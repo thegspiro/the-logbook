@@ -2929,7 +2929,75 @@ class Seeder:
                 },
             )
 
+        self._wear_out_one_members_gear()
+
         return {"storage_areas": areas, "kits": kits, "allowances": allowances}
+
+    WORN_GEAR_CATEGORY = "Structural PPE"
+
+    def _wear_out_one_members_gear(self) -> None:
+        """Retire one member's structural gear so it needs replacing.
+
+        Every assigned item is seeded `good`, which makes the Impact Planner's
+        replacement-aware analysis invisible: it separates a member holding a
+        *serviceable* item from one whose holdings are all worn or past their
+        NFPA retirement, and with nothing worn in the data the second case never
+        appears.
+
+        It has to be **every** item that member holds in the category, not one
+        of them. The rule is `has_any and serviceable == 0`, so wearing out a
+        single coat on a member who also holds good pants still reads as "has
+        item" — which is exactly what the first attempt at this produced.
+        """
+        # Re-fetched rather than reusing the assignment list, which was read
+        # before the assignments were made and still says "available".
+        categories = items(
+            self.api.get("/inventory/categories?limit=100"), "categories"
+        )
+        category_id = next(
+            (
+                pick(c, "id")
+                for c in categories
+                if pick(c, "name") == self.WORN_GEAR_CATEGORY
+            ),
+            None,
+        )
+        if not category_id:
+            return
+        current = items(self.api.get("/inventory/items?limit=200"), "items")
+        in_category = [
+            i for i in current if pick(i, "category_id", "categoryId") == category_id
+        ]
+        # Idempotent: a second run must not retire a second member's gear.
+        if any((pick(i, "condition") or "").lower() == "poor" for i in in_category):
+            return
+
+        by_holder: dict[str, list[dict]] = {}
+        for item in in_category:
+            holder = pick(item, "assigned_to_user_id", "assignedToUserId")
+            if holder:
+                by_holder.setdefault(str(holder), []).append(item)
+        if not by_holder:
+            return
+
+        # The member holding the fewest pieces, so the smallest edit produces
+        # the badge and the rest of the roster keeps its serviceable gear.
+        _, gear = min(by_holder.items(), key=lambda kv: len(kv[1]))
+        for item in gear:
+            item_id = pick(item, "id")
+            if not item_id:
+                continue
+            try:
+                self.api.patch(
+                    f"/inventory/items/{item_id}",
+                    {
+                        "condition": "poor",
+                        "notes": "End of service life — due for replacement.",
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"worn gear: {exc}")
+                return
 
     def _kit_out_one_member(
         self, members: list[dict], assignable: list[dict], target: int = 3

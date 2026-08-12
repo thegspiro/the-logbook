@@ -7043,6 +7043,40 @@ export const SHOTS = [
     selector: "aside, nav",
   },
   {
+    id: "05-71-impact-planner-replacement",
+    doc: "05-inventory.md",
+    line: 1968,
+    anchor:
+      "Screenshot of the Impacted Members table with replacement-aware analysis on",
+    alt: "The Impact Planner's Impacted Members table with replacement-aware analysis on — each member badged Has item, Replace or Needs item against the chosen category",
+    route: "/inventory/admin/impact-planner",
+    prepare: async (page) => {
+      // The badge column only renders once a related category is chosen, and
+      // "Replace" only appears when worn/expired items are counted too.
+      const category = page.getByLabel("Related category");
+      await category.waitFor({ timeout: 15_000 });
+      // Structural PPE specifically: it is the category the seeder puts a worn
+      // bunker coat in, and without an unserviceable holding the "Replace"
+      // badge — the whole point of this shot — never appears.
+      const value = await category.evaluate((el) => {
+        const option = [...el.options].find((o) =>
+          o.label.includes("Structural PPE"),
+        );
+        return option?.value ?? "";
+      });
+      if (!value) throw new Error("no Structural PPE category to analyse against");
+      await category.selectOption(value);
+      await page
+        .getByText("Count worn or expired items as needing replacement")
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Analyze Impact" })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(2500);
+    },
+    fullPage: true,
+  },
+  {
     id: "05-70-inventory-table-mobile",
     doc: "05-inventory.md",
     line: 1830,

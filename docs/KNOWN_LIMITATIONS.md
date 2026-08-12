@@ -1297,6 +1297,27 @@ Two related facts worth carrying:
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
 
+## Inventory — Departure Clearance Is Backend-Only (2026-08-12)
+
+`DepartureClearanceService` is a complete implementation — initiate a clearance
+for a departing member, list clearances, resolve each outstanding item with a
+disposition, complete or close-incomplete — and `api/v1/endpoints/inventory.py`
+exposes it. Nothing in the frontend calls any of it: there is no route, no page,
+no service method, and no reference to "departure" or "clearance" in that sense
+anywhere in `frontend/src`.
+
+`docs/training/05-inventory.md` documented the whole workflow as if it were a
+screen, including a clearance record with per-item disposition dropdowns and
+resolve/complete buttons. That screenshot placeholder is retired and the section
+now says the workflow is API-only.
+
+The property-return report generated when a member is dropped is a separate,
+working feature — see Membership > Property Return Process. It is the clearance
+_record_ that has no interface.
+
+Needs an owner decision on whether to build it. This loop does not make that
+call.
+
 ## Events — There Is No Per-Event Analytics Panel (2026-08-12)
 
 `docs/training/02-training.md` described a post-event analytics panel on the

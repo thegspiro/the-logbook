@@ -781,6 +781,17 @@ trucks") is the supply worklist at **Scheduling → Supply**; see
 
 When a member departs the department (dropped, retired, etc.), a **Departure Clearance** is created to track the return of all assigned equipment.
 
+> **No screen for this yet _(2026-08-12)_.** Departure clearance is implemented
+> on the server — clearances can be initiated, listed, resolved item by item and
+> completed — but nothing in the application calls it. There is no Inventory
+> Admin button, no clearance page, and no way to work one through the interface;
+> it is reachable only via the API. The steps below describe the workflow, not a
+> screen you can currently open. The **property return report** generated when a
+> member is dropped is a different, working feature — see
+> [Membership > Property Return Process](./01-membership.md#member-status-management).
+> See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#inventory--departure-clearance-is-backend-only-2026-08-12).
+
 ### Creating a Clearance
 
 **Required Permission:** `inventory.manage`
@@ -803,9 +814,6 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 | **In Progress**       | Some items resolved, others still pending                                |
 | **Completed**         | All items resolved, clearance finalized                                  |
 | **Closed Incomplete** | Closed by an administrator with some items still outstanding (write-off) |
-
-> **Screenshot placeholder:**
-> _[Screenshot of a departure clearance record showing the member's name, departure date, a checklist of outstanding items with disposition dropdowns, and resolve/complete buttons]_
 
 > **Hint:** Departure clearances integrate with the Member Status workflow. When a member is dropped, a property return report is automatically generated. See [Membership > Property Return Process](./01-membership.md#member-status-management).
 
@@ -1957,15 +1965,32 @@ Use cases: Annual uniform refresh, seasonal PPE cycle, new recruit onboarding ki
 
 ### Replacement-Aware Analysis
 
-When you enable **Include replacements** and select a related category:
+Select a related category under **Already has item in category**, then tick
+**Count worn or expired items as needing replacement**. With that on:
 
 1. The system checks each member's held items in that category
 2. Items are assessed for serviceability (condition, NFPA retirement dates)
 3. Members with only worn-out or expired items are flagged "Needs replacement"
 4. The purchase count includes both members with no item AND those needing replacement
-5. The UI distinguishes "Needs item" (never had one) from "Replace" (has a worn/expired one)
+5. The Existing column carries one of **three** badges, not two:
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the member list with replacement-aware analysis enabled, showing two badge types: "Needs item" (red) for a member with no turnout coat, and "Replace" (amber) for a member with an expired coat._
+| Badge          | Colour | Meaning                                                       |
+| -------------- | ------ | ------------------------------------------------------------- |
+| **Has item**   | Green  | Holds at least one serviceable item in the category           |
+| **Replace**    | Amber  | Holds items in the category, but every one is worn or expired |
+| **Needs item** | Purple | Holds nothing in the category                                 |
+
+Hovering **Has item** or **Replace** lists the items in question, and a
+**"N to replace"** chip appears beside the Impacted Members heading. Note that
+members needing a replacement count toward **Need the item** in the summary
+cards, not toward **Already have one** — they are people you must buy for.
+
+> **Corrected 2026-08-12.** This section previously described two badges and
+> called "Needs item" red; there are three and it is purple. The control is also
+> named "Count worn or expired items as needing replacement", not "Include
+> replacements", and it only appears once a category is chosen.
+
+![The Impact Planner's Impacted Members table with replacement-aware analysis on — each member badged Has item, Replace or Needs item against the chosen category](./images/05-71-impact-planner-replacement.png)
 
 ### Allowance-Aware Warnings
 
