@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useLocation } from 'react-router';
+import { checkForServiceWorkerUpdate, reloadForNewVersion } from '../utils/serviceWorkerUpdate';
 
 /** Minimum time between two consecutive version checks (60 seconds). */
 const MIN_CHECK_INTERVAL_MS = 60_000;
@@ -66,6 +67,11 @@ export function useAppUpdate(): AppUpdateState {
         const serverBuildId = (data as { buildId: string }).buildId;
         if (serverBuildId !== getCurrentBuildId() && serverBuildId !== dismissedBuildRef.current) {
           setUpdateAvailable(true);
+          // Start installing the new service worker now, in the background,
+          // so that by the time the user taps "Reload now" the fresh worker
+          // is (usually) already controlling the page and one reload lands
+          // on the new build instead of the old precached shell.
+          checkForServiceWorkerUpdate(true);
         }
       }
     } catch {
@@ -98,7 +104,9 @@ export function useAppUpdate(): AppUpdateState {
   }, [checkForUpdate]);
 
   const applyUpdate = useCallback(() => {
-    window.location.reload();
+    // Not a bare reload: on an installed PWA the old service worker would
+    // serve its old precached index.html, making the reload a visible no-op.
+    void reloadForNewVersion();
   }, []);
 
   const dismiss = useCallback(() => {
