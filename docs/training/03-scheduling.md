@@ -1709,8 +1709,7 @@ This affects:
 - **InventoryScanModal** — scanning item barcodes for check-in/check-out
 - **MemberScanPage** — scanning member QR codes for attendance
 
-> **Screenshot needed:**
-> _[Screenshot of the MemberIdScannerModal running on a desktop browser, showing the user-facing camera feed in the scanner viewport with a QR code being detected]_
+> **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
 
 ### Edge Cases (2026-03-22)
 

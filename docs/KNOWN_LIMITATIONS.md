@@ -910,6 +910,24 @@ recorded rather than fixed: the alternative is showing a Flagged view to
 departments that never flag anything. Worth revisiting as "show the Flagged
 view whenever a flagged report exists".
 
+## Screenshot Harness — Camera Viewfinders Cannot Be Photographed (2026-08-12)
+
+Three placeholders asked for a live camera viewfinder with a code being read:
+`MemberIdScannerModal` on a desktop browser (`docs/training/03-scheduling.md`),
+the inventory scan modal mid-batch and `InventoryScanModal` detecting a barcode
+(both `docs/training/05-inventory.md`).
+
+The capture harness runs headless Chromium with no camera device. Chromium's
+fake-device flags can supply a synthetic stream, but it is a rolling test
+pattern, not a scannable code — and each of these shots is specifically of a
+code _being recognised_, which a fake stream cannot produce. Nothing short of a
+real camera in front of a real label satisfies them, so all three are retired
+rather than left open to be re-surveyed each pass.
+
+The scanning features themselves work; this is a limitation of the automation,
+not of the product. If these screens ever have to be documented visually, the
+images will have to be taken by hand.
+
 ## Inventory — Scanning Has No Screen Of Its Own (2026-08-10)
 
 `inventoryService.lookupByCode` (`GET /inventory/lookup`) has exactly one

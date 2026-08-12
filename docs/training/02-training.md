@@ -2134,9 +2134,19 @@ After enrollment, the program dashboard for Alex shows:
 | Phases           | 4 (Phase 1 unlocked, Phases 2-4 locked) |
 | Requirements     | 0 of 15 complete                        |
 
-Phase 1 (Orientation) is immediately accessible. Phases 2 through 4 display a lock icon with the tooltip "Complete the previous phase to unlock." Alex can see her enrollment on the **My Training** dashboard under **Active Program Enrollments** with a progress bar at 0%.
+Alex can see her enrollment on the **My Training** dashboard under **Active Program Enrollments** with a progress bar at 0%. Opening it shows every phase at once.
 
-> **[SCREENSHOT NEEDED]:** _The program enrollment detail page showing Alex Rivera's enrollment at 0% progress, Phase 1 unlocked with 4 requirements listed, and Phases 2-4 showing lock icons._
+> **Phases are not locked as units _(2026-08-12)_.** This guide previously said
+> later phases carry a lock icon and the tooltip "Complete the previous phase to
+> unlock". They do not — a member can work on any phase, and the seeded example
+> below has requirements finished in Phase 2 and Phase 3 while Phase 1 is still
+> in progress. What **is** locked is an individual **requirement** with a
+> prerequisite, which greys out and says which requirement it is waiting on
+> ("Locked until you finish Hose Deployment"). The current phase is marked
+> **You are here** rather than by unlocking, and **Next milestones** at the top
+> lists the phase completions still ahead.
+
+![A member's program enrollment — overall progress, and every requirement grouped by phase with the locked ones marked](./images/02-105-program-enrollment-progress.png)
 
 **Edge case — duplicate enrollment:** Later that week, Lt. Park (another officer) attempts to enroll Alex in the same program. The system returns: "Member is already enrolled in this program" and prevents the duplicate. Each member can have only one active enrollment per program.
 

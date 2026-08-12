@@ -7043,6 +7043,25 @@ export const SHOTS = [
     selector: "aside, nav",
   },
   {
+    id: "02-105-program-enrollment-progress",
+    doc: "02-training.md",
+    line: 2139,
+    anchor:
+      "Screenshot of a member's program enrollment showing overall progress and the requirements grouped by phase",
+    alt: "A member's program enrollment — overall progress, and every requirement grouped by phase with the locked ones marked",
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/programs/enrollments/me",
+        (id) => `/training/my-progress/${id}`,
+        "enrollments",
+      )(page);
+      await page.waitForTimeout(1800);
+    },
+    fullPage: true,
+  },
+  {
     id: "03-99-checklists-resume",
     doc: "03-scheduling.md",
     line: 2233,

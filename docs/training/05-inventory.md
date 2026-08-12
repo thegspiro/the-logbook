@@ -555,8 +555,7 @@ own. You choose the person and what you are doing first, then scan; there is no
 
 If a code matches multiple items (e.g., the same serial number in different categories), all matches are displayed.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the scan modal with the camera running and an item just read into the staged list]_
+> **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
 
 > **Hint:** Barcode scanning works best with a device that has a camera. On desktop, you can use a USB barcode scanner, which types the code into the search field — as does typing a name, serial or asset tag by hand, which is the same path. If scanning fails, check that the barcode is clean and well-lit; a specific error message will indicate whether the item was not found or a network error occurred.
 
@@ -1527,8 +1526,7 @@ Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop brow
 - **MemberIdScannerModal**: Member ID card scanning works on desktop with user-facing camera fallback
 - Both modals share the same camera initialization, resolution selection, and error handling logic
 
-> **Screenshot needed:**
-> _[Screenshot of the InventoryScanModal running on a desktop browser, showing the camera viewport with a barcode being detected and the item search results appearing below]_
+> **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
 
 > **Edge case:** If no camera is available, the scanner shows an error message and the user can fall back to manual text entry (barcode/serial number input field).
 
