@@ -59,6 +59,15 @@ class TestPublicRouteErrorResponses:
             ("/api/public/v1/calendar/{token}.ics", "get", {"404", "429"}),
             ("/api/public/v1/finance/approvals/{token}", "get", {"404", "429"}),
             ("/api/public/v1/webhooks/calcom/{integration_id}", "post", {"404", "429"}),
+            # Guest check-in answers 400 when the window is closed, when the
+            # service refuses the sign-in, and when the body will not parse,
+            # but its router declared only the token-addressed set.
+            (
+                "/api/public/v1/display/{display_code}/events/{event_id}"
+                "/guest-check-in",
+                "post",
+                {"400", "404", "429"},
+            ),
         ],
     )
     def test_declares_the_codes_it_can_return(self, schema, path, method, expected):
