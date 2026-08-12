@@ -7312,7 +7312,114 @@ class Seeder:
         self._link_elections_to_meetings(elections)
         self._seed_nominations(elections)
         self._seed_closed_election(elections, minutes or [])
+        self._seed_open_election(elections)
         return elections
+
+    OPEN_ELECTION_TITLE = "Line Officer Election — 2027 Term"
+
+    # Two candidates and a separate yes/no question, so one ballot shows both
+    # controls a voter meets: a candidate choice and an approval vote.
+    OPEN_ELECTION_CANDIDATES = [
+        (
+            "Dana Ruiz",
+            "Nine years on Engine 1, acting officer since 2025.",
+        ),
+        (
+            "Emeka Adeyemi",
+            "Rescue technician and lead instructor for vehicle extrication.",
+        ),
+    ]
+
+    def _seed_open_election(self, elections: list[dict]) -> None:
+        """An election actually taking votes, so the member ballot can be shown.
+
+        The other three seeded elections are a draft, one taking nominations
+        and one closed — between them they cover everything except the screen
+        a rank-and-file member actually uses. Without one in ``open`` status
+        the voting page can only ever be photographed empty.
+
+        Deliberately left with no votes recorded: the shot wanted is an
+        unmarked ballot, and any member who has already voted is shown the
+        receipt instead.
+        """
+        if any(pick(e, "title") == self.OPEN_ELECTION_TITLE for e in elections):
+            return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{pick(m, 'first_name', 'firstName')} "
+            f"{pick(m, 'last_name', 'lastName')}": pick(m, "id")
+            for m in members
+        }
+
+        election = self.api.post(
+            "/elections",
+            {
+                "title": self.OPEN_ELECTION_TITLE,
+                "description": (
+                    "Annual election for line officer positions, plus one "
+                    "bylaw amendment carried over from the August meeting."
+                ),
+                "election_type": "position",
+                "positions": ["Captain"],
+                "ballot_items": [
+                    {
+                        "id": "item-captain",
+                        "type": "officer_election",
+                        "title": "Captain",
+                        "description": (
+                            "Vote for one candidate for Captain, two-year term "
+                            "beginning January 2027."
+                        ),
+                        "position": "Captain",
+                        "vote_type": "candidate_selection",
+                        "voting_method": "simple_majority",
+                    },
+                    {
+                        "id": "item-bylaw",
+                        "type": "general_vote",
+                        "title": "Bylaw Amendment — Article IV, Meeting Quorum",
+                        "description": (
+                            "Shall Article IV be amended to reduce the quorum "
+                            "for a business meeting from 40% to 30% of active "
+                            "members?"
+                        ),
+                        "vote_type": "approval",
+                    },
+                ],
+                "start_date": iso(NOW - timedelta(days=1)),
+                "end_date": iso(NOW + timedelta(days=5)),
+                "anonymous_voting": True,
+                "allow_write_ins": True,
+                "results_visible_immediately": False,
+                "voting_method": "simple_majority",
+                "victory_condition": "most_votes",
+                "quorum_type": "percentage",
+                "quorum_value": 50,
+            },
+        )
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+
+        for name, statement in self.OPEN_ELECTION_CANDIDATES:
+            self.api.post(
+                f"/elections/{election_id}/candidates",
+                {
+                    "election_id": election_id,
+                    "name": name,
+                    "position": "Captain",
+                    "user_id": by_name.get(name),
+                    "statement": statement,
+                },
+            )
+
+        try:
+            self.api.post(f"/elections/{election_id}/open")
+        except ApiError as exc:
+            self.blocked.append(f"open election: {exc}")
+            return
+        elections.append(self.api.get(f"/elections/{election_id}"))
 
     # Who attests the paper tally. Neither may be a candidate, and neither may
     # be the officer who recorded the batch — the API enforces both.
@@ -7512,6 +7619,14 @@ class Seeder:
         for index, election in enumerate(elections):
             election_id = pick(election, "id")
             if not election_id or pick(election, "event_id", "eventId"):
+                continue
+            # A closed or cancelled election refuses every field update except
+            # results_visible_immediately, so patching one is a guaranteed 400.
+            # It matters on a re-run: the list representation omits event_id, so
+            # an already-linked election looks unlinked here and we would try to
+            # link it again — failing the whole elections step, and with it every
+            # election seeded after this call.
+            if str(pick(election, "status") or "").lower() in {"closed", "cancelled"}:
                 continue
             meeting_id = pick(meetings[index % len(meetings)], "id")
             if not meeting_id:

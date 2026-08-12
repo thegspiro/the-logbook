@@ -618,6 +618,8 @@ export const isNominatingElection = (election) =>
 export const isClosedElection = (election) =>
   (election.status ?? "") === "closed";
 
+export const isOpenElection = (election) => (election.status ?? "") === "open";
+
 export function openElectionTab(tabId, match) {
   return async (page) => {
     await openFirstFromApi(
@@ -7039,6 +7041,36 @@ export const SHOTS = [
     alt: "Sidebar navigation with the unread notification badge",
     route: "/dashboard",
     selector: "aside, nav",
+  },
+  {
+    id: "04-42-cast-ballot",
+    doc: "04-events-meetings.md",
+    line: 609,
+    anchor:
+      "Screenshot of the Cast Vote tab on an open election showing the position, its candidates with their statements",
+    alt: "The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, and the per-position submit button beneath them",
+    route: "/elections",
+    // The member's own view, not an officer's: the ballot is what a voter sees.
+    auth: "member",
+    prepare: openElectionTab("voting", isOpenElection),
+    fullPage: true,
+  },
+  {
+    id: "01-36-membership-number-field",
+    doc: "01-membership.md",
+    line: 1043,
+    anchor:
+      "Screenshot of the Department Information section on a member's admin edit page showing the auto-generated Membership Number",
+    alt: "The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, all editable",
+    route: "/members",
+    prepare: openFirstFromApi(
+      "/users?limit=1",
+      (id) => `/members/admin/edit/${id}`,
+      "users",
+    ),
+    // Cropped to the block rather than the whole form: 01-07 already shows the
+    // full page, and the point here is the one field.
+    selector: "div:has(> h2:text-is('Department Information'))",
   },
   {
     id: "01-07-admin-member-edit",

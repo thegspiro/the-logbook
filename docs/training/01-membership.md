@@ -1040,8 +1040,21 @@ Membership IDs are now auto-generated when a member is created or transferred. A
 - When a member is reactivated, their previous membership number is automatically restored
 - The active membership number column is NULLed on archive so the number can be reassigned if needed
 
-> **Screenshot needed:**
-> _[Screenshot of a member profile showing the auto-generated Membership ID field (e.g., "2026-0042") in the member details section, with the field marked as read-only]_
+The generated number appears on the member's **admin edit** page, under
+Department Information, next to Rank and Station. It shows on the member's
+profile too, as `#021` beneath their name.
+
+![The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, all editable](./images/01-36-membership-number-field.png)
+
+> **Corrected 2026-08-12 — the number is editable, not read-only.** This guide
+> previously described it as a read-only field. It is a normal text input: an
+> officer can overwrite a generated number, which is what makes reassigning a
+> retired number possible. Two guardrails apply instead of read-only — the field
+> is one of the restricted ones (`rank`, `station`, `platoon`,
+> `membership_number`), so it takes leadership, secretary or membership
+> coordinator permission to change; and the number must be unique within your
+> department, so saving a number another active member already holds is refused
+> with "A member with this membership number already exists".
 
 > **Edge case:** If a member is archived and then a new member is assigned their old number, reactivating the archived member will generate a new number instead of conflicting.
 

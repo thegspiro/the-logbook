@@ -602,14 +602,23 @@ Each election shows:
 ### Casting Your Vote
 
 1. Click on an active election.
-2. Review the candidates or ballot items.
-3. Make your selections.
-4. Submit your ballot.
+2. Open the **Cast Vote** tab.
+3. Review the candidates for each position and make your selection.
+4. Submit — **one position at a time**. Each position has its own submit button
+   ("Submit Vote for Captain"), and a position you have already voted on is
+   shown as voted rather than offered again.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the voting page showing the election title, ballot items with candidate names and descriptions, radio buttons or checkboxes for selection, and a Submit Ballot button at the bottom]_
+![The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, and the per-position submit button beneath them](./images/04-42-cast-ballot.png)
 
 > **Hint:** Votes are anonymous by default. The system records that you voted but not how you voted. Write-in candidates are supported when enabled by the election creator.
+
+> **Voting in the app covers position races only _(2026-08-12)_.** The Cast Vote
+> tab builds its ballot from the election's positions, so a ballot item that is
+> not a position — a bylaw amendment or a membership approval — does not appear
+> there and cannot be voted on in the app. Those items do appear on the emailed
+> public ballot link, which renders every ballot item. If your ballot mixes the
+> two, send the public link rather than asking members to vote in the app. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#elections--the-in-app-ballot-only-shows-position-races-2026-08-12).
 
 ### Creating Elections (Officers)
 

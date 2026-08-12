@@ -1297,6 +1297,38 @@ Two related facts worth carrying:
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
 
+## Elections — The In-App Ballot Only Shows Position Races (2026-08-12)
+
+An election can carry three kinds of ballot item — `officer_election`,
+`general_vote` and `membership_approval` — and the Ballot Builder happily
+creates all three. Members reach a ballot two ways, and the two disagree about
+what is on it:
+
+- **The public token ballot** (`BallotVotingPage`, `/ballot?token=…`, the link
+  sent by email) reads `election.ballot_items` and renders every item, then
+  submits them atomically as `{ballot_item_id, candidate_ids | rankings | …}`.
+- **The in-app Cast Vote tab** (`ElectionBallot`, on the election detail page)
+  never reads `ballot_items` at all. It derives the ballot from
+  `election.positions`, renders the candidates for each, and submits **one
+  position at a time** as `{position, …}`.
+
+So an item with no position — a bylaw amendment, a membership approval —
+is invisible to anyone voting in the app. It is not refused or flagged: the
+ballot simply does not mention it, and the submit button names the one position
+it did find ("Submit Vote for Captain"). A secretary who builds a two-item
+ballot and watches members vote in-app gets a result for one item and silence on
+the other.
+
+Reproducible in the demo data: the seeded "Line Officer Election — 2027 Term"
+has a Captain race and an Article IV quorum amendment, and
+`docs/training/images/04-42-cast-ballot.png` is the in-app ballot showing only
+the former.
+
+This is not a small patch — the in-app component would have to move from the
+position model to the ballot-item model the public page already uses, including
+its submission shape. Needs an owner decision on whether to converge the two
+ballots or retire one of them. This loop does not make that call.
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.
