@@ -28,7 +28,7 @@ git clone https://github.com/thegspiro/the-logbook.git
 cd the-logbook
 cp .env.example .env
 # Edit .env with your settings
-docker-compose up -d
+docker compose up -d
 ```
 
 **[→ Complete Installation Guide](Installation)**
@@ -46,7 +46,7 @@ docker-compose up -d
 
 ### 🚢 Deployment
 
-- **[Unraid Deployment](Deployment-Unraid)** - Complete Unraid guide
+- **[Unraid Deployment](Deployment-Unraid)** - Deploying and updating on Unraid
 - **[Docker Deployment](Deployment-Docker)** - Docker Compose deployment
 - **[Production Deployment](Deployment-Production)** - Production best practices
 
@@ -581,7 +581,11 @@ See [Communications](Module-Communications#email-footer-library-2026-08-10).
 
 ### January 2026 - Package Updates
 
-- ✅ Updated to Vite 6.0.5 (fixed from invalid 7.3.1)
+> **Historical snapshot.** These versions were current in January 2026 and have
+> since been superseded by the March 2026 toolchain upgrades above — the
+> project now runs React 19, Vite 7.3, Tailwind CSS 4.2, and Vitest 4.
+
+- ✅ Updated to Vite 6.0.5 (fixed from an invalid 7.3.1 version pin — Vite 7.3 did not exist yet)
 - ✅ React 18.3.1 with security updates
 - ✅ axios 1.7.9 security updates
 - ✅ lucide-react 0.468.0 (was 150+ versions behind)

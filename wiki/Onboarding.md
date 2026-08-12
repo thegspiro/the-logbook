@@ -1,5 +1,10 @@
 # Onboarding Module Guide
 
+> **Published copy — not the canonical source.** The maintained original is
+> [`ONBOARDING.md`](https://github.com/thegspiro/the-logbook/blob/main/ONBOARDING.md)
+> in the repository root, and this page may lag behind it. Make content changes
+> there first, then mirror them here.
+
 The onboarding module handles first-time system setup and can be disabled once the platform is fully configured.
 
 ## Overview

@@ -1,5 +1,10 @@
 # Security Policy
 
+> **Published copy — not the canonical source.** The maintained original is
+> [`SECURITY.md`](https://github.com/thegspiro/the-logbook/blob/main/SECURITY.md)
+> in the repository root, and this page may lag behind it. Make content changes
+> there first, then mirror them here.
+
 ## Overview
 
 The Logbook is designed with security as a core principle, implementing industry-standard security practices with features aligned to HIPAA requirements, Section 508 accessibility, and general security best practices. Note: HIPAA compliance requires external review and cannot be self-declared.

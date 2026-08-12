@@ -1,5 +1,9 @@
 # Onboarding Module Guide
 
+> **Canonical source.** A copy of this guide is published to the GitHub Wiki
+> from [`wiki/Onboarding.md`](wiki/Onboarding.md). The two are not synced
+> automatically — if you change this file, update the wiki page too.
+
 The onboarding module handles first-time system setup and can be disabled once the platform is fully configured.
 
 ## Overview

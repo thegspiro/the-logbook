@@ -61,9 +61,12 @@ backup_database() {
     print_info "Backing up MySQL database..."
 
     if [[ -n "$DB_HOST" && "$DB_HOST" != "localhost" ]]; then
-        # Docker or remote database
-        if command -v docker &> /dev/null && docker ps | grep -q mysql; then
-            docker exec intranet-mysql mysqldump \
+        # Docker or remote database. The MySQL container is named logbook-db
+        # in every compose file (intranet-mysql is the pre-rename legacy name);
+        # override with DB_CONTAINER for custom setups.
+        MYSQL_CONTAINER="${DB_CONTAINER:-$(docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 -E '^(logbook-db|intranet-mysql)$' || true)}"
+        if [[ -n "$MYSQL_CONTAINER" ]]; then
+            docker exec "$MYSQL_CONTAINER" mysqldump \
                 -u"${DB_USER}" \
                 -p"${DB_PASSWORD}" \
                 "${DB_NAME}" \
@@ -272,14 +275,24 @@ restore_backup() {
     # Find the backup directory (it will be the only directory in RESTORE_DIR)
     BACKUP_EXTRACT_DIR=$(find "$RESTORE_DIR" -mindepth 1 -maxdepth 1 -type d)
 
-    # Restore database
+    # Restore database. In the compose stacks MySQL's port is not published
+    # to the host, so restore through the container when one is running;
+    # fall back to a host mysql client for remote/local databases.
     if [[ -f "$BACKUP_EXTRACT_DIR/database.sql.gz" ]]; then
         print_info "Restoring database..."
-        gunzip -c "$BACKUP_EXTRACT_DIR/database.sql.gz" | mysql \
-            -h"${DB_HOST:-localhost}" \
-            -u"${DB_USER}" \
-            -p"${DB_PASSWORD}" \
-            "${DB_NAME}"
+        MYSQL_CONTAINER="${DB_CONTAINER:-$(docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 -E '^(logbook-db|intranet-mysql)$' || true)}"
+        if [[ -n "$MYSQL_CONTAINER" ]]; then
+            gunzip -c "$BACKUP_EXTRACT_DIR/database.sql.gz" | docker exec -i "$MYSQL_CONTAINER" mysql \
+                -u"${DB_USER}" \
+                -p"${DB_PASSWORD}" \
+                "${DB_NAME}"
+        else
+            gunzip -c "$BACKUP_EXTRACT_DIR/database.sql.gz" | mysql \
+                -h"${DB_HOST:-localhost}" \
+                -u"${DB_USER}" \
+                -p"${DB_PASSWORD}" \
+                "${DB_NAME}"
+        fi
         print_success "Database restored"
     fi
 
