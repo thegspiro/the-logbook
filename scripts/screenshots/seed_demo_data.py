@@ -3006,6 +3006,90 @@ class Seeder:
             shortfall -= 1
         return taken
 
+    # -- inventory: equipment requests --------------------------------
+
+    # (item name, request type, member's reason, review note, fulfil?)
+    # A review note of None leaves the request pending.
+    EQUIPMENT_REQUESTS = [
+        (
+            "Nitrile Gloves — Large",
+            "issuance",
+            "Box in the medic bag is down to two pairs.",
+            "Approved — issue from quartermaster stock.",
+            True,
+        ),
+        (
+            "Portable Radio",
+            "checkout",
+            "Mine failed its battery check on Tuesday.",
+            "Approved — collect from the quartermaster.",
+            False,
+        ),
+        (
+            "Structural Helmet",
+            "issuance",
+            "Shell is cracked at the brim after the Third Street fire.",
+            None,
+            False,
+        ),
+    ]
+
+    def seed_equipment_requests(self, base_url: str) -> dict[str, Any]:
+        """One request in each state the Equipment Requests page can show.
+
+        A request is raised by the member who wants the kit, so these are
+        created over a second session signed in as the demo member — the admin
+        cannot raise one on somebody's behalf, and a request the admin raised
+        for themselves would never show the reviewer/requester split the page
+        is built around.
+
+        Three states, because each one renders differently: **pending** carries
+        the Approve and Deny actions, **approved** carries **Fulfill**, and
+        **fulfilled** is terminal and carries a link through to the issuance it
+        created.
+        """
+        existing = items(self.api.get("/inventory/requests"), "requests")
+        if existing:
+            return {"requests": existing}
+
+        catalog = items(self.api.get("/inventory/items?limit=200"), "items")
+
+        def by_name(name: str) -> dict | None:
+            return next((i for i in catalog if pick(i, "name") == name), None)
+
+        member_api = Api(base_url)
+        member_api.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+
+        created = []
+        for name, request_type, reason, review, fulfill in self.EQUIPMENT_REQUESTS:
+            item = by_name(name)
+            if item is None:
+                continue
+            payload = {
+                "item_name": name,
+                "item_id": pick(item, "id"),
+                "quantity": 1,
+                "request_type": request_type,
+                "priority": "normal",
+                "reason": reason,
+            }
+            request = member_api.post("/inventory/requests", payload)
+            request_id = pick(request, "id")
+            if review:
+                self.api.put(
+                    f"/inventory/requests/{request_id}/review",
+                    {"status": "approved", "review_notes": review},
+                )
+            if fulfill:
+                # Fulfilling routes by the item's tracking type — a pool item
+                # becomes an issuance, an individual one a checkout — and the
+                # request then carries a reference to whichever it made.
+                self.api.put(
+                    f"/inventory/requests/{request_id}/fulfill", {"quantity": 1}
+                )
+            created.append(request)
+        return {"requests": created}
+
     # -- inventory: variants and reorder requests --------------------
 
     def seed_inventory_variants(
@@ -8555,6 +8639,12 @@ class Seeder:
             lambda: self.seed_inventory_variants(
                 inventory.get("categories", []), stations
             ),
+        )
+        # After the variants: the requests name catalog items, and the gloves
+        # one of them asks for is created by the variant pass.
+        self.step(
+            "equipment requests",
+            lambda: self.seed_equipment_requests(self.base_url),
         )
         self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)

@@ -5736,6 +5736,46 @@ export const SHOTS = [
     prepare: clickByName(/Assign to Member/i),
   },
   {
+    id: "05-68-equipment-request-states",
+    doc: "05-inventory.md",
+    line: 340,
+    anchor:
+      "Screenshot of the Equipment Requests page showing an approved request with its Fulfill",
+    alt: "Equipment Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge",
+    route: "/inventory/admin/requests",
+    prepare: async (page) => {
+      // The page opens on Pending, which is right for a review queue and wrong
+      // for a picture of the states a request moves through.
+      await page.selectOption("#status-filter", "");
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-67-empty-asset-tag",
+    doc: "05-inventory.md",
+    line: 1597,
+    anchor:
+      "Screenshot of an item detail page showing the barcode field with a generated barcode value",
+    alt: "An item with a barcode but no asset tag — the empty field showing its -- placeholder rather than being hidden",
+    route: "/inventory/items",
+    // The section is about what an *empty* field looks like, so the item has
+    // to be one that has a barcode and no asset tag. `05-56` and `05-61`
+    // deliberately pick the opposite.
+    prepare: openFirstFromApi(
+      "/inventory/items?limit=200",
+      (id) => `/inventory/items/${id}`,
+      "items",
+      (item) =>
+        Boolean(item.barcode ?? item.barcode_value) &&
+        !(item.asset_tag ?? item.assetTag),
+    ),
+    selector: 'div:has(> h3:text("Basic Info"))',
+    // "--" is the subject, and the harness's empty-state check reads a page
+    // full of dashes as a page that failed to load.
+    allowEmptyState: true,
+  },
+  {
     id: "05-56-item-barcode-value",
     doc: "05-inventory.md",
     line: 1556,

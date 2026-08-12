@@ -268,8 +268,17 @@ The system creates `4 × 2 × 2 = 16` pool items:
 
 All 16 items are linked under a single variant group and share the base description and category.
 
-> **Screenshot needed:**
-> _[Screenshot of the inventory items list showing a variant group expanded to display individual size/style/color variants with their stock levels]_
+Each variant is its own row in the items list, with its size, style and colour
+shown as capsules in the **Variant** column — pictured under
+[Variant Capsules](#variant-capsules). To see the whole group at once, with a
+stock quantity per size and colour, open it on **Inventory Admin > Variant
+Groups**; that grid is pictured under
+[Stock Matrix on Variant Groups Page](#stock-matrix-on-variant-groups-page).
+
+> **Corrected 2026-08-12.** The retired screenshot placeholder here asked for
+> "a variant group **expanded**" in the inventory items list. The list does not
+> group or collapse variants — every variant is a top-level row, and the only
+> place a group is expandable is the Variant Groups admin page.
 
 ### Edge Cases
 
@@ -332,13 +341,22 @@ When a quartermaster issues a **pool** item to a member, the system checks the m
 
 Once an equipment request has been **approved**, a quartermaster can **fulfill** it — turning the request into an actual issuance, checkout, or assignment in one step. Open the request from **Equipment Requests** and click **Fulfill**.
 
+- The page opens on **Pending**, which is the review queue. Approved and
+  fulfilled requests are behind the status filter — switch it to **All** to see
+  a request's whole life.
 - The system routes fulfillment by the item's tracking type: a **pool** item becomes a pool issuance (allowance-checked unless overridden); an **individual** item becomes a checkout (for checkout requests) or an assignment.
-- The request then shows a terminal **Fulfilled** status, along with who fulfilled it, when, and a link to the created record.
+- The request then shows a terminal **Fulfilled** status and one line saying
+  which way it went and when — "Fulfilled via issuance on 8/11/2026".
+
+> **Corrected 2026-08-12.** That last line previously promised "who fulfilled
+> it, when, and a link to the created record". The card names neither the
+> fulfiller nor a link; the reference to the issuance or checkout is stored
+> (`fulfillment_reference_id`) but nothing renders it, so tracing a fulfilled
+> request to what it created means finding that record by member and date.
 
 > **Note:** Fulfillment is **not** reversible by re-running it — each fulfill action creates a new issuance/checkout/assignment. Only requests in the **Approved** state can be fulfilled, which prevents accidentally fulfilling the same request twice.
 
-> **Screenshot needed:**
-> _[Screenshot of an approved Equipment Request row with a "Fulfill" action, and a fulfilled request showing the green "Fulfilled" badge with the fulfiller's name, timestamp, and a link to the resulting issuance/checkout/assignment]_
+![Equipment Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge](./images/05-68-equipment-request-states.png)
 
 ---
 
@@ -1596,8 +1614,7 @@ Storage areas now display the inventory items assigned to each area:
 
 Item detail pages now always display the barcode and asset tag fields, even when empty. Empty fields show a `--` placeholder instead of being hidden, making it clear which items have barcodes assigned and which don't.
 
-> **Screenshot needed:**
-> _[Screenshot of an item detail page showing the barcode field with a generated barcode value (e.g., "INV-A3F82B9C") and the asset tag field showing "--" placeholder]_
+![An item with a barcode but no asset tag — the empty field showing its -- placeholder rather than being hidden](./images/05-67-empty-asset-tag.png)
 
 ### Barcode Numbering
 
