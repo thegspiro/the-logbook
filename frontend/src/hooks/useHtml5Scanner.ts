@@ -53,6 +53,9 @@ export function useHtml5Scanner({
   formatsToSupport,
 }: UseHtml5ScannerOptions): UseHtml5ScannerReturn {
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  // Invalidates an in-flight start when the user stops/closes the scanner
+  // while a permission prompt or camera startup is still pending.
+  const lifecycleRef = useRef(0);
   const [scanning, setScanning] = useState(false);
   const [flashlightSupported, setFlashlightSupported] = useState(false);
   const [flashlightOn, setFlashlightOn] = useState(false);
@@ -67,13 +70,20 @@ export function useHtml5Scanner({
   onScanRef.current = onScan;
 
   const stopScanner = useCallback(async () => {
-    if (scannerRef.current) {
+    lifecycleRef.current += 1;
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+    if (scanner) {
       try {
-        await scannerRef.current.stop();
+        await scanner.stop();
       } catch {
         // Already stopped
       }
-      scannerRef.current = null;
+      try {
+        if (typeof scanner.clear === 'function') scanner.clear();
+      } catch {
+        // The preview may already have been removed with its owning modal.
+      }
     }
     setScanning(false);
     setFlashlightOn(false);
@@ -102,6 +112,7 @@ export function useHtml5Scanner({
   const startScanner = useCallback(async () => {
     // Stop any existing instance first
     await stopScanner();
+    const lifecycle = lifecycleRef.current;
 
     // Fail fast with an actionable message on insecure origins (HTTP LAN),
     // where the camera APIs are simply absent.
@@ -123,6 +134,9 @@ export function useHtml5Scanner({
     // Enumerate cameras first — this triggers the browser permission prompt
     // and gives us device IDs across desktop and mobile.
     const cameras = await Html5Qrcode.getCameras();
+    if (lifecycle !== lifecycleRef.current) {
+      throw new DOMException('Camera startup was cancelled', 'AbortError');
+    }
     if (cameras.length === 0) {
       // Named as the DOMException `getUserMedia` raises for the same fact, so
       // `describeCameraError` gives an empty enumeration and a rejected
@@ -134,16 +148,16 @@ export function useHtml5Scanner({
       throw error;
     }
 
-    // Choose the scan target. Use a back-camera device id only when its label
-    // reliably identifies it, or when there is a single camera (desktop
-    // webcam). Otherwise hand html5-qrcode a facingMode:environment constraint
-    // and let the browser pick the rear camera — matching labels alone is
-    // unreliable on mobile (labels are empty before permission is granted and
-    // localized on many devices), and falling back to cameras[0] frequently
-    // selects the FRONT camera.
+    // Choose the scan target. Use a device id only when its label reliably
+    // identifies a rear camera. In every other case let the browser satisfy an
+    // ideal environment constraint. This works for a single desktop webcam as
+    // well, while avoiding a common mobile failure where enumeration exposes
+    // only the front camera initially and selecting its id prevents the browser
+    // from switching to the rear camera.
     const backCamera = cameras.find((c) => /back|rear|environment/i.test(c.label));
-    const cameraTarget: string | MediaTrackConstraints =
-      backCamera?.id ?? (cameras.length === 1 && cameras[0] ? cameras[0].id : { facingMode: { ideal: 'environment' } });
+    const cameraTarget: string | MediaTrackConstraints = backCamera?.id ?? {
+      facingMode: { ideal: 'environment' },
+    };
 
     const startConfig = {
       fps: scanConfig.fps,
@@ -153,7 +167,39 @@ export function useHtml5Scanner({
     const html5QrCode = new Html5Qrcode(viewportId, libConfig);
     scannerRef.current = html5QrCode;
 
-    await html5QrCode.start(cameraTarget, startConfig, onSuccess, onFailure);
+    try {
+      await html5QrCode.start(cameraTarget, startConfig, onSuccess, onFailure);
+    } catch (error) {
+      // A failed start can still leave a partially-created video track or DOM
+      // preview in html5-qrcode. Best-effort cleanup makes retrying work and
+      // prevents the mobile camera indicator from remaining on.
+      try {
+        await html5QrCode.stop();
+      } catch {
+        // The library rejects stop() when startup failed before it became live.
+      }
+      try {
+        if (typeof html5QrCode.clear === 'function') html5QrCode.clear();
+      } catch {
+        // The preview may not have been mounted yet.
+      }
+      if (scannerRef.current === html5QrCode) scannerRef.current = null;
+      throw error;
+    }
+    if (lifecycle !== lifecycleRef.current) {
+      try {
+        await html5QrCode.stop();
+      } catch {
+        // It may already have stopped while the start promise was settling.
+      }
+      try {
+        if (typeof html5QrCode.clear === 'function') html5QrCode.clear();
+      } catch {
+        // The owning viewport may already have unmounted.
+      }
+      if (scannerRef.current === html5QrCode) scannerRef.current = null;
+      throw new DOMException('Camera startup was cancelled', 'AbortError');
+    }
     setScanning(true);
 
     // Detect flashlight capability on the running track (guard: the method is
@@ -198,11 +244,9 @@ export function useHtml5Scanner({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (scannerRef.current) {
-        void scannerRef.current.stop().catch(() => {});
-      }
+      void stopScanner();
     };
-  }, []);
+  }, [stopScanner]);
 
   return {
     scanning,
