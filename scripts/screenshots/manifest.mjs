@@ -3027,6 +3027,65 @@ export const SHOTS = [
     },
   },
   {
+    id: "00-22-notification-card-expanded",
+    doc: "00-getting-started.md",
+    line: 254,
+    anchor:
+      "Screenshot of the notifications inbox showing one card pinned and expanded",
+    alt: "The notifications inbox — a shift assignment pinned and expanded to its details, View Shift button and Unpin control, the rest collapsed to a summary line",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      // Pinning writes to the database, so a re-run would otherwise shoot the
+      // pins left behind by the previous run stacked on top of this one's.
+      // page.request shares the page's cookies, so this is the logged-in member.
+      await page.evaluate(async () => {
+        // /my, not /logs — the latter is the org-wide admin send log, which is
+        // ordered differently and is not what this page reads.
+        const listed = await fetch("/api/v1/notifications/my?limit=100", {
+          credentials: "include",
+        });
+        const logs = (await listed.json()).logs ?? [];
+        // The pin endpoint is state-changing, so it needs the double-submit
+        // header the app's axios interceptor would normally attach.
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        for (const log of logs.filter((l) => l.pinned)) {
+          await fetch(`/api/v1/notifications/my/${log.id}/pin?pinned=false`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+          });
+        }
+      });
+      await page.reload({ waitUntil: "networkidle" });
+
+      // A shift assignment specifically, because it is the case the guide
+      // describes: only notifications carrying an action_url render a CTA, and
+      // this is the one whose CTA is "View Shift".
+      const card = page
+        .locator("div.card")
+        .filter({ hasText: "New Shift Assignment" })
+        .first();
+      // Expand first — the Pin control lives inside the expanded panel, so
+      // there is nothing to click until a card is open.
+      // Scoped to the card, not the page: the sidebar's collapsible nav groups
+      // also carry `aria-expanded`, and there are more of them than there are
+      // notifications — an unscoped `.first()` clicks the navigation.
+      await card
+        .locator('button[aria-expanded="false"]')
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(700);
+      await card.locator('button[title="Pin notification"]').first().click({
+        timeout: 15_000,
+      });
+      // Pinning re-sorts the list to put this card first; give the reorder a
+      // moment before shooting.
+      await page.waitForTimeout(1200);
+    },
+    fullPage: true,
+  },
+  {
     id: "00-04-dashboard-overview",
     // the empty 'My Upcoming Shifts' panel is incidental; the rest of the dashboard is populated
     allowEmptyState: true,

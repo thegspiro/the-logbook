@@ -919,12 +919,17 @@ async def update_event(
                             log_data={
                                 "channel": NotificationChannel.IN_APP,
                                 "recipient_id": str(rsvp.user_id),
+                                "category": "event_update",
                                 "subject": f"Event Updated: {event.title}",
                                 "message": (
                                     f'The event "{event.title}" has been '
                                     f"updated ({changes_desc}). "
                                     f"Please review the latest details."
                                 ),
+                                # The message asks the member to review the
+                                # event; without this the card offers no way
+                                # to open it.
+                                "action_url": f"/events/{event.id}",
                             },
                         )
                 except Exception as notif_err:

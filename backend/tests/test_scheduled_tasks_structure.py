@@ -81,3 +81,71 @@ class TestOrgIterationInvariants:
             "These task runners catch a per-org exception but never roll the "
             f"session back: {offenders}"
         )
+
+
+def _in_app_notification_logs() -> list[tuple[int, str, dict[str, ast.expr]]]:
+    """Every in-app NotificationLog(...) built in this module.
+
+    Returns (line number, category literal or "?", keyword map) per call.
+    """
+    out = []
+    for node in ast.walk(TREE):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = getattr(func, "id", None) or getattr(func, "attr", None)
+        if name != "NotificationLog":
+            continue
+        kwargs = {kw.arg: kw.value for kw in node.keywords if kw.arg}
+        channel = kwargs.get("channel")
+        channel_txt = ast.get_source_segment(TEXT, channel) if channel else ""
+        if "IN_APP" not in (channel_txt or "") and "in_app" not in (channel_txt or ""):
+            continue
+        cat = kwargs.get("category")
+        cat_txt = (cat.value if isinstance(cat, ast.Constant) else None) or "?"
+        out.append((node.lineno, cat_txt, kwargs))
+    return out
+
+
+class TestInAppNotificationNavigation:
+    """An in-app notification is a dead end without somewhere to go.
+
+    The notification card renders its action buttons from ``action_url`` and
+    renders none at all when the field is empty, so a reminder that omits it
+    reaches the member as a headline they cannot act on. Four categories
+    shipped that way — both action-item reminders, event reminders and the
+    series-end reminder — while every scheduling notification set one.
+    """
+
+    def test_every_in_app_notification_has_a_destination(self):
+        calls = _in_app_notification_logs()
+        assert calls, "no in-app NotificationLog calls parsed — matcher drifted"
+
+        offenders = [
+            f"{cat} (line {line})"
+            for line, cat, kwargs in calls
+            if "action_url" not in kwargs
+        ]
+        assert offenders == [], (
+            "These in-app notifications give the member no way to reach what "
+            f"they are about: {offenders}"
+        )
+
+    def test_action_urls_are_relative_paths(self):
+        """NotificationCard navigates with react-router and ignores any URL
+        that does not start with "/", so an absolute ``FRONTEND_URL/...``
+        renders a button that silently does nothing when clicked. The email
+        bodies in these same functions do need the absolute form, so both
+        spellings are in scope together."""
+        offenders = []
+        for line, cat, kwargs in _in_app_notification_logs():
+            value = kwargs.get("action_url")
+            if value is None:
+                continue
+            src = (ast.get_source_segment(TEXT, value) or "").strip()
+            if "FRONTEND_URL" in src or "http://" in src or "https://" in src:
+                offenders.append(f"{cat} (line {line}): {src}")
+        assert offenders == [], (
+            "These in-app notifications point at an absolute URL the card "
+            f"cannot navigate to: {offenders}"
+        )
