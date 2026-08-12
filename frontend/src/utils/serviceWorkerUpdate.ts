@@ -69,8 +69,14 @@ export async function activateFreshServiceWorker(timeoutMs = ACTIVATE_TIMEOUT_MS
     });
   });
 
+  const timedOut = Symbol('service-worker-update-timeout');
+  const timeout = new Promise<typeof timedOut>((resolve) => {
+    setTimeout(() => resolve(timedOut), timeoutMs);
+  });
+
   try {
-    await registration.update();
+    const updateResult = await Promise.race([registration.update().then(() => undefined), timeout]);
+    if (updateResult === timedOut) return;
   } catch {
     return;
   }
@@ -80,7 +86,7 @@ export async function activateFreshServiceWorker(timeoutMs = ACTIVATE_TIMEOUT_MS
   // new worker. Either way a reload is already safe — don't burn the timeout.
   if (!registration.installing && !registration.waiting) return;
 
-  await Promise.race([controllerChanged, new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
+  await Promise.race([controllerChanged, timeout]);
 }
 
 /**

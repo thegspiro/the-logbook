@@ -121,6 +121,14 @@ describe('activateFreshServiceWorker', () => {
     await expect(activateFreshServiceWorker(20)).resolves.toBeUndefined();
   });
 
+  it('gives up after the timeout when registration.update() never resolves', async () => {
+    const registration = makeRegistration();
+    registration.update.mockReturnValue(new Promise(() => undefined));
+    installContainer(registration);
+
+    await expect(activateFreshServiceWorker(20)).resolves.toBeUndefined();
+  });
+
   it('resolves when registration.update() rejects', async () => {
     const registration = makeRegistration();
     registration.update.mockRejectedValue(new Error('sw fetch failed'));
