@@ -68,6 +68,7 @@ class LocationUpdate(BaseModel):
     floor: Optional[str] = Field(None, max_length=20)
     room_number: Optional[str] = Field(None, max_length=50)
     capacity: Optional[int] = Field(None, ge=1)
+    facility_id: Optional[UUID] = None
     is_active: Optional[bool] = None
 
 

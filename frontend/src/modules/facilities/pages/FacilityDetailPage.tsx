@@ -7,20 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import {
-  Building2,
-  ArrowLeft,
-  Loader2,
-  Info,
-  DoorOpen,
-  Settings,
-  Wrench,
-  ClipboardCheck,
-  Users,
-  ShieldCheck,
-  Archive,
-  RotateCcw,
-} from 'lucide-react';
+import { Building2, ArrowLeft, Loader2, Archive, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -31,22 +18,21 @@ import MaintenanceSection from '../components/MaintenanceSection';
 import InspectionsSection from '../components/InspectionsSection';
 import ContactsSection from '../components/ContactsSection';
 import ComplianceSection from '../components/ComplianceSection';
-
-type SectionId = 'overview' | 'rooms' | 'systems' | 'maintenance' | 'inspections' | 'contacts' | 'compliance';
-
-const SECTIONS: { id: SectionId; label: string; icon: React.ElementType }[] = [
-  { id: 'overview', label: 'Overview', icon: Info },
-  { id: 'rooms', label: 'Rooms', icon: DoorOpen },
-  { id: 'systems', label: 'Building Systems', icon: Settings },
-  { id: 'maintenance', label: 'Maintenance', icon: Wrench },
-  { id: 'inspections', label: 'Inspections', icon: ClipboardCheck },
-  { id: 'contacts', label: 'Emergency Contacts', icon: Users },
-  { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
-];
+import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
+import {
+  AccessKeysSection,
+  CapitalProjectsSection,
+  InsuranceSection,
+  OccupantsSection,
+  ShutoffsSection,
+  UtilitiesSection,
+} from '../components/ExtendedFacilitySections';
+import { FACILITY_DETAIL_SECTIONS, type FacilitySectionId } from '../facilityDetailSections';
 
 export default function FacilityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { canManage } = useFacilitiesAccess();
   const {
     selectedFacility: facility,
     isLoadingDetail,
@@ -59,7 +45,7 @@ export default function FacilityDetailPage() {
     clearSelectedFacility,
   } = useFacilitiesStore();
 
-  const [activeSection, setActiveSection] = useState<SectionId>('overview');
+  const [activeSection, setActiveSection] = useState<FacilitySectionId>('overview');
 
   useEffect(() => {
     if (id) {
@@ -166,25 +152,26 @@ export default function FacilityDetailPage() {
           )}
 
           {/* Action buttons */}
-          {facility.isArchived ? (
-            <button
-              onClick={() => {
-                void handleRestore();
-              }}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-400"
-            >
-              <RotateCcw className="h-3.5 w-3.5" /> Restore
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                void handleArchive();
-              }}
-              className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
-            >
-              <Archive className="h-3.5 w-3.5" /> Archive
-            </button>
-          )}
+          {canManage &&
+            (facility.isArchived ? (
+              <button
+                onClick={() => {
+                  void handleRestore();
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-400"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Restore
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  void handleArchive();
+                }}
+                className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
+              >
+                <Archive className="h-3.5 w-3.5" /> Archive
+              </button>
+            ))}
         </div>
       </div>
 
@@ -193,7 +180,7 @@ export default function FacilityDetailPage() {
         {/* Sidebar Navigation */}
         <nav className="w-56 shrink-0" aria-label="Facility sections">
           <div className="bg-theme-surface-modal border-theme-surface-border sticky top-6 rounded-xl border p-2">
-            {SECTIONS.map((section) => {
+            {FACILITY_DETAIL_SECTIONS.map((section) => {
               const Icon = section.icon;
               const isActive = activeSection === section.id;
               return (
@@ -217,14 +204,27 @@ export default function FacilityDetailPage() {
         {/* Content Area */}
         <div className="min-w-0 flex-1">
           {activeSection === 'overview' && (
-            <OverviewSection facility={facility} facilityTypes={facilityTypes} facilityStatuses={facilityStatuses} />
+            <OverviewSection
+              facility={facility}
+              facilityTypes={facilityTypes}
+              facilityStatuses={facilityStatuses}
+              canManage={canManage}
+            />
           )}
-          {activeSection === 'rooms' && <RoomsSection facilityId={facility.id} />}
-          {activeSection === 'systems' && <SystemsSection facilityId={facility.id} />}
-          {activeSection === 'maintenance' && <MaintenanceSection facilityId={facility.id} />}
-          {activeSection === 'inspections' && <InspectionsSection facilityId={facility.id} />}
-          {activeSection === 'contacts' && <ContactsSection facilityId={facility.id} />}
-          {activeSection === 'compliance' && <ComplianceSection facilityId={facility.id} />}
+          {activeSection === 'rooms' && <RoomsSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'systems' && <SystemsSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'maintenance' && <MaintenanceSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'inspections' && <InspectionsSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'utilities' && <UtilitiesSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'contacts' && <ContactsSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'access-keys' && <AccessKeysSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'shutoffs' && <ShutoffsSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'capital-projects' && (
+            <CapitalProjectsSection facilityId={facility.id} canManage={canManage} />
+          )}
+          {activeSection === 'insurance' && <InsuranceSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'occupants' && <OccupantsSection facilityId={facility.id} canManage={canManage} />}
+          {activeSection === 'compliance' && <ComplianceSection facilityId={facility.id} canManage={canManage} />}
         </div>
       </div>
     </div>

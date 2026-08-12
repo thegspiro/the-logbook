@@ -95,7 +95,7 @@ Compliance tracking and auditing across training requirements, certifications, a
 
 ### Facilities Management
 
-Building and property management including maintenance tracking, inspections, and utilities. Links to Locations for room-level data.
+Building and property management including maintenance, inspections, utilities, access keys, shutoff locations, capital projects, insurance, and occupants. Links to Locations for room-level data.
 
 ### Reports
 
