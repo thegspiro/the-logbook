@@ -8,7 +8,7 @@ The Prospective Members module provides a complete applicant tracking system for
 
 ### Key Capabilities
 
-- **Configurable Pipeline**: Drag-and-drop stage builder with seven stage types (form submission, document upload, election/vote, manual approval, automated email, form dropdown, meeting)
+- **Configurable Pipeline**: Drag-and-drop stage builder with twelve stage types (form submission, document upload, election/vote, manual approval, meeting, status-page toggle, automated email, reference check, checklist, interview requirement, multi-signer approval, and medical screening)
 - **Dual View Modes**: Kanban board with drag-and-drop or sortable paginated table
 - **Inactivity Timeout System**: Automatic deactivation with configurable timeouts, per-stage overrides, two-phase warnings, and auto-purge
 - **Applicant Lifecycle**: Six statuses (active, on_hold, withdrawn, converted, rejected, inactive) with full audit trail
@@ -54,15 +54,15 @@ frontend/src/modules/prospective-members/
 
 ### Types
 
-| Type                      | Description                                                                                                                                                                                 |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ApplicantStatus`         | `'active' \| 'on_hold' \| 'withdrawn' \| 'converted' \| 'rejected' \| 'inactive'`                                                                                                           |
-| `PipelineStageType`       | `'form_submission' \| 'document_upload' \| 'election_vote' \| 'manual_approval' \| 'automated_email' \| 'form_dropdown' \| 'meeting'` — see [Stage Types](#stage-types) for details on each |
-| `InactivityTimeoutPreset` | `'3_months' \| '6_months' \| '1_year' \| 'never' \| 'custom'`                                                                                                                               |
-| `InactivityAlertLevel`    | `'normal' \| 'warning' \| 'critical'`                                                                                                                                                       |
-| `PipelineTab`             | `'active' \| 'inactive' \| 'withdrawn'`                                                                                                                                                     |
-| `TargetMembershipType`    | `'regular' \| 'administrative'`                                                                                                                                                             |
-| `ElectionPackageStatus`   | `'draft' \| 'ready' \| 'added_to_ballot' \| 'elected' \| 'not_elected'`                                                                                                                     |
+| Type                      | Description                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `ApplicantStatus`         | `'active' \| 'on_hold' \| 'withdrawn' \| 'converted' \| 'rejected' \| 'inactive'` |
+| `PipelineStageType`       | One of the twelve workflow stage types described in [Stage Types](#stage-types)   |
+| `InactivityTimeoutPreset` | `'3_months' \| '6_months' \| '1_year' \| 'never' \| 'custom'`                     |
+| `InactivityAlertLevel`    | `'normal' \| 'warning' \| 'critical'`                                             |
+| `PipelineTab`             | `'active' \| 'inactive' \| 'withdrawn'`                                           |
+| `TargetMembershipType`    | `'regular' \| 'administrative'`                                                   |
+| `ElectionPackageStatus`   | `'draft' \| 'ready' \| 'added_to_ballot' \| 'elected' \| 'not_elected'`           |
 
 ### Key Interfaces
 
@@ -423,12 +423,12 @@ The stats bar on the main page shows up to seven metrics:
 | Total Active        | Count of applicants with `status = 'active'`                            |
 | Converted           | Count of applicants with `status = 'converted'`                         |
 | Avg Days to Convert | Average days from application to conversion (converted applicants only) |
-| Conversion Rate     | Converted / (Total - Active - On Hold)                                  |
+| Conversion Rate     | Converted / (Converted + Rejected), measuring decided applications      |
 | Approaching Timeout | Active applicants in warning or critical alert state                    |
 | Inactive            | Count of applicants with `status = 'inactive'`                          |
 | Withdrawn           | Count of applicants with `status = 'withdrawn'` (shown when > 0)        |
 
-**Important**: An annotation below the stats bar states: "Statistics include active applicants only. Inactive, rejected, and withdrawn applicants are excluded from conversion rate and averages."
+The leadership Pipeline Overview report additionally provides year-over-year applicant volume and growth, annual conversion and time-to-convert cohorts, referral-source effectiveness, configurable stage-group throughput, and applicant-level detail for authorized users. Date-range filters apply to the application date, so annual cohorts remain tied to the year in which each applicant entered the pipeline.
 
 ---
 
