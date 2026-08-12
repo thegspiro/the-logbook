@@ -4260,6 +4260,11 @@ class Seeder:
         # bare truthiness guard meant a database seeded before end-of-shift
         # checks were added here never grew them, and the pre-finalization
         # checklist's equipment row stayed absent through every re-seed.
+        # Before the early return below, not after it: on a database that has
+        # already been seeded this function returns here, so anything appended
+        # to the end never runs again.
+        self._seed_member_checklist_states(template_id)
+
         if all(
             {"start_of_shift", "end_of_shift"} <= timings
             for timings in existing_by_shift.values()
@@ -4380,6 +4385,130 @@ class Seeder:
                     if exc.code not in (400, 409):
                         raise
         return {"templates": templates, "checks": checks}
+
+    def _seed_member_checklist_states(self, template_id: str | None) -> None:
+        """Leave the demo member one finished check and one part-answered.
+
+        "My Equipment Checklists" is built from the member's own upcoming shift
+        assignments, and offers **Resume** only for a check whose status is
+        `in_progress` or `incomplete` with fewer items answered than it has.
+        Every seeded check was submitted and then completed, so every row read
+        either Not Started or done, and the Resume path could not be shown.
+
+        Submitted **as the member**, not as the admin running the seeder:
+        `complete_incomplete_check` only lets the original checker finish a
+        check unless the caller holds `equipment_check.manage`, so a check
+        started by the chief would give the member a Resume button that refuses
+        them.
+
+        A check is left incomplete simply by not calling `/complete` on it —
+        the status falls out of `completed < total` server-side.
+        """
+        if not template_id:
+            return
+        member = Api(self.base_url)
+        member.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+
+        shifts = [
+            s
+            for s in items(member.get("/scheduling/my-shifts?limit=50"), "shifts")
+            if pick(s, "id")
+            and str(pick(s, "shift_date", "shiftDate") or "") >= str(TODAY)
+        ]
+        shifts.sort(key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""))
+
+        # Idempotent on the state, not on the shift: once one part-answered
+        # check exists there is nothing to add, and re-running must not keep
+        # minting a fresh completed check on the next free shift each time.
+        existing = items(member.get("/equipment-checks/my-checklists"), "checklists")
+        if any(
+            str(pick(c, "status") or "") in {"in_progress", "incomplete"}
+            for c in existing
+        ):
+            return
+
+        untouched = [
+            s
+            for s in shifts
+            if not items(
+                member.get(f"/equipment-checks/shifts/{pick(s, 'id')}/checks"),
+                "checks",
+            )
+        ]
+        if len(untouched) < 2:
+            return
+
+        detail = self.api.get(f"/equipment-checks/templates/{template_id}")
+        rows = []
+        for compartment in items(detail, "compartments"):
+            for item in items(compartment, "items"):
+                # Headers carry no answer and are not counted by the form.
+                if pick(item, "check_type", "checkType") == "header":
+                    continue
+                rows.append(
+                    {
+                        "template_item_id": pick(item, "id"),
+                        "compartment_name": pick(compartment, "name"),
+                        "item_name": pick(item, "name"),
+                        "status": "pass",
+                        "quantity_found": 1,
+                        "required_quantity": 1,
+                    }
+                )
+        if not rows:
+            return
+
+        # The optional As-Carried Kit left unanswered, which is what a crew
+        # interrupted mid-check actually leaves behind. The server derives
+        # `incomplete` from completed < total, so simply not calling /complete
+        # afterwards is the whole trick — and submitting every item lands the
+        # other check as `pass` with no follow-up needed (completing an already
+        # complete check is refused).
+        # The quantity keys are dropped, not zeroed: the server rewrites any
+        # item whose quantity_found is below required_quantity to `fail`, so
+        # sending 0 turned these into answered-and-failed and the check came
+        # back complete — the opposite of what is wanted.
+        part_rows = [
+            (
+                {
+                    key: value
+                    for key, value in row.items()
+                    if key not in {"quantity_found", "required_quantity"}
+                }
+                | {"status": "not_checked"}
+                if row["compartment_name"] == "As-Carried Kit"
+                else row
+            )
+            for row in rows
+        ]
+
+        # Tried against each free shift in turn rather than the first two: this
+        # template is engine-only, and a shift on any other apparatus is
+        # refused with "Template is not applicable to this shift".
+        wanted = [rows, part_rows]
+        for shift in untouched:
+            if not wanted:
+                break
+            try:
+                member.post(
+                    f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
+                    {
+                        "template_id": template_id,
+                        "check_timing": "start_of_shift",
+                        "items": wanted[0],
+                    },
+                )
+            except ApiError as exc:
+                if exc.code == 400:
+                    continue
+                self.blocked.append(f"member checklist states: {exc}")
+                return
+            wanted.pop(0)
+        if wanted:
+            self.blocked.append(
+                "member checklist states: no engine shift free for a "
+                "part-answered check"
+            )
 
     # -- shift finalization ------------------------------------------
 

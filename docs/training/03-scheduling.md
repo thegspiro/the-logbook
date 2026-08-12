@@ -2231,11 +2231,11 @@ When submitting an equipment check with unanswered items, a **confirmation dialo
 Previously, if you started an equipment check but couldn't finish it, the check was stuck in an incomplete state. Now:
 
 1. Open the **Equipment Checks** tab — as a member it is headed **My Equipment Checklists**
-2. Each row shows the rig, whether it is a start- or end-of-shift check, the date, and how many of its items are answered. An untouched one reads **Not Started** with a **Start Check** button; a part-answered one shows its progress and offers **Resume**
-3. Resume opens the form with the answered items already filled in
+2. Each card shows the rig, whether it is a start- or end-of-shift check, the date, and how many of its items are answered, with a progress bar. An untouched one reads **Not Started**; a part-answered one reads **In Progress** with its percentage; a finished one reads **Passed**
+3. The button follows the state: **Continue checklist** on a part-answered card, **Open checklist** otherwise. Continuing opens the form with the answered items already filled in
 4. Complete what is left and submit
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of My Equipment Checklists with a finished check beside a part-answered one showing its progress and a Resume button._
+![My Equipment Checklists — one check part-answered with its progress and a Resume control, one finished, and the untouched ones offering Start Check](./images/03-99-checklists-resume.png)
 
 ### Edge Cases
 

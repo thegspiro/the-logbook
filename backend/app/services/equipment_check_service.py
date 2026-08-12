@@ -622,7 +622,17 @@ class EquipmentCheckService:
         summaries = []
         for tmpl in templates:
             check = checks.get(tmpl.id)
-            item_count = sum(len(comp.items) for comp in tmpl.compartments)
+            # Headers and free-text rows are captions, not questions: the check
+            # form excludes them from what it asks for, and a submitted check's
+            # total_items excludes them too. Counting them here made an
+            # unstarted checklist advertise more items than it turned out to
+            # have — 0/13 on the card, 12 once you opened it.
+            item_count = sum(
+                1
+                for comp in tmpl.compartments
+                for item in comp.items
+                if item.check_type not in ("header", "text")
+            )
             summaries.append(
                 {
                     "template_id": tmpl.id,

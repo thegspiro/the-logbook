@@ -7043,6 +7043,21 @@ export const SHOTS = [
     selector: "aside, nav",
   },
   {
+    id: "03-99-checklists-resume",
+    doc: "03-scheduling.md",
+    line: 2233,
+    anchor:
+      "Screenshot of My Equipment Checklists with a part-answered check beside a finished one",
+    alt: "My Equipment Checklists — one check part-answered with its progress and a Resume control, one finished, and the untouched ones offering Start Check",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await page.waitForSelector("text=Engine Daily Check", { timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
     id: "03-98-incomplete-check-warning",
     doc: "03-scheduling.md",
     line: 2222,
