@@ -3853,29 +3853,6 @@ export const SHOTS = [
   },
 
   {
-    id: "03-58-lots-aboard-sheet",
-    doc: "03-scheduling.md",
-    line: 840,
-    anchor:
-      "Screenshot of the lots sheet open over the Apparatus Inventory page",
-    alt: "The lots sheet: two lots on one position, each with its own count, date and Remove",
-    auth: "member",
-    route: "/scheduling/apparatus-inventory",
-    viewport: "mobile",
-    prepare: async (page) => {
-      await selectMedicApparatus(page);
-      // The lot-count button is the only trigger and renders only above zero.
-      // `.first()` is the naloxone position — the one seeded with two lots, and
-      // the only one that can picture two dates in one bracket. A position with
-      // a single lot opens a stepper instead.
-      const lots = page.getByRole("button", { name: /\d+ lots?/ }).first();
-      await lots.waitFor({ timeout: 20_000 });
-      await lots.click();
-      await page.waitForTimeout(900);
-    },
-    fullPage: false,
-  },
-  {
     id: "03-60-report-used-sheet",
     doc: "03-scheduling.md",
     line: 880,
@@ -3896,62 +3873,6 @@ export const SHOTS = [
       await trigger.waitFor({ timeout: 20_000 });
       await trigger.click();
       await page.waitForTimeout(900);
-    },
-    fullPage: false,
-  },
-  {
-    id: "03-61-quick-add-catalog-search",
-    doc: "03-scheduling.md",
-    line: 937,
-    anchor:
-      'Screenshot of the template builder\'s quick-add bar with "gau" typed',
-    alt: "The quick-add bar searching the inventory catalog, with matches and the create-and-link option",
-    route: "/scheduling",
-    prepare: async (page) => {
-      await openTemplateNamed("Medic 3 Supply Check")(page);
-      const search = page
-        .getByPlaceholder(/Search inventory or type a new item name/i)
-        .first();
-      await search.waitFor({ timeout: 20_000 });
-      // Centred, not merely "in view". The results open *below* the input, so
-      // `scrollIntoViewIfNeeded` — which stops as soon as the input itself is
-      // on screen — leaves the dropdown clipped by the bottom of the viewport,
-      // and the dropdown is the entire subject of the shot.
-      await search.evaluate((el) => el.scrollIntoView({ block: "center" }));
-      await page.waitForTimeout(400);
-      // Typed one key at a time: the dropdown opens on input events, and
-      // `fill` emits a single change rather than a keystroke each.
-      await search.pressSequentially("gau", { delay: 120 });
-      await page.waitForTimeout(1_500);
-    },
-    fullPage: false,
-  },
-  {
-    id: "03-62-bulk-inventory-match",
-    doc: "03-scheduling.md",
-    line: 940,
-    anchor:
-      "Screenshot of the bulk inventory-match dialog on an unlinked engine checklist",
-    alt: "The bulk match dialog: exact matches pre-selected, a close match left for a person to arbitrate",
-    route: "/scheduling",
-    prepare: async (page) => {
-      // The **engine** checklist, not the medic's. `seed_supply_tracking` links
-      // every stock position on the medic, so its dialog has nothing to propose
-      // — the right end state and the wrong picture. The engine template is the
-      // case this feature exists for: a checklist nobody has linked, carrying
-      // two exact matches (Portable radio, Thermal imaging camera), one close
-      // match left unticked (Spare cylinder → SCBA Spare Cylinder), and six
-      // lines that are not stock at all.
-      await openTemplateNamed("Engine Daily Check")(page);
-      const coverage = page
-        .getByRole("button", { name: /\d+\/\d+ linked/ })
-        .first();
-      await coverage.waitFor({ timeout: 20_000 });
-      await coverage.click();
-      await page
-        .getByText(/items are linked to inventory/i)
-        .waitFor({ timeout: 20_000 });
-      await page.waitForTimeout(800);
     },
     fullPage: false,
   },
@@ -4061,7 +3982,6 @@ export const SHOTS = [
     viewport: { width: 1440, height: 1010 },
     fullPage: false,
   },
-
 
   // ── 06 Apparatus & Facilities ───────────────────────────────────────
   {
