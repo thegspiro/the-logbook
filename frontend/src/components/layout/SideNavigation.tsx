@@ -560,7 +560,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               />
             </div>
             <div className="ml-3 min-w-0 flex-1">
-              <span className="text-theme-text-primary text-lg leading-tight font-semibold wrap-break-word">
+              <span className="text-theme-text-primary block truncate text-base leading-tight font-semibold sm:text-lg">
                 {departmentName}
               </span>
             </div>
@@ -583,13 +583,13 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         id="side-navigation"
         role="navigation"
         aria-label="Main navigation"
-        className={`safe-top bg-theme-nav-bg border-theme-surface-border fixed top-0 left-0 z-40 h-full overscroll-contain border-r transition-all duration-300 ${
+        className={`mobile-navigation-drawer safe-top bg-theme-nav-bg border-theme-surface-border fixed top-0 left-0 z-40 h-full overscroll-contain border-r transition-all duration-300 ${
           collapsed ? 'w-20' : 'w-64'
         } ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       >
         <div className="flex h-full flex-col">
           {/* Logo Section */}
-          <div className="border-theme-surface-border border-b p-4">
+          <div className="border-theme-surface-border hidden border-b p-4 md:block">
             {collapsed ? (
               <>
                 <div className="flex items-center justify-center">
@@ -657,7 +657,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   return (
                     <li key={`section-${item.label}`} aria-hidden="true">
                       {!collapsed ? (
-                        <div className="px-4 pt-5 pb-2">
+                        <div className="px-4 pt-3 pb-2 md:pt-5">
                           <div className="border-theme-surface-border border-t" />
                           <span className="text-theme-text-muted/70 mt-3 block text-[10px] font-bold tracking-widest uppercase">
                             {item.label}

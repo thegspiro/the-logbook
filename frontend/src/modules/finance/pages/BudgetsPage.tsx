@@ -169,7 +169,7 @@ const BudgetsPage: React.FC = () => {
         <select
           value={selectedFiscalYear}
           onChange={(e) => setSelectedFiscalYear(e.target.value)}
-          className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:ring-2 focus:outline-none"
         >
           <option value="">Select Fiscal Year</option>
           {fiscalYears.map((fy) => (

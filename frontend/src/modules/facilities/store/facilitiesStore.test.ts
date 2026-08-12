@@ -15,6 +15,7 @@ const mockArchiveFacility = vi.fn();
 const mockRestoreFacility = vi.fn();
 const mockGetMaintenanceRecords = vi.fn();
 const mockGetInspections = vi.fn();
+const mockGetDashboardCounts = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   facilitiesService: {
@@ -32,6 +33,7 @@ vi.mock('../../../services/api', () => ({
     restoreFacility: (...args: unknown[]) => mockRestoreFacility(...args) as unknown,
     getMaintenanceRecords: (...args: unknown[]) => mockGetMaintenanceRecords(...args) as unknown,
     getInspections: (...args: unknown[]) => mockGetInspections(...args) as unknown,
+    getDashboardCounts: (...args: unknown[]) => mockGetDashboardCounts(...args) as unknown,
   },
 }));
 
@@ -150,6 +152,29 @@ describe('facilitiesStore', () => {
       expect(state.facilityStatuses).toEqual([]);
       expect(state.maintenanceTypes).toEqual([]);
       expect(state.error).toBeNull();
+    });
+  });
+
+  describe('loadDashboardStats', () => {
+    it('uses unpaginated API counts instead of list lengths', async () => {
+      mockGetFacilities.mockResolvedValue([mockFacility, mockFacility2]);
+      mockGetMaintenanceRecords.mockResolvedValue([]);
+      mockGetInspections.mockResolvedValue([]);
+      mockGetDashboardCounts.mockResolvedValue({
+        totalFacilities: 125,
+        operationalFacilities: 98,
+        overdueMaintenance: 17,
+        upcomingInspections: 9,
+      });
+
+      await useFacilitiesStore.getState().loadDashboardStats();
+
+      expect(useFacilitiesStore.getState().dashboardStats).toMatchObject({
+        totalFacilities: 125,
+        operationalCount: 98,
+        overdueMaintenanceCount: 17,
+        upcomingInspectionCount: 9,
+      });
     });
   });
 

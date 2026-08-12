@@ -114,9 +114,12 @@ The inventory system supports two tracking modes:
 
 ### Pool Items
 
-- Tracked by total quantity on hand and quantity currently issued
+- Tracked by two separate counts: **Quantity**, the units on hand, and
+  **Issued**, the units currently out with members
 - Members receive issuances (e.g., "3 pairs of gloves")
-- Returns increase the on-hand count
+- Issuing moves units from one count to the other, and a return moves them
+  back — so the department's total is on-hand **plus** issued, and an item
+  with every unit out reads `0` on hand, never a negative number
 - Pool items must have a quantity of at least 1 when created
 
 > **Hint:** Set the tracking type when creating an item. It determines whether the item appears in the assignment workflow (individual) or the issue/return workflow (pool).
@@ -268,8 +271,17 @@ The system creates `4 × 2 × 2 = 16` pool items:
 
 All 16 items are linked under a single variant group and share the base description and category.
 
-> **Screenshot needed:**
-> _[Screenshot of the inventory items list showing a variant group expanded to display individual size/style/color variants with their stock levels]_
+Each variant is its own row in the items list, with its size, style and colour
+shown as capsules in the **Variant** column — pictured under
+[Variant Capsules](#variant-capsules). To see the whole group at once, with a
+stock quantity per size and colour, open it on **Inventory Admin > Variant
+Groups**; that grid is pictured under
+[Stock Matrix on Variant Groups Page](#stock-matrix-on-variant-groups-page).
+
+> **Corrected 2026-08-12.** The retired screenshot placeholder here asked for
+> "a variant group **expanded**" in the inventory items list. The list does not
+> group or collapse variants — every variant is a top-level row, and the only
+> place a group is expandable is the Variant Groups admin page.
 
 ### Edge Cases
 
@@ -310,10 +322,9 @@ When a quartermaster issues a **pool** item to a member, the system checks the m
 - The member's **highest-priority position** determines which allowance applies (a role-specific allowance wins over the org-wide default).
 - **Annual** allowances count issuances since January 1 of the current year; **Career** and **One-time** count all-time issuances.
 - A category with **no** configured allowance is **unlimited**.
-- If an issuance would exceed the cap, it is blocked with a message stating how many remain versus how many were requested. An admin can check **Override allowance** to issue anyway for a documented exception.
+- If an issuance would exceed the cap, it is blocked with a message stating how many remain versus how many were requested. The issue dialog checks the allowance as soon as you pick the member, so the warning and the **Override allowance** checkbox appear before you submit rather than after — check it to issue anyway for a documented exception. The checkbox only appears when the quantity you have entered would actually exceed the cap.
 
-> **Screenshot needed:**
-> _[Screenshot of the pool-item issue dialog showing an "allowance exceeded" warning (e.g., "Member has 1 of 3 remaining for this category (annual), but 2 requested") with an "Override allowance" checkbox available to administrators]_
+![Pool item issue dialog warning that the quantity exceeds the member’s uniform allowance, with the "Override allowance" checkbox](./images/05-13-issue-allowance-exceeded.png)
 
 ### Edge Cases
 
@@ -332,13 +343,22 @@ When a quartermaster issues a **pool** item to a member, the system checks the m
 
 Once an equipment request has been **approved**, a quartermaster can **fulfill** it — turning the request into an actual issuance, checkout, or assignment in one step. Open the request from **Equipment Requests** and click **Fulfill**.
 
+- The page opens on **Pending**, which is the review queue. Approved and
+  fulfilled requests are behind the status filter — switch it to **All** to see
+  a request's whole life.
 - The system routes fulfillment by the item's tracking type: a **pool** item becomes a pool issuance (allowance-checked unless overridden); an **individual** item becomes a checkout (for checkout requests) or an assignment.
-- The request then shows a terminal **Fulfilled** status, along with who fulfilled it, when, and a link to the created record.
+- The request then shows a terminal **Fulfilled** status and one line saying
+  which way it went and when — "Fulfilled via issuance on 8/11/2026".
+
+> **Corrected 2026-08-12.** That last line previously promised "who fulfilled
+> it, when, and a link to the created record". The card names neither the
+> fulfiller nor a link; the reference to the issuance or checkout is stored
+> (`fulfillment_reference_id`) but nothing renders it, so tracing a fulfilled
+> request to what it created means finding that record by member and date.
 
 > **Note:** Fulfillment is **not** reversible by re-running it — each fulfill action creates a new issuance/checkout/assignment. Only requests in the **Approved** state can be fulfilled, which prevents accidentally fulfilling the same request twice.
 
-> **Screenshot needed:**
-> _[Screenshot of an approved Equipment Request row with a "Fulfill" action, and a fulfilled request showing the green "Fulfilled" badge with the fulfiller's name, timestamp, and a link to the resulting issuance/checkout/assignment]_
+![Equipment Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge](./images/05-68-equipment-request-states.png)
 
 ---
 
@@ -537,8 +557,7 @@ own. You choose the person and what you are doing first, then scan; there is no
 
 If a code matches multiple items (e.g., the same serial number in different categories), all matches are displayed.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the scan modal with the camera running and an item just read into the staged list]_
+> **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
 
 > **Hint:** Barcode scanning works best with a device that has a camera. On desktop, you can use a USB barcode scanner, which types the code into the search field — as does typing a name, serial or asset tag by hand, which is the same path. If scanning fails, check that the barcode is clean and well-lit; a specific error message will indicate whether the item was not found or a network error occurred.
 
@@ -763,6 +782,17 @@ trucks") is the supply worklist at **Scheduling → Supply**; see
 
 When a member departs the department (dropped, retired, etc.), a **Departure Clearance** is created to track the return of all assigned equipment.
 
+> **No screen for this yet _(2026-08-12)_.** Departure clearance is implemented
+> on the server — clearances can be initiated, listed, resolved item by item and
+> completed — but nothing in the application calls it. There is no Inventory
+> Admin button, no clearance page, and no way to work one through the interface;
+> it is reachable only via the API. The steps below describe the workflow, not a
+> screen you can currently open. The **property return report** generated when a
+> member is dropped is a different, working feature — see
+> [Membership > Property Return Process](./01-membership.md#member-status-management).
+> See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#inventory--departure-clearance-is-backend-only-2026-08-12).
+
 ### Creating a Clearance
 
 **Required Permission:** `inventory.manage`
@@ -785,9 +815,6 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 | **In Progress**       | Some items resolved, others still pending                                |
 | **Completed**         | All items resolved, clearance finalized                                  |
 | **Closed Incomplete** | Closed by an administrator with some items still outstanding (write-off) |
-
-> **Screenshot placeholder:**
-> _[Screenshot of a departure clearance record showing the member's name, departure date, a checklist of outstanding items with disposition dropdowns, and resolve/complete buttons]_
 
 > **Hint:** Departure clearances integrate with the Member Status workflow. When a member is dropped, a property return report is automatically generated. See [Membership > Property Return Process](./01-membership.md#member-status-management).
 
@@ -1501,8 +1528,7 @@ Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop brow
 - **MemberIdScannerModal**: Member ID card scanning works on desktop with user-facing camera fallback
 - Both modals share the same camera initialization, resolution selection, and error handling logic
 
-> **Screenshot needed:**
-> _[Screenshot of the InventoryScanModal running on a desktop browser, showing the camera viewport with a barcode being detected and the item search results appearing below]_
+> **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
 
 > **Edge case:** If no camera is available, the scanner shows an error message and the user can fall back to manual text entry (barcode/serial number input field).
 
@@ -1596,8 +1622,7 @@ Storage areas now display the inventory items assigned to each area:
 
 Item detail pages now always display the barcode and asset tag fields, even when empty. Empty fields show a `--` placeholder instead of being hidden, making it clear which items have barcodes assigned and which don't.
 
-> **Screenshot needed:**
-> _[Screenshot of an item detail page showing the barcode field with a generated barcode value (e.g., "INV-A3F82B9C") and the asset tag field showing "--" placeholder]_
+![An item with a barcode but no asset tag — the empty field showing its -- placeholder rather than being hidden](./images/05-67-empty-asset-tag.png)
 
 ### Barcode Numbering
 
@@ -1732,16 +1757,32 @@ The system remembers your chosen **printer/size per position and per module**:
 
 ### Label Formats
 
-| Format       | Size         | Use Case                   |
-| ------------ | ------------ | -------------------------- |
-| Dymo 30252   | 1.125×3.5"   | Address labels             |
-| Dymo 30256   | 2.3125×4"    | Shipping labels            |
-| Dymo 30334   | 1.25×2.25"   | Multi-purpose labels       |
-| Rollo 4×6    | 4×6"         | Thermal shipping labels    |
-| Letter sheet | 8.5×11"      | Standard printer, 2×5 grid |
-| Custom       | User-defined | 0.5-8" wide × 0.5-11" tall |
+Nine choices, picked as cards rather than from a dropdown. Dymo 30252 is the
+default.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the label print page (any module) showing the label format dropdown, printer preference selector, copies per record field, and a preview of the generated label._
+| Format              | Size         | Use Case                   |
+| ------------------- | ------------ | -------------------------- |
+| Dymo 30252          | 1.125×3.5"   | Standard address label     |
+| Dymo 30256          | 2.3125×4"    | Shipping label             |
+| Dymo 30334          | 2.25×1.25"   | Multi-purpose label        |
+| Dymo 30336          | 1×2.125"     | Small multipurpose label   |
+| Rollo 4×6           | 4×6"         | Shipping label             |
+| Rollo / Thermal 2×1 | 2×1"         | Small thermal label        |
+| Thermal 1×1         | 1×1"         | Square asset tag           |
+| Letter Paper (Grid) | 8.5×11"      | 30 per page (Avery 5160)   |
+| Custom size         | User-defined | 0.5-8" wide × 0.5-11" tall |
+
+> **Corrected 2026-08-12.** This table previously listed six formats and
+> described the letter sheet as a 2×5 grid. There are nine, and the letter
+> sheet is Avery 5160 at 30 labels per page.
+
+Choosing a **thermal** size (the Rollo and Thermal entries) also reveals a
+**Label Orientation** control and a **Download Test Label** button, for
+checking alignment on a roll-fed printer before committing a batch. Below the
+size you can set **copies per item** and tick which extra details to print
+under the barcode — Location, Category, Condition.
+
+![The inventory label print page — the nine label size choices with Rollo/Thermal 2x1 selected, copies per item, extra-detail toggles, and a preview of the three barcode labels](./images/05-69-label-print-page.png)
 
 ### Edge Cases
 
@@ -1792,9 +1833,26 @@ Several inventory admin pages have been **collapsed from separate desktop and mo
 | ReorderRequestsPage      | Separate renders           | Single responsive table |
 | InventoryMaintenancePage | Separate renders           | Single responsive table |
 
-Each `<td>` uses a `data-label` attribute to display the field name on mobile. Cells without `data-label` (checkboxes, action buttons) are hidden in mobile view.
+Each `<td>` uses a `data-label` attribute to display the field name on mobile.
+A cell with **no** `data-label` at all is hidden in the stacked view.
 
-> **[SCREENSHOT NEEDED]:** _Side-by-side comparison of an inventory table on desktop (standard horizontal table) and mobile (stacked card format with field labels on the left, values on the right)._
+Two refinements are worth knowing, because both look like mistakes and are not
+_(clarified 2026-08-12)_:
+
+- **A cell can opt back in with an empty label.** The selection checkbox and
+  the Edit/Retire buttons carry `data-label=""`, so they still appear on a
+  phone — just without a field name against them. They are not hidden.
+- **Columns hidden on desktop can reappear on the phone.** Manufacturer, Serial
+  #, Asset Tag, Barcode and Cost are marked `hidden`, which keeps them out of
+  the desktop table where width is scarce; the stacked-card rules override that,
+  so they come back as rows on mobile where there is vertical room. This is why
+  the phone card below lists more fields than the desktop table shows, not
+  fewer.
+
+The desktop form of this table is pictured at the top of this guide under
+[Inventory Overview](#inventory-overview). Below is the same table on a phone.
+
+![The inventory items table on a phone — each row stacked into a card with the field name on the left and its value on the right](./images/05-70-inventory-table-mobile.png)
 
 ---
 
@@ -1907,15 +1965,32 @@ Use cases: Annual uniform refresh, seasonal PPE cycle, new recruit onboarding ki
 
 ### Replacement-Aware Analysis
 
-When you enable **Include replacements** and select a related category:
+Select a related category under **Already has item in category**, then tick
+**Count worn or expired items as needing replacement**. With that on:
 
 1. The system checks each member's held items in that category
 2. Items are assessed for serviceability (condition, NFPA retirement dates)
 3. Members with only worn-out or expired items are flagged "Needs replacement"
 4. The purchase count includes both members with no item AND those needing replacement
-5. The UI distinguishes "Needs item" (never had one) from "Replace" (has a worn/expired one)
+5. The Existing column carries one of **three** badges, not two:
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the member list with replacement-aware analysis enabled, showing two badge types: "Needs item" (red) for a member with no turnout coat, and "Replace" (amber) for a member with an expired coat._
+| Badge          | Colour | Meaning                                                       |
+| -------------- | ------ | ------------------------------------------------------------- |
+| **Has item**   | Green  | Holds at least one serviceable item in the category           |
+| **Replace**    | Amber  | Holds items in the category, but every one is worn or expired |
+| **Needs item** | Purple | Holds nothing in the category                                 |
+
+Hovering **Has item** or **Replace** lists the items in question, and a
+**"N to replace"** chip appears beside the Impacted Members heading. Note that
+members needing a replacement count toward **Need the item** in the summary
+cards, not toward **Already have one** — they are people you must buy for.
+
+> **Corrected 2026-08-12.** This section previously described two badges and
+> called "Needs item" red; there are three and it is purple. The control is also
+> named "Count worn or expired items as needing replacement", not "Include
+> replacements", and it only appears once a category is chosen.
+
+![The Impact Planner's Impacted Members table with replacement-aware analysis on — each member badged Has item, Replace or Needs item against the chosen category](./images/05-71-impact-planner-replacement.png)
 
 ### Allowance-Aware Warnings
 

@@ -19,6 +19,7 @@ import React, { useState } from 'react';
 import { Check, Copy, ExternalLink } from 'lucide-react';
 import { formatCurrency } from '../../../utils/dateFormatting';
 import type { StorePaymentInstructions, StorePaymentOption } from '../types';
+import { isSafeExternalUrl } from '../../../utils/safeUrl';
 
 interface PaymentOptionsProps {
   instructions: StorePaymentInstructions;
@@ -78,7 +79,7 @@ const OptionRow: React.FC<{
         <p className="text-theme-text-muted mt-0.5 text-xs whitespace-pre-line">{option.instructions}</p>
       )}
     </div>
-    {option.paymentUrl && (
+    {option.paymentUrl && isSafeExternalUrl(option.paymentUrl) && (
       <a href={option.paymentUrl} target="_blank" rel="noopener noreferrer" className="btn-primary btn-sm shrink-0">
         Pay {formatCurrency(amount)}
         <ExternalLink className="h-3.5 w-3.5" />

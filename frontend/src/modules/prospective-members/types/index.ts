@@ -422,12 +422,12 @@ export interface Applicant {
   current_stage_id: string;
   current_stage_name?: string | undefined;
   current_stage_type?: StageType | undefined;
+  current_stage_config?: StageConfig | undefined;
   stage_entered_at: string;
   target_membership_type: TargetMembershipType;
   target_role_id?: string | undefined;
   target_role_name?: string | undefined;
   form_submission_id?: string | undefined;
-  status_token?: string | undefined;
   status: ApplicantStatus;
   notes?: string | undefined;
   stage_history: StageHistoryEntry[];
@@ -865,7 +865,6 @@ export interface BackendProspectResponse {
   status: string | { value: string };
   metadata: Record<string, unknown> | null;
   form_submission_id: string | null;
-  status_token: string | null;
   transferred_user_id: string | null;
   transferred_at: string | null;
   created_at: string;
@@ -945,6 +944,8 @@ export interface BackendPipelineStatsResponse {
   pipeline_id: string;
   total_prospects: number;
   active_count: number;
+  on_hold_count: number;
+  inactive_count: number;
   approved_count: number;
   rejected_count: number;
   withdrawn_count: number;

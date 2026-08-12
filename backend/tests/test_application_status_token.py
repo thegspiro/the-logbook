@@ -67,8 +67,8 @@ async def test_token_is_not_rotated_on_read():
     assert result is not None
     # The stored token is untouched, so the emailed link keeps working.
     assert prospect.status_token == "tok_original"
-    # And the response echoes the same stable token, not a new one.
-    assert result["status_token"] == "tok_original"
+    # The bearer credential is not reflected into the public response.
+    assert "status_token" not in result
 
 
 async def test_second_read_with_same_token_still_succeeds():

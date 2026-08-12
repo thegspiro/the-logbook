@@ -56,7 +56,6 @@ _STUB_MODULES = [
     "fastapi.routing",
     "fastapi.middleware",
     "fastapi.middleware.cors",
-    "fastapi_mail",
     "sentry_sdk",
     "twilio",
     "twilio.rest",

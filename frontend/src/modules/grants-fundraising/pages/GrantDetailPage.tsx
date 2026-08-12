@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { useNavigate, useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -890,7 +891,7 @@ export const GrantDetailPage: React.FC = () => {
                               {linkedBudgetItem ? linkedBudgetItem.category : '--'}
                             </td>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">
-                              {exp.receiptUrl ? (
+                              {exp.receiptUrl && isSafeExternalUrl(exp.receiptUrl) ? (
                                 <a
                                   href={exp.receiptUrl}
                                   target="_blank"

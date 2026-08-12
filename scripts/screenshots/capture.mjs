@@ -34,6 +34,12 @@ const REPO_ROOT = resolve(HERE, "..", "..");
 const OUTPUT_DIR = resolve(REPO_ROOT, "docs", "training", "images");
 const BASE_URL = process.env.SCREENSHOT_BASE_URL || "http://localhost:3000";
 
+if (!DEMO_CREDENTIALS.password) {
+  throw new Error(
+    "SCREENSHOT_ADMIN_PASSWORD must be set to the password used during bootstrap",
+  );
+}
+
 const run = promisify(execFile);
 
 /**
@@ -402,12 +408,37 @@ async function main() {
         });
         await settle(page);
       }
+      // Hide the skip-to-main link before shooting.
+      //
+      // It is `position: fixed` at `top: -24rem` — off-screen until focused,
+      // and a reader never sees it. But a full-page screenshot is stitched
+      // from several viewport captures, and a fixed element is painted into
+      // each stitch at its *document* offset, so "24rem above the viewport"
+      // lands 24rem above whatever scroll position that stitch used: the link
+      // appeared in the middle of the finished image, over real content.
+      //
+      // Not a focus problem — `boundingBox()` reports it off-screen the whole
+      // time — so blurring does not help. Hiding the one element that is
+      // already invisible to a user makes the image more faithful, not less.
+      await page.addStyleTag({
+        content: ".skip-to-main { display: none !important; }",
+      });
+
       const clip = shot.selector
         ? await page.locator(shot.selector).first()
         : null;
       if (clip) {
         await clip.screenshot({ path: target });
       } else {
+        if (shot.fullPage) {
+          // Return to the top first. A prepare step that clicks something far
+          // down the page leaves the window scrolled, and a full-page shot is
+          // stitched from viewport captures with fixed elements painted at the
+          // scroll offset in force — which drops the fixed sidebar into the
+          // middle of the image. Same mechanism as the skip-link above.
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await page.waitForTimeout(250);
+        }
         await page.screenshot({
           path: target,
           fullPage: Boolean(shot.fullPage),

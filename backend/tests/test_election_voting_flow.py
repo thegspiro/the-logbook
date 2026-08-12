@@ -10,6 +10,7 @@ Tests covering the full vote-casting lifecycle through ElectionService:
 """
 
 import secrets
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -380,6 +381,17 @@ class TestVoteIntegrity(TestElectionSetup):
         assert integrity["tampered_votes"] == 0
         assert integrity["chain_verified"] is True
 
+        # And it must survive the schema the endpoint returns it through. The
+        # response model was written against a different vocabulary entirely
+        # — election_title, total_votes_checked, valid_votes, invalid_votes,
+        # chain_valid — none of which this service produces, so every call to
+        # /integrity was a 500. Asserting on the dict alone never caught it.
+        from app.schemas.election import VoteIntegrityResponse
+
+        checked = VoteIntegrityResponse.model_validate(integrity)
+        assert checked.integrity_status == "PASS"
+        assert checked.valid_signatures == 1
+
     async def test_vote_forensics(self, db_session: AsyncSession, setup_election):
         data = setup_election
         svc = ElectionService(db_session)
@@ -408,6 +420,57 @@ class TestVoteIntegrity(TestElectionSetup):
         assert forensics["vote_integrity"]["integrity_status"] == "PASS"
         assert forensics["vote_integrity"]["chain_verified"] is True
         assert forensics["vote_integrity"]["total_votes"] == 3
+
+    async def test_forensics_payload_passes_response_validation(
+        self, db_session: AsyncSession, setup_election
+    ):
+        """The report must survive the schema the endpoint returns it through.
+
+        This is the gap the previous test left. `get_election_forensics`
+        returns a plain dict, so asserting on it directly never exercised
+        `ForensicsReport` — and the endpoint validates against that model on
+        the way out. `AuditLog.id` is a BigInteger while `AuditLogEntry.id` is
+        a string, so the moment an election had any audit trail the whole
+        report failed response validation and the Forensics panel got a 500.
+        Every election that has ever been touched has an audit trail.
+        """
+        from app.schemas.election import ForensicsResponse
+
+        data = setup_election
+        # One audit row of the shape the report gathers: category "elections",
+        # carrying this election's id in its event_data.
+        await db_session.execute(
+            text(
+                "INSERT INTO audit_logs "
+                "(event_type, event_category, severity, event_data, "
+                " organization_id, timestamp, timestamp_nanos, "
+                " previous_hash, current_hash) "
+                "VALUES ('election_opened', 'elections', 'info', :data, "
+                "        :org, :ts, :nanos, :prev, :cur)"
+            ),
+            {
+                "data": f'{{"election_id": "{data["election_id"]}"}}',
+                "org": data["org_id"],
+                "ts": datetime.now(timezone.utc),
+                "nanos": time.time_ns(),
+                # The chain columns are NOT NULL; their values are irrelevant
+                # here — this row exists to be *read back* by the report.
+                "prev": "0" * 64,
+                "cur": "1" * 64,
+            },
+        )
+        await db_session.flush()
+
+        svc = ElectionService(db_session)
+        forensics = await svc.get_election_forensics(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+        )
+
+        assert forensics["audit_log"]["total_entries"] >= 1
+        # The assertion that matters: this is what the endpoint does.
+        report = ForensicsResponse.model_validate(forensics)
+        assert all(isinstance(e.id, str) for e in report.audit_log.entries)
 
 
 # ── TestMultiVoteMethods (ELEC-3) ─────────────────────────────────────

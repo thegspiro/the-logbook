@@ -568,7 +568,6 @@ class ItemTrendEntry(BaseModel):
     period: str
     pass_count: int = 0
     fail_count: int = 0
-    not_applicable_count: int = 0
     not_checked_count: int = 0
     # Answered "not on truck". Counted apart from not_checked_count: one is a
     # crew's answer, the other is nobody having looked.

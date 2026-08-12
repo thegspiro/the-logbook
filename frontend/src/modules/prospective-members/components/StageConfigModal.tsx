@@ -615,8 +615,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
     if (stageType === StageTypeConst.MULTI_APPROVAL) {
       const c = config as MultiApprovalConfig;
-      if (!c.required_approvers || c.required_approvers.length === 0) {
+      const roles = (c.required_approvers ?? []).map((role) => role.trim()).filter(Boolean);
+      if (roles.length === 0) {
         newErrors.required_approvers = 'At least one approver role is required';
+      } else if (new Set(roles).size !== roles.length) {
+        newErrors.required_approvers = 'Approver roles must be unique';
       }
     }
 

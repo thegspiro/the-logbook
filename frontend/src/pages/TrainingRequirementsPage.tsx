@@ -22,6 +22,7 @@ import {
 import { trainingService, trainingProgramService } from '../services/api';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
+import { isSafeExternalUrl } from '@/utils/safeUrl';
 import { toChecklistItems } from '../utils/checklistItems';
 import type {
   TrainingRequirement,
@@ -644,20 +645,22 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                         : 'Department'
                   }
                 />
-                {requirement.registry_name && registryUrlMap[requirement.registry_name] && (
-                  <div className="flex justify-between">
-                    <span className="text-theme-text-muted text-sm">Citation:</span>
-                    <a
-                      href={registryUrlMap[requirement.registry_name]}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center space-x-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
-                    >
-                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                      <span>View source</span>
-                    </a>
-                  </div>
-                )}
+                {requirement.registry_name &&
+                  registryUrlMap[requirement.registry_name] &&
+                  isSafeExternalUrl(registryUrlMap[requirement.registry_name]) && (
+                    <div className="flex justify-between">
+                      <span className="text-theme-text-muted text-sm">Citation:</span>
+                      <a
+                        href={registryUrlMap[requirement.registry_name]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center space-x-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        <span>View source</span>
+                      </a>
+                    </div>
+                  )}
                 <DetailRow label="Training Type" value={requirement.training_type || 'Any'} />
                 {/* Due date type, period and year describe a recurring cycle
                     that a one-time requirement does not have — the backend

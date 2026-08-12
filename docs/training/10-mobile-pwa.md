@@ -49,8 +49,10 @@ iOS requires using **Safari** to install PWAs. Other browsers (Chrome, Firefox) 
 5. The name will default to "The Logbook" — you can change it if you wish.
 6. Tap **Add** in the upper right corner.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Safari share sheet on iPhone showing the "Add to Home Screen" option highlighted, with the Logbook URL in the address bar above]_
+> **Corrected 2026-08-12.** The retired placeholder asked for **Safari's own
+> share sheet**. That is iOS system UI, not a screen this application draws,
+> so the screenshot pipeline has nothing to capture — the steps above are the
+> documentation.
 
 The Logbook icon now appears on your home screen. Tapping it opens the app in standalone mode (no Safari toolbar).
 
@@ -66,8 +68,8 @@ The Logbook icon now appears on your home screen. Tapping it opens the app in st
 4. If the banner does not appear, tap the **three-dot menu** (top right) and select **Install app** or **Add to Home screen**.
 5. Confirm by tapping **Install**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of Chrome on Android showing the install banner at the bottom of the screen ("Add The Logbook to Home screen") with an Install button]_
+> **Corrected 2026-08-12.** Same as the iOS step above: Chrome's install
+> banner is browser UI, drawn by Chrome and not by this application.
 
 The Logbook icon appears on your home screen and in your app drawer. It opens in standalone mode.
 
@@ -127,6 +129,19 @@ button, within thumb reach. Tap **More** to open the full navigation drawer.
 
 ![Bottom navigation bar as it appears on a phone](./images/10-12-mobile-bottom-nav.png)
 
+> **The header menu button moved to the left edge** _(2026-08-12)_. The ☰
+> button in the top bar — which opens the full navigation drawer — now sits at
+> the **top-left**, with your department name beside it, instead of the far
+> right. The drawer slides in from the left, so the button now sits on the
+> edge the drawer comes from. This is the same header on every signed-in page,
+> so if you built the muscle memory for the top-right corner, that is what
+> moved. Sign-in and public pages have no such header and are unchanged.
+>
+> **[SCREENSHOT NEEDED]:** _Re-shoot of the phone header showing the ☰ button
+> at the left edge with the department name beside it — every existing
+> phone-width capture that includes the top bar shows the old right-edge
+> placement (see SCREENSHOT_CURRENCY.md)._
+
 ### Everything Is Thumb-Sized Now _(2026-08-08)_
 
 Every tappable control in the app now meets the **44-pixel touch minimum** on a
@@ -173,6 +188,21 @@ on the label-print preview. These are dense fixed-size layouts where enlarging
 the text would break the grid rather than help anyone read it.
 
 ![Dashboard on a phone with relative timestamps and navigation labels at the 12px minimum](./images/10-10-mobile-minimum-text.png)
+
+### The Rest of the App Fits a Phone Now _(2026-08-11)_
+
+Roughly 115 pages that still overflowed sideways at phone width — training
+admin tabs, elections, events, finance, grants, facilities, minutes,
+onboarding, and more — were reworked so nothing forces horizontal scrolling:
+page headers stack their title and buttons, tab strips scroll sideways within
+themselves instead of wrapping to two lines, two-column form grids collapse to
+one, and long badge/filter rows wrap. Two pages changed at every width, not
+just phones: the Member Training Status page gained the standard page margins
+it had been missing, and a facility's section list stacks above its content on
+a phone instead of squeezing beside it.
+
+Nothing moved on desktop beyond those two; this is the same
+scoped-under-768px approach as the touch-target work above.
 
 ### Dark Mode Now Works on Public Pages _(2026-08-08)_
 
@@ -381,8 +411,11 @@ Camera scanning works on **all modern browsers** — Chrome, Edge, Firefox, and 
 
 On **desktop computers** with only a front-facing webcam, the scanner automatically falls back from the rear camera to the front camera. Hold the barcode or QR code in front of your webcam.
 
-> **Screenshot needed:**
-> _[Screenshot of the InventoryScanModal on a desktop browser showing the webcam feed with a barcode being scanned, the live search dropdown showing matching items, and the batch action buttons at the bottom]_
+> **Corrected 2026-08-12.** A live camera feed cannot be captured here: the
+> screenshot pipeline drives a headless browser with no camera attached, so
+> the scanner renders its no-camera error rather than a viewfinder. What that
+> error looks like _is_ pictured, under
+> [Camera Error Handling](#camera-error-handling).
 
 ### Form Submission
 
@@ -523,8 +556,8 @@ Camera scanning (QR codes, barcodes, member IDs) now works on desktop browsers i
 - Shared scanner infrastructure across all scanning features (inventory, member ID, event check-in)
 - Works in Chrome, Edge, Firefox, and Safari
 
-> **Screenshot needed:**
-> _[Screenshot of the MemberIdScannerModal on a desktop browser showing the webcam feed in the scanner viewport, with a QR code being detected and the member's name appearing in the result area below]_
+> **Corrected 2026-08-12.** Same reason as the inventory scanner above — a
+> headless browser has no camera, so there is no viewfinder to photograph.
 
 > **Edge case:** Desktop browsers require explicit camera permission. If the user denies camera access, the scanner shows a clear error message and the user can fall back to manual text entry.
 
@@ -598,7 +631,9 @@ Sarah taps the event to open the detail page, then taps the **Check In** button.
 
 > **Edge case:** The QR code printout at Door B is water-damaged and unreadable. Sarah taps **Manual Check-In** below the scanner. She enters her membership number (OFD-0047) and taps Submit. The system confirms: "Checked in at 08:04 AM — manual entry."
 
-> **[SCREENSHOT NEEDED]:** _Phone camera view showing the QR scanner overlay pointed at a QR code on a door, with the event name "Q2 Hazmat Refresher" displayed at the top of the scanner screen_
+> **Corrected 2026-08-12.** This asked for a photograph of a phone pointed at
+> a door — a picture of the world, not of a screen. Nothing in the capture
+> pipeline can produce it.
 
 ### Part 2: Equipment Barcode Scan (Mid-Morning)
 
@@ -610,7 +645,12 @@ Sarah taps **Check Out**, selects herself as the borrower (her name is pre-fille
 
 > **Edge case:** The barcode on a second gas monitor is partially obscured by a sticker. The camera scan fails after a few seconds. Sarah taps the manual entry field below the scanner, types `INV-000234` in the search box, and the item is found immediately.
 
-> **[SCREENSHOT NEEDED]:** _Inventory item detail card on mobile showing the MSA Altair 5X with serial number, condition badge, and the "Check Out" button at the bottom of the card_
+![An inventory item's detail page on a phone — the status and condition badges under the name, with the Basic Info and Location cards stacked](./images/10-16-mobile-item-detail.png)
+
+> **Corrected 2026-08-12.** The item detail page has **no Check Out button**.
+> Its actions are Back, Print Barcode and (for a manager) Edit. A checkout is
+> made against a _member_, from **Inventory Admin > Members > Assign** — which
+> is why the walkthrough above has Sarah select herself as the borrower.
 
 ### Part 3: Offline Training Submission (Afternoon — No Signal)
 
@@ -635,7 +675,11 @@ A notification appears: "2 queued items synced successfully." Sarah taps it to v
 
 > **Edge case:** If one of the queued items had failed during sync (for example, if someone else had already submitted an identical training record creating a duplicate conflict), the sync would show an error toast with the specific failure reason: "Training submission failed: A record for this course on this date already exists." The failed item remains in the queue with an error badge. Sarah can tap it to edit and retry, or dismiss it if the duplicate was submitted by someone else on her behalf.
 
-> **[SCREENSHOT NEEDED]:** _Sync status notification on mobile showing "2 queued items synced successfully" with green checkmarks next to "Training submission" and "Event RSVP," displayed as a toast or notification card_
+> **Corrected 2026-08-12.** The sync toast appears only on the transition
+> from offline to online with a populated IndexedDB queue. The capture
+> pipeline drives an online browser against a live API, so the queue is always
+> empty and the toast never fires; producing it would mean scripting a network
+> outage mid-session rather than photographing a screen.
 
 ---
 

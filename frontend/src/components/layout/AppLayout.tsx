@@ -138,12 +138,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       className="bg-theme-input-bg/80 border-theme-surface-border mt-auto border-t backdrop-blur-sm"
       role="contentinfo"
     >
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <p className="text-theme-text-secondary text-center text-sm">
           &copy; {new Date().getFullYear()} {departmentName}. All rights reserved.
         </p>
-        <p className="text-theme-text-muted mt-1.5 text-center text-xs tracking-wide">Powered by The Logbook</p>
-        <p className="text-theme-text-muted mt-2 text-center text-[11px]">
+        <p className="text-theme-text-muted mt-1.5 hidden text-center text-xs tracking-wide sm:block">
+          Powered by The Logbook
+        </p>
+        <p className="text-theme-text-muted mt-2 hidden text-center text-[11px] sm:block">
           End-to-end encrypted &middot; Self-hosted &middot; HIPAA-aware
         </p>
       </div>

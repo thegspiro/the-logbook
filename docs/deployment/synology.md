@@ -333,16 +333,23 @@ Use Synology's Hyper Backup to back up the entire Docker project:
 
 ### Application-Level Backup
 
-For database-consistent backups:
+The production stack already takes nightly database-consistent backups: the
+`backup` sidecar in `docker-compose.prod.yml` dumps the database and archives
+uploads at `BACKUP_TIME` (default 02:00 UTC), with automated
+restore-verification drills. Check it with
+`sudo docker compose logs backup`.
+
+For a manual, on-demand backup (`backup.sh` is a host-side script — it is not
+shipped inside the backend image):
 
 ```bash
 # Manual backup
-sudo docker compose exec backend /app/scripts/backup.sh
+cd /volume1/docker/the-logbook && sudo ./scripts/backup.sh
 
-# Schedule via DSM Task Scheduler:
+# Optional extra schedule via DSM Task Scheduler:
 # Control Panel > Task Scheduler > Create > Scheduled Task > User-defined script
 # Command:
-cd /volume1/docker/the-logbook && sudo docker compose exec -T backend /app/scripts/backup.sh
+cd /volume1/docker/the-logbook && ./scripts/backup.sh
 ```
 
 ### Database Dump

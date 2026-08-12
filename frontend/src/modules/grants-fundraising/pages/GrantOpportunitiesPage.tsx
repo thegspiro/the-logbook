@@ -26,6 +26,7 @@ import type { GrantOpportunity, GrantCategory } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { isSafeExternalUrl } from '../../../utils/safeUrl';
 
 const CATEGORY_LABELS: Record<string, string> = {
   equipment: 'Equipment',
@@ -392,7 +393,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                           <p className="text-theme-text-secondary">{opp.matchDescription}</p>
                         </div>
                       )}
-                      {opp.applicationUrl && (
+                      {opp.applicationUrl && isSafeExternalUrl(opp.applicationUrl) && (
                         <a
                           href={opp.applicationUrl}
                           target="_blank"

@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+
+const mockToastError = vi.fn();
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    error: (...args: unknown[]) => {
+      mockToastError(...args);
+    },
+  },
+}));
 
 const mockGetAnnualReport = vi.fn();
 const mockGetISOReadiness = vi.fn();
@@ -197,6 +208,19 @@ describe('ComplianceOfficerDashboard', () => {
 
     expect(screen.getByText('Board Meetings')).toBeInTheDocument();
     expect(screen.getByText('Fundraising')).toBeInTheDocument();
+  });
+
+  it('reports an annual report export failure instead of failing silently', async () => {
+    mockExportAnnualReport.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Export CSV' }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Failed to export annual compliance report');
+    });
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeEnabled();
   });
 
   it('renders the Forecast section when activeTab is forecast', async () => {

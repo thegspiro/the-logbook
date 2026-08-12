@@ -10,13 +10,14 @@ integration test database (same as the rest of test_inventory*.py).
 """
 
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import (
+    AssignmentType,
     EquipmentRequest,
     InventoryActionType,
     InventoryNotificationQueue,
@@ -78,6 +79,28 @@ async def setup_org_and_user(db_session: AsyncSession):
         )
     await db_session.flush()
     return org_id, user_id, user2_id
+
+
+async def _make_individual_item(svc, org_id, user_id):
+    cat, _ = await svc.create_category(
+        organization_id=uuid.UUID(org_id),
+        category_data={"name": "Radios", "item_type": "equipment"},
+        created_by=uuid.UUID(user_id),
+    )
+    item, err = await svc.create_item(
+        organization_id=uuid.UUID(org_id),
+        item_data={
+            "name": "Spare Radio",
+            "condition": "good",
+            "status": "available",
+            "tracking_type": "individual",
+            "quantity": 1,
+            "category_id": cat.id,
+        },
+        created_by=uuid.UUID(user_id),
+    )
+    assert err is None
+    return item
 
 
 async def _make_pool_item(svc, org_id, user_id, quantity=10):
@@ -292,6 +315,90 @@ class TestEquipmentRequestFulfillment:
         assert issuance is not None
         assert issuance.user_id == member_id
         assert issuance.quantity_issued == 2
+
+    @pytest.mark.asyncio
+    async def test_fulfill_individual_with_return_date_is_a_loan(
+        self, db_session, setup_org_and_user
+    ):
+        """A return date on the fulfil form must survive the fulfilment.
+
+        The pool branch honours it by creating a checkout. The individual
+        branch passed neither the date nor an assignment type, so the date was
+        dropped and the item was issued permanently — the member's equipment
+        list then showed it under Permanent Assignments with nothing due back.
+        """
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await _make_individual_item(svc, org_id, user_id)
+
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Spare Radio",
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        due = datetime.now(timezone.utc) + timedelta(days=14)
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            expected_return_at=due,
+        )
+        assert err is None
+        assert fulfilled.fulfillment_type == "assignment"
+
+        result = await db_session.execute(
+            select(ItemAssignment).where(
+                ItemAssignment.id == fulfilled.fulfillment_reference_id
+            )
+        )
+        assignment = result.scalar_one_or_none()
+        assert assignment is not None
+        assert assignment.assignment_type == AssignmentType.TEMPORARY
+        assert assignment.expected_return_date is not None
+
+    @pytest.mark.asyncio
+    async def test_fulfill_individual_without_return_date_stays_permanent(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await _make_individual_item(svc, org_id, user_id)
+
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Spare Radio",
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+        )
+        assert err is None
+
+        result = await db_session.execute(
+            select(ItemAssignment).where(
+                ItemAssignment.id == fulfilled.fulfillment_reference_id
+            )
+        )
+        assignment = result.scalar_one_or_none()
+        assert assignment is not None
+        assert assignment.assignment_type == AssignmentType.PERMANENT
+        assert assignment.expected_return_date is None
 
     @pytest.mark.asyncio
     async def test_fulfill_requires_approved_status(

@@ -439,6 +439,7 @@ describe('inventoryService', () => {
         user_id: 'u1',
         quantity: 1,
         issue_reason: undefined,
+        override_allowance: false,
       });
       expect(result).toEqual(response);
     });
@@ -452,6 +453,20 @@ describe('inventoryService', () => {
         user_id: 'u1',
         quantity: 5,
         issue_reason: 'Annual resupply',
+        override_allowance: false,
+      });
+    });
+
+    it('should send override_allowance when the cap is deliberately exceeded', async () => {
+      mockPost.mockResolvedValueOnce({ data: { id: 'iss1' } });
+
+      await inventoryService.issueFromPool('i1', 'u1', 2, undefined, true);
+
+      expect(mockPost).toHaveBeenCalledWith('/inventory/items/i1/issue', {
+        user_id: 'u1',
+        quantity: 2,
+        issue_reason: undefined,
+        override_allowance: true,
       });
     });
   });

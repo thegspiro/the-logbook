@@ -237,6 +237,22 @@ status, credit hours, instructor, how many members are signed up, and an
 
 The **Roster** tab lists each member with their progress through the pipeline, a link to their full progression, and a **Remove** action.
 
+> **What a student sees is different** _(2026-08-12)_. A member on the roster
+> can open their own cohort (also via **My Training**), but they get the
+> schedule only: the class timeline with dates, times and statuses. They do
+> **not** see the roster, classmates' names or emails, anyone's progress
+> percentage, who withdrew, officer notes, or per-class attendance counts —
+> those render only for officers (`training.manage` / `training.view_all`).
+> Previously a student's view included all of it; if your recruits could see
+> each other's progress before, that was this, and it is closed. A member who
+> is *not* on the roster gets "Cohort not found" rather than confirmation the
+> cohort exists.
+>
+> **[SCREENSHOT NEEDED]:** _A cohort detail page as a roster **member** sees
+> it — class timeline populated, no Roster tab / member list, attendance
+> counts absent — captioned against the officer view pictured below so the
+> difference is the subject of the shot._
+
 > **Reschedule** and **Cancel class** are the two icon buttons at the right of
 > each row. **Create missing events** only appears while some class has no
 > event — on a healthy cohort it is absent, which is the state pictured below.
@@ -695,7 +711,14 @@ as satisfied forever — which is exactly what a recruit school needs to reject.
   anything is saved. That path deliberately bypasses the external-credit flag,
   but not this.
 - **A record with no completion date fails the check**, rather than slipping
-  through — the window cannot be verified against it.
+  through — the window cannot be verified against it. _(Fixed 2026-08-12: this
+  used to fail open on the apply path — an undated record credited against a
+  windowed requirement with no freshness ever verified. You now get a clear
+  message at the approve step: "That training has no completion date, so it
+  can't be credited toward this requirement's N-day window." Nothing is saved,
+  so there is no approved-but-unapplied half-state. If you hit this, ask the
+  member to resubmit with the completion date, or enter the date yourself
+  before applying.)_
 - **The window can be removed again** by clearing the field; it is not a one-way
   setting.
 
@@ -2134,9 +2157,26 @@ After enrollment, the program dashboard for Alex shows:
 | Phases           | 4 (Phase 1 unlocked, Phases 2-4 locked) |
 | Requirements     | 0 of 15 complete                        |
 
-Phase 1 (Orientation) is immediately accessible. Phases 2 through 4 display a lock icon with the tooltip "Complete the previous phase to unlock." Alex can see her enrollment on the **My Training** dashboard under **Active Program Enrollments** with a progress bar at 0%.
+Alex can see her enrollment on the **My Training** dashboard under **Active Program Enrollments** with a progress bar at 0%. Opening it shows every phase at once.
 
-> **[SCREENSHOT NEEDED]:** _The program enrollment detail page showing Alex Rivera's enrollment at 0% progress, Phase 1 unlocked with 4 requirements listed, and Phases 2-4 showing lock icons._
+> **Phases are not locked as units _(2026-08-12)_.** This guide previously said
+> later phases carry a lock icon and the tooltip "Complete the previous phase to
+> unlock". They do not — a member can work on any phase, and the seeded example
+> below has requirements finished in Phase 2 and Phase 3 while Phase 1 is still
+> in progress. What **is** locked is an individual **requirement** with a
+> prerequisite, which greys out and says which requirement it is waiting on
+> ("Locked until you finish Hose Deployment"). The current phase is marked
+> **You are here** rather than by unlocking, and **Next milestones** at the top
+> lists the phase completions still ahead.
+
+![A member's program enrollment — overall progress, and every requirement grouped by phase with the locked ones marked](./images/02-105-program-enrollment-progress.png)
+
+> **Why the count and the bar disagree.** The header shows two different
+> measures side by side: "7 of 13 requirements complete" counts requirements
+> that are **finished**, while the percentage beside it averages how far along
+> **every** requirement is. A checklist four steps into six lifts the bar
+> without moving the count, so the bar normally runs ahead of the fraction.
+> Both figures are right.
 
 **Edge case — duplicate enrollment:** Later that week, Lt. Park (another officer) attempts to enroll Alex in the same program. The system returns: "Member is already enrolled in this program" and prevents the duplicate. Each member can have only one active enrollment per program.
 
@@ -2191,7 +2231,15 @@ After each shift, the shift officer finalizes the shift (creating draft reports 
 | Search & Rescue   | 3                   | 3                     | 3 → 3 → 4         | Complete          |
 | Ventilation       | 3                   | 3                     | 2 → 3 → 4         | Complete          |
 
-> **[SCREENSHOT NEEDED]:** _The Phase 2 detail view showing the six skill requirements with observation counts, score progressions displayed as small bar charts, and status indicators (green checkmarks for complete, yellow progress bars for in-progress)._
+> **There is no phase detail view, and no score bar charts _(2026-08-12)_.**
+> The table above is a summary of the worked example, not a screen. Phases are
+> not separately routable — there is no `/phases/:id` page — and a member's
+> phases are shown together on their enrollment (pictured under
+> [Enrolling Members](#enrolling-members)), each requirement giving its
+> progress as a percentage and a bar. Per-skill score progressions such as
+> "2 → 3 → 4" are not charted anywhere in the training module; the only bar
+> charts in the application are in scheduling and events reporting. A skill's
+> score history is on the member's skill checkoffs, not on the phase.
 
 **Edge case — unmatched call type:** On April 18, Engine 1 responds to a carbon monoxide alarm. The shift officer files a completion report for that call, but the call type "CO Investigation" does not match any Phase 2 requirement's `required_call_types`. The 2 hours from that shift are counted toward Alex's overall program hours but no specific Phase 2 requirement is credited. The system logs this in `progress_notes`: "Call type 'CO Investigation' did not match any Phase 2 requirements."
 
@@ -2251,7 +2299,13 @@ Capt. Davis conducts a final evaluation session with Alex, reviews her performan
 
 Alex's membership status is now eligible for upgrade from **Probationary** to **Active** (see [Membership Management — Member Lifecycle](./01-membership.md)). The compliance matrix shows Alex green across all requirements.
 
-> **[SCREENSHOT NEEDED]:** _The completed program dashboard showing 100% progress, all 4 phases with green checkmarks, the total hours summary, and a "Program Completed" banner with the completion date._
+> **A finished programme disappears from the dashboard _(2026-08-12)_.** There
+> is a **Program Completed!** banner in the dashboard's enrollment card, but
+> nothing can reach it: the dashboard asks only for **active** enrollments, so a
+> programme drops off the list the moment it completes rather than being shown
+> as finished. Check a member's completion on their enrollment itself, or on the
+> compliance matrix, not on their dashboard. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#training--the-program-completed-banner-is-unreachable-2026-08-12).
 
 **Edge case — insufficient hours:** If Alex had only accumulated 38 of the required 40 supervised hours, the system would show 95% on that requirement (38/40). Capt. Davis can navigate to the requirement detail to see exactly which shifts contributed hours: a table listing each shift date, officer, hours credited, and call types. This transparency helps identify whether additional shifts need to be scheduled.
 
@@ -2322,7 +2376,15 @@ Lt. Santos navigates to **Inventory > Check Out** to reserve training equipment:
 | Thermal Imaging Cameras | 2          | Temporary (same-day return) | June 13, 16:00  |
 | Attack Hose (1.75")     | 12 lengths | Pool item issuance          | June 13, 16:00  |
 
-> **[SCREENSHOT NEEDED]:** _The Inventory checkout form showing the 6 SCBA units being checked out with "Temporary" selected, the return date auto-filled, and the equipment list below showing current availability counts._
+> **No "Temporary" control on the checkout form _(2026-08-12)_.** The
+> assignment types in the table above are real — an assignment is `permanent` or
+> `temporary`, and the member's equipment list groups them accordingly — but
+> nothing in the interface lets you pick one. Assigning from an item's detail
+> page and the bulk batch-checkout both create **permanent** assignments with no
+> choice offered. The one way to produce a loan today is to fulfil an equipment
+> request with an expected-return date. Pool issuance (the hose lengths above)
+> is a separate flow and does honour a return date. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#inventory--nothing-in-the-ui-can-choose-a-temporary-assignment-2026-08-12).
 
 **Edge case — equipment in maintenance:** When Lt. Santos attempts to check out 6 SCBA units, the system reports that SCBA Unit #14 is currently flagged as "In Maintenance" (last inspection failed — regulator issue). Only 5 of the 6 requested units from that batch are available. Lt. Santos substitutes SCBA Unit #22 from a different station's inventory, and the checkout proceeds with 6 available units.
 
@@ -2440,7 +2502,16 @@ After all 26 reports are approved, the training compliance matrix refreshes. Lt.
 
 **Event analytics:**
 
-The event detail page now shows post-event analytics:
+> **This panel does not exist _(2026-08-12)_.** The figures below are from the
+> worked example, not a description of a screen. The event detail page has no
+> analytics section. Two things nearby are easy to mistake for one:
+> **/events/analytics** is a department-wide attendance-trends dashboard across
+> all events, and **/events/:id/analytics** is per-event but reports **QR
+> check-in** activity — scans, success rate, device breakdown — not hours,
+> skills observations or apparatus. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#events--there-is-no-per-event-analytics-panel-2026-08-12).
+
+For this drill the numbers would be:
 
 | Metric              | Value                            |
 | ------------------- | -------------------------------- |
@@ -2449,8 +2520,6 @@ The event detail page now shows post-event analytics:
 | Total Participants  | 26                               |
 | Skills Observations | 78 (3 skills avg per trainee)    |
 | Apparatus Used      | 3 (Engine 1, Engine 3, Ladder 1) |
-
-> **[SCREENSHOT NEEDED]:** _The event analytics panel showing the attendance rate pie chart, average hours bar, participant count, and a breakdown table by apparatus showing skills observed per unit._
 
 **PDF report generation:**
 

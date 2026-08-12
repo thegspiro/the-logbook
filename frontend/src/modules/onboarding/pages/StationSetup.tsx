@@ -5,7 +5,6 @@ import toast from 'react-hot-toast';
 import {
   OnboardingHeader,
   ProgressIndicator,
-  BackButton,
   ResetProgressButton,
   AutoSaveNotification,
   ErrorAlert,
@@ -50,6 +49,7 @@ const StationSetup: React.FC = () => {
   const setStations = useOnboardingStore((state) => state.setStations);
 
   const [rows, setRows] = useState<OnboardingStationDraft[]>(savedStations.length > 0 ? savedStations : []);
+  const [invalidRowIds, setInvalidRowIds] = useState<string[]>([]);
   const { execute, error, canRetry, clearError, isLoading } = useApiRequest();
 
   useEffect(() => {
@@ -59,10 +59,17 @@ const StationSetup: React.FC = () => {
   }, [departmentName, navigate]);
 
   const updateRow = (id: string, field: keyof OnboardingStationDraft, value: string) => {
-    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+    const nextRows = rows.map((row) => (row.id === id ? { ...row, [field]: value } : row));
+    setRows(nextRows);
+    setStations(nextRows);
+    if (field === 'name' && value.trim()) {
+      setInvalidRowIds((prev) => prev.filter((rowId) => rowId !== id));
+    }
   };
 
   const namedRows = rows.filter((row) => row.name.trim());
+  const rowHasData = (row: OnboardingStationDraft) =>
+    Object.entries(row).some(([field, value]) => field !== 'id' && typeof value === 'string' && value.trim());
 
   const persist = async (stationRows: OnboardingStationDraft[]) => {
     const { error: apiError } = await execute(
@@ -94,6 +101,12 @@ const StationSetup: React.FC = () => {
 
   const handleContinue = async () => {
     clearError();
+    const incompleteRows = rows.filter((row) => !row.name.trim() && rowHasData(row));
+    if (incompleteRows.length > 0) {
+      setInvalidRowIds(incompleteRows.map((row) => row.id));
+      toast.error('Add a station name or remove the incomplete station before continuing.');
+      return;
+    }
     setStations(namedRows);
 
     if (!(await persist(namedRows))) return;
@@ -156,7 +169,14 @@ const StationSetup: React.FC = () => {
               <p className="text-theme-text-secondary mb-4 text-sm">
                 No additional stations yet. Single-station departments can skip this step.
               </p>
-              <button onClick={() => setRows([makeStation()])} className="btn-primary inline-flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const nextRows = [makeStation()];
+                  setRows(nextRows);
+                  setStations(nextRows);
+                }}
+                className="btn-primary inline-flex items-center gap-2"
+              >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add a Station
               </button>
@@ -168,7 +188,12 @@ const StationSetup: React.FC = () => {
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-theme-text-primary text-sm font-semibold">Station {index + 2}</h3>
                     <button
-                      onClick={() => setRows((prev) => prev.filter((r) => r.id !== row.id))}
+                      onClick={() => {
+                        const nextRows = rows.filter((candidate) => candidate.id !== row.id);
+                        setRows(nextRows);
+                        setStations(nextRows);
+                        setInvalidRowIds((prev) => prev.filter((rowId) => rowId !== row.id));
+                      }}
                       className="text-theme-text-muted mobile-touch-target transition-colors hover:text-red-500"
                       aria-label={`Remove station ${index + 2}`}
                     >
@@ -183,11 +208,18 @@ const StationSetup: React.FC = () => {
                       </label>
                       <input
                         id={`name-${row.id}`}
-                        className={inputClass}
+                        className={`${inputClass} ${invalidRowIds.includes(row.id) ? 'border-red-500' : ''}`}
                         value={row.name}
                         onChange={(e) => updateRow(row.id, 'name', e.target.value)}
                         placeholder="North Station"
+                        aria-invalid={invalidRowIds.includes(row.id)}
+                        aria-describedby={invalidRowIds.includes(row.id) ? `name-error-${row.id}` : undefined}
                       />
+                      {invalidRowIds.includes(row.id) && (
+                        <p id={`name-error-${row.id}`} className="mt-1 text-xs text-red-500">
+                          Station name is required when other details are entered.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass} htmlFor={`number-${row.id}`}>
@@ -278,7 +310,11 @@ const StationSetup: React.FC = () => {
               ))}
 
               <button
-                onClick={() => setRows((prev) => [...prev, makeStation()])}
+                onClick={() => {
+                  const nextRows = [...rows, makeStation()];
+                  setRows(nextRows);
+                  setStations(nextRows);
+                }}
                 className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target inline-flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-3 transition-colors hover:border-red-500/40"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
@@ -305,7 +341,9 @@ const StationSetup: React.FC = () => {
           </div>
 
           <div className="mt-6 flex items-center justify-between">
-            <BackButton to="/onboarding/start" />
+            <p className="text-theme-text-muted max-w-md text-xs">
+              Organization details are already saved. You can update them from Settings after setup.
+            </p>
             <ResetProgressButton />
           </div>
 

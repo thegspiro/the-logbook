@@ -3,7 +3,7 @@
  *
  * Displays a non-intrusive banner at the top of the page when a new
  * frontend deployment has been detected. Users can reload immediately
- * or dismiss the banner.
+ * or defer the reminder for one hour.
  */
 
 import React from 'react';
@@ -37,7 +37,7 @@ export const UpdateNotification: React.FC = () => {
       <button
         onClick={dismiss}
         className="absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-2.5 transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-white focus:outline-hidden"
-        aria-label="Dismiss update notification"
+        aria-label="Remind me about this update later"
       >
         <X className="h-4 w-4" aria-hidden="true" />
       </button>

@@ -10,6 +10,7 @@ would leak another org's apparatus name.
 Mocked sessions/getters — no DB — so it runs in the sandbox.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -152,6 +153,24 @@ class TestSubmitterTemplateVisibility:
         assert result is inactive
 
 
+class TestStandaloneTemplateVisibility:
+    async def test_inactive_template_cannot_create_check(self, service, mock_db):
+        inactive = MagicMock(is_active=False)
+        result_proxy = MagicMock()
+        result_proxy.scalars.return_value.first.return_value = inactive
+        mock_db.execute.return_value = result_proxy
+
+        with pytest.raises(ValueError, match="Template not found"):
+            await service.submit_standalone_check(
+                "org-1",
+                "user-1",
+                {"template_id": "inactive-template", "items": [{}]},
+            )
+
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_awaited()
+
+
 class TestUpdateItemCompartmentValidation:
     """update_item must validate a reassigned compartment_id in-org — moving an
     item to a foreign compartment transfers it (with the caller's content) into
@@ -266,3 +285,61 @@ class TestCompartmentParentValidation:
                     "comp-1", "org-1", {"parent_compartment_id": "foreign-comp"}
                 )
         mock_db.commit.assert_not_awaited()
+
+
+class TestShiftCheckStatusItemCount:
+    """An unstarted checklist must not advertise more items than it asks for.
+
+    `get_shift_check_status` reports `total_items` for a template nobody has
+    started yet by counting its template rows. Headers and free-text rows are
+    captions rather than questions — the check form drops them from what it
+    asks, and a submitted check's `total_items` drops them too — so counting
+    them made the denominator shrink the moment a member opened the checklist
+    (0/13 on the card, 12/12 once submitted).
+    """
+
+    @staticmethod
+    def _item(check_type: str):
+        return SimpleNamespace(check_type=check_type)
+
+    def _template(self):
+        return SimpleNamespace(
+            id="tmpl-1",
+            name="Engine Daily Check",
+            check_timing="start_of_shift",
+            assigned_positions=None,
+            compartments=[
+                SimpleNamespace(
+                    items=[
+                        self._item("present"),
+                        self._item("header"),
+                        self._item("present"),
+                    ]
+                ),
+                SimpleNamespace(
+                    items=[self._item("text"), self._item("quantity")],
+                ),
+            ],
+        )
+
+    @pytest.mark.asyncio
+    async def test_headers_and_text_are_not_counted(self, mock_db):
+        service = EquipmentCheckService(mock_db)
+        template = self._template()
+
+        with (
+            patch.object(
+                service, "_resolve_templates", AsyncMock(return_value=[template])
+            ),
+            patch.object(service, "_get_user_name_map", AsyncMock(return_value={})),
+        ):
+            mock_db.execute.return_value = MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(all=MagicMock(return_value=[]))
+                )
+            )
+            summaries = await service.get_shift_check_status("shift-1", "org-1")
+
+        assert len(summaries) == 1
+        # Five template rows, of which a header and a text row are captions.
+        assert summaries[0]["total_items"] == 3

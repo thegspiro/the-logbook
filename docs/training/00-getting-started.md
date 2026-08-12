@@ -82,9 +82,23 @@ If your administrator has enabled single sign-on, the login page shows **Google*
 2. Complete the sign-in on the provider's page (and approve access if prompted).
 3. You are returned to The Logbook and taken to your dashboard.
 
-> **[SCREENSHOT NEEDED]:** _Login page showing the username/password fields, the "Or continue with" divider, and the Google and Microsoft sign-in buttons below it_
+![Login page with Google and Microsoft single sign-on choices](./images/00-21-login-sso-options.png)
 
 > **Hint:** Single sign-on links to an account that already exists. The email on your Google or Microsoft account must match a member account your administrator has already created — signing in this way will not create a new account.
+
+> **Two-factor still applies** _(2026-08-12)_. If you have two-factor
+> authentication enabled on your Logbook account, signing in with Google or
+> Microsoft brings you back to the login page's **authentication code** step —
+> enter the 6-digit code from your authenticator app (or a recovery code)
+> exactly as you would after a password. Google or Microsoft verifying you is
+> not a substitute for your second factor; you are not signed in until the code
+> is accepted. The challenge expires after 5 minutes — past that, start the
+> sign-in again.
+>
+> **[SCREENSHOT NEEDED]:** _The login page showing the two-factor
+> authentication code step immediately after returning from a Google sign-in —
+> the code field and "Use a recovery code" link visible, so a member knows this
+> screen is expected and not an error._
 
 > **Troubleshooting:** If your account is not recognized you are returned to the login page with a message such as "No account matches that Google email. Contact your administrator for access." Other messages cover an account from a domain that is not allowed, an account already linked to a different user, or an unverified email address. In every case, contact your administrator.
 
@@ -244,15 +258,26 @@ Dashboard notifications now use expandable cards:
 - Click to expand and see full notification details
 - Pinned notifications appear first
 - Notifications are marked as read when you collapse the card (not when you expand it)
-- Each notification shows context-aware action buttons:
-  - Shift notifications → "View Shift" button
-  - Equipment check reminders → "Start Checklist" button
-  - Other notifications → "View Details" or link to relevant page
+- An expanded card shows a context-aware action button, then **Pin** (or
+  **Unpin**, once pinned):
+  - Shift notifications → "View Shift"
+  - Event notifications → "View Event"
+  - Training notifications → "View Training"
+  - Shift swap requests → "Review Swap"
+  - Anything else → "View Details"
 
-Clicking a shift notification takes you directly to the scheduling page with the correct tab and shift selected.
+A shift reminder that arrives inside its equipment-check window adds a second
+button, **Start Checklist**; a post-shift validation notice adds **File
+Report**. Clicking a shift notification takes you directly to the scheduling
+page with the correct tab and shift selected.
 
-> **Screenshot needed:**
-> _[Screenshot of the dashboard notifications section showing 2-3 expandable notification cards: one pinned (with pin icon) and expanded showing shift assignment details with a "View Shift" button, and one collapsed showing just the summary text]_
+![The notifications inbox — a shift assignment pinned and expanded to its details, View Shift button and Unpin control, the rest collapsed to a summary line](./images/00-22-notification-card-expanded.png)
+
+> **Not every notification has a button _(2026-08-12)_.** The action button is
+> built from the destination stored on the notification, so a notification
+> saved without one expands to its detail text and the Pin control alone. Event
+> reminders, recurring-series warnings, action-item reminders and event-update
+> notices were all being saved that way and now carry their destination.
 
 > **Edge case:** If you expand a notification card to read it but navigate away before collapsing, the notification remains unread.
 

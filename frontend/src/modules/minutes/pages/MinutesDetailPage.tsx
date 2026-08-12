@@ -145,17 +145,24 @@ export const MinutesDetailPage: React.FC = () => {
     }
   }, [minutes?.event_id]);
 
-  // Fetch elections linked to this meeting record
+  // Fetch elections held at the event these minutes record.
+  //
+  // Keyed on the event, not on the minutes id. `Election.meeting_id` is a
+  // `meetings` row; a minutes record is a `meeting_minutes` row. Passing the
+  // minutes id as `meeting_id` compared two different id spaces, so the query
+  // matched nothing and this card could never appear — however many elections
+  // were held at the meeting. The event is the link both sides actually share.
+  const linkedEventId = minutes?.event_id;
   useEffect(() => {
-    if (minutesId) {
+    if (linkedEventId) {
       electionService
-        .getElectionsByMeeting(minutesId)
+        .getElectionsByEvent(linkedEventId)
         .then((elections) => setLinkedElections(elections))
         .catch(() => setLinkedElections([]));
     } else {
       setLinkedElections([]);
     }
-  }, [minutesId]);
+  }, [linkedEventId]);
 
   const isEditable = minutes && (minutes.status === 'draft' || minutes.status === 'rejected');
 

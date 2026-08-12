@@ -6,34 +6,38 @@ Guide to developing the React/TypeScript frontend for The Logbook.
 
 ## Technology Stack
 
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| React | 19 | UI framework |
-| TypeScript | 5.9 | Type-safe JavaScript |
-| Vite | 7.3 | Build tool and dev server |
-| Vitest | 4 | Unit/integration testing |
-| Tailwind CSS | 4.2 | Utility-first CSS |
-| Zod | 4 | Schema validation |
-| ESLint | 9 | Linting (flat config) |
-| React Router | 6.x | Client-side routing |
-| React Hook Form | 7.71 | Form management |
-| Lucide React | 0.575+ | Icons |
-| React Hot Toast | — | Toast notifications |
-| DOMPurify | — | XSS sanitization |
+| Technology      | Version | Purpose                                           |
+| --------------- | ------- | ------------------------------------------------- |
+| React           | 19      | UI framework                                      |
+| TypeScript      | 5.9     | Type-safe JavaScript                              |
+| Vite            | 7.3     | Build tool and dev server                         |
+| Vitest          | 4       | Unit/integration testing                          |
+| Tailwind CSS    | 4.2     | Utility-first CSS                                 |
+| Zod             | 4       | Schema validation                                 |
+| ESLint          | 9       | Linting (flat config)                             |
+| React Router    | 8.3     | Client-side routing (core `react-router` package) |
+| React Hook Form | 7.8x    | Form management                                   |
+| Lucide React    | 1.x     | Icons                                             |
+| React Hot Toast | —       | Toast notifications                               |
+| DOMPurify       | —       | XSS sanitization                                  |
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18.x+
-- npm 9+
+
+- Node.js 22.x+
+- npm 10+
 
 ### Setup
 
 ```bash
-cd frontend
+# Install from the repo root — the workspace uses a single root lockfile.
+# Do not run npm install inside frontend/ (see "No nested
+# frontend/package-lock.json" in docs/KNOWN_LIMITATIONS.md).
 npm install
+cd frontend
 cp .env.example .env
 # Edit .env if needed
 npm run dev
@@ -126,6 +130,7 @@ frontend/src/
 ### Module Structure
 
 Each module follows a consistent structure:
+
 ```
 modules/<module>/
 ├── index.ts           # Barrel export
@@ -215,16 +220,17 @@ API calls are organized into 13 domain-specific service files in `src/services/`
 
 ```typescript
 // Example: fetch members
-import { userService } from '@/services/userServices';
+import { userService } from "@/services/userServices";
 
 const users = await userService.getUsers();
 
 // Or use the raw API client
-import { apiClient } from '@/services/apiClient';
-const response = await apiClient.get('/users');
+import { apiClient } from "@/services/apiClient";
+const response = await apiClient.get("/users");
 ```
 
 The shared API client automatically:
+
 - Sends httpOnly cookies with `withCredentials: true`
 - Attaches CSRF token on state-changing requests
 - Handles 401 → refresh → retry flow
@@ -243,19 +249,20 @@ npm run build
 ```
 
 The Docker build uses a multi-stage Dockerfile:
-1. **Build stage** — npm install + npm run build (with VITE_* build args)
+
+1. **Build stage** — npm install + npm run build (with VITE\_\* build args)
 2. **Runtime stage** — Nginx serving static files + API proxy
 
 ---
 
 ## Browser Support
 
-| Browser | Support |
-|---------|---------|
-| Chrome / Edge | Last 2 versions |
-| Firefox | Last 2 versions |
-| Safari | Last 2 versions |
-| iOS Safari | Last 2 versions |
+| Browser        | Support         |
+| -------------- | --------------- |
+| Chrome / Edge  | Last 2 versions |
+| Firefox        | Last 2 versions |
+| Safari         | Last 2 versions |
+| iOS Safari     | Last 2 versions |
 | Android Chrome | Last 2 versions |
 
 ---

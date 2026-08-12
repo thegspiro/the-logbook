@@ -9,6 +9,12 @@ Kept separately because `SCREENSHOT_STATUS.md` is regenerated wholesale by
 `scripts/screenshots/status_report.py` and anything hand-written there is lost on
 the next run.
 
+**Newest flags first: see _[Images invalidated by the 2026-08-11 → 08-12
+changes](#images-invalidated-by-the-2026-08-11--08-12-changes)_** — the mobile
+hamburger moved to the left edge (touches every phone-width capture with a
+header) and the Ballot Builder grew a Save-as-Template control. Flagged
+2026-08-12, not yet re-captured.
+
 **Re-captured 2026-08-11.** The seventeen images flagged under _[Images
 invalidated by the 2026-08-10 → 08-11 changes](#images-invalidated-by-the-2026-08-10--08-11-changes)_
 were re-shot against a live stack, and every one of them was opened and read
@@ -27,6 +33,65 @@ earlier** and remain stale.
 > database, and the pipeline runs fine without Docker. The claim is corrected
 > rather than deleted because it is the sort of environment assumption that
 > quietly becomes policy.
+
+---
+
+## Images invalidated by the 2026-08-11 → 08-12 changes
+
+**Flagged 2026-08-12, not yet re-captured.** Two UI changes landed after the
+2026-08-11 passes and reach existing images. Flagged by comparing each image's
+subject against the commits, not by opening them.
+
+### A. The mobile hamburger moved to the left edge
+
+`SideNavigation`'s phone header now puts the ☰ button at the **left** edge
+(the edge the drawer slides in from) with the logo/department name to its
+right; it was previously at the far right. The component renders the top bar
+of **every authenticated page on a phone**, so every phone-width capture that
+includes the top bar now shows an outdated header:
+
+| Image | Why it's in frame |
+| --- | --- |
+| `10-04-mobile-dashboard` | fullPage, header at top |
+| `10-05-mobile-inventory` | header at top |
+| `10-06-mobile-inventory-admin` | fullPage, header at top |
+| `10-10-mobile-minimum-text` | header at top |
+| `10-15-mobile-menu-notifications` | shot *of* the open menu — the button itself is the subject |
+| `10-14-scan-camera-denied` | viewport-anchored, header at top |
+| `03-48-settings-phone`, `03-73-flat-check-form-header`, `03-95-apparatus-inventory` | top-anchored phone shots |
+
+**Not invalidated, recorded so nobody re-checks:** `10-12-mobile-bottom-nav`
+(clipped to the bottom nav element), `03-71-set-all-to-par-confirm` (dialog
+clip), `04-32`/`04-33` guest sign-in (public `/login` renders outside
+`AppLayout` — no hamburger), and mid-page clips that never reach the top bar
+(`03-60`, `03-70`, `03-72`, `03-96` — verify by opening before re-shooting).
+
+The training guide's new header note carries a matching
+`[SCREENSHOT NEEDED]` for the re-shoot.
+
+### B. The Ballot Builder grew a "Save as Template" button
+
+`14-04-ballot-configuration` pictures the Ballot Builder, which now shows
+**Save as Template** beside its actions whenever the ballot has items (and the
+template picker gained a "Your saved ballots" section). The whole guide-14 set
+was already listed under *Not re-captured* as cosmetically stale; `14-04` is
+now **structurally** stale, and two new placeholders in
+`14-elections.md` (the save form, the saved-ballots picker) have never been
+shot. Note for the harness: the saved-templates picker needs a seeded saved
+template — `seed_demo_data.py` does not create one yet.
+
+### C. Checked and not invalidated
+
+- **The responsive sweeps (08-11)** are scoped under 768px, so the existing
+  desktop captures are unaffected. The two everywhere-width changes have no
+  captures to invalidate: the Member Training Status page (gained its page
+  gutter) has no shot in the manifest, and no facility detail page is shot at
+  phone width.
+- **The confirm-dialog sweep** replaced *native* browser dialogs, which
+  Playwright could never photograph anyway; `00-14-confirm-dialog` pictures
+  the in-app dialog, which is the surviving pattern.
+- **`02-104-cohort-preview-step`** was captured in the same commit that fixed
+  the holiday-chip date format it pictures, so it is already current.
 
 ---
 
@@ -102,6 +167,26 @@ captured and applied. Only the configuration is seeded: `connection_verified`
 and `last_sync_at` are written by a real sync, so the card reads "Connection
 not verified" and "Last Sync: Never", which the guide's prose now explains
 rather than contradicts.
+
+### Salesforce cannot be connected in a demo department, and that is correct
+
+The Salesforce Sync panel is real and worth a picture, but it renders only for
+an integration whose status is `connected`, and `POST
+/integrations/{id}/connect` will not grant that. `instance_url` must match
+`^https://[a-zA-Z0-9\-\.]+\.salesforce\.com$` **and** resolve in DNS — the SSRF
+guard calls `getaddrinfo` on it. A Salesforce instance host is per-customer
+(`oakvillefd.my.salesforce.com`), so the demo department's does not exist and
+never will.
+
+**Deliberately not worked around.** The hosts that do resolve —
+`login.salesforce.com`, `test.salesforce.com`, `na1.salesforce.com` — are login
+and pod hosts, not any department's instance, and seeding one would put a URL
+in the demo database that is wrong in a way a reader could copy. That is a
+different case from `seed_external_provider`, where the vendor's real API host
+_is_ the value every customer uses.
+
+The section's prose has been corrected against the code instead, so the guide
+describes the panel accurately without a picture of it.
 
 ### A seed gap that wasn't — the quantity checklist was reachable all along
 
@@ -332,30 +417,13 @@ The lesson is the one the harness section above already makes, sharpened: an
 empty. That decision is worth re-examining whenever the caption changes — the
 flag is what stops the one check that would have caught this.
 
-**Two captions promised things the application does not do.** Both were
-corrected in the guide rather than chased with a cleverer `prepare`:
-
-- The **Add Several** modal's preview does not mark names already in the
-  catalog. It lists every line pasted; the skipped ones are named in the
-  confirmation _after_ you submit. `05-inventory.md` now says so.
-- The **email preview** cannot show the header band and the footer in one frame.
-  The pane is a fixed 600px iframe with its own scrollbar and the message is
-  taller than it. `08-admin-reports.md` now points the reader at the scroll and
-  at **Send Test Email to Me**.
-
-A third — the **Add Operator** "member picker dropdown open" — is not
-photographable at all: both selects on that form are native, and an open native
-popup is drawn by the operating system rather than the page. The shot shows the
-two fields _set_ instead, which makes the same point more directly: a real
-member name proves the box is a picker over the roster.
-
 **Three empty-state flags were false positives, all the same shape.** A
-`<select>`'s placeholder option — "No category", "No EVOC requirement", "No
-EVOC level" — is in the DOM on every render, including the ones where a real
-value is selected. `03-52`, `05-66` and `06-23` now carry `allowEmptyState`
-with a comment saying which option is doing it. `03-54`'s flag is a different
-false positive: "No calls logged for this shift" belongs to a sub-panel further
-down the same drawer, and the shift is deliberately in the future.
+`<select>`'s placeholder option — "No EVOC requirement", "No EVOC level", "No
+category" — is in the DOM on every render, including the ones where a real value
+is selected. `03-52` and `06-23` now carry `allowEmptyState` with a comment
+saying which option is doing it. `03-54`'s flag is a different false positive:
+"No calls logged for this shift" belongs to a sub-panel further down the same
+drawer, and the shift is deliberately in the future.
 
 **One shot needed new seed data.** `03-54-crew-board-open-slots` had been
 failing outright — "no future shift is part-staffed with 2+ open" — because the
@@ -367,12 +435,41 @@ crewed by its officer alone. The repair runs against the API as well as in the
 create path: an existing shift is skipped on a re-run, so a create-path-only fix
 would have worked on a fresh database and nowhere else.
 
+**The Add Operator form cannot be photographed with its picker open.** Both
+selects on it are native, and an open native popup is drawn by the operating
+system rather than the page, so Playwright cannot capture it. `06-23` shows the
+two fields _set_ instead, which makes the same point more directly: a real
+member name proves the box is a picker over the roster, and an EVOC level beside
+it is the combination that used to return a server error.
+
 **Still not fixed: `11-05-budget-detail` pictures a budget with no
 transactions.** The breadcrumb fix it was flagged for is confirmed, but every
 seeded budget has `amountSpent: 0`, so Transaction History is genuinely empty and
 the utilization bar reads 0.0%. The seeder creates purchase requests and expense
 reports without settling any of them against a budget. Closing that gap is
 seeder work, not a capture setting.
+
+### Two sessions shot the same screens at once
+
+This pass and the one recorded above it ran in parallel against the same
+backlog, and both photographed the email screens, the two inventory modals, an
+item's Stock tab and four of the supply shots. Nothing was lost — the duplicates
+were reconciled on merge, keeping whichever version was better and deleting the
+other — but the effort was spent twice, and one of the reconciliations was not
+obvious:
+
+- **`08-67-email-preview-design`.** One version opened the welcome email and
+  concluded, in the guide, that the preview pane simply cannot show a footer:
+  it is a fixed 600px iframe and the message is taller. The other opened
+  **Shift Assignment** instead, because the footer renders only where the body
+  contains `{{footer_html}}` and most shipped bodies predate footers. The second
+  is right, and the first would have documented a limitation that is really a
+  template-choice problem. Kept the second.
+- **Numbering collided.** Both sessions took `05-65`, `05-66` and the `03-57`
+  … `03-62` range for different screens. Ids are full slugs, so no file was
+  overwritten, but the numbers no longer read in order. Before adding a shot,
+  check the manifest for the next free number rather than counting the images
+  on disk.
 
 ### D. Verified current — do not re-shoot on this pass
 
@@ -395,12 +492,21 @@ placeholders** for screens that have never been photographed:
 | `06-apparatus-facilities.md` | The Operators tab, the Add Operator member picker                                                                                                                                                                                         |
 | `08-admin-reports.md`        | The Footers tab, the footer selector in the template editor, the Organization variable palette, the new email preview design                                                                                                              |
 
-**Four now have manifest entries** _(2026-08-11)_ —
-`03-95-apparatus-inventory`, `03-59-supply-worklist`,
-`05-53-items-grid-lot-stock` and `08-64-email-footers-tab`. Three are plain
-route visits; the apparatus one selects M-3 from the picker by the option's
-**value** rather than its label, since the label is built from two fields and
-matching it as a string breaks the moment either changes.
+**All eighteen are now captured and applied** _(2026-08-11)_, across the two
+parallel sessions recorded above:
+
+| Guide | Shot as                                                                                                                                                                 |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `03`  | `03-95` apparatus inventory, `03-96` lots sheet, `03-59` worklist, `03-69` quick-add, `03-68` bulk match, plus the report-used sheet, carry-over banner and par warning |
+| `05`  | `05-53` the two-ledger grid, `05-09` Receive Stock, `05-10` Add Several, `05-07` an item's Stock tab                                                                    |
+| `06`  | `06-22` Operators tab, `06-23` Add Operator                                                                                                                             |
+| `08`  | `08-64` Footers tab, `08-65` footer selector, `08-66` variable palette, `08-67` email preview                                                                           |
+
+The numbering does not run in order because two sessions allocated ids at the
+same time — see _Two sessions shot the same screens at once_ above. The
+apparatus shots select M-3 from the picker by the option's **value** rather
+than its label, since the label is built from two fields and matching it as a
+string breaks the moment either changes.
 
 `08-64` only became possible on 2026-08-11: the Email Templates page held its
 tab in plain state, so a shot of the Footers tab would have silently captured
@@ -411,8 +517,8 @@ five tabs, with a test pinning every call site.
 **Superseded.** An earlier revision of this section said fourteen of the
 eighteen had no manifest entry and that several needed seed data that did not
 exist — a position carrying two lots with two dates, a truck below par, a
-restock report raised by a member. All three now exist, and all but three of
-the eighteen are shot; see the table above.
+restock report raised by a member. All three now exist, and all eighteen are
+shot.
 
 **The seeder gap is closed** _(2026-08-11)_. `seed_supply_tracking` in
 `scripts/screenshots/seed_demo_data.py` now builds the state these sections

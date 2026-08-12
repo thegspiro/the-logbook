@@ -65,7 +65,7 @@ from app.models.user import (
     user_positions,
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
-from app.utils.label_renderer import LabelSpec, render_labels
+from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_value
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 
@@ -82,13 +82,6 @@ _FORCED_CONDITION: dict[ItemStatus, ItemCondition] = {
 
 # Statuses that require assigned_to_user_id to be set
 _REQUIRES_ASSIGNED_USER = {ItemStatus.ASSIGNED}
-
-# ISO/IEC 15417 minimum module (bar) width for Code128: 0.191 mm ≈ 0.0075 in.
-# At 203 DPI (standard thermal printers) this is ~1.5 dots — the minimum for
-# reliable scanning.  The scaling loops in label generators must not go below
-# this floor.
-_MIN_BAR_WIDTH_INCH = 0.0075
-
 
 # Inventory barcode scheme — a single rule used everywhere: a human-readable
 # sequential number per organization, ``<prefix><zero-padded number>`` with a
@@ -1650,6 +1643,27 @@ class InventoryService:
         )
         return result.scalars().all()
 
+    @staticmethod
+    def checkout_is_overdue(record: CheckOutRecord) -> bool:
+        """Whether *record* is past its due date, decided at read time.
+
+        ``CheckOutRecord.is_overdue`` is a stored column that only
+        :meth:`mark_overdue_checkouts` writes, from a daily scheduled task.
+        Between a checkout falling due and that task's next run the column
+        still reads ``False`` — while :meth:`get_overdue_checkouts` compares
+        ``expected_return_at`` live, so the same loan appeared under the
+        Overdue tab and wore a green "Active" badge on the Active tab at the
+        same time. Every read path answers through this so they agree; the
+        stored flag remains the fallback for a record with no due date on file.
+        """
+        if record.is_returned or record.expected_return_at is None:
+            return bool(record.is_overdue)
+        due = record.expected_return_at
+        if due.tzinfo is None:
+            # MySQL hands back naive datetimes; every stored value is UTC.
+            due = due.replace(tzinfo=timezone.utc)
+        return due < datetime.now(timezone.utc)
+
     async def mark_overdue_checkouts(self, organization_id: UUID) -> int:
         """Batch-mark overdue checkouts.  Call from a scheduled task, not from
         read endpoints, to avoid write-on-read overhead.
@@ -2265,7 +2279,7 @@ class InventoryService:
                     "item_name": c.item.name,
                     "checked_out_at": c.checked_out_at,
                     "expected_return_at": c.expected_return_at,
-                    "is_overdue": c.is_overdue,
+                    "is_overdue": self.checkout_is_overdue(c),
                 }
                 for c in checkouts
             ],
@@ -2893,7 +2907,7 @@ class InventoryService:
         auto_populated = 0
         if persist:
             for item in items:
-                if not item.barcode:
+                if not item.barcode or not sanitize_barcode_value(item.barcode):
                     item.barcode = await self._next_sequential_barcode(
                         item.organization_id
                     )
@@ -2901,12 +2915,20 @@ class InventoryService:
             if auto_populated > 0:
                 await self.db.commit()
 
+        def printable_value(item) -> str:
+            """Resolve the first non-empty Code128-compatible identifier."""
+            candidates = (item.barcode, item.asset_tag, item.serial_number)
+            for candidate in candidates:
+                if candidate:
+                    value = sanitize_barcode_value(str(candidate))
+                    if value:
+                        return value
+            raise ValueError(f"Item {item.id} has no printable barcode identifier")
+
         specs = [
             LabelSpec(
                 name=item.name,
-                barcode_value=(
-                    item.barcode or item.asset_tag or item.serial_number or item.id[:12]
-                ),
+                barcode_value=printable_value(item),
                 asset_tag=item.asset_tag,
                 serial_number=item.serial_number,
                 extra=_build_extra_lines(item, extra_lines) or None,
@@ -3259,7 +3281,7 @@ class InventoryService:
                             else None
                         ),
                         "is_returned": c.is_returned,
-                        "is_overdue": c.is_overdue,
+                        "is_overdue": self.checkout_is_overdue(c),
                     },
                 }
             )
@@ -5076,6 +5098,17 @@ class InventoryService:
                         user_id=requester_id,
                         organization_id=organization_id,
                         assigned_by=fulfilled_by,
+                        # A return date makes this a loan, not a permanent
+                        # issue. The pool branch above already honours the date
+                        # by creating a checkout; on this branch both arguments
+                        # were omitted, so a date entered on the fulfil form was
+                        # silently dropped and the item was issued for good.
+                        assignment_type=(
+                            AssignmentType.TEMPORARY
+                            if expected_return_at
+                            else AssignmentType.PERMANENT
+                        ),
+                        expected_return_date=expected_return_at,
                         reason="Equipment request fulfillment",
                     )
                     fulfillment_type = "assignment"
@@ -5349,7 +5382,9 @@ class InventoryService:
         Returns ``(stock_by_size, unit_cost_by_size, avg_unit_cost)``:
 
         - ``stock_by_size``: available units keyed by normalized size. Pool
-          items contribute unissued quantity (``quantity - quantity_issued``);
+          items contribute their on-hand ``quantity`` — issuing already
+          decrements it and a return adds it back, so subtracting
+          ``quantity_issued`` again would count every issued unit twice;
           individually-tracked items contribute one unit when ``available``.
         - ``unit_cost_by_size``: mean unit cost of priced items at each size,
           used to estimate per-size purchase cost.
@@ -5381,9 +5416,7 @@ class InventoryService:
             key = self._normalize_size_key(self._item_stock_size_value(item))
 
             if item.tracking_type == TrackingType.POOL:
-                avail = (item.quantity or 0) - (item.quantity_issued or 0)
-                if avail < 0:
-                    avail = 0
+                avail = max(0, item.quantity or 0)
             else:
                 avail = 1 if item.status == ItemStatus.AVAILABLE else 0
             if avail > 0:
@@ -5430,7 +5463,8 @@ class InventoryService:
 
         by_size: Dict[str, List[Dict[str, Any]]] = {}
         for item in items:
-            avail = (item.quantity or 0) - (item.quantity_issued or 0)
+            # On-hand is `quantity` alone; see _get_stock_and_cost_by_size.
+            avail = item.quantity or 0
             if avail <= 0:
                 continue
             key = self._normalize_size_key(self._item_stock_size_value(item))

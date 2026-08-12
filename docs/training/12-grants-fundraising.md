@@ -29,27 +29,32 @@ The Grants & Fundraising module manages the complete lifecycle of fire departmen
 
 Navigate to **Grants & Fundraising** in the sidebar. The module must be enabled for your organization in Organization/Admin Settings > Modules (`enabled_modules`).
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/grants` | Dashboard | `fundraising.view` |
-| `/grants/opportunities` | Grant Opportunities Library | `fundraising.view` |
-| `/grants/applications` | Application List (Pipeline/Table) | `fundraising.view` |
-| `/grants/applications/new` | Create Application | `fundraising.manage` |
-| `/grants/applications/:id` | Application Detail (5 tabs) | `fundraising.view` |
-| `/grants/applications/:id/edit` | Edit Application | `fundraising.manage` |
-| `/grants/campaigns` | Fundraising Campaigns | `fundraising.view` |
-| `/grants/donors` | Donor Directory/CRM | `fundraising.view` |
-| `/grants/donations` | All Donations | `fundraising.view` |
-| `/grants/reports` | Financial Reports | `fundraising.view` |
+| URL                             | Page                              | Permission           |
+| ------------------------------- | --------------------------------- | -------------------- |
+| `/grants`                       | Dashboard                         | `fundraising.view`   |
+| `/grants/opportunities`         | Grant Opportunities Library       | `fundraising.view`   |
+| `/grants/applications`          | Application List (Pipeline/Table) | `fundraising.view`   |
+| `/grants/applications/new`      | Create Application                | `fundraising.manage` |
+| `/grants/applications/:id`      | Application Detail (5 tabs)       | `fundraising.view`   |
+| `/grants/applications/:id/edit` | Edit Application                  | `fundraising.manage` |
+| `/grants/campaigns`             | Fundraising Campaigns             | `fundraising.view`   |
+| `/grants/donors`                | Donor Directory/CRM               | `fundraising.view`   |
+| `/grants/donations`             | All Donations                     | `fundraising.view`   |
+| `/grants/reports`               | Financial Reports                 | `fundraising.view`   |
 
 ### Permissions
 
-| Permission | Description |
-|------------|-------------|
-| `fundraising.view` | View dashboard, opportunities, applications, campaigns, donors, donations, reports |
+| Permission           | Description                                                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `fundraising.view`   | View dashboard, opportunities, applications, campaigns, donors, donations, reports                 |
 | `fundraising.manage` | Create/update/delete applications, budget items, expenditures, tasks, campaigns, donors, donations |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Grants & Fundraising sidebar navigation showing Dashboard, Opportunities, Applications, Campaigns, Donors, Donations, and Reports._
+> **Corrected 2026-08-12.** **The module has no navigation entry at all.**
+> Neither the sidebar nor the top navigation mentions grants, and nothing
+> outside the module links to `/grants`. Enabling the module makes its pages
+> routable and reachable by typing the URL, and by nothing else — so the
+> navigation this placeholder pictures is precisely what is missing. Recorded
+> in [Grants & Fundraising — Pledges and Fundraising Events](../KNOWN_LIMITATIONS.md#grants--fundraising--pledges-and-fundraising-events-2026-08-08).
 
 ---
 
@@ -75,12 +80,12 @@ The main dashboard at `/grants` shows key performance indicators:
 
 The opportunities library is a catalog of available grant programs. Pre-loaded with common fire service grants:
 
-| Program | Agency | Description |
-|---------|--------|-------------|
-| **AFG** | FEMA | Assistance to Firefighters Grant — equipment, PPE, training |
-| **SAFER** | FEMA | Staffing for Adequate Fire & Emergency Response — hiring |
-| **FP&S** | FEMA | Fire Prevention & Safety — prevention, research |
-| State grants | Various | State-specific emergency services funding |
+| Program      | Agency  | Description                                                 |
+| ------------ | ------- | ----------------------------------------------------------- |
+| **AFG**      | FEMA    | Assistance to Firefighters Grant — equipment, PPE, training |
+| **SAFER**    | FEMA    | Staffing for Adequate Fire & Emergency Response — hiring    |
+| **FP&S**     | FEMA    | Fire Prevention & Safety — prevention, research             |
+| State grants | Various | State-specific emergency services funding                   |
 
 ### Browsing Opportunities
 
@@ -130,22 +135,23 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
 
 Applications progress through 10 stages:
 
-| Status | Description | Next Steps |
-|--------|-------------|------------|
-| **Researching** | Evaluating fit, gathering requirements | Move to Preparing when ready |
-| **Preparing** | Writing application, assembling documents | Submit for Internal Review |
-| **Internal Review** | Department leadership review | Submit to grantor |
-| **Submitted** | Application filed with funding agency | Wait for response |
-| **Under Review** | Grantor is evaluating | Wait for decision |
-| **Awarded** | Grant approved! | Begin spending and reporting |
-| **Denied** | Application not selected | Note lessons learned |
-| **Active** | Grant period in progress, funds being spent | Track expenditures |
-| **Reporting** | Performance reports due | File required reports |
-| **Closed** | Grant period complete | Final closeout |
+| Status              | Description                                 | Next Steps                   |
+| ------------------- | ------------------------------------------- | ---------------------------- |
+| **Researching**     | Evaluating fit, gathering requirements      | Move to Preparing when ready |
+| **Preparing**       | Writing application, assembling documents   | Submit for Internal Review   |
+| **Internal Review** | Department leadership review                | Submit to grantor            |
+| **Submitted**       | Application filed with funding agency       | Wait for response            |
+| **Under Review**    | Grantor is evaluating                       | Wait for decision            |
+| **Awarded**         | Grant approved!                             | Begin spending and reporting |
+| **Denied**          | Application not selected                    | Note lessons learned         |
+| **Active**          | Grant period in progress, funds being spent | Track expenditures           |
+| **Reporting**       | Performance reports due                     | File required reports        |
+| **Closed**          | Grant period complete                       | Final closeout               |
 
 ### Pipeline View vs Table View
 
 Applications can be viewed in two ways:
+
 - **Pipeline (Kanban)** — Visual columns with drag-and-drop between stages
 - **Table** — Sortable, filterable list with status badges
 
@@ -161,15 +167,15 @@ Each grant application has a **budget** broken down into line items and tracked 
 
 Navigate to the **Budget** tab on an application detail page.
 
-| Field | Description |
-|-------|-------------|
-| Category | Equipment, Personnel, Training, Contractual, Supplies, Travel, Construction, Indirect, Other |
-| Description | What the money is for |
-| Amount Budgeted | Planned spending for this line |
-| Amount Spent | Auto-calculated from expenditures |
-| Amount Remaining | Budgeted minus spent |
-| Federal Share | How much is covered by the grant |
-| Local Match | Department's cost-share obligation |
+| Field            | Description                                                                                  |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| Category         | Equipment, Personnel, Training, Contractual, Supplies, Travel, Construction, Indirect, Other |
+| Description      | What the money is for                                                                        |
+| Amount Budgeted  | Planned spending for this line                                                               |
+| Amount Spent     | Auto-calculated from expenditures                                                            |
+| Amount Remaining | Budgeted minus spent                                                                         |
+| Federal Share    | How much is covered by the grant                                                             |
+| Local Match      | Department's cost-share obligation                                                           |
 
 ### Expenditures
 
@@ -185,11 +191,11 @@ Navigate to the **Expenditures** tab to record spending against the budget:
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario                        | Behavior                                     |
+| ------------------------------- | -------------------------------------------- |
 | Expenditure exceeds budget item | Allowed but flagged; over-budget highlighted |
-| Budget item deleted | Cascades to linked expenditures |
-| Expenditure without budget item | Standalone expenditure; still tracked |
+| Budget item deleted             | Cascades to linked expenditures              |
+| Expenditure without budget item | Standalone expenditure; still tracked        |
 
 ---
 
@@ -199,27 +205,27 @@ Awarded grants come with reporting and compliance obligations. The system tracks
 
 ### Task Types
 
-| Type | Description |
-|------|-------------|
-| Performance Report | Periodic progress report to grantor |
-| Financial Report | Spending report with receipts/documentation |
-| Progress Update | Informal status update |
-| Site Visit | On-site inspection by grantor |
-| Audit | Financial or program audit |
+| Type                | Description                                 |
+| ------------------- | ------------------------------------------- |
+| Performance Report  | Periodic progress report to grantor         |
+| Financial Report    | Spending report with receipts/documentation |
+| Progress Update     | Informal status update                      |
+| Site Visit          | On-site inspection by grantor               |
+| Audit               | Financial or program audit                  |
 | Equipment Inventory | Physical inventory of grant-purchased items |
-| NFIRS Submission | National Fire Incident Reporting submission |
-| Closeout Report | Final report at end of grant period |
-| Other | Custom compliance task |
+| NFIRS Submission    | National Fire Incident Reporting submission |
+| Closeout Report     | Final report at end of grant period         |
+| Other               | Custom compliance task                      |
 
 ### Task Statuses
 
-| Status | Description |
-|--------|-------------|
-| Pending | Not yet started |
-| In Progress | Work underway |
-| Completed | Task finished and documented |
-| Overdue | Past due date, not completed |
-| Waived | Excused (with documentation) |
+| Status      | Description                  |
+| ----------- | ---------------------------- |
+| Pending     | Not yet started              |
+| In Progress | Work underway                |
+| Completed   | Task finished and documented |
+| Overdue     | Past due date, not completed |
+| Waived      | Excused (with documentation) |
 
 ### Managing Tasks
 
@@ -233,11 +239,11 @@ Awarded grants come with reporting and compliance obligations. The system tracks
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Task overdue | Status auto-changes to Overdue; notification sent |
-| Waived task | Requires documentation reason |
-| Auto-generated tasks | Created based on grant type and reporting_frequency setting |
+| Scenario             | Behavior                                                       |
+| -------------------- | -------------------------------------------------------------- |
+| Task overdue         | Status auto-changes to Overdue; notification sent              |
+| Waived task          | Requires documentation reason                                  |
+| Auto-generated tasks | Created based on grant type and reporting_frequency setting    |
 | Reminder not sending | Check that reminder_days_before is set and email is configured |
 
 ---
@@ -255,15 +261,15 @@ The **Activity** tab on each application provides a chronological log of all act
 
 ### Note Types
 
-| Type | Description |
-|------|-------------|
-| General | Free-form notes |
-| Status Change | Automatic log of status transitions |
-| Document Added | File upload notification |
-| Contact Made | Record of communication with grantor |
-| Milestone | Key project milestone |
-| Financial | Financial event or update |
-| Compliance | Compliance-related note |
+| Type           | Description                          |
+| -------------- | ------------------------------------ |
+| General        | Free-form notes                      |
+| Status Change  | Automatic log of status transitions  |
+| Document Added | File upload notification             |
+| Contact Made   | Record of communication with grantor |
+| Milestone      | Key project milestone                |
+| Financial      | Financial event or update            |
+| Compliance     | Compliance-related note              |
 
 ![Grant application activity log with its timeline of status changes and notes](./images/12-08-application-activity-log.png)
 
@@ -299,11 +305,11 @@ Campaigns organize fundraising efforts around a specific goal.
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Campaign past end date | Status can be manually changed to Completed |
-| Campaign linked to grant match | Donations count toward grant cost-share |
-| Soft-delete campaign | Marked inactive; historical data preserved |
+| Scenario                       | Behavior                                    |
+| ------------------------------ | ------------------------------------------- |
+| Campaign past end date         | Status can be manually changed to Completed |
+| Campaign linked to grant match | Donations count toward grant cost-share     |
+| Soft-delete campaign           | Marked inactive; historical data preserved  |
 
 ---
 
@@ -322,6 +328,7 @@ The donor CRM tracks all individuals, businesses, and organizations that support
 ### Donor Profile
 
 Each donor profile shows:
+
 - Contact information
 - **Giving history** — total donated, donation count, first/last donation dates
 - **Donation records** — chronological list of all gifts
@@ -332,11 +339,11 @@ Each donor profile shows:
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Donor linked to a member | `user_id` field connects to the member profile |
-| Anonymous donor | `is_anonymous = true`; name not shown in public views |
-| Donor deactivated | Soft-delete; historical records preserved |
+| Scenario                 | Behavior                                              |
+| ------------------------ | ----------------------------------------------------- |
+| Donor linked to a member | `user_id` field connects to the member profile        |
+| Anonymous donor          | `is_anonymous = true`; name not shown in public views |
+| Donor deactivated        | Soft-delete; historical records preserved             |
 
 ---
 
@@ -359,30 +366,36 @@ Each donor profile shows:
 
 ### Payment Statuses
 
-| Status | Description |
-|--------|-------------|
-| Pending | Payment initiated, not yet confirmed |
-| Completed | Payment received and confirmed |
-| Failed | Payment attempt failed |
-| Refunded | Payment returned to donor |
-| Cancelled | Payment cancelled before processing |
+| Status    | Description                          |
+| --------- | ------------------------------------ |
+| Pending   | Payment initiated, not yet confirmed |
+| Completed | Payment received and confirmed       |
+| Failed    | Payment attempt failed               |
+| Refunded  | Payment returned to donor            |
+| Cancelled | Payment cancelled before processing  |
 
 ### Donation Acknowledgments
 
 Track whether receipts and thank-you letters have been sent:
+
 - `receipt_sent` / `receipt_sent_at` — tax receipt
 - `thank_you_sent` / `thank_you_sent_at` — thank-you letter
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Record Donation form showing donor selector, campaign dropdown, amount field, payment method dropdown, date picker, recurring toggle, anonymous toggle, and dedication fields._
+> **Corrected 2026-08-12.** The form was never built. No component calls
+> `createDonation`, and the "Record Donation" button that pointed at
+> `/grants/donations/new` has been removed because that route does not exist —
+> the router's catch-all was silently bouncing anyone who clicked it to the
+> home dashboard. Donations reach the system through the API and through no
+> screen. Recorded in [Grants & Fundraising — Pledges and Fundraising Events](../KNOWN_LIMITATIONS.md#grants--fundraising--pledges-and-fundraising-events-2026-08-08).
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Recurring donation | Records each occurrence separately; tracks frequency |
-| Anonymous donation with dedication | Dedication shown; donor name hidden |
-| Donation to inactive campaign | Allowed but logged; counted toward campaign total |
-| Check donation | `check_number` field available for reference |
+| Scenario                           | Behavior                                             |
+| ---------------------------------- | ---------------------------------------------------- |
+| Recurring donation                 | Records each occurrence separately; tracks frequency |
+| Anonymous donation with dedication | Dedication shown; donor name hidden                  |
+| Donation to inactive campaign      | Allowed but logged; counted toward campaign total    |
+| Check donation                     | `check_number` field available for reference         |
 
 ---
 
@@ -400,15 +413,19 @@ Pledges track donation commitments that haven't been fulfilled yet.
 
 ### Pledge Statuses
 
-| Status | Description |
-|--------|-------------|
-| Pending | Pledged, no payments yet |
-| Partial | Some payments received |
-| Fulfilled | Full amount received |
-| Cancelled | Pledge withdrawn |
-| Overdue | Past due date, not fully paid |
+| Status    | Description                   |
+| --------- | ----------------------------- |
+| Pending   | Pledged, no payments yet      |
+| Partial   | Some payments received        |
+| Fulfilled | Full amount received          |
+| Cancelled | Pledge withdrawn              |
+| Overdue   | Past due date, not fully paid |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Pledges list showing several pledges with donor name, pledged amount, fulfilled amount, status badge, and due date._
+> **Corrected 2026-08-12.** There is no pledges page. The service methods
+> exist and their only consumer is a store action no component calls; the KPI
+> tile that linked to `/grants/pledges` has been removed because that route
+> does not exist either. The Outstanding Pledges figure on the dashboard is
+> real — its destination was not. Recorded in [Grants & Fundraising — Pledges and Fundraising Events](../KNOWN_LIMITATIONS.md#grants--fundraising--pledges-and-fundraising-events-2026-08-08).
 
 ---
 
@@ -432,11 +449,15 @@ Dinner, Gala, Auction, Raffle, Golf Outing, Walkathon, Other
 ### Tracking Results
 
 After the event, update:
+
 - **Actual Revenue** — total raised
 - **Expenses** — event costs
 - **Current Attendees** — actual attendance count
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of a fundraising event detail showing "Annual Dinner Gala" with ticket sales progress, revenue goal bar, sponsor logos, and expense tracking._
+> **Corrected 2026-08-12.** There is no fundraising-event screen:
+> `listFundraisingEvents`, `createFundraisingEvent` and
+> `updateFundraisingEvent` have zero consumers, no route and no page. Recorded
+> in [Grants & Fundraising — Pledges and Fundraising Events](../KNOWN_LIMITATIONS.md#grants--fundraising--pledges-and-fundraising-events-2026-08-08).
 
 ---
 
@@ -472,6 +493,7 @@ Navigate to **Grants > Reports** for two report types:
 ### Part 1: Research (January)
 
 Lt. Walsh opens the **Opportunities Library** and finds the AFG program:
+
 - **Agency:** FEMA
 - **Deadline:** Rolling (applications accepted Jan–Mar)
 - **Typical Award:** $50,000–$500,000
@@ -479,6 +501,7 @@ Lt. Walsh opens the **Opportunities Library** and finds the AFG program:
 - **Required Documents:** Application narrative, cost analysis, department profile
 
 He creates a new application:
+
 - **Title:** "SCBA Replacement — AFG 2026"
 - **Amount Requested:** $180,000
 - **Match Amount:** $31,765 (15% of total project cost $211,765)
@@ -501,6 +524,7 @@ Lt. Walsh moves the application to **Preparing** and:
 ### Part 3: Submission (March 1)
 
 Chief Morrison reviews and approves → Lt. Walsh submits:
+
 - Status: **Submitted**
 - Application deadline met with 2 weeks to spare
 
@@ -509,6 +533,7 @@ Chief Morrison reviews and approves → Lt. Walsh submits:
 FEMA notifies the department: **Awarded!**
 
 Lt. Walsh updates the application:
+
 - Status: **Awarded**
 - Amount Awarded: $180,000
 - Grant Start Date: July 1, 2026
@@ -516,6 +541,7 @@ Lt. Walsh updates the application:
 - Reporting Frequency: Quarterly
 
 The system auto-generates compliance tasks:
+
 - Q1 Performance Report (due Oct 15)
 - Q1 Financial Report (due Oct 15)
 - Q2 Performance Report (due Jan 15)
@@ -527,6 +553,7 @@ The system auto-generates compliance tasks:
 ### Part 5: Grant Period (July–December)
 
 As SCBA units arrive and are deployed, Lt. Walsh records expenditures:
+
 - Jul 15: MSA Safety invoice — $82,500 (30 SCBA units, first shipment)
 - Aug 20: Training vendor — $7,500 (SCBA certification course)
 - Oct 1: MSA Safety invoice — $82,500 (30 SCBA units, second shipment)
@@ -538,6 +565,7 @@ He completes the Q1 reports on time and marks the tasks as Complete.
 ### Part 6: Closeout (July 2027)
 
 Lt. Walsh files the final closeout report:
+
 - Total spent: $175,200
 - Equipment inventory verified: all 60 SCBA units accounted for
 - Remaining $4,800 returned to FEMA
@@ -547,17 +575,17 @@ Lt. Walsh files the final closeout report:
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| Grant opportunity not showing deadline | Check that deadline_type and deadline_date are set. Rolling deadlines have no fixed date. |
-| Cannot create application | Verify `fundraising.manage` permission. Check that the module is enabled. |
+| Issue                                  | Solution                                                                                                                          |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Grant opportunity not showing deadline | Check that deadline_type and deadline_date are set. Rolling deadlines have no fixed date.                                         |
+| Cannot create application              | Verify `fundraising.manage` permission. Check that the module is enabled.                                                         |
 | Budget items not matching expenditures | Expenditures must be linked to budget items for automatic tracking. Unlinked expenditures count toward totals but not line items. |
-| Compliance task not auto-created | Auto-creation depends on reporting_frequency being set on the application. Set it after the application is awarded. |
-| Campaign progress not updating | Donations must be linked to the campaign via campaign_id. Unlinked donations don't count. |
-| Donor duplicate | System does not auto-detect donor duplicates. Search before creating. Merge not yet available. |
-| Pledge shows overdue incorrectly | Check the due_date. Partial payments keep the pledge in Partial status until fully paid. |
-| Report shows $0 for a period | Verify the date range includes transactions. Some reports filter by fiscal_year_id. |
-| Cannot delete application | Applications with expenditures or compliance tasks must have those removed first. |
+| Compliance task not auto-created       | Auto-creation depends on reporting_frequency being set on the application. Set it after the application is awarded.               |
+| Campaign progress not updating         | Donations must be linked to the campaign via campaign_id. Unlinked donations don't count.                                         |
+| Donor duplicate                        | System does not auto-detect donor duplicates. Search before creating. Merge not yet available.                                    |
+| Pledge shows overdue incorrectly       | Check the due_date. Partial payments keep the pledge in Partial status until fully paid.                                          |
+| Report shows $0 for a period           | Verify the date range includes transactions. Some reports filter by fiscal_year_id.                                               |
+| Cannot delete application              | Applications with expenditures or compliance tasks must have those removed first.                                                 |
 
 ---
 

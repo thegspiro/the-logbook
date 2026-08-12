@@ -13,6 +13,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
+import toast from 'react-hot-toast';
 import {
   Shield,
   FileText,
@@ -95,6 +96,7 @@ const AnnualReportSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [exporting, setExporting] = useState(false);
 
   const loadReport = useCallback(async () => {
     try {
@@ -114,7 +116,10 @@ const AnnualReportSection: React.FC = () => {
   }, [loadReport]);
 
   const handleExport = async () => {
+    if (exporting) return;
+
     try {
+      setExporting(true);
       const blob = await complianceOfficerService.exportAnnualReport(year);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -123,7 +128,9 @@ const AnnualReportSection: React.FC = () => {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      // Silently fail - user will see no download
+      toast.error('Failed to export annual compliance report');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -164,9 +171,10 @@ const AnnualReportSection: React.FC = () => {
               void handleExport();
             }}
             className="btn-primary flex items-center gap-2 text-sm"
+            disabled={exporting}
           >
-            <Download className="h-4 w-4" />
-            Export CSV
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {exporting ? 'Exporting…' : 'Export CSV'}
           </button>
         </div>
       </div>
