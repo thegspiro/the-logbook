@@ -21,6 +21,7 @@ import type {
   PipelineStats,
   InactivityConfig,
   StageType,
+  StageConfig,
   Applicant,
   ApplicantCreate,
   ApplicantUpdate,
@@ -374,6 +375,7 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     current_stage_type: data.current_step?.step_type
       ? mapStepTypeToFrontend(data.current_step.step_type, data.current_step.action_type)
       : undefined,
+    current_stage_config: (data.current_step?.config as StageConfig | null) ?? undefined,
     stage_history: stageHistory,
     total_stages: (data.step_progress || []).length,
     stage_entered_at:
@@ -381,7 +383,6 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
         ?.created_at ?? data.created_at,
     target_membership_type: mapDesiredMembershipType(data.desired_membership_type),
     form_submission_id: data.form_submission_id || undefined,
-    status_token: data.status_token || undefined,
     status: extractStatus(data.status) as Applicant['status'],
     notes: data.notes || undefined,
     last_activity_at: data.updated_at,
@@ -465,8 +466,8 @@ function mapPipelineStatsResponse(data: BackendPipelineStatsResponse): PipelineS
     converted_count: data.transferred_count ?? 0,
     rejected_count: data.rejected_count ?? 0,
     withdrawn_count: data.withdrawn_count ?? 0,
-    on_hold_count: 0,
-    inactive_count: 0,
+    on_hold_count: data.on_hold_count ?? 0,
+    inactive_count: data.inactive_count ?? 0,
     warning_count: 0,
     avg_days_to_convert: data.avg_days_to_transfer ?? 0,
     by_stage: (data.by_step || []).map((s) => ({
@@ -786,6 +787,14 @@ export const applicantService = {
     const response = await api.post<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}/complete-step`,
       { step_id: stepId, notes }
+    );
+    return mapProspectToApplicant(response.data);
+  },
+
+  async skipStep(applicantId: string, notes?: string): Promise<Applicant> {
+    const response = await api.post<BackendProspectResponse>(
+      `/prospective-members/prospects/${applicantId}/skip-step`,
+      { notes }
     );
     return mapProspectToApplicant(response.data);
   },

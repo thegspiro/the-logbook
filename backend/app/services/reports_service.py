@@ -1699,6 +1699,9 @@ class ReportsService:
                 "withdrawn_count": 0,
                 "on_hold_count": 0,
                 "avg_days_to_convert": 0,
+                "conversion_rate": 0,
+                "yearly_trends": [],
+                "referral_sources": [],
                 "groups": [],
                 "prospects": [],
             }
@@ -1770,6 +1773,94 @@ class ReportsService:
             avg_days = round(total_days / len(transferred_prospects), 1)
         else:
             avg_days = 0
+
+        decided = converted + rejected
+        conversion_rate = round(converted / decided * 100, 1) if decided else 0
+
+        # Cohort applicants by the year they entered this pipeline. Outcomes
+        # stay attached to their application year, which makes year-over-year
+        # comparisons stable instead of moving old conversions into this year.
+        yearly: Dict[int, Dict[str, Any]] = {}
+        sources: Dict[str, Dict[str, int]] = {}
+        for prospect in prospects:
+            if not prospect.created_at:
+                continue
+            status_value = (
+                prospect.status.value
+                if hasattr(prospect.status, "value")
+                else prospect.status
+            )
+            year = prospect.created_at.year
+            cohort = yearly.setdefault(
+                year,
+                {
+                    "year": year,
+                    "applicants": 0,
+                    "converted": 0,
+                    "rejected": 0,
+                    "withdrawn": 0,
+                    "conversion_days": [],
+                },
+            )
+            cohort["applicants"] += 1
+            if status_value in {"transferred", "rejected", "withdrawn"}:
+                key = "converted" if status_value == "transferred" else status_value
+                cohort[key] += 1
+            if status_value == "transferred" and prospect.transferred_at:
+                cohort["conversion_days"].append(
+                    (prospect.transferred_at - prospect.created_at).days
+                )
+
+            source_name = (prospect.referral_source or "Unspecified").strip()
+            source = sources.setdefault(
+                source_name or "Unspecified", {"applicants": 0, "converted": 0}
+            )
+            source["applicants"] += 1
+            if status_value == "transferred":
+                source["converted"] += 1
+
+        yearly_trends = []
+        previous_applicants: Optional[int] = None
+        for year in sorted(yearly):
+            cohort = yearly[year]
+            cohort_decided = cohort["converted"] + cohort["rejected"]
+            growth = None
+            if previous_applicants:
+                growth = round(
+                    (cohort["applicants"] - previous_applicants)
+                    / previous_applicants
+                    * 100,
+                    1,
+                )
+            conversion_days = cohort.pop("conversion_days")
+            cohort["conversion_rate"] = (
+                round(cohort["converted"] / cohort_decided * 100, 1)
+                if cohort_decided
+                else 0
+            )
+            cohort["avg_days_to_convert"] = (
+                round(sum(conversion_days) / len(conversion_days), 1)
+                if conversion_days
+                else 0
+            )
+            cohort["applicant_growth_percent"] = growth
+            yearly_trends.append(cohort)
+            previous_applicants = cohort["applicants"]
+
+        referral_sources = [
+            {
+                "source": source_name,
+                **counts,
+                "conversion_rate": (
+                    round(counts["converted"] / counts["applicants"] * 100, 1)
+                    if counts["applicants"]
+                    else 0
+                ),
+            }
+            for source_name, counts in sorted(
+                sources.items(), key=lambda item: (-item[1]["applicants"], item[0])
+            )
+        ]
 
         # Load step progress for all prospects in this pipeline
         prospect_ids = [p.id for p in prospects]
@@ -1983,6 +2074,9 @@ class ReportsService:
             "withdrawn_count": withdrawn,
             "on_hold_count": on_hold,
             "avg_days_to_convert": avg_days,
+            "conversion_rate": conversion_rate,
+            "yearly_trends": yearly_trends,
+            "referral_sources": referral_sources,
             "groups": groups_data,
             "prospects": prospect_rows,
         }

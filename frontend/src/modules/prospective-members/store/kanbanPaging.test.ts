@@ -8,10 +8,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGetApplicants = vi.fn();
+const mockRegressStage = vi.fn();
 
 vi.mock('../services/api', () => ({
   applicantService: {
     getApplicants: (...args: unknown[]) => mockGetApplicants(...args) as unknown,
+    regressStage: (...args: unknown[]) => mockRegressStage(...args) as unknown,
   },
   pipelineService: {},
   interviewService: {},
@@ -25,12 +27,24 @@ const emptyPage = { items: [], total: 0, page: 1, total_pages: 1 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   mockGetApplicants.mockResolvedValue(emptyPage);
+  mockRegressStage.mockResolvedValue(undefined);
   useProspectiveMembersStore.setState({
     viewMode: 'kanban',
     currentPage: 1,
     pageSize: 25,
     filters: {},
+  });
+});
+
+describe('applicant action errors', () => {
+  it('propagates an API rejection so the action UI cannot report success', async () => {
+    const error = new Error('Stage cannot be moved back');
+    mockRegressStage.mockRejectedValueOnce(error);
+
+    await expect(useProspectiveMembersStore.getState().regressApplicant('prospect-1')).rejects.toBe(error);
+    expect(useProspectiveMembersStore.getState().isRegressing).toBe(false);
   });
 });
 
@@ -74,5 +88,12 @@ describe('applicant paging by view mode', () => {
     useProspectiveMembersStore.getState().setViewMode('kanban');
 
     expect(mockGetApplicants).not.toHaveBeenCalled();
+  });
+
+  it('remembers the selected view for the next visit', async () => {
+    useProspectiveMembersStore.getState().setViewMode('table');
+    await vi.waitFor(() => expect(mockGetApplicants).toHaveBeenCalledTimes(1));
+
+    expect(localStorage.getItem('prospective-members:view-mode')).toBe('table');
   });
 });
