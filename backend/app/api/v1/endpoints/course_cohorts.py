@@ -298,14 +298,27 @@ async def create_cohort(
         user_id=str(current_user.id),
         username=current_user.username,
     )
-    return await _build_detail(service, cohort.id, current_user.organization_id)
+    return await _build_detail(
+        service,
+        cohort.id,
+        current_user.organization_id,
+        include_member_data=True,
+    )
 
 
 async def _build_detail(
-    service: CourseCohortService, cohort_id, organization_id
+    service: CourseCohortService,
+    cohort_id,
+    organization_id,
+    *,
+    include_member_data: bool = False,
 ) -> CourseCohortDetailResponse:
-    """Assemble the full cohort view (metadata + class timeline + roster)."""
-    detail = await service.get_cohort_detail(UUID(str(cohort_id)), organization_id)
+    """Assemble cohort details with peer data excluded by default."""
+    detail = await service.get_cohort_detail(
+        UUID(str(cohort_id)),
+        organization_id,
+        include_member_data=include_member_data,
+    )
     base = _cohort_response(
         detail["cohort"],
         course_name=detail.get("course_name"),
@@ -344,10 +357,12 @@ async def get_cohort(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get one cohort with its class timeline and roster
+    Get one cohort with its class timeline
 
-    Officers see any cohort in their organization; other members see only
-    cohorts they are on the roster for.
+    Officers see the roster and attendance aggregates for any cohort in their
+    organization. Other members see only the schedule for cohorts they are on;
+    peer names, contact details, progress, roster size, and attendance totals
+    are withheld.
 
     **Authentication required**
     """
@@ -363,7 +378,12 @@ async def get_cohort(
         )
 
     try:
-        return await _build_detail(service, cohort_id, current_user.organization_id)
+        return await _build_detail(
+            service,
+            cohort_id,
+            current_user.organization_id,
+            include_member_data=is_officer,
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)

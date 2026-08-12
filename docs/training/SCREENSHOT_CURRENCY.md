@@ -80,10 +80,47 @@ this note exists so the guide does not silently endorse the number.
 
 ### Held back deliberately
 
-`02-42-external-integrations` and `02-68-vector-category-mapping` capture an
-empty "No Integrations Yet" state. The harness flags them and does not apply
-them, and they are **not committed**, so the guide keeps its unfilled
-placeholders rather than gaining a picture of nothing.
+`02-68-vector-category-mapping` still has nothing to photograph. Category
+mappings are created **only** by `POST /providers/{id}/sync-categories`, which
+fetches the live vendor catalogue over the network — there is no create
+endpoint the seeder could call, so the table stays empty however much demo data
+is added. The harness flags the shot and does not apply it, and it is **not
+committed**, so the guide keeps its unfilled placeholder rather than gaining a
+picture of an empty table under a caption describing a full one.
+
+**Resolved 2026-08-12 for `02-42-external-integrations`.** That one was empty
+for a reason the seeder _could_ fix — the demo department had no provider
+configured at all. `seed_external_provider` now saves one, and the shot is
+captured and applied. Only the configuration is seeded: `connection_verified`
+and `last_sync_at` are written by a real sync, so the card reads "Connection
+not verified" and "Last Sync: Never", which the guide's prose now explains
+rather than contradicts.
+
+### A seed gap that wasn't — the quantity checklist was reachable all along
+
+**Withdrawn 2026-08-12, the day after it was written.** This section claimed
+three 03-scheduling placeholders — the carry-over banner, the Set All to Par
+confirmation, and the flat check form on a phone — were unreachable because the
+only template with quantity items is bound to **M-3** and `seed_scheduling`
+rosters shifts onto `fleet[:3]` only. The premise about the roster is true. The
+conclusion drawn from it was not.
+
+**A check does not need a shift.** `MyChecklistsPage` has an **Unscheduled
+checklist** button that offers every active template and starts a check with no
+shift attached — the same standalone-check feature the guide documents two
+sections further down. All three shots were captured through it with no seeder
+change at all, and they are now applied.
+
+The mistake was reasoning from `/equipment-checks/my-checklists` (which is
+shift-derived, and was correctly read) to "the screen is unreachable", without
+reading the page that renders it. Recorded rather than deleted because the
+cheap check — open the page and look at what else is on it — is the one that
+was skipped.
+
+**What was genuinely missing** was smaller and got fixed here: no seeded
+template had a **section header**, so the bold in-compartment caption the guide
+documents could not be pictured and the renderer had never met one in demo
+data. `_add_section_header` now puts one on the engine checklist.
 
 ---
 

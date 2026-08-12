@@ -1506,7 +1506,7 @@ const PipelineDetailPage: React.FC = () => {
         />
 
         {/* Header */}
-        <div className="mb-8 flex items-start justify-between">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start space-x-4">
             <button
               onClick={() => void navigate('/training/programs')}
@@ -1544,7 +1544,7 @@ const PipelineDetailPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => window.open(`/training/print/program?id=${programId}`, '_blank')}
               className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm print:hidden"
@@ -1629,7 +1629,7 @@ const PipelineDetailPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="bg-theme-surface mb-6 flex space-x-1 rounded-lg p-1" role="tablist">
+        <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1" role="tablist">
           {[
             { key: 'overview' as DetailTab, label: 'Phases & Requirements', icon: Layers },
             { key: 'enrollments' as DetailTab, label: 'Enrollments', icon: Users },

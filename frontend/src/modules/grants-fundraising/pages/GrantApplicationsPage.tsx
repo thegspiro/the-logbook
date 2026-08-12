@@ -342,7 +342,7 @@ export const GrantApplicationsPage: React.FC = () => {
               Track and manage grant applications through the pipeline
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {/* View toggle */}
             <div className="border-theme-surface-border bg-theme-surface flex rounded-lg border p-0.5">
               <button

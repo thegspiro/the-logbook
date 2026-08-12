@@ -39,12 +39,13 @@ services:
       # makes the documented production stack unavailable.
       DB_SSL: ${DB_SSL:-false}
       REDIS_SSL: ${REDIS_SSL:-false}
-      # Fail-closed policy switches are opt-in because they require external
-      # deployment prerequisites. SECURITY_REQUIRE_TLS needs TLS-enabled data
-      # services with trusted CA paths; GEOIP_FAIL_CLOSED needs a mounted
-      # GeoLite database. Enabling either without its prerequisite prevents
-      # legitimate traffic rather than making the bundled services safer.
-      SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-false}
+      # Fail closed until production data services have TLS configured. The
+      # bundled plaintext services therefore require an explicit, documented
+      # SECURITY_REQUIRE_TLS=false override rather than silently carrying
+      # database, session, and cache traffic in cleartext.
+      SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-true}
+      # GeoIP enforcement remains opt-in because it requires a mounted GeoLite
+      # database; enabling it without that prerequisite blocks legitimate traffic.
       GEOIP_FAIL_CLOSED: ${GEOIP_FAIL_CLOSED:-false}
       # Retention exports of purged audit rows go to a persistent volume
       # (backed up by the backup sidecar).

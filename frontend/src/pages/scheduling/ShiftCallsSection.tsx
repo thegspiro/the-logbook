@@ -167,7 +167,7 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
 
   const renderForm = () => (
     <div className="space-y-3 rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor="call-type" className="text-theme-text-secondary mb-1 block text-xs font-medium">
             Incident Type *

@@ -432,7 +432,12 @@ class TestShiftCRUD:
         # An unrostered member is blocked from checking in.
         result, err = await svc.member_check_in(shift.id, user2_id, uuid.UUID(org_id))
         assert result is None
-        assert "not assigned" in err.lower()
+        # Naming the guard, not just the refusal: the window guard runs first
+        # and also returns a message, so a bare "is there an error" assertion
+        # passes while testing nothing about the roster.
+        assert (
+            "not assigned" in err.lower()
+        ), f"the roster guard must be what refuses this, not the window: {err}"
 
         # After being assigned, the member can check in.
         await svc.create_assignment(

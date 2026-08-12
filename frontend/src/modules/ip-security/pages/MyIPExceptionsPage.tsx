@@ -44,9 +44,9 @@ const MyIPExceptionsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-600 p-2">
+            <div className="shrink-0 rounded-lg bg-blue-600 p-2">
               <Shield className="h-5 w-5 text-white" />
             </div>
             <div>

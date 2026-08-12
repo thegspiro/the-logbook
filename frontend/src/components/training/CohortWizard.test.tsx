@@ -155,6 +155,11 @@ describe('CohortWizard', () => {
     await waitFor(() => {
       expect(screen.getByText('Holidays in this range')).toBeInTheDocument();
     });
+    // The date the chip carries is the date it must offer. A suggested
+    // blackout is a bare calendar date; run through a timezone-aware
+    // formatter it renders a day early west of UTC, so Thanksgiving is
+    // offered as the 25th and ticking it blacks out the wrong day.
+    expect(screen.getByRole('button', { name: 'Nov 26, 2026' })).toBeInTheDocument();
   });
 
   it('skipping a class removes it from the generated count', async () => {

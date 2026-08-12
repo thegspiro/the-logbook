@@ -1042,7 +1042,7 @@ export const PatternsTab: React.FC = () => {
                         </button>
                         <div className="flex-1" />
                         {confirmingDelete === pattern.id ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs text-red-500">
                               Delete pattern? Existing shifts will not be removed.
                             </span>

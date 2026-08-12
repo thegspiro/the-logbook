@@ -26,6 +26,7 @@ import {
   Edit2,
   PlayCircle,
 } from 'lucide-react';
+import { Tooltip } from '../components/ux';
 import { externalTrainingService, trainingService } from '../services/api';
 import type {
   ExternalTrainingProvider,
@@ -379,7 +380,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
               )}
             </div>
 
-            <div className="border-theme-surface-border flex justify-between border-t pt-4">
+            <div className="border-theme-surface-border flex flex-wrap justify-between gap-2 border-t pt-4">
               <button
                 type="button"
                 onClick={() => setStep('type')}
@@ -466,8 +467,18 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
             <p className="text-theme-text-muted text-sm">{getProviderTypeLabel()}</p>
           </div>
         </div>
+        {/* Two independent facts sit side by side here: whether the connection
+            has been proved to work, and whether the provider is switched on.
+            The first was conveyed by icon colour alone, so a sighted reader saw
+            an unexplained amber triangle next to the word "Active" and had no
+            way to tell which of the two it referred to. The label is the icon's
+            accessible name and its tooltip. */}
         <div className="flex items-center gap-2">
-          <span aria-label={getStatusLabel()}>{getStatusIcon()}</span>
+          <Tooltip content={getStatusLabel()}>
+            <span aria-label={getStatusLabel()} className="flex">
+              {getStatusIcon()}
+            </span>
+          </Tooltip>
           <span
             className={`text-sm ${provider.active ? 'text-green-700 dark:text-green-400' : 'text-theme-text-muted'}`}
           >
@@ -957,7 +968,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                         : 'border-yellow-500/30 bg-yellow-500/10'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-theme-text-primary font-medium">{mapping.external_category_name}</p>
                         <p className="text-theme-text-muted text-xs">
@@ -965,7 +976,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                           {mapping.external_category_code && ` | Code: ${mapping.external_category_code}`}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {mapping.is_mapped && (
                           <span className="flex items-center gap-1 text-sm text-green-700 dark:text-green-400">
                             <CheckCircle className="h-4 w-4" aria-hidden="true" />
@@ -980,7 +991,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                             void mapCategory(mapping, e.target.value);
                           }}
                           aria-label={`Internal category for ${mapping.external_category_name}`}
-                          className="form-input-sm w-56"
+                          className="form-input-sm w-full sm:w-56"
                         >
                           <option value="">Not mapped</option>
                           {internalCategories.map((category) => (
@@ -1172,14 +1183,17 @@ const ExternalTrainingPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="p-6">
         {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold">External Training Integrations</h1>
             <p className="text-theme-text-muted mt-1">
               Connect external training platforms to automatically sync completed training records
             </p>
           </div>
-          <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
+          >
             <Plus className="h-5 w-5" aria-hidden="true" />
             Add Provider
           </button>

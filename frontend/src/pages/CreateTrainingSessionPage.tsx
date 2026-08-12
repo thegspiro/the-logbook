@@ -295,7 +295,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                 <React.Fragment key={step.number}>
                   <div className="flex flex-col items-center">
                     <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                      className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all sm:h-12 sm:w-12 ${
                         isComplete
                           ? 'border-green-600 bg-green-600'
                           : isActive
@@ -310,14 +310,14 @@ const CreateTrainingSessionPage: React.FC = () => {
                       )}
                     </div>
                     <p
-                      className={`mt-2 text-sm font-medium ${
+                      className={`mt-2 hidden text-sm font-medium sm:block ${
                         isActive ? 'text-theme-text-primary' : 'text-theme-text-muted'
                       }`}
                     >
                       {step.title}
                     </p>
                   </div>
-                  {index < steps.length - 1 && <div className="bg-theme-surface-hover mx-4 h-0.5 flex-1" />}
+                  {index < steps.length - 1 && <div className="bg-theme-surface-hover mx-2 h-0.5 flex-1 sm:mx-4" />}
                 </React.Fragment>
               );
             })}
@@ -1124,7 +1124,7 @@ const CreateTrainingSessionPage: React.FC = () => {
           )}
 
           {/* Navigation Buttons */}
-          <div className="border-theme-surface-border flex justify-between border-t pt-6">
+          <div className="border-theme-surface-border flex flex-wrap justify-between gap-3 border-t pt-6">
             <button
               onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
               disabled={currentStep === 1}
