@@ -714,8 +714,10 @@ you in the result message after you submit. Two of the eight lines above are
 already in this department's catalog, and nothing on this screen says so.
 
 **Names already in the catalog are skipped and reported, not rejected**, so you
-can re-paste a list after it grows and only the new lines are created. As with
-receiving, any validation failure writes nothing at all.
+can re-paste a list after it grows and only the new lines are created. The
+preview does not mark them in advance — it shows every line you pasted, and the
+skipped ones are named in the confirmation after you submit. As with receiving,
+any validation failure writes nothing at all.
 
 The **Import CSV** button beside them is the third path. It goes to
 `/inventory/import`, which was built and routed but previously reachable only by

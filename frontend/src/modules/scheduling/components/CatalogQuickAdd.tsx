@@ -16,7 +16,7 @@
  * what was typed, exactly as before.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2, Package, Plus, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '@/services/inventoryService';
@@ -60,6 +60,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const [creating, setCreating] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -176,6 +177,43 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const hasExactMatch = results.some((r) => r.name.trim().toLowerCase() === typed.toLowerCase());
   const showCreate = canCreateInventory && typed.length > 0 && !searching && !hasExactMatch;
 
+  /**
+   * Position the results list against the viewport rather than the input.
+   *
+   * The list used to be `absolute` inside this component's `relative` wrapper,
+   * which sits inside the compartment card — and that card is `overflow-hidden`
+   * so it can clip its own rounded corners. An absolutely-positioned descendant
+   * is clipped along with everything else, and because the quick-add bar is the
+   * **last** element in the card, the list always extended past the bottom edge.
+   * A user typing three letters saw a sliver of the first result and could not
+   * read the rest, let alone pick one — on the control whose whole purpose is
+   * picking a catalog item.
+   *
+   * `fixed` escapes the clip. The element stays a DOM child of the wrapper, so
+   * the click-outside handler above still recognises it.
+   */
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+    const measure = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setAnchor({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    };
+    measure();
+    // Capture phase: the builder scrolls the page *and* individual panels, and
+    // a bubbling listener on window never hears an inner element's scroll — the
+    // list would sit where the input used to be.
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [open, results.length, showCreate]);
+
   return (
     <div className="relative" ref={containerRef}>
       <div className="flex items-center gap-2">
@@ -214,8 +252,11 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
         </button>
       </div>
 
-      {open && typed.length > 0 && (
-        <div className="border-theme-surface-border bg-theme-surface absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-md border shadow-lg">
+      {open && typed.length > 0 && anchor && (
+        <div
+          style={{ top: anchor.top, left: anchor.left, width: anchor.width }}
+          className="border-theme-surface-border bg-theme-surface fixed z-50 max-h-64 overflow-auto rounded-md border shadow-lg"
+        >
           {results.map((r) => (
             <button
               key={r.id}
