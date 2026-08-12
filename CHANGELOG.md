@@ -7,6 +7,331 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Elections: reusable saved ballots, and the votes that counted when they shouldn't (2026-08-12)
+
+**Added**
+
+- **Saved ballot templates.** A secretary who runs the same officer slate every
+  year can save the ballot as a named template and apply it next year instead
+  of rebuilding it item by item. Three endpoints under
+  `/api/v1/elections/templates/saved-ballots` (list / save / delete), all
+  `elections.manage`, all org-scoped; model `SavedBallotTemplate`
+  (`saved_ballot_templates`, migration `20260812_0001`); audit events
+  `ballot_template_created` / `ballot_template_deleted`.
+
+  Three design decisions worth knowing:
+
+  - **Configuration only, by construction.** A template snapshots ballot
+    *structure* — never candidates, voter rosters, votes, tokens, or
+    attendance. The create schema is `extra="forbid"`, so a payload that tries
+    to smuggle any of those in is a 422, not a stored secret.
+  - **Names are unique per org, case-insensitively** — uniqueness rides on
+    `name_key` (SHA-256 of the NFKC-casefolded name), so "Annual Officers" and
+    "annual officers" collide with a 409 while the display name keeps its
+    casing.
+  - **Applying regenerates ballot-item ids**, so an applied snapshot can never
+    carry ids already referenced by the draft it replaces. The BallotBuilder
+    grows a "Save as Template" button and a "Your saved ballots" section in
+    the template picker, with two-step confirms on both replace and delete.
+
+- **Ballot definitions are validated on the way in** — create *and* update.
+  Item ids must be `^[A-Za-z0-9_-]+$` and unique per ballot; voting methods
+  and victory conditions are checked against the known sets;
+  `victory_percentage` is required for a supermajority item; voter-type lists
+  are de-duplicated and `'all'` cannot be combined with other types; position
+  names must be unique case-insensitively. Quorum is cross-validated on update
+  against the *stored* row merged with the patch — and the blanket `le=100`
+  that wrongly capped **count** quorums at 100 is gone (a percentage quorum
+  still caps at 100).
+
+- **Election detail tabs are addressable.** `/elections/{id}?tab=` round-trips
+  all nine workflow tabs, derived from the URL rather than mirrored into state
+  — so the Back button works, and the **Eligibility roster** is finally
+  linkable (`?tab=eligibility`) and photographable. An unknown value falls
+  back to the first tab the viewer may see. Same fix, same reasons, as Email
+  Templates on 2026-08-11.
+
+**Fixed**
+
+- **Unattested paper ballots could decide runoffs and membership outcomes.**
+  Pending paper batches were already excluded from published results, but two
+  raw SQL tallies on the close path didn't know that: the runoff-advancement
+  count and the membership-package Approve/Deny sync. A batch nobody attested
+  was invisible in the results yet could pick who advanced to a runoff or flip
+  a prospect to `elected`. Both queries now carry the `_is_attested_vote`
+  predicate. Electronic votes, confirmed batches, and pre-attestation batches
+  are unaffected; a batch confirmed later counts again everywhere.
+
+- **A token voter could double-vote a position by omitting it.** On the public
+  token-ballot path, a vote sent without `position` for a positioned candidate
+  was stored positionless — a different bucket from the same voter's explicit
+  vote, unseen by the duplicate/limit filters and hashed differently by the
+  dedup constraint. The stored position, the limit filters, and the dedup hash
+  now all normalize to `position or candidate.position`. A genuinely
+  positionless candidate still stores NULL and is limited as before.
+
+- **Two simultaneous votes could both pass validation.** The dedup hash is
+  method-aware (distinct candidates/ranks legitimately hash differently), so
+  its unique constraint cannot enforce per-voter limits by itself — and two
+  concurrent `cast_vote` requests could each read "votes so far" before either
+  inserted. The election row is now locked (`SELECT … FOR UPDATE`) for the
+  whole validate-then-insert window, serializing voters through one at a time.
+
+- **Every `elections.view` holder could read applicant PII.** The
+  prospective-member *election package* bundles the interview and coordinator
+  material the vote is based on — unlike ordinary election data. Both package
+  read endpoints dropped `elections.view` from their permission lists (now
+  `prospective_members.view` / `prospective_members.manage` /
+  `elections.manage`); a regression test pins the set exactly, so additions
+  fail it too.
+
+- **Cloning an election now copies its ballot items** (deep-copied, so editing
+  the clone can never mutate the source through a shared reference — the same
+  JSON-column trap as CLAUDE.md pitfall #12).
+
+---
+
+### Sign-in: MFA reaches OAuth, refresh replay dies, and resets meet a ceiling (2026-08-12)
+
+Four authentication fixes, each closing a way around a control that existed:
+
+**Security**
+
+- **OAuth logins now face the MFA challenge.** "Sign in with Google/Microsoft"
+  verified only the primary credential: an account with TOTP enabled got full
+  session cookies straight from the callback, so a compromised IdP account
+  bypassed the app's second factor entirely. The callback now issues **no
+  session** for MFA-enabled accounts — it redirects to
+  `/auth/callback#mfa_token=<jwt>` (a 5-minute `mfa_pending` token in the URL
+  **fragment**, which browsers never send to a server), the SPA strips it from
+  history and routes to the normal two-factor form, and only
+  `POST /auth/mfa/login` issues cookies. Audit: `oauth_mfa_challenge`.
+
+- **A used refresh token is dead immediately.** The 30-second "rotation grace
+  window" — which answered a *previous* refresh token with the session's
+  *current* token pair, to tolerate multi-tab races — was a session-takeover
+  gift to anyone who stole a token: replay within 30s of the legitimate
+  rotation and you own the session, with replay detection suppressed. Removed
+  outright. A stale refresh token now revokes **all** of the user's sessions
+  as presumed theft. Multi-tab refreshes that slid through the grace window
+  will now trip this — an accepted trade, stated here on purpose.
+  `REFRESH_ROTATION_GRACE_SECONDS` and `previous_refresh_token` remain as
+  inert residue (tracked in KNOWN_LIMITATIONS).
+
+- **Members of a deactivated organization can no longer log in** with a
+  password. The candidate query now joins `organizations` and requires
+  `active IS TRUE` in both the canonical-org resolution and the cross-org
+  username fallback. The rejection is indistinguishable from a wrong password
+  (same message, same dummy-hash timing defense), so org status is not
+  enumerable. Two edges recorded rather than hidden: existing sessions are not
+  revoked on deactivation (they expire), and the **OAuth path still lacks the
+  org-active check** — filed in KNOWN_LIMITATIONS rather than silently
+  shipped.
+
+- **Admin account resets hit a privilege ceiling.** `members.manage` could
+  reset the password or MFA of a `security.manage` admin — reset-to-escalate,
+  the oldest trick in the helpdesk book. Both endpoints
+  (`POST /users/{id}/reset-password`, `/reset-mfa`) now require every
+  permission the target holds to be within the caller's own set (wildcards
+  honored; equal peers still resettable). Violations 403 with "You cannot
+  reset the account of a user with privileges beyond your own" and file a
+  privilege-escalation report. The check runs before the MFA-enabled probe, so
+  the 400/403 difference can't be used to learn a superior's MFA state.
+
+---
+
+### Audit log: the legacy-hash boundary moves out of the database (2026-08-12)
+
+**Security**
+
+- **`AUDIT_LOG_LEGACY_MAX_ID`** (new setting, default `0`). Which audit rows
+  may verify under the legacy *unkeyed* SHA-256 scheme was decided by each
+  row's own `hash_version` column — a column in the same attacker-writable
+  table the chain protects. An attacker with SQL write access could rewrite
+  the entire keyed suffix, stamp every forged row `hash_version=1`, recompute
+  the unkeyed chain **without the HMAC key**, and verification would call it
+  intact; the no-downgrade guard was blind to it because it derived its
+  high-water mark from the same column. The boundary now lives in trusted
+  application config: rows above `AUDIT_LOG_LEGACY_MAX_ID` **must** be keyed,
+  whatever their column claims. New installs leave it at `0` (no unkeyed row
+  is ever valid); upgraded installs set it once, to the last row that existed
+  before the HMAC upgrade. Verification flags violations as "Unkeyed hash is
+  not permitted after the trusted legacy audit boundary"; rehash refuses them
+  as a possible downgrade attack rather than laundering them into the chain.
+
+---
+
+### Data boundaries: Salesforce rank, cohort rosters, result emails, undated training (2026-08-11 → 08-12)
+
+**Security**
+
+- **Salesforce inbound sync can no longer change a member's rank.** `rank` is
+  authorization-adjacent (`fire_chief` vs `firefighter`), and it was on the
+  inbound whitelist mapped from the Contact `Title` — so anyone who could edit
+  a Contact in the department's Salesforce org, or forge a webhook payload,
+  could promote a member inside The Logbook. Removed from
+  `INBOUND_UPDATABLE_FIELDS`; inbound now writes contact/demographic fields
+  only (names, phones, station, address). Outbound is deliberately unchanged —
+  The Logbook still *pushes* rank to `Title`; it just never takes it back.
+  Consequence worth knowing: a Contact whose only difference is `Title` now
+  counts as `unchanged`, and previously-overwritten ranks are not repaired.
+
+- **A cohort student no longer sees the whole roster.** The cohort detail
+  endpoint returned the officer payload to any roster member: every peer's
+  name, email, withdrawal status, officer notes, program progress percentage,
+  and per-class attendance counts. A non-officer now gets the metadata and
+  class timeline only — `members` empty, `member_count` 0, per-class
+  `rsvp_count`/`checked_in_count` `null` (withheld, distinguishable from a
+  real zero). The withheld data is never *queried*, so there is no
+  serialization-layer bypass; `/mine` stopped disclosing roster sizes too. The
+  same pass org-scoped every query in the detail path, closing cross-tenant
+  reads via colliding ids.
+
+- **Skills-testing result emails are officer-only, final-only, and escaped.**
+  The email-results endpoint was open to any authenticated user via the
+  examiner path, had no status gate (a draft — i.e. attacker-authored —
+  scorecard could be mailed as an official-looking result), and interpolated
+  the DB-sourced result string raw into the HTML body. Now
+  `require_permission("training.manage")`, completed tests only (400
+  otherwise), `html.escape` on the result text, and the recipient remains
+  derived server-side from the test's own candidate — there is no recipient
+  parameter to abuse. Disclosure is still resolved for the *recipient*, so
+  "email results" cannot bypass a department's decision to withhold them.
+
+**Fixed**
+
+- **An undated training record could satisfy a freshness window.** The officer
+  apply path's recency check was wrapped in `if completed_on is not None` — so
+  a record with *no* completion date failed **open** against a "within the
+  last N days" requirement, crediting freshness that was never verified, while
+  the read-path evaluator already said no. The apply/approve step now rejects
+  it pre-flight with "That training has no completion date, so it can't be
+  credited toward this requirement's N-day window"; nothing is mutated, so
+  there is no approved-but-unapplied half-state. Requirements without a window
+  are untouched, and previously-credited undated records are not backed out.
+
+---
+
+### Production compose fails closed on transport TLS (2026-08-11)
+
+**Changed — breaking for compose deployments**
+
+- `docker-compose.prod.yml` now defaults `SECURITY_REQUIRE_TLS` to **`true`**
+  (was `false`). The documented production stack could previously carry
+  database, session, and cache traffic in cleartext without any explicit
+  operator decision. Upgrading operators running the bundled plaintext
+  MySQL/Redis containers will now **fail at startup** until they either
+  configure TLS on those services (`DB_SSL`/`REDIS_SSL` + CA paths) or write
+  an explicit `SECURITY_REQUIRE_TLS=false` into their `.env` — cleartext is
+  still available, but only as a decision on the record. `GEOIP_FAIL_CLOSED`
+  stays opt-in (it requires a mounted GeoLite database to not block legitimate
+  traffic).
+
+### Removed: the autonomous review workflow (2026-08-12)
+
+- `.github/workflows/functionality-review-loop.yml` — a scheduled (every 30
+  minutes) unattended Claude agent with `contents: write`, auto-committing and
+  pushing to a working branch with no human review gate, holding a long-lived
+  OAuth token as a repo secret. Removed as unsafe; no workflow consumes
+  `CLAUDE_CODE_OAUTH_TOKEN` any more. (Landed twice — two sessions deleted the
+  same file with identical commits.)
+
+---
+
+### Mobile: every page fits a phone, and dialogs a browser can't suppress (2026-08-11)
+
+**Changed**
+
+- **The remaining ~115 app pages are responsive at phone widths.** Two sweeps
+  (the training admin tabs, then everything else) applied the idiom the
+  Training Officer Dashboard fix established: header rows stack below `sm`
+  (`flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`), titles
+  downscale (`text-2xl sm:text-3xl`), badge/filter/toolbar rows wrap,
+  segmented bars scroll (`hscroll`), two-up modal grids collapse to one
+  column, and step indicators compact their labels. Almost entirely
+  layout-classes-only; the user-visible exceptions: the facilities detail
+  sidebar stacks above content on phones, the Member Training Status page
+  gained the standard page gutter it had been missing **at every width**, the
+  admin-hours QR code scales instead of overflowing, and public-form
+  half/third-width fields go full-width on phones.
+
+- **The mobile hamburger moved to the left edge of the header.** The drawer
+  slides in from the left (matching the desktop sidebar), so the button that
+  opens it now sits on the edge it emerges from; the logo/department name
+  moved right and stretches. One component (`SideNavigation`), but it renders
+  the top bar of **every authenticated page on a phone** — which is why the
+  screenshot tracker flags every phone-width capture that includes the header.
+
+**Fixed**
+
+- **The last 20 native `confirm()`/`alert()` call sites are gone** — 15 files:
+  course deactivation, training submission/requirement deletes, election
+  close, waiver deactivation, role deletes, member-form discard, role
+  removals, proxy revocation, attendee/candidate removal, minutes deletes
+  (section/motion/action-item/draft), meeting deletes, country unblock, and
+  bulk item retire. All use `useConfirm()` per pitfall #16 (a suppressed
+  native dialog is indistinguishable from Cancel), with the decision named on
+  the buttons ("Delete" / "Keep it", "Discard changes" / "Keep editing") and
+  the consequence stated ("Members assigned to it will lose its permissions").
+  One honesty fix along the way: the course dialog now says **Deactivate** —
+  the old native text promised a delete the code never performed. Zero live
+  `window.confirm`/`alert`/`prompt` call sites remain in `frontend/src`.
+
+- **The equipment-check template builder's catalog dropdown was clipped in
+  half.** The compartment card's `overflow-hidden` cut the quick-add results
+  list mid-row — no z-index can escape a clipping ancestor. The clip is
+  removed (the header rounds its own top corners instead); a source comment
+  says why it must not come back. Deliberately no unit test: jsdom does not
+  compute overflow clipping, so a class assertion would pin the letter of the
+  fix and not the fact of it.
+
+---
+
+### Small fixes the screenshots surfaced (2026-08-11 → 08-12)
+
+The screenshot pass keeps finding product bugs — photographing a screen is
+reading it. This batch:
+
+**Fixed**
+
+- **Shift reports named no apparatus for onboarding-era rigs.** The batched
+  label lookup only consulted the full `apparatus` table, so a shift on a
+  `basic_apparatus` rig rendered a blank label. Ids the first query doesn't
+  claim are now retried against `basic_apparatus` (org-scoped, `Apparatus`
+  wins a contested id — mirroring the options endpoint's own priority), and
+  only when something is actually missing, so the common case costs zero extra
+  queries.
+
+- **A lot number was shown with a different lot's date.** An item's Stock tab
+  paired the legacy scalar `lot_number` (last swap) with the *derived*
+  soonest expiration across deployed lots — "Lot NLX-2411 · Exp 9/4/2026" when
+  NLX-2405 is the box expiring in September. Third of three projections with
+  this shape (the supply worklist and apparatus inventory were fixed earlier);
+  a source-scanning test now fails any future projection that pairs the scalar
+  with a derived date, because "a behavioural test can only cover the
+  projections somebody remembered."
+
+- **Date-only values rendered a day early west of UTC — twice more.** The
+  stock-lots panel's expiration chips and the cohort wizard's holiday
+  blackout chips both ran calendar dates through the timezone-aware
+  `formatDate`, which parses `"2026-11-26"` as UTC midnight — so Thanksgiving
+  was offered as the 25th, and a lot read "Exp 9/3/2026 · 24d left" on 8/11
+  (24 days after 8/11 is 9/4; the date and the count disagreed in one
+  sentence). Both now use `formatCalendarDate`, which pins UTC round-trip.
+  The blackout case was the dangerous one: the *label* lied while the value
+  submitted was correct, so an officer ticked a date they had not been shown.
+  Same defect class `formatCalendarDate` was added for on 2026-08-10 — and
+  `formatDate` is an approved wrapper, so no lint rule flagged it.
+
+- **An inventory item's Stock tab is linkable.** `/inventory/items/{id}?tab=`
+  round-trips all five tabs (validated against the declared list, so
+  `?tab=nonsense` falls back to History instead of rendering nothing), derived
+  from the URL so Back works. Fifth page found with the mirrored-tab-state
+  pattern, after Email Templates, Notifications, Medical Screening and
+  Compliance Config.
+
+---
+
 ### Communications: the Email Templates tabs are addressable (2026-08-11)
 
 **Fixed**

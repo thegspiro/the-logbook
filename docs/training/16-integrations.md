@@ -132,7 +132,7 @@ IDs.
 | **Push Members**  | Sync all active members to Salesforce contacts |
 | **Push Training** | Sync training records and certifications       |
 | **Push Events**   | Sync department events                         |
-| **Pull Contacts** | Import Salesforce contacts to Logbook          |
+| **Pull Contacts** | Update existing Logbook members from Salesforce contacts — contact details only (names, phones, station, address). Never creates members, and never changes rank, email, status, or dates |
 
 ### How to Sync
 
@@ -155,6 +155,7 @@ Salesforce can push contact updates back to The Logbook via a webhook at `POST /
 
 | Scenario                       | Behavior                                                                                         |
 | ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| A Contact's **Title** (rank) is changed in Salesforce | Ignored on pull _(2026-08-12)_ — rank never syncs into The Logbook, because rank affects what a member can do here and Salesforce is not authoritative for it. The Logbook still **pushes** rank out to the Contact `Title`. If a member's rank looks wrong, fix it in The Logbook, not Salesforce |
 | Salesforce API rate limit hit  | Retried up to three times, honoring `Retry-After` or using bounded exponential backoff           |
 | A later SOQL result page fails | The pull fails; partial results are never applied as a successful pull                           |
 | Field mapping mismatch         | Warning logged; unmatched fields skipped                                                         |

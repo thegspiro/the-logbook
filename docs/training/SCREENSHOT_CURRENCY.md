@@ -9,6 +9,12 @@ Kept separately because `SCREENSHOT_STATUS.md` is regenerated wholesale by
 `scripts/screenshots/status_report.py` and anything hand-written there is lost on
 the next run.
 
+**Newest flags first: see _[Images invalidated by the 2026-08-11 → 08-12
+changes](#images-invalidated-by-the-2026-08-11--08-12-changes)_** — the mobile
+hamburger moved to the left edge (touches every phone-width capture with a
+header) and the Ballot Builder grew a Save-as-Template control. Flagged
+2026-08-12, not yet re-captured.
+
 **Re-captured 2026-08-11.** The seventeen images flagged under _[Images
 invalidated by the 2026-08-10 → 08-11 changes](#images-invalidated-by-the-2026-08-10--08-11-changes)_
 were re-shot against a live stack, and every one of them was opened and read
@@ -27,6 +33,65 @@ earlier** and remain stale.
 > database, and the pipeline runs fine without Docker. The claim is corrected
 > rather than deleted because it is the sort of environment assumption that
 > quietly becomes policy.
+
+---
+
+## Images invalidated by the 2026-08-11 → 08-12 changes
+
+**Flagged 2026-08-12, not yet re-captured.** Two UI changes landed after the
+2026-08-11 passes and reach existing images. Flagged by comparing each image's
+subject against the commits, not by opening them.
+
+### A. The mobile hamburger moved to the left edge
+
+`SideNavigation`'s phone header now puts the ☰ button at the **left** edge
+(the edge the drawer slides in from) with the logo/department name to its
+right; it was previously at the far right. The component renders the top bar
+of **every authenticated page on a phone**, so every phone-width capture that
+includes the top bar now shows an outdated header:
+
+| Image | Why it's in frame |
+| --- | --- |
+| `10-04-mobile-dashboard` | fullPage, header at top |
+| `10-05-mobile-inventory` | header at top |
+| `10-06-mobile-inventory-admin` | fullPage, header at top |
+| `10-10-mobile-minimum-text` | header at top |
+| `10-15-mobile-menu-notifications` | shot *of* the open menu — the button itself is the subject |
+| `10-14-scan-camera-denied` | viewport-anchored, header at top |
+| `03-48-settings-phone`, `03-73-flat-check-form-header`, `03-95-apparatus-inventory` | top-anchored phone shots |
+
+**Not invalidated, recorded so nobody re-checks:** `10-12-mobile-bottom-nav`
+(clipped to the bottom nav element), `03-71-set-all-to-par-confirm` (dialog
+clip), `04-32`/`04-33` guest sign-in (public `/login` renders outside
+`AppLayout` — no hamburger), and mid-page clips that never reach the top bar
+(`03-60`, `03-70`, `03-72`, `03-96` — verify by opening before re-shooting).
+
+The training guide's new header note carries a matching
+`[SCREENSHOT NEEDED]` for the re-shoot.
+
+### B. The Ballot Builder grew a "Save as Template" button
+
+`14-04-ballot-configuration` pictures the Ballot Builder, which now shows
+**Save as Template** beside its actions whenever the ballot has items (and the
+template picker gained a "Your saved ballots" section). The whole guide-14 set
+was already listed under *Not re-captured* as cosmetically stale; `14-04` is
+now **structurally** stale, and two new placeholders in
+`14-elections.md` (the save form, the saved-ballots picker) have never been
+shot. Note for the harness: the saved-templates picker needs a seeded saved
+template — `seed_demo_data.py` does not create one yet.
+
+### C. Checked and not invalidated
+
+- **The responsive sweeps (08-11)** are scoped under 768px, so the existing
+  desktop captures are unaffected. The two everywhere-width changes have no
+  captures to invalidate: the Member Training Status page (gained its page
+  gutter) has no shot in the manifest, and no facility detail page is shot at
+  phone width.
+- **The confirm-dialog sweep** replaced *native* browser dialogs, which
+  Playwright could never photograph anyway; `00-14-confirm-dialog` pictures
+  the in-app dialog, which is the surviving pattern.
+- **`02-104-cohort-preview-step`** was captured in the same commit that fixed
+  the holiday-chip date format it pictures, so it is already current.
 
 ---
 
