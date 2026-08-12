@@ -153,6 +153,24 @@ class TestSubmitterTemplateVisibility:
         assert result is inactive
 
 
+class TestStandaloneTemplateVisibility:
+    async def test_inactive_template_cannot_create_check(self, service, mock_db):
+        inactive = MagicMock(is_active=False)
+        result_proxy = MagicMock()
+        result_proxy.scalars.return_value.first.return_value = inactive
+        mock_db.execute.return_value = result_proxy
+
+        with pytest.raises(ValueError, match="Template not found"):
+            await service.submit_standalone_check(
+                "org-1",
+                "user-1",
+                {"template_id": "inactive-template", "items": [{}]},
+            )
+
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_awaited()
+
+
 class TestUpdateItemCompartmentValidation:
     """update_item must validate a reassigned compartment_id in-org — moving an
     item to a foreign compartment transfers it (with the caller's content) into
