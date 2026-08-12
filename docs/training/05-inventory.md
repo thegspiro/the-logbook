@@ -1848,7 +1848,7 @@ _(clarified 2026-08-12)_:
   fewer.
 
 The desktop form of this table is pictured at the top of this guide under
-[Inventory Items](#inventory-items). Below is the same table on a phone.
+[Inventory Overview](#inventory-overview). Below is the same table on a phone.
 
 ![The inventory items table on a phone — each row stacked into a card with the field name on the left and its value on the right](./images/05-70-inventory-table-mobile.png)
 

@@ -1073,7 +1073,7 @@ Event notifications now deliver via **in-app notifications** in addition to emai
 > straight to **Notifications > Inbox**, carrying an unread-count badge; event
 > notifications arrive in that inbox alongside every other type. The inbox is
 > pictured in
-> [Admin & Reports > Notifications Inbox](./08-admin-reports.md#notification-center).
+> [Admin & Reports > Notifications Overhaul](./08-admin-reports.md#notifications-overhaul-2026-03-24).
 
 ## Time Picker Standardization (2026-03-17)
 
