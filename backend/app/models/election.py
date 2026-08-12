@@ -29,6 +29,48 @@ class ElectionStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class SavedBallotTemplate(Base):
+    """Organization-scoped, reusable snapshot of a structured ballot.
+
+    Templates contain configuration only: never candidates, voter rosters,
+    votes, tokens, attendance, or election lifecycle state.
+    """
+
+    __tablename__ = "saved_ballot_templates"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name = Column(String(200), nullable=False)
+    name_key = Column(String(64), nullable=False)
+    description = Column(Text, nullable=True)
+    ballot_items = Column(JSON, nullable=False)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "name_key",
+            name="uq_saved_ballot_template_org_name_key",
+        ),
+        Index("ix_saved_ballot_templates_org", "organization_id"),
+    )
+
+
 class Election(Base):
     """
     Election model for managing elections within an organization

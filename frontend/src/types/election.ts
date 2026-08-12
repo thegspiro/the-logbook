@@ -488,6 +488,16 @@ export interface BallotTemplate {
   description_template?: string;
 }
 
+export interface SavedBallotTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  ballot_items: BallotItem[];
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // Ballot submission types (token-based voting)
 
 export interface BallotItemVote {

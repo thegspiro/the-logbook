@@ -6,6 +6,7 @@ import api from './apiClient';
 import type {
   Attendee,
   AttendeeCheckInResponse,
+  BallotItem,
   BallotItemVote,
   BallotLookupResponse,
   BallotPreview,
@@ -37,6 +38,7 @@ import type {
   ProxyAuthorization,
   ProxyAuthorizationCreate,
   ProxyVoteCreate,
+  SavedBallotTemplate,
   Vote,
   VoteCreate,
   VoteIntegrityResult,
@@ -225,6 +227,24 @@ export const electionService = {
   async getBallotTemplates(): Promise<BallotTemplate[]> {
     const response = await api.get<{ templates: BallotTemplate[] }>('/elections/templates/ballot-items');
     return asArray(response.data?.templates);
+  },
+
+  async getSavedBallotTemplates(): Promise<SavedBallotTemplate[]> {
+    const response = await api.get<SavedBallotTemplate[]>('/elections/templates/saved-ballots');
+    return asArray(response.data);
+  },
+
+  async saveBallotTemplate(payload: {
+    name: string;
+    description?: string;
+    ballot_items: BallotItem[];
+  }): Promise<SavedBallotTemplate> {
+    const response = await api.post<SavedBallotTemplate>('/elections/templates/saved-ballots', payload);
+    return response.data;
+  },
+
+  async deleteSavedBallotTemplate(templateId: string): Promise<void> {
+    await api.delete(`/elections/templates/saved-ballots/${templateId}`);
   },
 
   /**
