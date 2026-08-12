@@ -62,11 +62,11 @@ jobs:
         run: flake8 app/ tests/ alembic/
 
       - name: Check formatting with black
-        if: '!cancelled()'
+        if: "!cancelled()"
         run: black --check app/ tests/ alembic/
 
       - name: Check import order with isort
-        if: '!cancelled()'
+        if: "!cancelled()"
         run: isort --check-only app/ tests/ alembic/
 
       # Repo-root Python (generate_registry.py, scripts/) is outside the
@@ -75,7 +75,7 @@ jobs:
       # files predate black/isort adoption and reformatting them is a
       # separate change.
       - name: Run flake8 (repo-root scripts)
-        if: '!cancelled()'
+        if: "!cancelled()"
         working-directory: .
         run: flake8 --config backend/.flake8 generate_registry.py scripts/
 
@@ -97,9 +97,14 @@ jobs:
       # Pure stdlib ast — no import of the application, so it cannot be broken
       # by a missing runtime dependency.
       - name: Check endpoint permission docs match enforcement
-        if: '!cancelled()'
+        if: "!cancelled()"
         working-directory: .
         run: python3 scripts/check_endpoint_permissions.py
+
+      - name: Check dependency scans have no vulnerability suppressions
+        if: "!cancelled()"
+        working-directory: .
+        run: python3 scripts/check_security_scan_policy.py
 
   backend-security:
     name: Backend Security Scan
@@ -135,17 +140,9 @@ jobs:
         # BLOCKING since the 2026-07-30 FastAPI/starlette upgrade pass.
         # Audits the requirements set (-r), not the runner environment, so
         # runner-image packages (pip/setuptools/wheel) don't fail the build.
-        # The explicit ignores are the documented deferrals from
-        # docs/KNOWN_LIMITATIONS.md: black 26 is a major that reformats the
-        # repo, and cryptography's fix is unreachable behind fastapi-mail's
-        # upper pin. Remove an ignore when its entry clears. (The pyopenssl
-        # ignores went away with the unused pysaml2 dependency.)
         run: |
           pip install -r requirements.txt
-          pip-audit -r requirements.txt \
-            --ignore-vuln PYSEC-2026-2120 \
-            --ignore-vuln PYSEC-2026-2121 \
-            --ignore-vuln PYSEC-2026-3552
+          pip-audit -r requirements.txt
 
       - name: Upload Bandit report
         if: always()

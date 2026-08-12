@@ -7,8 +7,7 @@
 # ============================================
 fastapi==0.141.1
 # starlette pinned explicitly (normally transitive): the 1.x line carries
-# the security fixes pip-audit flagged; fastapi>=0.141 and fastapi-mail>=1.6
-# both accept it.
+# the security fixes pip-audit flagged; fastapi>=0.141 accepts it.
 starlette==1.4.1
 uvicorn[standard]==0.52.1
 pydantic==2.13.4
@@ -23,7 +22,7 @@ alembic==1.19.0
 pymysql==1.2.0
 aiomysql==0.3.2
 greenlet==3.5.4  # Required by SQLAlchemy for async operations
-cryptography==49.0.0  # Required by PyMySQL for secure connections; fastapi-mail 1.6.x requires >=49,<50
+cryptography==50.0.0  # Required by PyMySQL for secure connections; includes CVE-2026-69247 fix
 
 # ============================================
 # Redis & Caching
@@ -51,7 +50,6 @@ argon2-cffi==25.1.0
 # ============================================
 # Email
 # ============================================
-fastapi-mail==1.6.5
 jinja2==3.1.6
 
 # ============================================
@@ -95,7 +93,7 @@ websockets==17.0.1
 # ============================================
 # Data Validation & Parsing
 # ============================================
-email-validator==2.3.0  # fastapi-mail 1.6.x requires >=2.3
+email-validator==2.3.0
 python-dateutil==2.9.0.post0
 tzdata>=2026.3  # Timezone data for zoneinfo (Python 3.9+ built-in)
 

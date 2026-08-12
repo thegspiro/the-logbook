@@ -8399,7 +8399,7 @@ Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare 
 
 ### Problem: A pinned dependency conflicts on install after pulling
 
-**Status (Expected):** The stack moved to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), with fastapi-mail, aiosmtplib, PyJWT, cryptography, pydantic-settings, pypdf, email-validator, schemathesis and pytest pinned to match. Install from `backend/requirements.txt` rather than upgrading individual packages.
+**Status (Expected):** The stack moved to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), with PyJWT, cryptography, pydantic-settings, pypdf, email-validator, schemathesis and pytest pinned to match. Install from `backend/requirements.txt` rather than upgrading individual packages.
 
 **Edge Case:** `pip-audit -r requirements.txt` runs **blocking** in CI with documented ignores; a new advisory fails the build rather than being noticed later.
 
