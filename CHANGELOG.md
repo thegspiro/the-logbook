@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: clear cryptography findings from every scanner (2026-08-12)
+
+**Fixed**
+
+- Removed the unused `fastapi-mail` dependency, whose `<50` cryptography cap
+  was the only blocker preventing the security upgrade. The application already
+  uses its own SMTP/provider email service, so this does not change email
+  delivery behavior.
+- Upgraded `cryptography` to 50.0.0 for the `CVE-2026-69247` fix and removed the
+  corresponding pip-audit and Trivy suppressions. Both blocking scans now
+  enforce the patched dependency rather than accepting a documented exception.
+- Reconciled two stale security-review findings with the implemented controls:
+  access tokens already carry unique random `jti` claims, and the in-memory
+  limiter checks its request ceiling before recording an allowed request. Added
+  a token-collision regression test and linked both controls to executable tests.
+- Removed the last two `pip-audit` exceptions. They targeted the pre-upgrade
+  Black release but survived after the repository moved to Black 26.5.1; the
+  blocking Python dependency scan now runs with no suppressed advisories.
+- Added a CI policy check and regression tests that reject new `pip-audit`
+  advisory exceptions or active `.trivyignore` entries. Scanner suppressions
+  can no longer quietly return in a later dependency update.
+- Minimized the duplicate-archived-member prospect conflict response. A
+  name-based match can no longer disclose the archived member's stored name or
+  email; the response retains only the guidance to use the reactivation flow.
+- Applied the same minimization to prospect-to-member transfers. Internal
+  duplicate-match details are now converted to a generic `409` at the HTTP
+  boundary instead of passing service-layer names, emails, or IDs to clients.
+
 ### Communications: the Email Templates tabs are addressable (2026-08-11)
 
 **Fixed**
