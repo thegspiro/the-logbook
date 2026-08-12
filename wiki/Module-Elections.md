@@ -115,6 +115,16 @@ Attestation is only possible while voting is open — a batch still pending
 at close stays out of the certified results and the close writes a warning
 `election_manual_ballots_unattested_at_close` audit event.
 
+*(2026-08-12)* That exclusion now reaches **every** tally the close path
+runs, not just the published results: the runoff-advancement count and the
+membership-package Approve/Deny sync each carry a SQL predicate
+(`_is_attested_vote`) that skips votes belonging to a still-`pending`
+batch. Previously an unattested paper batch was invisible in the results
+yet could still decide which candidates advanced to a runoff or flip a
+prospect's package to `elected`/`not_elected`. Votes in a batch that is
+later confirmed count again everywhere; electronic votes (no
+`manual_batch_id`) and pre-attestation-era batches are unaffected.
+
 ### Enhancement Batch (2026-07-29)
 
 - **Printable ballot PDF** — the in-room paper ballot is generated from
@@ -170,6 +180,87 @@ old token could disenfranchise a member whose reminder email bounces.
 Audit events: `election_auto_opened`, `election_auto_closed`,
 `election_reminder_sent`.
 
+## Saved Ballot Templates (2026-08-12)
+
+A secretary who runs the same officer slate every year can now save the
+ballot as a **named, reusable template** and apply it to next year's
+election instead of rebuilding it item by item.
+
+- **Configuration only, by construction.** A template snapshots the ballot
+  *structure* — items, positions, voting methods, victory conditions,
+  eligibility types — and never candidates, voter rosters, votes, tokens,
+  attendance, or lifecycle state. The create schema is `extra="forbid"`,
+  so a payload that tries to smuggle any of those in is rejected with 422
+  rather than silently stored.
+- **Org-scoped, `elections.manage` only.** List, save, and delete all
+  require `elections.manage` and filter to the caller's organization —
+  there is no `elections.view`-level read. Cross-org ids 404.
+- **Case-insensitive unique names.** Uniqueness is enforced per org on
+  `name_key` (SHA-256 of the NFKC-normalized, casefolded name), so
+  "Annual Officers" and "annual officers" collide with a 409 while the
+  display name keeps its original casing.
+- **Applying regenerates item ids.** The BallotBuilder's template picker
+  gains a "Your saved ballots" section; applying a template replaces the
+  current ballot (two-step confirm) and mints fresh ballot-item ids so a
+  snapshot can never carry ids already referenced by draft state.
+- **Survives its author.** `created_by` is `SET NULL` — deleting the
+  member who saved a template leaves the department's template intact.
+- Model `SavedBallotTemplate` (`saved_ballot_templates`), migration
+  `20260812_0001`. Audit events `ballot_template_created` /
+  `ballot_template_deleted` (category `elections`).
+
+The same batch hardened ballot definitions themselves (create *and*
+update): ballot-item ids are validated (`^[A-Za-z0-9_-]+$`, unique per
+ballot), voting methods / victory conditions are checked against the known
+sets, `victory_percentage` is required for supermajority items, voter-type
+lists are de-duplicated and `'all'` cannot be combined with other types,
+position names must be unique case-insensitively, and quorum is
+cross-validated (`quorum_value` required when quorum is enabled; a
+**percentage** quorum caps at 100 while a **count** quorum may exceed it —
+the blanket `le=100` that wrongly capped count quorums is gone). Election
+**cloning** now copies `ballot_items` too (deep-copied so editing the
+clone can never mutate the source).
+
+## Recent Fixes (2026-08-12)
+
+### Vote-Casting Integrity
+
+- **Concurrent vote validation is serialized.** `cast_vote` now takes a
+  row-level `SELECT … FOR UPDATE` lock on the election before inspecting
+  prior votes. The method-aware dedup hash permits distinct
+  candidates/ranks, so its unique constraint alone could not stop two
+  simultaneous requests from both passing the per-voter limit check and
+  both committing — an over-voting window under concurrency. The lock
+  forces validate-then-insert through one request at a time.
+- **Token votes are normalized to the candidate's position.** On the
+  public token-ballot path, a voter who omitted `position` for a
+  positioned candidate previously produced a `position=NULL` vote row in a
+  different bucket from the same voter's explicit-position vote — letting
+  one voter double-vote a position (and dodge the dedup hash) simply by
+  leaving the field out. The vote's stored position, the duplicate/limit
+  filters, and the dedup hash now all use `position or candidate.position`.
+  A genuinely positionless candidate still stores NULL and is limited as
+  before.
+- **Election packages are no longer readable at `elections.view`.**
+  `GET /prospective-members/prospects/{id}/election-package` and
+  `GET /prospective-members/election-packages` dropped `elections.view`
+  from their permission list (now `prospective_members.view`,
+  `prospective_members.manage`, or `elections.manage`). A package bundles
+  the interview and coordinator material the vote is based on — applicant
+  PII, unlike ordinary election data — and every voter-level
+  `elections.view` holder could read it. A regression test pins the
+  permission set exactly (additions fail it too).
+
+### Election Detail Tabs Are Addressable
+
+`/elections/{id}?tab=` now round-trips all nine workflow tabs (`ballot`,
+`nominations`, `candidates`, `eligibility`, `attendance`, `overrides`,
+`proxies`, `voting`, `results`). The active tab is **derived from the
+URL**, not mirrored into state, so the Back button works; an unknown or
+not-currently-visible value falls back to the first tab the viewer may
+see. This is what finally made the **Eligibility roster** linkable
+(`?tab=eligibility`) — and photographable.
+
 ## API Endpoints
 
 ```
@@ -222,6 +313,11 @@ POST   /api/v1/elections/{id}/proxy-vote        # Cast a vote as an authorized p
 GET    /api/v1/elections/settings               # Get election settings (proxy voting config)
 PATCH  /api/v1/elections/settings               # Update election settings
 GET    /api/v1/elections/{id}/eligibility-roster  # Full eligibility breakdown for secretary
+
+# Saved ballot templates (2026-08-12; all require elections.manage, org-scoped)
+GET    /api/v1/elections/templates/saved-ballots            # List the org's saved templates
+POST   /api/v1/elections/templates/saved-ballots            # Save current ballot as a template (409 on duplicate name)
+DELETE /api/v1/elections/templates/saved-ballots/{template_id}  # Delete a saved template (404 if not in org)
 
 # Public token-ballot endpoints (no auth, rate-limited; the token always
 # travels in the POST body — never a query string or path — so the live

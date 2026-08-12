@@ -129,6 +129,19 @@ button, within thumb reach. Tap **More** to open the full navigation drawer.
 
 ![Bottom navigation bar as it appears on a phone](./images/10-12-mobile-bottom-nav.png)
 
+> **The header menu button moved to the left edge** _(2026-08-12)_. The ☰
+> button in the top bar — which opens the full navigation drawer — now sits at
+> the **top-left**, with your department name beside it, instead of the far
+> right. The drawer slides in from the left, so the button now sits on the
+> edge the drawer comes from. This is the same header on every signed-in page,
+> so if you built the muscle memory for the top-right corner, that is what
+> moved. Sign-in and public pages have no such header and are unchanged.
+>
+> **[SCREENSHOT NEEDED]:** _Re-shoot of the phone header showing the ☰ button
+> at the left edge with the department name beside it — every existing
+> phone-width capture that includes the top bar shows the old right-edge
+> placement (see SCREENSHOT_CURRENCY.md)._
+
 ### Everything Is Thumb-Sized Now _(2026-08-08)_
 
 Every tappable control in the app now meets the **44-pixel touch minimum** on a
@@ -175,6 +188,21 @@ on the label-print preview. These are dense fixed-size layouts where enlarging
 the text would break the grid rather than help anyone read it.
 
 ![Dashboard on a phone with relative timestamps and navigation labels at the 12px minimum](./images/10-10-mobile-minimum-text.png)
+
+### The Rest of the App Fits a Phone Now _(2026-08-11)_
+
+Roughly 115 pages that still overflowed sideways at phone width — training
+admin tabs, elections, events, finance, grants, facilities, minutes,
+onboarding, and more — were reworked so nothing forces horizontal scrolling:
+page headers stack their title and buttons, tab strips scroll sideways within
+themselves instead of wrapping to two lines, two-column form grids collapse to
+one, and long badge/filter rows wrap. Two pages changed at every width, not
+just phones: the Member Training Status page gained the standard page margins
+it had been missing, and a facility's section list stacks above its content on
+a phone instead of squeezing beside it.
+
+Nothing moved on desktop beyond those two; this is the same
+scoped-under-768px approach as the touch-target work above.
 
 ### Dark Mode Now Works on Public Pages _(2026-08-08)_
 

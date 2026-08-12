@@ -349,6 +349,18 @@ POST   /api/v1/elections/ballot/vote                                    # Cast o
 POST   /api/v1/elections/ballot/vote/bulk                               # Submit full ballot atomically (choice | candidate_ids | rankings per item)
 ```
 
+## Saved Ballot Templates _(2026-08-12)_
+
+Org-scoped, reusable ballot **configuration** snapshots (never candidates,
+voters, votes, tokens, or attendance — the create schema forbids extra
+fields). All require `elections.manage`.
+
+```
+GET    /api/v1/elections/templates/saved-ballots                        # List the org's saved templates
+POST   /api/v1/elections/templates/saved-ballots                        # Save a named template (201; 409 on case-insensitive duplicate name)
+DELETE /api/v1/elections/templates/saved-ballots/{template_id}          # Delete (204; 404 if not in the caller's org)
+```
+
 ## Department Messages _(updated 2026-07-17)_
 
 Admin endpoints require `notifications.manage`. Inbox/read/acknowledge endpoints
@@ -407,6 +419,13 @@ GET    /api/v1/auth/oauth/microsoft/callback             # Microsoft OAuth callb
 
 See [Authentication > OAuth](Security-Authentication#oauth) for the
 link-existing-only policy, domain restriction, and callback error codes.
+
+*(2026-08-12)* When the matched account has TOTP MFA enabled, the callback no
+longer issues session cookies: it 302-redirects to the SPA with a short-lived
+`mfa_pending` token in the **URL fragment** (`/auth/callback#mfa_token=…`),
+and the client completes the second factor through the normal
+`POST /api/v1/auth/mfa/login` before any session exists. Audit event:
+`oauth_mfa_challenge`.
 
 ## Prospective Member Documents _(2026-05-29)_
 

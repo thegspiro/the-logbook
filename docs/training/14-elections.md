@@ -9,27 +9,28 @@ The Elections module manages department elections, officer nominations, anonymou
 1. [Elections Overview](#elections-overview)
 2. [Creating an Election](#creating-an-election)
 3. [Configuring Ballot Items](#configuring-ballot-items)
-4. [The Nomination Phase](#the-nomination-phase)
-5. [Nominating Candidates](#nominating-candidates)
-6. [Voter Eligibility & Overrides](#voter-eligibility--overrides)
-7. [The Pre-Meeting Package](#the-pre-meeting-package)
-8. [Opening an Election](#opening-an-election)
-9. [Reminders & Lifecycle Automation](#reminders--lifecycle-automation)
-10. [Casting Votes](#casting-votes)
-11. [Paper Ballots & Attestation](#paper-ballots--attestation)
-12. [Proxy Voting](#proxy-voting)
-13. [Monitoring & Results](#monitoring--results)
-14. [Tie Handling](#tie-handling)
-15. [Write-In Consolidation](#write-in-consolidation)
-16. [Runoff Elections](#runoff-elections)
-17. [Vote Integrity & Forensics](#vote-integrity--forensics)
-18. [The Certified Results Package](#the-certified-results-package)
-19. [Election Settings](#election-settings)
-20. [Cloning an Election](#cloning-an-election)
-21. [Meeting Attendance Integration](#meeting-attendance-integration)
-22. [Prospective Member Election Packages](#prospective-member-election-packages)
-23. [Realistic Example: Annual Officer Election](#realistic-example-annual-officer-election)
-24. [Troubleshooting](#troubleshooting)
+4. [Saved Ballot Templates](#saved-ballot-templates)
+5. [The Nomination Phase](#the-nomination-phase)
+6. [Nominating Candidates](#nominating-candidates)
+7. [Voter Eligibility & Overrides](#voter-eligibility--overrides)
+8. [The Pre-Meeting Package](#the-pre-meeting-package)
+9. [Opening an Election](#opening-an-election)
+10. [Reminders & Lifecycle Automation](#reminders--lifecycle-automation)
+11. [Casting Votes](#casting-votes)
+12. [Paper Ballots & Attestation](#paper-ballots--attestation)
+13. [Proxy Voting](#proxy-voting)
+14. [Monitoring & Results](#monitoring--results)
+15. [Tie Handling](#tie-handling)
+16. [Write-In Consolidation](#write-in-consolidation)
+17. [Runoff Elections](#runoff-elections)
+18. [Vote Integrity & Forensics](#vote-integrity--forensics)
+19. [The Certified Results Package](#the-certified-results-package)
+20. [Election Settings](#election-settings)
+21. [Cloning an Election](#cloning-an-election)
+22. [Meeting Attendance Integration](#meeting-attendance-integration)
+23. [Prospective Member Election Packages](#prospective-member-election-packages)
+24. [Realistic Example: Annual Officer Election](#realistic-example-annual-officer-election)
+25. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -115,6 +116,61 @@ After creating an election, add ballot items — the individual questions or pos
 ![Ballot item configuration with its position and candidate settings](./images/14-04-ballot-configuration.png)
 
 > **Hint:** Use **ballot item templates** (`GET /elections/templates/ballot-items`) for common configurations like officer positions or membership approval votes.
+
+---
+
+## Saved Ballot Templates
+
+_(2026-08-12)_ **Required Permission:** `elections.manage`
+
+If your department runs the same officer slate every year, you no longer have
+to rebuild the ballot each time. Save this year's ballot as a named template
+and apply it to next year's election:
+
+### Saving a ballot
+
+1. Build the ballot as usual on a draft election
+2. In the Ballot Builder, click **Save as Template** (visible once the ballot
+   has at least one item, and not on a closed election)
+3. Name it — e.g. "Annual officer election" — and click **Save Template**
+
+> **What is saved — and what deliberately is not.** A template snapshots the
+> ballot **structure only**: items, positions, voting methods, victory
+> conditions, write-in settings, eligibility types. It never carries
+> candidates, voters, votes, tokens, or attendance — the builder says exactly
+> this under the name field, and the server enforces it. Applying last year's
+> template gives you last year's *questions*, with nobody pre-nominated.
+
+> **[SCREENSHOT NEEDED]:** _The Ballot Builder with the **Save as Template**
+> form open — the "Template name" field, the "Saves ballot configuration
+> only—never candidates, voters, votes, or attendance" helper text, and the
+> Save Template / Cancel buttons._
+
+### Applying one
+
+1. On a draft election, open the ballot **template picker**
+2. Your department's templates appear under **"Your saved ballots"**, above
+   the built-in item templates, each showing its item count and the note
+   "replaces current ballot"
+3. Click one, then confirm **Replace** — this replaces the whole current
+   ballot, which is why it asks twice
+4. Add this year's candidates to the applied items
+
+> **[SCREENSHOT NEEDED]:** _The template picker showing the "Your saved
+> ballots" section with one saved template ("Annual officer election · 4 items
+> · replaces current ballot") above the built-in template grid, with the
+> two-step Replace / Cancel confirmation armed._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Two templates named "Annual Officers" and "annual officers" | Rejected — names are unique per department **case-insensitively** (409 "A ballot template with this name already exists"). The saved name keeps your original casing |
+| Applying a template over a ballot you were editing | The current ballot is **replaced**, not merged — the two-step confirm exists because of this |
+| The member who saved a template leaves the department | The template survives — it belongs to the organization, not its author |
+| Deleting a template used by past elections | Safe — elections hold their own copy of their ballot; a template is only a starting point |
+| Applying the same template to two elections | Each application mints fresh ballot-item ids, so the two ballots never share identifiers |
+| A template from another department | Invisible — templates are organization-scoped; list and delete both 404 across org lines |
 
 ---
 
@@ -204,6 +260,13 @@ When a member is excluded from voting but should be allowed (e.g., absent member
 3. Find the member and click **Grant Override**
 4. Enter a reason for the override
 5. The member is now eligible to vote regardless of other restrictions
+
+> **Linkable tabs** _(2026-08-12)_: every tab on the election detail page can
+> now be sent as a URL — the eligibility roster is
+> `/elections/<id>?tab=eligibility`, and the browser Back button steps back
+> through tab changes. Useful for pointing a fellow officer at exactly the
+> roster (or `?tab=overrides`, `?tab=proxies`, `?tab=attendance`) instead of
+> giving directions.
 
 ![Eligibility roster listing members with their eligibility status](./images/14-07-eligibility-roster.png)
 
@@ -467,7 +530,8 @@ photographed after the close carries its trail and no buttons.
 | Typo: 40 votes entered for a 4-vote race           | Rejected by the plausibility guard; over-count checkbox appears only after the guard fires |
 | Recorder clicks Attest on their own batch          | Rejected — attestation requires a _different_ officer                                      |
 | Setting changed from 2 to 0 after batches recorded | Existing pending batches still require their snapshotted 2 attestations                    |
-| Election closed with a batch still pending         | Batch excluded from certified results; warning audit event written                         |
+| Election closed with a batch still pending         | Batch excluded from certified results; warning audit event written. _(2026-08-12)_ The exclusion now also covers the close path's own arithmetic: a pending batch's votes cannot decide which candidates advance to a **runoff** and cannot flip a **membership-approval** package to elected/not elected. Before this fix an unattested batch was invisible in the published results yet still counted in those two outcomes |
+| A batch reaches Confirmed before close             | Its votes count everywhere — results, runoff advancement, and package outcomes. Exclusion applies only while the batch is Pending (or, via its votes' soft-delete, Voided) |
 | Mis-keyed batch already attested                   | Void the batch (reason required) and re-record                                             |
 | Attestation requirement set to 0                   | Batches confirm immediately on recording (not recommended)                                 |
 
@@ -526,7 +590,7 @@ If results are hidden until close:
 
 **Required Permission:** `elections.manage` (to close)
 
-1. Click **Close Election** — voting ends immediately. Closing early (before the scheduled end date) is fully supported — runoff conditions are still evaluated and membership-approval results still flow back to the pipeline
+1. Click **Close Election** and confirm in the dialog — the buttons read **Close election** / **Keep it open**, and it warns that voting ends immediately and cannot be undone _(2026-08-11: this is now an in-app dialog rather than a browser popup, so it cannot be silently suppressed by the browser)_. Closing early (before the scheduled end date) is fully supported — runoff conditions are still evaluated and membership-approval results still flow back to the pipeline
 2. Results are calculated and displayed:
    - Per-position winner (or "No winner" if the victory condition wasn't met)
    - Vote counts per candidate

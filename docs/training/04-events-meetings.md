@@ -634,6 +634,7 @@ Each election shows:
 3. Open the new election and add **ballot items** using the card-based Ballot
    Builder with drag-and-drop reordering:
    - Use templates for common items (officer election, bylaw vote, membership approval) or create custom items
+   - _(2026-08-12)_ Or apply one of **your saved ballots** — a whole ballot your department saved from a previous election. See [Elections & Voting > Saved Ballot Templates](./14-elections.md#saved-ballot-templates) for how to save one and what it does and does not carry
    - Each position can only have one ballot item (the dropdown shows only unused positions)
    - Positions load from your organization's operational ranks (Chief, Captain, etc.) with type-ahead filtering
 4. For each item, add **candidates** and configure options:
