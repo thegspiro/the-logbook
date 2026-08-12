@@ -50,6 +50,11 @@ Insurance Services Office grading vs. ISO/IEC standards).
 **[KEY_ROTATION.md](./KEY_ROTATION.md)** — rotating `ENCRYPTION_KEY` with no
 downtime or data loss, via the legacy-key ring and drain script.
 
+**[AES256_GCM_BACKFILL_RUNBOOK.md](./AES256_GCM_BACKFILL_RUNBOOK.md)** —
+operator runbook for re-encrypting legacy Fernet fields to AES-256-GCM with
+`backend/scripts/reencrypt_to_aesgcm.py`; zero downtime, both formats readable
+throughout.
+
 **[BACKUP.md](./BACKUP.md)** — what backups cover, why keys must be stored
 separately, restore drills, RTO/RPO, and the disaster-recovery runbook.
 
@@ -274,6 +279,34 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - API endpoints: events CRUD, RSVP, attachments, templates, recurrence, duplication, event requests (18 endpoints)
     - Permissions: `events.view`, `events.manage`
 
+27. **[FINANCE_MODULE.md](./FINANCE_MODULE.md)**
+    - Finance module: budget tracking, approval chains, purchase requests, expense reports, check requests, dues & assessments
+    - Phases 1–4 implemented; Phase 5 (dashboard, reports, QuickBooks export) planned
+    - Enabled per organization via `enabled_modules`
+
+28. **[GRANTS_FUNDRAISING_MODULE.md](./GRANTS_FUNDRAISING_MODULE.md)**
+    - Grants & Fundraising: grant applications, fundraising campaigns, donor relationships, financial reporting
+    - Research findings and design decisions behind the module
+
+29. **[MEDICAL_SCREENING_MODULE.md](./MEDICAL_SCREENING_MODULE.md)**
+    - Medical screenings, physicals, drug tests, fitness assessments, psychological evaluations
+    - Covers both members and prospective members; PHI handling considerations
+
+30. **[PUBLIC_PORTAL_MODULE.md](./PUBLIC_PORTAL_MODULE.md)**
+    - Public Portal architecture and security design
+    - Exposing selected department data to a public-facing website
+    - Security model for bridging internal systems and the public internet
+
+31. **[DEPARTMENT_OFFICERS.md](./DEPARTMENT_OFFICERS.md)**
+    - Department office holders and email signatures
+    - Outgoing email signed by the officeholder rather than whoever triggered the send
+
+32. **[COMPLIANCE_CONFIG.md](./COMPLIANCE_CONFIG.md)**
+    - Organization-wide compliance thresholds, profiles, and automated reporting configuration
+
+33. **[training-compliance-calculations.md](./training-compliance-calculations.md)**
+    - Every calculation used to determine training compliance: requirement evaluation, waiver adjustments, certification expiration handling
+
 ---
 
 ### 🗄️ Database Schema
@@ -305,6 +338,39 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Full codebase audit of 32 flush() calls for greenlet errors
     - 87.5% safe, 4 low-risk patterns identified, 0 critical issues
     - Recommendations for async SQLAlchemy best practices
+
+12. **[DEPLOYMENT.md](./DEPLOYMENT.md)**
+    - Step-by-step deployment guide for all supported methods
+    - See also the platform-specific guides in [deployment/](./deployment/) (AWS, Proxmox, Synology, Unraid)
+
+13. **[DOCKER-BUILD-PUBLISH.md](./DOCKER-BUILD-PUBLISH.md)**
+    - Building Docker images and publishing them to GitHub Container Registry (ghcr.io)
+
+14. **[PORT_CONFIGURATION.md](./PORT_CONFIGURATION.md)**
+    - Port layouts used by each deployment method and how to change them
+
+15. **[ALEMBIC_MIGRATIONS.md](./ALEMBIC_MIGRATIONS.md)**
+    - Migration revision tracking — consult before creating a new migration
+    - Prevents revision-ID collisions and broken `down_revision` chains
+
+16. **[EMAIL_DELIVERABILITY.md](./EMAIL_DELIVERABILITY.md)**
+    - DNS records (SPF, DKIM, DMARC) and SMTP configuration for reliable email delivery to Gmail, Microsoft 365, and other providers
+
+---
+
+### 📝 Reviews, Audits & Working Documents
+
+Point-in-time reviews and active plans — useful history and open decisions, not
+evergreen reference:
+
+- **[review-log.md](./review-log.md)** — ongoing rotating codebase review log (security, incomplete sections, documentation gaps)
+- **[RELEASE_CANDIDATE_PLAN.md](./RELEASE_CANDIDATE_PLAN.md)** — path from `main` to a tagged 1.0.0-rc.1, with per-item status
+- **[DEPARTMENT_TEMPLATE_EXPORT_IMPORT_PLAN.md](./DEPARTMENT_TEMPLATE_EXPORT_IMPORT_PLAN.md)** — design proposal for structure-only department template export/import (no implementation yet)
+- **[SHIFT_SCHEDULING_UX_REVIEW.md](./SHIFT_SCHEDULING_UX_REVIEW.md)** — 2026-08-11 clarity review of the shift scheduling screens
+- **[SKILLS_TESTING_DATA_REVIEW.md](./SKILLS_TESTING_DATA_REVIEW.md)** — seed data and data-lifecycle review of the skills-testing module
+- **[scheduling-module-audit.md](./scheduling-module-audit.md)** — 2026-06-18 scheduling module audit (see [review-log.md](./review-log.md) for items closed since)
+- **[module-audit/](./module-audit/)** — rotating module-by-module tenant-isolation and security audit
+- **[app-review/](./app-review/)** — feature-by-feature application review notes
 
 ---
 
@@ -568,9 +634,6 @@ docker-compose ps
 | ENUM_CONVENTIONS.md            | 1.0     | 2026-02-07   | Current                                                                                                                            |
 | FORMS_MODULE.md                | 1.0     | 2026-02-12   | Current                                                                                                                            |
 | PUBLIC_API_DOCUMENTATION.md    | 1.1     | 2026-02-12   | Current                                                                                                                            |
-| ONBOARDING_REVIEW.md           | 1.0     | 2026-02-07   | Current                                                                                                                            |
-| ELECTION_SECURITY_AUDIT.md     | 2.0     | 2026-02-12   | Current                                                                                                                            |
-| ASYNC_SQLALCHEMY_REVIEW.md     | 1.0     | 2026-02-10   | Current                                                                                                                            |
 | PROSPECTIVE_MEMBERS_MODULE.md  | 1.0     | 2026-02-12   | Current                                                                                                                            |
 | MEETING_MINUTES_MODULE.md      | 1.0     | 2026-02-13   | Current                                                                                                                            |
 | COMMUNICATIONS_MODULE.md       | 1.0     | 2026-07-17   | Current                                                                                                                            |

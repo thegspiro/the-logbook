@@ -184,7 +184,7 @@ docstring is a welcome drive-by.
 
 ### Python (Backend)
 
-- Use Python 3.11+ features where appropriate
+- Use Python 3.13+ features where appropriate
 - Use type hints for function signatures
 - Use `async`/`await` for all database operations (SQLAlchemy async)
 - Use `catch (err: unknown)` pattern — never use bare `except:` or `except Exception`
