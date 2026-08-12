@@ -354,10 +354,10 @@ class ShiftCompletionService:
         self.db.add(report)
         await self.db.flush()
 
-        # Auto-update pipeline requirement progress — skip for drafts
-        # since the officer hasn't reviewed the data yet.  Progress
-        # will be triggered when the draft is completed/approved.
-        if review_status != "draft":
+        # Training credit is released only with an approved report. Draft and
+        # pending-review reports are provisional and are processed if they
+        # later transition to approved.
+        if review_status == "approved":
             matched_skill_ids = await self._create_skill_checkoffs(
                 organization_id=organization_id,
                 trainee_id=trainee_id,
@@ -1183,8 +1183,7 @@ class ShiftCompletionService:
         report: ShiftCompletionReport,
         officer_id: str,
     ) -> None:
-        """Trigger training pipeline progress that was deferred
-        when a report was created as a draft."""
+        """Trigger training progress deferred until a report is approved."""
         org_id = UUID(report.organization_id)
 
         matched_skill_ids = await self._create_skill_checkoffs(
