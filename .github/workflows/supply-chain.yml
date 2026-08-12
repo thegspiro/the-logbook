@@ -64,6 +64,13 @@ jobs:
           artifact-name: the-logbook-sbom.spdx.json
           upload-artifact: true
 
+      # An immediate retry rides out a dropped connection but not an outage
+      # window: the first observed double failure was two 503s from the
+      # releases endpoint 0.3s apart. Wait out the window before retrying.
+      - name: Pause before retry
+        if: steps.sbom.outcome == 'failure'
+        run: sleep 60
+
       - name: Generate SPDX SBOM (Syft) — retry after transient failure
         if: steps.sbom.outcome == 'failure'
         uses: anchore/sbom-action@v0
