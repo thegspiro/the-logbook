@@ -1297,6 +1297,42 @@ Two related facts worth carrying:
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
 
+## Integrations — No Detail Page, No Error History, No Event Triggers (2026-08-12)
+
+`docs/training/16-integrations.md` described three things around integration
+management that do not exist. All four of its screenshot placeholders are
+retired on this basis.
+
+**There is no integration detail page.** `/integrations` is the only route in
+`modules/integrations/routes.tsx`; integrations are cards on that one page, and
+clicking one does not open anything. The guide said "Click any integration to
+see: last sync timestamp, last error message, consecutive error count, sync
+history".
+
+**Three of those four fields do not exist either.** The `Integration` model
+carries `status` (`available` / `connected` / `error` / `coming_soon`), `config`,
+`encrypted_config`, `enabled`, `contains_phi` and `last_sync_at` — and nothing
+else. There is no error message, no consecutive-error counter and no sync
+history table anywhere in the model or schemas. Nor is there a **Retry Sync**
+control: the string appears nowhere in the frontend.
+
+**Messaging integrations have no event-trigger selection.** The guide told
+administrators to "select which events trigger notifications" and pictured
+checkboxes for New Member, Training Completed, Event Scheduled and Shift Change.
+No such control exists — none of those labels appears in the frontend, and the
+Slack/Discord/Teams connect dialogs collect a webhook URL. There is no **Test
+Connection** button on an integration either (the one in the codebase belongs to
+onboarding's email configuration, a different feature).
+
+Two of the four were unreachable for a second, separate reason, worth keeping
+distinct from the missing UI: the Cal.com **Bookings** panel does exist and does
+work, but it lists bookings fetched live from a real Cal.com account, and the
+Slack placeholder asked for a screenshot of the Slack channel itself. Neither is
+reachable from a demo environment with no third-party accounts connected.
+
+Needs an owner decision on whether integration health monitoring and per-event
+notification routing should be built. This loop does not make that call.
+
 ## Inventory — Departure Clearance Is Backend-Only (2026-08-12)
 
 `DepartureClearanceService` is a complete implementation — initiate a clearance

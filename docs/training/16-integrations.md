@@ -253,7 +253,11 @@ Add this URL as a Cal.com webhook subscribed to the **BOOKING_CREATED** event, u
 
 Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** option — switch it from _Manual_ to _Cal.com_ and paste your booking link. Applicants then see a **Schedule** button on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the connected Cal.com card with the "Bookings" button, and the Bookings panel below listing upcoming interviews with attendee, time, and status._
+> **No screenshot of this _(2026-08-12)_.** The Bookings panel is real and
+> works, but it lists bookings fetched live from your Cal.com account — there is
+> nothing to photograph without a connected one, and our documentation
+> environment has no third-party accounts. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
 
 ---
 
@@ -381,15 +385,13 @@ Each member opens **Subscribe to my shifts** at the top of
 
 1. Create an incoming webhook in your Slack workspace settings
 2. Paste the webhook URL in the integration configuration
-3. Select which events trigger notifications (new members, training completed, events scheduled)
-4. Messages appear in your configured Slack channel
+3. Messages appear in your configured Slack channel
 
 ### Discord
 
 1. Create a webhook in your Discord server settings
 2. Paste the webhook URL
-3. Configure event triggers
-4. Notifications appear as bot messages in your channel
+3. Notifications appear as bot messages in your channel
 
 ### Microsoft Teams
 
@@ -397,7 +399,14 @@ Each member opens **Subscribe to my shifts** at the top of
 2. Paste the webhook URL
 3. Notifications appear as Adaptive Cards with action buttons
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the messaging integration configuration showing the webhook URL field, event trigger checkboxes (New Member, Training Completed, Event Scheduled, Shift Change), and a test notification button._
+> **You cannot choose which events post _(2026-08-12)_.** Earlier versions of
+> this guide had a step for selecting event triggers and described checkboxes
+> for New Member, Training Completed, Event Scheduled and Shift Change. There is
+> no such control — a messaging integration collects a webhook URL and nothing
+> more — and there is no Test Connection button on an integration. The Slack
+> connect dialog is pictured under
+> [Connecting an Integration](#connecting-an-integration). See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
 
 ---
 
@@ -531,14 +540,15 @@ The integrations dashboard shows health status for each connected integration:
 | **Gray dot**        | Not connected — available to configure               |
 | **Red X**           | Connection lost — credentials may have expired       |
 
-Click any integration to see:
-
-- Last sync timestamp
-- Last error message (if any)
-- Consecutive error count
-- Sync history
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of an integration detail page showing a yellow warning status, the error message "Salesforce API rate limit exceeded", consecutive error count (2), and a "Retry Sync" button._
+> **There is no integration detail page _(2026-08-12)_.** This section used to
+> say you could click an integration to see its last sync timestamp, last error
+> message, consecutive error count and sync history. `/integrations` is the only
+> page — the integrations are cards on it, and clicking one does not open
+> anything further. Of those four figures only the **last sync timestamp** is
+> recorded at all; there is no error message, error counter or sync history in
+> the data model, and no **Retry Sync** control anywhere. What you get is the
+> status on the card itself. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
 
 ---
 
@@ -592,7 +602,12 @@ That afternoon, Lt. Santos creates a training event "Q3 Hazmat Refresher" → a 
 > Location: Station 1 Training Bay
 > RSVP by July 10
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Slack integration configuration page showing the webhook URL field, event trigger checkboxes, and the Test Connection button. Below, show the Slack channel with a sample notification message._
+> **No screenshot here _(2026-08-12)_.** The Slack connect dialog and its
+> webhook URL field are already pictured under
+> [Connecting an Integration](#connecting-an-integration); the event-trigger
+> checkboxes and Test Connection button this asked for do not exist. The other
+> half — the Slack channel showing a delivered message — is outside the
+> application and cannot be captured from our documentation environment.
 
 ### Part 2: Connecting Google Calendar (Monday Afternoon)
 
