@@ -32,6 +32,29 @@ default, and a department can **require** it for every member.
    set.
 4. Only after the second factor verifies are full session cookies issued.
 
+### OAuth Logins Are Challenged Too *(2026-08-12)*
+
+"Sign in with Google" / "Sign in with Microsoft" no longer bypasses the second
+factor. When the OAuth callback matches an account with `mfa_enabled`:
+
+1. **No session is created** — `create_user_tokens` is never called, no cookies
+   are set, no `UserSession` row is written.
+2. The callback 302-redirects to the SPA with the same short-lived
+   `mfa_pending` token (5 min TTL) the password flow uses, carried in the
+   **URL fragment**: `/auth/callback#mfa_token=<jwt>`. Fragments are never sent
+   to a server, and `OAuthCallbackPage` strips the token from browser history
+   (`history.replaceState`) before navigating.
+3. The page stores the challenge in the auth store (`mfaRequired`, `mfaToken`)
+   and routes to `/login`, where the existing two-factor form completes
+   `POST /auth/mfa/login` — the only endpoint that issues session cookies.
+4. Audit: an `oauth_mfa_challenge` event (category `authentication`) records
+   the provider and email; the OAuth CSRF `oauth_state` cookie is cleared on
+   this branch so an abandoned challenge leaves no stale state.
+
+Why: OAuth verifies only the *primary* credential. Before this change, a
+compromised Google/Microsoft account (or IdP session) yielded a full Logbook
+session with the app-level TOTP never consulted.
+
 ### Disabling MFA
 
 A member disables MFA from Settings → Security by verifying a current
@@ -121,3 +144,16 @@ MFA for the lost-device case:
 After a reset the member re-enrolls from their own **Settings → Security**; if
 the org requires MFA, they are prompted to set it up again on next login. Admins
 cannot reset their own MFA via this endpoint (use your own Security settings).
+
+**Privilege ceiling** *(2026-08-12)*: both admin reset endpoints
+(`/reset-password` and `/reset-mfa`) refuse a target whose effective
+permissions exceed the caller's. Resetting credentials or stripping MFA is
+account takeover by construction, so a `members.manage` holder must not be
+able to do it to a `security.manage` admin. The rule: every permission in the
+target's effective set (positions + rank defaults, wildcards honored) must be
+within the caller's set. A violation returns 403 — "You cannot reset the
+account of a user with privileges beyond your own" — and files a
+privilege-escalation report. Equal-privilege peers can still be reset, and a
+`*` holder can reset anyone. The check runs before the MFA-enabled probe, so
+an under-privileged caller can't learn a superior's MFA state from the
+400/403 difference.

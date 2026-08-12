@@ -86,6 +86,20 @@ If your administrator has enabled single sign-on, the login page shows **Google*
 
 > **Hint:** Single sign-on links to an account that already exists. The email on your Google or Microsoft account must match a member account your administrator has already created — signing in this way will not create a new account.
 
+> **Two-factor still applies** _(2026-08-12)_. If you have two-factor
+> authentication enabled on your Logbook account, signing in with Google or
+> Microsoft brings you back to the login page's **authentication code** step —
+> enter the 6-digit code from your authenticator app (or a recovery code)
+> exactly as you would after a password. Google or Microsoft verifying you is
+> not a substitute for your second factor; you are not signed in until the code
+> is accepted. The challenge expires after 5 minutes — past that, start the
+> sign-in again.
+>
+> **[SCREENSHOT NEEDED]:** _The login page showing the two-factor
+> authentication code step immediately after returning from a Google sign-in —
+> the code field and "Use a recovery code" link visible, so a member knows this
+> screen is expected and not an error._
+
 > **Troubleshooting:** If your account is not recognized you are returned to the login page with a message such as "No account matches that Google email. Contact your administrator for access." Other messages cover an account from a domain that is not allowed, an account already linked to a different user, or an unverified email address. In every case, contact your administrator.
 
 ---

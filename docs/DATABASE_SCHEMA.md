@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**239 tables · 4129 columns · 778 foreign keys**
+**240 tables · 4143 columns · 781 foreign keys**
 
 ---
 
@@ -140,6 +140,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`elections`](#elections) | `Election` | 49 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 9 | One paper-tally entry — the set of manual votes sharing a batch id. |
+| [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 9 | Organization-scoped, reusable snapshot of a structured ballot. |
 | [`votes`](#votes) | `Vote` | 25 | Vote model for recording votes |
 | [`voting_tokens`](#voting_tokens) | `VotingToken` | 15 | Voting token model for secure anonymous ballot access |
 
@@ -290,7 +291,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`checkout_records`](#checkout_records) | `CheckOutRecord` | 17 | Check Out Record model |
 | [`departure_clearance_items`](#departure_clearance_items) | `DepartureClearanceItem` | 18 | Departure Clearance Line Item |
 | [`departure_clearances`](#departure_clearances) | `DepartureClearance` | 18 | Departure Clearance model |
-| [`equipment_kit_items`](#equipment_kit_items) | `EquipmentKitItem` | 8 | One line item in a kit template — specifies what item/category |
+| [`equipment_kit_items`](#equipment_kit_items) | `EquipmentKitItem` | 9 | One line item in a kit template — specifies what item/category |
 | [`equipment_kits`](#equipment_kits) | `EquipmentKit` | 10 | Kit/bundle template for issuing multiple items as a set. |
 | [`equipment_requests`](#equipment_requests) | `EquipmentRequest` | 20 | Equipment Request model |
 | [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 16 | Inventory Category model |
@@ -431,7 +432,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`skill_templates`](#skill_templates) | `SkillTemplate` | 21 | Skill Template model |
 | [`skill_test_viewers`](#skill_test_viewers) | `SkillTestViewer` | 5 | A person granted sight of one specific test's result. |
-| [`skill_tests`](#skill_tests) | `SkillTest` | 29 | Skill Test model |
+| [`skill_tests`](#skill_tests) | `SkillTest` | 33 | Skill Test model |
 
 ### Storefront
 
@@ -1923,6 +1924,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_manual_ballot_batches_election_id` (`election_id`)
 - `ix_manual_ballot_batches_organization_id` (`organization_id`)
+
+### `saved_ballot_templates`
+
+**SavedBallotTemplate** · `app/models/election.py`
+
+> Organization-scoped, reusable snapshot of a structured ballot. Templates contain configuration only: never candidates, voter rosters, votes, tokens, attendance, or election lifecycle state.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(200) | no |  |  |  |
+| `name_key` | VARCHAR(64) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `ballot_items` | JSON | no |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_saved_ballot_templates_org` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_saved_ballot_template_org_name_key` (`organization_id`, `name_key`)
 
 ### `votes`
 
@@ -4324,6 +4351,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `item_name` | VARCHAR(255) | no |  |  |  |
 | `quantity` | INTEGER | no |  | `1` |  |
 | `size_selectable` | BOOL | yes |  | `False` |  |
+| `optional` | BOOL | no |  | `0` |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
 
 **Indexes**
@@ -6102,6 +6130,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `validated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `released_at` | DATETIME | yes |  |  |  |
 | `released_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `returned_at` | DATETIME | yes |  |  |  |
+| `returned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `return_reason` | TEXT | yes |  |  |  |
+| `return_count` | INTEGER | no |  | `0` |  |
 | `voided_at` | DATETIME | yes |  |  |  |
 | `voided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `void_reason` | TEXT | yes |  |  |  |
@@ -8441,7 +8473,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (290 references)
+### → `users` (292 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8662,6 +8694,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `return_requests` | `reviewed_by` | SET NULL | yes |
 | `rsvp_history` | `changed_by` | SET NULL | yes |
 | `rsvp_history` | `user_id` | CASCADE | no |
+| `saved_ballot_templates` | `created_by` | SET NULL | yes |
 | `saved_reports` | `created_by` | SET NULL | yes |
 | `scheduled_emails` | `created_by` | SET NULL | yes |
 | `screening_records` | `reviewed_by` | SET NULL | yes |
@@ -8696,6 +8729,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_tests` | `candidate_id` | CASCADE | no |
 | `skill_tests` | `examiner_id` | CASCADE | no |
 | `skill_tests` | `released_by` | SET NULL | yes |
+| `skill_tests` | `returned_by` | SET NULL | yes |
 | `skill_tests` | `validated_by` | SET NULL | yes |
 | `skill_tests` | `voided_by` | SET NULL | yes |
 | `storage_areas` | `created_by` | NO ACTION | yes |
@@ -8736,7 +8770,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (188 references)
+### → `organizations` (189 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8883,6 +8917,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `renewal_tasks` | `organization_id` | CASCADE | no |
 | `reorder_requests` | `organization_id` | CASCADE | no |
 | `return_requests` | `organization_id` | CASCADE | no |
+| `saved_ballot_templates` | `organization_id` | CASCADE | no |
 | `saved_reports` | `organization_id` | CASCADE | no |
 | `scheduled_emails` | `organization_id` | CASCADE | no |
 | `screening_records` | `organization_id` | CASCADE | no |
