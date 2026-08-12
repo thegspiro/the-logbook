@@ -366,6 +366,40 @@ class TestLimits:
         with pytest.raises(ValueError, match="Only 1 .* Large.* remain available"):
             await service.create_order(org.id, member, payload)
 
+    async def test_variant_stock_accepts_uppercase_product_id(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, requires_variant=True)
+        variant = StoreProductVariant(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            product_id=product.id,
+            label="Large",
+            stock_quantity=2,
+        )
+        db_session.add(variant)
+        await db_session.flush()
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(
+            org.id,
+            member,
+            {
+                "items": [
+                    {
+                        "product_id": product.id.upper(),
+                        "variant_id": variant.id,
+                        "quantity": 1,
+                    }
+                ],
+                "fulfillment_method": "pickup",
+            },
+        )
+
+        assert order.items[0].product_id == product.id
+
 
 # ======================================================================
 # Personalization

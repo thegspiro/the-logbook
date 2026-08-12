@@ -1430,9 +1430,11 @@ class StorefrontService:
         # are different goods and must stay separate lines.
         merged: Dict[Tuple[str, Optional[str], Optional[str]], int] = {}
         for item in items:
+            product_id = str(item["product_id"]).lower()
+            variant_id = item.get("variant_id")
             key = (
-                str(item["product_id"]),
-                item.get("variant_id"),
+                product_id,
+                str(variant_id).lower() if variant_id is not None else None,
                 (item.get("personalization_text") or "").strip() or None,
             )
             merged[key] = merged.get(key, 0) + int(item["quantity"])
