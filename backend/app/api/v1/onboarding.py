@@ -1372,7 +1372,10 @@ async def save_email_config(
     session = await validate_session(request, db)
 
     # Validate platform
-    valid_platforms = ["gmail", "microsoft", "selfhosted", "other"]
+    # Keep this list aligned with EmailConfigRequest and the choices rendered
+    # by EmailPlatformChoice. Cloudflare was selectable and testable, but the
+    # save endpoint rejected it, trapping users after they entered credentials.
+    valid_platforms = ["gmail", "microsoft", "selfhosted", "cloudflare", "other"]
     if data.platform not in valid_platforms:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

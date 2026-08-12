@@ -5,6 +5,7 @@ The onboarding module handles first-time system setup and can be disabled once t
 ## Overview
 
 The onboarding module provides:
+
 - **Guided setup wizard** for first-time configuration
 - **Security verification** to ensure proper configuration
 - **Organization creation** with default roles
@@ -17,12 +18,14 @@ The onboarding module provides:
 ### 1. Automatic Detection
 
 The system automatically detects if onboarding is needed by checking:
+
 - Whether any organizations exist in the database
 - Whether an OnboardingStatus record exists and is marked complete
 
 ### 2. Startup Health Check
 
 Before onboarding begins, the frontend performs a service health check that verifies:
+
 - Backend API is reachable
 - Database is connected and migrations are complete
 - Redis cache is available (optional — degraded mode is supported)
@@ -31,9 +34,12 @@ The health check includes auto-retry with exponential backoff (up to 20 attempts
 
 ### 3. Onboarding Steps
 
-The onboarding process consists of 10 steps:
+The progress indicator contains 12 steps. Email configuration and file-storage
+configuration are conditional sub-pages within their respective steps, so the
+number of screens a user sees depends on the services they select.
 
 #### Step 1: Organization Setup
+
 - Create your fire department or organization
 - Set organization name, slug, and type (`fire_department`, `ems_only`, `fire_ems_combined`)
 - Configure timezone, contact info, mailing/physical addresses
@@ -41,39 +47,57 @@ The onboarding process consists of 10 steps:
 - Set department identifiers (FDID, State ID, or Department ID)
 - **Commits to database immediately**
 
-#### Step 2: Navigation Choice
+#### Step 2: Stations
+
+- Confirm the headquarters created from the organization mailing address
+- Add any additional stations (optional)
+
+#### Step 3: Apparatus
+
+- Add apparatus and minimum staffing requirements (optional)
+
+#### Step 4: Navigation Choice
+
 - Choose between Top Bar or Left Sidebar navigation layout
 
-#### Step 3: Email Platform Choice
-- Select email service: Gmail, Microsoft 365, Self-Hosted (SMTP), or Skip
+#### Step 5: Email Platform Choice
+
+- Select email service: Gmail, Microsoft 365, Cloudflare Email, Self-Hosted (SMTP), or Skip
 - If a service is selected, proceeds to email configuration
 
-#### Step 4: File Storage Choice
-- Select file storage: Local, AWS S3, Azure Blob, or Google Cloud Storage
+#### Step 6: File Storage Choice
 
-#### Step 5: Authentication Choice
-- Select authentication method: Local, OAuth, SAML, or LDAP
+- Select file storage: Local, Amazon S3, Google Drive, OneDrive / SharePoint, or Other
 
-#### Step 6: IT Team & Backup Access
+#### Step 7: Authentication Choice
+
+- Select authentication method: Local passwords, Google, Microsoft, or Authentik
+
+#### Step 8: System Owner Creation
+
+- Create the first administrator account
+- Enforces strong password requirements (12+ characters with complexity rules)
+- Membership Number is optional — all other fields are required
+- Automatically assigns Super Admin access
+
+#### Step 9: IT Team & Backup Access
+
 - Configure IT team contacts and backup access information
 
-#### Step 7: Role Setup
-- Configure roles with two-tier permissions (View Access / Manage Access)
-- Pre-configured role templates by category (Leadership, Officers, Administrative, etc.)
+#### Step 10: Position Setup
 
-#### Step 8: Module Selection
+- Configure operational positions with two-tier permissions (View Access / Manage Access)
+- Use pre-configured position templates by category (Leadership, Officers, Administrative, etc.)
+
+#### Step 11: Module Selection
+
 - Choose which modules to enable:
   - **Essential**: Member Management, Events & RSVP, Documents & Files
   - **Recommended**: Training & Certifications, Equipment & Inventory, Scheduling, Elections, Compliance
   - **Optional**: Notifications, Mobile App, Forms & Surveys, Integrations
 
-#### Step 9: Admin User Creation
-- Create first administrator account
-- Enforces strong password requirements (12+ characters with complexity rules)
-- Membership Number is optional — all other fields are required
-- Automatically assigns Super Admin role
+#### Step 12: Complete
 
-#### Step 10: Complete
 - Finalizes onboarding and redirects to dashboard
 - Generate post-onboarding checklist
 
@@ -82,12 +106,14 @@ The onboarding process consists of 10 steps:
 After completing onboarding, a checklist is automatically created with critical tasks:
 
 **Critical Priority:**
+
 - ✅ Set up TLS/HTTPS certificates
 - ✅ Configure automated backups
 - ✅ Review security checklist (HIPAA-aligned)
 - ✅ Configure firewall rules
 
 **High Priority:**
+
 - ✅ Configure email notifications
 - ✅ Enable multi-factor authentication for admins
 - ✅ Set up monitoring and alerting
@@ -95,6 +121,7 @@ After completing onboarding, a checklist is automatically created with critical 
 - ✅ Test disaster recovery plan
 
 **Medium Priority:**
+
 - ✅ Review and customize user roles
 - ✅ Configure additional modules
 - ✅ Set up integrations (Microsoft 365, Google Workspace, LDAP)
@@ -108,6 +135,7 @@ GET /api/v1/onboarding/status
 ```
 
 **Response:**
+
 ```json
 {
   "needs_onboarding": true,
@@ -126,6 +154,7 @@ POST /api/v1/onboarding/start
 ```
 
 **Response:**
+
 ```json
 {
   "message": "Onboarding started successfully",
@@ -141,6 +170,7 @@ GET /api/v1/onboarding/system-info
 ```
 
 **Response:**
+
 ```json
 {
   "app_name": "The Logbook",
@@ -176,6 +206,7 @@ GET /api/v1/onboarding/security-check
 ```
 
 **Response:**
+
 ```json
 {
   "passed": false,
@@ -200,6 +231,7 @@ GET /api/v1/onboarding/database-check
 ```
 
 **Response:**
+
 ```json
 {
   "connected": true,
@@ -227,6 +259,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "id": "uuid-here",
@@ -239,6 +272,7 @@ Content-Type: application/json
 ```
 
 **Automatic Actions:**
+
 - Creates 6 default roles: Super Admin, Admin, Chief, Officer, Member, Probationary
 - Each role has appropriate permissions pre-configured
 - Organization settings initialized
@@ -261,6 +295,7 @@ Content-Type: application/json
 ```
 
 **Password Requirements:**
+
 - Minimum 12 characters
 - At least one uppercase letter
 - At least one lowercase letter
@@ -270,6 +305,7 @@ Content-Type: application/json
 - Passwords must match
 
 **Response:**
+
 ```json
 {
   "id": "uuid-here",
@@ -283,6 +319,7 @@ Content-Type: application/json
 ```
 
 **Automatic Actions:**
+
 - Password hashed with Argon2id
 - User assigned Super Admin role
 - Audit log entry created
@@ -306,6 +343,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "message": "Modules configured successfully",
@@ -342,6 +380,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "message": "Notifications configured successfully",
@@ -362,6 +401,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "message": "Onboarding completed successfully!",
@@ -373,6 +413,7 @@ Content-Type: application/json
 ```
 
 **Automatic Actions:**
+
 - Onboarding marked as complete
 - Default seed data created for the organization
 - Audit log entry created
@@ -391,6 +432,7 @@ GET /api/v1/organization/setup-checklist
 ```
 
 **Response:**
+
 ```json
 {
   "items": [
@@ -425,6 +467,7 @@ POST /api/v1/organization/setup-checklist/{item_key}/acknowledge?acknowledged=tr
 ```
 
 **Response:**
+
 ```json
 {
   "item_key": "org_settings",
@@ -477,6 +520,7 @@ Once onboarding is complete, the module automatically disables itself:
 3. **API Protection**: Onboarding endpoints return 400 error if already completed
 
 To manually re-enable (NOT RECOMMENDED in production):
+
 ```sql
 -- Delete onboarding status (will require re-onboarding)
 DELETE FROM onboarding_status;
@@ -489,13 +533,14 @@ The onboarding module is designed to be integrated with a frontend wizard:
 ### Recommended Flow
 
 1. **Check Status on App Load**
+
    ```javascript
-   const response = await fetch('/api/v1/onboarding/status');
+   const response = await fetch("/api/v1/onboarding/status");
    const status = await response.json();
 
    if (status.needs_onboarding) {
      // Redirect to onboarding wizard
-     router.push('/onboarding');
+     router.push("/onboarding");
    }
    ```
 
@@ -544,6 +589,7 @@ Frontend onboarding state is stored in a Zustand store persisted to **localStora
 ### onboarding_status Table
 
 Stores overall onboarding progress:
+
 - `id` - UUID primary key
 - `is_completed` - Boolean completion flag
 - `completed_at` - Timestamp when completed
@@ -566,6 +612,7 @@ Stores overall onboarding progress:
 ### onboarding_checklist Table
 
 Stores post-onboarding tasks:
+
 - `id` - UUID primary key
 - `title` - Task title
 - `description` - Task description
@@ -581,6 +628,7 @@ Stores post-onboarding tasks:
 ## Security Considerations
 
 ### Access Control
+
 1. **No Authentication Required** - Onboarding endpoints don't require authentication since no users exist yet
 2. **GeoIP Bypass** - Onboarding endpoints are exempt from GeoIP country blocking, since first-time setup must be accessible before any configuration exists
 3. **One-Time Use** - Once completed, can't be rerun without database changes
@@ -588,12 +636,14 @@ Stores post-onboarding tasks:
 5. **CSRF Protection** - All session-modifying endpoints require a valid `X-CSRF-Token` header
 
 ### Data Protection
+
 6. **Sensitive Data Encryption** - Email passwords, API keys, and file storage credentials entered during onboarding are encrypted (AES-256 via Fernet) before being stored in the session database. Only platform names are stored in plain text.
 7. **No Passwords in Logs** - Temporary passwords are never written to application logs. Only the request for a welcome email is logged.
 8. **Sanitized Error Responses** - API error responses never expose internal exception details, database structure, or stack traces. Full error details are logged internally only.
 9. **Password Requirements** - Enforced at both API and client level (12+ chars, complexity, common password check)
 
 ### Monitoring & Hardening
+
 10. **Audit Logging** - All onboarding actions are logged with IP, user agent, and timestamps
 11. **IP Tracking** - Setup IP address is recorded for each session
 12. **Email Test Timeout** - SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable
@@ -614,6 +664,7 @@ Stores post-onboarding tasks:
 **Cause**: Using insecure default values in .env file. The security check flags any `SECRET_KEY` or `ENCRYPTION_KEY` containing the substring `INSECURE_DEFAULT`, and any `DB_PASSWORD` equal to `change_me_in_production`.
 
 **Solution**:
+
 1. Generate new SECRET_KEY: `python -c "import secrets; print(secrets.token_urlsafe(64))"`
 2. Generate new ENCRYPTION_KEY: `python -c "import secrets; print(secrets.token_hex(32))"`
 3. Generate new ENCRYPTION_SALT: `python -c "import secrets; print(secrets.token_hex(16))"`
@@ -631,6 +682,7 @@ Stores post-onboarding tasks:
 **Cause**: Password doesn't meet requirements
 
 **Solution**: Ensure password has:
+
 - At least 12 characters
 - One uppercase letter
 - One lowercase letter
@@ -642,6 +694,7 @@ Stores post-onboarding tasks:
 **Cause**: Database not running or connection settings wrong
 
 **Solution**:
+
 1. Check Docker: `docker-compose ps`
 2. Verify MySQL is healthy: `docker-compose logs mysql`
 3. Check .env database settings
@@ -661,6 +714,7 @@ Stores post-onboarding tasks:
 ## Support
 
 For issues with onboarding:
+
 - Check logs: `docker-compose logs backend`
 - Review SECURITY.md for requirements
 - Check .env.example for configuration reference

@@ -368,7 +368,7 @@ const OrganizationSetup: React.FC = () => {
     mailing: true,
     physical: false,
     identifiers: false,
-
+    additional: false,
     logo: true, // Logo is important and small, show by default
   });
 
@@ -402,6 +402,17 @@ const OrganizationSetup: React.FC = () => {
       setFormData((prev) => ({ ...prev, logo: logoData }));
     }
   }, [departmentName, logoData]);
+
+  // Organization creation is intentionally one-time and subsequent records
+  // already reference its id. Browser Back used to reopen this form with only
+  // the name/logo restored; submitting then failed with "already created" and
+  // could not update the record. Keep the user on the first editable step
+  // until a dedicated organization-update endpoint exists.
+  useEffect(() => {
+    if (departmentName && hasSession && !sessionLoading) {
+      void navigate('/onboarding/stations', { replace: true });
+    }
+  }, [departmentName, hasSession, navigate, sessionLoading]);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -540,6 +551,16 @@ const OrganizationSetup: React.FC = () => {
       errors.stateId = 'State ID is required when selected as identifier type';
     }
 
+    // Keep this aligned with OrganizationSetupCreate on the API. Without
+    // client-side validation, values such as "9999" make it all the way to
+    // the server and turn an otherwise valid first step into a generic 422.
+    if (formData.foundedYear.trim()) {
+      const foundedYear = Number(formData.foundedYear);
+      if (!/^\d{4}$/.test(formData.foundedYear) || foundedYear < 1600 || foundedYear > 2100) {
+        errors.foundedYear = 'Year founded must be between 1600 and 2100';
+      }
+    }
+
     setValidationErrors(errors);
 
     // Expand sections with errors
@@ -557,6 +578,9 @@ const OrganizationSetup: React.FC = () => {
     }
     if (errors.fdid || errors.stateId) {
       setExpandedSections((prev) => ({ ...prev, identifiers: true }));
+    }
+    if (errors.foundedYear) {
+      setExpandedSections((prev) => ({ ...prev, additional: true }));
     }
 
     return errors;
@@ -596,9 +620,6 @@ const OrganizationSetup: React.FC = () => {
     setIsSaving(true);
 
     try {
-      // Store name in Zustand for other components
-      setDepartmentName(formData.name);
-
       // Prepare API payload
       // Use || undefined (not ??) so empty strings become undefined and are omitted from JSON,
       // preventing Pydantic validation errors on optional fields (e.g., phone regex rejects "")
@@ -630,9 +651,14 @@ const OrganizationSetup: React.FC = () => {
               country: formData.physicalAddress.country || 'USA',
             },
         identifier_type: formData.identifierType,
-        fdid: formData.fdid?.trim() || undefined,
-        state_id: formData.stateId?.trim() || undefined,
-        department_id: formData.departmentId?.trim() || undefined,
+        // Only submit the identifier matching the current selection. A user
+        // may enter an FDID and then switch to State ID; sending both leaves
+        // contradictory organization data even though only one field is
+        // visible in the form.
+        fdid: formData.identifierType === 'fdid' ? formData.fdid.trim() || undefined : undefined,
+        state_id: formData.identifierType === 'state_id' ? formData.stateId.trim() || undefined : undefined,
+        department_id:
+          formData.identifierType === 'department_id' ? formData.departmentId.trim() || undefined : undefined,
         county: formData.county?.trim() || undefined,
         founded_year: formData.foundedYear ? parseInt(formData.foundedYear, 10) : undefined,
         logo: formData.logo || undefined,
@@ -640,6 +666,11 @@ const OrganizationSetup: React.FC = () => {
 
       // Save to API
       await saveOrganization(payload);
+
+      // Only publish the organization name after the server has successfully
+      // created it. Publishing before the request made downstream route guards
+      // treat a failed submission as a completed organization step.
+      setDepartmentName(formData.name);
 
       toast.success('Organization created successfully!');
 
@@ -992,10 +1023,10 @@ const OrganizationSetup: React.FC = () => {
             <SectionHeader
               title="Additional Information"
               icon={<MapPin aria-hidden="true" className="h-5 w-5" />}
-              expanded={expandedSections.identifiers}
-              onToggle={() => toggleSection('identifiers')}
+              expanded={expandedSections.additional}
+              onToggle={() => toggleSection('additional')}
             />
-            {expandedSections.identifiers && (
+            {expandedSections.additional && (
               <div className="bg-theme-surface-secondary p-4">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <InputField
@@ -1015,6 +1046,7 @@ const OrganizationSetup: React.FC = () => {
                     placeholder="e.g., 1952"
                     maxLength={4}
                     helpText="Year your organization was established"
+                    error={validationErrors.foundedYear}
                   />
                 </div>
               </div>

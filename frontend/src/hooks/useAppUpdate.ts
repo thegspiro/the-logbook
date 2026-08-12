@@ -22,6 +22,9 @@ const MIN_CHECK_INTERVAL_MS = 60_000;
 /** Fallback polling interval when no navigation or focus events fire. */
 const POLL_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
+/** Re-prompt after a deferral so a security update is not ignored forever. */
+const UPDATE_REMINDER_MS = 60 * 60_000; // 1 hour
+
 /**
  * Build ID baked into this bundle at compile time.
  * Evaluated lazily (not at module-load) so that test stubs have time
@@ -38,14 +41,15 @@ export interface AppUpdateState {
   updateAvailable: boolean;
   /** Reload the page to apply the new version. */
   applyUpdate: () => void;
-  /** Dismiss the notification (re-shown on next detection). */
+  /** Defer the notification for one hour. */
   dismiss: () => void;
 }
 
 export function useAppUpdate(): AppUpdateState {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const lastCheckRef = useRef(0);
-  const dismissedBuildRef = useRef<string | null>(null);
+  const deferredBuildRef = useRef<{ buildId: string; until: number } | null>(null);
+  const detectedBuildRef = useRef<string | null>(null);
   const location = useLocation();
 
   const checkForUpdate = useCallback(async () => {
@@ -64,7 +68,10 @@ export function useAppUpdate(): AppUpdateState {
       const data: unknown = await res.json();
       if (typeof data === 'object' && data !== null && 'buildId' in data && typeof data.buildId === 'string') {
         const serverBuildId = (data as { buildId: string }).buildId;
-        if (serverBuildId !== getCurrentBuildId() && serverBuildId !== dismissedBuildRef.current) {
+        const deferred = deferredBuildRef.current;
+        const isStillDeferred = deferred?.buildId === serverBuildId && Date.now() < deferred.until;
+        if (serverBuildId !== getCurrentBuildId() && !isStillDeferred) {
+          detectedBuildRef.current = serverBuildId;
           setUpdateAvailable(true);
         }
       }
@@ -89,6 +96,17 @@ export function useAppUpdate(): AppUpdateState {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [checkForUpdate]);
 
+  // Check immediately when a device regains connectivity instead of waiting
+  // for the next five-minute poll.
+  useEffect(() => {
+    const handleOnline = () => {
+      lastCheckRef.current = 0;
+      void checkForUpdate();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [checkForUpdate]);
+
   // Periodic fallback
   useEffect(() => {
     const id = setInterval(() => {
@@ -98,28 +116,24 @@ export function useAppUpdate(): AppUpdateState {
   }, [checkForUpdate]);
 
   const applyUpdate = useCallback(() => {
+    // Discover/install the newest worker before reloading. A plain reload can
+    // otherwise still be served by the old worker and appear to do nothing.
+    if ('serviceWorker' in navigator) {
+      void navigator.serviceWorker
+        .getRegistration()
+        .then((registration) => registration?.update())
+        .finally(() => window.location.reload());
+      return;
+    }
     window.location.reload();
   }, []);
 
   const dismiss = useCallback(() => {
     setUpdateAvailable(false);
-    // Remember which build the user dismissed so we don't re-show until
-    // yet another deployment happens.
-    // We read the latest server build from the last successful check.
-    // Since the user is dismissing, we just mark the current detection
-    // as dismissed — the ref will be compared on the next check.
-    dismissedBuildRef.current = 'dismissed';
-    // Re-fetch once to capture the exact build ID that was dismissed
-    void fetch('/version.json', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d: unknown) => {
-        if (typeof d === 'object' && d !== null && 'buildId' in d && typeof d.buildId === 'string') {
-          dismissedBuildRef.current = (d as { buildId: string }).buildId;
-        }
-      })
-      .catch(() => {
-        /* ignore */
-      });
+    const buildId = detectedBuildRef.current;
+    if (buildId) {
+      deferredBuildRef.current = { buildId, until: Date.now() + UPDATE_REMINDER_MS };
+    }
   }, []);
 
   return { updateAvailable, applyUpdate, dismiss };

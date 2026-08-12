@@ -7,8 +7,11 @@ import {
   BackButton,
   ResetProgressButton,
   AutoSaveNotification,
+  ErrorAlert,
 } from '../components';
 import { useOnboardingStore } from '../store';
+import { useApiRequest } from '../hooks';
+import { apiClient } from '../services/api-client';
 
 // Email platform logos (using simple SVG icons)
 const GmailIcon = () => (
@@ -42,6 +45,7 @@ const EmailPlatformChoice: React.FC = () => {
   const emailPlatform = useOnboardingStore((state) => state.emailPlatform);
   const setEmailPlatform = useOnboardingStore((state) => state.setEmailPlatform);
   const lastSaved = useOnboardingStore((state) => state.lastSaved);
+  const { execute, isLoading, error, canRetry, clearError } = useApiRequest();
 
   useEffect(() => {
     // Redirect to start if no department name
@@ -98,13 +102,23 @@ const EmailPlatformChoice: React.FC = () => {
     },
   ];
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!emailPlatform) return;
 
     // Navigate to next step based on selection
     if (emailPlatform === 'other') {
-      // Skip email configuration, go to file storage selection
-      void navigate('/onboarding/file-storage');
+      // Persist an explicit "configure later" outcome. Previously this route
+      // skipped the API entirely, leaving the server unable to distinguish a
+      // deliberate choice from an abandoned email step.
+      const { data } = await execute(
+        async () => {
+          const response = await apiClient.saveEmailConfig({ platform: 'other', config: {} });
+          if (response.error) throw new Error(response.error);
+          return response;
+        },
+        { step: 'Email Platform Choice', action: 'Skip email configuration' }
+      );
+      if (data) void navigate('/onboarding/file-storage');
     } else {
       // Go to email configuration page
       void navigate('/onboarding/email-config');
@@ -224,17 +238,27 @@ const EmailPlatformChoice: React.FC = () => {
 
           {/* Continue Button */}
           <div className="mx-auto max-w-md">
+            {error && (
+              <div className="mb-4">
+                <ErrorAlert
+                  message={error}
+                  canRetry={canRetry}
+                  onRetry={() => void handleContinue()}
+                  onDismiss={clearError}
+                />
+              </div>
+            )}
             <button
-              onClick={handleContinue}
-              disabled={!emailPlatform}
+              onClick={() => void handleContinue()}
+              disabled={!emailPlatform || isLoading}
               className={`w-full rounded-lg px-8 py-4 text-lg font-semibold transition-all duration-300 ${
-                emailPlatform
+                emailPlatform && !isLoading
                   ? 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
-              Continue
+              {isLoading ? 'Saving...' : 'Continue'}
             </button>
 
             {/* Help Text */}
