@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { checkForServiceWorkerUpdate, activateFreshServiceWorker, reloadForNewVersion } from './serviceWorkerUpdate';
+import { nudgeServiceWorkerUpdate, activateFreshServiceWorker, reloadForNewVersion } from './serviceWorkerUpdate';
 
 /**
  * jsdom has no navigator.serviceWorker, so each test that needs one installs
@@ -43,11 +43,7 @@ async function flushAsync(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-describe('checkForServiceWorkerUpdate', () => {
-  beforeEach(() => {
-    Object.defineProperty(navigator, 'onLine', { value: true, writable: true, configurable: true });
-  });
-
+describe('nudgeServiceWorkerUpdate', () => {
   afterEach(() => {
     removeContainer();
     vi.restoreAllMocks();
@@ -55,61 +51,24 @@ describe('checkForServiceWorkerUpdate', () => {
 
   it('is a no-op when service workers are unsupported', () => {
     removeContainer();
-    expect(() => checkForServiceWorkerUpdate(true)).not.toThrow();
+    expect(() => nudgeServiceWorkerUpdate()).not.toThrow();
   });
 
-  it('calls registration.update() when forced', async () => {
+  it('calls registration.update()', async () => {
     const registration = makeRegistration();
     installContainer(registration);
 
-    checkForServiceWorkerUpdate(true);
+    nudgeServiceWorkerUpdate();
     await flushAsync();
 
     expect(registration.update).toHaveBeenCalledExactlyOnceWith();
-  });
-
-  it('does not check while offline', async () => {
-    Object.defineProperty(navigator, 'onLine', { value: false, writable: true, configurable: true });
-    const registration = makeRegistration();
-    const container = installContainer(registration);
-
-    checkForServiceWorkerUpdate(true);
-    await flushAsync();
-
-    expect(container.getRegistration).not.toHaveBeenCalled();
-  });
-
-  it('rate-limits unforced checks and lets them through after the window', async () => {
-    const registration = makeRegistration();
-    installContainer(registration);
-
-    const nowSpy = vi.spyOn(Date, 'now');
-    const base = 1_700_000_000_000;
-
-    // Forced check stamps the rate-limit clock at `base`.
-    nowSpy.mockReturnValue(base);
-    checkForServiceWorkerUpdate(true);
-    await flushAsync();
-    expect(registration.update).toHaveBeenCalledTimes(1);
-
-    // 10s later — inside the 60s window, unforced check is suppressed.
-    nowSpy.mockReturnValue(base + 10_000);
-    checkForServiceWorkerUpdate();
-    await flushAsync();
-    expect(registration.update).toHaveBeenCalledTimes(1);
-
-    // 61s later — window elapsed, check goes through.
-    nowSpy.mockReturnValue(base + 61_000);
-    checkForServiceWorkerUpdate();
-    await flushAsync();
-    expect(registration.update).toHaveBeenCalledTimes(2);
   });
 
   it('swallows getRegistration failures', async () => {
     const container = installContainer(undefined);
     container.getRegistration.mockRejectedValue(new Error('boom'));
 
-    expect(() => checkForServiceWorkerUpdate(true)).not.toThrow();
+    expect(() => nudgeServiceWorkerUpdate()).not.toThrow();
     await flushAsync();
   });
 });

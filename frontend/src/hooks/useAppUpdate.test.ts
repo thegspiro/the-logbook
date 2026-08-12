@@ -101,7 +101,7 @@ describe('useAppUpdate', () => {
     expect(result.current.updateAvailable).toBe(false);
   });
 
-  it('dismiss hides the notification', async () => {
+  it('dismiss hides the notification without re-fetching version.json', async () => {
     fetchSpy.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ buildId: 'new-build-789' }),
@@ -118,6 +118,61 @@ describe('useAppUpdate', () => {
     });
 
     expect(result.current.updateAvailable).toBe(false);
+    // The dismissed buildId is remembered from the detecting check itself.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-flag a dismissed build on a later check', async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ buildId: 'new-build-789' }),
+    });
+
+    const { result } = renderHook(() => useAppUpdate(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.updateAvailable).toBe(true);
+    });
+
+    act(() => {
+      result.current.dismiss();
+    });
+
+    // Step past the 60s rate limit and trigger another check.
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 61_000);
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+    expect(result.current.updateAvailable).toBe(false);
+  });
+
+  it('nudges the service worker registration on each allowed check', async () => {
+    const registration = { update: vi.fn().mockResolvedValue(undefined) };
+    Object.defineProperty(window.navigator, 'serviceWorker', {
+      value: { getRegistration: vi.fn().mockResolvedValue(registration) },
+      configurable: true,
+    });
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ buildId: 'test-build-123' }),
+    });
+
+    renderHook(() => useAppUpdate(), { wrapper });
+
+    await waitFor(() => {
+      expect(registration.update).toHaveBeenCalledExactlyOnceWith();
+    });
+
+    Reflect.deleteProperty(window.navigator, 'serviceWorker');
   });
 
   it('checks on visibility change after rate-limit window', async () => {

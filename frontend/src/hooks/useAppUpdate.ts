@@ -11,11 +11,16 @@
  *
  * All triggers are rate-limited so the server sees at most one
  * request per `MIN_CHECK_INTERVAL_MS` window.
+ *
+ * Each allowed check also nudges the service worker registration, so an
+ * installed PWA picks up a new deployment without waiting for the browser's
+ * own ~24h service worker update cadence. This hook (via UpdateNotification,
+ * mounted above the router) is the single owner of update detection.
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useLocation } from 'react-router';
-import { checkForServiceWorkerUpdate, reloadForNewVersion } from '../utils/serviceWorkerUpdate';
+import { nudgeServiceWorkerUpdate, reloadForNewVersion } from '../utils/serviceWorkerUpdate';
 
 /** Minimum time between two consecutive version checks (60 seconds). */
 const MIN_CHECK_INTERVAL_MS = 60_000;
@@ -47,6 +52,7 @@ export function useAppUpdate(): AppUpdateState {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const lastCheckRef = useRef(0);
   const dismissedBuildRef = useRef<string | null>(null);
+  const lastSeenServerBuildRef = useRef<string | null>(null);
   const location = useLocation();
 
   const checkForUpdate = useCallback(async () => {
@@ -58,6 +64,11 @@ export function useAppUpdate(): AppUpdateState {
     if (now - lastCheckRef.current < MIN_CHECK_INTERVAL_MS) return;
     lastCheckRef.current = now;
 
+    // Piggyback a service worker update check on the same cadence. Keeping
+    // the worker fresh here — rather than waiting for the browser's own ~24h
+    // check — is what lets an installed PWA apply a deployment in one reload.
+    nudgeServiceWorkerUpdate();
+
     try {
       const res = await fetch('/version.json', { cache: 'no-store' });
       if (!res.ok) return;
@@ -65,13 +76,9 @@ export function useAppUpdate(): AppUpdateState {
       const data: unknown = await res.json();
       if (typeof data === 'object' && data !== null && 'buildId' in data && typeof data.buildId === 'string') {
         const serverBuildId = (data as { buildId: string }).buildId;
+        lastSeenServerBuildRef.current = serverBuildId;
         if (serverBuildId !== getCurrentBuildId() && serverBuildId !== dismissedBuildRef.current) {
           setUpdateAvailable(true);
-          // Start installing the new service worker now, in the background,
-          // so that by the time the user taps "Reload now" the fresh worker
-          // is (usually) already controlling the page and one reload lands
-          // on the new build instead of the old precached shell.
-          checkForServiceWorkerUpdate(true);
         }
       }
     } catch {
@@ -111,23 +118,9 @@ export function useAppUpdate(): AppUpdateState {
 
   const dismiss = useCallback(() => {
     setUpdateAvailable(false);
-    // Remember which build the user dismissed so we don't re-show until
-    // yet another deployment happens.
-    // We read the latest server build from the last successful check.
-    // Since the user is dismissing, we just mark the current detection
-    // as dismissed — the ref will be compared on the next check.
-    dismissedBuildRef.current = 'dismissed';
-    // Re-fetch once to capture the exact build ID that was dismissed
-    void fetch('/version.json', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d: unknown) => {
-        if (typeof d === 'object' && d !== null && 'buildId' in d && typeof d.buildId === 'string') {
-          dismissedBuildRef.current = (d as { buildId: string }).buildId;
-        }
-      })
-      .catch(() => {
-        /* ignore */
-      });
+    // Remember which build the user dismissed so the banner stays hidden
+    // until yet another deployment produces a different buildId.
+    dismissedBuildRef.current = lastSeenServerBuildRef.current;
   }, []);
 
   return { updateAvailable, applyUpdate, dismiss };

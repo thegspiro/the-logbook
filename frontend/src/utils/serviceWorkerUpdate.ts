@@ -15,12 +15,6 @@
  * without a navigation), and only then reload — one reload, fresh shell.
  */
 
-/** Minimum time between two consecutive SW update checks (60 seconds). */
-const MIN_SW_CHECK_INTERVAL_MS = 60_000;
-
-/** Fallback interval for SW update checks when the app stays in the foreground. */
-const SW_CHECK_INTERVAL_MS = 30 * 60_000; // 30 minutes
-
 /**
  * How long to wait for a freshly installed worker to take control before
  * reloading anyway. Covers the pathological cases (SW fetch hangs on a bad
@@ -29,48 +23,23 @@ const SW_CHECK_INTERVAL_MS = 30 * 60_000; // 30 minutes
  */
 const ACTIVATE_TIMEOUT_MS = 4_000;
 
-let lastSwCheckAt = 0;
-
 /**
- * Ask the browser to re-fetch `/sw.js` and install any new version.
- * Rate-limited unless `force` is passed (used when a new deployment has
- * already been positively detected via /version.json).
+ * Ask the browser to re-fetch `/sw.js` and install any new version, without
+ * waiting for the result. Deliberately has no triggers or rate limiting of
+ * its own: it rides useAppUpdate's version checks, which already fire on
+ * route changes, on tab/app resume (visibilitychange — the trigger that
+ * matters for an installed PWA re-opened from the home screen), and on a
+ * periodic fallback, all rate-limited to once a minute.
  */
-export function checkForServiceWorkerUpdate(force = false): void {
-  if (!('serviceWorker' in navigator) || !navigator.onLine) return;
-
-  const now = Date.now();
-  if (!force && now - lastSwCheckAt < MIN_SW_CHECK_INTERVAL_MS) return;
-  lastSwCheckAt = now;
+export function nudgeServiceWorkerUpdate(): void {
+  if (!('serviceWorker' in navigator)) return;
 
   navigator.serviceWorker
     .getRegistration()
     .then((registration) => registration?.update())
     .catch(() => {
-      // Offline or SW fetch failed — the next trigger will retry.
+      // Offline or SW fetch failed — the next check will retry.
     });
-}
-
-/**
- * Wire up proactive SW update checks. Called once at boot.
- *
- * `visibilitychange` is the trigger that matters for installed apps: iOS and
- * Android keep the PWA process alive in the background for days, and
- * re-opening it from the home screen is a resume, not a navigation — without
- * this listener no update check happens at all on resume.
- */
-export function initServiceWorkerUpdateChecks(): void {
-  if (!('serviceWorker' in navigator)) return;
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      checkForServiceWorkerUpdate();
-    }
-  });
-
-  setInterval(() => {
-    checkForServiceWorkerUpdate();
-  }, SW_CHECK_INTERVAL_MS);
 }
 
 /**
