@@ -83,13 +83,6 @@ _FORCED_CONDITION: dict[ItemStatus, ItemCondition] = {
 # Statuses that require assigned_to_user_id to be set
 _REQUIRES_ASSIGNED_USER = {ItemStatus.ASSIGNED}
 
-# ISO/IEC 15417 minimum module (bar) width for Code128: 0.191 mm ≈ 0.0075 in.
-# At 203 DPI (standard thermal printers) this is ~1.5 dots — the minimum for
-# reliable scanning.  The scaling loops in label generators must not go below
-# this floor.
-_MIN_BAR_WIDTH_INCH = 0.0075
-
-
 # Inventory barcode scheme — a single rule used everywhere: a human-readable
 # sequential number per organization, ``<prefix><zero-padded number>`` with a
 # 6-digit minimum (e.g. INV-000001, INV-000002, ...). The prefix (default

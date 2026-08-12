@@ -13,7 +13,9 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Dict, Optional
 
-_MIN_BAR_WIDTH_INCH = 0.0075
+# 5 mil is the minimum X-dimension commonly readable by handheld scanners and
+# one dot at 203 dpi thermal resolution — narrower cannot be printed at all.
+_MIN_BAR_WIDTH_INCH = 0.005
 
 
 def sanitize_barcode_value(raw: str) -> str:
@@ -30,15 +32,33 @@ def sanitize_barcode_value(raw: str) -> str:
 def _fit_code128(
     code128, value: str, initial_width: float, max_width: float, bar_height: float
 ):
-    """Build a barcode without shrinking modules below the scanner-safe floor."""
+    """Build a barcode without shrinking modules below the scanner-safe floor.
+
+    Quiet zones are pinned to the Code 128 spec minimum of 10 modules per
+    side; reportlab's default is max(0.25", 10 modules), and a quarter inch
+    per side consumes half of a 1x1" thermal label before any bars print.
+    ``barcode.width`` therefore reflects the true printed footprint, so
+    callers compare it against the label's usable width directly.
+    """
     from reportlab.lib.units import inch
 
     minimum_width = _MIN_BAR_WIDTH_INCH * inch
+
+    def build(bar_width: float):
+        return code128.Code128(
+            value,
+            barWidth=bar_width,
+            barHeight=bar_height,
+            quiet=1,
+            lquiet=10 * bar_width,
+            rquiet=10 * bar_width,
+        )
+
     bar_width = max(initial_width, minimum_width)
-    barcode = code128.Code128(value, barWidth=bar_width, barHeight=bar_height)
+    barcode = build(bar_width)
     while barcode.width > max_width and bar_width > minimum_width:
         bar_width = max(minimum_width, bar_width - 0.001 * inch)
-        barcode = code128.Code128(value, barWidth=bar_width, barHeight=bar_height)
+        barcode = build(bar_width)
     if barcode.width > max_width:
         raise ValueError(
             f"Barcode value {value!r} is too long for the selected label size"
@@ -233,10 +253,9 @@ def _render_sheet(specs: list) -> BytesIO:
             max_extra = int(usable_w / (5 * 0.5))
             c.drawString(x + padding, y_cursor, spec.extra[:max_extra])
 
-        quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
         bar_height = 0.35 * inch
         bar_width_unit = 0.008 * inch
-        max_barcode_width = usable_w - 2 * quiet_zone
+        max_barcode_width = usable_w
         barcode_obj = _fit_code128(
             code128, barcode_value, bar_width_unit, max_barcode_width, bar_height
         )
@@ -286,7 +305,6 @@ def _render_thermal(
             c.translate(content_h, 0)
             c.rotate(90)
 
-        quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
         self_w = content_w - 2 * padding
         self_h = content_h - 2 * padding
 
@@ -303,7 +321,9 @@ def _render_thermal(
             bar_height = min(0.8 * inch, self_h * 0.3)
             bar_width_unit = 0.012 * inch
 
-        max_barcode_width = self_w * 0.9 - 2 * quiet_zone
+        # self_w already excludes the page padding, and the 10-module quiet
+        # zones live inside barcode.width, so the bars may span it fully.
+        max_barcode_width = self_w
 
         barcode_obj = _fit_code128(
             code128, barcode_value, bar_width_unit, max_barcode_width, bar_height
