@@ -14,8 +14,8 @@ shown. Deliberately not an attempt to correct the figure: there is no honest
 way to reconstruct what the stopwatch would have read, and a corrected-looking
 number is worse than one openly marked uncertain.
 
-Revision ID: 20260811_0003
-Revises: 20260811_0002
+Revision ID: 20260812_0002
+Revises: 20260812_0001
 Create Date: 2026-08-11 12:00:00.000000
 
 """
@@ -24,8 +24,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260811_0003"
-down_revision = "20260811_0002"
+revision = "20260812_0002"
+down_revision = "20260812_0001"
 branch_labels = None
 depends_on = None
 
