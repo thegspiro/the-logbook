@@ -1145,6 +1145,9 @@ export const ActiveSkillTestPage: React.FC = () => {
   // Runs once per test id, and never while the clock is running, so it can't
   // stamp on a live count.
   const hydratedTimerForTestRef = useRef<string | undefined>(undefined);
+  // Kept until a save succeeds so a dropped connection cannot erase the fact
+  // that this clock was restored rather than continuously measured.
+  const pendingResumeRef = useRef(false);
   const loadedTestId = currentTest?.id;
   const loadedElapsedSeconds = currentTest?.elapsed_seconds;
   useEffect(() => {
@@ -1156,6 +1159,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     // the test, not something to redo when the examiner starts or pauses.
     if (!useSkillsTestingStore.getState().activeTestRunning && loadedElapsedSeconds) {
       setActiveTestTimer(loadedElapsedSeconds);
+      pendingResumeRef.current = true;
     }
   }, [loadedTestId, loadedElapsedSeconds, setActiveTestTimer]);
 
@@ -1292,11 +1296,14 @@ export const ActiveSkillTestPage: React.FC = () => {
     async (updates: SkillTestUpdate) => {
       if (!currentTest) return;
       setSaveState('saving');
+      const reportingResume = pendingResumeRef.current;
       try {
         await updateTest(currentTest.id, {
           ...updates,
+          ...(reportingResume ? { resumed: true } : {}),
           expected_version: currentTest.version,
         });
+        if (reportingResume) pendingResumeRef.current = false;
         setSaveState('saved');
       } catch (err: unknown) {
         setSaveState('failed');
@@ -2228,6 +2235,15 @@ export const ActiveSkillTestPage: React.FC = () => {
           of them while they correct — not buried in a notification they read
           on the way to the truck. Persists after they resubmit, so the officer
           reviewing the second attempt can check it was addressed. */}
+      {(currentTest.resume_count ?? 0) > 0 && isTestLive(currentTest.status) && (
+        <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/20">
+          <p className="text-sm text-blue-900 dark:text-blue-100">
+            <span className="font-medium">Resumed evaluation.</span> The clock carried on from the last save, so the
+            recorded time is not an exact stopwatch reading. Note anything the duration needs explained.
+          </p>
+        </div>
+      )}
+
       {currentTest.returned_at && currentTest.return_reason && (
         <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/20">
           <p className="text-sm font-medium text-blue-900 dark:text-blue-100">

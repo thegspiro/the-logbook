@@ -1448,6 +1448,13 @@ async def update_test(
     # problem entirely.
     expected_version = update_data.pop("expected_version", None)
 
+    # Popped for the same reason as expected_version: it is a fact the client is
+    # reporting, not a column it is asking to set. The count is incremented
+    # here rather than assigned, so a client cannot inflate it — and a save that
+    # merely repeats the flag cannot either, because the examiner screen sends
+    # it once per pickup.
+    resumed = update_data.pop("resumed", None)
+
     # Completed tests only allow notes updates (section_results for criterion notes, top-level notes)
     if test.status == "completed":
         allowed_fields = {"section_results", "notes"}
@@ -1466,6 +1473,13 @@ async def update_test(
                 "Reload to see the current results before saving again."
             ),
         )
+
+    # After the conflict check, so a refused write cannot bump the count.
+    # Incremented rather than assigned, so a client cannot set it directly — and
+    # a replayed save cannot inflate it either, because the examiner screen
+    # sends the flag once per pickup.
+    if resumed:
+        test.resume_count = (test.resume_count or 0) + 1
 
     # Convert section_results to JSON-serializable dicts if provided
     if "section_results" in update_data and update_data["section_results"] is not None:
@@ -3199,6 +3213,7 @@ async def export_tests_csv(
                 "Started (UTC)",
                 "Completed (UTC)",
                 "Elapsed (s)",
+                "Timing Verified",
                 "Validated (UTC)",
                 "Validated By",
                 "Voided (UTC)",
@@ -3223,6 +3238,11 @@ async def export_tests_csv(
                     _csv_dt(t.started_at),
                     _csv_dt(t.completed_at),
                     "" if t.elapsed_seconds is None else t.elapsed_seconds,
+                    # A resumed test's clock carried on from the last save, so
+                    # the seconds are not a stopwatch reading. An audit packet
+                    # that presented them as one would be overstating what the
+                    # record can support.
+                    _csv_bool(not (t.resume_count or 0)),
                     _csv_dt(t.validated_at),
                     name_of(t.validated_by),
                     _csv_dt(t.voided_at),
@@ -3556,6 +3576,8 @@ def _build_test_response(
         returned_by_name=_format_user_name(returner) if returner else None,
         return_reason=test.return_reason,
         return_count=test.return_count or 0,
+        resume_count=test.resume_count or 0,
+        timing_verified=not (test.resume_count or 0),
         validated_at=_ensure_utc(test.validated_at),
         validated_by=test.validated_by,
         pending_validation=is_pending_validation(test),
