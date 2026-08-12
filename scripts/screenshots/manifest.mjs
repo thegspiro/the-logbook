@@ -7043,6 +7043,25 @@ export const SHOTS = [
     selector: "aside, nav",
   },
   {
+    id: "14-20-runoff-chain",
+    doc: "14-elections.md",
+    line: 601,
+    anchor:
+      "Screenshot of the Runoff Chain timeline showing the original election",
+    alt: "The Multi-Stage Election Chain on a Fire Chief election — Original, Runoff 1 and Runoff 2 as linked nodes with their status and vote counts, the current round ringed",
+    route: "/elections",
+    prepare: openFirstFromApi(
+      "/elections?limit=50",
+      (id) => `/elections/${id}`,
+      "elections",
+      // The root of the seeded chain: RunoffChain walks up to the root anyway,
+      // but starting there is what puts the ring on "Original".
+      (election) =>
+        (election.title ?? "") === "Fire Chief Election — 2027 Term",
+    ),
+    selector: "div:has(> div > h3:text-is('Multi-Stage Election Chain'))",
+  },
+  {
     id: "04-42-cast-ballot",
     doc: "04-events-meetings.md",
     line: 609,

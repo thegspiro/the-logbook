@@ -50,6 +50,21 @@ from app.schemas.election import (
 from app.services.email_service import EmailService
 from app.services.email_theme import TABLE_STYLE, TD_STYLE, TH_STYLE
 
+# " - Runoff Round 2" and friends, only at the very end of a title.
+_RUNOFF_SUFFIX = re.compile(r"\s*-\s*Runoff Round\s+\d+\s*$", re.IGNORECASE)
+
+
+def _runoff_base_title(election) -> str:
+    """The original race's title, with any runoff suffix stripped.
+
+    A runoff is named after the round it follows, and that round may itself be
+    a runoff — so naming round three after round two produced
+    "Fire Chief Election - Runoff Round 1 - Runoff Round 2", growing by a
+    clause per round. Every round in a chain should read as a round of the
+    same election.
+    """
+    return _RUNOFF_SUFFIX.sub("", election.title or "").strip()
+
 
 class ElectionService:
     """Service for election management"""
@@ -4040,7 +4055,10 @@ class ElectionService:
             organization_id=organization_id,
             created_by=election.created_by,
             status=ElectionStatus.DRAFT,
-            title=f"{election.title} - Runoff Round {election.runoff_round + 1}",
+            title=(
+                f"{_runoff_base_title(election)} - "
+                f"Runoff Round {election.runoff_round + 1}"
+            ),
             description=f"Runoff election for {election.title}. No candidate received the required votes in the previous round.",
             election_type=election.election_type,
             positions=election.positions,

@@ -606,7 +606,7 @@ When **Enable Runoffs** is on and no candidate meets the victory condition at cl
 
 > **Hint:** Draft elections — runoffs included — have an **Edit Dates** button with Start Now and 15-min/30-min/1-hour quick durations. And an election whose end date has already passed can't be opened until its dates are updated.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Runoff Chain timeline showing the original election (no majority), Runoff 1 (still no majority), and Runoff 2 (winner determined), connected by arrows._
+![The Multi-Stage Election Chain on a Fire Chief election — Original, Runoff 1 and Runoff 2 as linked nodes with their status and vote counts, the current round ringed](./images/14-20-runoff-chain.png)
 
 ### Edge Cases
 

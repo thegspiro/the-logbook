@@ -7313,7 +7313,154 @@ class Seeder:
         self._seed_nominations(elections)
         self._seed_closed_election(elections, minutes or [])
         self._seed_open_election(elections)
+        self._seed_runoff_chain(elections)
         return elections
+
+    RUNOFF_ELECTION_TITLE = "Fire Chief Election — 2027 Term"
+
+    # Three candidates so round one splits and nobody clears half.
+    RUNOFF_ELECTION_CANDIDATES = [
+        ("Amara Osei", "Twenty years in, eight as Deputy Chief."),
+        ("Jonah Whitfield", "Ran the station's rebuild of the duty roster."),
+        ("Esme Caldwell", "Fire prevention officer; wrote the inspection program."),
+    ]
+
+    def _seed_runoff_chain(self, elections: list[dict]) -> None:
+        """An election that took three rounds to produce a chief.
+
+        There is no endpoint that creates a runoff. `_check_and_create_runoff`
+        fires on close, when an election with `enable_runoffs` finishes without
+        a winner, so a chain has to be *played out* rather than constructed:
+        each round is opened, tallied on paper, attested and closed, and
+        closing it is what mints the next round.
+
+        Victory condition is `majority` — strictly more than half — because
+        under the default `most_votes` a plurality wins and no runoff is ever
+        needed. Round one splits 8/6/5 of 19 (10 required), round two ties 9/9
+        of 18, and round three settles it 11/7.
+        """
+        if any(pick(e, "title") == self.RUNOFF_ELECTION_TITLE for e in elections):
+            return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{pick(m, 'first_name', 'firstName')} "
+            f"{pick(m, 'last_name', 'lastName')}": pick(m, "id")
+            for m in members
+        }
+
+        election = self.api.post(
+            "/elections",
+            {
+                "title": self.RUNOFF_ELECTION_TITLE,
+                "description": (
+                    "Election for Fire Chief. No candidate reached a majority "
+                    "in the first two rounds."
+                ),
+                "election_type": "position",
+                "positions": ["Fire Chief"],
+                "ballot_items": [
+                    {
+                        "id": "item-chief",
+                        "type": "officer_election",
+                        "title": "Fire Chief",
+                        "description": "Vote for Fire Chief.",
+                        "position": "Fire Chief",
+                        "vote_type": "candidate_selection",
+                        "voting_method": "simple_majority",
+                    }
+                ],
+                "start_date": iso(NOW - timedelta(days=6)),
+                "end_date": iso(NOW + timedelta(days=1)),
+                "anonymous_voting": True,
+                "allow_write_ins": False,
+                "results_visible_immediately": True,
+                "voting_method": "simple_majority",
+                "victory_condition": "majority",
+                "enable_runoffs": True,
+                "runoff_type": "top_two",
+                "max_runoff_rounds": 3,
+                "quorum_type": "none",
+            },
+        )
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+
+        for name, statement in self.RUNOFF_ELECTION_CANDIDATES:
+            self.api.post(
+                f"/elections/{election_id}/candidates",
+                {
+                    "election_id": election_id,
+                    "name": name,
+                    "position": "Fire Chief",
+                    "user_id": by_name.get(name),
+                    "statement": statement,
+                },
+            )
+
+        # (tally for this round, note) — the last round has a majority, which
+        # is what stops the chain.
+        rounds = [
+            ([8, 6, 5], "First ballot, September business meeting. No majority."),
+            ([9, 9], "Second ballot, same meeting. Tied — a third was called."),
+            ([11, 7], "Third ballot. Chief elected."),
+        ]
+
+        current_id = election_id
+        try:
+            for counts, note in rounds:
+                if current_id is None:
+                    break
+                self._play_paper_round(current_id, counts, note)
+                current_id = self._next_runoff_id(current_id)
+        except ApiError as exc:
+            self.blocked.append(f"runoff chain: {exc}")
+            return
+        elections.append(self.api.get(f"/elections/{election_id}"))
+
+    def _play_paper_round(self, election_id: str, counts: list[int], note: str) -> None:
+        """Open a round, record a paper tally against it, attest, and close."""
+        detail = self.api.get(f"/elections/{election_id}")
+        if str(pick(detail, "status") or "").lower() == "draft":
+            self.api.post(f"/elections/{election_id}/open")
+
+        candidates = items(
+            self.api.get(f"/elections/{election_id}/candidates"), "candidates"
+        )
+        entries = [
+            {"candidate_id": pick(c, "id"), "count": n}
+            for c, n in zip(candidates, counts)
+        ]
+        if not entries:
+            return
+        self.api.post(
+            f"/elections/{election_id}/manual-ballots",
+            {"entries": entries, "notes": note},
+        )
+        batches = items(
+            self.api.get(f"/elections/{election_id}/manual-ballots"), "batches"
+        )
+        batch_id = pick(batches[0], "batch_id", "id") if batches else None
+        if batch_id:
+            self._attest_ballot_batch(election_id, batch_id)
+        self.api.post(f"/elections/{election_id}/close")
+
+    def _next_runoff_id(self, parent_id: str) -> str | None:
+        """The runoff that closing `parent_id` just created, if any.
+
+        The list representation does not carry parent_election_id, so each
+        candidate has to be fetched — the same reason RunoffChain.tsx walks the
+        list one detail call at a time.
+        """
+        for entry in items(self.api.get("/elections?limit=50"), "elections"):
+            entry_id = pick(entry, "id")
+            if not entry_id or entry_id == parent_id:
+                continue
+            detail = self.api.get(f"/elections/{entry_id}")
+            if pick(detail, "parent_election_id", "parentElectionId") == parent_id:
+                return entry_id
+        return None
 
     OPEN_ELECTION_TITLE = "Line Officer Election — 2027 Term"
 
@@ -7620,13 +7767,20 @@ class Seeder:
             election_id = pick(election, "id")
             if not election_id or pick(election, "event_id", "eventId"):
                 continue
-            # A closed or cancelled election refuses every field update except
-            # results_visible_immediately, so patching one is a guaranteed 400.
+            # Only a draft or nominating election accepts an event_id: an open
+            # one takes end_date and nothing else, a closed one takes
+            # results_visible_immediately and nothing else. An allowlist rather
+            # than a denylist, because the denylist that named closed and
+            # cancelled still walked into the open election added later.
+            #
             # It matters on a re-run: the list representation omits event_id, so
             # an already-linked election looks unlinked here and we would try to
             # link it again — failing the whole elections step, and with it every
             # election seeded after this call.
-            if str(pick(election, "status") or "").lower() in {"closed", "cancelled"}:
+            if str(pick(election, "status") or "").lower() not in {
+                "draft",
+                "nominations",
+            }:
                 continue
             meeting_id = pick(meetings[index % len(meetings)], "id")
             if not meeting_id:
