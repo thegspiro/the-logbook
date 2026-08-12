@@ -16,15 +16,17 @@ import {
   Settings,
   Repeat,
   FileText,
-  ExternalLink,
   Truck,
   ChevronDown,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { useTheme } from '../contexts/ThemeContext';
-import { formatDateCustom, localToUTC } from '../utils/dateFormatting';
+import { formatDateCustom, formatTimeOfDay, localToUTC } from '../utils/dateFormatting';
+import { enumLabel } from '../utils/displayValue';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
 import type { ShiftRecord, ShiftTemplateRecord } from '../modules/scheduling';
 import { resolveTemplatePositions } from '../modules/scheduling/services/api';
@@ -537,7 +539,9 @@ const SchedulingPage: React.FC = () => {
               <Clock className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Scheduling & Shifts</h1>
+              {/* The nav calls this "Shift Scheduling"; the page called itself
+                  "Scheduling & Shifts". Two names for one screen. */}
+              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Shift Scheduling</h1>
               <p className="text-theme-text-muted text-sm">Manage schedules, sign up for shifts, and handle trades</p>
             </div>
           </div>
@@ -582,30 +586,71 @@ const SchedulingPage: React.FC = () => {
           />
         </div>
 
+        {/* Officer tools.
+            These sat under the month grid as seven cards headed
+            "ADMINISTRATION", so an officer reached them only by scrolling a
+            whole calendar past — and on a phone each carried an
+            external-link arrow, though every one is an ordinary page in this
+            app. A strip above the content instead: same links, no scrolling,
+            and the Supply count says what it is counting. */}
+        {canManage && (
+          <div className="mb-6">
+            <h2 className="text-theme-text-muted mb-2 text-xs font-semibold">Officer tools</h2>
+            <div className="hscroll flex gap-2">
+              {adminLinks.map((link) => {
+                const Icon = link.icon;
+                const isSupply = link.path === '/scheduling/supply/expiring';
+                return (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    title={link.description}
+                    className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-primary mobile-touch-target inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+                  >
+                    <Icon className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
+                    {link.label}
+                    {isSupply && supplyCount != null && supplyCount > 0 && (
+                      <span className="inline-flex shrink-0 items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                        {supplyCount} expiring
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Tab Content */}
         {activeTab === 'schedule' && (
           <>
             {/* Summary Stats */}
             {summary && (
               <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+                {/* Each label names its own window and whose figure it is. Three
+                    of these count scheduled shifts over different spans and the
+                    fourth sums hours the department actually worked; under
+                    "Scheduled Shifts" / "This Month" the first and third read as
+                    the same measure, and matched exactly whenever every shift on
+                    record happened to fall in the current month. */}
                 <div className="card p-3 sm:p-4">
-                  <p className="text-theme-text-muted text-xs sm:text-sm">Scheduled Shifts</p>
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Shifts on record (all dates)</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">{summary.shifts_scheduled}</p>
                 </div>
                 <div className="card p-3 sm:p-4">
-                  <p className="text-theme-text-muted text-xs sm:text-sm">This Week</p>
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Shifts this week</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
                     {summary.shifts_scheduled_this_week}
                   </p>
                 </div>
                 <div className="card p-3 sm:p-4">
-                  <p className="text-theme-text-muted text-xs sm:text-sm">This Month</p>
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Shifts this month</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
                     {summary.shifts_scheduled_this_month}
                   </p>
                 </div>
                 <div className="card p-3 sm:p-4">
-                  <p className="text-theme-text-muted text-xs sm:text-sm">Hours Worked This Month</p>
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Department hours this month</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
                     {summary.hours_worked_this_month}
                   </p>
@@ -662,6 +707,33 @@ const SchedulingPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+              {/* What the colours and the ratio mean. Every cell below is
+                  shorthand — a unit code, a filled/target ratio and a coloured
+                  icon — and none of it is guessable without being told once. */}
+              <dl className="border-theme-surface-border text-theme-text-muted mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" aria-hidden="true" />
+                  <dt className="sr-only">Green tick</dt>
+                  <dd>Fully crewed</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                  <dt className="sr-only">Amber triangle</dt>
+                  <dd>Short-staffed</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                  <dt className="sr-only">Crew count</dt>
+                  <dd>Positions filled of the minimum</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Truck className="h-3.5 w-3.5" aria-hidden="true" />
+                  <dt className="sr-only">Unit code</dt>
+                  {/* Not "hover for the name" — half the people reading this are
+                      on a phone, which has no hover. */}
+                  <dd>Apparatus unit</dd>
+                </div>
+              </dl>
             </div>
 
             {/* Error State */}
@@ -1001,39 +1073,6 @@ const SchedulingPage: React.FC = () => {
           </Suspense>
         )}
 
-        {/* Admin Quick Links */}
-        {canManage && (
-          <div className="border-theme-surface-border mt-8 border-t pt-6">
-            <h2 className="text-theme-text-muted mb-3 text-sm font-semibold tracking-wider uppercase">
-              Administration
-            </h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {adminLinks.map((link) => {
-                const Icon = link.icon;
-                return (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover group flex items-center gap-3 rounded-xl border p-3 transition-colors"
-                  >
-                    <Icon className="h-5 w-5 shrink-0 text-violet-500" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-theme-text-primary truncate text-sm font-medium">{link.label}</p>
-                      <p className="text-theme-text-muted hidden truncate text-xs sm:block">{link.description}</p>
-                    </div>
-                    {link.path === '/scheduling/supply/expiring' && supplyCount != null && supplyCount > 0 && (
-                      <span className="inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white">
-                        {supplyCount}
-                      </span>
-                    )}
-                    <ExternalLink className="text-theme-text-muted h-3.5 w-3.5 shrink-0 transition-opacity sm:opacity-0 sm:group-hover:opacity-100" />
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Shift Detail Panel */}
         {selectedShift && (
           <Suspense fallback={null}>
@@ -1123,8 +1162,8 @@ const SchedulingPage: React.FC = () => {
                                   {standard.map((t) => (
                                     <option key={t.id} value={t.id}>
                                       {t.name}
-                                      {t.apparatus_type ? ` — ${t.apparatus_type}` : ''} ({t.start_time_of_day} -{' '}
-                                      {t.end_time_of_day})
+                                      {t.apparatus_type ? ` — ${enumLabel(t.apparatus_type)}` : ''} (
+                                      {formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
                                     </option>
                                   ))}
                                 </optgroup>
@@ -1133,7 +1172,8 @@ const SchedulingPage: React.FC = () => {
                                 <optgroup label="Specialty Vehicle">
                                   {specialty.map((t) => (
                                     <option key={t.id} value={t.id}>
-                                      {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                                      {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
+                                      {formatTimeOfDay(t.end_time_of_day)})
                                     </option>
                                   ))}
                                 </optgroup>
@@ -1142,7 +1182,8 @@ const SchedulingPage: React.FC = () => {
                                 <optgroup label="Event / Special">
                                   {event.map((t) => (
                                     <option key={t.id} value={t.id}>
-                                      {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                                      {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
+                                      {formatTimeOfDay(t.end_time_of_day)})
                                     </option>
                                   ))}
                                 </optgroup>
@@ -1153,7 +1194,8 @@ const SchedulingPage: React.FC = () => {
                                 filtered.length > 0 &&
                                 filtered.map((t) => (
                                   <option key={t.id} value={t.id}>
-                                    {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                                    {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
+                                    {formatTimeOfDay(t.end_time_of_day)})
                                   </option>
                                 ))}
                               {filtered.length === 0 && (
@@ -1202,8 +1244,8 @@ const SchedulingPage: React.FC = () => {
                             {tmpl.apparatus_type && (
                               <p className="text-theme-text-muted flex items-center gap-1 text-xs">
                                 <Truck className="h-3 w-3" /> Vehicle type:{' '}
-                                <span className="text-theme-text-primary font-medium capitalize">
-                                  {tmpl.apparatus_type}
+                                <span className="text-theme-text-primary font-medium">
+                                  {enumLabel(tmpl.apparatus_type)}
                                 </span>
                               </p>
                             )}
@@ -1286,8 +1328,8 @@ const SchedulingPage: React.FC = () => {
                             const sameDay = shiftForm.startDate === shiftForm.endDate;
                             return (
                               <p className="text-theme-text-muted mt-1 text-xs">
-                                {tmpl.start_time_of_day} &rarr; {tmpl.end_time_of_day} (
-                                {sameDay ? 'same day' : 'next day'})
+                                {formatTimeOfDay(tmpl.start_time_of_day)} &rarr; {formatTimeOfDay(tmpl.end_time_of_day)}{' '}
+                                ({sameDay ? 'same day' : 'next day'})
                               </p>
                             );
                           })()}

@@ -142,15 +142,28 @@ export const formsService = {
   },
 };
 
-// Public forms service (no auth required)
+// Public forms service. Views are anonymous; credentials are included because
+// individual forms may require an authenticated member to submit.
 // The public API lives at /api/public/v1/... (outside the /api/v1 prefix).
 // VITE_API_URL is typically "/api/v1", so we strip the version segment to get
 // the bare "/api" base, avoiding a doubled path like "/api/v1/public/v1/...".
 const PUBLIC_API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/v\d+$/, '');
 
+function publicRequestConfig(method: 'GET' | 'POST') {
+  const csrfMatch = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
+  const csrf = csrfMatch?.[1] ? decodeURIComponent(csrfMatch[1]) : null;
+  return {
+    withCredentials: true,
+    ...(method === 'POST' && csrf ? { headers: { 'X-CSRF-Token': csrf } } : {}),
+  };
+}
+
 export const publicFormsService = {
   async getForm(slug: string): Promise<PublicFormDef> {
-    const response = await axios.get<PublicFormDef>(`${PUBLIC_API_BASE}/public/v1/forms/${slug}`);
+    const response = await axios.get<PublicFormDef>(
+      `${PUBLIC_API_BASE}/public/v1/forms/${slug}`,
+      publicRequestConfig('GET')
+    );
     return response.data;
   },
 
@@ -166,7 +179,8 @@ export const publicFormsService = {
     }
     const response = await axios.post<PublicFormSubmissionResponse>(
       `${PUBLIC_API_BASE}/public/v1/forms/${slug}/submit`,
-      payload
+      payload,
+      publicRequestConfig('POST')
     );
     return response.data;
   },

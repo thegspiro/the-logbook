@@ -118,7 +118,10 @@ describe('MemberScanPage', () => {
     await user.click(screen.getByRole('button', { name: /start scanning/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/No cameras found/i)).toBeInTheDocument();
+      // The user-facing wording, not the thrown message: the point of
+      // `describeCameraError` is that the browser's own text never
+      // reaches the screen.
+      expect(screen.getByText(/No camera was found on this device/i)).toBeInTheDocument();
     });
   });
 

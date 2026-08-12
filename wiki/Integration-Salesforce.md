@@ -1,6 +1,6 @@
 # Salesforce CRM Integration
 
-*(Added 2026-04-11)*
+_(Added 2026-04-11)_
 
 The Salesforce integration enables bidirectional synchronization between The Logbook and Salesforce CRM, allowing departments to manage contacts, donors, training records, and events across both platforms.
 
@@ -9,7 +9,7 @@ The Salesforce integration enables bidirectional synchronization between The Log
 ## Key Features
 
 - **One-Click OAuth 2.0 Connect** — Departments connect their Salesforce org through an authorization-code redirect flow ("Connect Salesforce" → consent → done); the refresh token is stored encrypted. A deployment-wide Connected App can be provided, or each org can supply its own client ID/secret. Manual refresh-token entry is still supported. Production and sandbox environments both work
-- **Safe Matching / De-duplication** — Works against a Salesforce org that already contains Contacts. Before creating a Contact, the sync matches existing records (by Logbook external ID, then a configurable fallback) and *adopts* them instead of creating duplicates. See [Matching existing Salesforce data](#matching-existing-salesforce-data)
+- **Safe Matching / De-duplication** — Works against a Salesforce org that already contains Contacts. Before creating a Contact, the sync matches existing records (by Logbook external ID, then a configurable fallback) and _adopts_ them instead of creating duplicates. See [Matching existing Salesforce data](#matching-existing-salesforce-data)
 - **Readiness Check & Dry-Run Preview** — Before writing anything, confirm the target org has the custom fields the sync needs, and preview how many members would be created vs. matched. Ideal for an org that is still being built out
 - **Graceful Field Handling** — Custom fields the org has not created yet are dropped at write time (and reported) instead of failing the record, so a half-configured org still receives data
 - **Bidirectional Sync** — Push Logbook data to Salesforce and pull Salesforce changes back. Sync direction configurable: push-only, pull-only, or bidirectional
@@ -22,8 +22,8 @@ The Salesforce integration enables bidirectional synchronization between The Log
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
+| URL             | Page             | Permission            |
+| --------------- | ---------------- | --------------------- |
 | `/integrations` | Integrations Hub | `integrations.manage` |
 
 The Salesforce integration is configured via the **Integrations** page. A dedicated Salesforce card shows connection status, last sync timestamp, and action buttons.
@@ -70,46 +70,46 @@ Rate limited: 30 requests/minute per IP with 5-minute lockout. Validates HMAC-SH
 
 ### Member → Salesforce Contact
 
-| Logbook Field | Salesforce Field | Notes |
-|---------------|-----------------|-------|
-| `first_name` | `FirstName` | |
-| `last_name` | `LastName` | |
-| `email` | `Email` | |
-| `phone` | `Phone` | |
-| `mobile` | `MobilePhone` | |
-| `rank` | `Title` | |
-| `station` | `Department` | |
-| `address` fields | `MailingStreet`, `MailingCity`, `MailingState`, `MailingPostalCode` | |
-| `date_of_birth` | `Birthdate` | |
-| `membership_number` | `Logbook_Member_ID__c` | Custom field, used as external ID |
-| `membership_type` | `Logbook_Membership_Type__c` | Custom field |
-| `status` | `Logbook_Status__c` | Custom field |
-| `hire_date` | `Logbook_Hire_Date__c` | Custom field |
+| Logbook Field       | Salesforce Field                                                    | Notes                             |
+| ------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `first_name`        | `FirstName`                                                         |                                   |
+| `last_name`         | `LastName`                                                          |                                   |
+| `email`             | `Email`                                                             |                                   |
+| `phone`             | `Phone`                                                             |                                   |
+| `mobile`            | `MobilePhone`                                                       |                                   |
+| `rank`              | `Title`                                                             |                                   |
+| `station`           | `Department`                                                        |                                   |
+| `address` fields    | `MailingStreet`, `MailingCity`, `MailingState`, `MailingPostalCode` |                                   |
+| `date_of_birth`     | `Birthdate`                                                         |                                   |
+| `membership_number` | `Logbook_Member_ID__c`                                              | Custom field, used as external ID |
+| `membership_type`   | `Logbook_Membership_Type__c`                                        | Custom field                      |
+| `status`            | `Logbook_Status__c`                                                 | Custom field                      |
+| `hire_date`         | `Logbook_Hire_Date__c`                                              | Custom field                      |
 
 ### Training Record → Salesforce Task
 
-| Logbook Field | Salesforce Field | Notes |
-|---------------|-----------------|-------|
-| `course_name` | `Subject` | |
-| `completion_date` | `ActivityDate` | |
-| `hours_completed` | `Logbook_Hours__c` | Custom field |
-| `status` | `Status` | Mapped to Salesforce Task status |
-| `certification_number` | `Logbook_Cert_Number__c` | Custom field |
-| `expiration_date` | `Logbook_Cert_Expiry__c` | Custom field |
-| `training_type` | `Logbook_Training_Type__c` | Custom field |
-| `instructor` | `Logbook_Instructor__c` | Custom field |
+| Logbook Field          | Salesforce Field           | Notes                            |
+| ---------------------- | -------------------------- | -------------------------------- |
+| `course_name`          | `Subject`                  |                                  |
+| `completion_date`      | `ActivityDate`             |                                  |
+| `hours_completed`      | `Logbook_Hours__c`         | Custom field                     |
+| `status`               | `Status`                   | Mapped to Salesforce Task status |
+| `certification_number` | `Logbook_Cert_Number__c`   | Custom field                     |
+| `expiration_date`      | `Logbook_Cert_Expiry__c`   | Custom field                     |
+| `training_type`        | `Logbook_Training_Type__c` | Custom field                     |
+| `instructor`           | `Logbook_Instructor__c`    | Custom field                     |
 
 ### Event → Salesforce Event
 
-| Logbook Field | Salesforce Field | Notes |
-|---------------|-----------------|-------|
-| `title` | `Subject` | |
-| `description` | `Description` | |
-| `location` | `Location` | |
-| `start_datetime` | `StartDateTime` | |
-| `end_datetime` | `EndDateTime` | |
-| `event_type` | `Logbook_Event_Type__c` | Custom field |
-| `is_mandatory` | `Logbook_Is_Mandatory__c` | Custom field |
+| Logbook Field    | Salesforce Field          | Notes        |
+| ---------------- | ------------------------- | ------------ |
+| `title`          | `Subject`                 |              |
+| `description`    | `Description`             |              |
+| `location`       | `Location`                |              |
+| `start_datetime` | `StartDateTime`           |              |
+| `end_datetime`   | `EndDateTime`             |              |
+| `event_type`     | `Logbook_Event_Type__c`   | Custom field |
+| `is_mandatory`   | `Logbook_Is_Mandatory__c` | Custom field |
 
 ---
 
@@ -156,11 +156,11 @@ member's Logbook external ID (`Logbook_Member_ID__c`). If none is found, the
 per-org **match strategy** decides how to reconcile with Contacts the
 department may already have:
 
-| `match_strategy` | Fallback lookup | Result on match |
-|------------------|-----------------|-----------------|
-| `email` (default) | `Email` | **Adopt**: stamp the Logbook ID onto the existing Contact and update it |
-| `email_lastname` | `Email` **and** `LastName` | Adopt (stricter; fewer false matches) |
-| `external_id` | *(none)* | Never adopts — always creates. May produce duplicates for people already in Salesforce |
+| `match_strategy`  | Fallback lookup            | Result on match                                                                        |
+| ----------------- | -------------------------- | -------------------------------------------------------------------------------------- |
+| `email` (default) | `Email`                    | **Adopt**: stamp the Logbook ID onto the existing Contact and update it                |
+| `email_lastname`  | `Email` **and** `LastName` | Adopt (stricter; fewer false matches)                                                  |
+| `external_id`     | _(none)_                   | Never adopts — always creates. May produce duplicates for people already in Salesforce |
 
 "Adopting" a record means future syncs match it directly by external ID, so no
 duplicate is ever created. Email-based matching also provides de-duplication
@@ -188,7 +188,7 @@ Set the strategy in the integration config, e.g. `{ "match_strategy": "email_las
 Both the webhook and a manual `POST /pull/contacts` apply inbound Contacts to
 Logbook members, subject to these rules:
 
-- **Update-only, never create.** Inbound Contacts are matched to *existing*
+- **Update-only, never create.** Inbound Contacts are matched to _existing_
   members by Logbook external ID, then email. Unmatched Contacts are counted
   and skipped — a Salesforce Contact never auto-creates a Logbook user (mirrors
   the app's link-to-existing OAuth policy, and avoids creating members without
@@ -229,18 +229,18 @@ form) to have the background scheduler sync the org automatically.
 
 ## Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Salesforce API rate limit exceeded during sync | Sync pauses, retries with exponential backoff, logs partial progress |
-| Webhook received for unmapped Salesforce object | Event logged and skipped; no error returned to Salesforce |
-| Inbound Contact matches no existing member | Counted as `unmatched` and skipped — never auto-creates a member |
-| Salesforce Contact deleted | Logged and ignored — never deletes or deactivates the Logbook member |
-| Inbound value is empty | Skipped — an empty Salesforce value never blanks an existing Logbook field |
-| Salesforce field mapping references nonexistent field | Mapping validation on save rejects invalid field references |
-| OAuth token expires mid-sync | Auto-refresh token and retry the request once |
+| Scenario                                                         | Behavior                                                                                                                                            |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Salesforce API rate limit exceeded during sync                   | Sync pauses, retries with exponential backoff, logs partial progress                                                                                |
+| Webhook received for unmapped Salesforce object                  | Event logged and skipped; no error returned to Salesforce                                                                                           |
+| Inbound Contact matches no existing member                       | Counted as `unmatched` and skipped — never auto-creates a member                                                                                    |
+| Salesforce Contact deleted                                       | Logged and ignored — never deletes or deactivates the Logbook member                                                                                |
+| Inbound value is empty                                           | Skipped — an empty Salesforce value never blanks an existing Logbook field                                                                          |
+| Salesforce field mapping references nonexistent field            | Mapping validation on save rejects invalid field references                                                                                         |
+| OAuth token expires mid-sync                                     | Auto-refresh token and retry the request once                                                                                                       |
 | Member already exists in Salesforce (no Logbook external ID yet) | Matched by the configured strategy (email / email+lastname) and **adopted** — the Logbook ID is stamped on and the record updated, never duplicated |
-| Target org is missing a custom field referenced by a mapping | Field is dropped at write time and reported in `skipped_fields`; the record still saves (unless `graceful_fields` is disabled) |
-| Custom fields for external IDs not yet created | Readiness check reports `external_id_fields_ready: false`; Contacts still de-dup by email, but Events/Tasks may duplicate until the fields exist |
+| Target org is missing a custom field referenced by a mapping     | Field is dropped at write time and reported in `skipped_fields`; the record still saves (unless `graceful_fields` is disabled)                      |
+| Custom fields for external IDs not yet created                   | Readiness check reports `external_id_fields_ready: false`; Contacts still de-dup by email, but Events/Tasks may duplicate until the fields exist    |
 
 ---
 
@@ -248,11 +248,36 @@ form) to have the background scheduler sync the org automatically.
 
 ### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SALESFORCE_CLIENT_ID` | No | Deployment-wide Connected App client ID (overridden by per-org value) |
-| `SALESFORCE_CLIENT_SECRET` | No | Deployment-wide Connected App client secret (overridden by per-org value) |
-| `SALESFORCE_OAUTH_REDIRECT_URI` | No | Callback URL for the one-click flow. Must match the Connected App's Callback URL; if blank, derived from the request base URL |
+| Variable                        | Required | Description                                                                                                                   |
+| ------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `SALESFORCE_CLIENT_ID`          | No       | Deployment-wide Connected App client ID (overridden by per-org value)                                                         |
+| `SALESFORCE_CLIENT_SECRET`      | No       | Deployment-wide Connected App client secret (overridden by per-org value)                                                     |
+| `SALESFORCE_OAUTH_REDIRECT_URI` | No       | Callback URL for the one-click flow. Must match the Connected App's Callback URL; if blank, derived from the request base URL |
+
+### Service account (client credentials)
+
+For unattended server-to-server sync, configure a Salesforce Connected App
+with **OAuth 2.0 Client Credentials Flow** enabled and select a dedicated,
+least-privilege **Run As** integration user in the app's policies. Supply the
+Connected App consumer key as `client_id` and consumer secret as
+`client_secret`, and leave `refresh_token` empty. The Logbook then requests a
+short-lived access token from the org's My Domain token endpoint using
+`grant_type=client_credentials`; it never needs
+or stores the Run As user's password. Salesforce attributes every API action to
+that user, so grant it only **API Enabled** and the object/field permissions
+needed for the enabled sync types.
+
+Use a separate integration user rather than a human administrator, restrict
+the Connected App's permitted users and IP/session policies as appropriate,
+and rotate the consumer secret through Salesforce and The Logbook together.
+For an interactive connection instead, use **Connect with Salesforce**, which
+continues to use authorization code plus encrypted refresh-token storage.
+
+Both grants send credentials only to Salesforce's fixed HTTPS token host. The
+REST client validates Salesforce's returned `instance_url` before sending a
+bearer token to it, verifies TLS, does not follow redirects, refreshes once on
+HTTP 401, retries rate-limited requests with bounded backoff, refuses to apply
+partial paginated query results, and never logs Salesforce response bodies.
 
 ### Organization Settings
 
@@ -284,7 +309,7 @@ plaintext `config`.
 
 ## Permissions
 
-| Permission | Required For |
-|------------|-------------|
+| Permission            | Required For                                               |
+| --------------------- | ---------------------------------------------------------- |
 | `integrations.manage` | Connect/disconnect, configure field mappings, trigger sync |
-| `settings.manage` | Access the Integrations page |
+| `settings.manage`     | Access the Integrations page                               |

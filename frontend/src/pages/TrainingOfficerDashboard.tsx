@@ -256,10 +256,10 @@ const TrainingOfficerDashboard: React.FC = () => {
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-              <GraduationCap className="h-8 w-8 text-red-700" />
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+              <GraduationCap className="h-8 w-8 shrink-0 text-red-700" />
               <span>Training Officer Dashboard</span>
             </h1>
             <p className="text-theme-text-muted mt-1">Manage training, track compliance, and monitor certifications</p>

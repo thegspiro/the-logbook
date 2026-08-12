@@ -787,7 +787,7 @@ const PositionSetup: React.FC = () => {
                 <span className="text-theme-text-muted ml-2">positions selected</span>
               </div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => setShowCustomModal(true)}
                 className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-colors"

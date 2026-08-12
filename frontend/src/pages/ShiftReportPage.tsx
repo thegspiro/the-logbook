@@ -200,7 +200,7 @@ const ShiftReportPage: React.FC = () => {
         )}
 
         {/* Tabs */}
-        <div className="bg-theme-surface mb-6 flex space-x-1 rounded-lg p-1">
+        <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1">
           <button
             onClick={() => setActiveTab('new')}
             className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${

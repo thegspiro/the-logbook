@@ -370,6 +370,43 @@ describe('electionService', () => {
     });
   });
 
+  describe('saved ballot templates', () => {
+    it('lists organization ballot templates', async () => {
+      const templates = [{ id: 'saved-1', name: 'Annual ballot', ballot_items: [] }];
+      mockGet.mockResolvedValueOnce({ data: templates });
+
+      await expect(electionService.getSavedBallotTemplates()).resolves.toEqual(templates);
+      expect(mockGet).toHaveBeenCalledWith('/elections/templates/saved-ballots');
+    });
+
+    it('saves configuration-only ballot data', async () => {
+      const payload = {
+        name: 'Annual ballot',
+        ballot_items: [
+          {
+            id: 'item-1',
+            type: 'general_vote',
+            title: 'Approve',
+            eligible_voter_types: ['all'],
+            vote_type: 'approval',
+            require_attendance: true,
+          },
+        ],
+      };
+      mockPost.mockResolvedValueOnce({ data: { id: 'saved-1', ...payload } });
+
+      await electionService.saveBallotTemplate(payload);
+      expect(mockPost).toHaveBeenCalledWith('/elections/templates/saved-ballots', payload);
+    });
+
+    it('deletes a saved ballot by id', async () => {
+      mockDelete.mockResolvedValueOnce({});
+
+      await electionService.deleteSavedBallotTemplate('saved-1');
+      expect(mockDelete).toHaveBeenCalledWith('/elections/templates/saved-ballots/saved-1');
+    });
+  });
+
   // --- getAttendees ---
   describe('getAttendees', () => {
     it('should GET /elections/:id/attendees', async () => {

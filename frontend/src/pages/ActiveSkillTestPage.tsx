@@ -1233,6 +1233,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         status: 'in_progress',
         section_results: test.section_results ?? [],
         elapsed_seconds: state.activeTestTimer,
+        expected_version: test.version,
       }).catch(() => {
         // The clock is already running locally. A failure here surfaces on the
         // next save or on Complete Test, which report it properly.
@@ -2220,6 +2221,22 @@ export const ActiveSkillTestPage: React.FC = () => {
           >
             Reload current results
           </button>
+        </div>
+      )}
+
+      {/* Why this test came back. An officer sent it here instead of accepting
+          or voiding it, and the examiner opening it needs the request in front
+          of them while they correct — not buried in a notification they read
+          on the way to the truck. Persists after they resubmit, so the officer
+          reviewing the second attempt can check it was addressed. */}
+      {currentTest.returned_at && currentTest.return_reason && (
+        <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/20">
+          <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+            Sent back for correction
+            {currentTest.returned_by_name ? ` by ${currentTest.returned_by_name}` : ''}
+            {currentTest.return_count && currentTest.return_count > 1 ? ` (${currentTest.return_count} times)` : ''}
+          </p>
+          <p className="mt-1 text-sm text-blue-800 dark:text-blue-200">{currentTest.return_reason}</p>
         </div>
       )}
 

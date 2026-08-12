@@ -91,6 +91,13 @@ export interface ShiftReportSettings {
   checklist_timing: {
     start_of_shift_enabled: boolean;
     end_of_shift_enabled: boolean;
+    /**
+     * How long either side of a shift a member may still check in. Check-in was
+     * previously refused only once an officer had finalised the shift, so a
+     * stale link recorded attendance against a shift that ended days earlier.
+     */
+    checkin_opens_hours_before: number;
+    checkin_closes_hours_after: number;
   };
   post_shift_validation: {
     enabled: boolean;

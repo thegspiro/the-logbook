@@ -476,7 +476,7 @@ export const RequestsTab: React.FC = () => {
                 className="form-input placeholder-theme-text-muted resize-none py-2.5 focus:ring-violet-500"
               />
             </div>
-            <div className="border-theme-surface-border flex justify-end gap-3 border-t p-6">
+            <div className="border-theme-surface-border flex flex-wrap justify-end gap-3 border-t p-6">
               <button onClick={() => setReviewing(null)} className="text-theme-text-secondary px-4 py-2">
                 Cancel
               </button>

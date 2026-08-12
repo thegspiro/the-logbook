@@ -32,9 +32,21 @@ services:
       # dynamically-assigned bridge addresses. If your proxy runs on a fixed IP,
       # narrow this to that address. Override in .env for a non-Docker proxy.
       TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}
-      # Encrypt DB/Redis traffic (set to false only if the network is trusted).
-      DB_SSL: "true"
-      REDIS_SSL: "true"
+      # The bundled MySQL/Redis services do not terminate TLS. Enable these
+      # only when the corresponding service (or service mesh) has TLS and the
+      # backend can verify it with DB_SSL_CA / REDIS_SSL_CA. Hard-coding true
+      # here creates rediss:// connections to a plaintext Redis listener and
+      # makes the documented production stack unavailable.
+      DB_SSL: ${DB_SSL:-false}
+      REDIS_SSL: ${REDIS_SSL:-false}
+      # Fail closed until production data services have TLS configured. The
+      # bundled plaintext services therefore require an explicit, documented
+      # SECURITY_REQUIRE_TLS=false override rather than silently carrying
+      # database, session, and cache traffic in cleartext.
+      SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-true}
+      # GeoIP enforcement remains opt-in because it requires a mounted GeoLite
+      # database; enabling it without that prerequisite blocks legitimate traffic.
+      GEOIP_FAIL_CLOSED: ${GEOIP_FAIL_CLOSED:-false}
       # Retention exports of purged audit rows go to a persistent volume
       # (backed up by the backup sidecar).
       AUDIT_ARCHIVE_DIR: /app/audit_archives

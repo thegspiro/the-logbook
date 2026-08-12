@@ -227,21 +227,18 @@ async def get_my_shift_reports(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get shift completion reports where the current user is the trainee.
-    Only returns approved reports if review workflow is enabled."""
+    """Get officer-released reports where the current user is the trainee."""
     service = ShiftCompletionService(db)
     reports = await service.get_reports_for_trainee(
         organization_id=current_user.organization_id,
         trainee_id=str(current_user.id),
         start_date=start_date,
         end_date=end_date,
+        released_only=True,
     )
 
-    # Filter to only approved reports if review workflow is enabled
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
-    if config.report_review_required:
-        reports = [r for r in reports if r.review_status == "approved"]
 
     # Strip sensitive fields based on visibility config
     visibility = config.to_visibility_dict()
@@ -269,6 +266,7 @@ async def get_my_shift_stats(
         trainee_id=str(current_user.id),
         start_date=start_date,
         end_date=end_date,
+        released_only=True,
     )
 
     if not visibility.get("show_performance_rating", True):
@@ -448,9 +446,9 @@ async def submit_all_drafts(
 ):
     """Submit all draft reports at once.
 
-    Transitions each draft to pending_review or approved based
-    on the org's review workflow setting, and triggers deferred
-    pipeline progress for each.
+    Transitions each draft to pending_review or approved based on the org's
+    review workflow setting. Pending review remains provisional; pipeline
+    progress is applied only after approval.
     """
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
@@ -525,6 +523,12 @@ async def get_shift_report(
     if not (is_trainee or is_filing_officer or has_manage):
         raise HTTPException(status_code=404, detail="Report not found")
 
+    # A report belongs to the officer until it is explicitly released. This is
+    # unconditional: disabling the optional second-review workflow means the
+    # filing officer can approve directly, not that drafts become trainee data.
+    if is_trainee and not has_manage and report.review_status != "approved":
+        raise HTTPException(status_code=404, detail="Report not found")
+
     # Trainees without manage permission see visibility-filtered data
     if is_trainee and not has_manage:
         config_service = TrainingModuleConfigService(db)
@@ -545,9 +549,8 @@ async def update_shift_report(
     """Update a draft shift completion report.
 
     Officers use this to complete auto-created drafts with ratings,
-    narratives, and skills before submitting.  When review_status
-    transitions from draft to approved/pending_review, training
-    pipeline progress is triggered automatically.
+    narratives, and skills before submitting. Training pipeline progress is
+    triggered only when review_status transitions to approved.
     """
     service = ShiftCompletionService(db)
     try:
@@ -587,7 +590,7 @@ async def acknowledge_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Trainee acknowledges a shift completion report."""
+    """Trainee acknowledges an approved, officer-released report."""
     service = ShiftCompletionService(db)
     report = await service.acknowledge_report(
         report_id=report_id,

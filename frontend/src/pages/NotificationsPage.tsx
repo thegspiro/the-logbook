@@ -352,9 +352,9 @@ const NotificationsPage: React.FC = () => {
         <Breadcrumbs />
 
         {/* Page Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center space-x-3">
-            <div className="rounded-lg bg-orange-600 p-2">
+            <div className="shrink-0 rounded-lg bg-orange-600 p-2">
               <Bell className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -421,7 +421,7 @@ const NotificationsPage: React.FC = () => {
 
         {/* Tabs */}
         <div
-          className="bg-theme-surface-secondary mb-6 flex w-fit space-x-1 rounded-lg p-1"
+          className="bg-theme-surface-secondary hscroll mb-6 flex w-fit space-x-1 rounded-lg p-1"
           role="tablist"
           aria-label="Notification views"
         >
@@ -488,7 +488,7 @@ const NotificationsPage: React.FC = () => {
 
         {activeTab === 'inbox' && (
           <div role="tabpanel">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-3">
                 <p className="text-theme-text-muted text-sm">
                   {myUnreadCount > 0 ? `${myUnreadCount} unread` : 'All caught up'}
@@ -710,7 +710,7 @@ const NotificationsPage: React.FC = () => {
             const filteredLogs = logChannelFilter === 'all' ? logs : logs.filter((l) => l.channel === logChannelFilter);
             return (
               <>
-                <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <div className="bg-theme-surface-secondary flex items-center space-x-1 rounded-lg p-1">
                     {(
                       [

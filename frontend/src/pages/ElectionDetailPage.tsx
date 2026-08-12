@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
 import type { MeetingRecord } from '../services/api';
@@ -28,6 +28,7 @@ import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { PromptDialog } from '../components/ux';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
@@ -53,6 +54,7 @@ const MIN_VOID_REASON_LENGTH = 3;
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
   const navigate = useNavigate();
+  const { confirm } = useConfirm();
   // Core election state
   const [election, setElection] = useState<Election | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,21 @@ export const ElectionDetailPage: React.FC = () => {
   const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Tabbed workflow state
-  const [activeTab, setActiveTab] = useState('ballot');
+  // Addressable, so a secretary can send "the eligibility roster for this
+  // election" as a link. Plain state before, which also broke the Back button
+  // after a tab change and pinned the screenshot harness to Ballot. Sixth page
+  // to get this treatment, after Email Templates, Notifications, Medical
+  // Screening, Compliance Config and Item Detail.
+  //
+  // Derived from the URL rather than mirrored into state: mirroring reads the
+  // parameter once, on mount, so every later URL change — which is what Back
+  // is — would be ignored. `ElectionWorkflowTabs` already falls back to its
+  // first visible tab when the active one is not one this viewer may see, so
+  // an unknown or forbidden `?tab=` lands somewhere sensible rather than on a
+  // blank panel.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') ?? 'ballot';
+  const setActiveTab = (tab: string) => setSearchParams({ tab });
 
   // Pending election packages state
   const [pendingPackages, setPendingPackages] = useState<ElectionPackage[]>([]);
@@ -311,7 +327,14 @@ export const ElectionDetailPage: React.FC = () => {
   const handleCloseElection = async () => {
     if (!electionId) return;
 
-    if (!confirm('Are you sure you want to close this election? This action cannot be undone.')) {
+    if (
+      !(await confirm({
+        title: 'Close election',
+        message: 'Close this election? Voting ends immediately and this cannot be undone.',
+        confirmLabel: 'Close election',
+        cancelLabel: 'Keep it open',
+      }))
+    ) {
       return;
     }
 
@@ -1948,7 +1971,7 @@ export const ElectionDetailPage: React.FC = () => {
                         {(forensicsReport.audit_log.entries || []).length === 0 ? (
                           <p className="text-theme-text-muted text-sm">No audit entries.</p>
                         ) : (
-                          <div className="max-h-64 overflow-y-auto">
+                          <div className="max-h-64 overflow-x-auto overflow-y-auto">
                             <table className="min-w-full text-sm" aria-label="Audit log entries">
                               <thead className="bg-theme-surface-secondary sticky top-0">
                                 <tr>

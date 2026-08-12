@@ -236,7 +236,7 @@ const TrainingWaiversTab: React.FC = () => {
           onChange={(e) => setSearchQuery(e.target.value)}
           aria-label="Search by name, rank, or reason..."
           placeholder="Search by name, rank, or reason..."
-          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring w-72 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden sm:w-72"
         />
         <div className="text-theme-text-muted ml-auto self-center text-xs">
           {filteredWaivers.length} waiver{filteredWaivers.length !== 1 ? 's' : ''}

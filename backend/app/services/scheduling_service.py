@@ -484,14 +484,33 @@ class SchedulingService:
         user_ids = list({a.user_id for a in assignments if a.user_id})
         name_map = await self._get_user_name_map(user_ids)
 
-        # Batch-load shifts for all assignments
+        # Batch-load shifts for all assignments. Org-scoped: the ids come from
+        # the caller's own assignments, but the filter is what makes that
+        # guarantee live in the query rather than in the caller — and it is why
+        # this method takes organization_id at all.
         shift_ids = list({a.shift_id for a in assignments if a.shift_id})
         shift_map: Dict[str, Any] = {}
         if shift_ids:
             shift_result = await self.db.execute(
-                select(Shift).where(Shift.id.in_(shift_ids))
+                select(Shift).where(
+                    Shift.id.in_(shift_ids),
+                    Shift.organization_id == str(organization_id),
+                )
             )
-            for s in shift_result.scalars().all():
+            shifts = list(shift_result.scalars().all())
+            # My Shifts tells a member when to turn out but could not tell them
+            # which rig: the assignment carried apparatus_id and nothing else,
+            # so the row had no unit to name. Only the two display fields are
+            # resolved here — EmbeddedShiftInfo is deliberately minimal, and the
+            # rest of _enrich_shift_dict's output (positions, min_staffing) is
+            # for the crew board, not a member's own list.
+            apparatus_map = await self._get_apparatus_map(
+                organization_id, [s.apparatus_id for s in shifts if s.apparatus_id]
+            )
+            for s in shifts:
+                apparatus = (
+                    apparatus_map.get(s.apparatus_id) if s.apparatus_id else None
+                )
                 shift_map[str(s.id)] = {
                     "id": s.id,
                     "shift_date": s.shift_date.isoformat() if s.shift_date else None,
@@ -499,6 +518,10 @@ class SchedulingService:
                     "end_time": s.end_time.isoformat() if s.end_time else None,
                     "notes": s.notes,
                     "apparatus_id": s.apparatus_id,
+                    "apparatus_name": apparatus.name if apparatus else None,
+                    "apparatus_unit_number": (
+                        apparatus.unit_number if apparatus else None
+                    ),
                     "shift_officer_id": s.shift_officer_id,
                     "color": s.color,
                 }
@@ -1440,6 +1463,68 @@ class SchedulingService:
             await self.db.rollback()
             return None, str(e)
 
+    async def checkin_closed_reason(
+        self, shift: Shift, organization_id: UUID
+    ) -> Optional[str]:
+        """Why check-in is closed for this shift, or None if it is open.
+
+        The public form of _checkin_window_error, for callers that want to show
+        the state rather than enforce it — the check-in screen disables its
+        button and prints this instead of offering an action the API refuses.
+        """
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        return self._checkin_window_error(shift, (org.settings or {}) if org else {})
+
+    @staticmethod
+    def _checkin_window_error(shift: Shift, settings: Dict[str, Any]) -> Optional[str]:
+        """Why this shift is outside its check-in window, or None if it is inside.
+
+        Attendance used to be refused only once an officer had finalised the
+        shift, which meant a link to a shift that ended last week still checked
+        somebody in — and stamped the arrival at the moment they tapped it. The
+        bounds come from the department's checklist-timing settings so a
+        department that runs long call-backs can widen them.
+
+        A shift with no recorded times cannot be bounded, so it is allowed
+        through: refusing it would block check-in on data this function cannot
+        judge.
+        """
+        timing = (settings.get("shift_reports") or {}).get("checklist_timing") or {}
+        opens_before = timing.get("checkin_opens_hours_before", 2)
+        closes_after = timing.get("checkin_closes_hours_after", 12)
+
+        # MySQL DATETIME carries no offset, so a value read back through
+        # DateTime(timezone=True) arrives naive and comparing it against an aware
+        # `now` raises TypeError — which would 500 every check-in. Everything is
+        # stored as UTC (see UTCResponseBase), so that is what a naive value is.
+        def as_utc(value: Optional[datetime]) -> Optional[datetime]:
+            if value is None:
+                return None
+            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        start = as_utc(shift.start_time)
+        end = as_utc(shift.end_time) or start
+        if start is None:
+            return None
+
+        if now < start - timedelta(hours=opens_before):
+            when = "when the shift starts"
+            if opens_before:
+                when = f"{opens_before} hour{'s' if opens_before != 1 else ''} before the shift starts"
+            return f"This shift has not started yet. Check-in opens {when}."
+
+        if end is not None and now > end + timedelta(hours=closes_after):
+            return (
+                "This shift ended too long ago to check in to. "
+                "Ask an officer to record your attendance."
+            )
+        return None
+
     async def member_check_in(
         self,
         shift_id: str,
@@ -1461,10 +1546,14 @@ class SchedulingService:
                 select(Organization).where(Organization.id == str(organization_id))
             )
         ).scalar_one_or_none()
+        settings = (org.settings or {}) if org else {}
+
+        window_error = self._checkin_window_error(shift, settings)
+        if window_error:
+            return None, window_error
+
         restrict = bool(
-            ((org.settings or {}) if org else {})
-            .get("scheduling", {})
-            .get("restrict_checkin_to_assigned", False)
+            settings.get("scheduling", {}).get("restrict_checkin_to_assigned", False)
         )
         if restrict and not shift.open_to_all_members:
             assigned = (

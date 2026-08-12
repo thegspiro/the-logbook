@@ -5,6 +5,8 @@ Endpoints for election management including elections, candidates, voting, and r
 """
 
 import copy
+import hashlib
+import unicodedata
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
@@ -24,7 +26,13 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
-from app.models.election import Candidate, Election, ElectionStatus, Vote
+from app.models.election import (
+    Candidate,
+    Election,
+    ElectionStatus,
+    SavedBallotTemplate,
+    Vote,
+)
 from app.models.event import Event, EventRSVP, RSVPStatus
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import User
@@ -76,6 +84,8 @@ from app.schemas.election import (
     ProxyAuthorizationListResponse,
     ProxyAuthorizationResponse,
     ProxyVoteCreate,
+    SavedBallotTemplateCreate,
+    SavedBallotTemplateResponse,
     SoftDeleteVoteResponse,
     SuccessResponse,
     TestBallotResponse,
@@ -345,6 +355,105 @@ async def get_ballot_templates(
     """
     templates = ElectionService.get_ballot_templates()
     return BallotTemplatesResponse(templates=templates)
+
+
+@router.get(
+    "/templates/saved-ballots", response_model=list[SavedBallotTemplateResponse]
+)
+async def list_saved_ballot_templates(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """List reusable ballot snapshots belonging to the caller's organization."""
+    result = await db.execute(
+        select(SavedBallotTemplate)
+        .where(SavedBallotTemplate.organization_id == str(current_user.organization_id))
+        .order_by(SavedBallotTemplate.name)
+    )
+    return list(result.scalars().all())
+
+
+@router.post(
+    "/templates/saved-ballots",
+    response_model=SavedBallotTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def save_ballot_template(
+    payload: SavedBallotTemplateCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """Save configuration-only ballot items for later reuse.
+
+    The schema deliberately accepts no election, voter, candidate, token, or
+    result fields, preventing a template from becoming a route for copying
+    sensitive or stateful election data.
+    """
+    template = SavedBallotTemplate(
+        id=str(uuid4()),
+        organization_id=str(current_user.organization_id),
+        created_by=str(current_user.id),
+        name=payload.name,
+        name_key=hashlib.sha256(
+            unicodedata.normalize("NFKC", payload.name).casefold().encode("utf-8")
+        ).hexdigest(),
+        description=payload.description,
+        ballot_items=[
+            item.model_dump(exclude_none=True) for item in payload.ballot_items
+        ],
+    )
+    db.add(template)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A ballot template with this name already exists",
+        )
+    await db.refresh(template)
+    await log_audit_event(
+        db=db,
+        event_type="ballot_template_created",
+        event_category="elections",
+        severity="info",
+        event_data={"template_id": template.id, "name": template.name},
+        user_id=str(current_user.id),
+    )
+    return template
+
+
+@router.delete(
+    "/templates/saved-ballots/{template_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_saved_ballot_template(
+    template_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """Delete an organization-owned reusable ballot snapshot."""
+    result = await db.execute(
+        select(SavedBallotTemplate).where(
+            SavedBallotTemplate.id == str(template_id),
+            SavedBallotTemplate.organization_id == str(current_user.organization_id),
+        )
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
+        )
+    template_name = template.name
+    await db.delete(template)
+    await db.commit()
+    await log_audit_event(
+        db=db,
+        event_type="ballot_template_deleted",
+        event_category="elections",
+        severity="info",
+        event_data={"template_id": str(template_id), "name": template_name},
+        user_id=str(current_user.id),
+    )
 
 
 # ============================================
@@ -928,6 +1037,26 @@ async def update_election(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
             )
+
+    # PATCH validation must consider the stored half of a partial update.
+    # Validating each field in isolation would allow, for example, switching
+    # quorum_type to percentage while retaining no value (or a count > 100).
+    effective_quorum_type = update_data.get("quorum_type", election.quorum_type)
+    effective_quorum_value = update_data.get("quorum_value", election.quorum_value)
+    if effective_quorum_type != "none" and effective_quorum_value is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="quorum_value is required when quorum is enabled",
+        )
+    if (
+        effective_quorum_type == "percentage"
+        and effective_quorum_value is not None
+        and effective_quorum_value > 100
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Percentage quorum cannot exceed 100",
+        )
 
     for field, value in update_data.items():
         if field in ALLOWED_ELECTION_UPDATE_FIELDS:

@@ -12,6 +12,7 @@ import type { ProxyAuthorization, ProxyAuthorizationCreate } from '../types/elec
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 interface ProxyVotingManagementProps {
   electionId: string;
@@ -34,6 +35,7 @@ const emptyForm: ProxyFormState = {
 
 export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ electionId, canManage }) => {
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const [authorizations, setAuthorizations] = useState<ProxyAuthorization[]>([]);
   const [proxyVotingEnabled, setProxyVotingEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -94,7 +96,15 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
 
   const handleRevoke = async (authId: string, delegatingName?: string) => {
     const label = delegatingName || 'this member';
-    if (!confirm(`Are you sure you want to revoke the proxy authorization for ${label}?`)) return;
+    if (
+      !(await confirm({
+        title: 'Revoke proxy authorization',
+        message: `Revoke the proxy authorization for ${label}? Their proxy will no longer be able to vote on their behalf.`,
+        confirmLabel: 'Revoke',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
 
     try {
       setRevokingId(authId);

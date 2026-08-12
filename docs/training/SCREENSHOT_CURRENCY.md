@@ -87,10 +87,47 @@ this note exists so the guide does not silently endorse the number.
 
 ### Held back deliberately
 
-`02-42-external-integrations` and `02-68-vector-category-mapping` capture an
-empty "No Integrations Yet" state. The harness flags them and does not apply
-them, and they are **not committed**, so the guide keeps its unfilled
-placeholders rather than gaining a picture of nothing.
+`02-68-vector-category-mapping` still has nothing to photograph. Category
+mappings are created **only** by `POST /providers/{id}/sync-categories`, which
+fetches the live vendor catalogue over the network — there is no create
+endpoint the seeder could call, so the table stays empty however much demo data
+is added. The harness flags the shot and does not apply it, and it is **not
+committed**, so the guide keeps its unfilled placeholder rather than gaining a
+picture of an empty table under a caption describing a full one.
+
+**Resolved 2026-08-12 for `02-42-external-integrations`.** That one was empty
+for a reason the seeder _could_ fix — the demo department had no provider
+configured at all. `seed_external_provider` now saves one, and the shot is
+captured and applied. Only the configuration is seeded: `connection_verified`
+and `last_sync_at` are written by a real sync, so the card reads "Connection
+not verified" and "Last Sync: Never", which the guide's prose now explains
+rather than contradicts.
+
+### A seed gap that wasn't — the quantity checklist was reachable all along
+
+**Withdrawn 2026-08-12, the day after it was written.** This section claimed
+three 03-scheduling placeholders — the carry-over banner, the Set All to Par
+confirmation, and the flat check form on a phone — were unreachable because the
+only template with quantity items is bound to **M-3** and `seed_scheduling`
+rosters shifts onto `fleet[:3]` only. The premise about the roster is true. The
+conclusion drawn from it was not.
+
+**A check does not need a shift.** `MyChecklistsPage` has an **Unscheduled
+checklist** button that offers every active template and starts a check with no
+shift attached — the same standalone-check feature the guide documents two
+sections further down. All three shots were captured through it with no seeder
+change at all, and they are now applied.
+
+The mistake was reasoning from `/equipment-checks/my-checklists` (which is
+shift-derived, and was correctly read) to "the screen is unreachable", without
+reading the page that renders it. Recorded rather than deleted because the
+cheap check — open the page and look at what else is on it — is the one that
+was skipped.
+
+**What was genuinely missing** was smaller and got fixed here: no seeded
+template had a **section header**, so the bold in-compartment caption the guide
+documents could not be pictured and the renderer had never met one in demo
+data. `_add_section_header` now puts one on the engine checklist.
 
 ---
 
@@ -295,30 +332,13 @@ The lesson is the one the harness section above already makes, sharpened: an
 empty. That decision is worth re-examining whenever the caption changes — the
 flag is what stops the one check that would have caught this.
 
-**Two captions promised things the application does not do.** Both were
-corrected in the guide rather than chased with a cleverer `prepare`:
-
-- The **Add Several** modal's preview does not mark names already in the
-  catalog. It lists every line pasted; the skipped ones are named in the
-  confirmation _after_ you submit. `05-inventory.md` now says so.
-- The **email preview** cannot show the header band and the footer in one frame.
-  The pane is a fixed 600px iframe with its own scrollbar and the message is
-  taller than it. `08-admin-reports.md` now points the reader at the scroll and
-  at **Send Test Email to Me**.
-
-A third — the **Add Operator** "member picker dropdown open" — is not
-photographable at all: both selects on that form are native, and an open native
-popup is drawn by the operating system rather than the page. The shot shows the
-two fields _set_ instead, which makes the same point more directly: a real
-member name proves the box is a picker over the roster.
-
 **Three empty-state flags were false positives, all the same shape.** A
-`<select>`'s placeholder option — "No category", "No EVOC requirement", "No
-EVOC level" — is in the DOM on every render, including the ones where a real
-value is selected. `03-52`, `05-66` and `06-23` now carry `allowEmptyState`
-with a comment saying which option is doing it. `03-54`'s flag is a different
-false positive: "No calls logged for this shift" belongs to a sub-panel further
-down the same drawer, and the shift is deliberately in the future.
+`<select>`'s placeholder option — "No EVOC requirement", "No EVOC level", "No
+category" — is in the DOM on every render, including the ones where a real value
+is selected. `03-52` and `06-23` now carry `allowEmptyState` with a comment
+saying which option is doing it. `03-54`'s flag is a different false positive:
+"No calls logged for this shift" belongs to a sub-panel further down the same
+drawer, and the shift is deliberately in the future.
 
 **One shot needed new seed data.** `03-54-crew-board-open-slots` had been
 failing outright — "no future shift is part-staffed with 2+ open" — because the
@@ -330,12 +350,41 @@ crewed by its officer alone. The repair runs against the API as well as in the
 create path: an existing shift is skipped on a re-run, so a create-path-only fix
 would have worked on a fresh database and nowhere else.
 
+**The Add Operator form cannot be photographed with its picker open.** Both
+selects on it are native, and an open native popup is drawn by the operating
+system rather than the page, so Playwright cannot capture it. `06-23` shows the
+two fields _set_ instead, which makes the same point more directly: a real
+member name proves the box is a picker over the roster, and an EVOC level beside
+it is the combination that used to return a server error.
+
 **Still not fixed: `11-05-budget-detail` pictures a budget with no
 transactions.** The breadcrumb fix it was flagged for is confirmed, but every
 seeded budget has `amountSpent: 0`, so Transaction History is genuinely empty and
 the utilization bar reads 0.0%. The seeder creates purchase requests and expense
 reports without settling any of them against a budget. Closing that gap is
 seeder work, not a capture setting.
+
+### Two sessions shot the same screens at once
+
+This pass and the one recorded above it ran in parallel against the same
+backlog, and both photographed the email screens, the two inventory modals, an
+item's Stock tab and four of the supply shots. Nothing was lost — the duplicates
+were reconciled on merge, keeping whichever version was better and deleting the
+other — but the effort was spent twice, and one of the reconciliations was not
+obvious:
+
+- **`08-67-email-preview-design`.** One version opened the welcome email and
+  concluded, in the guide, that the preview pane simply cannot show a footer:
+  it is a fixed 600px iframe and the message is taller. The other opened
+  **Shift Assignment** instead, because the footer renders only where the body
+  contains `{{footer_html}}` and most shipped bodies predate footers. The second
+  is right, and the first would have documented a limitation that is really a
+  template-choice problem. Kept the second.
+- **Numbering collided.** Both sessions took `05-65`, `05-66` and the `03-57`
+  … `03-62` range for different screens. Ids are full slugs, so no file was
+  overwritten, but the numbers no longer read in order. Before adding a shot,
+  check the manifest for the next free number rather than counting the images
+  on disk.
 
 ### D. Verified current — do not re-shoot on this pass
 
@@ -358,27 +407,21 @@ placeholders** for screens that have never been photographed:
 | `06-apparatus-facilities.md` | The Operators tab, the Add Operator member picker                                                                                                                                                                                         |
 | `08-admin-reports.md`        | The Footers tab, the footer selector in the template editor, the Organization variable palette, the new email preview design                                                                                                              |
 
-**Fifteen of the eighteen are now captured and applied** _(2026-08-11)_:
+**All eighteen are now captured and applied** _(2026-08-11)_, across the two
+parallel sessions recorded above:
 
-| Guide | Captured                                                                                                                      | Still open                                                                                   |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `03`  | `03-57` apparatus inventory, `03-58` lots sheet, `03-59` worklist, `03-60` report-used, `03-61` quick-add, `03-62` bulk match | The check form's **carry-over banner** and the **Set All to Par** warning — both phone-width |
-| `05`  | `05-65` Receive Stock, `05-66` Add Several, `05-67` an item's Stock tab                                                       | The **two-ledger items grid** (`05-53`, entry written, not yet shot)                         |
-| `06`  | `06-22` Operators tab, `06-23` Add Operator                                                                                   | —                                                                                            |
-| `08`  | `08-64` Footers tab, `08-65` footer selector, `08-66` variable palette, `08-67` email preview                                 | —                                                                                            |
+| Guide | Shot as                                                                                                                                                                 |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `03`  | `03-95` apparatus inventory, `03-96` lots sheet, `03-59` worklist, `03-69` quick-add, `03-68` bulk match, plus the report-used sheet, carry-over banner and par warning |
+| `05`  | `05-53` the two-ledger grid, `05-09` Receive Stock, `05-10` Add Several, `05-07` an item's Stock tab                                                                    |
+| `06`  | `06-22` Operators tab, `06-23` Add Operator                                                                                                                             |
+| `08`  | `08-64` Footers tab, `08-65` footer selector, `08-66` variable palette, `08-67` email preview                                                                           |
 
-The apparatus shots select M-3 from the picker by the option's **value** rather
+The numbering does not run in order because two sessions allocated ids at the
+same time — see _Two sessions shot the same screens at once_ above. The
+apparatus shots select M-3 from the picker by the option's **value** rather
 than its label, since the label is built from two fields and matching it as a
-string breaks the moment either changes. `openTemplateEditor()` does the same
-job for the four email shots: it reaches a template through the screen's own
-filter box rather than by clicking the nth row, because the catalogue is forty
-templates in collapsible categories and the nth row is a different template
-every time one is added.
-
-**The three still open are the ones that need something the demo does not have
-yet** — two are phone-width captures of a check form mid-carry-over, and the
-third needs the items grid showing a lot-stocked and a plain consumable side by
-side.
+string breaks the moment either changes.
 
 `08-64` only became possible on 2026-08-11: the Email Templates page held its
 tab in plain state, so a shot of the Footers tab would have silently captured
@@ -389,8 +432,8 @@ five tabs, with a test pinning every call site.
 **Superseded.** An earlier revision of this section said fourteen of the
 eighteen had no manifest entry and that several needed seed data that did not
 exist — a position carrying two lots with two dates, a truck below par, a
-restock report raised by a member. All three now exist, and all but three of
-the eighteen are shot; see the table above.
+restock report raised by a member. All three now exist, and all eighteen are
+shot.
 
 **The seeder gap is closed** _(2026-08-11)_. `seed_supply_tracking` in
 `scripts/screenshots/seed_demo_data.py` now builds the state these sections

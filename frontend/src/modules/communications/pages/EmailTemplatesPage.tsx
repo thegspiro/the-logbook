@@ -307,7 +307,7 @@ const EmailTemplatesPage: React.FC = () => {
         </div>
 
         {/* Tab Bar */}
-        <div className="border-theme-surface-border mb-6 flex items-center gap-1 border-b">
+        <div className="tab-scroll mb-6">
           <button
             onClick={() => handleTabChange('templates')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
@@ -430,7 +430,7 @@ const EmailTemplatesPage: React.FC = () => {
               {selectedTemplate ? (
                 <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
                   {/* Template meta bar */}
-                  <div className="border-theme-surface-border flex items-center justify-between border-b px-5 pt-5 pb-4">
+                  <div className="border-theme-surface-border flex flex-col gap-3 border-b px-5 pt-5 pb-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-4">
                       <p className="text-theme-text-muted text-xs">
                         {selectedTemplate.description || 'No description'}

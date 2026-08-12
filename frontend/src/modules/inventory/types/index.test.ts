@@ -7,6 +7,7 @@ import {
   getStatusStyle,
   getConditionColor,
   getItemTypeFromCategory,
+  sizeLabel,
 } from './index';
 
 describe('ITEM_TYPES', () => {
@@ -126,5 +127,39 @@ describe('getItemTypeFromCategory', () => {
 
   it('returns "equipment" for undefined category', () => {
     expect(getItemTypeFromCategory(undefined)).toBe('equipment');
+  });
+});
+
+describe('sizeLabel', () => {
+  // Sizes are stored as lowercase codes. The Impact Planner printed them
+  // straight into its size breakdown and its member table, so a quartermaster
+  // planning a shirt order read "l" and "xl" where every dropdown in the
+  // application says "L" and "XL".
+  it.each([
+    ['s', 'S'],
+    ['m', 'M'],
+    ['l', 'L'],
+    ['xl', 'XL'],
+    ['xxxl', '3XL'],
+    ['one_size', 'One Size'],
+  ])('renders %s as %s', (code, label) => {
+    expect(sizeLabel(code)).toBe(label);
+  });
+
+  it('is case-insensitive about the stored code', () => {
+    expect(sizeLabel('XL')).toBe('XL');
+  });
+
+  it('returns anything outside the list unchanged', () => {
+    // A numeric waist or a boot width is a size too, and mangling it would be
+    // worse than printing it.
+    expect(sizeLabel('34')).toBe('34');
+    expect(sizeLabel('10.5 EE')).toBe('10.5 EE');
+  });
+
+  it('returns an empty string for no size on file', () => {
+    expect(sizeLabel(null)).toBe('');
+    expect(sizeLabel(undefined)).toBe('');
+    expect(sizeLabel('')).toBe('');
   });
 });

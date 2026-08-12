@@ -25,7 +25,9 @@ from pydantic import (
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.api.dependencies import get_optional_current_user
 from app.api.v1.email_test_helper import (
     test_cloudflare_email,
     test_gmail_oauth,
@@ -39,10 +41,12 @@ from app.models.onboarding import (
     OnboardingSessionModel,
     OnboardingStatus,
 )
+from app.models.user import User
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.services.auth_service import AuthService
 from app.services.onboarding import OnboardingService
 from app.utils.image_validator import validate_logo_image
+from app.utils.onboarding_security import find_system_owner
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
@@ -2059,7 +2063,11 @@ async def get_session_data(request: Request, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/reset", dependencies=[Depends(check_rate_limit)])
-async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db)):
+async def reset_onboarding(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_user),
+):
     """
     Reset onboarding and clear all database records.
 
@@ -2084,7 +2092,35 @@ async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db))
     from app.models.location import Location
 
     # OnboardingStatus and OnboardingSessionModel are already imported at module level
-    from app.models.user import Organization, Role, User
+    from app.models.user import Organization, Role
+
+    # Once setup has created its system owner, possession of the resumable
+    # onboarding cookie is no longer sufficient authority to erase the tenant.
+    # Identify that owner by the wildcard position granted by create_system_owner;
+    # creation timestamps can tie at database precision and are not an authority
+    # boundary.
+    owner_result = await db.execute(
+        select(User)
+        .options(selectinload(User.positions))
+        .order_by(User.created_at, User.id)
+    )
+    users = owner_result.scalars().all()
+    owner = find_system_owner(users)
+    # Fail closed if users exist but setup state is inconsistent and none has
+    # the system-owner grant. An arbitrary first user must never gain reset
+    # authority merely because the intended owner row/position is damaged.
+    if users and owner is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="System-owner role is missing; onboarding cannot be reset safely.",
+        )
+    if owner is not None and (
+        current_user is None or str(current_user.id) != str(owner.id)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="System-owner authentication is required to reset onboarding.",
+        )
 
     try:
         # Log the reset BEFORE deletion to ensure we capture it

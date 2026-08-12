@@ -1321,36 +1321,53 @@ class CourseCohortService:
         rows = result.all()
         cohorts: List[Dict[str, Any]] = []
         for cohort, course_name in rows:
-            counts = await self._cohort_counts(cohort.id)
+            counts = await self._cohort_counts(cohort.id, organization_id)
             cohorts.append({"cohort": cohort, "course_name": course_name, **counts})
         return cohorts
 
-    async def _cohort_counts(self, cohort_id: str) -> Dict[str, Any]:
+    async def _cohort_counts(
+        self,
+        cohort_id: str,
+        organization_id: UUID,
+        *,
+        include_member_count: bool = True,
+    ) -> Dict[str, Any]:
         """Class/member counts and the cohort's last class date."""
         class_result = await self.db.execute(
             select(
                 func.count(CourseCohortClass.id),
                 func.max(CourseCohortClass.scheduled_start),
-            ).where(CourseCohortClass.cohort_id == cohort_id)
+            ).where(
+                CourseCohortClass.cohort_id == cohort_id,
+                CourseCohortClass.organization_id == str(organization_id),
+            )
         )
         class_count, last_start = class_result.one()
 
-        member_result = await self.db.execute(
-            select(func.count(CourseCohortMember.id)).where(
-                CourseCohortMember.cohort_id == cohort_id,
-                CourseCohortMember.status == CohortMemberStatus.ACTIVE,
+        member_count = 0
+        if include_member_count:
+            member_result = await self.db.execute(
+                select(func.count(CourseCohortMember.id)).where(
+                    CourseCohortMember.cohort_id == cohort_id,
+                    CourseCohortMember.organization_id == str(organization_id),
+                    CourseCohortMember.status == CohortMemberStatus.ACTIVE,
+                )
             )
-        )
+            member_count = member_result.scalar() or 0
         return {
             "class_count": class_count or 0,
-            "member_count": member_result.scalar() or 0,
+            "member_count": member_count,
             "end_date": last_start.date() if last_start else None,
         }
 
     async def get_cohort_detail(
-        self, cohort_id: UUID, organization_id: UUID
+        self,
+        cohort_id: UUID,
+        organization_id: UUID,
+        *,
+        include_member_data: bool = False,
     ) -> Dict[str, Any]:
-        """Full cohort: metadata, class timeline with attendance, and roster."""
+        """Return cohort details, omitting peer data unless explicitly requested."""
         cohort = await self.get_cohort(cohort_id, organization_id)
         if not cohort:
             raise ValueError("Cohort not found")
@@ -1369,23 +1386,31 @@ class CourseCohortService:
         class_result = await self.db.execute(
             select(CourseCohortClass, TrainingCourse.name)
             .outerjoin(
-                TrainingCourse, CourseCohortClass.class_course_id == TrainingCourse.id
+                TrainingCourse,
+                (CourseCohortClass.class_course_id == TrainingCourse.id)
+                & (TrainingCourse.organization_id == str(organization_id)),
             )
-            .where(CourseCohortClass.cohort_id == str(cohort_id))
+            .where(
+                CourseCohortClass.cohort_id == str(cohort_id),
+                CourseCohortClass.organization_id == str(organization_id),
+            )
             .order_by(CourseCohortClass.sequence)
         )
         class_rows = class_result.all()
 
         event_ids = [c.event_id for c, _ in class_rows if c.event_id]
         rsvp_counts: Dict[str, Tuple[int, int]] = {}
-        if event_ids:
+        if include_member_data and event_ids:
             rsvp_result = await self.db.execute(
                 select(
                     EventRSVP.event_id,
                     func.count(EventRSVP.id),
                     func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)),
                 )
-                .where(EventRSVP.event_id.in_(event_ids))
+                .where(
+                    EventRSVP.event_id.in_(event_ids),
+                    EventRSVP.organization_id == str(organization_id),
+                )
                 .group_by(EventRSVP.event_id)
             )
             for event_id, total, checked_in in rsvp_result.all():
@@ -1393,7 +1418,11 @@ class CourseCohortService:
 
         classes = []
         for cohort_class, class_course_name in class_rows:
-            total, checked_in = rsvp_counts.get(cohort_class.event_id or "", (0, 0))
+            total, checked_in = (
+                rsvp_counts.get(cohort_class.event_id or "", (0, 0))
+                if include_member_data
+                else (None, None)
+            )
             classes.append(
                 {
                     "row": cohort_class,
@@ -1403,31 +1432,45 @@ class CourseCohortService:
                 }
             )
 
-        member_result = await self.db.execute(
-            select(CourseCohortMember, User, ProgramEnrollment)
-            .outerjoin(User, CourseCohortMember.user_id == User.id)
-            .outerjoin(
-                ProgramEnrollment,
-                CourseCohortMember.enrollment_id == ProgramEnrollment.id,
+        members = []
+        if include_member_data:
+            member_result = await self.db.execute(
+                select(CourseCohortMember, User, ProgramEnrollment)
+                .outerjoin(
+                    User,
+                    (CourseCohortMember.user_id == User.id)
+                    & (User.organization_id == str(organization_id)),
+                )
+                .outerjoin(
+                    ProgramEnrollment,
+                    (CourseCohortMember.enrollment_id == ProgramEnrollment.id)
+                    & (ProgramEnrollment.organization_id == str(organization_id)),
+                )
+                .where(
+                    CourseCohortMember.cohort_id == str(cohort_id),
+                    CourseCohortMember.organization_id == str(organization_id),
+                )
+                .order_by(CourseCohortMember.added_at)
             )
-            .where(CourseCohortMember.cohort_id == str(cohort_id))
-            .order_by(CourseCohortMember.added_at)
-        )
-        members = [
-            {
-                "row": member,
-                "full_name": (
-                    f"{user.first_name} {user.last_name}".strip() if user else None
-                ),
-                "email": user.email if user else None,
-                "progress_percentage": (
-                    enrollment.progress_percentage if enrollment else None
-                ),
-            }
-            for member, user, enrollment in member_result.all()
-        ]
+            members = [
+                {
+                    "row": member,
+                    "full_name": (
+                        f"{user.first_name} {user.last_name}".strip() if user else None
+                    ),
+                    "email": user.email if user else None,
+                    "progress_percentage": (
+                        enrollment.progress_percentage if enrollment else None
+                    ),
+                }
+                for member, user, enrollment in member_result.all()
+            ]
 
-        counts = await self._cohort_counts(cohort.id)
+        counts = await self._cohort_counts(
+            cohort.id,
+            organization_id,
+            include_member_count=include_member_data,
+        )
         return {
             "cohort": cohort,
             "course_name": course.name if course else None,
@@ -1454,7 +1497,9 @@ class CourseCohortService:
         )
         cohorts = []
         for cohort, course_name in result.all():
-            counts = await self._cohort_counts(cohort.id)
+            counts = await self._cohort_counts(
+                cohort.id, organization_id, include_member_count=False
+            )
             cohorts.append({"cohort": cohort, "course_name": course_name, **counts})
         return cohorts
 
