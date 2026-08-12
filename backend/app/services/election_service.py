@@ -147,6 +147,16 @@ class ElectionService:
             return list(votes)
         return [v for v in votes if getattr(v, "manual_batch_id", None) not in pending]
 
+    @staticmethod
+    def _is_attested_vote(election_id: UUID):
+        """SQL predicate excluding votes that belong to a pending paper batch."""
+        pending_batch = select(ManualBallotBatch.id).where(
+            ManualBallotBatch.id == Vote.manual_batch_id,
+            ManualBallotBatch.election_id == str(election_id),
+            ManualBallotBatch.status == "pending",
+        )
+        return ~pending_batch.exists()
+
     # ------------------------------------------------------------------
     # Audit helpers
     # ------------------------------------------------------------------
@@ -3935,6 +3945,7 @@ class ElectionService:
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
             .where(Vote.is_test.is_(False))
+            .where(self._is_attested_vote(election.id))
             .group_by(Vote.candidate_id)
         )
         candidate_vote_counts = dict(vote_counts_result.all())
@@ -4236,6 +4247,7 @@ class ElectionService:
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
             .where(Vote.is_test.is_(False))
+            .where(self._is_attested_vote(election.id))
         )
         all_votes = votes_result.scalars().all()
 
