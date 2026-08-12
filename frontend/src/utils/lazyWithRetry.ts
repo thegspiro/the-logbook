@@ -16,6 +16,7 @@
  */
 
 import { lazy, type ComponentType } from 'react';
+import { reloadForNewVersion } from './serviceWorkerUpdate';
 
 const RELOAD_KEY = 'chunk_reload';
 
@@ -53,9 +54,13 @@ export function lazyWithRetry<T extends ComponentType<any>>(
           const currentPath = window.location.pathname + window.location.search;
 
           if (reloadedPage !== currentPath) {
-            // First failure on this page — reload to get fresh HTML
+            // First failure on this page — reload to get fresh HTML. On an
+            // installed PWA the reload must go through the service worker
+            // update first: a bare reload would be served the OLD precached
+            // index.html, hit the same missing chunk, and dump the user on
+            // the ErrorBoundary.
             sessionStorage.setItem(RELOAD_KEY, currentPath);
-            window.location.reload();
+            void reloadForNewVersion();
 
             // Return a never-resolving promise to prevent React from
             // rendering while the reload is in progress
