@@ -54,6 +54,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
     const base = path.split('?')[0] ?? path;
     return location.pathname === base || location.pathname.startsWith(base + '/');
   };
+  const moreIsActive = !tabs.some((tab) => isActive(tab.path));
 
   if (hidden) return null;
 
@@ -87,8 +88,11 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
         <li className="flex-1">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent(OPEN_MOBILE_NAV_EVENT))}
+            aria-current={moreIsActive ? 'page' : undefined}
             aria-label="Open full navigation menu"
-            className="text-theme-text-muted hover:text-theme-text-primary focus:ring-theme-focus-ring flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset"
+            className={`focus:ring-theme-focus-ring flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
+              moreIsActive ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'
+            }`}
           >
             <Menu className="h-5 w-5 shrink-0" aria-hidden="true" />
             <span className="text-[11px] leading-none font-medium">More</span>

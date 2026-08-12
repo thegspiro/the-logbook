@@ -132,7 +132,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
       </div>
 
       {/* Quick fill buttons */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-theme-text-muted text-xs">Quick fill:</span>
         <button
           onClick={() => fillRange('day')}

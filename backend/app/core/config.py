@@ -204,6 +204,11 @@ class Settings(BaseSettings):
     # only write audit rows (SQL access) cannot forge a valid chain, since they
     # do not possess the key. Store it in a secrets manager / HSM, not the DB.
     AUDIT_LOG_SIGNING_KEY: str = ""
+    # Highest audit-log ID that may use the pre-HMAC, unkeyed hash format.
+    # This trust boundary lives outside the attacker-writable audit database.
+    # New installations must leave it at 0; upgraded installations set it once
+    # to the final row that existed immediately before the HMAC upgrade.
+    AUDIT_LOG_LEGACY_MAX_ID: int = 0
 
     # Encryption - CRITICAL: Must be set via ENCRYPTION_KEY env var
     ENCRYPTION_KEY: str = ""

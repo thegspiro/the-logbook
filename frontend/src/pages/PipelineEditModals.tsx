@@ -209,7 +209,7 @@ export const EditProgramModal: React.FC<{
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="form-label" htmlFor="ep-code">
             Code
@@ -243,7 +243,7 @@ export const EditProgramModal: React.FC<{
           </select>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="form-label" htmlFor="ep-target">
             Target position
@@ -353,7 +353,7 @@ export const EditProgramModal: React.FC<{
                 placeholder="e.g. 24 for a two-year cycle"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="form-label" htmlFor="ep-recert-month">
                   Reset month <span className="text-theme-text-muted">(optional)</span>
@@ -797,7 +797,7 @@ export const RequirementFormModal: React.FC<{
             </div>
           )}
           {type === 'knowledge_test' && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="form-label" htmlFor="rq-pass">
                   Passing score (%)
@@ -968,7 +968,7 @@ export const MilestoneFormModal: React.FC<{
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="form-label" htmlFor="ms-thresh">
             Triggers at (%)

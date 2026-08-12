@@ -251,9 +251,9 @@ const DocumentsPage: React.FC = () => {
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Page Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center space-x-3">
-            <div className="rounded-lg bg-amber-600 p-2">
+            <div className="shrink-0 rounded-lg bg-amber-600 p-2">
               <FileText className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -264,7 +264,7 @@ const DocumentsPage: React.FC = () => {
             </div>
           </div>
           {canManage && (
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowCreateFolder(true)}
                 className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"

@@ -883,7 +883,7 @@ const ImpactPlannerPage: React.FC = () => {
                 {/* Members table */}
                 <div className="card p-4 sm:p-5">
                   <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-theme-text-primary text-sm font-semibold">
                         Impacted Members ({filteredMembers.length})
                       </h3>

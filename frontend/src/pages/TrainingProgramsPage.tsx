@@ -177,17 +177,17 @@ const TrainingProgramsPage: React.FC = () => {
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-              <GraduationCap className="h-8 w-8 text-red-700 dark:text-red-500" aria-hidden="true" />
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+              <GraduationCap className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
               <span>Training Programs</span>
             </h1>
             <p className="text-theme-text-muted mt-2">Manage training programs, requirements, and member progress</p>
           </div>
 
           {activeTab === 'programs' && (
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 ref={importFileRef}
                 type="file"
@@ -231,7 +231,7 @@ const TrainingProgramsPage: React.FC = () => {
 
         {/* Tabs */}
         <div
-          className="bg-theme-surface-secondary mb-6 flex space-x-1 rounded-lg p-1"
+          className="bg-theme-surface-secondary hscroll mb-6 flex space-x-1 rounded-lg p-1"
           role="tablist"
           aria-label="Training program views"
         >
@@ -403,7 +403,7 @@ const TrainingProgramsPage: React.FC = () => {
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className="mb-2 flex items-center space-x-3">
+                            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                               <h3 className="text-theme-text-primary text-xl font-semibold">{program.name}</h3>
                               {program.target_position && (
                                 <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 dark:text-red-400">
@@ -415,7 +415,7 @@ const TrainingProgramsPage: React.FC = () => {
                               </span>
                             </div>
                             {program.description && <p className="text-theme-text-muted mb-3">{program.description}</p>}
-                            <div className="text-theme-text-muted flex items-center space-x-6 text-sm">
+                            <div className="text-theme-text-muted flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
                               {program.time_limit_days && (
                                 <div className="flex items-center space-x-1">
                                   <Calendar className="h-4 w-4" aria-hidden="true" />
@@ -518,7 +518,7 @@ const TrainingProgramsPage: React.FC = () => {
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className="mb-2 flex items-center space-x-3">
+                            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                               <h3 className="text-theme-text-primary text-lg font-semibold">{req.name}</h3>
                               <span
                                 className={`rounded px-2 py-1 text-xs ${
@@ -541,7 +541,7 @@ const TrainingProgramsPage: React.FC = () => {
                               </span>
                             </div>
                             {req.description && <p className="text-theme-text-muted mb-2 text-sm">{req.description}</p>}
-                            <div className="text-theme-text-muted flex items-center space-x-4 text-sm">
+                            <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                               {req.required_hours && <span>{req.required_hours} hours</span>}
                               {req.required_shifts && <span>{req.required_shifts} shifts</span>}
                               {req.required_calls && <span>{req.required_calls} calls</span>}

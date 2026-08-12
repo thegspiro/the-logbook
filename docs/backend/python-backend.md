@@ -1,5 +1,10 @@
 # Python Backend Documentation
 
+> **Canonical source.** A copy of this document is published to the GitHub Wiki
+> from [`wiki/Development-Backend.md`](../../wiki/Development-Backend.md). The
+> two are not synced automatically — if you change this file, update the wiki
+> page too.
+
 ## Overview
 
 The backend uses **Python 3.13+ with FastAPI** - a modern, high-performance framework with excellent type safety and automatic API documentation.

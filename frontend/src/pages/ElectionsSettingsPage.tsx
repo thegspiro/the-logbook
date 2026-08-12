@@ -116,7 +116,7 @@ export const ElectionsSettingsPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => void navigate('/elections')}
@@ -132,7 +132,7 @@ export const ElectionsSettingsPage: React.FC = () => {
             void handleSave();
           }}
           disabled={saving}
-          className="btn-primary flex items-center gap-2 rounded-md px-4 py-2 text-sm"
+          className="btn-primary flex shrink-0 items-center gap-2 self-start rounded-md px-4 py-2 text-sm sm:self-auto"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save Settings
@@ -334,7 +334,7 @@ export const ElectionsSettingsPage: React.FC = () => {
               </label>
             </div>
 
-            <div className="flex items-center gap-3 pl-7">
+            <div className="flex flex-wrap items-center gap-3 pl-7">
               <label htmlFor="paper_ballot_attestations_required" className="text-theme-text-secondary text-sm">
                 Officers who must confirm each paper batch before it counts (besides the recorder):
               </label>

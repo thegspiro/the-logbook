@@ -199,6 +199,56 @@ class TestVoteSigning:
 
 
 class TestVoteDedupHash:
+    async def test_cast_vote_locks_election_before_multi_vote_checks(self):
+        """Concurrent requests must serialize before inspecting prior votes."""
+        service = _make_service()
+        election_id = uuid4()
+        organization_id = uuid4()
+        candidate_id = uuid4()
+        election = _make_election(
+            id=str(election_id),
+            organization_id=str(organization_id),
+            voting_method="ranked_choice",
+        )
+        candidate = SimpleNamespace(
+            id=str(candidate_id),
+            accepted=True,
+            is_write_in=False,
+            position="Chief",
+        )
+        election_result = MagicMock()
+        election_result.scalar_one_or_none.return_value = election
+        candidate_result = MagicMock()
+        candidate_result.scalar_one_or_none.return_value = candidate
+        service.db.execute.side_effect = [election_result, candidate_result]
+        service.check_voter_eligibility = AsyncMock(
+            return_value=SimpleNamespace(is_eligible=True, reason=None)
+        )
+        service._get_user_votes = AsyncMock(
+            return_value=[
+                _make_vote(
+                    str(election_id),
+                    candidate_id=str(candidate_id),
+                    position="Chief",
+                    vote_rank=1,
+                )
+            ]
+        )
+
+        vote, error = await service.cast_vote(
+            user_id=uuid4(),
+            election_id=election_id,
+            candidate_id=candidate_id,
+            position="Chief",
+            organization_id=organization_id,
+            vote_rank=2,
+        )
+
+        assert vote is None
+        assert error == "You have already ranked this candidate"
+        election_query = service.db.execute.await_args_list[0].args[0]
+        assert election_query._for_update_arg is not None
+
     def test_same_inputs_produce_same_hash(self):
         from app.services.election_service import ElectionService
 
@@ -907,6 +957,120 @@ class TestElectionCreateRejectsAttendees:
             attendees=[{"user_id": "fake", "name": "Forged"}],
         )
         assert "attendees" not in election.model_dump()
+
+
+class TestElectionBallotDefinitionValidation:
+    """Malformed definitions must be rejected before ambiguous ballot IDs or
+    unbounded JSON can reach persistent election configuration."""
+
+    def test_duplicate_ballot_item_ids_rejected_on_create_and_update(self):
+        import pydantic
+
+        from app.schemas.election import ElectionCreate, ElectionUpdate
+
+        now = datetime.now(timezone.utc)
+        item = {
+            "id": "resolution_1",
+            "type": "general_vote",
+            "title": "Resolution",
+            "vote_type": "approval",
+        }
+        with pytest.raises(pydantic.ValidationError, match="IDs must be unique"):
+            ElectionCreate(
+                title="Test",
+                start_date=now,
+                end_date=now + timedelta(days=1),
+                ballot_items=[item, item],
+            )
+        with pytest.raises(pydantic.ValidationError, match="IDs must be unique"):
+            ElectionUpdate(ballot_items=[item, item])
+
+    def test_invalid_ballot_item_id_rejected(self):
+        import pydantic
+
+        from app.schemas.election import BallotItem
+
+        with pytest.raises(pydantic.ValidationError):
+            BallotItem(
+                id="../../ambiguous item",
+                type="general_vote",
+                title="Resolution",
+            )
+
+    def test_invalid_ballot_item_overrides_rejected(self):
+        import pydantic
+
+        from app.schemas.election import BallotItem
+
+        with pytest.raises(pydantic.ValidationError, match="voting method"):
+            BallotItem(
+                id="resolution_1",
+                type="general_vote",
+                title="Resolution",
+                voting_method="trust_the_client",
+            )
+        with pytest.raises(pydantic.ValidationError, match="victory_percentage"):
+            BallotItem(
+                id="resolution_1",
+                type="general_vote",
+                title="Resolution",
+                victory_condition="supermajority",
+            )
+
+    def test_position_duplicates_are_case_insensitive(self):
+        import pydantic
+
+        from app.schemas.election import ElectionUpdate
+
+        with pytest.raises(pydantic.ValidationError, match="must be unique"):
+            ElectionUpdate(positions=["President", " president "])
+
+    def test_count_quorum_can_exceed_percentage_range(self):
+        from app.schemas.election import ElectionCreate
+
+        now = datetime.now(timezone.utc)
+        election = ElectionCreate(
+            title="Large organization",
+            start_date=now,
+            end_date=now + timedelta(days=1),
+            quorum_type="count",
+            quorum_value=150,
+        )
+        assert election.quorum_value == 150
+
+    def test_inconsistent_configuration_rejected(self):
+        import pydantic
+
+        from app.schemas.election import ElectionCreate
+
+        now = datetime.now(timezone.utc)
+        with pytest.raises(pydantic.ValidationError, match="quorum_value"):
+            ElectionCreate(
+                title="Test",
+                start_date=now,
+                end_date=now + timedelta(days=1),
+                quorum_type="percentage",
+            )
+
+    def test_saved_template_requires_items_and_rejects_election_state(self):
+        import pydantic
+
+        from app.schemas.election import SavedBallotTemplateCreate
+
+        with pytest.raises(pydantic.ValidationError):
+            SavedBallotTemplateCreate(name="Empty", ballot_items=[])
+        with pytest.raises(pydantic.ValidationError, match="votes"):
+            SavedBallotTemplateCreate(
+                name="Tampered",
+                ballot_items=[
+                    {
+                        "id": "resolution_1",
+                        "type": "general_vote",
+                        "title": "Resolution",
+                    }
+                ],
+                votes=[{"candidate_id": str(uuid4())}],
+            )
 
 
 class TestBallotSubmissionResponseReceipts:

@@ -1,5 +1,9 @@
 # Security Policy
 
+> **Canonical source.** A copy of this policy is published to the GitHub Wiki
+> from [`wiki/Security-Overview.md`](wiki/Security-Overview.md). The two are
+> not synced automatically — if you change this file, update the wiki page too.
+
 ## Overview
 
 The Logbook is designed with security as a core principle, implementing industry-standard security practices with features aligned to HIPAA requirements, Section 508 accessibility, and general security best practices. Note: HIPAA compliance requires external review and cannot be self-declared.

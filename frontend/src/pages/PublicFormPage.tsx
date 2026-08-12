@@ -385,9 +385,9 @@ const PublicFormPage = () => {
                   key={field.id}
                   className={
                     field.width === 'half'
-                      ? 'inline-block w-1/2 pr-2'
+                      ? 'inline-block w-full sm:w-1/2 sm:pr-2'
                       : field.width === 'third'
-                        ? 'inline-block w-1/3 pr-2'
+                        ? 'inline-block w-full sm:w-1/3 sm:pr-2'
                         : ''
                   }
                 >

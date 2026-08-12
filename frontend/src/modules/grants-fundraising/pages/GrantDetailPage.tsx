@@ -465,7 +465,7 @@ export const GrantDetailPage: React.FC = () => {
 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-theme-text-primary text-2xl font-bold">{application.grantProgramName}</h1>
                 <span
                   className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${APPLICATION_STATUS_COLORS[application.applicationStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
@@ -548,7 +548,7 @@ export const GrantDetailPage: React.FC = () => {
       {/* Tabs                                                               */}
       {/* ================================================================== */}
       <div className="mx-auto max-w-7xl px-6 pt-6">
-        <div className="border-theme-surface-border bg-theme-surface flex space-x-1 overflow-x-auto rounded-lg border p-1">
+        <div className="border-theme-surface-border bg-theme-surface hscroll flex space-x-1 rounded-lg border p-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -665,7 +665,7 @@ export const GrantDetailPage: React.FC = () => {
         {activeTab === 'budget' && (
           <div className="space-y-6">
             {/* Summary bar */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 text-center">
                 <p className="text-theme-text-secondary text-sm">Total Budgeted</p>
                 <p className="text-theme-text-primary mt-1 text-xl font-bold">{formatCurrency(budgetTotal)}</p>
@@ -811,7 +811,7 @@ export const GrantDetailPage: React.FC = () => {
         {/* ---------------------------------------------------------------- */}
         {activeTab === 'expenditures' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-theme-text-primary text-lg font-semibold">Expenditures</h3>
               <button
                 type="button"
@@ -921,7 +921,7 @@ export const GrantDetailPage: React.FC = () => {
         {/* ---------------------------------------------------------------- */}
         {activeTab === 'compliance' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-theme-text-primary text-lg font-semibold">Compliance & Follow-Up Tasks</h3>
               <button
                 type="button"
@@ -942,7 +942,7 @@ export const GrantDetailPage: React.FC = () => {
               <div className="space-y-3">
                 {complianceTasks.map((task) => (
                   <div key={task.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
-                    <div className="flex items-start gap-4">
+                    <div className="flex flex-wrap items-start gap-4">
                       {/* Type icon */}
                       <div className="mt-0.5 flex-shrink-0">
                         {COMPLIANCE_TASK_TYPE_ICONS[task.taskType] ?? (
@@ -1189,7 +1189,7 @@ export const GrantDetailPage: React.FC = () => {
               className={inputClass}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="exp-amount" className={labelClass}>
                 Amount
@@ -1338,7 +1338,7 @@ export const GrantDetailPage: React.FC = () => {
               className={`${inputClass} resize-none`}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="comp-due-date" className={labelClass}>
                 Due Date

@@ -141,9 +141,9 @@ const AllowancesPage: React.FC = () => {
           Back to Admin
         </Link>
 
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-600 p-2">
+            <div className="shrink-0 rounded-lg bg-blue-600 p-2">
               <SlidersHorizontal className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -274,7 +274,7 @@ const AllowancesPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label htmlFor="allow-qty" className={labelClass}>
                   Max Quantity

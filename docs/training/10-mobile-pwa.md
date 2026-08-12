@@ -534,41 +534,55 @@ Camera scanning (QR codes, barcodes, member IDs) now works on desktop browsers i
 
 ### Camera Error Handling
 
-Camera scanning across the app now provides **specific error messages** instead of generic failures:
+Camera scanning across the app tells you **which** camera problem you have,
+because the fix differs:
 
-| Error                        | Message                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------- |
-| Camera permission denied     | "Camera permission denied. Please allow camera access in your browser settings." |
-| No camera available          | "No camera detected on this device."                                             |
-| Camera in use by another app | "Camera is in use by another application."                                       |
+| What went wrong            | What you are told                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Permission blocked         | "Camera access was blocked. Allow camera permission for this site in your browser settings, then try again." |
+| No camera on the device    | "No camera was found on this device. Use a phone or tablet with a camera, or enter the code by hand."        |
+| Camera held by another app | "The camera is in use by another app. Close anything else using it, then try again."                         |
+| Page not served over HTTPS | "Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan."                   |
+
+The distinction that matters is between the first two. Only a blocked
+permission has anything to grant, so a device with no camera is deliberately
+**not** sent to browser settings to look for a switch that will not be there.
 
 Error messages **stay visible** until you dismiss them (no auto-dismiss), giving you time to read and act on the message.
 
-> **Screenshot needed:**
-> _[Screenshot of the MemberScanPage on a mobile device showing a camera error banner: "Camera permission denied. Please allow camera access in your browser settings." with a "Try Again" button and manual entry field below]_
+![Member ID scan on a phone after the camera is refused — the red banner naming the failure, with Start Scanning still offered](./images/10-14-scan-camera-denied.png)
+
+The banner replaces nothing: **Start Scanning** stays where it was, so
+retrying is the same tap it always was, and the "How to use" steps stay on
+screen underneath. There is no separate "Try Again" button and no manual member
+lookup on this page — to find a member without a camera, use the search on
+**Members**.
 
 ### Inventory Scan Modal
 
-The `InventoryScanModal` now uses `getErrorMessage()` for consistent, specific error display. On desktop browsers where the camera fails, the manual barcode/serial number input field is always available as a fallback.
+The inventory scanner reports the same four camera states, and on any browser
+where the camera fails the manual barcode/serial-number input is always
+available as a fallback — so a failed camera slows the job down rather than
+stopping it.
 
 > **Edge case:** On iOS Safari, camera access requires the page to be served over HTTPS. If your department uses HTTP for local network access, camera scanning will not work — use the manual entry fallback.
 
 ### Notification Badges on Mobile
 
-The notification unread count badge is now visible on both mobile and desktop:
+The unread count reaches you on a phone as well as on a desktop, but **not in
+the same place**:
 
-- **Top navigation**: Bell icon with red badge count
-- **Side navigation**: Notifications link with badge count
-- **Smart polling**: Polling pauses when the app/tab is in the background, preserving battery
+- **Desktop side navigation** — the Notifications link carries the badge
+- **Phone** — the count is on the Notifications entry **inside the menu**. The
+  collapsed top bar is the department logo, the department name and the
+  hamburger: no page title, and no bell. Tap the hamburger to see the count
+- **Smart polling** — polling pauses when the app or tab is in the background,
+  preserving battery
 
-> **Screenshot needed:**
-> _[Screenshot of the mobile top navigation bar showing the hamburger menu, page title, and bell icon with a red "3" badge]_
+![The phone menu open, with the unread count on the Notifications entry](./images/10-15-mobile-menu-notifications.png)
 
-On a phone the bell is **inside the menu**, not on the bar. The collapsed top
-bar is the department logo, the department name, and the hamburger — there is
-no page title and no bell on it. Open the menu and the Notifications entry
-carries the red unread count. The placeholder stays open until there is a
-screen matching what it describes.
+This is worth knowing before you go looking: a member told to "watch for the
+red badge" will not find one on a phone until they open the menu.
 
 ---
 

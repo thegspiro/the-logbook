@@ -21,6 +21,7 @@ import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 import { courseCohortService, trainingService, userService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
+  formatCalendarDate,
   formatDate,
   formatForDateTimeInput,
   formatShortDateTime,
@@ -423,7 +424,12 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
                             : 'border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted'
                         }`}
                       >
-                        {formatDate(day, tz)}
+                        {/* A suggested blackout is a bare "YYYY-MM-DD"
+                            holiday, not an instant. Run through the
+                            timezone-aware formatter it was parsed as UTC
+                            midnight and rendered a day early for anyone west
+                            of UTC — Veterans Day offered as 11/10. */}
+                        {formatCalendarDate(day)}
                       </button>
                     ))}
                   </div>

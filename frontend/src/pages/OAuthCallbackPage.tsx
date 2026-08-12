@@ -23,6 +23,23 @@ export const OAuthCallbackPage: React.FC = () => {
     if (ran.current) return;
     ran.current = true;
 
+    // MFA-enabled OAuth accounts receive a pending challenge rather than
+    // session cookies.  Fragments are not sent to the server; remove the token
+    // from browser history immediately, then reuse the normal login MFA form.
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const mfaToken = fragment.get('mfa_token');
+    if (mfaToken) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      useAuthStore.setState({
+        mfaRequired: true,
+        mfaToken,
+        error: null,
+        isLoading: false,
+      });
+      void navigate('/login', { replace: true });
+      return;
+    }
+
     const finish = async () => {
       // The httpOnly cookies are set; tell loadUser a session may exist.
       localStorage.setItem('has_session', '1');

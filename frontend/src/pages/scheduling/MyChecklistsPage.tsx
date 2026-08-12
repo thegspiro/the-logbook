@@ -436,12 +436,12 @@ export const MyChecklistsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <ClipboardCheck className="text-theme-text-primary h-6 w-6" />
+          <ClipboardCheck className="text-theme-text-primary h-6 w-6 shrink-0" />
           <h1 className="text-theme-text-primary text-xl font-bold">My Equipment Checklists</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => void handleOpenTemplatePicker()}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
@@ -474,7 +474,7 @@ export const MyChecklistsPage: React.FC = () => {
       {/* Checklists due now and coming up                               */}
       {/* ============================================================= */}
       <section>
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-theme-text-primary text-base font-semibold">Due now and coming up</h2>
           {activeChecklists.length > 1 && (
             <div className="border-theme-surface-border bg-theme-surface flex items-center gap-1 rounded-lg border p-0.5">

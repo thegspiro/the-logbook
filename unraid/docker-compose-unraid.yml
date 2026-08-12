@@ -178,10 +178,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
 
-      # Backup
-      BACKUP_ENABLED: ${BACKUP_ENABLED:-true}
-      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * *}
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      # Backups are handled by the `backup` sidecar service below, not by
+      # the backend process — see that service for schedule/retention knobs.
 
       # Unraid User/Group IDs
       PUID: ${PUID:-99}
@@ -266,6 +264,44 @@ services:
       - "com.unraid.docker.icon=https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png"
       - "com.unraid.docker.webui=http://[IP]:[PORT:7880]"
 
+  # ============================================
+  # Backup Sidecar
+  # ============================================
+  # Nightly mysqldump + uploads archive written to /mnt/user/backups/the-logbook,
+  # pruned after BACKUP_RETENTION_DAYS, with an automated restore-verification
+  # drill every VERIFY_EVERY_N_BACKUPS runs (scripts/backup-sidecar.sh — same
+  # sidecar the production compose uses). Archives are LOCAL to this host:
+  # sync the backups share offsite, and keep ENCRYPTION_KEY/ENCRYPTION_SALT
+  # stored separately — a backup without its era's keys cannot decrypt
+  # encrypted fields. See docs/BACKUP.md.
+  backup:
+    image: mysql:8.0
+    container_name: logbook-backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["bash", "/scripts/backup-sidecar.sh"]
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-the_logbook}
+      DB_USER: ${DB_USER:-logbook_user}
+      DB_PASSWORD: ${DB_PASSWORD:-change_me_strong_password}
+      # Restore drills load the dump into a throwaway schema, which needs
+      # CREATE/DROP DATABASE — hence root, scoped to this internal network.
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_strong_password}
+      BACKUP_TIME: ${BACKUP_TIME:-02:00}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      VERIFY_EVERY_N_BACKUPS: ${VERIFY_EVERY_N_BACKUPS:-7}
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ./scripts:/scripts:ro
+      - /mnt/user/backups/the-logbook:/backups
+      - /mnt/user/appdata/the-logbook/uploads:/uploads:ro
+    networks:
+      - logbook-internal
+
 # ============================================
 # Networks
 # ============================================
@@ -320,26 +356,28 @@ networks:
 # 5. Access application:
 #    http://YOUR-UNRAID-IP:7880
 #
-# Management Commands:
-#   docker-compose up -d              # Start all services
-#   docker-compose down               # Stop all services
-#   docker-compose down --remove-orphans  # Stop all + clean up orphans
-#   docker-compose restart            # Restart all services
-#   docker-compose logs -f backend    # View backend logs
-#   docker-compose pull               # Pull latest images
-#   docker-compose exec backend bash  # Access backend shell
-#   docker-compose exec db mysql -u root -p  # Access database
+# Management Commands (docker compose v2; use docker-compose if that's what
+# your Unraid has):
+#   docker compose up -d              # Start all services
+#   docker compose down               # Stop all services
+#   docker compose down --remove-orphans  # Stop all + clean up orphans
+#   docker compose restart            # Restart all services
+#   docker compose logs -f backend    # View backend logs
+#   docker compose logs -f backup     # View backup sidecar logs
+#   docker compose exec backend bash  # Access backend shell
+#   docker compose exec db mysql -u root -p  # Access database
 #
 # Removal:
-#   docker-compose down --remove-orphans  # Remove all containers + network
+#   docker compose down --remove-orphans  # Remove all containers + network
 #   Or run: ./unraid/unraid-setup.sh and choose option 4
 #
 # Backup:
-#   docker-compose exec backend /app/scripts/backup.sh
+#   Automated: the `backup` sidecar service runs nightly (BACKUP_TIME).
+#   Manual (from the host, in the install directory): ./scripts/backup.sh
+#   Restore: ./scripts/backup.sh --restore /mnt/user/backups/the-logbook/logbook_backup_TIMESTAMP.tar.gz
 #
 # Update:
-#   docker-compose pull
-#   docker-compose up -d
+#   ./unraid/update.sh   # verified DB dump + build-context repair + rebuild
 #
-# For more help, see: /mnt/user/appdata/the-logbook/UNRAID-INSTALLATION.md
+# For more help, see: /mnt/user/appdata/the-logbook/docs/deployment/unraid.md
 # ============================================

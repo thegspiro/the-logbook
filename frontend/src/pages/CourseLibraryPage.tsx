@@ -5,6 +5,7 @@ import { trainingService } from '../services/api';
 import { CourseSyllabusBuilder } from '../components/training/CourseSyllabusBuilder';
 import { SkeletonCardGrid } from '../components/ux/Skeleton';
 import { Pagination } from '../components/ux/Pagination';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
 import type {
   TrainingCourse,
@@ -366,6 +367,7 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
 // provides the outer page chrome + title), so we drop the standalone
 // min-h-screen wrapper and the big page header to avoid doubling them up.
 const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  const { confirm } = useConfirm();
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -419,7 +421,15 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
   }, []);
 
   const handleDelete = async (courseId: string, courseName: string) => {
-    if (!confirm(`Are you sure you want to delete "${courseName}"? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: 'Deactivate course',
+        message: `Deactivate "${courseName}"? It will no longer be available for new training records.`,
+        confirmLabel: 'Deactivate',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await trainingService.updateCourse(courseId, { active: false });
       toast.success('Course deactivated');
@@ -470,15 +480,15 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
     <div className={embedded ? '' : 'min-h-screen'}>
       <main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           {embedded ? (
             <p className="text-theme-text-muted text-sm">
               Organization-wide training course catalog ({courses.length} course{courses.length !== 1 ? 's' : ''})
             </p>
           ) : (
             <div>
-              <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-                <BookOpen className="h-8 w-8 text-red-700 dark:text-red-500" />
+              <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+                <BookOpen className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" />
                 <span>Course Library</span>
               </h1>
               <p className="text-theme-text-muted mt-1">

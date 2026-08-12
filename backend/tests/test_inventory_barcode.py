@@ -94,3 +94,30 @@ class TestNextSequentialBarcode:
         except ValueError:
             raised = True
         assert raised
+
+
+class TestPrintableLabelBarcode:
+    async def test_replaces_unencodable_barcode_with_scannable_canonical_value(self):
+        item_id = uuid4()
+        item = SimpleNamespace(
+            id=str(item_id),
+            organization_id=uuid4(),
+            name="Legacy item",
+            barcode="INV-12火",
+            asset_tag=None,
+            serial_number=None,
+        )
+        db = MagicMock()
+        db.commit = AsyncMock()
+        service = InventoryService(db)
+        service.get_item_by_id = AsyncMock(return_value=item)
+        service._next_sequential_barcode = AsyncMock(return_value="INV-000123")
+
+        specs, auto_populated = await service.build_label_specs(
+            [item_id], item.organization_id
+        )
+
+        assert specs[0].barcode_value == "INV-000123"
+        assert item.barcode == "INV-000123"
+        assert auto_populated == 1
+        db.commit.assert_awaited_once()

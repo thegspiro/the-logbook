@@ -860,18 +860,16 @@ async def create_prospect(
     )
     archived_matches = [m for m in matches if m["status"] == "archived"]
     if archived_matches:
-        match = archived_matches[0]
-        # MP-7: return a plain-string message rather than a structured body
-        # carrying the archived member's internal user_id / reactivate URL.
-        # The client never consumed those fields, and this mirrors the sibling
-        # /check-existing endpoint's deliberate PII minimization.
+        # MP-7: match details can contain an email the caller did not submit
+        # when the service matched by name. Keep the create response aligned
+        # with /check-existing's deliberately minimized projection: the caller
+        # needs to know what workflow to use, not the archived member's PII.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"A previously archived member matches this prospect: "
-                f"{match['name']} ({match['email']}). Consider reactivating "
-                f"their account from the archived members list instead of "
-                f"creating a new prospect."
+                "A previously archived member matches this prospect. Consider "
+                "reactivating their account from the archived members list "
+                "instead of creating a new prospect."
             ),
         )
 
@@ -1224,6 +1222,18 @@ async def transfer_prospect(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
     if not result.get("success"):
+        if result.get("existing_member_match"):
+            # The service needs the match internally to choose the duplicate
+            # workflow, but the HTTP boundary must not echo its PII. This also
+            # covers name-only matches whose stored email was never supplied
+            # by the caller.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "An existing member matches this prospect. Review the "
+                    "existing members list instead of creating a duplicate."
+                ),
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("message")
         )
@@ -1529,7 +1539,6 @@ async def get_election_package(
         require_permission(
             "prospective_members.view",
             "prospective_members.manage",
-            "elections.view",
             "elections.manage",
         )
     ),
@@ -1537,7 +1546,7 @@ async def get_election_package(
     """
     Get the election package for a prospect.
 
-    **Requires permission: prospective_members.view or prospective_members.manage or elections.view or elections.manage**
+    **Requires permission: prospective_members.view, prospective_members.manage, or elections.manage**
     """
     service = MembershipPipelineService(db)
     pkg = await service.get_election_package(
@@ -1629,7 +1638,6 @@ async def list_election_packages(
         require_permission(
             "prospective_members.view",
             "prospective_members.manage",
-            "elections.view",
             "elections.manage",
         )
     ),
@@ -1641,7 +1649,7 @@ async def list_election_packages(
     The package built for the caller's own application is omitted — it
     bundles the interview and coordinator material the vote is based on.
 
-    **Requires permission: prospective_members.view or prospective_members.manage or elections.view or elections.manage**
+    **Requires permission: prospective_members.view, prospective_members.manage, or elections.manage**
     """
     service = MembershipPipelineService(db)
     packages = await service.list_election_packages(

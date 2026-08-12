@@ -23,6 +23,21 @@ export const NATIVE_BARCODE_FORMATS = ['code_128', 'code_39', 'ean_13', 'ean_8',
 export const HAS_BARCODE_DETECTOR = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
 /**
+ * Open a video-only stream while asking mobile browsers for the rear camera.
+ *
+ * `ideal` is intentional: an exact `environment` constraint rejects on
+ * laptops and older devices that do have a usable camera but do not expose a
+ * facing mode. It also avoids retrying permission and hardware failures with a
+ * second request, which can hide the useful DOMException from the UI.
+ */
+export function acquirePreferredCameraStream(): Promise<MediaStream> {
+  return navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' } },
+    audio: false,
+  });
+}
+
+/**
  * Returns a user-facing reason string when the camera cannot be used, or null
  * when it should be available. The common mobile failure is an insecure origin
  * (plain HTTP over a LAN IP): browsers only expose `navigator.mediaDevices` in
@@ -39,4 +54,39 @@ export function getCameraUnavailableReason(): string | null {
     return 'Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan.';
   }
   return null;
+}
+
+/**
+ * Turn a failed camera start into something a member can act on.
+ *
+ * Every scanner passed its error to `getErrorMessage(err, 'Camera access
+ * denied. Please allow camera permissions…')`, but a fallback only applies
+ * when the error carries no message of its own — and `getUserMedia` always
+ * rejects with a `DOMException` that has one. So the friendly copy was dead at
+ * all four call sites, and what reached the screen was the browser's own
+ * wording: a laptop with no webcam said **"Requested device not found"**, which
+ * names no cause and suggests no action.
+ *
+ * The distinction that matters is in `name`, not in `message`: refusing the
+ * permission prompt and having no camera at all are different problems with
+ * different fixes, and only one of them is worth going to browser settings for.
+ */
+export function describeCameraError(error: unknown): string {
+  // Browser media APIs reject with DOMException. Some WebViews and test DOM
+  // implementations do not put DOMException on the same prototype chain as
+  // Error, so read its standard `name` field structurally.
+  const name =
+    typeof error === 'object' && error !== null && 'name' in error && typeof error.name === 'string' ? error.name : '';
+  switch (name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'Camera access was blocked. Allow camera permission for this site in your browser settings, then try again.';
+    case 'NotFoundError':
+    case 'OverconstrainedError':
+      return 'No camera was found on this device. Use a phone or tablet with a camera, or enter the code by hand.';
+    case 'NotReadableError':
+      return 'The camera is in use by another app. Close anything else using it, then try again.';
+    default:
+      return 'The camera could not be started. Check that this device has a working camera and that the browser is allowed to use it.';
+  }
 }

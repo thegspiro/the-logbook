@@ -147,6 +147,16 @@ class ElectionService:
             return list(votes)
         return [v for v in votes if getattr(v, "manual_batch_id", None) not in pending]
 
+    @staticmethod
+    def _is_attested_vote(election_id: UUID):
+        """SQL predicate excluding votes that belong to a pending paper batch."""
+        pending_batch = select(ManualBallotBatch.id).where(
+            ManualBallotBatch.id == Vote.manual_batch_id,
+            ManualBallotBatch.election_id == str(election_id),
+            ManualBallotBatch.status == "pending",
+        )
+        return ~pending_batch.exists()
+
     # ------------------------------------------------------------------
     # Audit helpers
     # ------------------------------------------------------------------
@@ -1036,11 +1046,14 @@ class ElectionService:
         if not eligibility.is_eligible:
             return None, eligibility.reason or "You are not eligible to vote"
 
-        # Get election for further checks
+        # Serialize vote validation and insertion for this election. The
+        # method-aware dedup hash permits distinct candidates/ranks, so its
+        # unique constraint cannot enforce per-voter limits by itself.
         result = await self.db.execute(
             select(Election)
             .where(Election.id == str(election_id))
             .where(Election.organization_id == str(organization_id))
+            .with_for_update()
         )
         election = result.scalar_one_or_none()
 
@@ -3453,6 +3466,10 @@ class ElectionService:
             description=source.description,
             election_type=source.election_type,
             positions=copy.deepcopy(source.positions),
+            # Ballot items are the core of a reusable ballot.  Copy the JSON
+            # structure deeply so a later edit to the clone cannot mutate a
+            # mutable source value held by the ORM session.
+            ballot_items=copy.deepcopy(source.ballot_items),
             position_eligibility=copy.deepcopy(source.position_eligibility),
             start_date=start_date,
             end_date=end_date,
@@ -3928,6 +3945,7 @@ class ElectionService:
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
             .where(Vote.is_test.is_(False))
+            .where(self._is_attested_vote(election.id))
             .group_by(Vote.candidate_id)
         )
         candidate_vote_counts = dict(vote_counts_result.all())
@@ -4229,6 +4247,7 @@ class ElectionService:
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
             .where(Vote.is_test.is_(False))
+            .where(self._is_attested_vote(election.id))
         )
         all_votes = votes_result.scalars().all()
 
@@ -6708,7 +6727,11 @@ Best regards,
             .where(Vote.voter_hash == voting_token.voter_hash)
             .where(Vote.is_test == voting_token.is_test)
             .where(Vote.deleted_at.is_(None))
-            .where(Vote.position == position if position else Vote.position.is_(None))
+            .where(
+                Vote.position == effective_position
+                if effective_position
+                else Vote.position.is_(None)
+            )
         )
         position_votes = existing_votes_result.scalars().all()
 
@@ -6716,7 +6739,7 @@ Best regards,
             if any(v.vote_rank == vote_rank for v in position_votes):
                 return None, (
                     f"You have already cast a rank-{vote_rank} vote"
-                    + (f" for {position}" if position else "")
+                    + (f" for {effective_position}" if effective_position else "")
                 )
             if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
                 return None, "You have already ranked this candidate"
@@ -6728,10 +6751,10 @@ Best regards,
             if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
                 return None, "You have already voted for this candidate"
             if len(position_votes) >= max_votes:
-                if position:
+                if effective_position:
                     if max_votes == 1:
-                        return None, f"You have already voted for {position}"
-                    return None, f"Maximum votes for {position} reached"
+                        return None, f"You have already voted for {effective_position}"
+                    return None, f"Maximum votes for {effective_position} reached"
                 if max_votes == 1:
                     return None, "You have already voted"
                 return None, "Maximum votes for this election reached"
@@ -6751,7 +6774,7 @@ Best regards,
             candidate_id=candidate_id,
             voter_id=None,  # Anonymous - not stored
             voter_hash=voting_token.voter_hash,
-            position=position,
+            position=effective_position,
             vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
@@ -6760,7 +6783,7 @@ Best regards,
             vote_dedup_hash=self._compute_vote_dedup_hash(
                 election.id,
                 dedup_voter,
-                position,
+                effective_position,
                 discriminator=self._dedup_discriminator(
                     election, candidate_id, vote_rank
                 ),

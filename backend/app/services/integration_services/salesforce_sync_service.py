@@ -24,17 +24,16 @@ from app.models.user import User
 from app.services.integration_services.salesforce_service import SalesforceService
 
 # Logbook User attributes an inbound Salesforce sync may overwrite. Deliberately
-# limited to contact/demographic fields. Identity fields (email, membership
-# number), the status state machine, and typed date fields are intentionally
-# excluded — Salesforce is not authoritative for those, and changing email would
-# break login/matching.
+# limited to contact/demographic fields. Authorization and identity fields
+# (rank, email, membership number), the status state machine, and typed date
+# fields are intentionally excluded — Salesforce is not authoritative for those,
+# and changing email would break login/matching.
 INBOUND_UPDATABLE_FIELDS: frozenset[str] = frozenset(
     {
         "first_name",
         "last_name",
         "phone",
         "mobile",
-        "rank",
         "station",
         "address_street",
         "address_city",

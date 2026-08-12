@@ -967,14 +967,14 @@ export const SettingsPage: React.FC = () => {
 
         return (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-theme-text-primary text-lg font-semibold">Modules</h3>
                 <p className="text-theme-text-muted mt-1 text-sm">
                   Enable or disable optional modules. Core modules (Members, Events, Documents) are always active.
                 </p>
               </div>
-              <span className="bg-theme-accent-green-muted text-theme-accent-green rounded-full px-2.5 py-1 text-xs font-medium">
+              <span className="bg-theme-accent-green-muted text-theme-accent-green shrink-0 self-start rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap sm:self-auto">
                 {enabledCount} / {CONFIGURABLE_MODULES.length} enabled
               </span>
             </div>

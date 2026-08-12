@@ -73,7 +73,7 @@ const EmailSection: React.FC<EmailSectionProps> = ({
 
       {/* Email Templates */}
       <div className="border-theme-surface-border border-t pt-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h4 className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">Email Templates</h4>
           <button
             type="button"
@@ -112,7 +112,7 @@ const EmailSection: React.FC<EmailSectionProps> = ({
               placeholder="Email body (HTML supported)"
               className="form-input placeholder-theme-text-muted text-sm"
             />
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <select
                 value={newTemplateTrigger}
                 onChange={(e) => onNewTemplateTriggerChange(e.target.value)}

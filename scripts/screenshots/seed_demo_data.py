@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -69,7 +70,20 @@ class Throttle:
 
 
 # `_rate_limit_admin_reset` in app/api/v1/endpoints/users.py: 5 per 300s.
-ADMIN_RESET_THROTTLE = Throttle(max_calls=5, window_seconds=300)
+#
+# Overridable because the pacing only earns its cost when the ceiling is
+# actually there. A local demo stack seeded with `RATE_LIMIT_ENABLED=false`
+# has no admin-reset limiter to stay under, and a roster of twenty members
+# then spends the better part of an hour asleep waiting for a window that
+# does not exist. Set `SEED_ADMIN_RESET_WINDOW_SECONDS=0` in that case.
+#
+# Default unchanged: against any stack with the limiter on — which is every
+# real one, and the CI stack — the 300s window is what avoids the 15-minute
+# lockout, and guessing wrong there costs far more than the pacing does.
+ADMIN_RESET_WINDOW_SECONDS = float(
+    os.environ.get("SEED_ADMIN_RESET_WINDOW_SECONDS", "300")
+)
+ADMIN_RESET_THROTTLE = Throttle(max_calls=5, window_seconds=ADMIN_RESET_WINDOW_SECONDS)
 
 # Shared password given to the seeded member accounts so the seeder can act as
 # them where the API has no admin-on-behalf-of route (event RSVPs). Demo-only.
@@ -479,6 +493,20 @@ RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 # staffing, so a four-person engine asks for an officer, a driver and two
 # firefighters while a two-person brush truck asks for an officer and a driver.
 SHIFT_POSITIONS = ["officer", "driver", "firefighter", "firefighter", "ems"]
+
+# One future shift is left crewed by its officer alone.
+#
+# Every other shift is staffed to its minimum or one short, which is what a real
+# schedule looks like — but it means the crew board never shows more than a
+# single open row, and the bulk "Fill All Open" action only appears once two or
+# more slots are unfilled. Both were unreachable in the demo, so the guide's
+# crew-board screenshot had nothing to photograph.
+#
+# ``(day offset from today, index into the fleet)``. Day 4 puts it far enough
+# ahead to be unambiguously future on any run; fleet index 2 is the Weekend Duty
+# Crew template, whose minimum staffing of four leaves three rows open beside
+# the officer's filled one.
+PART_STAFFED_SHIFT = (4, 2)
 
 # The requirement each programme makes members finish before the rest of its
 # phase. Chosen among the requirements the seeded members have *not* finished,
@@ -1835,7 +1863,13 @@ class Seeder:
                 seats = SHIFT_POSITIONS[:staffing]
                 if officer_seated and "officer" in seats:
                     seats = [seat for seat in seats if seat != "officer"]
-                if not full:
+                if (offset, index) == PART_STAFFED_SHIFT and officer_seated:
+                    # The one board with several rows open — see
+                    # PART_STAFFED_SHIFT. Only meaningful with an officer
+                    # already seated: with nobody aboard at all the board is an
+                    # empty state, not a part-staffed shift.
+                    seats = []
+                elif not full:
                     seats = seats[:-1]
                 crew = day_pool[pool_cursor : pool_cursor + len(seats)]
                 pool_cursor += len(crew)
@@ -1875,6 +1909,7 @@ class Seeder:
                             raise
         self._seat_shift_officers(shifts)
         self._align_crew_to_seats(shifts)
+        self._thin_part_staffed_shift(fleet[:3])
         self._seed_shift_attendance(shifts)
         return {
             "templates": templates,
@@ -1882,6 +1917,49 @@ class Seeder:
             "apparatus": fleet,
             "shifts": shifts,
         }
+
+    def _thin_part_staffed_shift(self, fleet: list[dict]) -> None:
+        """Empty every seat but the officer's on the one part-staffed shift.
+
+        The create path above declines to crew this shift in the first place,
+        but a shift that already exists is skipped entirely on a re-run — so on
+        every database except a brand new one the board would stay one row short
+        and the guide's crew-board screenshot would have nothing to picture. The
+        repair is here, against the API, for the same reason
+        ``_align_crew_to_seats`` is: an existing demo database should be brought
+        into line rather than needing a wipe.
+
+        The shift officer keeps their seat. A board with nobody on it is an
+        empty state, not the part-staffed one this is for.
+        """
+        offset, index = PART_STAFFED_SHIFT
+        if index >= len(fleet):
+            return
+        apparatus_id = pick(fleet[index], "id")
+        day = str(TODAY + timedelta(days=offset))
+        target = next(
+            (
+                shift
+                for shift in items(
+                    self.api.get("/scheduling/shifts?limit=200"), "shifts"
+                )
+                if str(pick(shift, "shift_date", "shiftDate") or "") == day
+                and pick(shift, "apparatus_id", "apparatusId") == apparatus_id
+            ),
+            None,
+        )
+        if not target:
+            return
+        shift_id = pick(target, "id")
+        officer_id = pick(target, "shift_officer_id", "shiftOfficerId")
+        if not officer_id:
+            return
+        for row in items(
+            self.api.get(f"/scheduling/shifts/{shift_id}/assignments"), "assignments"
+        ):
+            if pick(row, "user_id", "userId") == officer_id:
+                continue
+            self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
 
     def _seat_shift_officers(self, shifts: list[dict]) -> None:
         """Put each shift's designated officer onto its crew board.
@@ -3089,8 +3167,9 @@ class Seeder:
 
         - one position carrying **two lots with two dates**, so the "soonest
           aboard" rule is visible rather than asserted;
-        - one position **short of par** (18 of 24), which is also the only thing
-          that makes the Set All to Par warning fire;
+        - one position **short of par** (18 of 24) that still carries an
+          expiry, which is also the only thing that makes the Set All to Par
+          warning fire;
         - one **restock report** raised by an ordinary member, so the row names
           a real person rather than the administrator who seeded it;
         - one **expired** lot on the shelf, struck through and refused by the
@@ -3121,7 +3200,6 @@ class Seeder:
             return {"skipped": "no linked positions"}
 
         self._deploy_lots(positions, catalog)
-        self._leave_one_short(positions)
         self._report_one_used(positions, str(pick(medic, "id")))
         return {
             "template_id": pick(template, "id"),
@@ -3390,20 +3468,6 @@ class Seeder:
                         f"supply: {position} refused lot "
                         f"{pick(lot, 'lot_number', 'lotNumber')}"
                     )
-
-    def _leave_one_short(self, positions: dict[str, str]) -> None:
-        """Record 18 of 24 gauze.
-
-        Two screens need a truck that is short. The supply worklist needs a row
-        that is under par rather than merely expiring, and **Set All to Par**
-        needs something whose count it would raise — its warning is suppressed
-        on a compartment already full, so a fully stocked demo department cannot
-        picture the guard at all.
-        """
-        item_id = positions.get("Gauze 4x4 Sterile")
-        if not item_id:
-            return
-        self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 18})
 
     def _report_one_used(self, positions: dict[str, str], apparatus_id: str) -> None:
         """Raise a restock report as an ordinary member, not as the chief.
@@ -3785,6 +3849,51 @@ class Seeder:
 
     # -- scheduling: equipment check templates and completed checks --
 
+    def _add_section_header(self, template_id: str | None) -> None:
+        """Put one section header on the engine checklist.
+
+        Headers are a documented grouping device — a bold caption inside a
+        compartment, with no pass/fail control and no effect on the score — and
+        no seeded template had one, so the feature was undocumentable and the
+        renderer untested against real data.
+
+        Written as a top-up rather than folded into the create payload above:
+        the template is created once and every existing demo database already
+        has it, so a header only in the create branch would never appear.
+        """
+        if not template_id:
+            return
+        template = self.api.get(f"/equipment-checks/templates/{template_id}")
+        cab = next(
+            (c for c in items(template, "compartments") if pick(c, "name") == "Cab"),
+            None,
+        )
+        if not cab:
+            return
+        existing = items(cab, "items")
+        # Keyed on check_type, not the `is_header` column. That column is a
+        # compartment-level flag; on an item it is write-only — the item
+        # response schema does not carry it and the check form switches on
+        # `checkType === "header"`.
+        if any(pick(i, "check_type", "checkType") == "header" for i in existing):
+            return
+        header = self.api.post(
+            f"/equipment-checks/compartments/{pick(cab, 'id')}/items",
+            {
+                "name": "Safety Equipment",
+                "check_type": "header",
+                "is_required": False,
+                # Appended, then moved: sort_order is stored verbatim and the
+                # three existing items already hold 0, 1 and 2, so there is no
+                # gap to insert into without renumbering them anyway.
+                "sort_order": len(existing),
+            },
+        )
+        self.api.put(
+            f"/equipment-checks/compartments/{pick(cab, 'id')}/items/reorder",
+            {"ordered_ids": [pick(header, "id")] + [pick(i, "id") for i in existing]},
+        )
+
     def seed_equipment_checks(self) -> dict[str, Any]:
         """A template plus completed checks, which the reports page aggregates."""
         self._repair_check_types()
@@ -3840,6 +3949,8 @@ class Seeder:
                 },
             )
             templates.append(engine_daily)
+
+        self._add_section_header(pick(engine_daily, "id"))
 
         def close_out_template_for(apparatus_type: str) -> dict:
             """Get or create the end-of-shift template for an apparatus type.
@@ -7846,6 +7957,152 @@ class Seeder:
 
     # -- facilities: maintenance & inspections -----------------------
 
+    # name, description, membership types, priority, how many requirements
+    COMPLIANCE_PROFILES = [
+        (
+            "Line Officers",
+            "Officers carry the full requirement set and are held to it strictly.",
+            ["active"],
+            10,
+            3,
+        ),
+        (
+            "Probationary Members",
+            "A probationary member is graded on the core set only, until release.",
+            ["probationary"],
+            5,
+            1,
+        ),
+    ]
+
+    def seed_compliance_profiles(self) -> dict[str, Any]:
+        """Save a compliance configuration, then the profiles it unlocks.
+
+        The Profiles tab refuses to build anything until a threshold
+        configuration has been saved — "Save the compliance thresholds first
+        before creating profiles" — and a department that has only ever *looked*
+        at the Thresholds tab has not saved one: the numbers it shows before a
+        first save are the code's defaults, not a stored row. So the tab renders
+        that notice and nothing else, which is a truthful screen of an
+        unconfigured department and a useless one for documenting profiles.
+        """
+        config = self.api.get("/compliance/config")
+        if not config:
+            config = self.api.post(
+                "/compliance/config/initialize",
+                {
+                    "threshold_type": "percentage",
+                    "compliant_threshold": 100,
+                    "at_risk_threshold": 75,
+                    "grace_period_days": 0,
+                    "notify_on_non_compliant": False,
+                    "reminder_days": [30, 14, 7],
+                },
+            )
+
+        existing = {p.get("name") for p in items(config, "profiles")}
+        # One id per *distinct name*. The department carries three separate
+        # requirements all called "Aerial Operations" — one per program — and
+        # the picker returns only id, name, type, source and frequency, so
+        # nothing at any layer tells them apart. Three identical chips on a
+        # profile read as a rendering bug when they are the honest answer, and
+        # they teach nothing about what a profile is for.
+        seen_names: set[str] = set()
+        requirement_ids = []
+        for requirement in items(
+            self.api.get("/compliance/config/requirements"), "requirements"
+        ):
+            name = str(pick(requirement, "name") or "")
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            requirement_ids.append(pick(requirement, "id"))
+        created = 0
+        for name, description, types, priority, wanted in self.COMPLIANCE_PROFILES:
+            if name in existing:
+                continue
+            self.api.post(
+                "/compliance/config/profiles",
+                {
+                    "name": name,
+                    "description": description,
+                    "membership_types": types,
+                    # Sliced from whatever the department actually has rather
+                    # than named: requirement ids are per-install, and a profile
+                    # naming one that does not exist is refused.
+                    "required_requirement_ids": requirement_ids[:wanted],
+                    "is_active": True,
+                    "priority": priority,
+                },
+            )
+            created += 1
+
+        reports = self.api.get("/compliance/reports?limit=20")
+        if not items(reports, "reports"):
+            # One generated report, so Report History is a history rather than
+            # its own empty state. Last month rather than this one: a report for
+            # a month still in progress grades everyone against requirements
+            # they still have time to meet, which is not what the screen is for.
+            first_of_month = TODAY.replace(day=1)
+            previous = first_of_month - timedelta(days=1)
+            self.api.post(
+                "/compliance/reports/generate",
+                {
+                    "report_type": "monthly",
+                    "year": previous.year,
+                    "month": previous.month,
+                    # Never true here. Generating a report is safe to seed;
+                    # mailing one to every officer in the demo department is not.
+                    "send_email": False,
+                },
+            )
+        return {"profiles_created": created}
+
+    def seed_external_provider(self) -> dict[str, Any]:
+        """Configure the department's LMS so Integrations is not an empty state.
+
+        Only the *configuration* is seeded. `connection_verified`, `last_sync_at`
+        and the import queue are written by a real sync against a real vendor
+        API, and no create/update field sets them — so this department reads
+        "Connection not verified" and "Last Sync: Never", which is what a
+        department that has entered its credentials and not yet pressed Sync
+        actually sees.
+        """
+        existing = items(self.api.get("/training/external/providers"), "providers")
+        if existing:
+            return {"providers": existing}
+
+        # The API base URL is fetched server-side during a sync, so it goes
+        # through an SSRF guard that resolves the hostname and rejects anything
+        # private. A made-up host would fail to resolve and the create would
+        # 400; the vendor's real API host is the one value that passes.
+        categories = items(self.api.get("/training/categories"), "categories")
+        default_category = next(
+            (c for c in categories if pick(c, "name") == "Fire Suppression"),
+            categories[0] if categories else None,
+        )
+        provider = self.api.post(
+            "/training/external/providers",
+            {
+                "name": "Vector Solutions",
+                "provider_type": "vector_solutions",
+                "description": (
+                    "Department LMS. Completed courses sync into each member's "
+                    "training record and count toward their requirements."
+                ),
+                "api_base_url": "https://api.vectorsolutions.com/v1",
+                "auth_type": "api_key",
+                # Stored encrypted, and never sent anywhere: no sync is seeded.
+                "api_key": "demo-key-not-a-real-credential",
+                "auto_sync_enabled": True,
+                "sync_interval_hours": 24,
+                "default_category_id": (
+                    pick(default_category, "id") if default_category else None
+                ),
+            },
+        )
+        return {"providers": [provider] if provider else []}
+
     def seed_facility_activity(self, facilities: list[dict]) -> dict[str, list[dict]]:
         maintenance = items(self.api.get("/facilities/maintenance"), "maintenance")
         inspections = items(self.api.get("/facilities/inspections"), "inspections")
@@ -8325,6 +8582,8 @@ class Seeder:
             )
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
+        self.step("compliance profiles", self.seed_compliance_profiles)
+        self.step("external training provider", self.seed_external_provider)
         self.step("facility activity", lambda: self.seed_facility_activity(facilities))
         self.step("storefront", self.seed_storefront)
         finance = self.step("finance", self.seed_finance) or {}

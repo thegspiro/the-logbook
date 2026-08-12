@@ -70,14 +70,6 @@ export const getMembershipRoutes = () => {
         }
       />
       <Route
-        path="/members/scan"
-        element={
-          <Suspense fallback={null}>
-            <MemberScanPage />
-          </Suspense>
-        }
-      />
-      <Route
         path="/members/:userId"
         element={
           <Suspense fallback={null}>

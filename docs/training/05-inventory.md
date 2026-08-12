@@ -658,8 +658,7 @@ pool count beside it, and the CSV export carries the same number in its own
 which ledger it came from, so a number that disagrees with the item's Quantity
 field reads as the count that matters rather than as a bug.
 
-> **Screenshot needed:**
-> _[Screenshot of the inventory items grid with two consumable rows visible — one showing a Qty figure annotated "in-date lots" and one showing a plain pool figure — so the two ledgers can be told apart]_
+![Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure](./images/05-53-items-grid-lot-stock.png)
 
 > **Why the two disagree.** For anything kept as dated stock, the item's
 > **Quantity** field is not maintained at all: receiving a lot does not touch it,
@@ -683,8 +682,7 @@ for often did not exist.
 4. Set the **received date** once, for the whole delivery.
 5. Review and submit.
 
-> **Screenshot needed:**
-> _[Screenshot of the Receive Stock modal with four delivery lines filled in — different items, lot numbers, expirations and quantities — and the single received-date field above them]_
+![Receive Stock: four delivery lines, each its own item, lot and expiry, under one received date](./images/05-09-receive-stock-modal.png)
 
 **The whole delivery lands, or none of it does.** A partly applied delivery is
 worse than a rejected one: you cannot tell which lines landed, and re-entering it
@@ -700,15 +698,26 @@ one-item-at-a-time modal.
 
 1. Go to **Inventory**.
 2. Click **Add Several**.
-3. Paste or type one item per line.
-4. Review the parsed preview and submit.
+3. Paste or type one item per line. A name on its own is enough; add
+   `| quantity | unit` after it to set those too.
+4. Pick a **category** and a **tracking** type for the whole paste — they apply
+   to every line, so paste one kind of thing at a time. **Counted** is right for
+   anything a checklist counts: a bracket holds four gauze, not gauze #7.
+5. Review the parsed preview and submit.
 
-> **Screenshot needed:**
-> _[Screenshot of the Add Several modal with eight pasted lines in the input and the parsed preview beside it, showing two lines marked as already existing in the catalog]_
+![Add Several: eight pasted lines and the parsed preview of name, quantity and unit](./images/05-10-bulk-add-items.png)
+
+The preview shows what each line **parsed to** — name, quantity, unit — with an
+em dash where a line gave none. It does **not** flag names the catalog already
+holds: that check runs on the server, and the ones it skipped are named back to
+you in the result message after you submit. Two of the eight lines above are
+already in this department's catalog, and nothing on this screen says so.
 
 **Names already in the catalog are skipped and reported, not rejected**, so you
-can re-paste a list after it grows and only the new lines are created. As with
-receiving, any validation failure writes nothing at all.
+can re-paste a list after it grows and only the new lines are created. The
+preview does not mark them in advance — it shows every line you pasted, and the
+skipped ones are named in the confirmation after you submit. As with receiving,
+any validation failure writes nothing at all.
 
 The **Import CSV** button beside them is the third path. It goes to
 `/inventory/import`, which was built and routed but previously reachable only by
@@ -727,8 +736,7 @@ apparatus**: the checklist positions this item fills, which apparatus and
 compartment each one is, what that truck is carrying right now, and the soonest
 expiration aboard.
 
-> **Screenshot needed:**
-> _[Screenshot of an inventory item's Stock tab showing the ready-lots table above a "Deployed on apparatus" list of three checklist positions, each naming its apparatus, compartment, on-truck count and soonest expiration]_
+![An item's Stock Lots tab: the shelf lots above, and the checklist positions carrying it below](./images/05-07-item-stock-deployed.png)
 
 This is the direction a **recall** is worked from — you are holding the item and
 need to know which rigs to go to. The opposite direction ("what is expiring on my
@@ -1533,11 +1541,22 @@ The equipment check template builder no longer crashes when editing templates. T
 
 ### Camera Error Handling
 
-- **InventoryScanModal**: Error messages from camera failures now show specific details (e.g., "Camera permission denied" instead of "An error occurred")
-- **Errors stay visible**: Camera error messages no longer auto-dismiss, giving you time to read and act on them
+The scanner names **which** camera problem you have, because the fix differs:
+a blocked permission sends you to browser settings, a device with no camera
+does not (there is nothing there to grant), a camera held by another app asks
+you to close it, and a page served over plain HTTP says so. The four messages
+are listed in `10-mobile-pwa.md`, which is where the scanner is documented in
+full.
 
-> **Screenshot needed:**
-> _[Screenshot of the InventoryScanModal showing a camera error message: "Camera permission denied. Please allow camera access in your browser settings." with a "Try Again" button below]_
+- **Errors stay visible** — camera error messages do not auto-dismiss, so there
+  is time to read and act on them
+- **The manual field is always there.** On any browser where the camera fails,
+  the barcode / serial-number input still works, so a failed camera slows the
+  job down rather than stopping it. There is no separate "Try Again" button:
+  the scan control stays where it was, and retrying is the same click
+
+The refused-camera state is pictured in `10-mobile-pwa.md`; it is the same
+banner in both scanners.
 
 ### WebSocket Reliability
 

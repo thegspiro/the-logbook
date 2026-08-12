@@ -56,7 +56,7 @@ const ExpiringCertsTab: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
             <Shield className="h-5 w-5 text-red-700 dark:text-red-400" />
@@ -66,7 +66,11 @@ const ExpiringCertsTab: React.FC = () => {
             Certifications expiring within the next {daysWindow} days
           </p>
         </div>
-        <select value={daysWindow} onChange={(e) => setDaysWindow(Number(e.target.value))} className="form-input-sm">
+        <select
+          value={daysWindow}
+          onChange={(e) => setDaysWindow(Number(e.target.value))}
+          className="form-input-sm sm:w-auto"
+        >
           <option value={30}>30 days</option>
           <option value={60}>60 days</option>
           <option value={90}>90 days</option>

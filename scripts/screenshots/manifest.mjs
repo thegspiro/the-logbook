@@ -236,6 +236,59 @@ export function openFirstFromApi(apiPath, routeFor, listKey, match) {
   };
 }
 
+/**
+ * Put the medic unit's stocked inventory on screen.
+ *
+ * The Apparatus Inventory page opens on "Select an apparatus…", which is an
+ * empty state rather than the screen — every shot of it has to pick a rig
+ * first. M-3 is the one `seed_supply_tracking` stocks: two lots on the drug
+ * bag, gauze and gloves under par, and a restock report from a member.
+ *
+ * Selected by the option's **value**, not its label. The label is built from
+ * two fields ("M-3 — Medic 3"), so matching it as a string breaks the moment
+ * either one is edited.
+ */
+export async function selectMedicApparatus(page) {
+  const select = page.locator("#apparatus-select");
+  await select.waitFor({ timeout: 20_000 });
+  const value = await page
+    .locator("#apparatus-select option")
+    .filter({ hasText: "M-3" })
+    .first()
+    .getAttribute("value");
+  if (!value) {
+    throw new Error("selectMedicApparatus: no M-3 in the apparatus picker");
+  }
+  await select.selectOption(value);
+  // Wait on the compartments rather than a timeout: they load on selection,
+  // and without this the shot catches a spinner over an otherwise-right page.
+  await page
+    .getByText(/Drug Bag|Trauma Bag/i)
+    .first()
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(600);
+}
+
+/**
+ * Open a checklist template in the builder, by name.
+ *
+ * By name through the API rather than by clicking the settings list: that list
+ * is ordered and grows, so a positional click quietly opens a different
+ * template as the demo department fills out — the failure `openFirstFromApi`
+ * exists to prevent.
+ */
+export function openTemplateNamed(name) {
+  return async (page) => {
+    await openFirstFromApi(
+      "/equipment-checks/templates",
+      (id) => `/scheduling/equipment-check-templates/${id}`,
+      "templates",
+      (t) => (t.name ?? "") === name,
+    )(page);
+    await page.waitForTimeout(1_500);
+  };
+}
+
 /** True for an event that has started but not finished. */
 export const isInProgress = (event) => {
   const now = new Date().toISOString();
@@ -618,7 +671,8 @@ function openPartStaffedShift(shotId) {
       }
       return null;
     });
-    if (!id) throw new Error(`${shotId}: no future shift has exactly one open seat`);
+    if (!id)
+      throw new Error(`${shotId}: no future shift has exactly one open seat`);
     const url = new URL(page.url());
     url.searchParams.set("shift", id);
     await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
@@ -629,10 +683,7 @@ function openPartStaffedShift(shotId) {
 /** Open the Shift Reports tab and switch to one of its views. */
 function openReportView(name) {
   return async (page) => {
-    await page
-      .getByRole("button", { name })
-      .first()
-      .click({ timeout: 20_000 });
+    await page.getByRole("button", { name }).first().click({ timeout: 20_000 });
     await page.waitForTimeout(2500);
   };
 }
@@ -706,7 +757,9 @@ async function runImpactAnalysis(page) {
   const sizeField = page.locator('select[aria-label="Size needed"]');
   const sizes = await sizeField
     .locator("option")
-    .evaluateAll((els) => els.map((e) => e.getAttribute("value")).filter(Boolean));
+    .evaluateAll((els) =>
+      els.map((e) => e.getAttribute("value")).filter(Boolean),
+    );
   if (sizes[0]) await sizeField.selectOption(sizes[0]);
   await page.waitForTimeout(600);
   // The stock select only renders once a size field is chosen, and only a
@@ -716,7 +769,9 @@ async function runImpactAnalysis(page) {
     .filter({ hasText: /subtract current stock/i });
   const opts = await stock
     .locator("option")
-    .evaluateAll((els) => els.map((e) => e.getAttribute("value")).filter(Boolean));
+    .evaluateAll((els) =>
+      els.map((e) => e.getAttribute("value")).filter(Boolean),
+    );
   if (opts[0]) await stock.selectOption(opts[0]);
   await page.waitForTimeout(400);
   await page
@@ -761,9 +816,12 @@ export const SHOTS = [
     route: "/scheduling",
     prepare: async (page) => {
       const id = await page.evaluate(async () => {
-        const response = await fetch("/api/v1/training/shift-reports/all?limit=50", {
-          credentials: "include",
-        });
+        const response = await fetch(
+          "/api/v1/training/shift-reports/all?limit=50",
+          {
+            credentials: "include",
+          },
+        );
         if (!response.ok) return null;
         const rows = await response.json();
         const list = Array.isArray(rows) ? rows : rows.reports || [];
@@ -864,9 +922,7 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       // Wait for the member list to load rather than for a fixed pause: the
       // select renders empty first and a fixed wait pictured it that way.
-      await page
-        .locator("#assign-member-search")
-        .waitFor({ timeout: 15_000 });
+      await page.locator("#assign-member-search").waitFor({ timeout: 15_000 });
       await page.waitForTimeout(1500);
     },
     // Clipped to the form. The panel scrolls in its own container, so
@@ -1076,6 +1132,10 @@ export const SHOTS = [
     anchor: "Screenshot of a shift's Crew Board with one position filled",
     alt: "A shift's crew board — one filled position and three open, each with Assign and Sign Up",
     route: "/scheduling",
+    // "No calls logged for this shift" is the Calls/Runs panel further down the
+    // same drawer. This shift is deliberately in the future — that is what
+    // leaves its seats open — and a shift that has not run yet has no calls.
+    allowEmptyState: true,
     prepare: async (page) => {
       // A shift with several slots still open: that is what puts open-position
       // rows on the board and brings up the bulk "Fill All Open" action, which
@@ -1122,6 +1182,10 @@ export const SHOTS = [
       "Screenshot of the Required EVOC Level control on an apparatus edit form",
     alt: "The Required EVOC Level control on an apparatus, set to the level needed to drive it",
     route: "/apparatus",
+    // "No EVOC requirement" is this select's placeholder option. It is in the
+    // DOM — and so in the text the empty-state scan reads — on every apparatus,
+    // including the one picked here precisely because it *has* a level set.
+    allowEmptyState: true,
     prepare: async (page) => {
       // The control is on the apparatus *edit form*, not the detail page, and
       // it renders only once the organization has EVOC levels configured.
@@ -1570,6 +1634,52 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "02-104-cohort-preview-step",
+    doc: "02-training.md",
+    line: 220,
+    anchor:
+      "Screenshot of the cohort wizard on the Preview step, showing a numbered list",
+    alt: "The cohort wizard's Preview step — computed class dates, a weekend-move warning, and the holidays offered as blackout dates",
+    route: "/training/admin?tab=cohorts",
+    prepare: async (page) => {
+      await clickByName("New cohort")(page);
+      // The wizard fetches the course list and the member roster before it
+      // renders step 1 at all; until they land it is a pair of skeletons.
+      await page.waitForSelector("#cohort-course", { timeout: 20_000 });
+
+      // Recruit School is the only seeded course with a syllabus, and the
+      // wizard refuses to advance without one. Matched on the option's text
+      // rather than passed as a label: the picker appends each course's code,
+      // so the exact label is "Recruit School (RS-100)".
+      const courseValue = await page.$eval("#cohort-course", (select) => {
+        const match = Array.from(select.options).find((option) =>
+          option.text.startsWith("Recruit School"),
+        );
+        return match ? match.value : "";
+      });
+      await page.selectOption("#cohort-course", courseValue);
+      await page.fill("#cohort-name", "Recruit School — Fall 2026");
+      await clickByName("Next")(page);
+
+      // 5 Nov 2026 is chosen so the syllabus's own day offsets (0, 3, 7, 10,
+      // 14) land two classes on a Sunday and put Veterans Day inside the
+      // span — which is what makes the warning and the blackout suggestion
+      // appear at all. Any other start date renders the step empty of both.
+      await page.fill("#cohort-start", "2026-11-05");
+      await page.selectOption("#cohort-policy", "next_business_day");
+      await page.fill("#cohort-time", "19:00");
+      await clickByName("Next")(page);
+
+      // The Next click fires the preview request; the step renders a skeleton
+      // until it lands.
+      await page.waitForSelector("text=Holidays in this range", {
+        timeout: 20_000,
+      });
+      await page.waitForTimeout(600);
+    },
+    viewport: { width: 1440, height: 1500 },
+  },
+  {
     id: "02-80-session-course-autopopulate",
     doc: "02-training.md",
     line: 1728,
@@ -1929,7 +2039,10 @@ export const SHOTS = [
       // Off, so the members who cannot be enrolled are listed with the reason
       // rather than filtered away — which is the half of this the guide
       // described as an after-the-fact summary.
-      await page.getByText(/Show eligible only/).first().click();
+      await page
+        .getByText(/Show eligible only/)
+        .first()
+        .click();
       await page.waitForTimeout(1200);
       const dialog = page.locator("div.fixed.inset-0").first();
       // The eligible members sort first, so the first three rows are a
@@ -1980,7 +2093,8 @@ export const SHOTS = [
     },
     // Stops short of pressing Submit: filing the batch is finite, and the
     // shift's reports would exist on the next run.
-    selector: "div.bg-theme-surface.rounded-xl:has(h3:text-is('New Shift Completion Report'))",
+    selector:
+      "div.bg-theme-surface.rounded-xl:has(h3:text-is('New Shift Completion Report'))",
   },
   {
     id: "02-103-shift-report-drafts",
@@ -2003,7 +2117,8 @@ export const SHOTS = [
     id: "02-100-checklist-steps-editor",
     doc: "02-training.md",
     line: 365,
-    anchor: "The checklist steps editor, with one step kept off the member's view",
+    anchor:
+      "The checklist steps editor, with one step kept off the member's view",
     alt: "The requirement editor's checklist steps — each with its own eye toggle, one switched to officer-only",
     route: "/training/admin?page=setup&tab=requirements",
     prepare: async (page) => {
@@ -2042,7 +2157,9 @@ export const SHOTS = [
         if (!response.ok) return null;
         const rows = await response.json();
         const list = Array.isArray(rows) ? rows : [];
-        const wanted = list.find((row) => /Recruit School/.test(row.name || ""));
+        const wanted = list.find((row) =>
+          /Recruit School/.test(row.name || ""),
+        );
         return wanted ? wanted.id : null;
       });
       if (!programId) throw new Error("02-101: no Recruit School pipeline");
@@ -2074,7 +2191,8 @@ export const SHOTS = [
     id: "02-98-requirement-prerequisite",
     doc: "02-training.md",
     line: 445,
-    anchor: "The pipeline detail page with one requirement set to be done first",
+    anchor:
+      "The pipeline detail page with one requirement set to be done first",
     alt: "A phase on the pipeline detail page — one requirement chipped 'Do this first', the rest 'Any order'",
     route: "/training/programs",
     prepare: async (page) => {
@@ -2242,7 +2360,8 @@ export const SHOTS = [
     id: "02-94-officer-progress-detail",
     doc: "02-training.md",
     line: 322,
-    anchor: "A member's enrollment progress detail showing requirements grouped by phase",
+    anchor:
+      "A member's enrollment progress detail showing requirements grouped by phase",
     alt: "The officer's view of a member's pipeline progress, with the controls that credit and verify each requirement",
     route: "/training/programs",
     prepare: async (page) => {
@@ -3129,21 +3248,91 @@ export const SHOTS = [
         "emergencyPhone1",
       ];
       const rows = [
-        ["Wren", "Adisa", "241", "wadisa", "1994-02-11", "wren.adisa@example.org", "2026-02-01", "firefighter", "Ada Adisa", "Sister", "555-0142"],
-        ["Tomas", "Vlk", "242", "tvlk", "1990-07-03", "tomas.vlk@example.org", "2026-02-01", "emt", "Petra Vlk", "Spouse", "555-0143"],
-        ["Ines", "", "243", "ifer", "1988-11-30", "ines.ferreira@example.org", "2026-02-01", "firefighter", "Luis Ferreira", "Father", "555-0144"],
-        ["Bo", "Nakashima", "244", "bn", "1996-05-19", "bo.nakashima@example.org", "2026-02-01", "Engine Operator", "Rei Nakashima", "Mother", "555-0145"],
-        ["Hala", "Zayed", "245", "hzayed", "not-a-date", "hala.zayed@example.org", "2026-02-01", "emt", "Omar Zayed", "Brother", "555-0146"],
-        ["Petr", "Vlk", "246", "pvlk", "1992-09-08", "tomas.vlk@example.org", "2026-02-01", "firefighter", "Jana Vlk", "Spouse", "555-0147"],
+        [
+          "Wren",
+          "Adisa",
+          "241",
+          "wadisa",
+          "1994-02-11",
+          "wren.adisa@example.org",
+          "2026-02-01",
+          "firefighter",
+          "Ada Adisa",
+          "Sister",
+          "555-0142",
+        ],
+        [
+          "Tomas",
+          "Vlk",
+          "242",
+          "tvlk",
+          "1990-07-03",
+          "tomas.vlk@example.org",
+          "2026-02-01",
+          "emt",
+          "Petra Vlk",
+          "Spouse",
+          "555-0143",
+        ],
+        [
+          "Ines",
+          "",
+          "243",
+          "ifer",
+          "1988-11-30",
+          "ines.ferreira@example.org",
+          "2026-02-01",
+          "firefighter",
+          "Luis Ferreira",
+          "Father",
+          "555-0144",
+        ],
+        [
+          "Bo",
+          "Nakashima",
+          "244",
+          "bn",
+          "1996-05-19",
+          "bo.nakashima@example.org",
+          "2026-02-01",
+          "Engine Operator",
+          "Rei Nakashima",
+          "Mother",
+          "555-0145",
+        ],
+        [
+          "Hala",
+          "Zayed",
+          "245",
+          "hzayed",
+          "not-a-date",
+          "hala.zayed@example.org",
+          "2026-02-01",
+          "emt",
+          "Omar Zayed",
+          "Brother",
+          "555-0146",
+        ],
+        [
+          "Petr",
+          "Vlk",
+          "246",
+          "pvlk",
+          "1992-09-08",
+          "tomas.vlk@example.org",
+          "2026-02-01",
+          "firefighter",
+          "Jana Vlk",
+          "Spouse",
+          "555-0147",
+        ],
       ];
       const csv = [header, ...rows].map((line) => line.join(",")).join("\n");
-      await page
-        .locator('input[data-testid="csv-file-input"]')
-        .setInputFiles({
-          name: "roster.csv",
-          mimeType: "text/csv",
-          buffer: Buffer.from(csv, "utf8"),
-        });
+      await page.locator('input[data-testid="csv-file-input"]').setInputFiles({
+        name: "roster.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from(csv, "utf8"),
+      });
       await page.waitForTimeout(2500);
       const rejected = page.getByText(/row\(s\) will not be imported/);
       await rejected.waitFor({ timeout: 20_000 });
@@ -3480,8 +3669,8 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 984,
     anchor:
-      "Screenshot of the External Training Integrations page showing a connected provider with",
-    alt: "External Training Integrations page showing provider connection status",
+      "Screenshot of the External Training Integrations page showing a saved provider card with",
+    alt: "The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions",
     route: "/training/integrations",
   },
   {
@@ -3492,6 +3681,49 @@ export const SHOTS = [
       "Screenshot of the Training Programs page with the Export button visible on",
     alt: "Training Programs page listing programs with an export action",
     route: "/training/programs",
+  },
+  {
+    id: "02-02-historical-import-preview",
+    doc: "02-training.md",
+    line: 1480,
+    anchor:
+      "Screenshot of the historical import page showing the file upload area",
+    alt: "The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button",
+    route: "/training/admin?page=setup&tab=import",
+    prepare: async (page) => {
+      // A CSV built here rather than committed: the importer matches rows to
+      // members by email, so the file has to name members this department
+      // actually has, and those are minted per seed run.
+      const csv = [
+        "email,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes",
+        "isolberg@oakvillefd.example.org,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Ruiz,Station 1,95,Annual certification",
+        "ytanaka@oakvillefd.example.org,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher",
+        "hvance@oakvillefd.example.org,Pump Operations,2024-05-02,12,certification,PO-8891,2027-05-02,Capt. Frazier,Station 1,88,",
+        "jwhitfield@oakvillefd.example.org,Hazmat Awareness,2024-06-11,6,refresher,,,Chief Ruiz,Training Center,,",
+      ].join("\n");
+      // The wizard defaults to matching on membership number, and rejects an
+      // email-keyed file outright — "CSV must contain a 'membership_number'
+      // column". Choose the match mode before uploading.
+      await page.getByText("Email Address", { exact: true }).first().click();
+      await page.waitForTimeout(600);
+      await page.setInputFiles('input[type="file"]', {
+        name: "historical-training-2024.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from(csv, "utf8"),
+      });
+      await page.waitForTimeout(2_000);
+      // Upload -> Map courses -> Preview. The wizard advances on its own
+      // button rather than by step number.
+      for (let step = 0; step < 2; step += 1) {
+        const next = page
+          .getByRole("button", { name: /Continue to (Course Mapping|Preview)/ })
+          .first();
+        if (!(await next.count())) break;
+        await next.click();
+        await page.waitForTimeout(1_500);
+      }
+    },
+    fullPage: true,
   },
   {
     id: "02-64-skills-testing-admin",
@@ -3607,10 +3839,42 @@ export const SHOTS = [
     id: "03-59-supply-worklist",
     doc: "03-scheduling.md",
     line: 894,
-    anchor: "Screenshot of the Expiring on Apparatus page with the three summary pills",
+    anchor:
+      "Screenshot of the Expiring on Apparatus page with the three summary pills",
     alt: "Expiring on Apparatus: the summary pills, the 30/60/90 window, and three rows — one expiring, one reported used, one short of par",
     route: "/scheduling/supply/expiring",
+    // "No stock" here is a **badge on a populated row** — the Nozzle position,
+    // which is short and has nothing behind it, and is the one row on this page
+    // that pictures "order it" rather than "swap it". The empty-state check
+    // matches it as a whole short line and holds the shot back; the page is the
+    // opposite of empty, carrying five rows across every filter it offers.
+    allowEmptyState: true,
     fullPage: true,
+  },
+
+  {
+    id: "03-60-report-used-sheet",
+    doc: "03-scheduling.md",
+    line: 880,
+    anchor:
+      'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
+    alt: "The report-used sheet: quantity stepper, optional note, and the position's current count",
+    auth: "member",
+    route: "/scheduling/apparatus-inventory",
+    viewport: "mobile",
+    prepare: async (page) => {
+      await selectMedicApparatus(page);
+      // "Flag" on a counted position, "Used" on one with no target — the same
+      // report by either name, so match both rather than assuming which the
+      // seeder produced for the first row.
+      const trigger = page
+        .getByRole("button", { name: /^(Flag|Used)$/ })
+        .first();
+      await trigger.waitFor({ timeout: 20_000 });
+      await trigger.click();
+      await page.waitForTimeout(900);
+    },
+    fullPage: false,
   },
 
   // ── 04 Events & Meetings ────────────────────────────────────────────
@@ -3695,12 +3959,27 @@ export const SHOTS = [
     id: "05-53-items-grid-lot-stock",
     doc: "05-inventory.md",
     line: 662,
-    anchor: "Screenshot of the inventory items grid with two consumable rows visible",
+    anchor:
+      "Screenshot of the inventory items grid with two consumable rows visible",
     alt: 'Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure',
     // Needs `seed_supply_tracking` to have run: without dated lots on at least
     // one item every row reports the pool figure and the two ledgers cannot be
     // told apart, which is the entire subject of the caption.
     route: "/inventory/items",
+    prepare: async (page) => {
+      // Filtered to a term matching both ledgers. The grid is alphabetical and
+      // the lot-stocked consumables sit mid-list, so an unfiltered shot shows
+      // one kind or the other depending on where the fold lands — and the whole
+      // claim is that the two are distinguishable side by side.
+      const search = page.getByPlaceholder(/search/i).first();
+      await search.waitFor({ timeout: 20_000 });
+      await search.fill("s");
+      await page.waitForTimeout(1_800);
+    },
+    // Slightly taller than the default frame so the last row in view is a whole
+    // row: at 900px the fold lands through "in-date lots" and reads as a
+    // clipped control rather than a list that continues.
+    viewport: { width: 1440, height: 1010 },
     fullPage: false,
   },
 
@@ -3780,6 +4059,96 @@ export const SHOTS = [
       "Screenshot of the Integrations page showing available integrations as cards with logos,",
     alt: "Integrations page showing available integrations and connection status",
     route: "/integrations",
+  },
+
+  {
+    id: "06-22-apparatus-operators-tab",
+    doc: "06-apparatus-facilities.md",
+    line: 672,
+    anchor:
+      "Screenshot of an engine's Operators tab listing three operators by name",
+    alt: "The Operators tab: certified operators by name, with EVOC level and certification dates",
+    route: "/apparatus",
+    prepare: async (page) => {
+      // `?tab=operators` is read on mount, so no click is needed — but the
+      // apparatus id has to be resolved first, and E-1 is the rig the seeder
+      // gives three operators with spread EVOC levels.
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}?tab=operators`,
+        "apparatus",
+        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
+      )(page);
+      await page
+        .getByRole("button", { name: /Add Operator/i })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
+  },
+  {
+    id: "06-23-add-operator-member-picker",
+    doc: "06-apparatus-facilities.md",
+    line: 687,
+    anchor:
+      "Screenshot of the Add Operator form with a member chosen from the picker",
+    alt: "The Add Operator form: a member picker, not the free-text UUID box it replaced",
+    route: "/apparatus",
+    // Both selects are native, and an open native popup is drawn by the OS
+    // rather than the page — Playwright cannot photograph it. Showing the two
+    // fields *set* makes the same point the caption does, and better: a real
+    // member name proves the box is a picker over the roster, and an EVOC level
+    // is the combination that used to return a server error.
+    allowEmptyState: true, // "No EVOC level" is the placeholder option, not an empty page
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}?tab=operators`,
+        "apparatus",
+        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
+      )(page);
+      const add = page.getByRole("button", { name: /Add Operator/i }).first();
+      await add.waitFor({ timeout: 20_000 });
+      await add.click();
+
+      // Pick by position rather than by name: the roster is seeded and the
+      // first real option is a member either way, whereas naming one couples
+      // this shot to the seeder's name list.
+      const member = page.locator("#operator-member");
+      await member.waitFor({ timeout: 10_000 });
+      // The roster is fetched after the modal mounts, so the select exists for
+      // a moment holding nothing but its placeholder. Waiting on the element
+      // is not waiting on the list.
+      await member
+        .locator("option")
+        .nth(1)
+        .waitFor({ state: "attached", timeout: 20_000 });
+      const memberValue = await member.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) => option.value !== "")?.value ??
+          "",
+      );
+      if (!memberValue) throw new Error("member picker has no members in it");
+      await member.selectOption(memberValue);
+
+      const evoc = page.locator("select").nth(1);
+      const evocValue = await evoc.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) =>
+            /intermediate/i.test(option.text),
+          )?.value ?? "",
+      );
+      if (!evocValue) throw new Error("no Intermediate EVOC level defined");
+      await evoc.selectOption(evocValue);
+
+      await page
+        .getByLabel(/Certified to operate/i)
+        .first()
+        .check();
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
   },
 
   // ── 08 Administration & Reports ─────────────────────────────────────
@@ -3980,6 +4349,127 @@ export const SHOTS = [
     // in plain state before that, so this shot would have silently captured the
     // Templates tab — the same way `02-21` and `02-41` came to be byte-identical.
     route: "/communications/email-templates?tab=footers",
+    // The whole page: the guide's claim is about the *library* — three footers,
+    // one of them the default — and a single viewport holds one and a half.
+    fullPage: true,
+    // The empty-state detector fires on "No templates close with this footer",
+    // which is the honest count beside a footer nobody has assigned yet, not a
+    // page that failed to load.
+    allowEmptyState: true,
+  },
+
+  {
+    id: "08-68-compliance-dashboard",
+    doc: "08-admin-reports.md",
+    line: 1001,
+    anchor:
+      "Screenshot of the ComplianceDashboard showing compliance rate cards",
+    alt: "The medical-screening Compliance tab: a rate card per screening type, with expiring and overdue called out",
+    // `?tab=compliance` only started working on 2026-08-11. The page held its
+    // tab in plain state before that, so this shot would have silently
+    // captured the Requirements tab — the way `02-21`/`02-41` came to be
+    // byte-identical images under different captions.
+    route: "/medical-screening?tab=compliance",
+    fullPage: true,
+  },
+  {
+    id: "08-69-compliance-requirements-config",
+    doc: "08-admin-reports.md",
+    line: 1044,
+    anchor:
+      "Screenshot of the ComplianceRequirementsConfigPage showing the threshold configuration",
+    alt: "Compliance requirements configuration: the thresholds at the top and the profiles beneath them",
+    route: "/training/compliance-config",
+    fullPage: true,
+  },
+  {
+    id: "08-70-compliance-profiles",
+    doc: "08-admin-reports.md",
+    line: 1044,
+    // Applied by hand: the placeholder this replaces was a bullet list, not a
+    // `> _[Screenshot …]_` block, so there was nothing for the anchor matcher
+    // to find.
+    anchor: "Set **priority** — when a member matches multiple profiles",
+    alt: "The Profiles tab: each profile with the groups it targets and the requirements it demands",
+    // `?tab=profiles` only started working on 2026-08-11 — plain state before
+    // that, so this shot would have silently captured the Thresholds tab.
+    route: "/training/compliance-config?tab=profiles",
+    fullPage: true,
+  },
+  {
+    id: "08-71-compliance-report-history",
+    doc: "08-admin-reports.md",
+    line: 1061,
+    anchor:
+      "Screenshot of the report generation dialog showing report type selector",
+    alt: "Generating a compliance report: the type selector, the email switch and the extra recipients field",
+    route: "/training/compliance-config?tab=reports",
+    fullPage: true,
+  },
+  {
+    id: "08-65-template-footer-selector",
+    doc: "08-admin-reports.md",
+    line: 1521,
+    anchor:
+      "Screenshot of the email template editor with the footer selector visible",
+    alt: "The template editor's Closes with selector, set to the Public footer, with that footer's own description under it",
+    route: "/communications/email-templates",
+    prepare: async (page) => {
+      const select = page.locator("#template-footer");
+      await select.waitFor({ timeout: 20_000 });
+      // Changing the select only moves component state — nothing is written
+      // until Save, which is deliberately not clicked. Picking Public rather
+      // than leaving the default is the point: the hint under the control
+      // swaps to the chosen footer's own description, which is how an
+      // administrator tells the three apart without opening the Footers tab.
+      await select.selectOption("public");
+      await page.waitForTimeout(800);
+      await select.scrollIntoViewIfNeeded().catch(() => {});
+    },
+  },
+  {
+    id: "08-66-template-variable-palette",
+    doc: "08-admin-reports.md",
+    line: 1558,
+    anchor: "Screenshot of the template editor's variable palette expanded",
+    alt: "The Available Variables palette expanded, the organization variables among the rest",
+    route: "/communications/email-templates",
+    prepare: async (page) => {
+      await clickByName(/^Available Variables \(\d+\)$/)(page);
+      await page.waitForTimeout(800);
+    },
+    // Not `fullPage`: this page's template list runs to sixty entries, so a
+    // full-page shot is 2,700px tall to picture a panel that occupies 250 of
+    // them.
+    fullPage: false,
+  },
+  {
+    id: "08-67-email-preview-design",
+    doc: "08-admin-reports.md",
+    line: 1600,
+    anchor:
+      "Screenshot of the email preview pane showing the new white-card-on-grey design",
+    alt: "The rendered preview: a white card on grey, its header band, details table and footer",
+    route: "/communications/email-templates",
+    // The Preview tab, not the editor: the two are alternate views of the same
+    // panel and cannot both be on screen.
+    prepare: async (page) => {
+      // "Shift Assignment" rather than whichever template the list opens on.
+      // The footer only renders where the body contains `{{footer_html}}`, and
+      // most of the shipped bodies predate footers — a preview of one of those
+      // would picture the design without the closing block the guide points at.
+      await page.getByText("Shift Assignment", { exact: true }).first().click();
+      await page.waitForTimeout(1_000);
+      await clickByName(/^Preview$/)(page);
+      await page.waitForTimeout(2_000);
+      await page
+        .getByText(/automated message from|Sent by/i)
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 10_000 })
+        .catch(() => {});
+    },
+    // Not `fullPage`: the sixty-entry template list makes the page 2,700px
+    // tall, and the rendered message sits entirely in the first viewport.
     fullPage: false,
   },
 
@@ -4222,19 +4712,54 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
-    id: "10-13-mobile-top-bar",
+    id: "10-14-scan-camera-denied",
     doc: "10-mobile-pwa.md",
-    line: 538,
+    line: 547,
     anchor:
-      "Screenshot of the mobile top navigation bar showing the hamburger menu, page title",
-    alt: "Mobile top bar with the menu button, page title and notification badge",
+      "Screenshot of the MemberScanPage on a mobile device showing a camera error banner",
+    alt: "Member ID scan on a phone after the camera is refused — the red banner naming the failure, with Start Scanning still offered",
+    route: "/members/scan",
+    // A tall phone rather than `viewport: "mobile"` + `fullPage`: the bottom
+    // tab bar is `position: fixed`, and a full-page shot paints it once at its
+    // viewport offset — across the "How to use" card that tells a member what
+    // to do next, which is half the point of picturing the failure.
+    viewport: { width: 414, height: 1100 },
+    prepare: async (page) => {
+      // No fake media device is configured, so `getUserMedia` rejects and the
+      // page renders its own failure banner. That is the point of the shot:
+      // the state a member reaches by declining the permission prompt is the
+      // one the guide has to describe, and it is the only camera state this
+      // harness can reach honestly — a webcam feed cannot be photographed on a
+      // headless runner, and faking one would picture a scan that never
+      // happened.
+      await page
+        .getByRole("button", { name: /^Start Scanning$/ })
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2_500);
+    },
+    fullPage: false,
+  },
+  {
+    id: "10-15-mobile-menu-notifications",
+    doc: "10-mobile-pwa.md",
+    line: 578,
+    anchor:
+      "Screenshot of the mobile top navigation bar showing the hamburger menu",
+    alt: "The phone menu open, with the unread count on the Notifications entry",
     route: "/dashboard",
     viewport: "mobile",
-    selector: "header",
-    allowEmptyState: true,
-    holdBack:
-      "the phone top bar is logo, department name and hamburger — the bell and " +
-      "its unread badge are inside the menu, not on the bar the placeholder describes",
+    prepare: async (page) => {
+      // Where the unread count actually lives on a phone. The collapsed bar
+      // carries no bell — it is logo, department name and hamburger — so the
+      // badge is only reachable with the menu open, and a shot of the bar
+      // alone would picture the absence rather than the feature.
+      await page
+        .getByRole("button", { name: /Open (main|navigation) menu/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(1_200);
+    },
+    fullPage: false,
   },
   {
     id: "10-04-mobile-dashboard",
@@ -4599,6 +5124,232 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "03-73-flat-check-form-header",
+    doc: "03-scheduling.md",
+    line: 1931,
+    anchor:
+      "Screenshot of the flat equipment check form on a mobile device showing a compartment header",
+    alt: "The flat check form on a phone — a compartment heading, a bold section header beneath it, and the items it groups",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Engine Daily Check")(page);
+      // The section header seeded into Cab by `_add_section_header`. Waiting
+      // on it rather than on the compartment name is the point: without it the
+      // shot is a checklist with nothing to picture.
+      await page.waitForSelector("text=Safety Equipment", { timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    viewport: { width: 414, height: 1050 },
+  },
+  {
+    id: "03-72-check-item-controls",
+    doc: "03-scheduling.md",
+    line: 850,
+    anchor:
+      "Screenshot of the equipment check form on a mobile device showing check items with",
+    alt: "Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Medic 3 Supply Check")(page);
+      await page.waitForSelector("text=Trauma Bag", { timeout: 20_000 });
+
+      // The photo button lives inside the note panel, so the note has to be
+      // open for it to exist at all. `:near` rather than an index: the Note
+      // buttons are identical and unlabelled, and an index would move the
+      // moment the seeded template gains an item.
+      await page
+        .locator(
+          'button:has-text("Note"):near(:text-is("Nitrile Gloves — Large"), 160)',
+        )
+        .first()
+        .click({ timeout: 15_000 });
+      await page.getByLabel("Upload photo for Nitrile Gloves — Large").waitFor({
+        state: "attached",
+        timeout: 15_000,
+      });
+
+      // Put that item at the top of the frame, so the shot runs from its
+      // quantity stepper down through the pass/fail item beneath it.
+      await page.evaluate(() => {
+        const heading = Array.from(document.querySelectorAll("span")).find(
+          (node) => node.textContent === "Nitrile Gloves — Large",
+        );
+        if (heading) heading.scrollIntoView({ block: "start" });
+        // `block: "start"` puts the heading under the sticky app bar and the
+        // check's own header; back off far enough that the item's name and its
+        // quantity stepper are both in frame.
+        window.scrollBy(0, -190);
+      });
+      await page.waitForTimeout(500);
+    },
+    viewport: { width: 414, height: 900 },
+  },
+  {
+    id: "03-71-set-all-to-par-confirm",
+    doc: "03-scheduling.md",
+    line: 1113,
+    anchor:
+      'Screenshot of the "Set All to Par" confirmation dialog naming the items whose counts',
+    alt: "The Set All to Par confirmation, naming each item it would raise and by how much",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Medic 3 Supply Check")(page);
+      await page.waitForSelector("text=Trauma Bag", { timeout: 20_000 });
+
+      // Trauma Bag arrives with one item already short (gauze, 18 of 24).
+      // Counting the gloves down gives the dialog a second row, which is what
+      // it is for — a single-item warning reads as a quirk, two reads as the
+      // claim it actually is.
+      const decrease = page.getByLabel(
+        "Decrease Nitrile Gloves — Large quantity",
+      );
+      await decrease.scrollIntoViewIfNeeded();
+      for (let i = 0; i < 2; i += 1) {
+        await decrease.click();
+        await page.waitForTimeout(150);
+      }
+
+      await page.getByLabel("Set all items in Trauma Bag to par").click();
+      await page.waitForSelector(
+        "text=Only do this if you have actually restocked.",
+        {
+          timeout: 15_000,
+        },
+      );
+      await page.waitForTimeout(400);
+    },
+    selector: '[role="dialog"]',
+    viewport: { width: 414, height: 1000 },
+  },
+  {
+    id: "03-70-check-form-carryover",
+    doc: "03-scheduling.md",
+    line: 1092,
+    anchor:
+      "Screenshot of the equipment check form on a phone showing the carry-over banner",
+    alt: "The check form's carry-over banner above a compartment of quantity items, each reading against par with its unit and none yet marked",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      // A check does not need a shift. "Unscheduled checklist" offers every
+      // active template, which is the only way to reach the medic's supply
+      // check — no seeded shift runs on M-3, and the engines' checklists are
+      // pass/fail throughout with no counts to carry over.
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Medic 3 Supply Check")(page);
+      await page.waitForSelector("text=Drug Bag", { timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    // Not fullPage: the whole checklist is eight items and four screens tall,
+    // and the subject is the top of it — the banner, the progress counter and
+    // the first compartment's counts.
+    viewport: { width: 414, height: 1000 },
+  },
+  {
+    id: "03-69-catalog-quick-add",
+    doc: "03-scheduling.md",
+    line: 1055,
+    anchor:
+      "Screenshot of the template builder's quick-add bar with a partial search term typed",
+    alt: "The template builder's quick-add bar, its catalog matches listed beneath and the create-in-inventory option under them",
+    route: "/scheduling/equipment-check-templates",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/equipment-checks/templates",
+        (id) => `/scheduling/equipment-check-templates/${id}`,
+        "templates",
+        (template) => template.name === "Engine Daily Check",
+      )(page);
+      const search = page
+        .getByPlaceholder("Search inventory or type a new item name…")
+        .first();
+      await search.waitFor({ timeout: 20_000 });
+      // Typed, not filled: the search is debounced off change events, and a
+      // programmatic value set fires none of them.
+      await search.click();
+      await search.type("SCBA", { delay: 80 });
+      // "SCBA" matches two catalog items and is nobody's exact name, so both
+      // halves of the dropdown are on screen — the matches and the offer to
+      // create what was typed.
+      await page.waitForSelector("text=SCBA Spare Cylinder", {
+        timeout: 20_000,
+      });
+      await page.waitForTimeout(400);
+    },
+    // The dropdown is absolutely positioned and overflows the compartment, so
+    // clip generously around the bar rather than to it.
+    viewport: { width: 1440, height: 1100 },
+  },
+  {
+    id: "03-68-inventory-match-dialog",
+    doc: "03-scheduling.md",
+    line: 1058,
+    anchor:
+      "Screenshot of the bulk inventory-match dialog listing the unlinked positions",
+    alt: "The bulk inventory-match dialog — coverage in the header, exact matches pre-selected, a close match left for the reader to decide",
+    // Engine Daily Check is the seeded template written before the catalog link
+    // existed: nine positions, none of them linked. Medic 3 is mostly linked
+    // already and would open this dialog on three rows.
+    route: "/scheduling/equipment-check-templates",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/equipment-checks/templates",
+        (id) => `/scheduling/equipment-check-templates/${id}`,
+        "templates",
+        (template) => template.name === "Engine Daily Check",
+      )(page);
+      // The coverage button carries the count, so match on the link icon's
+      // own title rather than a label that changes with the data.
+      await page.click('button[title*="not linked to inventory"]', {
+        timeout: 20_000,
+      });
+      await page.waitForSelector(
+        "text=exact name matches are selected for you",
+        {
+          timeout: 20_000,
+        },
+      );
+    },
+    selector: '[role="dialog"]',
+    viewport: { width: 1440, height: 1200 },
+  },
+  {
+    id: "03-67-swap-request-dialog",
+    doc: "03-scheduling.md",
+    line: 291,
+    anchor:
+      "Screenshot of the Request Shift Swap dialog with Specific Shift chosen",
+    alt: "The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field",
+    route: "/scheduling?tab=my-shifts",
+    prepare: async (page) => {
+      // The Swap button only exists on the Upcoming view, which is the
+      // default; one per assignment, so take the first.
+      await clickByName("Swap")(page);
+      await page.waitForSelector("#swap-reason", { timeout: 15_000 });
+      // Open Swap is the default and hides the picker. The picker is half of
+      // what this dialog is about, so pick the other branch — and give the
+      // shift list, fetched when the dialog opened, a moment to arrive so the
+      // select is not photographed reading "Loading shifts...".
+      await clickByName("Specific Shift")(page);
+      await page.waitForFunction(
+        () => {
+          const select = document.querySelector("#swap-target-shift");
+          return (
+            !!select && select.options.length > 0 && select.value !== "pick"
+          );
+        },
+        { timeout: 15_000 },
+      );
+    },
+    selector: '[role="dialog"] > div',
+  },
+  {
     id: "03-05-open-shifts",
     doc: "03-scheduling.md",
     line: 102,
@@ -4803,6 +5554,134 @@ export const SHOTS = [
       "Screenshot of the Inventory Admin Hub showing the three prominent cards at",
     alt: "Inventory admin hub with its grouped navigation cards",
     route: "/inventory/admin",
+    fullPage: true,
+  },
+  {
+    id: "05-10-bulk-add-items",
+    doc: "05-inventory.md",
+    line: 705,
+    anchor: "Screenshot of the Add Several modal with eight pasted lines",
+    alt: "Add Several: eight pasted lines and the parsed preview of name, quantity and unit",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Add Several/ })
+        .first()
+        .click();
+      const box = page.locator("textarea").first();
+      await box.waitFor({ timeout: 20_000 });
+      // Eight lines, three of them using the `| quantity | unit` suffix the
+      // hint under the box describes, and two naming items the catalog already
+      // holds — those are reported after submitting, not marked here. See the
+      // guide note beside this image.
+      await box.fill(
+        [
+          "Naloxone 4mg Nasal",
+          "Burn Sheet, Sterile | 6 | Each",
+          "Job Shirt",
+          "Cervical Collar, Adjustable | 4 | Each",
+          "Nasopharyngeal Airway Set",
+          "Trauma Shears, 7.5in | 12 | Each",
+          "Emergency Blanket",
+          "Glucometer Test Strips",
+        ].join("\n"),
+      );
+      await page.waitForTimeout(900);
+    },
+    selector: '[role="dialog"]',
+    // The detector fires on the Category select's "No category" — the honest
+    // default for a paste that has not chosen one, not a page that failed.
+    allowEmptyState: true,
+    fullPage: false,
+  },
+  {
+    id: "05-09-receive-stock-modal",
+    doc: "05-inventory.md",
+    line: 685,
+    anchor:
+      "Screenshot of the Receive Stock modal with four delivery lines filled in",
+    alt: "Receive Stock: four delivery lines, each its own item, lot and expiry, under one received date",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // The toolbar button wraps onto two lines, so it is matched loosely
+      // rather than anchored.
+      await page
+        .getByRole("button", { name: /Receive Stock/ })
+        .first()
+        .click();
+      await page
+        .getByPlaceholder("Search inventory…")
+        .first()
+        .waitFor({ timeout: 20_000 });
+
+      // A real delivery: four different consumables, four lot numbers, four
+      // dates. Nothing is submitted — the modal is a form, and the guide's
+      // claim ("the whole delivery lands, or none of it does") is about what
+      // happens after this screen, not on it.
+      const delivery = [
+        ["Naloxone", "NLX-2506", "2027-06-30", "12"],
+        ["Epinephrine", "EPI-4401", "2027-02-28", "8"],
+        ["Gauze", "GZ-1180", "2028-01-15", "60"],
+        ["Normal Saline", "NS-6612", "2027-11-30", "24"],
+      ];
+
+      for (let index = 0; index < delivery.length; index += 1) {
+        if (index > 0) {
+          await page.getByRole("button", { name: /^Add line$/ }).click();
+          await page.waitForTimeout(400);
+        }
+        const [term, lot, expiry, quantity] = delivery[index];
+        // Always the first: once a line has an item the picker replaces its
+        // input with a static row and an Unlink button, so the only search box
+        // left on screen belongs to the line just added.
+        const picker = page.getByPlaceholder("Search inventory…").first();
+        await picker.fill(term);
+        // The picker debounces, then renders its results as buttons.
+        await page.waitForTimeout(1_200);
+        await page
+          .getByRole("button", { name: new RegExp(term) })
+          .first()
+          .click({ timeout: 10_000 });
+        await page.waitForTimeout(300);
+        // Addressed by position, not by id: each line's field ids carry a key
+        // minted at render time, so there is nothing stable to name.
+        await page.locator('input[id^="lot-"]').nth(index).fill(lot);
+        await page.locator('input[id^="exp-"]').nth(index).fill(expiry);
+        await page.locator('input[id^="qty-"]').nth(index).fill(quantity);
+      }
+      // Back to the top of the modal body. Filling the last line leaves it
+      // scrolled to that field, which pushes the received-date field — the
+      // "one date for the whole delivery" half of the claim — off the top.
+      await page.getByLabel("Received").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(600);
+    },
+    // A frame tall enough for the whole dialog: four lines plus the date above
+    // them do not fit the default 900px, and a shorter frame clips whichever
+    // end the body happens to be scrolled to.
+    viewport: { width: 1440, height: 1250 },
+    selector: '[role="dialog"]',
+    fullPage: false,
+  },
+  {
+    id: "05-07-item-stock-deployed",
+    doc: "05-inventory.md",
+    line: 730,
+    anchor:
+      "Screenshot of an inventory item's Stock tab showing the ready-lots table",
+    alt: "An item's Stock Lots tab: the shelf lots above, and the checklist positions carrying it below",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // Naloxone by name: it is the item `seed_supply_tracking` deploys on M-3
+      // in two lots with two dates, which is the whole point of the panel —
+      // shelf stock above, and what is actually on a truck below it.
+      await openFirstFromApi(
+        "/inventory/items?limit=200",
+        (id) => `/inventory/items/${id}?tab=stock`,
+        "items",
+        (item) => item.name === "Naloxone 4mg Nasal",
+      )(page);
+      await page.waitForTimeout(2_500);
+    },
     fullPage: true,
   },
   {
@@ -5061,16 +5940,24 @@ export const SHOTS = [
   },
   {
     id: "03-22-equipment-check-builder",
-    // a builder opened on a new template correctly starts with no compartments;
-    // the shot is of the builder layout
-    allowEmptyState: true,
     doc: "03-scheduling.md",
     line: 668,
     anchor:
       "Screenshot of the Equipment Check Template Builder showing the template header (name,",
-    alt: "Equipment check template builder with the template header and sections",
-    route: "/scheduling/equipment-check-templates/new",
-    fullPage: true,
+    alt: "Equipment check template builder: the template header, its compartments and items, and the catalog-linked count",
+    route: "/scheduling",
+    // An existing template, not `/new`. The shot used to be of the blank
+    // create page — carrying `allowEmptyState` to say so — and the guide text
+    // above it is about compartments, item check types and drag-to-reorder,
+    // none of which a page with "No compartments yet" can show. The toolbar's
+    // linked/unlinked catalog count and the quick-add bar's catalog search,
+    // both added by the supply work, need items on the page to render at all.
+    prepare: openTemplateNamed("Medic 3 Supply Check"),
+    // Viewport, not full page: the builder's toolbar and its summary bar are
+    // both sticky, so a full-page capture paints each of them twice — once
+    // pinned and once where they sit in the document — leaving a duplicated
+    // toolbar across the middle of the image.
+    fullPage: false,
   },
   {
     id: "04-04-event-qr-code",
@@ -6640,7 +7527,8 @@ export const SHOTS = [
     id: "03-96-lots-aboard-sheet",
     doc: "03-scheduling.md",
     line: 866,
-    anchor: "Screenshot of the lots sheet open over the Apparatus Inventory page",
+    anchor:
+      "Screenshot of the lots sheet open over the Apparatus Inventory page",
     alt: "The lots-aboard sheet on a phone — two lots on one position, each with its own count and expiry",
     auth: "member",
     route: "/scheduling/apparatus-inventory",
@@ -6709,7 +7597,7 @@ export const SHOTS = [
     id: "09-18-finish-with-unscored-steps",
     doc: "09-skills-testing.md",
     line: 510,
-    anchor: "The \"finish with unscored steps\" dialog",
+    anchor: 'The "finish with unscored steps" dialog',
     alt: "The warning raised on finishing — how many steps have no score, what an unscored critical step costs, and the choice between going back and reviewing anyway",
     route: "/training/skills-testing",
     prepare: async (page) => {
@@ -7048,6 +7936,56 @@ export const SHOTS = [
     },
     // Not fullPage: the form's action bar is sticky, and a full-page render
     // draws it partway down the page, slicing through the fields underneath.
+    fullPage: false,
+  },
+  {
+    id: "04-03-election-eligibility",
+    doc: "04-events-meetings.md",
+    line: 1288,
+    anchor:
+      "Screenshot of the election detail page showing voter eligibility breakdown",
+    alt: "An election's voter-eligibility panel: which membership types may vote, and how many members each holds",
+    route: "/elections",
+    prepare: async (page) => {
+      // `?tab=eligibility` only started working on 2026-08-11 — plain state
+      // before that, so this shot would have silently captured the Ballot tab.
+      await openFirstFromApi(
+        "/elections",
+        (id) => `/elections/${id}?tab=eligibility`,
+        "elections",
+        (election) => election.title === "Annual Officer Elections",
+      )(page);
+      await page.waitForTimeout(2_500);
+      // The roster is collapsed on arrival — it is a member-by-member list and
+      // the tab does not assume you want it open. The breakdown the caption
+      // names lives inside it.
+      await page
+        .getByRole("button", { name: /Voter Eligibility Roster/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(2_000);
+      // Two artifacts of driving the page rather than reading it: the click
+      // leaves focus on the roster header, which reveals the "Skip to main
+      // content" link, and a full-page shot paints the fixed sidebar once at
+      // whatever offset the page is scrolled to. Blur, then frame the roster
+      // itself.
+      // Plain JS: this file is `.mjs`, so a TypeScript cast will not parse.
+      await page.evaluate(() => document.activeElement?.blur?.());
+      // `scrollIntoViewIfNeeded` is a no-op when the element is already within
+      // the (tall) frame, which leaves the roster pinned to the bottom edge
+      // with its summary cards cut off. Scroll it to the top of the frame.
+      await page
+        .getByText("Voter Eligibility Roster")
+        .first()
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(800);
+    },
+    // The detector fires on the roster's zeroes — nobody ineligible, nobody
+    // overridden, nobody voted yet in an election still taking nominations.
+    // Those are the honest counts, and three of the four are what a
+    // secretary hopes to see.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1250 },
     fullPage: false,
   },
   {

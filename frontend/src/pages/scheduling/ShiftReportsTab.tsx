@@ -1229,7 +1229,7 @@ export const ShiftReportsTab: React.FC = () => {
               <div className="border-theme-surface-border space-y-4 border-t pt-3" onClick={(e) => e.stopPropagation()}>
                 <h4 className="text-theme-text-primary text-sm font-semibold">Complete Draft Report</h4>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Hours on Shift</label>
                     <input
@@ -1326,7 +1326,7 @@ export const ShiftReportsTab: React.FC = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                       Areas of Strength
@@ -1390,7 +1390,7 @@ export const ShiftReportsTab: React.FC = () => {
     <div className="space-y-6">
       {/* View Toggle */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="bg-theme-surface border-theme-surface-border flex flex-1 items-center gap-1 rounded-lg border p-1 sm:flex-none">
+        <div className="bg-theme-surface border-theme-surface-border hscroll flex flex-1 items-center gap-1 rounded-lg border p-1 sm:flex-none">
           <button
             onClick={() => setViewMode('my-reports')}
             className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
@@ -2047,7 +2047,7 @@ export const ShiftReportsTab: React.FC = () => {
               </div>
 
               {/* Submit */}
-              <div className="border-theme-surface-border flex items-center gap-3 border-t pt-2">
+              <div className="border-theme-surface-border flex flex-wrap items-center gap-3 border-t pt-2">
                 <button
                   onClick={() => {
                     void handleBatchSubmit(true);
@@ -2192,7 +2192,7 @@ export const ShiftReportsTab: React.FC = () => {
               {/* Batch review toolbar */}
               {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
                 <div className="bg-theme-surface border-theme-surface-border mb-3 space-y-2 rounded-lg border p-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
                       <input
                         type="checkbox"
@@ -2209,7 +2209,7 @@ export const ShiftReportsTab: React.FC = () => {
                       Select all ({reports.length})
                     </label>
                     {selectedReportIds.size > 0 && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-theme-text-muted text-xs">{selectedReportIds.size} selected</span>
                         {viewMode === 'flagged' && (
                           <button
@@ -2435,7 +2435,7 @@ export const ShiftReportsTab: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2">
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
                   <button
                     onClick={() => {
                       setReviewReportId(null);
