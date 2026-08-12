@@ -1,11 +1,13 @@
 """
 Salesforce Integration Service
 
-Connects to Salesforce REST API using OAuth 2.0 refresh-token flow.
+Connects to Salesforce REST API using OAuth 2.0 refresh-token or client
+credentials flow.
 Supports syncing contacts, events, training records, and incidents
 between The Logbook and a department's Salesforce org.
 """
 
+import asyncio
 import re
 from typing import Any
 
@@ -29,6 +31,10 @@ _UNKNOWN_COLUMN_RE = re.compile(r"No such column '([^']+)'")
 # Cap the drop-unknown-field retry loop so a genuinely broken payload cannot
 # spin indefinitely (each retry removes at least one field, but guard anyway).
 _MAX_FIELD_RETRIES = 6
+_MAX_REQUEST_RETRIES = 3
+_RETRYABLE_READ_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+_INSTANCE_URL_RE = re.compile(r"^https://[a-zA-Z0-9.-]+\.salesforce\.com$")
 
 
 class SalesforceService:
@@ -57,28 +63,56 @@ class SalesforceService:
 
     @property
     def _token_url(self) -> str:
+        # Salesforce's client-credentials flow is scoped to the Connected
+        # App's org and uses that org's My Domain token endpoint. Interactive
+        # refresh-token grants continue to use the appropriate login host.
+        if not self.refresh_token:
+            instance_url = self.instance_url.rstrip("/")
+            if not _INSTANCE_URL_RE.fullmatch(instance_url):
+                raise Exception(
+                    "A valid Salesforce My Domain instance URL is required "
+                    "for client credentials"
+                )
+            return f"{instance_url}/services/oauth2/token"
         return _TOKEN_URLS.get(self.environment, _TOKEN_URLS["production"])
 
     async def _refresh_access_token(self) -> str:
-        """Obtain a fresh access token via the OAuth 2.0 refresh-token grant."""
-        if not self.refresh_token:
-            raise Exception(
-                "No refresh token configured — complete the OAuth flow first"
-            )
+        """Obtain an access token using the configured server-side grant.
+
+        A refresh token represents an interactive OAuth connection.  When it
+        is absent, use Salesforce's client-credentials flow, whose Connected
+        App must have a dedicated Run As user.  Client-credentials access
+        tokens are deliberately reacquired rather than persisted.
+        """
+        if not self.client_id or not self.client_secret:
+            raise Exception("Salesforce client credentials are not configured")
+
+        if self.refresh_token:
+            token_request = {
+                "grant_type": "refresh_token",
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "refresh_token": self.refresh_token,
+            }
+        else:
+            token_request = {
+                "grant_type": "client_credentials",
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            }
 
         async with create_integration_client() as client:
             response = await client.post(
                 self._token_url,
-                data={
-                    "grant_type": "refresh_token",
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "refresh_token": self.refresh_token,
-                },
+                data=token_request,
             )
             if response.status_code != 200:
-                body = response.text[:300]
-                logger.error("Salesforce token refresh failed: {}", body)
+                # OAuth error bodies can contain identifiers and must not be
+                # copied into application logs.
+                logger.error(
+                    "Salesforce token request failed with HTTP {}",
+                    response.status_code,
+                )
                 raise Exception(
                     "Failed to refresh Salesforce access token — "
                     "verify your Connected App credentials"
@@ -93,7 +127,10 @@ class SalesforceService:
             # response. Use it to handle org migrations transparently.
             returned_url = token_data.get("instance_url", "")
             if returned_url:
-                self.instance_url = returned_url
+                canonical_url = returned_url.rstrip("/")
+                if not _INSTANCE_URL_RE.fullmatch(canonical_url):
+                    raise Exception("Salesforce returned an invalid instance URL")
+                self.instance_url = canonical_url
 
             return self._access_token
 
@@ -116,7 +153,7 @@ class SalesforceService:
         json: dict[str, Any] | None = None,
         params: dict[str, str] | None = None,
     ) -> "httpx.Response":  # noqa: F821
-        """Execute an API request with automatic 401 retry.
+        """Execute an API request with bounded authentication/transient retries.
 
         If Salesforce returns 401 (expired token), the access token is
         refreshed once and the request is retried — matching the standard
@@ -141,15 +178,38 @@ class SalesforceService:
             if params is not None:
                 request_kwargs["params"] = params
 
-            response: httpx.Response = await client.request(**request_kwargs)
+            auth_retried = False
+            transient_attempt = 0
+            while True:
+                response: httpx.Response = await client.request(**request_kwargs)
 
-            if response.status_code == 401:
-                # Token expired — refresh and retry once
-                self._access_token = ""
-                new_token = await self._refresh_access_token()
-                headers["Authorization"] = f"Bearer {new_token}"
-                request_kwargs["headers"] = headers
-                response = await client.request(**request_kwargs)
+                if response.status_code == 401 and not auth_retried:
+                    # Token expired — refresh and retry once.
+                    auth_retried = True
+                    self._access_token = ""
+                    new_token = await self._refresh_access_token()
+                    headers["Authorization"] = f"Bearer {new_token}"
+                    request_kwargs["headers"] = headers
+                    continue
+
+                # Salesforce rejects rate-limited requests before applying
+                # them, so 429 is safe to retry for reads and writes. For
+                # ambiguous 5xx responses, only retry idempotent reads to
+                # avoid accidentally creating duplicate records.
+                retryable = response.status_code == 429 or (
+                    method.upper() == "GET"
+                    and response.status_code in _RETRYABLE_READ_STATUSES
+                )
+                if not retryable or transient_attempt >= _MAX_REQUEST_RETRIES:
+                    break
+
+                retry_after = response.headers.get("Retry-After", "")
+                try:
+                    delay = min(max(float(retry_after), 0.0), 10.0)
+                except (TypeError, ValueError):
+                    delay = float(2**transient_attempt)
+                transient_attempt += 1
+                await asyncio.sleep(delay)
 
             return response
 
@@ -171,11 +231,7 @@ class SalesforceService:
         url = self._api_url("/query")
         response = await self._request("GET", url, params={"q": soql})
         if response.status_code != 200:
-            logger.warning(
-                "Salesforce query failed ({}): {}",
-                response.status_code,
-                response.text[:200],
-            )
+            logger.warning("Salesforce query failed ({})", response.status_code)
             raise Exception(f"Salesforce query failed (HTTP {response.status_code})")
 
         data = response.json()
@@ -191,7 +247,10 @@ class SalesforceService:
                     "Salesforce query pagination failed ({})",
                     response.status_code,
                 )
-                break
+                raise Exception(
+                    "Salesforce query pagination failed "
+                    f"(HTTP {response.status_code}); refusing partial results"
+                )
             data = response.json()
             records.extend(data.get("records", []))
 
@@ -253,10 +312,7 @@ class SalesforceService:
                         continue
 
             logger.warning(
-                "Salesforce create {} failed ({}): {}",
-                sobject,
-                response.status_code,
-                response.text[:200],
+                "Salesforce create {} failed ({})", sobject, response.status_code
             )
             raise Exception(f"Failed to create {sobject} in Salesforce")
 
@@ -287,11 +343,10 @@ class SalesforceService:
                         continue
 
             logger.warning(
-                "Salesforce update {}/{} failed ({}): {}",
+                "Salesforce update {}/{} failed ({})",
                 sobject,
                 record_id,
                 response.status_code,
-                response.text[:200],
             )
             return False
 

@@ -95,6 +95,63 @@ class TestUpdateTemplateApparatusValidation:
         assert result is None
 
 
+class TestSubmitterTemplateVisibility:
+    @staticmethod
+    def template(*, active=True, positions=None):
+        template = MagicMock()
+        template.is_active = active
+        template.assigned_positions = positions
+        return template
+
+    async def test_list_hides_inactive_and_other_position_templates(
+        self, service, mock_db
+    ):
+        general = self.template()
+        driver = self.template(positions=["driver"])
+        officer = self.template(positions=["officer"])
+        inactive = self.template(active=False)
+        result_proxy = MagicMock()
+        result_proxy.scalars.return_value.all.return_value = [
+            general,
+            driver,
+            officer,
+            inactive,
+        ]
+        mock_db.execute.return_value = result_proxy
+
+        result = await service.list_templates("org-1", visible_positions={"driver"})
+
+        assert result == [general, driver]
+
+    async def test_get_hides_template_before_attaching_inventory_details(
+        self, service, mock_db
+    ):
+        officer = self.template(positions=["officer"])
+        result_proxy = MagicMock()
+        result_proxy.scalars.return_value.first.return_value = officer
+        mock_db.execute.return_value = result_proxy
+        with patch.object(
+            service, "_attach_unit_labels", new_callable=AsyncMock
+        ) as attach_labels:
+            result = await service.get_template(
+                "tmpl-1", "org-1", visible_positions={"driver"}
+            )
+
+        assert result is None
+        attach_labels.assert_not_awaited()
+
+    async def test_view_access_remains_unrestricted(self, service, mock_db):
+        inactive = self.template(active=False, positions=["officer"])
+        inactive.compartments = []
+        result_proxy = MagicMock()
+        result_proxy.scalars.return_value.first.return_value = inactive
+        mock_db.execute.return_value = result_proxy
+
+        result = await service.get_template("tmpl-1", "org-1")
+
+        assert result is inactive
+
+
 class TestUpdateItemCompartmentValidation:
     """update_item must validate a reassigned compartment_id in-org — moving an
     item to a foreign compartment transfers it (with the caller's content) into

@@ -14,7 +14,7 @@ Tests also freeze the flag into their template snapshot at creation, so turning
 it on later never re-scores a result taken under the old rule.
 
 Revision ID: 20260810_0002
-Revises: 20260810_0001
+Revises: 20260810_0001, 20260809_0002
 Create Date: 2026-08-09 12:00:00.000000
 
 """
@@ -24,7 +24,10 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260810_0002"
-down_revision = "20260810_0001"
+# 20260809_0002 was briefly released with this schema change before the
+# migration was renumbered.  Keep both histories in the graph so databases
+# stamped with that immutable, released revision can upgrade normally.
+down_revision = ("20260810_0001", "20260809_0002")
 branch_labels = None
 depends_on = None
 

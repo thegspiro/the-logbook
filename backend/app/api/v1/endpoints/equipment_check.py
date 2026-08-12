@@ -129,11 +129,18 @@ async def list_templates(
 ):
     """List equipment check templates with optional filters."""
     service = EquipmentCheckService(db)
+    permissions = _collect_user_permissions(current_user)
+    visible_positions = None
+    if not _has_permission("equipment_check.view", permissions):
+        visible_positions = await service.get_user_check_positions(
+            str(current_user.id), str(current_user.organization_id)
+        )
     return await service.list_templates(
         organization_id=current_user.organization_id,
         apparatus_id=apparatus_id,
         apparatus_type=apparatus_type,
         check_timing=check_timing,
+        visible_positions=visible_positions,
     )
 
 
@@ -154,7 +161,17 @@ async def get_template(
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
-    template = await service.get_template(template_id, current_user.organization_id)
+    permissions = _collect_user_permissions(current_user)
+    visible_positions = None
+    if not _has_permission("equipment_check.view", permissions):
+        visible_positions = await service.get_user_check_positions(
+            str(current_user.id), str(current_user.organization_id)
+        )
+    template = await service.get_template(
+        template_id,
+        current_user.organization_id,
+        visible_positions=visible_positions,
+    )
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     return template
@@ -661,7 +678,9 @@ async def submit_check(
     shift_id: str,
     data: ShiftEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Submit an equipment check for a shift."""
     service = EquipmentCheckService(db)
@@ -671,8 +690,13 @@ async def submit_check(
             organization_id=current_user.organization_id,
             checked_by=str(current_user.id),
             data=data.model_dump(exclude_unset=True),
+            allow_manage=_has_permission(
+                "equipment_check.manage", _collect_user_permissions(current_user)
+            ),
         )
         return check
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
@@ -1187,7 +1211,9 @@ async def export_csv(
                 "Period",
                 "Pass",
                 "Fail",
+                "Not Applicable",
                 "Not Checked",
+                "Not On Truck",
             ]
         )
         for t in data.get("trends", []):
@@ -1196,7 +1222,9 @@ async def export_csv(
                     t.get("period", ""),
                     t.get("pass_count", 0),
                     t.get("fail_count", 0),
+                    t.get("not_applicable_count", 0),
                     t.get("not_checked_count", 0),
+                    t.get("not_applicable_count", 0),
                 ]
             )
     else:
@@ -1510,6 +1538,15 @@ async def update_deployed_lot(
     This is how a crew that changed a drug out makes the application say what
     the box in the bag says. Zero quantity removes the lot from the truck.
     """
+    updates = data.model_dump(exclude_unset=True)
+    if {"lot_number", "expiration_date"} & updates.keys():
+        permissions = _collect_user_permissions(current_user)
+        can_manage_lot_metadata = _has_permission(
+            "equipment_check.manage", permissions
+        ) or _has_permission("inventory.manage", permissions)
+        if not can_manage_lot_metadata:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     service = EquipmentCheckService(db)
     try:
         result = await service.update_deployed_lot(
@@ -1517,7 +1554,7 @@ async def update_deployed_lot(
             deployed_lot_id=deployed_lot_id,
             organization_id=str(current_user.organization_id),
             user=current_user,
-            updates=data.model_dump(exclude_unset=True),
+            updates=updates,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1569,9 +1606,7 @@ async def clear_item_restock(
     template_item_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
-        )
+        require_permission("equipment_check.manage", "inventory.manage")
     ),
 ):
     """Withdraw a restock report — restocked by hand, or raised in error."""
@@ -1618,13 +1653,8 @@ async def swap_item_lot(
     template_item_id: str,
     data: LotSwapRequest,
     db: AsyncSession = Depends(get_db),
-    # Includes equipment_check.submit: a member who has just taken a unit off
-    # the truck is the one holding the replacement, and requiring an officer to
-    # record it is how the bracket stays empty until morning.
     current_user: User = Depends(
-        require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
-        )
+        require_permission("equipment_check.manage", "inventory.manage")
     ),
 ):
     """Swap a ready-stock lot onto the apparatus for a checklist item.

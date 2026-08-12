@@ -192,7 +192,8 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   },
   {
     id: 'scheduling',
-    name: 'Scheduling & Shifts',
+    // Same name the nav and the page itself use — this was a third one.
+    name: 'Shift Scheduling',
     description: 'Create shift schedules, manage duty rosters, and handle shift trades. Simplify workforce planning.',
     icon: Clock,
     priority: 'recommended',

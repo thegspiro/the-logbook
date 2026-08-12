@@ -101,6 +101,20 @@ def _format_points(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
 
 
+def _email_result_text(result: str | None) -> str:
+    """Return result text safe for interpolation into an HTML email."""
+    return html.escape((result or "incomplete").upper())
+
+
+def _ensure_test_results_emailable(test: SkillTest) -> None:
+    """Reject attempts to email a scorecard before its result is final."""
+    if test.status != SkillTestStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only completed test results can be emailed",
+        )
+
+
 # ============================================
 # Skill Templates
 # ============================================
@@ -2785,7 +2799,7 @@ async def return_test_for_correction(
 async def email_test_results(
     test_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Email a summary of the test results to the candidate.
@@ -2793,10 +2807,10 @@ async def email_test_results(
     Builds an HTML email with the test scorecard and sends it to the
     candidate's email address. Works for both official and practice tests.
 
-    Officers may email any test's results; a non-officer may only send those of
-    a practice test they ran as examiner.
+    Only training officers may send results. The test must be complete, so this
+    endpoint cannot be used to send draft or attacker-authored result content.
 
-    **Authentication required**
+    **Requires permission: training.manage**
     """
     result = await db.execute(
         select(SkillTest)
@@ -2811,6 +2825,8 @@ async def email_test_results(
         )
 
     _authorize_test_write(test, current_user)
+
+    _ensure_test_results_emailable(test)
 
     # Load template, candidate, examiner
     template_result = await db.execute(
@@ -2845,7 +2861,7 @@ async def email_test_results(
     examiner_name = _format_user_name(examiner) if examiner else "Unknown"
     template_name = template.name if template else "Unknown Template"
     test_type = "Practice" if test.is_practice else "Official"
-    result_text = (test.result or "incomplete").upper()
+    result_text = _email_result_text(test.result)
 
     # Same rule as the API response: the emailed scorecard must reflect the
     # structure the test was taken under, not the template's current state.

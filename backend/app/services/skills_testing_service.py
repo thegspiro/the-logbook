@@ -875,6 +875,14 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
 
     redacted = dict(payload)
     redacted["notes"] = None
+    # Return-for-correction metadata is internal reviewer commentary, not part
+    # of the candidate's score.  In particular, exposing the reason would
+    # defeat a scores-only policy's redaction of written notes.
+    redacted["return_reason"] = None
+    redacted["returned_at"] = None
+    redacted["returned_by"] = None
+    redacted["returned_by_name"] = None
+    redacted["return_count"] = 0
 
     sections = redacted.get("section_results") or []
     clean_sections = []

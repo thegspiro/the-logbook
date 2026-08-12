@@ -64,8 +64,17 @@ const learningPaths: LearningPath[] = [
 
 function readProgress(): Record<string, boolean> {
   try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-    return value && typeof value === 'object' ? value : {};
+    // JSON.parse returns `any`, so narrow before returning: the stored value is
+    // whatever a previous version of this page wrote, or whatever a user typed
+    // into localStorage. Only own boolean entries are kept, which is what the
+    // return type already promised.
+    const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const progress: Record<string, boolean> = {};
+    for (const [key, flag] of Object.entries(value)) {
+      if (typeof flag === 'boolean') progress[key] = flag;
+    }
+    return progress;
   } catch {
     return {};
   }

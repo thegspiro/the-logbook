@@ -1233,6 +1233,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         status: 'in_progress',
         section_results: test.section_results ?? [],
         elapsed_seconds: state.activeTestTimer,
+        expected_version: test.version,
       }).catch(() => {
         // The clock is already running locally. A failure here surfaces on the
         // next save or on Complete Test, which report it properly.

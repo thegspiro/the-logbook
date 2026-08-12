@@ -95,7 +95,7 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Administration')).toBeInTheDocument();
+        expect(screen.getByText('Officer tools')).toBeInTheDocument();
         expect(screen.getByText('Templates')).toBeInTheDocument();
         expect(screen.getByText('Patterns')).toBeInTheDocument();
         expect(screen.getByText('Reports')).toBeInTheDocument();
@@ -121,7 +121,7 @@ describe('SchedulingPage', () => {
         expectTabVisible('Schedule');
       });
 
-      expect(screen.queryByText('Administration')).not.toBeInTheDocument();
+      expect(screen.queryByText('Officer tools')).not.toBeInTheDocument();
       expect(screen.queryByText('Templates')).not.toBeInTheDocument();
       expect(screen.queryByText('Patterns')).not.toBeInTheDocument();
     });

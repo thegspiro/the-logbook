@@ -53,7 +53,7 @@ import type {
 } from '../../types/training';
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
 import {
   DEFAULT_SKILLS,
   DEFAULT_CALL_TYPE_OPTIONS,
@@ -989,6 +989,18 @@ export const ShiftReportsTab: React.FC = () => {
                 {report.trainee_name ? `${report.trainee_name} — ` : ''}
                 {dateStr}
               </p>
+              {/* Person and date alone told two reports from one day apart by
+                  author, never by which shift they covered. The start time is
+                  what separates a day shift from a night one on the same
+                  apparatus — and it is all there is to go on for a shift with
+                  no apparatus at all, like an event or a detail. */}
+              {(report.shift_label || report.shift_start_time) && (
+                <p className="text-theme-text-muted truncate text-xs">
+                  {[report.shift_label, report.shift_start_time ? formatTime(report.shift_start_time, tz) : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
                   {/* One decimal, like the summary table above. Raw, the same
