@@ -1297,6 +1297,41 @@ Two related facts worth carrying:
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
 
+## Elections — The Public Ballot Cannot Be Screenshotted, By Design (2026-08-12)
+
+The public ballot page works; it just cannot be reached by the capture harness,
+and the reason is a security property worth keeping rather than a defect to fix.
+
+`_generate_voting_token` returns the raw token exactly once, to its caller, and
+stores only its SHA-256 (`module-audit ELEC-5`), so database access never yields
+a live credential. The only caller is `send_ballot_emails`, which puts the raw
+token into an email and nothing else — the `send-test-ballot` endpoint returns
+`{success, message}` and no token. The demo stack runs with `EMAIL_ENABLED`
+false and no mail catcher, and the disabled path logs only
+`"Email disabled. Would batch-send N messages."` — not the body.
+
+So there is no supported way to obtain a working token in the demo environment,
+and the ways to manufacture one all mean defeating the hashing. The placeholder
+for the public ballot page in `docs/training/14-elections.md` is retired on that
+basis. Filling it would need a mail catcher wired into `dev_env.sh` plus email
+enabled for the demo org — a harness change, and the right one if this page ever
+has to be documented visually.
+
+## Elections — Proxy Voting Has an Admin Panel But No Ballot Mode (2026-08-12)
+
+`ProxyVotingManagement` exists on the election detail page and configures
+proxies. What does not exist is any way to _vote_ as one: `ElectionBallot` has
+no reference to proxies at all, and the string "Voting as proxy" (or anything
+like it) appears nowhere in the frontend. The guide described a ballot with a
+"Voting as proxy for: …" banner above the standard ballot; there is no such
+banner and no proxy mode on the ballot.
+
+Note this compounds the ballot limitation below — the in-app ballot is the one
+that would need the proxy mode, and it is already the weaker of the two ballots.
+
+Needs an owner decision on whether proxy voting is finished or abandoned. This
+loop does not make that call.
+
 ## Elections — The In-App Ballot Only Shows Position Races (2026-08-12)
 
 An election can carry three kinds of ballot item — `officer_election`,

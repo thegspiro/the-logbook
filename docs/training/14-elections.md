@@ -375,7 +375,13 @@ are never contacted.
 4. Select your choices. The ballot adapts to the election's voting method: radio buttons for single-choice, **checkboxes** for approval and multi-vote elections (select every candidate you support, up to any cap), and **rank dropdowns** for ranked choice (1 = first preference; each rank can be used once)
 5. Click **Submit** — no login required; the token authenticates you. The confirmation screen shows your vote receipts — save them if you want to verify your votes later
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the public ballot page showing the election title, a position ("Fire Chief") with three candidate options as radio buttons, a write-in text field, and a Submit button at the bottom._
+> **No screenshot of this page _(2026-08-12)_.** Not because it is unfinished —
+> the page works — but because reaching it needs a live voting token, and the
+> system deliberately keeps those out of reach. A token is generated once,
+> handed straight to the outgoing email, and stored only as a hash, so nobody
+> with database access (including our screenshot tooling) can recover a working
+> link. That is the property that makes an emailed ballot safe to send. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#elections--the-public-ballot-cannot-be-screenshotted-by-design-2026-08-12).
 
 ### Bulk Voting
 
@@ -484,12 +490,14 @@ When enabled for the organization, proxy voting allows one member to vote on beh
 
 ### Casting a Proxy Vote
 
-1. The proxy holder navigates to the election
-2. A **"Vote as Proxy"** button appears for each member they're authorized to represent
-3. They cast the vote on behalf of the absent member
-4. The vote is recorded under the delegating member's name with audit trail showing proxy details
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of the proxy voting interface showing "Voting as proxy for: FF Johnson" banner at the top, with the standard ballot below._
+> **Not built _(2026-08-12)_.** This section described a flow that does not
+> exist. Proxies can be **configured** — the Proxy Voting panel on the election
+> detail page assigns them and caps how many one member may hold — but there is
+> no way to cast a vote as one. There is no "Vote as Proxy" button, no
+> "Voting as proxy for…" banner, and no proxy mode on the ballot anywhere in the
+> application. Until that is built, a member who cannot attend should be sent an
+> email ballot instead. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#elections--proxy-voting-has-an-admin-panel-but-no-ballot-mode-2026-08-12).
 
 ### Edge Cases
 
