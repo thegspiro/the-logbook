@@ -22,7 +22,7 @@ from app.schemas.skills_testing import SkillTestUpdate
 
 
 def _test(**overrides):
-    base = {"resume_count": 0, "version": 3}
+    base = {"resume_count": 0, "version": 3, "status": "in_progress"}
     base.update(overrides)
     return SimpleNamespace(**base)
 
@@ -31,15 +31,16 @@ def _apply(test, update: SkillTestUpdate, *, version_conflict=False):
     """The endpoint's resume handling, in the order it runs.
 
     Mirrors update_test: the flag is popped as a report rather than a column,
-    and the increment happens *after* the conflict check so a refused write
-    cannot bump the count.
+    the increment happens *after* the conflict check so a refused write cannot
+    bump the count, and only while scoring can actually run (draft or
+    in_progress) so a notes edit on a completed test cannot carry it.
     """
     data = update.model_dump(exclude_unset=True)
     data.pop("expected_version", None)
     resumed = data.pop("resumed", None)
     if version_conflict:
         return data  # endpoint raises 409 here; nothing is written
-    if resumed:
+    if resumed and test.status in ("draft", "in_progress"):
         test.resume_count = (test.resume_count or 0) + 1
     return data
 
@@ -92,6 +93,22 @@ class TestResumeReporting:
         assert "resumed" not in SkillTestUpdate(notes="x").model_dump(
             exclude_unset=True
         )
+
+    def test_a_completed_test_ignores_the_flag(self):
+        """A completed test still accepts notes edits through this endpoint.
+        A stray resume flag riding along on one must not retroactively mark a
+        validated record's timing unverified — that would change what a signed
+        scorecard asserts."""
+        test = _test(status="completed")
+        _apply(test, SkillTestUpdate(resumed=True, notes="addendum"))
+
+        assert test.resume_count == 0
+
+    def test_a_draft_pickup_still_counts(self):
+        test = _test(status="draft")
+        _apply(test, SkillTestUpdate(resumed=True))
+
+        assert test.resume_count == 1
 
 
 class TestDerivedTimingVerified:

@@ -1539,7 +1539,15 @@ async def update_test(
     # Incremented rather than assigned, so a client cannot set it directly — and
     # a replayed save cannot inflate it either, because the examiner screen
     # sends the flag once per pickup.
-    if resumed:
+    #
+    # Only while scoring can actually run (draft/in_progress): a completed test
+    # still accepts notes edits through this endpoint, and letting a stray flag
+    # ride along on one would retroactively mark a validated record's timing
+    # unverified — changing what a signed scorecard asserts.
+    if resumed and test.status in (
+        SkillTestStatus.DRAFT.value,
+        SkillTestStatus.IN_PROGRESS.value,
+    ):
         test.resume_count = (test.resume_count or 0) + 1
 
     # Convert section_results to JSON-serializable dicts if provided

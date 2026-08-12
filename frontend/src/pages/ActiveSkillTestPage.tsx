@@ -1150,6 +1150,7 @@ export const ActiveSkillTestPage: React.FC = () => {
   const pendingResumeRef = useRef(false);
   const loadedTestId = currentTest?.id;
   const loadedElapsedSeconds = currentTest?.elapsed_seconds;
+  const loadedTestStatus = currentTest?.status;
   useEffect(() => {
     if (!loadedTestId || hydratedTimerForTestRef.current === loadedTestId) return;
     hydratedTimerForTestRef.current = loadedTestId;
@@ -1159,9 +1160,15 @@ export const ActiveSkillTestPage: React.FC = () => {
     // the test, not something to redo when the examiner starts or pauses.
     if (!useSkillsTestingStore.getState().activeTestRunning && loadedElapsedSeconds) {
       setActiveTestTimer(loadedElapsedSeconds);
-      pendingResumeRef.current = true;
+      // Only a live test is being *resumed* — opening a completed one (e.g. to
+      // edit notes) restores the display, not the stopwatch, and must not mark
+      // the recorded timing unverified. The server refuses the flag on
+      // non-live tests too; not sending it keeps the wire honest.
+      if (isTestLive(loadedTestStatus)) {
+        pendingResumeRef.current = true;
+      }
     }
-  }, [loadedTestId, loadedElapsedSeconds, setActiveTestTimer]);
+  }, [loadedTestId, loadedElapsedSeconds, loadedTestStatus, setActiveTestTimer]);
 
   // Hydrate template sections from the API response (must be before callbacks
   // that reference it). Memoized on the raw payload so the derived progress
