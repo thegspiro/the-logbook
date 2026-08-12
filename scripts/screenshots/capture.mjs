@@ -424,6 +424,15 @@ async function main() {
       if (clip) {
         await clip.screenshot({ path: target });
       } else {
+        if (shot.fullPage) {
+          // Return to the top first. A prepare step that clicks something far
+          // down the page leaves the window scrolled, and a full-page shot is
+          // stitched from viewport captures with fixed elements painted at the
+          // scroll offset in force — which drops the fixed sidebar into the
+          // middle of the image. Same mechanism as the skip-link above.
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await page.waitForTimeout(250);
+        }
         await page.screenshot({
           path: target,
           fullPage: Boolean(shot.fullPage),

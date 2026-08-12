@@ -980,11 +980,11 @@ their expiration date — and compares it against that requirement.
 
 When a prospect is elected to full membership (transferred from the prospective pipeline), the system can now **automatically generate a department email address** (e.g., `john.smith@firedept.org`).
 
-**Configuration** (Settings > Organization > Department Email):
+**Configuration** — three values on your organization's settings:
 
 | Setting     | Description                                           |
 | ----------- | ----------------------------------------------------- |
-| **Enabled** | Toggle department email generation on/off             |
+| **Enabled** | Turn department email generation on/off               |
 | **Domain**  | Your department's email domain (e.g., `firedept.org`) |
 | **Format**  | Choose from 4 patterns (see below)                    |
 
@@ -997,8 +997,15 @@ When a prospect is elected to full membership (transferred from the prospective 
 | `firstlast`                    | johnsmith@firedept.org  |
 | `last.first`                   | smith.john@firedept.org |
 
-> **Screenshot needed:**
-> _[Screenshot of the Organization Settings page showing the "Department Email" section with an enabled toggle, domain field showing "firedept.org", and a format dropdown set to "first.last"]_
+> **Corrected 2026-08-12 — there is no settings screen for this.** Earlier
+> versions of this guide sent you to "Settings > Organization > Department
+> Email". No such section exists: the frontend has no toggle, domain field or
+> format selector anywhere. Generation is off by default (`enabled: false`,
+> empty domain), and switching it on today means writing the three values to
+> your organization's settings through the API. Everything below — the format
+> patterns, the personal-email preservation, the numeric-suffix collision
+> handling — is real and works once it is enabled. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#membership--department-email-generation-has-no-settings-screen-2026-08-12).
 
 The prospect's **personal email** is preserved in the `personal_email` field on their user profile, so you always have a way to contact them outside the department system.
 

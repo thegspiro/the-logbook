@@ -1882,10 +1882,21 @@ Shift-related notifications now use expandable cards that show a summary preview
 
 - **Pinned-first sorting**: Pinned notifications always appear at the top of the list
 - **Mark as read on collapse**: Notifications are only marked as read when you collapse the card, not when you first open it — this prevents accidental mark-as-read from quick glances
-- **Contextual action buttons**: Each notification type shows relevant action buttons (e.g., "View Shift" for assignment notifications, "Start Checklist" for equipment check reminders)
+- **Contextual action buttons**: An expanded card ends with an action button for
+  that notification's destination, then **Pin** (or **Unpin**). A shift
+  notification offers "View Shift"; a shift reminder opened inside its
+  equipment-check window adds a second button, **Start Checklist**; a post-shift
+  validation notice adds **File Report**
 
-> **Screenshot needed:**
-> _[Screenshot of the notification inbox showing two notification cards: one collapsed showing summary text with a pin icon and "View Shift" button, and one expanded showing full notification details with "Start Checklist" and "Dismiss" buttons]_
+A **collapsed** card is summary only — subject, one line of message, the time,
+and a pin marker if it is pinned. The buttons live inside the expanded panel, so
+you have to open a card to act on it.
+
+A shift reminder carries the shift's full briefing: your crew for the shift by
+position, the apparatus, and the start-of-shift checklists assigned to it (or a
+line saying there are none).
+
+![The notification inbox with a shift reminder expanded — the crew by position, the apparatus checklists, and a View Shift button — between collapsed cards showing only a summary line](./images/03-97-shift-reminder-expanded.png)
 
 ### Scheduling Page Deep-Linking
 

@@ -1764,7 +1764,12 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     )
                 message = "\n".join(msg_lines)
 
-                subject = f"Shift Report \u2014 {shift_date_str} at {start_str}"
+                # "Shift Reminder", not "Shift Report": this is the pre-shift
+                # briefing that goes out inside the lookahead window, and the
+                # department also has a separate shift-reports feature with its
+                # own notifications ("Shift report flagged for revision"). The
+                # old subject sent members to the wrong one.
+                subject = f"Shift Reminder \u2014 {shift_date_str} at {start_str}"
 
                 # In-app notification for each assigned member
                 check_in_url = f"/scheduling/checkin?shift={shift.id}"

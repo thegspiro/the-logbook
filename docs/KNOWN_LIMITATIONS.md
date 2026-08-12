@@ -1297,6 +1297,30 @@ Two related facts worth carrying:
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
 
+## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
+
+The backend implements department email generation end to end.
+`DepartmentEmailSettings` (`enabled`, `domain`, `format`) is a real field on
+organization settings, `PUT /organizations/{id}/settings` accepts it, and
+`MembershipPipelineService._generate_department_email` uses it when a prospect
+is transferred to membership — including the numeric-suffix collision handling
+(`john.smith2@…`) the guide describes.
+
+What does not exist is anywhere to set it. The frontend references
+`DepartmentEmailSettings` in exactly two places — `types/user.ts` and a type
+annotation in `services/userServices.ts` — and no component renders a toggle, a
+domain field, or a format selector. `docs/training/01-membership.md` sent
+administrators to "Settings > Organization > Department Email", which is not a
+section that exists.
+
+The defaults are `enabled: false`, `domain: ""`, `format: first.last`, so out of
+the box the feature is off and stays off. Turning it on today requires writing
+organization settings through the API. The guide now says so, and its screenshot
+placeholder is retired until a screen exists to photograph.
+
+Needs an owner decision: whether to build the settings section or drop the
+feature. This loop does not make that call.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

@@ -3027,6 +3027,47 @@ export const SHOTS = [
     },
   },
   {
+    id: "03-97-shift-reminder-expanded",
+    doc: "03-scheduling.md",
+    line: 1887,
+    anchor:
+      "Screenshot of the notification inbox with a shift reminder expanded to show its crew and checklists",
+    alt: "The notification inbox with a shift reminder expanded — the crew by position, the apparatus checklists, and a View Shift button — between collapsed cards showing only a summary line",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      // 00-22 leaves a card pinned, and a pinned card sorts to the top. Clear
+      // pins so this shot is about the expanded reminder, not that leftover.
+      await page.evaluate(async () => {
+        const listed = await fetch("/api/v1/notifications/my?limit=100", {
+          credentials: "include",
+        });
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        for (const log of ((await listed.json()).logs ?? []).filter(
+          (l) => l.pinned,
+        )) {
+          await fetch(`/api/v1/notifications/my/${log.id}/pin?pinned=false`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+          });
+        }
+      });
+      await page.reload({ waitUntil: "networkidle" });
+
+      const card = page
+        .locator("div.card")
+        .filter({ hasText: "Shift Reminder" })
+        .first();
+      await card
+        .locator('button[aria-expanded="false"]')
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(900);
+    },
+    fullPage: true,
+  },
+  {
     id: "00-22-notification-card-expanded",
     doc: "00-getting-started.md",
     line: 254,
