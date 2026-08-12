@@ -50,6 +50,21 @@ from app.schemas.election import (
 from app.services.email_service import EmailService
 from app.services.email_theme import TABLE_STYLE, TD_STYLE, TH_STYLE
 
+# " - Runoff Round 2" and friends, only at the very end of a title.
+_RUNOFF_SUFFIX = re.compile(r"\s*-\s*Runoff Round\s+\d+\s*$", re.IGNORECASE)
+
+
+def _runoff_base_title(election) -> str:
+    """The original race's title, with any runoff suffix stripped.
+
+    A runoff is named after the round it follows, and that round may itself be
+    a runoff — so naming round three after round two produced
+    "Fire Chief Election - Runoff Round 1 - Runoff Round 2", growing by a
+    clause per round. Every round in a chain should read as a round of the
+    same election.
+    """
+    return _RUNOFF_SUFFIX.sub("", election.title or "").strip()
+
 
 class ElectionService:
     """Service for election management"""
@@ -146,6 +161,16 @@ class ElectionService:
         if not pending:
             return list(votes)
         return [v for v in votes if getattr(v, "manual_batch_id", None) not in pending]
+
+    @staticmethod
+    def _is_attested_vote(election_id: UUID):
+        """SQL predicate excluding votes that belong to a pending paper batch."""
+        pending_batch = select(ManualBallotBatch.id).where(
+            ManualBallotBatch.id == Vote.manual_batch_id,
+            ManualBallotBatch.election_id == str(election_id),
+            ManualBallotBatch.status == "pending",
+        )
+        return ~pending_batch.exists()
 
     # ------------------------------------------------------------------
     # Audit helpers
@@ -1036,11 +1061,14 @@ class ElectionService:
         if not eligibility.is_eligible:
             return None, eligibility.reason or "You are not eligible to vote"
 
-        # Get election for further checks
+        # Serialize vote validation and insertion for this election. The
+        # method-aware dedup hash permits distinct candidates/ranks, so its
+        # unique constraint cannot enforce per-voter limits by itself.
         result = await self.db.execute(
             select(Election)
             .where(Election.id == str(election_id))
             .where(Election.organization_id == str(organization_id))
+            .with_for_update()
         )
         election = result.scalar_one_or_none()
 
@@ -1636,7 +1664,12 @@ class ElectionService:
 
         audit_records = [
             {
-                "id": entry.id,
+                # `AuditLog.id` is a BigInteger; every id on this response —
+                # and in the frontend's `ForensicsReport` type — is a string.
+                # Passing the raw int failed response validation, so the whole
+                # forensics report 500'd for any election with an audit trail,
+                # which is every election that has ever been touched.
+                "id": str(entry.id),
                 "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
                 "event_type": entry.event_type,
                 "severity": entry.severity.value if entry.severity else None,
@@ -1742,6 +1775,72 @@ class ElectionService:
             },
             "voting_timeline": voting_timeline,
         }
+
+    async def get_vote_totals(
+        self, election: Election, organization_id: UUID
+    ) -> Tuple[int, int, float]:
+        """Counted votes, voters and turnout for one election.
+
+        The cheap summary the detail response needs. `ElectionResponse`
+        declares `total_votes`, `total_voters` and `voter_turnout_percentage`
+        and the detail endpoint validated straight off the ORM row, which has
+        no such columns — so all three came back null on every fetch and the
+        Publish Results panel, which reads them, said "No votes cast yet" over
+        a closed election with a full ballot box.
+
+        Counts what results count: test votes, soft-deleted votes and
+        unattested paper batches are all excluded, so this cannot disagree
+        with the tally on the same page.
+        """
+        votes_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == str(election.id))
+            .where(Vote.deleted_at.is_(None))
+            .where(Vote.is_test.is_(False))
+        )
+        all_votes = await self._exclude_unattested(
+            UUID(str(election.id)), votes_result.scalars().all()
+        )
+        voters = self._count_ballots_cast(election, all_votes)
+        eligible = await self._count_eligible_voters(election, organization_id)
+        turnout = (voters / eligible * 100) if eligible > 0 else 0.0
+        return len(all_votes), voters, round(turnout, 2)
+
+    @staticmethod
+    def _count_ballots_cast(election: Election, all_votes: List[Vote]) -> int:
+        """How many voters this election's ballots represent.
+
+        Electronic votes are deduplicated by voter: one member voting for
+        three positions is one voter, not three.
+
+        A paper ballot cannot be deduplicated that way, because it carries no
+        voter identity at all — the recording officer attests a count, not a
+        roster. Counted by identity alone an in-room election reported **zero
+        voters** however full the box was, and that was not just a wrong
+        turnout figure: a percentage quorum then failed for every paper
+        election, which clears every winner and stamps the result "advisory
+        only". A department that votes on paper, which is most volunteer
+        departments, never saw a winner declared.
+
+        Each physical ballot carries at most one vote per position, so the
+        largest per-position manual tally is the number of ballots in the box.
+        Summing every manual row instead would multiply the box by the number
+        of positions on the ballot.
+        """
+        if election.anonymous_voting:
+            identified = {v.voter_hash for v in all_votes if v.voter_hash}
+        else:
+            identified = {v.voter_id for v in all_votes if v.voter_id}
+
+        manual_by_position: Dict[Optional[str], int] = {}
+        for vote in all_votes:
+            if getattr(vote, "is_manual", False):
+                manual_by_position[vote.position] = (
+                    manual_by_position.get(vote.position, 0) + 1
+                )
+        paper_ballots = max(manual_by_position.values()) if manual_by_position else 0
+
+        return len(identified) + paper_ballots
 
     async def _count_eligible_voters(
         self, election: Election, organization_id: UUID
@@ -1915,11 +2014,8 @@ class ElectionService:
         # Count total eligible voters (excludes non-voting membership tiers)
         total_eligible = await self._count_eligible_voters(election, organization_id)
 
-        # Count unique voters
-        if election.anonymous_voting:
-            unique_voters = len(set(v.voter_hash for v in all_votes if v.voter_hash))
-        else:
-            unique_voters = len(set(v.voter_id for v in all_votes if v.voter_id))
+        # Voters, not votes — and paper ballots count. See _count_ballots_cast.
+        unique_voters = self._count_ballots_cast(election, all_votes)
 
         # Calculate turnout
         voter_turnout = (
@@ -2252,11 +2348,8 @@ class ElectionService:
         # Count eligible voters (excludes non-voting membership tiers)
         total_eligible = await self._count_eligible_voters(election, organization_id)
 
-        # Count unique voters
-        if election.anonymous_voting:
-            unique_voters = len(set(v.voter_hash for v in all_votes if v.voter_hash))
-        else:
-            unique_voters = len(set(v.voter_id for v in all_votes if v.voter_id))
+        # Voters, not votes — and paper ballots count. See _count_ballots_cast.
+        unique_voters = self._count_ballots_cast(election, all_votes)
 
         # Calculate turnout
         voter_turnout = (
@@ -3932,6 +4025,7 @@ class ElectionService:
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
             .where(Vote.is_test.is_(False))
+            .where(self._is_attested_vote(election.id))
             .group_by(Vote.candidate_id)
         )
         candidate_vote_counts = dict(vote_counts_result.all())
@@ -3975,7 +4069,10 @@ class ElectionService:
             organization_id=organization_id,
             created_by=election.created_by,
             status=ElectionStatus.DRAFT,
-            title=f"{election.title} - Runoff Round {election.runoff_round + 1}",
+            title=(
+                f"{_runoff_base_title(election)} - "
+                f"Runoff Round {election.runoff_round + 1}"
+            ),
             description=f"Runoff election for {election.title}. No candidate received the required votes in the previous round.",
             election_type=election.election_type,
             positions=election.positions,
@@ -4233,6 +4330,7 @@ class ElectionService:
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
             .where(Vote.is_test.is_(False))
+            .where(self._is_attested_vote(election.id))
         )
         all_votes = votes_result.scalars().all()
 
@@ -6712,7 +6810,11 @@ Best regards,
             .where(Vote.voter_hash == voting_token.voter_hash)
             .where(Vote.is_test == voting_token.is_test)
             .where(Vote.deleted_at.is_(None))
-            .where(Vote.position == position if position else Vote.position.is_(None))
+            .where(
+                Vote.position == effective_position
+                if effective_position
+                else Vote.position.is_(None)
+            )
         )
         position_votes = existing_votes_result.scalars().all()
 
@@ -6720,7 +6822,7 @@ Best regards,
             if any(v.vote_rank == vote_rank for v in position_votes):
                 return None, (
                     f"You have already cast a rank-{vote_rank} vote"
-                    + (f" for {position}" if position else "")
+                    + (f" for {effective_position}" if effective_position else "")
                 )
             if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
                 return None, "You have already ranked this candidate"
@@ -6732,10 +6834,10 @@ Best regards,
             if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
                 return None, "You have already voted for this candidate"
             if len(position_votes) >= max_votes:
-                if position:
+                if effective_position:
                     if max_votes == 1:
-                        return None, f"You have already voted for {position}"
-                    return None, f"Maximum votes for {position} reached"
+                        return None, f"You have already voted for {effective_position}"
+                    return None, f"Maximum votes for {effective_position} reached"
                 if max_votes == 1:
                     return None, "You have already voted"
                 return None, "Maximum votes for this election reached"
@@ -6755,7 +6857,7 @@ Best regards,
             candidate_id=candidate_id,
             voter_id=None,  # Anonymous - not stored
             voter_hash=voting_token.voter_hash,
-            position=position,
+            position=effective_position,
             vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
@@ -6764,7 +6866,7 @@ Best regards,
             vote_dedup_hash=self._compute_vote_dedup_hash(
                 election.id,
                 dedup_voter,
-                position,
+                effective_position,
                 discriminator=self._dedup_discriminator(
                     election, candidate_id, vote_rank
                 ),

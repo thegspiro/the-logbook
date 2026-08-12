@@ -8,7 +8,16 @@ All endpoints require API key authentication and are subject to rate limiting.
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -461,6 +470,7 @@ async def get_public_events(
 @router.get("/application-status/{token}")
 async def get_application_status(
     request: Request,
+    response: Response,
     # Declared, not just enforced below: the schema described `token` as any
     # string, so a generated client had no way to know what a usable value
     # looks like. Bounds mirror the check in the body.
@@ -484,6 +494,14 @@ async def get_application_status(
     from app.services.membership_pipeline_service import MembershipPipelineService
 
     await validate_ip_rate_limit(request)
+
+    # This response is unlocked by a bearer token in the URL. Do not let
+    # browsers, shared proxies, search engines, or referrer headers retain or
+    # redistribute the returned application details or credential-bearing URL.
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
 
     if not token or len(token) < 10 or len(token) > 64:
         raise HTTPException(

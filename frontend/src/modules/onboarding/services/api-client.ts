@@ -139,7 +139,7 @@ class SecureApiClient {
   /**
    * Clear session
    */
-  clearSession(): void {
+  clearSession(options: { preserveAuth?: boolean } = {}): void {
     this.sessionId = null;
     this.csrfToken = null;
     localStorage.removeItem('onboarding_session_id');
@@ -147,9 +147,13 @@ class SecureApiClient {
     // Clean up legacy localStorage CSRF token if it exists
     localStorage.removeItem('csrf_token');
     localStorage.removeItem('onboarding_data');
-    // Clear auth session flag so Welcome.tsx doesn't redirect to /dashboard
-    // after a reset that deleted the user from the database
-    localStorage.removeItem('has_session');
+    localStorage.removeItem('onboarding-storage');
+    // Resets and stale-session recovery must discard the auth hint. Normal
+    // completion must keep it: the System Owner is already authenticated via
+    // httpOnly cookies and ProtectedRoute requires this hint before loadUser.
+    if (!options.preserveAuth) {
+      localStorage.removeItem('has_session');
+    }
   }
 
   /**
@@ -612,8 +616,7 @@ class SecureApiClient {
 
     // Clear onboarding session after completion
     if (response.statusCode === 200 || response.statusCode === 201) {
-      this.clearSession();
-      // Keep auth token - user is now logged in
+      this.clearSession({ preserveAuth: true });
     }
 
     return response;

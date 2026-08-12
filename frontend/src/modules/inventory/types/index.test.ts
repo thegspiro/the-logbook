@@ -5,6 +5,7 @@ import {
   STORAGE_TYPES,
   ITEM_TYPE_FIELDS,
   getStatusStyle,
+  getStatusLabel,
   getConditionColor,
   getItemTypeFromCategory,
   sizeLabel,
@@ -161,5 +162,30 @@ describe('sizeLabel', () => {
     expect(sizeLabel(null)).toBe('');
     expect(sizeLabel(undefined)).toBe('');
     expect(sizeLabel('')).toBe('');
+  });
+});
+
+describe('getStatusLabel', () => {
+  // The detail page and the storage-area list used to print the stored value
+  // straight out, so "checked_out" reached the reader as "checked out" beside
+  // a properly-cased Condition and Tracking in the same row of three.
+  it.each([
+    ['available', 'Available'],
+    ['assigned', 'Assigned'],
+    ['checked_out', 'Checked Out'],
+  ])('renders %s as %s', (value, label) => {
+    expect(getStatusLabel(value)).toBe(label);
+  });
+
+  it('gives every option in STATUS_OPTIONS its own label', () => {
+    for (const option of STATUS_OPTIONS) {
+      expect(getStatusLabel(option.value)).toBe(option.label);
+    }
+  });
+
+  it('falls back to the underscored value made readable', () => {
+    // A status stored before it was added to the list is still better shown
+    // than swallowed.
+    expect(getStatusLabel('pending_disposal')).toBe('pending disposal');
   });
 });

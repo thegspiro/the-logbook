@@ -13,9 +13,10 @@ import { inputCls, labelCls, CONTACT_TYPE_OPTIONS } from '../constants';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
+  canManage: boolean;
 }
 
-export default function ContactsSection({ facilityId }: Props) {
+export default function ContactsSection({ facilityId, canManage }: Props) {
   const { confirm } = useConfirm();
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -140,19 +141,21 @@ export default function ContactsSection({ facilityId }: Props) {
         <h2 className="text-theme-text-primary text-sm font-semibold">
           Emergency Contacts {!isLoading && `(${contacts.length})`}
         </h2>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add Contact
-        </button>
+        {canManage && (
+          <button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Contact
+          </button>
+        )}
       </div>
 
       <div className="p-5">
-        {showForm && (
+        {canManage && showForm && (
           <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
             <h3 className="text-theme-text-primary text-sm font-medium">
               {editingContact ? 'Edit Contact' : 'Add Contact'}
@@ -302,24 +305,26 @@ export default function ContactsSection({ facilityId }: Props) {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                  <button
-                    onClick={() => openEdit(contact)}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
-                    aria-label={`Edit ${contact.companyName || contact.contactName || 'contact'}`}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      void handleDelete(contact);
-                    }}
-                    className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                    aria-label={`Delete ${contact.companyName || contact.contactName || 'contact'}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                {canManage && (
+                  <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    <button
+                      onClick={() => openEdit(contact)}
+                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                      aria-label={`Edit ${contact.companyName || contact.contactName || 'contact'}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        void handleDelete(contact);
+                      }}
+                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      aria-label={`Delete ${contact.companyName || contact.contactName || 'contact'}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

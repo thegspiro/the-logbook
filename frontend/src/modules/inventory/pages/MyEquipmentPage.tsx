@@ -675,8 +675,7 @@ const MyEquipmentPage: React.FC = () => {
               {reqSelected && (
                 <p className="text-theme-text-muted mt-1 text-xs">
                   Selected: <span className="text-theme-text-primary font-medium">{reqSelected.name}</span>
-                  {reqSelected.tracking_type === 'pool' &&
-                    ` (pool — ${reqSelected.quantity - reqSelected.quantity_issued} available)`}
+                  {reqSelected.tracking_type === 'pool' && ` (pool — ${reqSelected.quantity} available)`}
                 </p>
               )}
             </div>
@@ -713,7 +712,7 @@ const MyEquipmentPage: React.FC = () => {
                 <input
                   type="number"
                   min={1}
-                  max={reqSelected.quantity - reqSelected.quantity_issued}
+                  max={reqSelected.quantity}
                   value={reqQty}
                   onChange={(e) => setReqQty(Number(e.target.value))}
                   className={inputClass}

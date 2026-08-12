@@ -138,6 +138,7 @@ def _seal_chain(logger, logs):
 async def test_rehash_repairs_legacy_rows(monkeypatch):
     """Legacy (v1) rows with a wrong stored hash are repaired."""
     monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_LEGACY_MAX_ID", 2)
     logger = AuditLogger()
     logs = [
         _make_log(1, {"a": 1}, _LEGACY_HASH_VERSION),
@@ -251,3 +252,51 @@ async def test_verify_passes_when_checkpoint_within_chain(monkeypatch):
 
     assert result["verified"] is True
     assert result["errors"] == []
+
+
+async def test_verify_rejects_whole_chain_downgrade_after_trusted_boundary(
+    monkeypatch,
+):
+    """DB-controlled versions cannot authorize forgeable hashes on new rows."""
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_LEGACY_MAX_ID", 0)
+    logger = AuditLogger()
+    logs = [
+        _make_log(1, {"forged": True}, _LEGACY_HASH_VERSION),
+        _make_log(2, {"forged": True}, _LEGACY_HASH_VERSION),
+    ]
+    _seal_chain(logger, logs)
+
+    result = await logger.verify_integrity(_VerifyDB(logs, None))
+
+    assert result["verified"] is False
+    assert len(result["errors"]) == 2
+    assert all("trusted legacy" in error["error"] for error in result["errors"])
+
+
+async def test_verify_accepts_legacy_rows_within_trusted_boundary(monkeypatch):
+    """Upgrades retain verification by explicitly pinning the legacy range."""
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_LEGACY_MAX_ID", 2)
+    logger = AuditLogger()
+    logs = [
+        _make_log(1, {"historical": True}, _LEGACY_HASH_VERSION),
+        _make_log(2, {"historical": True}, _LEGACY_HASH_VERSION),
+        _make_log(3, {"keyed": True}, _CURRENT_HASH_VERSION),
+    ]
+    _seal_chain(logger, logs)
+
+    result = await logger.verify_integrity(_VerifyDB(logs, None))
+
+    assert result["verified"] is True
+    assert result["errors"] == []
+
+
+async def test_rehash_rejects_downgraded_row_after_trusted_boundary(monkeypatch):
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_LEGACY_MAX_ID", 0)
+    logger = AuditLogger()
+    log = _make_log(1, {"forged": True}, _LEGACY_HASH_VERSION)
+    _seal_chain(logger, [log])
+
+    with pytest.raises(ValueError, match="downgrade attack"):
+        await logger.rehash_chain(_FakeDB([log]))

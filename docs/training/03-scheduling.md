@@ -1000,8 +1000,7 @@ report carries who raised it, when, and an optional note, and it appears on the
 supply worklist beside the expiring items — to a supply officer, "expires
 Thursday" and "the crew used it last night" are the same job.
 
-> **Screenshot needed:**
-> _[Screenshot of the "report used" sheet on a phone showing the quantity stepper, the optional note field, and the confirm button, with the position's name and current count visible above it]_
+![The report-used sheet: quantity stepper, optional note, and the position's current count](./images/03-60-report-used-sheet.png)
 
 **A report is settled only when the truck is back at its target.** Two of four
 back is still a truck short two, and clearing the flag there would close the gap
@@ -1710,8 +1709,7 @@ This affects:
 - **InventoryScanModal** — scanning item barcodes for check-in/check-out
 - **MemberScanPage** — scanning member QR codes for attendance
 
-> **Screenshot needed:**
-> _[Screenshot of the MemberIdScannerModal running on a desktop browser, showing the user-facing camera feed in the scanner viewport with a QR code being detected]_
+> **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
 
 ### Edge Cases (2026-03-22)
 
@@ -1883,10 +1881,21 @@ Shift-related notifications now use expandable cards that show a summary preview
 
 - **Pinned-first sorting**: Pinned notifications always appear at the top of the list
 - **Mark as read on collapse**: Notifications are only marked as read when you collapse the card, not when you first open it — this prevents accidental mark-as-read from quick glances
-- **Contextual action buttons**: Each notification type shows relevant action buttons (e.g., "View Shift" for assignment notifications, "Start Checklist" for equipment check reminders)
+- **Contextual action buttons**: An expanded card ends with an action button for
+  that notification's destination, then **Pin** (or **Unpin**). A shift
+  notification offers "View Shift"; a shift reminder opened inside its
+  equipment-check window adds a second button, **Start Checklist**; a post-shift
+  validation notice adds **File Report**
 
-> **Screenshot needed:**
-> _[Screenshot of the notification inbox showing two notification cards: one collapsed showing summary text with a pin icon and "View Shift" button, and one expanded showing full notification details with "Start Checklist" and "Dismiss" buttons]_
+A **collapsed** card is summary only — subject, one line of message, the time,
+and a pin marker if it is pinned. The buttons live inside the expanded panel, so
+you have to open a card to act on it.
+
+A shift reminder carries the shift's full briefing: your crew for the shift by
+position, the apparatus, and the start-of-shift checklists assigned to it (or a
+line saying there are none).
+
+![The notification inbox with a shift reminder expanded — the crew by position, the apparatus checklists, and a View Shift button — between collapsed cards showing only a summary line](./images/03-97-shift-reminder-expanded.png)
 
 ### Scheduling Page Deep-Linking
 
@@ -2205,22 +2214,27 @@ The page is formatted for **letter-size (8.5" × 11")** printing and automatical
 
 ### Incomplete Checklist Warning
 
-When submitting an equipment check with unanswered items, a **confirmation dialog** now warns about the incomplete state before allowing submission. The dialog shows the count of unanswered items and asks the member to confirm.
+When submitting an equipment check with unanswered items, a **confirmation dialog** warns about the incomplete state before allowing submission. It names how many of the items are unanswered and says the report will be filed as incomplete, offering **Go back** and **Submit anyway**.
 
-This prevents accidental submission of partially completed checks while still allowing intentional partial submissions (e.g., when an item is not accessible).
+> **What this does and does not cover _(2026-08-12)_.** **Required** items are not
+> a matter of confirmation — **Submit Report** stays disabled until every one of
+> them is answered, with a line beneath it counting what is still outstanding.
+> So this dialog is only ever about **optional** items: kit that is carried on
+> some rigs and not others, which a crew may legitimately skip. You cannot reach
+> it by submitting a check you have not started.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the confirmation dialog showing "3 items not answered" warning with "Go Back" and "Submit Anyway" buttons._
+![The confirmation before filing an incomplete equipment check — how many of the items are unanswered, and the choice between going back and submitting anyway](./images/03-98-incomplete-check-warning.png)
 
 ### Resuming In-Progress Checks
 
 Previously, if you started an equipment check but couldn't finish it, the check was stuck in an incomplete state. Now:
 
 1. Open the **Equipment Checks** tab — as a member it is headed **My Equipment Checklists**
-2. Each row shows the rig, whether it is a start- or end-of-shift check, the date, and how many of its items are answered. An untouched one reads **Not Started** with a **Start Check** button; a part-answered one shows its progress and offers **Resume**
-3. Resume opens the form with the answered items already filled in
+2. Each card shows the rig, whether it is a start- or end-of-shift check, the date, and how many of its items are answered, with a progress bar. An untouched one reads **Not Started**; a part-answered one reads **In Progress** with its percentage; a finished one reads **Passed**
+3. The button follows the state: **Continue checklist** on a part-answered card, **Open checklist** otherwise. Continuing opens the form with the answered items already filled in
 4. Complete what is left and submit
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of My Equipment Checklists with a finished check beside a part-answered one showing its progress and a Resume button._
+![My Equipment Checklists — one check part-answered with its progress and a Resume control, one finished, and the untouched ones offering Start Check](./images/03-99-checklists-resume.png)
 
 ### Edge Cases
 

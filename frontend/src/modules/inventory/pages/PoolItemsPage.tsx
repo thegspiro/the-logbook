@@ -91,8 +91,12 @@ const PoolCard: React.FC<PoolCardProps> = ({
   onLoadIssuances,
 }) => {
   const tz = useTimezone();
-  const onHand = item.quantity - item.quantity_issued;
-  const total = item.quantity;
+  // `quantity` is the on-hand count, not the total owned: issuing decrements
+  // it and increments quantity_issued, and a return reverses both. The total is
+  // therefore the sum of the two — subtracting instead counted every issued
+  // unit twice and showed a fully-issued item at a negative on-hand.
+  const onHand = item.quantity;
+  const total = item.quantity + item.quantity_issued;
 
   const handleToggle = () => {
     if (!expanded) void onLoadIssuances();
@@ -216,6 +220,7 @@ const PoolItemsPage: React.FC = () => {
   const [issueSubmitting, setIssueSubmitting] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [allowanceCheck, setAllowanceCheck] = useState<AllowanceCheck | null>(null);
+  const [issueOverride, setIssueOverride] = useState(false);
 
   /* Return modal state */
   const [returnModalOpen, setReturnModalOpen] = useState(false);
@@ -288,7 +293,7 @@ const PoolItemsPage: React.FC = () => {
     if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (categoryFilter && item.category_id !== categoryFilter) return false;
     if (lowStockOnly) {
-      const onHand = item.quantity - item.quantity_issued;
+      const onHand = item.quantity;
       const cat = categories.find((c) => c.id === item.category_id);
       const threshold = cat?.low_stock_threshold ?? 0;
       if (onHand > threshold) return false;
@@ -296,7 +301,7 @@ const PoolItemsPage: React.FC = () => {
     return true;
   });
 
-  const totalOnHand = items.reduce((s, i) => s + (i.quantity - i.quantity_issued), 0);
+  const totalOnHand = items.reduce((s, i) => s + i.quantity, 0);
   const totalIssued = items.reduce((s, i) => s + i.quantity_issued, 0);
   const lowStockCount = lowStockAlerts.length;
 
@@ -307,6 +312,7 @@ const PoolItemsPage: React.FC = () => {
     setIssueReason('');
     setMemberSearch('');
     setAllowanceCheck(null);
+    setIssueOverride(false);
     setIssueModalOpen(true);
   };
 
@@ -325,7 +331,13 @@ const PoolItemsPage: React.FC = () => {
     if (!issueItem || !issueUserId) return;
     setIssueSubmitting(true);
     try {
-      await inventoryService.issueFromPool(issueItem.id, issueUserId, issueQty, issueReason.trim() || undefined);
+      await inventoryService.issueFromPool(
+        issueItem.id,
+        issueUserId,
+        issueQty,
+        issueReason.trim() || undefined,
+        issueOverride
+      );
       toast.success(`Issued ${issueQty} ${issueItem.name}`);
       setIssueModalOpen(false);
       // Clear cached issuances for this item so they reload
@@ -426,7 +438,14 @@ const PoolItemsPage: React.FC = () => {
 
   /* Render */
   const catLookup = categoryMap();
-  const issueItemOnHand = issueItem ? issueItem.quantity - issueItem.quantity_issued : 0;
+  const issueItemOnHand = issueItem ? issueItem.quantity : 0;
+
+  // The backend *rejects* an over-allowance issue with a 400 unless
+  // override_allowance is set — it does not merely flag it. Mirror its test
+  // (max_quantity of -1 means no cap configured) so the dialog can offer the
+  // override before the quartermaster hits the error instead of after.
+  const issueExceedsAllowance =
+    allowanceCheck !== null && allowanceCheck.max_quantity !== -1 && issueQty > allowanceCheck.remaining;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -632,6 +651,7 @@ const PoolItemsPage: React.FC = () => {
                   onClick={() => {
                     setIssueUserId('');
                     setAllowanceCheck(null);
+                    setIssueOverride(false);
                     setMemberSearch('');
                   }}
                 >
@@ -644,14 +664,29 @@ const PoolItemsPage: React.FC = () => {
           {/* Allowance info */}
           {allowanceCheck && (
             <div
-              className={`rounded-lg px-3 py-2 text-sm ${allowanceCheck.remaining <= 0 ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'bg-blue-500/10 text-blue-700 dark:text-blue-400'}`}
+              className={`rounded-lg px-3 py-2 text-sm ${issueExceedsAllowance ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'bg-blue-500/10 text-blue-700 dark:text-blue-400'}`}
             >
               Allowance: {allowanceCheck.issued_this_period}/{allowanceCheck.max_quantity} used (
-              {allowanceCheck.period_type}).
-              {allowanceCheck.remaining > 0
-                ? ` ${allowanceCheck.remaining} remaining.`
-                : ' Allowance exceeded — issue will be flagged.'}
+              {allowanceCheck.period_type}). {allowanceCheck.remaining} remaining.
+              {issueExceedsAllowance && (
+                <>
+                  {' '}
+                  Issuing {issueQty} would exceed it — check <strong>Override allowance</strong> to issue anyway.
+                </>
+              )}
             </div>
+          )}
+
+          {issueExceedsAllowance && (
+            <label className="text-theme-text-primary flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={issueOverride}
+                onChange={(e) => setIssueOverride(e.target.checked)}
+              />
+              <span>Override allowance</span>
+            </label>
           )}
 
           {/* Quantity */}
@@ -766,10 +801,10 @@ const PoolItemsPage: React.FC = () => {
             <select className="form-input w-full" value={bulkItemId} onChange={(e) => setBulkItemId(e.target.value)}>
               <option value="">Select an item...</option>
               {items
-                .filter((i) => i.quantity - i.quantity_issued > 0)
+                .filter((i) => i.quantity > 0)
                 .map((i) => (
                   <option key={i.id} value={i.id}>
-                    {i.name} ({i.quantity - i.quantity_issued} available)
+                    {i.name} ({i.quantity} available)
                   </option>
                 ))}
             </select>

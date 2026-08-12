@@ -124,7 +124,7 @@ The Logbook is an open-source modular intranet platform for fire departments and
 - **Auth:** PyJWT + bcrypt + Argon2 + TOTP (pyotp) + OAuth/OIDC via authlib (Google, Microsoft Azure AD); SAML/LDAP not implemented
 - **Task queue:** Celery
 - **Payments:** Stripe
-- **Email:** fastapi-mail + Jinja2 templates
+- **Email:** built-in SMTP/provider service + Jinja2 templates
 - **SMS:** Twilio
 - **Monitoring:** Sentry SDK + Loguru
 

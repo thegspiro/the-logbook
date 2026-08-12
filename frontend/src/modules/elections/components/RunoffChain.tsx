@@ -47,65 +47,56 @@ export const RunoffChain: React.FC<RunoffChainProps> = ({ election }) => {
     try {
       setLoading(true);
       const elections = await electionService.getElections();
-      const nodes: ChainNode[] = [];
 
-      // Find root election (walk up parent chain)
-      let rootId = election.id;
-      if (election.parent_election_id) {
-        rootId = election.parent_election_id;
-        // The parent might also have a parent — fetch it
-        try {
-          const parent = await electionService.getElection(rootId);
-          if (parent.parent_election_id) {
-            rootId = parent.parent_election_id;
+      // The list schema does not carry parent_election_id, so the links are
+      // only visible on the detail records — fetch them once and walk the
+      // chain in memory. Walking has to be transitive in both directions: a
+      // department that goes three rounds has round 3 parented to round 2, so
+      // matching only the root's direct children (and only climbing two levels
+      // up) drew a two-node chain and silently dropped every later round.
+      const details = new Map<string, Election>();
+      await Promise.all(
+        elections.map(async (e) => {
+          try {
+            details.set(e.id, await electionService.getElection(e.id));
+          } catch {
+            // Skip inaccessible elections
           }
-        } catch {
-          // Use what we have
-        }
+        })
+      );
+      details.set(election.id, election);
+
+      // Climb to the root, guarding against a cycle in the parent links.
+      let root: Election = election;
+      const climbed = new Set<string>([root.id]);
+      while (root.parent_election_id) {
+        const parent = details.get(root.parent_election_id);
+        if (!parent || climbed.has(parent.id)) break;
+        climbed.add(parent.id);
+        root = parent;
       }
 
-      // Add root
-      const rootItem = elections.find((e) => e.id === rootId);
-      if (rootItem) {
-        nodes.push({
-          id: rootItem.id,
-          title: rootItem.title,
-          status: rootItem.status,
-          runoff_round: 0,
-          total_votes: rootItem.total_votes,
-        });
-      } else if (rootId === election.id) {
-        nodes.push({
-          id: election.id,
-          title: election.title,
-          status: election.status,
-          runoff_round: election.runoff_round,
-          total_votes: election.total_votes,
-        });
+      const toNode = (e: Election): ChainNode => ({
+        id: e.id,
+        title: e.title,
+        status: e.status,
+        runoff_round: e.runoff_round,
+        total_votes: e.total_votes,
+      });
+
+      // Descend one round at a time. A round has at most one runoff, so the
+      // chain is a line rather than a tree.
+      const nodes: ChainNode[] = [toNode(root)];
+      const walked = new Set<string>([root.id]);
+      for (;;) {
+        const current = nodes[nodes.length - 1];
+        if (!current) break;
+        const next = [...details.values()].find((e) => e.parent_election_id === current.id && !walked.has(e.id));
+        if (!next) break;
+        walked.add(next.id);
+        nodes.push(toNode(next));
       }
 
-      // Find children by iterating list items (they don't expose parent_election_id
-      // in the list schema, so we fetch each potential runoff)
-      for (const e of elections) {
-        if (e.id === rootId) continue;
-        try {
-          const full = await electionService.getElection(e.id);
-          if (full.parent_election_id === rootId || full.parent_election_id === election.id) {
-            nodes.push({
-              id: full.id,
-              title: full.title,
-              status: full.status,
-              runoff_round: full.runoff_round,
-              total_votes: full.total_votes,
-            });
-          }
-        } catch {
-          // Skip inaccessible elections
-        }
-      }
-
-      // Sort by runoff_round
-      nodes.sort((a, b) => a.runoff_round - b.runoff_round);
       setChain(nodes);
     } catch {
       // Non-critical — section just won't show

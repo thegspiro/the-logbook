@@ -628,6 +628,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                         category="action_items",
                         subject=f"Action item {urgency}: {item.description[:80]}",
                         message=f"Your action item is {urgency}. Description: {item.description}",
+                        action_url="/action-items",
                         delivered=True,
                     )
                     db.add(log)
@@ -677,6 +678,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                         category="action_items",
                         subject=f"Action item {urgency}: {item.description[:80]}",
                         message=f"Your action item is {urgency}. Description: {item.description}",
+                        action_url="/action-items",
                         delivered=True,
                     )
                     db.add(log)
@@ -907,6 +909,10 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                                     f'Your event "{event.title}" starts '
                                     f"{_format_relative_time(event.start_datetime, now)}."
                                 ),
+                                # Relative, not the absolute `event_url` used for
+                                # the email above: the notification card navigates
+                                # in-app and ignores any URL not starting with "/".
+                                action_url=f"/events/{event.id}",
                                 expires_at=expires_at,
                                 delivered=True,
                             )
@@ -1758,7 +1764,12 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     )
                 message = "\n".join(msg_lines)
 
-                subject = f"Shift Report \u2014 {shift_date_str} at {start_str}"
+                # "Shift Reminder", not "Shift Report": this is the pre-shift
+                # briefing that goes out inside the lookahead window, and the
+                # department also has a separate shift-reports feature with its
+                # own notifications ("Shift report flagged for revision"). The
+                # old subject sent members to the wrong one.
+                subject = f"Shift Reminder \u2014 {shift_date_str} at {start_str}"
 
                 # In-app notification for each assigned member
                 check_in_url = f"/scheduling/checkin?shift={shift.id}"
@@ -4111,6 +4122,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                             f"({pattern_label}) ends on {series_end_str} "
                             f"with {remaining} occurrence(s) remaining."
                         ),
+                        action_url=f"/events/{event.id}",
                         delivered=True,
                     )
                     db.add(in_app_log)

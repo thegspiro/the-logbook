@@ -51,6 +51,7 @@ export const ProspectiveMembersPage: React.FC = () => {
     pipelines,
     currentPipeline,
     pipelineStats,
+    preferredPipelineId,
     applicants,
     currentApplicant,
     totalApplicants,
@@ -126,12 +127,13 @@ export const ProspectiveMembersPage: React.FC = () => {
   // Select first active pipeline by default
   useEffect(() => {
     if (pipelines.length > 0 && !currentPipeline) {
-      const activePipeline = pipelines.find((p) => p.is_active) ?? pipelines[0];
+      const activePipeline =
+        pipelines.find((p) => p.id === preferredPipelineId) ?? pipelines.find((p) => p.is_active) ?? pipelines[0];
       if (activePipeline) {
         void fetchPipeline(activePipeline.id);
       }
     }
-  }, [pipelines, currentPipeline, fetchPipeline]);
+  }, [pipelines, currentPipeline, preferredPipelineId, fetchPipeline]);
 
   // Load applicants when pipeline is selected
   useEffect(() => {
@@ -444,8 +446,8 @@ export const ProspectiveMembersPage: React.FC = () => {
           <div className="mb-6 flex items-center gap-1.5 px-1">
             <Info className="text-theme-text-muted h-3 w-3 shrink-0" />
             <p className="text-theme-text-muted text-xs">
-              Statistics include active applicants only. Inactive, rejected, and withdrawn (archived) applicants are
-              excluded from conversion rate and averages.
+              Conversion rate is converted applicants divided by decided applications (converted plus rejected). Active,
+              on-hold, inactive, and voluntarily withdrawn applications are excluded from that rate.
             </p>
           </div>
         </>

@@ -49,7 +49,30 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # sbom-action downloads syft from GitHub releases on every run, and
+      # that download fails transiently (HTTP 000) often enough to have
+      # turned this job red three times on 2026-08-12 alone. Actions has no
+      # native step retry, so the pattern is: let the first attempt fail
+      # softly, run an identical second attempt only when it did.
       - name: Generate SPDX SBOM (Syft)
+        id: sbom
+        continue-on-error: true
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          artifact-name: the-logbook-sbom.spdx.json
+          upload-artifact: true
+
+      # An immediate retry rides out a dropped connection but not an outage
+      # window: the first observed double failure was two 503s from the
+      # releases endpoint 0.3s apart. Wait out the window before retrying.
+      - name: Pause before retry
+        if: steps.sbom.outcome == 'failure'
+        run: sleep 60
+
+      - name: Generate SPDX SBOM (Syft) — retry after transient failure
+        if: steps.sbom.outcome == 'failure'
         uses: anchore/sbom-action@v0
         with:
           path: .

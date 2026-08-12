@@ -11,16 +11,30 @@
  *
  * All triggers are rate-limited so the server sees at most one
  * request per `MIN_CHECK_INTERVAL_MS` window.
+ *
+ * Each allowed check also nudges the service worker registration, so an
+ * installed PWA picks up a new deployment without waiting for the browser's
+ * own ~24h service worker update cadence. This hook (via UpdateNotification,
+ * mounted above the router) is the single owner of update detection.
+ *
+ * A detected update is applied two ways: immediately when the user taps
+ * "Reload now" on the banner, or automatically on the next route change —
+ * a natural boundary where page state is discarded anyway. Dismissing the
+ * banner suppresses both until the next deployment.
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useLocation } from 'react-router';
+import { nudgeServiceWorkerUpdate, reloadForNewVersion } from '../utils/serviceWorkerUpdate';
 
 /** Minimum time between two consecutive version checks (60 seconds). */
 const MIN_CHECK_INTERVAL_MS = 60_000;
 
 /** Fallback polling interval when no navigation or focus events fire. */
 const POLL_INTERVAL_MS = 5 * 60_000; // 5 minutes
+
+/** Re-prompt after a deferral so a security update is not ignored forever. */
+const UPDATE_REMINDER_MS = 60 * 60_000; // 1 hour
 
 /**
  * Build ID baked into this bundle at compile time.
@@ -38,14 +52,15 @@ export interface AppUpdateState {
   updateAvailable: boolean;
   /** Reload the page to apply the new version. */
   applyUpdate: () => void;
-  /** Dismiss the notification (re-shown on next detection). */
+  /** Defer the notification for one hour. */
   dismiss: () => void;
 }
 
 export function useAppUpdate(): AppUpdateState {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const lastCheckRef = useRef(0);
-  const dismissedBuildRef = useRef<string | null>(null);
+  const deferredBuildRef = useRef<{ buildId: string; until: number } | null>(null);
+  const detectedBuildRef = useRef<string | null>(null);
   const location = useLocation();
 
   const checkForUpdate = useCallback(async () => {
@@ -57,6 +72,11 @@ export function useAppUpdate(): AppUpdateState {
     if (now - lastCheckRef.current < MIN_CHECK_INTERVAL_MS) return;
     lastCheckRef.current = now;
 
+    // Piggyback a service worker update check on the same cadence. Keeping
+    // the worker fresh here — rather than waiting for the browser's own ~24h
+    // check — is what lets an installed PWA apply a deployment in one reload.
+    nudgeServiceWorkerUpdate();
+
     try {
       const res = await fetch('/version.json', { cache: 'no-store' });
       if (!res.ok) return;
@@ -64,7 +84,10 @@ export function useAppUpdate(): AppUpdateState {
       const data: unknown = await res.json();
       if (typeof data === 'object' && data !== null && 'buildId' in data && typeof data.buildId === 'string') {
         const serverBuildId = (data as { buildId: string }).buildId;
-        if (serverBuildId !== getCurrentBuildId() && serverBuildId !== dismissedBuildRef.current) {
+        const deferred = deferredBuildRef.current;
+        const isStillDeferred = deferred?.buildId === serverBuildId && Date.now() < deferred.until;
+        if (serverBuildId !== getCurrentBuildId() && !isStillDeferred) {
+          detectedBuildRef.current = serverBuildId;
           setUpdateAvailable(true);
         }
       }
@@ -78,6 +101,22 @@ export function useAppUpdate(): AppUpdateState {
     void checkForUpdate();
   }, [location.pathname, checkForUpdate]);
 
+  // Apply a pending update automatically on the NEXT route change after
+  // detection. A navigation discards page state anyway, so reloading there is
+  // invisible except for the refresh itself — members who never tap the
+  // banner still get the new build. Deliberately not the same navigation that
+  // detected the update (detection is async, and reloading a page someone is
+  // already reading is the interruption this avoids), and dismissing the
+  // banner also opts out of this until the next deployment.
+  const prevPathRef = useRef(location.pathname);
+  useEffect(() => {
+    if (location.pathname === prevPathRef.current) return;
+    prevPathRef.current = location.pathname;
+    if (updateAvailable) {
+      void reloadForNewVersion();
+    }
+  }, [location.pathname, updateAvailable]);
+
   // Check on tab focus
   useEffect(() => {
     const handleVisibility = () => {
@@ -89,6 +128,17 @@ export function useAppUpdate(): AppUpdateState {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [checkForUpdate]);
 
+  // Check immediately when a device regains connectivity instead of waiting
+  // for the next five-minute poll.
+  useEffect(() => {
+    const handleOnline = () => {
+      lastCheckRef.current = 0;
+      void checkForUpdate();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [checkForUpdate]);
+
   // Periodic fallback
   useEffect(() => {
     const id = setInterval(() => {
@@ -98,28 +148,17 @@ export function useAppUpdate(): AppUpdateState {
   }, [checkForUpdate]);
 
   const applyUpdate = useCallback(() => {
-    window.location.reload();
+    // Not a bare reload: on an installed PWA the old service worker would
+    // serve its old precached index.html, making the reload a visible no-op.
+    void reloadForNewVersion();
   }, []);
 
   const dismiss = useCallback(() => {
     setUpdateAvailable(false);
-    // Remember which build the user dismissed so we don't re-show until
-    // yet another deployment happens.
-    // We read the latest server build from the last successful check.
-    // Since the user is dismissing, we just mark the current detection
-    // as dismissed — the ref will be compared on the next check.
-    dismissedBuildRef.current = 'dismissed';
-    // Re-fetch once to capture the exact build ID that was dismissed
-    void fetch('/version.json', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d: unknown) => {
-        if (typeof d === 'object' && d !== null && 'buildId' in d && typeof d.buildId === 'string') {
-          dismissedBuildRef.current = (d as { buildId: string }).buildId;
-        }
-      })
-      .catch(() => {
-        /* ignore */
-      });
+    const buildId = detectedBuildRef.current;
+    if (buildId) {
+      deferredBuildRef.current = { buildId, until: Date.now() + UPDATE_REMINDER_MS };
+    }
   }, []);
 
   return { updateAvailable, applyUpdate, dismiss };

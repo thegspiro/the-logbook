@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { ErrorLog } from '../services/errorTracking';
 
@@ -123,5 +124,16 @@ describe('ErrorMonitoringPage', () => {
     await waitFor(() => {
       expect(screen.getByText('No errors found')).toBeInTheDocument();
     });
+  });
+
+  it('shows a retryable error instead of false healthy data when loading fails', async () => {
+    mockGetErrors.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([]);
+    const user = userEvent.setup();
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(mockGetErrors).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('No errors found')).toBeInTheDocument();
   });
 });

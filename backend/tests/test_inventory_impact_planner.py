@@ -370,7 +370,9 @@ class TestStockAndCostBySize:
     @pytest.mark.asyncio
     async def test_pool_and_individual_counts(self, service, mock_db):
         items = [
-            # pool: 3 on hand, 1 issued -> 2 available "M"
+            # pool: `quantity` is already net of what is out on issue, so 3 on
+            # hand with 1 issued is 3 available "M", not 2 — subtracting
+            # quantity_issued here would count the issued unit twice.
             _stock_item(standard_size="m", pool=True, quantity=3, issued=1),
             # individual available "M" -> +1
             _stock_item(size="M", status=ItemStatus.AVAILABLE),
@@ -381,7 +383,7 @@ class TestStockAndCostBySize:
         ]
         mock_db.execute.side_effect = [_scalars_result(items)]
         stock, _unit, _avg = await service._get_stock_and_cost_by_size("org", "cat")
-        assert stock == {"m": 3, "l": 1}
+        assert stock == {"m": 4, "l": 1}
 
     @pytest.mark.asyncio
     async def test_cost_averaging_and_fallback(self, service, mock_db):

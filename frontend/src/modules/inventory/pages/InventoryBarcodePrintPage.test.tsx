@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import type { InventoryItem } from '../types';
@@ -8,6 +8,7 @@ const mockGetItem = vi.fn();
 const mockGenerateLabels = vi.fn();
 const mockGetLabelPreset = vi.fn();
 const mockSetLabelPreset = vi.fn();
+const mockPrefersPdf = vi.fn(() => false);
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -19,10 +20,12 @@ vi.mock('../../../services/api', () => ({
 }));
 
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
+vi.mock('../../../utils/printEnvironment', () => ({ prefersPdfOverBrowserPrint: () => mockPrefersPdf() }));
 vi.mock('jsbarcode', () => ({ default: vi.fn() }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
 import InventoryBarcodePrintPage from './InventoryBarcodePrintPage';
+import JsBarcode from 'jsbarcode';
 
 const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   id: 'it-1',
@@ -55,6 +58,7 @@ describe('InventoryBarcodePrintPage', () => {
     mockGenerateLabels.mockResolvedValue({ blob: new Blob(['pdf']), autoPopulated: 0 });
     mockGetLabelPreset.mockResolvedValue({ preset: null });
     mockSetLabelPreset.mockResolvedValue({ preset: null });
+    mockPrefersPdf.mockReturnValue(false);
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:test');
     globalThis.URL.revokeObjectURL = vi.fn();
     // The PDF download clicks a temporary <a download> — stub it so jsdom
@@ -79,11 +83,32 @@ describe('InventoryBarcodePrintPage', () => {
     expect(screen.getAllByText('Spare Radio').length).toBeGreaterThan(0);
   });
 
+  it('falls back without truncating a partially unencodable legacy barcode', async () => {
+    mockGetItem.mockResolvedValue(makeItem({ barcode: 'INV-12火', asset_tag: 'ASSET-42' }));
+    renderPage('?ids=it-1');
+
+    await screen.findAllByText('Thermal Camera');
+    await waitFor(() =>
+      expect(JsBarcode).toHaveBeenCalledWith(
+        expect.any(SVGSVGElement),
+        'ASSET-42',
+        expect.objectContaining({ format: 'CODE128' })
+      )
+    );
+  });
+
   it('shows an error state when item loading fails', async () => {
     mockGetItem.mockRejectedValue(new Error('boom'));
     renderPage('?ids=it-1');
     expect(await screen.findByText('boom')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back to Inventory/ })).toBeInTheDocument();
+  });
+
+  it('rejects batches larger than the label API limit before loading items', async () => {
+    renderPage(`?ids=${Array.from({ length: 501 }, (_, index) => `it-${index}`).join(',')}`);
+
+    expect(await screen.findByText(/maximum of 500 inventory items/)).toBeInTheDocument();
+    expect(mockGetItem).not.toHaveBeenCalled();
   });
 
   it('generates a PDF at the entered custom label size', async () => {
@@ -109,6 +134,20 @@ describe('InventoryBarcodePrintPage', () => {
     expect(args?.[1]).toBe('custom'); // backend format key
     expect(args?.[2]).toBe(1.5); // custom width
     expect(args?.[3]).toBe(0.5); // custom height
+  });
+
+  it('includes the selected number of copies in the PDF batch', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    const copies = screen.getByLabelText(/Copies per item/);
+    fireEvent.change(copies, { target: { value: '3' } });
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+
+    await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+    expect(mockGenerateLabels.mock.calls[0]?.[0]).toEqual(['it-1', 'it-1', 'it-1']);
   });
 
   it('disables the PDF button when custom dimensions are out of range', async () => {
@@ -176,5 +215,29 @@ describe('InventoryBarcodePrintPage', () => {
 
     // The change is debounced (~500ms) then saved to the position.
     await waitFor(() => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6' }), { timeout: 2000 });
+  });
+
+  it('downloads a one-item PDF for a test label with the selected printer settings', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    await user.click(screen.getByRole('button', { name: /Download Test Label/ }));
+
+    await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+    expect(mockGenerateLabels).toHaveBeenCalledWith(['it-1'], 'dymo_30252', undefined, undefined, false, []);
+  });
+
+  it('uses the canonicalizing PDF path when printing an item without a stored identifier', async () => {
+    const user = userEvent.setup();
+    mockGetItem.mockResolvedValue(makeItem({ barcode: undefined, asset_tag: undefined, serial_number: undefined }));
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Print Labels/ }));
+
+    await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+    expect(mockGenerateLabels.mock.calls[0]?.[0]).toEqual(['it-1']);
   });
 });

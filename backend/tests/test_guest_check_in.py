@@ -520,15 +520,19 @@ class TestGuestCheckInSchema:
         assert payload.first_name == name
 
     def test_schema_valid_names_never_reach_the_blank_branch(self):
-        # The invariant the fix rests on: every code point the schema pattern
-        # admits survives str.strip(), so validation cannot reject data the
-        # published schema calls valid. Checked exhaustively rather than by
-        # reasoning about which definition of whitespace applies where.
+        # The invariant the fix rests on: every code point the published
+        # pattern admits survives str.strip(), so validation cannot reject
+        # data the published schema calls valid. Checked exhaustively rather
+        # than by reasoning about which definition of whitespace applies
+        # where — Python and JSON Schema disagree exactly where this bug
+        # lived (U+001C–001F, U+0085). Reading the pattern from the model's
+        # JSON schema (not a constant) keeps this pinned to what clients see.
         import re
 
-        from app.schemas.event import NAME_HAS_CONTENT
+        from app.schemas.event import GuestCheckInRequest
 
-        pattern = re.compile(NAME_HAS_CONTENT)
+        prop = GuestCheckInRequest.model_json_schema()["properties"]
+        pattern = re.compile(prop["first_name"]["pattern"])
         offenders = [
             cp
             for cp in range(0x110000)

@@ -510,6 +510,24 @@ export interface PipelineOverviewProspectEntry {
   applied_at?: string;
 }
 
+export interface PipelineYearTrend {
+  year: number;
+  applicants: number;
+  converted: number;
+  rejected: number;
+  withdrawn: number;
+  conversion_rate: number;
+  avg_days_to_convert: number;
+  applicant_growth_percent?: number;
+}
+
+export interface PipelineReferralSourceEntry {
+  source: string;
+  applicants: number;
+  converted: number;
+  conversion_rate: number;
+}
+
 export interface PipelineOverviewReport {
   report_type: 'pipeline_overview';
   generated_at: string;
@@ -522,6 +540,9 @@ export interface PipelineOverviewReport {
   withdrawn_count: number;
   on_hold_count: number;
   avg_days_to_convert: number;
+  conversion_rate: number;
+  yearly_trends: PipelineYearTrend[];
+  referral_sources: PipelineReferralSourceEntry[];
   groups: PipelineOverviewGroupEntry[];
   prospects: PipelineOverviewProspectEntry[];
 }

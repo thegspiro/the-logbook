@@ -140,8 +140,13 @@ Track compliance with NFPA standards for each apparatus:
 
 The compliance section shows which standards apply and whether the apparatus is compliant, with dates of last assessment.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the NFPA Compliance tab showing applicable standards with compliance status (green check or red X), last assessment date, and next due date]_
+> **Corrected 2026-08-12.** There is no NFPA Compliance **tab**, and no
+> per-standard status, assessment date or due date anywhere.
+> `ApparatusOverviewTab` renders a single card reading "Tracking Enabled" when
+> the flag is set; the flag's only other consumer is a checkbox on the edit
+> form. The standards above are the ones a department is expected to track, not
+> ones the application tracks for you. Recorded in
+> [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
 
 ---
 
@@ -280,8 +285,11 @@ Track utility accounts and monitor usage:
 2. Add utility accounts (electric, gas, water, internet, etc.).
 3. Record monthly readings to track consumption trends.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the utilities section showing utility accounts (Electric, Gas, Water) with the most recent reading, monthly cost, and a small usage trend chart]_
+> **Corrected 2026-08-12.** There is no Utilities section. Nine
+> `facilitiesService` methods sit over `/facilities/utility-accounts` and
+> `/utility-readings` with **no UI consumer** — `FacilityDetailPage` renders
+> seven sections and this is not one of them. The steps above describe the
+> intended design. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
 
 ---
 
@@ -295,8 +303,9 @@ Track building improvement and capital projects:
 - Status (Planning, In Progress, Completed)
 - Contractor information
 
-> **Screenshot placeholder:**
-> _[Screenshot of the capital projects section showing a list of projects with name, budget, status badge, and timeline bar]_
+> **Corrected 2026-08-12.** There is no capital-projects screen. Five
+> `facilitiesService` methods exist over `/facilities/capital-projects` with no
+> UI consumer, no route and no page. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
 
 ---
 
@@ -552,11 +561,16 @@ The Equipment Check system provides structured vehicle and equipment inspections
 - **Failure notifications**: Failed check items trigger in-app notifications to shift officers and configurable roles (e.g., apparatus maintenance officer)
 - **Cross-reference**: Equipment check reports are accessible from both the Scheduling module (`/scheduling/equipment-check-reports`) and the apparatus detail page
 
-> **Screenshot needed:**
-> _[Screenshot of the Apparatus List page showing an apparatus card with a red "Deficient" badge and the deficiency date, alongside a healthy apparatus with a green "OK" badge]_
+> **Corrected 2026-08-12.** The **Deficiency badge is real** and appears on
+> both the list row and the detail header. The **date is not**:
+> `deficiencySince` is on the TypeScript type and is never rendered, so no
+> screen shows when the deficiency began. There is also no green "OK" badge —
+> a healthy apparatus simply carries no deficiency badge. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
 
-> **Screenshot needed:**
-> _[Screenshot of the Apparatus Detail page showing the deficiency alert banner at the top with the date and a link to view the failed equipment check]_
+> **Corrected 2026-08-12.** There is no deficiency **banner** — only the badge
+> described above, beside the status badge — and no link from the apparatus to
+> the equipment check that failed. Reach the check from **Scheduling > Check
+> Reports** instead. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
 
 ### Edge Cases — Equipment Checks
 
@@ -668,8 +682,7 @@ When scheduling assigns a member to a Driver/Operator position on this apparatus
 Each apparatus has an **Operators** tab listing the members certified to drive
 it, with their EVOC level and certification dates.
 
-> **Screenshot needed:**
-> _[Screenshot of an engine's Operators tab listing three operators by name with their EVOC levels, certification dates, and the Add Operator button]_
+![The Operators tab: certified operators by name, with EVOC level and certification dates](./images/06-22-apparatus-operators-tab.png)
 
 Two long-standing problems here were fixed on 2026-08-10:
 
@@ -683,8 +696,7 @@ Two long-standing problems here were fixed on 2026-08-10:
   failure over an operator that had in fact been created. If you have duplicate
   operator rows from before this fix, delete the extras.
 
-> **Screenshot needed:**
-> _[Screenshot of the Add Operator form showing the member picker dropdown open with three member names, the EVOC level selector, and the certification date fields]_
+![The Add Operator form: a member picker, not the free-text UUID box it replaced](./images/06-23-add-operator-member-picker.png)
 
 ### Standalone Equipment Checks
 

@@ -266,12 +266,9 @@ describe('ErrorTrackingService', () => {
       });
     });
 
-    it('should return empty array when backend call fails', async () => {
+    it('should expose backend failures instead of reporting a false empty state', async () => {
       mockGetErrors.mockRejectedValue(new Error('Server error'));
-
-      const result = await errorTracker.getErrors();
-
-      expect(result).toEqual([]);
+      await expect(errorTracker.getErrors()).rejects.toThrow('Server error');
     });
   });
 
@@ -316,12 +313,9 @@ describe('ErrorTrackingService', () => {
       expect(result.recentErrors[0]?.timestamp).toBeInstanceOf(Date);
     });
 
-    it('should return empty stats when backend call fails', async () => {
+    it('should expose backend failures instead of reporting false zero stats', async () => {
       mockGetStats.mockRejectedValue(new Error('Server error'));
-
-      const result = await errorTracker.getErrorStats();
-
-      expect(result).toEqual({ total: 0, byType: {}, recentErrors: [] });
+      await expect(errorTracker.getErrorStats()).rejects.toThrow('Server error');
     });
   });
 
@@ -335,11 +329,9 @@ describe('ErrorTrackingService', () => {
       expect(mockClearErrors).toHaveBeenCalledWith();
     });
 
-    it('should silently fail when backend call fails', async () => {
+    it('should expose a clear failure to the caller', async () => {
       mockClearErrors.mockRejectedValue(new Error('Server error'));
-
-      // Should not throw
-      await expect(errorTracker.clearErrors()).resolves.toBeUndefined();
+      await expect(errorTracker.clearErrors()).rejects.toThrow('Server error');
     });
   });
 
@@ -363,12 +355,9 @@ describe('ErrorTrackingService', () => {
       expect(mockExportErrors).toHaveBeenCalledWith({ event_id: 'evt-1' });
     });
 
-    it('should return empty JSON array when backend call fails', async () => {
+    it('should expose export failures instead of creating a false empty export', async () => {
       mockExportErrors.mockRejectedValue(new Error('Server error'));
-
-      const result = await errorTracker.exportErrors();
-
-      expect(result).toBe(JSON.stringify([], null, 2));
+      await expect(errorTracker.exportErrors()).rejects.toThrow('Server error');
     });
   });
 });

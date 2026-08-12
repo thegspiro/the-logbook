@@ -1043,9 +1043,10 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
         v1, err1 = await svc.cast_vote_with_token(
             token=raw,
             candidate_id=uuid.UUID(data["cand_ids"][0]),
-            position="Board",
+            position=None,
         )
         assert err1 is None
+        assert v1.position == "Board"
 
         # The token must remain usable for further approval votes
         refreshed = (

@@ -34,19 +34,19 @@ here.
 
 ## Authentication & Security
 
-| Item                                                               | Status                            | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **CSRF "no csrf cookie → allow" branch**                           | ✅ Resolved (verified 2026-08-07) | The branch was tightened and this row had not been updated. `verify_csrf_token` now splits the no-cookie case: a request carrying an `access_token` cookie but no `csrf_token` is **rejected** (403 "Missing CSRF token") as anomalous, and only a request with no session cookie at all — unauthenticated, or a Bearer client whose header browsers never auto-send and which is therefore not CSRF-exploitable — is allowed through. `SameSite=Strict` remains the primary defense. (`security_middleware.py`.)                                                                                                                                                                                                                                                                                                                                                                        |
-| **Two logins by the same user in the same second fail with a 500** | Open (MED — found 2026-08-08)     | `create_access_token` encodes only `{sub, exp, iat, type}` — no `jti` or nonce — and `exp`/`iat` serialize to whole seconds. Two logins by one user inside the same second therefore produce a **byte-identical** JWT, which collides with the unique `ix_sessions_token` index and surfaces as `IntegrityError` → HTTP 500. A human cannot normally type fast enough, but automation can: the screenshot pipeline hits it every time `bootstrap_demo.py` and `seed_demo_data.py` run back to back, and a double-submitted login form or two tabs restoring at once would do the same. Found while capturing the equipment-check screenshots. Adding a `jti` would fix it, but token generation is security-sensitive and deserves a considered change rather than an incidental one — the fallback question is whether a duplicate token should 500 or resolve to the existing session. |
-| **`is_rate_limited` window write-before-check**                    | Verify (MED)                      | The sliding-window limiter records the request _before_ the count comparison; confirm this matches intended semantics (off-by-one on the first over-limit request). (`security.py`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Item                                                               | Status                            | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CSRF "no csrf cookie → allow" branch**                           | ✅ Resolved (verified 2026-08-07) | The branch was tightened and this row had not been updated. `verify_csrf_token` now splits the no-cookie case: a request carrying an `access_token` cookie but no `csrf_token` is **rejected** (403 "Missing CSRF token") as anomalous, and only a request with no session cookie at all — unauthenticated, or a Bearer client whose header browsers never auto-send and which is therefore not CSRF-exploitable — is allowed through. `SameSite=Strict` remains the primary defense. (`security_middleware.py`.) |
+| **Two logins by the same user in the same second fail with a 500** | ✅ Resolved (verified 2026-08-12) | `create_access_token` includes a random 128-bit `jti`, so otherwise identical logins no longer collide with the unique `sessions.token` index. `test_access_tokens_created_in_same_second_are_unique` now pins both distinct encoded tokens and distinct decoded IDs.                                                                                                                                                                                                                                             |
+| **`is_rate_limited` window write-before-check**                    | ✅ Resolved (verified 2026-08-12) | The implementation cleans the window, checks `len(requests) >= max_requests`, rejects and locks the first request over the allowance, and records only allowed requests afterward. The existing `test_exceeding_limit_triggers_lockout` pins five allowed requests and rejection of the sixth, so there is no write-before-check or off-by-one defect.                                                                                                                                                            |
 
 ## Dependencies
 
-| Item                                       | Status                                      | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ------------------------------------------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **CI `pip-audit` step**                    | ✅ Blocking (2026-07-30)                    | The FastAPI/starlette upgrade pass moved the stack to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), fastapi-mail 1.6.5, aiosmtplib 5.1.2, PyJWT 2.13.0, cryptography 49.0.0, pydantic-settings 2.14.2, pypdf 6.14.2, email-validator 2.3.0, schemathesis 4.24.3, pytest 9.0.3 (+ pytest-cov 7 / randomly 4.1 / timeout 2.4, required by schemathesis 4.10+). `pip-audit -r requirements.txt` now runs **blocking** in CI with one documented ignore: black 26 (major that reformats the whole repo — PYSEC-2026-2120/2121). Remove the ignore when its blocker clears. The `Backend Lint` black-pin drift described here is ✅ **resolved (verified 2026-08-07)**: the job now pins `black==26.5.1`, matching `requirements.txt`, and `black --check app/ tests/` passes clean at that version (501 files). The CI step carries a comment recording why both sides must pin the same version. Note `alembic/` and `scripts/` are outside the checked paths and are _not_ black-clean — that is the existing scope, not a regression. (The former pyopenssl ignores — PYSEC-2026-2268/2269, forced by pysaml2's `<24.3` cap — were dropped 2026-07-31 along with the unused pysaml2/python-ldap dependencies.) |
-| **cryptography held at 49.x**              | ⏸️ Deferred (2026-08-05) — blocked upstream | `PYSEC-2026-3552` / `CVE-2026-69247` against `cryptography==49.0.0`. The only fix is 50.0.0, and it is **uninstallable**: fastapi-mail 1.6.5 pins `cryptography>=49.0.0,<50.0.0`, so `pip install "fastapi-mail==1.6.5" "cryptography==50.0.0"` fails with `ResolutionImpossible`. 1.6.5 is the newest release on PyPI, so no combination of released versions satisfies both; the alternative is dropping fastapi-mail, which the whole templated-email layer sits on. Suppressed in **two** places that must clear together — `--ignore-vuln PYSEC-2026-3552` in `.github/workflows/ci.yml` and `CVE-2026-69247` in `.trivyignore`. **Clears when** fastapi-mail widens the pin: re-run `pip-audit -r backend/requirements.txt` with no ignores, then delete both suppressions and this row.                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **No nested `frontend/package-lock.json`** | ✅ Resolved (2026-08-05)                    | The repo is npm **workspaces** (`workspaces: [backend, frontend]`), so the root `package-lock.json` is the only lockfile `npm ci` reads, and `frontend/Dockerfile` copies just `package.json` and runs `npm install`. A stale nested lock had survived since PR #1071, pinning axios 1.13.6 / form-data 4.0.5 / @remix-run/router 1.23.0 while the root lock carried the patched axios 1.19.0 and form-data 4.0.6. Nothing installed from it — but Trivy scans every lockfile it finds, so it reported 12 HIGH advisories against dependency versions the build does not use. Deleted. Do not re-add a per-workspace lockfile; run `npm install` from the repo root.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Item                                       | Status                                    | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CI `pip-audit` step**                    | ✅ Blocking, no suppressions (2026-08-12) | `pip-audit -r requirements.txt` runs as a blocking CI check with no `--ignore-vuln` exceptions. The stale Black exceptions (PYSEC-2026-2120/2121) were left behind after Black had already been upgraded to 26.5.1; they are now removed. Earlier pyOpenSSL exceptions disappeared with the unused pysaml2/python-ldap dependencies, and the cryptography exception disappeared after removing unused fastapi-mail and upgrading cryptography to 50.0.0. A newly disclosed advisory must therefore either be fixed or explicitly reviewed in a future change rather than matching a legacy blanket exception.                                                        |
+| **cryptography held at 49.x**              | ✅ Resolved (2026-08-12)                  | `PYSEC-2026-3552` / `CVE-2026-69247` required cryptography 50, but the unused `fastapi-mail` package capped cryptography below 50. The application sends mail through its own SMTP/provider services and had no production import of `fastapi_mail`; only a historical test stub mentioned it. Removing that dead dependency allowed `cryptography==50.0.0`. The pip-audit and Trivy suppressions were removed together, so both scanners now enforce the fix.                                                                                                                                                                                                       |
+| **No nested `frontend/package-lock.json`** | ✅ Resolved (2026-08-05)                  | The repo is npm **workspaces** (`workspaces: [backend, frontend]`), so the root `package-lock.json` is the only lockfile `npm ci` reads, and `frontend/Dockerfile` copies just `package.json` and runs `npm install`. A stale nested lock had survived since PR #1071, pinning axios 1.13.6 / form-data 4.0.5 / @remix-run/router 1.23.0 while the root lock carried the patched axios 1.19.0 and form-data 4.0.6. Nothing installed from it — but Trivy scans every lockfile it finds, so it reported 12 HIGH advisories against dependency versions the build does not use. Deleted. Do not re-add a per-workspace lockfile; run `npm install` from the repo root. |
 
 ## Configuration & Docs
 
@@ -225,7 +225,7 @@ Owner-decision items from the feature-by-feature review under
 | **Grants: `is_anonymous` donations still show donor identity to staff**                          | Open (LOW-MED, product decision)                                       | `DonationResponse` / `DonorResponse` serialize `donor_name`/`donor_email`/`donor_id`/`amount` regardless of the `is_anonymous` flag, and the dashboard's recent-donations list returns donor-identified rows to any `fundraising.view` user. There is no public surface, so this is staff-only — but the anonymity flag currently has no effect. Decide whether an anonymous gift should hide donor identity from `fundraising.view` (vs `.manage`), then enforce it in the response serializers. (GF-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **Forms: `require_authentication` / `allow_multiple_submissions` not enforced on public submit** | Open (LOW, needs product decision)                                     | `get_form_by_slug` gates a public form on `is_public` + `PUBLISHED` only. A form flagged both `is_public=True` and `require_authentication=True` still accepts anonymous submissions, and `allow_multiple_submissions=False` isn't enforced server-side (only the per-IP daily cap applies). The fix depends on the intended semantics of "public + require_authentication" — reject it as contradictory, or read it as "public listing, authenticated submit." Decide, then enforce (and add a server-side one-submission-per-identity check for `allow_multiple_submissions`). (FORM-5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **Integrations: non-secret config readable by any authenticated member**                         | ✅ Resolved (owner decision, 2026-08-09)                               | `list_integrations` / `get_integration` used bare `get_current_user`, so any member read every integration's non-secret config (instance_url, field_mappings, api_base_url). **Fix (minimal-projection option):** the full config `list`/`get` now require `integrations.manage`; a new `GET /integrations/connected` returns only `integration_type`/`status`/`enabled` for any authenticated member, and the cross-module `useConnectedIntegrations` hook was repointed to it so meeting-config/pipeline flows keep working without the integrations-admin permission. Covered by `frontend/src/hooks/useConnectedIntegrations.test.ts`. (INT-3)                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Membership pipeline: duplicate-archived-member 409 names the matched member**                  | Open (LOW, product decision)                                           | Creating a prospect who matches a previously-archived member returns a 409 whose message names that member (`"…matches this prospect: <name> (<email>)…"`) so leadership can recognize who to reactivate. The structured `user_id`/`reactivate_url` leak was removed (MP-7 fix) and the frontend never read them, but the sibling `POST /prospects/check-existing` deliberately strips _all_ identity to `status`+`match_type`. Whether the create-path message should likewise avoid naming the archived member — trading leadership convenience for the same minimization — is a product call. When the match is by name rather than email, the message can surface an email the caller didn't supply. (MP-7)                                                                                                                                                                                                                                                                                                                                                                  |
+| **Membership pipeline: duplicate-member conflicts name the matched member**                      | ✅ Resolved (2026-08-12)                                               | Prospect creation and transfer conflicts now give only workflow guidance and never interpolate the matched member's name, email, user id, or reactivation URL. This matches the minimized `POST /prospects/check-existing` projection and prevents a name-only match from revealing an email the caller never supplied. `test_prospect_create_privacy.py` pins both HTTP response boundaries. (MP-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Client IP recorded as the proxy address**                                                      | ✅ Resolved (2026-08-05); one historical-data decision open            | `request.client.host` was used instead of `get_client_ip(request)` in 39 places across 8 files, so behind the production nginx every record stored one identical internal IP. Worst case was **elections**: per-vote IPs drive the fraud detection documented in `BALLOT_FORENSICS_GUIDE.md`, so `unique_ip_count` collapsed to 1 and every election permanently tripped the `suspicious_ips` threshold. The sweep also caught a live **availability** bug the survey had missed: `public_portal_security.py` keyed the public-portal _rate limiter_ on the peer IP, so all anonymous visitors shared one bucket and a single caller could lock out everyone (the H5 shape, still live on the public surface). Verified behavior-neutral: identical test results before and after. **Open:** rows already written still hold proxy IPs and are indistinguishable from real ones — recommend noting the cutover date in `BALLOT_FORENSICS_GUIDE.md` rather than rewriting hash-chained audit history. (AXC-1)                                                                     |
 
 ## Error Monitoring Coverage (2026-08-07)
@@ -446,6 +446,43 @@ check requests were all charged against the budgets and the panel still said
 
 Verified 2026-08-09 by counting non-test call sites for each store action and
 service method, and by reading the render bodies.
+
+## Finance — Nobody Can Approve Anything (2026-08-12)
+
+`finance.approve` is defined in `app/core/permissions.py`, gates all three
+approval endpoints (`GET /finance/approvals/pending`,
+`POST /finance/approvals/{id}/approve`, `.../deny`), and is granted by **no
+role in the shipped catalogue** — 27 roles, none of them include it.
+
+| Role           | Finance permissions              |
+| -------------- | -------------------------------- |
+| Treasurer      | `finance.view`, `finance.manage` |
+| Fire Chief     | none                             |
+| President      | none                             |
+| Vice President | none                             |
+| IT Manager     | `*`                              |
+
+So the only account that can reach the approval queue is one holding the `*`
+wildcard. And that account is then refused by separation of duties —
+_"You cannot approve your own purchase request. Separation of duties requires
+a second person"_ — for anything it raised itself. In a department using the
+shipped roles, every purchase request, expense report and check request stays
+in `pending_approval` for ever.
+
+**Needs an owner decision, not a patch.** The fix is to grant
+`FINANCE_APPROVE` to whichever roles a department expects to sign off
+spending — Treasurer alone is not enough, because the Treasurer is usually the
+one raising the request and separation of duties would then block them.
+Widening who can authorise money is an authorisation decision and is
+deliberately not being made from a documentation pass.
+
+This is also why **budget detail can never show a filled progress bar**: spend
+and encumbrance accrue on approval, and no approval can happen. That compounds
+the transaction-table stub recorded in the section above — the bar is real code
+that is permanently stuck at 0%, and the table below it is not wired at all.
+
+Found 2026-08-12 while trying to seed a budget with charges for
+`11-05-budget-detail`.
 
 ## Two Migrations Claimed 20260808_0002 — and What It Left Behind (2026-08-09)
 
@@ -873,6 +910,24 @@ recorded rather than fixed: the alternative is showing a Flagged view to
 departments that never flag anything. Worth revisiting as "show the Flagged
 view whenever a flagged report exists".
 
+## Screenshot Harness — Camera Viewfinders Cannot Be Photographed (2026-08-12)
+
+Three placeholders asked for a live camera viewfinder with a code being read:
+`MemberIdScannerModal` on a desktop browser (`docs/training/03-scheduling.md`),
+the inventory scan modal mid-batch and `InventoryScanModal` detecting a barcode
+(both `docs/training/05-inventory.md`).
+
+The capture harness runs headless Chromium with no camera device. Chromium's
+fake-device flags can supply a synthetic stream, but it is a rolling test
+pattern, not a scannable code — and each of these shots is specifically of a
+code _being recognised_, which a fake stream cannot produce. Nothing short of a
+real camera in front of a real label satisfies them, so all three are retired
+rather than left open to be re-surveyed each pass.
+
+The scanning features themselves work; this is a limitation of the automation,
+not of the product. If these screens ever have to be documented visually, the
+images will have to be taken by hand.
+
 ## Inventory — Scanning Has No Screen Of Its Own (2026-08-10)
 
 `inventoryService.lookupByCode` (`GET /inventory/lookup`) has exactly one
@@ -1259,6 +1314,230 @@ Two related facts worth carrying:
 - **npm keeps a per-workspace copy of each declared range inside the lock and
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
+
+## Training — The "Program Completed!" Banner Is Unreachable (2026-08-12)
+
+`Dashboard.tsx` renders a green **Program Completed!** line in an enrollment
+card when `enrollment.status === 'completed'`. Nothing can reach it: the only
+caller of `getMyEnrollments` is that same page, and it asks for
+`getMyEnrollments('active')` — a status filter passed through to
+`/training/programs/enrollments/me`. A completed enrollment is therefore never
+in the list the card is rendered from, and the string appears nowhere else in
+the frontend.
+
+Confirmed against a real completed enrollment: the demo member's Driver /
+Operator pipeline is now finished at 100% (seeded, so the completed state has
+data behind it at last), and it is simply absent from the dashboard rather than
+shown with the banner.
+
+Two readings, and picking between them is a product decision rather than a
+correctness fix — which is why this is recorded rather than patched:
+
+- The dashboard _should_ surface recently completed programs, and the filter is
+  the bug. A member finishing a programme currently sees it vanish.
+- The banner is vestigial from before the filter and should be deleted.
+
+`docs/training/02-training.md` asked for a screenshot of this banner; that
+placeholder is retired. Needs an owner decision.
+
+## Integrations — No Detail Page, No Error History, No Event Triggers (2026-08-12)
+
+`docs/training/16-integrations.md` described three things around integration
+management that do not exist. All four of its screenshot placeholders are
+retired on this basis.
+
+**There is no integration detail page.** `/integrations` is the only route in
+`modules/integrations/routes.tsx`; integrations are cards on that one page, and
+clicking one does not open anything. The guide said "Click any integration to
+see: last sync timestamp, last error message, consecutive error count, sync
+history".
+
+**Three of those four fields do not exist either.** The `Integration` model
+carries `status` (`available` / `connected` / `error` / `coming_soon`), `config`,
+`encrypted_config`, `enabled`, `contains_phi` and `last_sync_at` — and nothing
+else. There is no error message, no consecutive-error counter and no sync
+history table anywhere in the model or schemas. Nor is there a **Retry Sync**
+control: the string appears nowhere in the frontend.
+
+**Messaging integrations have no event-trigger selection.** The guide told
+administrators to "select which events trigger notifications" and pictured
+checkboxes for New Member, Training Completed, Event Scheduled and Shift Change.
+No such control exists — none of those labels appears in the frontend, and the
+Slack/Discord/Teams connect dialogs collect a webhook URL. There is no **Test
+Connection** button on an integration either (the one in the codebase belongs to
+onboarding's email configuration, a different feature).
+
+Two of the four were unreachable for a second, separate reason, worth keeping
+distinct from the missing UI: the Cal.com **Bookings** panel does exist and does
+work, but it lists bookings fetched live from a real Cal.com account, and the
+Slack placeholder asked for a screenshot of the Slack channel itself. Neither is
+reachable from a demo environment with no third-party accounts connected.
+
+Needs an owner decision on whether integration health monitoring and per-event
+notification routing should be built. This loop does not make that call.
+
+## Inventory — Departure Clearance Is Backend-Only (2026-08-12)
+
+`DepartureClearanceService` is a complete implementation — initiate a clearance
+for a departing member, list clearances, resolve each outstanding item with a
+disposition, complete or close-incomplete — and `api/v1/endpoints/inventory.py`
+exposes it. Nothing in the frontend calls any of it: there is no route, no page,
+no service method, and no reference to "departure" or "clearance" in that sense
+anywhere in `frontend/src`.
+
+`docs/training/05-inventory.md` documented the whole workflow as if it were a
+screen, including a clearance record with per-item disposition dropdowns and
+resolve/complete buttons. That screenshot placeholder is retired and the section
+now says the workflow is API-only.
+
+The property-return report generated when a member is dropped is a separate,
+working feature — see Membership > Property Return Process. It is the clearance
+_record_ that has no interface.
+
+Needs an owner decision on whether to build it. This loop does not make that
+call.
+
+## Events — There Is No Per-Event Analytics Panel (2026-08-12)
+
+`docs/training/02-training.md` described a post-event analytics panel on the
+event detail page, with an attendance-rate pie chart, an average-hours bar, a
+participant count, and a breakdown by apparatus showing skills observed per
+unit. None of it exists.
+
+What does exist, and is easy to mistake for it:
+
+- **`/events/analytics`** (`EventAnalyticsPage`) — a **department-wide**
+  attendance-trends dashboard: summary cards and charts across all events, not
+  one event.
+- **`/events/:id/analytics`** (`AnalyticsDashboardPage`) — per-event, but it is
+  **QR check-in analytics**: total scans, successful and failed check-ins,
+  success rate, time-to-check-in, device breakdown, hourly activity. No hours,
+  no skills observations, no apparatus breakdown.
+
+The event detail page itself has attendance finalization and a printable
+attendance roster, and no analytics section at all. The guide's metrics table
+(attendance rate, average hours, skills observations, apparatus used) was
+narrative from a worked example presented as a description of a real screen; it
+is now marked as such and the screenshot placeholder is retired.
+
+Needs an owner decision on whether the panel should be built. This loop does
+not make that call.
+
+## Inventory — Nothing In The UI Can Choose a Temporary Assignment (2026-08-12)
+
+An item assignment carries an `assignment_type` of `permanent` or `temporary`,
+`assign_item_to_user` accepts both along with an `expected_return_date`, and the
+member-facing equipment lists render a "Permanent Assignments" group and a
+"Due:" date — so the concept is visible throughout. No screen can create one:
+
+- `ItemDetailPage` is the only UI caller of `inventoryService.assignItem`, and
+  it passes no options, so the API default (`permanent`) always applies.
+- `batch_checkout` — the bulk flow the guide pictured issuing six SCBA units —
+  hardcodes `AssignmentType.PERMANENT`.
+
+Fixed in passing, because it was losing data rather than merely missing a
+control: fulfilling an equipment request for an **individually tracked** item
+dropped the expected-return date entirely and issued the item permanently. The
+fulfil form collects that date, and the pool branch of the same function already
+honoured it by creating a checkout. That branch now marks the assignment
+temporary and stores the date; two tests in `test_inventory_gaps.py` pin both
+outcomes.
+
+Still missing is any control letting an officer choose Temporary directly on an
+assign or batch-checkout form, which is what
+`docs/training/02-training.md` described. That placeholder is retired. Needs an
+owner decision on whether the control should exist.
+
+## Elections — The Public Ballot Cannot Be Screenshotted, By Design (2026-08-12)
+
+The public ballot page works; it just cannot be reached by the capture harness,
+and the reason is a security property worth keeping rather than a defect to fix.
+
+`_generate_voting_token` returns the raw token exactly once, to its caller, and
+stores only its SHA-256 (`module-audit ELEC-5`), so database access never yields
+a live credential. The only caller is `send_ballot_emails`, which puts the raw
+token into an email and nothing else — the `send-test-ballot` endpoint returns
+`{success, message}` and no token. The demo stack runs with `EMAIL_ENABLED`
+false and no mail catcher, and the disabled path logs only
+`"Email disabled. Would batch-send N messages."` — not the body.
+
+So there is no supported way to obtain a working token in the demo environment,
+and the ways to manufacture one all mean defeating the hashing. The placeholder
+for the public ballot page in `docs/training/14-elections.md` is retired on that
+basis. Filling it would need a mail catcher wired into `dev_env.sh` plus email
+enabled for the demo org — a harness change, and the right one if this page ever
+has to be documented visually.
+
+## Elections — Proxy Voting Has an Admin Panel But No Ballot Mode (2026-08-12)
+
+`ProxyVotingManagement` exists on the election detail page and configures
+proxies. What does not exist is any way to _vote_ as one: `ElectionBallot` has
+no reference to proxies at all, and the string "Voting as proxy" (or anything
+like it) appears nowhere in the frontend. The guide described a ballot with a
+"Voting as proxy for: …" banner above the standard ballot; there is no such
+banner and no proxy mode on the ballot.
+
+Note this compounds the ballot limitation below — the in-app ballot is the one
+that would need the proxy mode, and it is already the weaker of the two ballots.
+
+Needs an owner decision on whether proxy voting is finished or abandoned. This
+loop does not make that call.
+
+## Elections — The In-App Ballot Only Shows Position Races (2026-08-12)
+
+An election can carry three kinds of ballot item — `officer_election`,
+`general_vote` and `membership_approval` — and the Ballot Builder happily
+creates all three. Members reach a ballot two ways, and the two disagree about
+what is on it:
+
+- **The public token ballot** (`BallotVotingPage`, `/ballot?token=…`, the link
+  sent by email) reads `election.ballot_items` and renders every item, then
+  submits them atomically as `{ballot_item_id, candidate_ids | rankings | …}`.
+- **The in-app Cast Vote tab** (`ElectionBallot`, on the election detail page)
+  never reads `ballot_items` at all. It derives the ballot from
+  `election.positions`, renders the candidates for each, and submits **one
+  position at a time** as `{position, …}`.
+
+So an item with no position — a bylaw amendment, a membership approval —
+is invisible to anyone voting in the app. It is not refused or flagged: the
+ballot simply does not mention it, and the submit button names the one position
+it did find ("Submit Vote for Captain"). A secretary who builds a two-item
+ballot and watches members vote in-app gets a result for one item and silence on
+the other.
+
+Reproducible in the demo data: the seeded "Line Officer Election — 2027 Term"
+has a Captain race and an Article IV quorum amendment, and
+`docs/training/images/04-42-cast-ballot.png` is the in-app ballot showing only
+the former.
+
+This is not a small patch — the in-app component would have to move from the
+position model to the ballot-item model the public page already uses, including
+its submission shape. Needs an owner decision on whether to converge the two
+ballots or retire one of them. This loop does not make that call.
+
+## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
+
+The backend implements department email generation end to end.
+`DepartmentEmailSettings` (`enabled`, `domain`, `format`) is a real field on
+organization settings, `PUT /organizations/{id}/settings` accepts it, and
+`MembershipPipelineService._generate_department_email` uses it when a prospect
+is transferred to membership — including the numeric-suffix collision handling
+(`john.smith2@…`) the guide describes.
+
+What does not exist is anywhere to set it. The frontend references
+`DepartmentEmailSettings` in exactly two places — `types/user.ts` and a type
+annotation in `services/userServices.ts` — and no component renders a toggle, a
+domain field, or a format selector. `docs/training/01-membership.md` sent
+administrators to "Settings > Organization > Department Email", which is not a
+section that exists.
+
+The defaults are `enabled: false`, `domain: ""`, `format: first.last`, so out of
+the box the feature is off and stays off. Turning it on today requires writing
+organization settings through the API. The guide now says so, and its screenshot
+placeholder is retired until a screen exists to photograph.
+
+Needs an owner decision: whether to build the settings section or drop the
+feature. This loop does not make that call.
 
 ## Skills Testing — Offline Support (2026-08-07)
 

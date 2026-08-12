@@ -20,6 +20,7 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARCHIVE="${1:-}"
 if [[ -z "$ARCHIVE" || ! -f "$ARCHIVE" ]]; then
     echo "✗ Usage: $0 <backup-archive.tar.gz>" >&2
@@ -54,7 +55,7 @@ else
     echo "⚠ No .sha256 file next to the archive — skipping checksum check"
 fi
 
-tar -xzf "$ARCHIVE" -C "$WORK_DIR"
+python3 "$SCRIPT_DIR/safe_extract_tar.py" "$ARCHIVE" "$WORK_DIR"
 SQL_FILE="$(find "$WORK_DIR" -name 'database.sql*' | head -1)"
 if [[ -z "$SQL_FILE" ]]; then
     echo "✗ Archive contains no database.sql(.gz)" >&2

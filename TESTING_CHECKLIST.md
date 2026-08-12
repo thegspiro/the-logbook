@@ -927,7 +927,7 @@ Of the 35 recommendations in Section 22:
 | **IMP-23** | GeoIP service exists (`geoip.py`, `ip_security_service.py`) but there is no automated mechanism to download/update the MaxMind GeoIP database.                                                                           |
 | **IMP-24** | Multi-tenant isolation is handled at the application layer (queries filter by `organization_id`). No database-level row security policies or connection-per-tenant setup.                                                |
 | **IMP-25** | No request timeout middleware. Long-running requests are not capped. Individual HTTP client calls (e.g., `email_test_helper.py`) have timeouts, but there's no global per-request timeout.                               |
-| **IMP-26** | No email bounce handling or delivery tracking. Email is sent via `fastapi-mail` with no webhook or feedback loop for bounces/complaints.                                                                                 |
+| **IMP-26** | No email bounce handling or delivery tracking. Email is sent through the built-in SMTP/provider service with no webhook or feedback loop for bounces/complaints.                                                         |
 | **IMP-27** | No unsubscribe headers (`List-Unsubscribe`) or unsubscribe mechanism for notification emails.                                                                                                                            |
 | **IMP-29** | No load testing scripts (k6, Locust, or similar) found in the repository.                                                                                                                                                |
 

@@ -76,6 +76,11 @@ describe('BottomNavigation', () => {
     expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute('aria-current', 'page');
   });
 
+  it('marks More active when the current route is not a visible tab', () => {
+    renderBar({}, '/inventory');
+    expect(screen.getByRole('button', { name: 'Open full navigation menu' })).toHaveAttribute('aria-current', 'page');
+  });
+
   it('asks the drawer to open instead of navigating when More is tapped', async () => {
     const user = userEvent.setup();
     const listener = vi.fn();

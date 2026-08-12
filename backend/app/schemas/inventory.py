@@ -1052,10 +1052,16 @@ class LabelGenerateRequest(BaseModel):
         description="Label format: letter, dymo_30252, dymo_30256, dymo_30334, dymo_30336, rollo_4x6, rollo_2x1, thermal_1x1, or custom",
     )
     custom_width: Optional[float] = Field(
-        None, gt=0, description="Width in inches (required for custom format)"
+        None,
+        ge=0.5,
+        le=8,
+        description="Width in inches (0.5-8; required for custom format)",
     )
     custom_height: Optional[float] = Field(
-        None, gt=0, description="Height in inches (required for custom format)"
+        None,
+        ge=0.5,
+        le=11,
+        description="Height in inches (0.5-11; required for custom format)",
     )
     auto_rotate: Optional[bool] = Field(
         None,
