@@ -250,144 +250,30 @@ docker-compose up -d
 
 ---
 
-## Troubleshooting
+## Troubleshooting, Backups & Everything Else
 
-### Frontend not loading
+This quick start deliberately stops here. Deeper topics are covered once, in
+the **[full Unraid guide](../docs/deployment/unraid.md)**:
 
-```bash
-# Check if container is running
-docker ps | grep logbook-frontend
-
-# View frontend logs
-docker-compose logs frontend
-
-# Rebuild frontend
-docker-compose stop frontend
-docker-compose build --no-cache frontend
-docker-compose up -d frontend
-```
-
-### Backend API errors
-
-```bash
-# Check backend health
-curl http://localhost:7881/health
-
-# View backend logs
-docker-compose logs backend
-
-# Restart backend
-docker-compose restart backend
-```
-
-### Database connection issues
-
-```bash
-# Check database status
-docker ps | grep logbook-db
-
-# View database logs
-docker-compose logs db
-
-# Access database
-docker exec -it logbook-db mysql -u root -p
-# Enter password from .env MYSQL_ROOT_PASSWORD
-```
-
-### "Cannot connect to Docker daemon"
-
-```bash
-# Start Docker service on Unraid
-/etc/rc.d/rc.docker start
-```
-
-### Port conflicts (7880 or 7881 in use)
-
-Edit `.env` file:
-
-```bash
-nano /mnt/user/appdata/the-logbook/.env
-
-# Change ports
-FRONTEND_PORT=8880
-BACKEND_PORT=8881
-
-# Save and restart
-docker-compose down
-docker-compose up -d
-```
-
----
-
-## Backup & Restore
-
-### Automatic Backups
-
-Backups run daily at 2 AM to: `/mnt/user/backups/the-logbook/`
-
-### Manual Backup
-
-```bash
-cd /mnt/user/appdata/the-logbook
-docker-compose exec backend /app/scripts/backup.sh
-```
-
-### Restore from Backup
-
-```bash
-cd /mnt/user/appdata/the-logbook
-
-# Stop services
-docker-compose down
-
-# Restore database
-gunzip < /mnt/user/backups/the-logbook/backup_20260131.sql.gz | \
-  docker exec -i logbook-db mysql -u logbook_user -p the_logbook
-
-# Restore uploaded files
-cp -r /mnt/user/backups/the-logbook/backup_20260131/uploads/* \
-  /mnt/user/appdata/the-logbook/uploads/
-
-# Start services
-docker-compose up -d
-```
-
----
-
-## Performance Tips
-
-### Resource Allocation
-
-For optimal performance on Unraid:
-
-```yaml
-# In docker-compose.yml, add under each service:
-deploy:
-  resources:
-    limits:
-      cpus: "2"
-      memory: 2G
-    reservations:
-      cpus: "1"
-      memory: 512M
-```
-
-### Database Optimization
-
-Already configured in docker-compose:
-
-- 512MB buffer pool
-- UTF8MB4 encoding
-- 200 max connections
-- 256MB max packet size
+- [Troubleshooting](../docs/deployment/unraid.md#troubleshooting) — frontend
+  not loading, backend errors, database connection issues, port conflicts,
+  full rebuild
+- [Backup and Restore](../docs/deployment/unraid.md#backup-and-restore) —
+  automated daily backups with restore drills, manual backup and restore
+- [HTTPS with Reverse Proxy](../docs/deployment/unraid.md#https-with-reverse-proxy)
+  — required in production; Swag and Nginx Proxy Manager examples
+- [Performance](../docs/deployment/unraid.md#performance) — container resource
+  limits
 
 ---
 
 ## Unraid Community App
 
-The Logbook will be available in Unraid Community Apps soon!
-
-For now, use this installation method.
+The Logbook is **not yet published** to Unraid Community Applications —
+searching the Apps tab will not find it. The Docker Compose method on this
+page is the supported install path today. (The CA template and its
+[installation guide](./UNRAID-INSTALLATION.md) are ready in this directory,
+awaiting publication — see [README.md](./README.md) for status.)
 
 ---
 

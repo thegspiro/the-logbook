@@ -20,7 +20,7 @@ This directory contains all the wiki pages for The Logbook project. These pages 
 
 ### Deployment & Configuration
 
-- **Deployment-Unraid.md** - Complete Unraid deployment guide
+- **Deployment-Unraid.md** - Deploying and updating on Unraid
 - **Configuration-Environment.md** - Environment variables reference
 - **Configuration-Modules.md** - Module configuration
 - **Configuration-Security.md** - Security settings

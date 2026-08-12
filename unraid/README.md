@@ -1,471 +1,96 @@
 # The Logbook - Unraid Integration
 
-Official Unraid Community Applications package for The Logbook.
-
-## Quick Links
-
-- **[Installation Guide](./UNRAID-INSTALLATION.md)** - Complete setup via Community Apps
-- **[Quick Start](./QUICK-START.md)** - Docker Compose setup (automated or manual)
-- **[Build from Source](./BUILD-FROM-SOURCE-ON-UNRAID.md)** - Build locally on Unraid
-- **[Community App Submission](./COMMUNITY-APP-SUBMISSION.md)** - For maintainers
-- **[Support Forum](https://forums.unraid.net/)** - Get help from the community
-- **[Report Issues](https://github.com/thegspiro/the-logbook/issues)** - Bug reports
-
----
-
-## Overview
-
-The Logbook is a comprehensive, modular intranet platform designed specifically for fire departments, EMS, and emergency services organizations. Now optimized for Unraid!
-
-### Key Features
-
-✅ **Member Management** - Track members, roles, and contact information
-✅ **Training Tracking** - Schedule and record training sessions
-✅ **Equipment Inventory** - Manage gear, vehicles, and supplies
-✅ **Event Scheduling** - Calendar with RSVP and check-ins
-✅ **QR Code Check-Ins** - Touchless attendance tracking
-✅ **Elections Management** - Conduct secure electronic voting
-✅ **Document Management** - Policies, procedures, and files
-✅ **Reporting & Analytics** - Comprehensive dashboards
-✅ **Mobile Responsive** - Works on any device
-✅ **HIPAA-Oriented Security** - Built with HIPAA requirements in mind (external audit required for compliance)
-
----
-
-## Installation
-
-### Method 1: Community Applications (Recommended)
-
-1. Open **Apps** tab in Unraid
-2. Search for **"The Logbook"**
-3. Click **Install**
-4. Configure required settings
-5. Click **Apply**
-
-**That's it!** Access at `http://YOUR-UNRAID-IP:7880`
-
-📖 **[Full Installation Guide →](./UNRAID-INSTALLATION.md)**
-
-### Method 2: Docker Compose
-
-For advanced users who want a self-contained stack, see the **[Quick Start Guide](./QUICK-START.md)** or run:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh | bash
-```
-
----
-
-## Quick Start
-
-### 1. Prerequisites
-
-- Unraid 6.9.0 or later
-- MySQL 8.0 database
-- 8GB RAM minimum
-
-### 2. Install
-
-Search for "The Logbook" in Community Applications.
-
-### 3. Configure
-
-**Required Settings:**
-
-- WebUI Port: `7880` (or any available)
-- API Port: `7881` (or any available)
-- Database Host: Your Unraid IP
-- Database Credentials: Create database first
-- Secret Keys: Generate with `openssl rand -hex 32`
-
-### 4. Access
-
-Open: `http://YOUR-UNRAID-IP:7880`
-
-Complete the onboarding wizard.
-
-### 5. Enjoy!
-
-Start managing your organization! 🎉
-
----
-
-## System Requirements
-
-| Component          | Minimum | Recommended |
-| ------------------ | ------- | ----------- |
-| **Unraid Version** | 6.9.0+  | 6.12.0+     |
-| **RAM**            | 8 GB    | 16 GB       |
-| **Storage**        | 20 GB   | 50 GB+      |
-| **CPU Cores**      | 2       | 4+          |
-
-### Required Services
-
-- **MySQL 8.0** - For data storage
-- **Redis** (optional) - For caching (improves performance)
-
----
-
-## Default Ports
-
-Conflict-free default ports:
-
-| Service          | Port | Purpose       |
-| ---------------- | ---- | ------------- |
-| Frontend (WebUI) | 7880 | Web interface |
-| Backend API      | 7881 | API endpoint  |
-
-**Need different ports?** No problem! Change them in the template.
-
----
-
-## File Structure
-
-```
-/mnt/user/appdata/the-logbook/
-├── data/              # Application data
-├── uploads/           # User uploaded files
-├── logs/              # Application logs
-├── mysql/             # Database files (if using compose)
-├── redis/             # Redis data (if using compose)
-└── docker-compose.yml # Compose file (if used)
-
-/mnt/user/backups/the-logbook/
-└── *.tar.gz           # Automated backups
-```
-
----
-
-## Configuration
-
-### Environment Variables
-
-All configuration via Unraid Docker template or `.env` file.
-
-**Essential:**
-
-```bash
-DB_HOST=192.168.1.10       # Your Unraid IP
-DB_NAME=the_logbook
-DB_USER=logbook_user
-DB_PASSWORD=strong_password
-SECRET_KEY=generate_with_openssl
-ENCRYPTION_KEY=generate_with_openssl
-```
-
-**Optional:**
-
-```bash
-REDIS_HOST=192.168.1.10
-EMAIL_ENABLED=true
-SMTP_HOST=smtp.gmail.com
-BACKUP_TIME=02:00
-```
-
-> Modules are enabled per organization in-app (Organization/Admin Settings >
-> Modules) — there are no `MODULE_*_ENABLED` environment variables.
-
-📖 **[Full Configuration Guide →](./UNRAID-INSTALLATION.md#configuration)**
-
----
-
-## Database Setup
-
-### Option 1: Use Existing MySQL Instance
-
-```sql
-CREATE DATABASE the_logbook CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'logbook_user'@'%' IDENTIFIED BY 'strong_password';
-GRANT ALL PRIVILEGES ON the_logbook.* TO 'logbook_user'@'%';
-FLUSH PRIVILEGES;
-```
-
-### Option 2: Install MySQL from Community Apps
-
-1. Install **MySQL** from Apps
-2. Create database using phpMyAdmin or command line
-
-### Option 3: Use Included Docker Compose
-
-The `docker-compose-unraid.yml` includes MySQL 8.0 and Redis.
-
-📖 **[Database Setup Guide →](./UNRAID-INSTALLATION.md#database-setup-mysql)**
-
----
-
-## Backup & Recovery
-
-### Automated Backups
-
-Backups run automatically based on schedule (default: daily at 2 AM).
-
-**Backup Location:** `/mnt/user/backups/the-logbook/`
-
-### Manual Backup
-
-```bash
-docker exec TheLogbook /app/scripts/backup.sh
-```
-
-### Restore
-
-```bash
-docker exec -it TheLogbook /app/scripts/backup.sh --restore /backups/backup_file.tar.gz
-```
-
-### Cloud Backup
-
-Supports S3, Azure Blob, and Google Cloud Storage.
-
-📖 **[Backup Guide →](./UNRAID-INSTALLATION.md#backup-configuration)**
-
----
-
-## Troubleshooting
-
-### Container Won't Start
-
-```bash
-# Check logs
-docker logs TheLogbook
-
-# Common issues:
-# 1. Port conflict - change ports in template
-# 2. Database connection - verify DB_HOST and credentials
-# 3. Missing secrets - generate SECRET_KEY and ENCRYPTION_KEY
-```
-
-### Can't Access WebUI
-
-```bash
-# Verify container is running
-docker ps | grep TheLogbook
-
-# Check health
-curl http://localhost:7880/health
-
-# Test from another device
-curl http://UNRAID-IP:7880
-```
-
-### Database Connection Error
-
-```bash
-# Test database connection
-docker exec -it logbook-db mysql -u logbook_user -p
-
-# Verify database exists
-SHOW DATABASES;
-```
-
-📖 **[Full Troubleshooting Guide →](./UNRAID-INSTALLATION.md#troubleshooting)**
-
----
-
-## Updates
-
-### Automatic Updates
-
-Enable in Community Applications settings for automatic updates.
-
-### Manual Update
-
-```bash
-# From Unraid terminal
-docker pull ghcr.io/thegspiro/the-logbook:latest
-docker restart TheLogbook
-```
-
-### Backup Before Update
-
-```bash
-docker exec TheLogbook /app/scripts/backup.sh
-```
-
----
-
-## Security
-
-> **Production posture:** This stack runs with `ENVIRONMENT=production`, which
-> enforces a startup security gate. **API docs (`/docs`) are OFF by default**
-> (enabling them blocks boot), and **HTTPS is required** — the app refuses to
-> start unless strong secrets are set, `DEBUG=false`, docs are disabled, and
-> `SECURITY_ENFORCE_HTTPS=true`, so front it with an HTTPS reverse proxy.
-> **Leave `TRUSTED_PROXY_IPS` empty** unless you add a reverse proxy — the
-> compose publishes the backend port directly, so the connecting peer is the
-> real client. See the
-> [Security Hardening](./UNRAID-INSTALLATION.md#security-hardening) guide.
-
-### Best Practices
-
-✅ **Use Strong Passwords** - 20+ characters
-✅ **Generate Unique Keys** - Never use defaults
-✅ **Enable HTTPS** - Use reverse proxy (Swag, npm)
-✅ **Regular Updates** - Keep container updated
-✅ **Automated Backups** - Test restores monthly
-✅ **Limit Access** - Use VPN for remote access
-
-### Reverse Proxy (HTTPS)
-
-**Using Swag:**
-
-```nginx
-# /mnt/user/appdata/swag/nginx/proxy-confs/logbook.subdomain.conf
-server {
-    listen 443 ssl http2;
-    server_name logbook.*;
-
-    location / {
-        proxy_pass http://192.168.1.10:7880;
-        # ... proxy settings
-    }
-}
-```
-
-📖 **[SSL Setup Guide →](./UNRAID-INSTALLATION.md#sslhttps-setup-with-reverse-proxy)**
-
----
-
-## Support
-
-### Getting Help
-
-1. **Check Documentation**
-   - [Installation Guide](./UNRAID-INSTALLATION.md)
-   - [Troubleshooting](./UNRAID-INSTALLATION.md#troubleshooting)
-
-2. **Search Forums**
-   - [Unraid Community Forums](https://forums.unraid.net/)
-   - Look for existing threads
-
-3. **Create Support Thread**
-   - Post in Docker Containers section
-   - Include:
-     - Unraid version
-     - Container logs
-     - Steps to reproduce issue
-
-4. **Report Bugs**
-   - [GitHub Issues](https://github.com/thegspiro/the-logbook/issues)
-   - Include diagnostic information
-
-### Useful Commands
-
-```bash
-# View logs
-docker logs TheLogbook --tail 100 -f
-
-# Container status
-docker ps -a | grep TheLogbook
-
-# Health check
-curl http://localhost:3001/health
-
-# Database access
-docker exec -it logbook-db mysql -u root -p
-
-# Container shell
-docker exec -it TheLogbook bash
-
-# Restart container
-docker restart TheLogbook
-```
-
----
-
-## Advanced
-
-### Custom Network
-
-```bash
-# Create custom network
-docker network create logbook-network
-
-# Add to template Extra Parameters:
---network=logbook-network
-```
-
-### Resource Limits
-
-```bash
-# Add to Extra Parameters:
---memory=4g --cpus=2
-```
-
-### Multiple Instances
-
-1. Use different ports for each instance
-2. Use different database names
-3. Use separate appdata directories
-
----
-
-## Contributing
-
-Want to improve The Logbook for Unraid?
-
-1. Fork the repository
-2. Make improvements
-3. Test on Unraid
-4. Submit pull request
-
-**Areas needing help:**
-
-- Documentation improvements
-- Bug fixes
-- Feature requests
-- Community support
-
----
+Everything needed to run The Logbook on Unraid lives in this directory:
+setup and update scripts, Unraid-tuned Docker Compose files, the Community
+Applications template, and the guides below.
+
+## Which guide do I need?
+
+| I want to…                                       | Read                                                                       |
+| ------------------------------------------------ | -------------------------------------------------------------------------- |
+| Install quickly with one command                 | [QUICK-START.md](./QUICK-START.md)                                         |
+| Install, configure, and operate (the full guide) | [docs/deployment/unraid.md](../docs/deployment/unraid.md)                  |
+| Install via the Community Applications template  | [UNRAID-INSTALLATION.md](./UNRAID-INSTALLATION.md) — see status below      |
+| Build the images locally instead of pulling      | [BUILD-FROM-SOURCE-ON-UNRAID.md](./BUILD-FROM-SOURCE-ON-UNRAID.md)         |
+| Submit the app to Community Applications         | [COMMUNITY-APP-SUBMISSION.md](./COMMUNITY-APP-SUBMISSION.md) (maintainers) |
+
+## Install method status
+
+- **Docker Compose (available now).** The supported path today. One command:
+
+  ```bash
+  curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh | bash
+  ```
+
+  The script clones the repository to `/mnt/user/appdata/the-logbook`,
+  generates secure credentials, sets Unraid permissions, and builds and starts
+  all containers (frontend, backend, MySQL 8.0, Redis 7). Access the app at
+  `http://YOUR-UNRAID-IP:7880` and complete the onboarding wizard.
+
+- **Community Applications (pending).** The template
+  ([the-logbook.xml](./the-logbook.xml)) and its installation guide
+  ([UNRAID-INSTALLATION.md](./UNRAID-INSTALLATION.md)) are ready, but The
+  Logbook has not yet been published to the Community Applications catalog —
+  searching "The Logbook" in the Apps tab will not find it. Use the Docker
+  Compose path until the listing is live.
+
+## Security posture
+
+The Unraid stack runs with `ENVIRONMENT=production`, which enforces a startup
+security gate: strong secrets required, `DEBUG=false`, **API docs (`/docs`)
+off** (enabling them blocks boot), and `SECURITY_ENFORCE_HTTPS=true` — so front
+the app with an HTTPS reverse proxy (Swag, Nginx Proxy Manager) and point
+`ALLOWED_ORIGINS` at your `https://` origin. Leave `TRUSTED_PROXY_IPS` empty
+unless you actually add a proxy. Details:
+[HTTPS with Reverse Proxy](../docs/deployment/unraid.md#https-with-reverse-proxy)
+and [Security Hardening](./UNRAID-INSTALLATION.md#security-hardening).
+
+## Files in this directory
+
+| File                                                                           | Purpose                                                                                      |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| [unraid-setup.sh](./unraid-setup.sh)                                           | Automated install/update/clean-install script (the one-liner above)                          |
+| [update.sh](./update.sh)                                                       | Preferred update path: verified database dump, build-context repair, rebuild, rollback notes |
+| [validate-deployment.sh](./validate-deployment.sh)                             | Post-install validation and frontend build diagnosis                                         |
+| [docker-compose-unraid.yml](./docker-compose-unraid.yml)                       | Unraid-tuned compose file (pre-built images)                                                 |
+| [docker-compose-build-from-source.yml](./docker-compose-build-from-source.yml) | Compose file that builds images locally                                                      |
+| [the-logbook.xml](./the-logbook.xml)                                           | Community Applications template                                                              |
+| [.env.example](./.env.example)                                                 | Environment template the setup script starts from                                            |
+
+## System requirements
+
+| Component | Minimum | Recommended |
+| --------- | ------- | ----------- |
+| Unraid    | 6.9.0+  | 6.12.0+     |
+| RAM       | 8 GB    | 16 GB       |
+| Storage   | 20 GB   | 50 GB+      |
+| CPU cores | 2       | 4+          |
+
+Default ports: frontend (WebUI) `7880`, backend API `7881` — change via
+`FRONTEND_PORT` / `BACKEND_PORT` in `.env` (and update `ALLOWED_ORIGINS` to
+match).
+
+## Configuration, backups, troubleshooting
+
+These are covered once, in the full guide, rather than repeated here:
+
+- [Configuration](../docs/deployment/unraid.md#configuration) — `.env` settings,
+  ports, email; modules are enabled per organization in-app (Organization/Admin
+  Settings > Modules), not via environment variables
+- [Backup and Restore](../docs/deployment/unraid.md#backup-and-restore) —
+  automated daily backups with restore drills, manual backup/restore
+- [Updating](../docs/deployment/unraid.md#updating) — including the
+  build-context repair step that prevents mid-rebuild failures
+- [Troubleshooting](../docs/deployment/unraid.md#troubleshooting) — container
+  conflicts, port conflicts, database issues, full rebuild
+
+## Getting help
+
+1. [Troubleshooting](../docs/deployment/unraid.md#troubleshooting) in the full guide
+2. [docs/TROUBLESHOOTING.md](../docs/TROUBLESHOOTING.md) for application-level issues
+3. [Unraid Community Forums](https://forums.unraid.net/) — post in the Docker Containers section with your Unraid version, container logs, and steps to reproduce
+4. [GitHub Issues](https://github.com/thegspiro/the-logbook/issues) for bug reports
 
 ## License
 
 The Logbook is open source software. See [LICENSE](../LICENSE) for details.
-
----
-
-## Acknowledgments
-
-- **Unraid Team** - For the amazing platform
-- **Community Applications** - For the plugin ecosystem
-- **Contributors** - Everyone who helps improve The Logbook
-
----
-
-## Resources
-
-### Documentation
-
-- [Installation Guide](./UNRAID-INSTALLATION.md)
-- [Quick Start](./QUICK-START.md)
-- [Build from Source](./BUILD-FROM-SOURCE-ON-UNRAID.md)
-- [Community App Submission](./COMMUNITY-APP-SUBMISSION.md)
-- [Main Documentation](../docs/)
-
-### External Links
-
-- [Official Website](#)
-- [GitHub Repository](https://github.com/thegspiro/the-logbook)
-- [Docker Hub](https://hub.docker.com/r/thegspiro/the-logbook)
-- [Unraid Forums](https://forums.unraid.net/)
-
-### Quick Reference
-
-- [Docker Compose File](./docker-compose-unraid.yml)
-- [XML Template](./the-logbook.xml)
-- [Changelog](../CHANGELOG.md)
-
----
-
-## Stay Connected
-
-- 🌟 Star us on [GitHub](https://github.com/thegspiro/the-logbook)
-- 💬 Join our [Community Forum](#)
-- 🐦 Follow on [Twitter](#)
-- 📧 Subscribe to [Newsletter](#)
-
----
-
-**Made with ❤️ for Emergency Services**
-
-_The Logbook - Serving those who serve_

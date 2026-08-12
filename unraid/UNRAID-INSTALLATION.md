@@ -2,6 +2,15 @@
 
 Complete guide for installing The Logbook on Unraid using Community Applications.
 
+> **Status: the Community Applications listing is not yet published** —
+> searching "The Logbook" in the Apps tab will not find it yet. This guide
+> documents the CA template install path for when the listing is live (the
+> template ships in this directory as [the-logbook.xml](./the-logbook.xml);
+> maintainers, see [COMMUNITY-APP-SUBMISSION.md](./COMMUNITY-APP-SUBMISSION.md)).
+> **To install today, use the Docker Compose path:**
+> [QUICK-START.md](./QUICK-START.md) for the fast version or
+> [docs/deployment/unraid.md](../docs/deployment/unraid.md) for the full guide.
+
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)

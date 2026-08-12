@@ -46,7 +46,7 @@ docker-compose up -d
 
 ### 🚢 Deployment
 
-- **[Unraid Deployment](Deployment-Unraid)** - Complete Unraid guide
+- **[Unraid Deployment](Deployment-Unraid)** - Deploying and updating on Unraid
 - **[Docker Deployment](Deployment-Docker)** - Docker Compose deployment
 - **[Production Deployment](Deployment-Production)** - Production best practices
 

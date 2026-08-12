@@ -2,6 +2,13 @@
 
 Complete guide for installing and running The Logbook on Unraid.
 
+> **This is the canonical Unraid guide** for the Docker Compose deployment —
+> the supported install path today. The condensed
+> [Quick Start](../../unraid/QUICK-START.md) and the wiki pages defer to this
+> document; the separate [UNRAID-INSTALLATION.md](../../unraid/UNRAID-INSTALLATION.md)
+> covers the Community Applications template, which is not yet published to
+> the CA catalog.
+
 ## Table of Contents
 
 - [Requirements](#requirements)
@@ -13,6 +20,7 @@ Complete guide for installing and running The Logbook on Unraid.
 - [HTTPS with Reverse Proxy](#https-with-reverse-proxy)
 - [Backup and Restore](#backup-and-restore)
 - [Updating](#updating)
+- [Performance](#performance)
 - [Troubleshooting](#troubleshooting)
 - [Common Commands](#common-commands)
 
@@ -313,6 +321,31 @@ Back up before updating:
 ```bash
 docker-compose exec backend /app/scripts/backup.sh
 ```
+
+---
+
+## Performance
+
+### Resource Limits
+
+To cap container resource usage on a busy Unraid server, add under each
+service in `docker-compose.yml`:
+
+```yaml
+deploy:
+  resources:
+    limits:
+      cpus: "2"
+      memory: 2G
+    reservations:
+      cpus: "1"
+      memory: 512M
+```
+
+### Database
+
+The Unraid compose file already tunes MySQL: 512MB buffer pool, UTF8MB4
+encoding, 200 max connections, 256MB max packet size.
 
 ---
 
