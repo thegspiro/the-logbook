@@ -1000,8 +1000,7 @@ report carries who raised it, when, and an optional note, and it appears on the
 supply worklist beside the expiring items — to a supply officer, "expires
 Thursday" and "the crew used it last night" are the same job.
 
-> **Screenshot needed:**
-> _[Screenshot of the "report used" sheet on a phone showing the quantity stepper, the optional note field, and the confirm button, with the position's name and current count visible above it]_
+![The report-used sheet: quantity stepper, optional note, and the position's current count](./images/03-60-report-used-sheet.png)
 
 **A report is settled only when the truck is back at its target.** Two of four
 back is still a truck short two, and clearing the flag there would close the gap
