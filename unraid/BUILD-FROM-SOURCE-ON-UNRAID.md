@@ -150,7 +150,7 @@ ls -la /mnt/user/appdata/the-logbook/
 cd /mnt/user/appdata/the-logbook
 
 # Build the images (this will take 15-20 minutes the first time)
-docker-compose build
+docker compose build
 
 # You'll see output like:
 # [+] Building backend...
@@ -175,8 +175,8 @@ df -h
 free -h
 
 # If low on memory, build one at a time:
-docker-compose build backend
-docker-compose build frontend
+docker compose build backend
+docker compose build frontend
 ```
 
 ---
@@ -185,10 +185,10 @@ docker-compose build frontend
 
 ```bash
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # Watch the logs to verify startup
-docker-compose logs -f
+docker compose logs -f
 
 # Wait for these messages:
 # ✓ Database connection successful
@@ -205,7 +205,7 @@ docker-compose logs -f
 
 ```bash
 # Check container status (all should show "Up" and "healthy")
-docker-compose ps
+docker compose ps
 
 # Expected output:
 # NAME                 STATUS                    PORTS
@@ -248,15 +248,15 @@ curl http://localhost:7880
 cd /mnt/user/appdata/the-logbook
 
 # All services
-docker-compose logs -f
+docker compose logs -f
 
 # Specific service
-docker-compose logs -f backend
-docker-compose logs -f frontend
-docker-compose logs -f db
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f db
 
 # Last 100 lines
-docker-compose logs --tail 100
+docker compose logs --tail 100
 ```
 
 ### Stop/Start/Restart
@@ -265,19 +265,19 @@ docker-compose logs --tail 100
 cd /mnt/user/appdata/the-logbook
 
 # Stop
-docker-compose stop
+docker compose stop
 
 # Start
-docker-compose start
+docker compose start
 
 # Restart
-docker-compose restart
+docker compose restart
 
 # Stop and remove (keeps data)
-docker-compose down
+docker compose down
 
 # Start from scratch
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Update The Logbook
@@ -351,7 +351,7 @@ ls -lh /mnt/user/backups/the-logbook/
 
 ```bash
 # Access MySQL shell
-docker-compose exec logbook-db mysql -u root -p
+docker compose exec logbook-db mysql -u root -p
 # Enter MYSQL_ROOT_PASSWORD from .env
 
 # Inside MySQL:
@@ -380,15 +380,15 @@ df -h
 Your internet connection dropped during package download. Just run again:
 
 ```bash
-docker-compose build
+docker compose build
 ```
 
 ### Containers fail to start
 
 ```bash
 # Check logs for errors
-docker-compose logs backend
-docker-compose logs db
+docker compose logs backend
+docker compose logs db
 
 # Common issues:
 # - Wrong password in .env
@@ -400,11 +400,11 @@ docker-compose logs db
 
 ```bash
 # Verify database is running
-docker-compose ps db
+docker compose ps db
 # Should show "Up (healthy)"
 
 # Check database logs
-docker-compose logs db
+docker compose logs db
 
 # Verify password matches in .env
 cat .env | grep DB_PASSWORD
@@ -415,7 +415,7 @@ cat .env | grep MYSQL_ROOT_PASSWORD
 
 ```bash
 # 1. Verify frontend is running
-docker-compose ps frontend
+docker compose ps frontend
 # Should show "Up (healthy)"
 
 # 2. Check if port is accessible
@@ -433,7 +433,7 @@ ip addr show | grep "inet " | grep -v 127.0.0.1
 # Fix permissions
 chown -R 99:100 /mnt/user/appdata/the-logbook
 chown -R 99:100 /mnt/user/backups/the-logbook
-docker-compose restart
+docker compose restart
 ```
 
 ---
@@ -477,10 +477,10 @@ cd /mnt/user/appdata/the-logbook
 cp unraid/docker-compose-unraid.yml docker-compose.yml
 
 # Pull pre-built images
-docker-compose pull
+docker compose pull
 
 # Recreate containers
-docker-compose up -d
+docker compose up -d
 ```
 
 ---

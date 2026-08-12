@@ -25,10 +25,10 @@ cp .env.example .env
 # Edit .env with your settings (see Configuration below)
 
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # Verify
-docker-compose ps
+docker compose ps
 curl http://localhost:3001/health
 ```
 
@@ -119,31 +119,31 @@ Enable a profile: `docker compose --profile with-search up -d`
 ### Start / Stop / Restart
 
 ```bash
-docker-compose up -d          # Start all
-docker-compose down            # Stop all
-docker-compose restart         # Restart all
-docker-compose restart backend # Restart one service
+docker compose up -d          # Start all
+docker compose down            # Stop all
+docker compose restart         # Restart all
+docker compose restart backend # Restart one service
 ```
 
 ### Rebuild After Code Changes
 
 ```bash
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ### View Logs
 
 ```bash
-docker-compose logs -f              # All services
-docker-compose logs -f backend      # Specific service
-docker-compose logs --tail=50 backend # Last 50 lines
+docker compose logs -f              # All services
+docker compose logs -f backend      # Specific service
+docker compose logs --tail=50 backend # Last 50 lines
 ```
 
 ### Run Migrations
 
 ```bash
-docker-compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade head
 ```
 
 ### Database Backup
@@ -164,7 +164,7 @@ and [docs/BACKUP.md](../docs/BACKUP.md). _(2026-07-31)_
 
 ```bash
 cd /path/to/the-logbook
-docker-compose down
+docker compose down
 git pull
 
 # Reconcile the compose build contexts with the Dockerfiles just pulled.
@@ -173,9 +173,9 @@ git pull
 # copies passes validation and then fails the build.
 ./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
-docker-compose build --no-cache
-docker-compose up -d
-docker-compose exec backend alembic upgrade head
+docker compose build --no-cache
+docker compose up -d
+docker compose exec backend alembic upgrade head
 ```
 
 > Run the context check on every update if you maintain your own compose file:

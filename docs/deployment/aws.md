@@ -371,18 +371,26 @@ If using Route 53 for DNS:
 
 ### Method 1 (EC2 + Docker Compose)
 
-The database runs locally, so use The Logbook's built-in backup:
+The database runs locally, and the production stack already backs it up: the
+`backup` sidecar service in `docker-compose.prod.yml` takes a nightly
+`mysqldump` + uploads archive (at `BACKUP_TIME`, default 02:00 UTC), prunes
+archives older than `BACKUP_RETENTION_DAYS`, and runs an automated
+restore-verification drill every `VERIFY_EVERY_N_BACKUPS` runs.
 
 ```bash
-# Manual backup
-docker compose exec backend /app/scripts/backup.sh
+# Confirm the sidecar is running and healthy
+docker compose logs backup
 
-# Schedule daily backups via cron
-crontab -e
-# Add: 0 2 * * * cd /opt/the-logbook && docker compose exec -T backend /app/scripts/backup.sh
+# Archives land in the `backups` docker volume — find it on disk with:
+docker volume inspect the-logbook_backups -f '{{ .Mountpoint }}'
 
-# Back up to S3 (optional)
-aws s3 sync /opt/the-logbook/backups/ s3://your-org-logbook-backups/
+# Manual backup (run on the host from the install directory; backup.sh is a
+# host-side script — it is not shipped inside the backend image)
+cd /opt/the-logbook && ./scripts/backup.sh
+
+# Sync archives off the instance (a backup that dies with the host is not a backup)
+aws s3 sync "$(docker volume inspect the-logbook_backups -f '{{ .Mountpoint }}')" \
+  s3://your-org-logbook-backups/
 ```
 
 Also consider **EBS snapshots** for full disk backup:

@@ -1,5 +1,10 @@
 # Contributing to Intranet Platform
 
+> **Published copy — not the canonical source.** The maintained original is
+> [`CONTRIBUTING.md`](https://github.com/thegspiro/the-logbook/blob/main/CONTRIBUTING.md)
+> in the repository root, and this page may lag behind it. Make content changes
+> there first, then mirror them here.
+
 First off, thank you for considering contributing to the Intranet Platform! It's people like you that make this platform a great tool for fire departments and emergency services worldwide.
 
 ## Table of Contents

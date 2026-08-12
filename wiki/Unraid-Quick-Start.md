@@ -1,5 +1,10 @@
 # Unraid Quick Start
 
+> **Published copy — not the canonical source.** The maintained original is
+> [`unraid/QUICK-START.md`](https://github.com/thegspiro/the-logbook/blob/main/unraid/QUICK-START.md),
+> and this page may lag behind it. Make content changes there first, then
+> mirror them here.
+
 **One command to install The Logbook on Unraid:**
 
 ```bash
@@ -58,8 +63,8 @@ If you see: `Error: The container name "/logbook-redis" is already in use`
 
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker-compose down --remove-orphans
-docker-compose up -d
+docker compose down --remove-orphans
+docker compose up -d
 ```
 
 ### Or Use Setup Script
@@ -79,27 +84,27 @@ cd /mnt/user/appdata/the-logbook/unraid
 cd /mnt/user/appdata/the-logbook
 
 # View all logs
-docker-compose logs -f
+docker compose logs -f
 
 # View specific service logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker compose logs -f backend
+docker compose logs -f frontend
 
 # Restart services
-docker-compose restart
+docker compose restart
 
 # Stop everything
-docker-compose down
+docker compose down
 
 # Start everything
-docker-compose up -d
+docker compose up -d
 
 # Rebuild after updates
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 
 # Check status
-docker-compose ps
+docker compose ps
 ```
 
 ---
@@ -123,9 +128,9 @@ cd /mnt/user/appdata/the-logbook
 git pull
 
 # Rebuild containers
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ---
@@ -144,6 +149,7 @@ The setup script automatically configures:
 - **Backend** - FastAPI (Port 7881)
 - **Database** - MySQL 8.0
 - **Cache** - Redis 7
+- **Backup** - nightly database + uploads archives with restore drills
 
 ### 📁 Directory Structure
 ```
@@ -181,21 +187,24 @@ TZ=America/New_York
 
 After changing `.env`, restart:
 ```bash
-docker-compose restart
+docker compose restart
 ```
 
 ---
 
 ## Security Note
 
-This stack runs in **production posture**, so a startup security gate applies:
+This stack runs in **production posture**. The setup script configures a
+**LAN-trial mode** so the quick start works out of the box on a trusted LAN:
 
+- The generated `.env` sets `SECURITY_ENFORCE_HTTPS=true` (required by the
+  production startup gate) **and `COOKIE_SECURE=false`** — without the latter,
+  browsers refuse to send the app's `Secure` auth cookies over plain
+  `http://`, and logins fail.
+- **Before real use**: front the app with an HTTPS reverse proxy (SWAG /
+  Nginx Proxy Manager / Cloudflare Tunnel), set `ALLOWED_ORIGINS` to your
+  `https://` origin, and **delete the `COOKIE_SECURE` line from `.env`**.
 - **API docs (`/docs`) are OFF by default** — enabling them blocks boot in production.
-- **HTTPS is required in production** — the app refuses to start unless strong
-  secrets are set, `DEBUG=false`, docs are disabled, and
-  `SECURITY_ENFORCE_HTTPS=true`. Front the app with an HTTPS reverse proxy (SWAG /
-  Nginx Proxy Manager / Cloudflare Tunnel) and set `ALLOWED_ORIGINS` to your
-  `https://` origin.
 - **Leave `TRUSTED_PROXY_IPS` empty** — the compose publishes the backend port
   directly, so the connecting peer is the real client. Only set it when you add a
   reverse proxy.
@@ -212,20 +221,20 @@ See the **[Troubleshooting Guide](Troubleshooting)** for common issues.
 
 **Frontend not loading:**
 ```bash
-docker-compose logs frontend
-docker-compose restart frontend
+docker compose logs frontend
+docker compose restart frontend
 ```
 
 **Backend API errors:**
 ```bash
 curl http://localhost:7881/health
-docker-compose logs backend
+docker compose logs backend
 ```
 
 **Database issues:**
 ```bash
 docker ps | grep logbook-db
-docker-compose logs db
+docker compose logs db
 ```
 
 **Port conflicts:**
