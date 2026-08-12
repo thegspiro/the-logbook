@@ -386,6 +386,17 @@ async function main() {
     const page = await sessions.pageFor(shot);
     try {
       await page.setViewportSize(viewportFor(shot));
+      // One page is reused for every shot of a given auth mode, so anything a
+      // prepare step writes to localStorage outlives its own shot. The
+      // navigation layout is the one that bites: 08-62 switches the app to the
+      // top bar to photograph it, and without this every admin shot captured
+      // after it rendered with the top bar instead of the default sidebar —
+      // silently, and dependent on manifest order. Clearing the key restores
+      // AppLayout's own `|| 'left'` default; the shot that wants the top bar
+      // sets it again in its prepare step.
+      await page
+        .evaluate(() => localStorage.removeItem("navigationLayout"))
+        .catch(() => {});
       if (shot.beforeNavigate) {
         // Install route mocks before the first document request. This is used
         // sparingly for provider-controlled configuration states (for example,
