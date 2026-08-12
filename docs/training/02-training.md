@@ -1472,13 +1472,18 @@ first if you want to see what a package contains before it lands in yours.
 
 Navigate to **Training Admin > Import History** to import historical training records from a CSV file.
 
-1. Upload your CSV file with historical training data.
-2. The system **parses and previews** the data.
-3. Review the preview for any validation errors.
-4. Confirm the import.
+1. **Choose how members are matched** — by membership number (the default, and
+   the more reliable) or by email address. This is picked _before_ the upload:
+   a file keyed the other way is refused outright, with a message naming the
+   column it expected and the columns it found.
+2. Upload your CSV file with historical training data.
+3. **Map the course names** in the file to courses in your library, or let each
+   one create a new course.
+4. Review the **preview** — how many rows will import, how many members matched,
+   and any that did not, with filters for each state.
+5. Confirm the import.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the historical import page showing the file upload area, a parsed data preview table, and a confirmation button]_
+![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
 
 ---
 
@@ -1496,10 +1501,7 @@ A competency matrix is a per-position definition: a name, the position it applie
 - **Proficient**
 - **Expert**
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Competency Matrix showing a heat-map grid with member names on rows, competency areas on columns, and color-coded cells. Include the filter bar at the top for filtering by station, rank, or competency category]_
-
-**Not yet built:** the department-wide member-by-competency heat-map — one row per member, one column per competency area, with a station/rank filter bar. The tab today shows only the matrix definitions; a member's own levels are readable through the API (`/training/competency/me` and `/training/competency/members/{id}`) but have no screen. The placeholder above stays open until that view exists.
+**Not yet built:** the department-wide member-by-competency heat-map — one row per member, one column per competency area, with a station/rank filter bar. The tab today shows only the matrix definitions; a member's own levels are readable through the API (`/training/competency/me` and `/training/competency/members/{id}`) but have no screen.
 
 ### Edge Cases
 

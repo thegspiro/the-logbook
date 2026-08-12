@@ -3494,6 +3494,46 @@ export const SHOTS = [
     route: "/training/programs",
   },
   {
+    id: "02-02-historical-import-preview",
+    doc: "02-training.md",
+    line: 1480,
+    anchor: "Screenshot of the historical import page showing the file upload area",
+    alt: "The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button",
+    route: "/training/admin?page=setup&tab=import",
+    prepare: async (page) => {
+      // A CSV built here rather than committed: the importer matches rows to
+      // members by email, so the file has to name members this department
+      // actually has, and those are minted per seed run.
+      const csv = [
+        "email,course_name,completion_date,hours,training_type,certification_number,expiration_date,instructor,location,score,notes",
+        "isolberg@oakvillefd.example.org,Firefighter I,2024-01-15,40,certification,FF-12345,2026-01-15,Chief Ruiz,Station 1,95,Annual certification",
+        "ytanaka@oakvillefd.example.org,EMT Refresher,2024-03-20,8,refresher,,,Dr. Jones,Training Center,,Quarterly refresher",
+        "hvance@oakvillefd.example.org,Pump Operations,2024-05-02,12,certification,PO-8891,2027-05-02,Capt. Frazier,Station 1,88,",
+        "jwhitfield@oakvillefd.example.org,Hazmat Awareness,2024-06-11,6,refresher,,,Chief Ruiz,Training Center,,",
+      ].join("\n");
+      // The wizard defaults to matching on membership number, and rejects an
+      // email-keyed file outright — "CSV must contain a 'membership_number'
+      // column". Choose the match mode before uploading.
+      await page.getByText("Email Address", { exact: true }).first().click();
+      await page.waitForTimeout(600);
+      await page.setInputFiles('input[type="file"]', {
+        name: "historical-training-2024.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from(csv, "utf8"),
+      });
+      await page.waitForTimeout(2_000);
+      // Upload -> Map courses -> Preview. The wizard advances on its own
+      // button rather than by step number.
+      for (let step = 0; step < 2; step += 1) {
+        const next = page.getByRole("button", { name: /Continue to (Course Mapping|Preview)/ }).first();
+        if (!(await next.count())) break;
+        await next.click();
+        await page.waitForTimeout(1_500);
+      }
+    },
+    fullPage: true,
+  },
+  {
     id: "02-64-skills-testing-admin",
     doc: "02-training.md",
     line: 1460,
