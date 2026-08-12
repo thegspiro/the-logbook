@@ -34,6 +34,7 @@ const mockCompletedTest = {
   completed_at: '2026-01-15T10:30:00Z',
   created_at: '2026-01-15T10:00:00Z',
   updated_at: '2026-01-15T10:30:00Z',
+  version: 7,
 };
 
 const mockInProgressTest = {
@@ -441,6 +442,7 @@ describe('ActiveSkillTestPage', () => {
         status: 'in_progress',
         section_results: [],
         elapsed_seconds: 0,
+        expected_version: 7,
       });
     });
 

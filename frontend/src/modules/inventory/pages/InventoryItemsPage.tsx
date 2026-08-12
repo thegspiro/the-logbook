@@ -66,6 +66,7 @@ import {
   getConditionColor,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 const PAGE_SIZE = 50;
 const SORT_COLS = [
@@ -316,6 +317,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
 const InventoryItemsPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
 
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -516,7 +518,15 @@ const InventoryItemsPage: React.FC = () => {
   const printLabels = () => void navigate(`/inventory/print-labels?ids=${Array.from(selIds).join(',')}`);
 
   const bulkRetire = async () => {
-    if (!confirm(`Retire ${selIds.size} item(s)? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: 'Retire items',
+        message: `Retire ${selIds.size} item(s)? This cannot be undone.`,
+        confirmLabel: 'Retire',
+        cancelLabel: 'Keep them',
+      }))
+    )
+      return;
     try {
       await Promise.all(Array.from(selIds).map((id) => inventoryService.retireItem(id)));
       toast.success(`${selIds.size} item(s) retired`);

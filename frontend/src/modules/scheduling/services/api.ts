@@ -128,6 +128,13 @@ export interface ShiftRecord {
   created_by?: string;
   attendees?: ShiftAttendanceRecord[];
   platoon_roster?: PlatoonRosterEntry[];
+  /**
+   * Whether the shift is inside its check-in window, decided by the backend so
+   * the rule is not reimplemented here. Only the shift *detail* response carries
+   * these; the list endpoint leaves them undefined.
+   */
+  checkin_open?: boolean;
+  checkin_closed_reason?: string | null;
 }
 
 export interface PlatoonRosterEntry {

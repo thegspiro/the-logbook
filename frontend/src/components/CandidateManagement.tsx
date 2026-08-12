@@ -12,6 +12,7 @@ import type { Election, Candidate, CandidateCreate, CandidateUpdate } from '../t
 import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
 import { UserStatus, ElectionStatus } from '../constants/enums';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const inputClass =
   'mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm';
@@ -38,6 +39,7 @@ const emptyCandidateForm: CandidateFormState = {
 };
 
 export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electionId, election }) => {
+  const { confirm } = useConfirm();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,7 +155,15 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
   };
 
   const handleDelete = async (candidateId: string, candidateName: string) => {
-    if (!confirm(`Are you sure you want to remove ${candidateName}?`)) return;
+    if (
+      !(await confirm({
+        title: 'Remove candidate',
+        message: `Remove ${candidateName} from this election?`,
+        confirmLabel: 'Remove',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
 
     try {
       setError(null);

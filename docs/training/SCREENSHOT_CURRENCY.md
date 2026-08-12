@@ -87,10 +87,47 @@ this note exists so the guide does not silently endorse the number.
 
 ### Held back deliberately
 
-`02-42-external-integrations` and `02-68-vector-category-mapping` capture an
-empty "No Integrations Yet" state. The harness flags them and does not apply
-them, and they are **not committed**, so the guide keeps its unfilled
-placeholders rather than gaining a picture of nothing.
+`02-68-vector-category-mapping` still has nothing to photograph. Category
+mappings are created **only** by `POST /providers/{id}/sync-categories`, which
+fetches the live vendor catalogue over the network — there is no create
+endpoint the seeder could call, so the table stays empty however much demo data
+is added. The harness flags the shot and does not apply it, and it is **not
+committed**, so the guide keeps its unfilled placeholder rather than gaining a
+picture of an empty table under a caption describing a full one.
+
+**Resolved 2026-08-12 for `02-42-external-integrations`.** That one was empty
+for a reason the seeder _could_ fix — the demo department had no provider
+configured at all. `seed_external_provider` now saves one, and the shot is
+captured and applied. Only the configuration is seeded: `connection_verified`
+and `last_sync_at` are written by a real sync, so the card reads "Connection
+not verified" and "Last Sync: Never", which the guide's prose now explains
+rather than contradicts.
+
+### A seed gap that wasn't — the quantity checklist was reachable all along
+
+**Withdrawn 2026-08-12, the day after it was written.** This section claimed
+three 03-scheduling placeholders — the carry-over banner, the Set All to Par
+confirmation, and the flat check form on a phone — were unreachable because the
+only template with quantity items is bound to **M-3** and `seed_scheduling`
+rosters shifts onto `fleet[:3]` only. The premise about the roster is true. The
+conclusion drawn from it was not.
+
+**A check does not need a shift.** `MyChecklistsPage` has an **Unscheduled
+checklist** button that offers every active template and starts a check with no
+shift attached — the same standalone-check feature the guide documents two
+sections further down. All three shots were captured through it with no seeder
+change at all, and they are now applied.
+
+The mistake was reasoning from `/equipment-checks/my-checklists` (which is
+shift-derived, and was correctly read) to "the screen is unreachable", without
+reading the page that renders it. Recorded rather than deleted because the
+cheap check — open the page and look at what else is on it — is the one that
+was skipped.
+
+**What was genuinely missing** was smaller and got fixed here: no seeded
+template had a **section header**, so the bold in-compartment caption the guide
+documents could not be pictured and the renderer had never met one in demo
+data. `_add_section_header` now puts one on the engine checklist.
 
 ---
 
@@ -358,27 +395,12 @@ placeholders** for screens that have never been photographed:
 | `06-apparatus-facilities.md` | The Operators tab, the Add Operator member picker                                                                                                                                                                                         |
 | `08-admin-reports.md`        | The Footers tab, the footer selector in the template editor, the Organization variable palette, the new email preview design                                                                                                              |
 
-**Fifteen of the eighteen are now captured and applied** _(2026-08-11)_:
-
-| Guide | Captured                                                                                                                      | Still open                                                                                   |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `03`  | `03-57` apparatus inventory, `03-58` lots sheet, `03-59` worklist, `03-60` report-used, `03-61` quick-add, `03-62` bulk match | The check form's **carry-over banner** and the **Set All to Par** warning — both phone-width |
-| `05`  | `05-65` Receive Stock, `05-66` Add Several, `05-67` an item's Stock tab                                                       | The **two-ledger items grid** (`05-53`, entry written, not yet shot)                         |
-| `06`  | `06-22` Operators tab, `06-23` Add Operator                                                                                   | —                                                                                            |
-| `08`  | `08-64` Footers tab, `08-65` footer selector, `08-66` variable palette, `08-67` email preview                                 | —                                                                                            |
-
-The apparatus shots select M-3 from the picker by the option's **value** rather
-than its label, since the label is built from two fields and matching it as a
-string breaks the moment either changes. `openTemplateEditor()` does the same
-job for the four email shots: it reaches a template through the screen's own
-filter box rather than by clicking the nth row, because the catalogue is forty
-templates in collapsible categories and the nth row is a different template
-every time one is added.
-
-**The three still open are the ones that need something the demo does not have
-yet** — two are phone-width captures of a check form mid-carry-over, and the
-third needs the items grid showing a lot-stocked and a plain consumable side by
-side.
+**Four now have manifest entries** _(2026-08-11)_ —
+`03-95-apparatus-inventory`, `03-59-supply-worklist`,
+`05-53-items-grid-lot-stock` and `08-64-email-footers-tab`. Three are plain
+route visits; the apparatus one selects M-3 from the picker by the option's
+**value** rather than its label, since the label is built from two fields and
+matching it as a string breaks the moment either changes.
 
 `08-64` only became possible on 2026-08-11: the Email Templates page held its
 tab in plain state, so a shot of the Footers tab would have silently captured

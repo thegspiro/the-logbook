@@ -746,7 +746,7 @@ function LocationSetupWizard({
         </div>
 
         {/* Footer buttons */}
-        <div className="border-theme-surface-border flex items-center justify-between border-t p-6">
+        <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-2 border-t p-6">
           {step === 'mode' && (
             <>
               <span />
@@ -1224,7 +1224,7 @@ export default function LocationsPage() {
 
       {/* Station Mode Badge (shown when configured, allows changing) */}
       {!stationModeLoading && stationMode !== null && (
-        <div className="text-theme-text-muted flex items-center gap-2 text-xs">
+        <div className="text-theme-text-muted flex flex-wrap items-center gap-2 text-xs">
           {isSingleStation ? (
             <span className="flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-blue-700 dark:text-blue-400">
               <Building className="h-3.5 w-3.5" /> Single-Station Department
@@ -1256,7 +1256,7 @@ export default function LocationsPage() {
 
       {/* Station mode not set but locations exist — let user set mode or launch wizard */}
       {!stationModeLoading && stationMode === null && locations.length > 0 && (
-        <div className="text-theme-text-muted flex items-center gap-2 text-xs">
+        <div className="text-theme-text-muted flex flex-wrap items-center gap-2 text-xs">
           <span className="flex items-center gap-1.5 rounded-full bg-yellow-500/10 px-2.5 py-1 text-yellow-500">
             <HelpCircle className="h-3.5 w-3.5" /> Station mode not configured
           </span>
@@ -1289,9 +1289,9 @@ export default function LocationsPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-3xl font-bold">
+          <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">
             {isSingleStation ? 'Location & Rooms' : 'Locations & Rooms'}
           </h1>
           <p className="text-theme-text-secondary mt-1">
@@ -1301,7 +1301,10 @@ export default function LocationsPage() {
           </p>
         </div>
         {(!isSingleStation || stations.length === 0) && (
-          <button onClick={openCreateStation} className="btn-primary flex items-center gap-2 py-2.5">
+          <button
+            onClick={openCreateStation}
+            className="btn-primary flex shrink-0 items-center gap-2 self-start py-2.5 sm:self-auto"
+          >
             <Plus className="h-4 w-4" /> {isSingleStation ? 'Set Up Location' : 'Add Station'}
           </button>
         )}
@@ -1368,7 +1371,7 @@ export default function LocationsPage() {
                 className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border"
               >
                 {/* Station Header */}
-                <div className="flex items-center gap-4 p-5">
+                <div className="flex flex-wrap items-center gap-4 p-5">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
                     <Building2 className="h-5 w-5 text-red-500" />
                   </div>

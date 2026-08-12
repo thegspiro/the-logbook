@@ -173,6 +173,11 @@ class FundraisingService:
         donor = Donor(organization_id=organization_id, **data)
         self.db.add(donor)
         await self.db.flush()
+        # A full refresh, not just the timestamps: these models carry other
+        # server-side defaults too (Donor alone has country, total_donated,
+        # donation_count, is_anonymous and active), and every unloaded one
+        # raises MissingGreenlet when the response model reads it.
+        await self.db.refresh(donor)
         return donor
 
     async def update_donor(
@@ -264,6 +269,11 @@ class FundraisingService:
         if donation.donor_id and donation.payment_status == PaymentStatus.COMPLETED:
             await self._update_donor_stats(donation.donor_id, organization_id)
 
+        # Refreshed last, after the total updates above: those flush again, and a
+        # refresh before them would be re-expired by the time this returns.
+        # created_at / updated_at are server-side defaults, and the response
+        # model requires both.
+        await self.db.refresh(donation)
         return donation
 
     async def update_donation(
@@ -400,6 +410,11 @@ class FundraisingService:
         )
         self.db.add(pledge)
         await self.db.flush()
+        # A full refresh, not just the timestamps: these models carry other
+        # server-side defaults too (Donor alone has country, total_donated,
+        # donation_count, is_anonymous and active), and every unloaded one
+        # raises MissingGreenlet when the response model reads it.
+        await self.db.refresh(pledge)
         return pledge
 
     async def update_pledge(
@@ -470,6 +485,11 @@ class FundraisingService:
         )
         self.db.add(event)
         await self.db.flush()
+        # A full refresh, not just the timestamps: these models carry other
+        # server-side defaults too (Donor alone has country, total_donated,
+        # donation_count, is_anonymous and active), and every unloaded one
+        # raises MissingGreenlet when the response model reads it.
+        await self.db.refresh(event)
         return event
 
     async def update_fundraising_event(

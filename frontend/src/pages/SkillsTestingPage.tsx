@@ -54,7 +54,7 @@ const TemplateCard: React.FC<{
         {template.description && (
           <p className="text-theme-text-muted mt-1 line-clamp-2 text-sm">{template.description}</p>
         )}
-        <div className="text-theme-text-muted mt-3 flex items-center gap-3 text-xs">
+        <div className="text-theme-text-muted mt-3 flex flex-wrap items-center gap-3 text-xs">
           {template.category && (
             <span className="inline-flex items-center gap-1">
               <FileText className="h-3 w-3" aria-hidden="true" />
@@ -85,7 +85,7 @@ const TestHistoryCard: React.FC<{
     >
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center gap-2">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
             <p className="text-theme-text-primary truncate font-medium">{test.template_name}</p>
             <ResultBadge result={test.status} />
             {/* The score is withheld server-side until an officer signs the

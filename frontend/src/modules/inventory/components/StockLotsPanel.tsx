@@ -41,6 +41,12 @@ function emptyForm(): InventoryLotCreate {
 
 const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) => {
   const { confirm } = useConfirm();
+  // Still needed for `getTodayLocalDate`: "how many days until this expires" is
+  // asked from where the reader is standing. The expiration date itself is not
+  // — it is a calendar date, the same day everywhere, and running it through a
+  // timezone-converting formatter printed it a day early for any viewer behind
+  // UTC. The count and the date beside it then disagreed in one sentence:
+  // "Exp 9/3/2026 · 24d left", 24 days after 8/11 being 9/4.
   const tz = useTimezone();
   const [lots, setLots] = useState<InventoryLot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -306,7 +312,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                         {state === 'expired' && <AlertTriangle className="h-3 w-3" />}
                         {state === 'soon' && <Clock className="h-3 w-3" />}
                         {state === 'expired' ? 'Expired ' : 'Exp '}
-                        {formatCalendarDate(lot.expiration_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                        {formatCalendarDate(lot.expiration_date)}
                         {(() => {
                           const d = daysLeft(lot);
                           return d === null ? null : <span className="opacity-70">· {daysLeftLabel(d)}</span>;
@@ -393,7 +399,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                     >
                       {d.isExpired ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
                       {d.isExpired ? 'Expired ' : 'Exp '}
-                      {formatCalendarDate(d.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                      {formatCalendarDate(d.expirationDate)}
                     </span>
                   )}
                 </div>

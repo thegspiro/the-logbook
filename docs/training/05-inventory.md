@@ -658,8 +658,7 @@ pool count beside it, and the CSV export carries the same number in its own
 which ledger it came from, so a number that disagrees with the item's Quantity
 field reads as the count that matters rather than as a bug.
 
-> **Screenshot needed:**
-> _[Screenshot of the inventory items grid with two consumable rows visible — one showing a Qty figure annotated "in-date lots" and one showing a plain pool figure — so the two ledgers can be told apart]_
+![Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure](./images/05-53-items-grid-lot-stock.png)
 
 > **Why the two disagree.** For anything kept as dated stock, the item's
 > **Quantity** field is not maintained at all: receiving a lot does not touch it,
@@ -683,7 +682,7 @@ for often did not exist.
 4. Set the **received date** once, for the whole delivery.
 5. Review and submit.
 
-![Receive Stock: one dated lot per delivery line, with a single received date above them](./images/05-65-receive-stock-modal.png)
+![Receive Stock: four delivery lines, each its own item, lot and expiry, under one received date](./images/05-09-receive-stock-modal.png)
 
 **The whole delivery lands, or none of it does.** A partly applied delivery is
 worse than a rejected one: you cannot tell which lines landed, and re-entering it
@@ -699,10 +698,20 @@ one-item-at-a-time modal.
 
 1. Go to **Inventory**.
 2. Click **Add Several**.
-3. Paste or type one item per line.
-4. Review the parsed preview and submit.
+3. Paste or type one item per line. A name on its own is enough; add
+   `| quantity | unit` after it to set those too.
+4. Pick a **category** and a **tracking** type for the whole paste — they apply
+   to every line, so paste one kind of thing at a time. **Counted** is right for
+   anything a checklist counts: a bracket holds four gauze, not gauze #7.
+5. Review the parsed preview and submit.
 
-![Add Several: a pasted list of catalog items with its parsed preview, and the category and tracking that apply to all of them](./images/05-66-add-several-modal.png)
+![Add Several: eight pasted lines and the parsed preview of name, quantity and unit](./images/05-10-bulk-add-items.png)
+
+The preview shows what each line **parsed to** — name, quantity, unit — with an
+em dash where a line gave none. It does **not** flag names the catalog already
+holds: that check runs on the server, and the ones it skipped are named back to
+you in the result message after you submit. Two of the eight lines above are
+already in this department's catalog, and nothing on this screen says so.
 
 **Names already in the catalog are skipped and reported, not rejected**, so you
 can re-paste a list after it grows and only the new lines are created. The
@@ -727,7 +736,7 @@ apparatus**: the checklist positions this item fills, which apparatus and
 compartment each one is, what that truck is carrying right now, and the soonest
 expiration aboard.
 
-![An item's Stock tab: ready lots above the checklist positions carrying it, per apparatus](./images/05-67-item-deployed-on-apparatus.png)
+![An item's Stock Lots tab: the shelf lots above, and the checklist positions carrying it below](./images/05-07-item-stock-deployed.png)
 
 This is the direction a **recall** is worked from — you are holding the item and
 need to know which rigs to go to. The opposite direction ("what is expiring on my
@@ -1464,12 +1473,25 @@ Label generation has been significantly improved:
 
 ### Inventory Dashboard Scoping
 
-Non-admin users now see only their own assigned equipment on the inventory dashboard. This prevents information overload for regular members and aligns with role-based access principles.
+The **figures** on the inventory page are scoped to the member: the header counts
+their items, their overdue checkouts and the value of what they hold, not the
+department's. The low-stock alerts and the per-location breakdown of departmental
+stock are not shown to a non-admin at all.
 
-> **Screenshot needed:**
-> _[Screenshot comparison: left shows admin view with full department inventory summary, right shows member view with only "My Equipment" counts and items]_
+The **item list** is not scoped, and is not meant to be — `inventory.view` is
+what lets a member browse the department's catalogue in order to request from it.
+A member's own kit lives on **My Equipment**, which is the page to open to see
+what somebody actually holds: their permanent assignments, checkouts, issued
+consumables and pending requests, each with a Request Return action.
 
-> **Edge case:** Users with `inventory.manage` permission continue to see the full department inventory. The scoping applies only to users without admin permissions.
+![My Equipment as an ordinary member — the count tiles and their permanent assignments](./images/05-66-my-equipment.png)
+
+> **Edge case:** Users with `inventory.manage` (or `settings.manage`) see the department's figures rather than their own. The scoping applies only to users without those permissions.
+
+> **Fixed 2026-08-11.** The per-location panel was the one summary that never
+> checked. A member's page counted their own three items in its header and then
+> reported the department's entire stock and valuation in the panel directly
+> beneath it. Pull latest.
 
 ### Desktop Camera Scanning
 
@@ -1519,11 +1541,22 @@ The equipment check template builder no longer crashes when editing templates. T
 
 ### Camera Error Handling
 
-- **InventoryScanModal**: Error messages from camera failures now show specific details (e.g., "Camera permission denied" instead of "An error occurred")
-- **Errors stay visible**: Camera error messages no longer auto-dismiss, giving you time to read and act on them
+The scanner names **which** camera problem you have, because the fix differs:
+a blocked permission sends you to browser settings, a device with no camera
+does not (there is nothing there to grant), a camera held by another app asks
+you to close it, and a page served over plain HTTP says so. The four messages
+are listed in `10-mobile-pwa.md`, which is where the scanner is documented in
+full.
 
-> **Screenshot needed:**
-> _[Screenshot of the InventoryScanModal showing a camera error message: "Camera permission denied. Please allow camera access in your browser settings." with a "Try Again" button below]_
+- **Errors stay visible** — camera error messages do not auto-dismiss, so there
+  is time to read and act on them
+- **The manual field is always there.** On any browser where the camera fails,
+  the barcode / serial-number input still works, so a failed camera slows the
+  job down rather than stopping it. There is no separate "Try Again" button:
+  the scan control stays where it was, and retrying is the same click
+
+The refused-camera state is pictured in `10-mobile-pwa.md`; it is the same
+banner in both scanners.
 
 ### WebSocket Reliability
 
@@ -1807,43 +1840,55 @@ The analysis shows:
 
 After analyzing, you can take four actions directly from the results:
 
-#### Generate Reorder Requests
+Three of the four appear only when the analysis produces something for them to
+act on, so a results page will not always show all four.
 
-Click **Generate Reorders** to automatically create purchase requests:
+#### Create Reorder Requests
+
+**Create reorder requests** sits under the size breakdown, and appears only when
+you asked the analysis to subtract current stock _and_ it found a shortfall:
 
 - One `ReorderRequest` per size with shortfall > 0
 - Pre-fills vendor, urgency, unit cost, and a descriptive note
 - All requests land in PENDING status for approval
 - The cost estimate from the analysis carries onto each request
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Generate Reorders" confirmation dialog showing a preview of the reorder requests to be created (e.g., "M: 5 units, L: 8 units, XL: 3 units — Total: 16 units, Est. cost: $1,280")._
+There is **no confirmation step**. The button files the requests, then replaces
+itself with "Created N reorder requests" and a **Review reorders** link. The
+preview is the panel above it — each size with what is needed, what is on hand,
+what to buy, and the cost of buying it.
 
-#### Bulk Issue from Stock
+![The size breakdown with each size's shortfall and cost, and the Create reorder requests button beneath it](./images/05-65-reorder-shortfall.png)
 
-Click **Issue from Stock** to distribute on-hand inventory:
+#### Issue On-Hand Stock
+
+**Issue on-hand stock** appears only when at least one needed size actually has
+stock on hand — there is no point offering it against an empty shelf:
 
 - Issues one unit per member from matching pool stock
 - Matches by member's size preference
 - Skips members without a size, with no matching stock, or over their allowance
-- Shows results: `{issued: 12, skipped: 4}` with per-member reasons for skips
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of the bulk-issue results showing "Issued: 12 members" with a green success list and "Skipped: 4 members" with reasons (e.g., "No size on file", "Over allowance", "No matching stock")._
+- This one _does_ confirm first, warning that members with no size on file or no
+  matching stock will be skipped
+- Afterwards the button is replaced by "Issued to N members, M skipped", with
+  the first five skip reasons listed and a count of any beyond that
 
 #### Request Sizes from Members
 
-Click **Request Sizes** to notify members who haven't recorded their size preference:
+**Request sizes** appears in a banner above the results, and only when somebody
+in the analysis has no size on file:
 
 - Sends in-app notifications directing them to `/inventory/my-equipment`
 - After members add their sizes, re-run the analysis to see updated results
-- Returns count of members notified
+- The banner then reads "Requested from N", so you can see it has been done
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Request Sizes" confirmation showing "8 members will be notified to add their shirt size" with a Send button._
+#### Export the Summary
 
-#### Download PDF Summary
+**CSV** and **PDF**, at the head of the Impacted Members table, export the
+analysis:
 
-Click **Download PDF** to generate a branded printable summary:
-
-- Includes org name, analysis date, all filter parameters, and size breakdown table
+- The PDF includes org name, analysis date, all filter parameters, and the size
+  breakdown table
 - Contact columns (email, phone) included only if org visibility settings allow
 - Suitable for budget approval meetings or procurement documentation
 

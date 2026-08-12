@@ -255,7 +255,6 @@ export interface GuestCheckInResult {
   attendee_id: string;
   event_name: string;
   checked_in_at: string;
-  prospect_created: boolean;
   message: string;
 }
 

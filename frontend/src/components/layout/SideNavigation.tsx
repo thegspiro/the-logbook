@@ -163,6 +163,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
     { label: 'Dashboard', path: '/dashboard', icon: Home },
+    { label: 'Learning Center', path: '/learning', icon: BookOpen },
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
@@ -531,12 +532,27 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         className="bg-theme-nav-bg border-theme-surface-border safe-top fixed top-0 right-0 left-0 z-50 border-b md:hidden"
         role="banner"
       >
-        <div className="flex h-16 items-center justify-between px-4">
+        <div className="flex h-16 items-center gap-1 px-4">
+          {/* Hamburger sits on the left, matching the edge the drawer slides
+              in from (and the desktop sidebar's position). */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="text-theme-text-primary hover:bg-theme-surface-hover focus:ring-theme-focus-ring mobile-touch-target shrink-0 rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="side-navigation"
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          >
+            {mobileMenuOpen ? (
+              <X className="h-6 w-6" aria-hidden="true" />
+            ) : (
+              <Menu className="h-6 w-6" aria-hidden="true" />
+            )}
+          </button>
           <Link
             to="/dashboard"
-            className="focus:ring-theme-focus-ring flex min-h-[44px] items-center rounded-lg focus:ring-2 focus:outline-hidden"
+            className="focus:ring-theme-focus-ring flex min-h-[44px] min-w-0 flex-1 items-center rounded-lg focus:ring-2 focus:outline-hidden"
           >
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
               <img
                 src={logoPreview || '/logo-128.png'}
                 alt={`${departmentName} logo`}
@@ -549,19 +565,6 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               </span>
             </div>
           </Link>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-theme-text-primary hover:bg-theme-surface-hover focus:ring-theme-focus-ring mobile-touch-target rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden"
-            aria-expanded={mobileMenuOpen}
-            aria-controls="side-navigation"
-            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-          >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" aria-hidden="true" />
-            ) : (
-              <Menu className="h-6 w-6" aria-hidden="true" />
-            )}
-          </button>
         </div>
       </header>
 

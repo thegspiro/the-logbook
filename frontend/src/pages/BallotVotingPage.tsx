@@ -670,7 +670,7 @@ export const BallotVotingPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="border-theme-surface-border bg-theme-surface-secondary flex justify-between border-t px-6 py-4">
+            <div className="border-theme-surface-border bg-theme-surface-secondary flex flex-wrap justify-between gap-2 border-t px-6 py-4">
               <button
                 type="button"
                 onClick={() => setShowConfirmation(false)}

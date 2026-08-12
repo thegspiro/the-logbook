@@ -20,6 +20,7 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
@@ -128,11 +129,18 @@ async def list_templates(
 ):
     """List equipment check templates with optional filters."""
     service = EquipmentCheckService(db)
+    permissions = _collect_user_permissions(current_user)
+    visible_positions = None
+    if not _has_permission("equipment_check.view", permissions):
+        visible_positions = await service.get_user_check_positions(
+            str(current_user.id), str(current_user.organization_id)
+        )
     return await service.list_templates(
         organization_id=current_user.organization_id,
         apparatus_id=apparatus_id,
         apparatus_type=apparatus_type,
         check_timing=check_timing,
+        visible_positions=visible_positions,
     )
 
 
@@ -153,7 +161,17 @@ async def get_template(
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
-    template = await service.get_template(template_id, current_user.organization_id)
+    permissions = _collect_user_permissions(current_user)
+    visible_positions = None
+    if not _has_permission("equipment_check.view", permissions):
+        visible_positions = await service.get_user_check_positions(
+            str(current_user.id), str(current_user.organization_id)
+        )
+    template = await service.get_template(
+        template_id,
+        current_user.organization_id,
+        visible_positions=visible_positions,
+    )
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     return template
@@ -208,25 +226,32 @@ async def delete_template(
     template = await service.get_template(template_id, current_user.organization_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
+    tmpl_name = template.name
     deleted = await service.delete_template(template_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
-    # No changelog entry, and there cannot be one.
-    #
-    # `template_change_logs.template_id` is a FK onto the template with
-    # ON DELETE CASCADE, so a row recording *this* deletion is either rejected
-    # or immediately cascaded away. It used to be written here, after
-    # `delete_template` had already committed — so every call inserted a child
-    # row for a parent that no longer existed, MySQL refused it with 1452, and
-    # the endpoint 500'd over a deletion that had in fact succeeded. Deleting a
-    # checklist template was impossible to do without an error, and the error
-    # said nothing about what had actually happened.
-    #
-    # The changelog is per-template by construction — `get_template_changelog`
-    # takes a template id — so it cannot outlive its template, and a durable
-    # record of the deletion belongs in the organization audit log rather than
-    # here. Sibling deletes (compartment, item) log against the *parent*
-    # template, which survives, and are unaffected.
+    # The deletion cannot be recorded in the template's own changelog:
+    # `template_change_logs.template_id` is a NOT NULL foreign key to the row
+    # being deleted, so the insert failed with MySQL 1452 and every template
+    # delete returned a 500. The changelog is also only ever read back per
+    # template (`GET /templates/{id}/changelog`), so a surviving delete row
+    # would be unreachable anyway. A template's edit history dies with the
+    # template; the fact that someone deleted it belongs in the org-wide
+    # audit log, which outlives both.
+    await log_audit_event(
+        db=db,
+        event_type="equipment_check_template_deleted",
+        event_category="equipment_check",
+        severity="warning",
+        event_data={
+            "template_id": template_id,
+            "template_name": tmpl_name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
 
 
 @router.post(
@@ -309,6 +334,22 @@ async def link_inventory_items(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if changed is None:
         raise HTTPException(status_code=404, detail="Template not found")
+
+    if changed:
+        await service.log_template_change(
+            organization_id=str(current_user.organization_id),
+            template_id=template_id,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="update",
+            entity_type="template",
+            entity_id=template_id,
+            changes={
+                "inventory_links": data.links,
+                "changed_count": changed,
+            },
+        )
+        await db.commit()
 
     coverage = await service.get_link_coverage(
         template_id, current_user.organization_id
@@ -637,7 +678,9 @@ async def submit_check(
     shift_id: str,
     data: ShiftEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Submit an equipment check for a shift."""
     service = EquipmentCheckService(db)
@@ -647,8 +690,13 @@ async def submit_check(
             organization_id=current_user.organization_id,
             checked_by=str(current_user.id),
             data=data.model_dump(exclude_unset=True),
+            allow_manage=_has_permission(
+                "equipment_check.manage", _collect_user_permissions(current_user)
+            ),
         )
         return check
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
@@ -963,12 +1011,18 @@ async def upload_check_item_photos(
             )
 
         # Optimize: resize, strip EXIF, convert to WebP
-        optimized = optimize_image(
-            contents,
-            max_size=(1920, 1080),
-            quality=80,
-            output_format="WEBP",
-        )
+        try:
+            optimized = optimize_image(
+                contents,
+                max_size=(1920, 1080),
+                quality=80,
+                output_format="WEBP",
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid image {upload.filename}: {safe_error_detail(exc)}",
+            ) from exc
         encoded = base64.b64encode(optimized).decode()
         data_uri = f"data:image/webp;base64,{encoded}"
         new_urls.append(data_uri)
@@ -1157,7 +1211,9 @@ async def export_csv(
                 "Period",
                 "Pass",
                 "Fail",
+                "Not Applicable",
                 "Not Checked",
+                "Not On Truck",
             ]
         )
         for t in data.get("trends", []):
@@ -1166,7 +1222,9 @@ async def export_csv(
                     t.get("period", ""),
                     t.get("pass_count", 0),
                     t.get("fail_count", 0),
+                    t.get("not_applicable_count", 0),
                     t.get("not_checked_count", 0),
+                    t.get("not_applicable_count", 0),
                 ]
             )
     else:
@@ -1480,6 +1538,15 @@ async def update_deployed_lot(
     This is how a crew that changed a drug out makes the application say what
     the box in the bag says. Zero quantity removes the lot from the truck.
     """
+    updates = data.model_dump(exclude_unset=True)
+    if {"lot_number", "expiration_date"} & updates.keys():
+        permissions = _collect_user_permissions(current_user)
+        can_manage_lot_metadata = _has_permission(
+            "equipment_check.manage", permissions
+        ) or _has_permission("inventory.manage", permissions)
+        if not can_manage_lot_metadata:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     service = EquipmentCheckService(db)
     try:
         result = await service.update_deployed_lot(
@@ -1487,7 +1554,7 @@ async def update_deployed_lot(
             deployed_lot_id=deployed_lot_id,
             organization_id=str(current_user.organization_id),
             user=current_user,
-            updates=data.model_dump(exclude_unset=True),
+            updates=updates,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1539,9 +1606,7 @@ async def clear_item_restock(
     template_item_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
-        )
+        require_permission("equipment_check.manage", "inventory.manage")
     ),
 ):
     """Withdraw a restock report — restocked by hand, or raised in error."""
@@ -1588,13 +1653,8 @@ async def swap_item_lot(
     template_item_id: str,
     data: LotSwapRequest,
     db: AsyncSession = Depends(get_db),
-    # Includes equipment_check.submit: a member who has just taken a unit off
-    # the truck is the one holding the replacement, and requiring an officer to
-    # record it is how the bracket stays empty until morning.
     current_user: User = Depends(
-        require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
-        )
+        require_permission("equipment_check.manage", "inventory.manage")
     ),
 ):
     """Swap a ready-stock lot onto the apparatus for a checklist item.

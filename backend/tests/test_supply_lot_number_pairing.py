@@ -73,15 +73,17 @@ class TestSoonestLotNumber:
             "any single lot aboard"
         )
 
-    def test_undated_lot_still_names_itself(self):
-        # A position holding only undated units has no date to report, but the
-        # number it shows must still be one that is actually aboard rather than
-        # the scalar left behind by an older restock.
+    def test_undated_lots_leave_the_pair_on_the_scalar(self):
+        # A position holding only undated units has no derived date to report,
+        # so the number falls back to the scalar — the same source the date
+        # comes from. Naming the undated lot instead would re-create the
+        # mismatch this helper exists to prevent: its number beside a date
+        # that belongs to the scalar columns.
         item = _item(lot_number="STALE-SCALAR", expiration_date=None)
         item.deployed_lots = [_lot("FOUND-STOCK", None, quantity=4)]
 
         assert EquipmentCheckService._soonest_expiration(item) is None
-        assert EquipmentCheckService._soonest_lot_number(item) == "FOUND-STOCK"
+        assert EquipmentCheckService._soonest_lot_number(item) == "STALE-SCALAR"
 
     def test_falls_back_to_the_scalar_with_no_lots(self):
         # Every position a department has not yet restocked through the lot

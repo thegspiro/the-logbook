@@ -10,6 +10,7 @@
 
 import type { ChangeEvent, ReactElement } from 'react';
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Settings,
   Users,
@@ -49,7 +50,8 @@ const labelClass = 'form-label';
 const checkboxClass =
   'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800';
 
-type ActiveTab = 'thresholds' | 'profiles' | 'reports' | 'schedule';
+const COMPLIANCE_CONFIG_TABS = ['thresholds', 'profiles', 'reports', 'schedule'] as const;
+type ActiveTab = (typeof COMPLIANCE_CONFIG_TABS)[number];
 
 const MEMBERSHIP_TYPES = [
   'active',
@@ -72,7 +74,21 @@ const REPORT_FREQUENCIES = [
 export default function ComplianceRequirementsConfigPage() {
   const { confirm } = useConfirm();
   const tz = useTimezone();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('thresholds');
+  // All four tabs are addressable. They were plain state, so the report
+  // history and the profile list — the two an officer has cause to send a
+  // colleague — could not be linked to, and the Back button did nothing after
+  // a tab change.
+  //
+  // Derived from the URL rather than mirrored into state: mirroring reads the
+  // parameter once, on mount, so every later URL change is ignored, which is
+  // exactly what Back is. Fourth page to get this treatment, after Email
+  // Templates, Notifications and Medical Screening.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab: ActiveTab = COMPLIANCE_CONFIG_TABS.includes(requestedTab as ActiveTab)
+    ? (requestedTab as ActiveTab)
+    : 'thresholds';
+  const setActiveTab = (tab: ActiveTab) => setSearchParams({ tab });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [config, setConfig] = useState<ComplianceConfigData | null>(null);
@@ -397,7 +413,7 @@ export default function ComplianceRequirementsConfigPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-theme-surface-border bg-theme-surface flex gap-1 rounded-lg border p-1">
+      <div className="border-theme-surface-border bg-theme-surface hscroll flex gap-1 rounded-lg border p-1">
         {tabs.map((tab: { id: ActiveTab; label: string; icon: ReactElement }) => (
           <button
             key={tab.id}
@@ -515,7 +531,7 @@ export default function ComplianceRequirementsConfigPage() {
           {/* Threshold preview */}
           <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
             <h3 className="text-theme-text-secondary mb-3 text-sm font-medium">Status Preview</h3>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-green-500" />
                 <span className="text-theme-text-primary text-sm">
@@ -795,7 +811,7 @@ export default function ComplianceRequirementsConfigPage() {
             <div key={profile.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-theme-text-primary font-semibold">{profile.name}</h3>
                     {!profile.isActive && (
                       <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-400">

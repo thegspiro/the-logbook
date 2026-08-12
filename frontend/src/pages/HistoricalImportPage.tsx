@@ -95,13 +95,13 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
               </span>
               <span
                 className={`ml-2 text-sm font-medium ${
-                  isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'
+                  isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted hidden sm:inline'
                 }`}
               >
                 {step.label}
               </span>
             </div>
-            {idx < STEPS.length - 1 && <div className="bg-theme-surface-border mx-3 h-px w-12" />}
+            {idx < STEPS.length - 1 && <div className="bg-theme-surface-border mx-2 h-px w-6 sm:mx-3 sm:w-12" />}
           </li>
         );
       })}
@@ -606,7 +606,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
       )}
 
       {/* Filter buttons */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(['all', 'matched', 'unmatched', 'errors'] as const).map((f) => (
           <button
             key={f}

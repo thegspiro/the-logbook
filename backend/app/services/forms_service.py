@@ -919,8 +919,9 @@ class FormsService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         honeypot_value: Optional[str] = None,
+        submitted_by: Optional[str] = None,
     ) -> Tuple[Optional[FormSubmission], Optional[str]]:
-        """Submit a public form (no authentication required)"""
+        """Submit a public form while enforcing its identity policy."""
         try:
             # Honeypot bot detection - if the hidden field has a value, it's a bot
             if honeypot_value:
@@ -930,6 +931,27 @@ class FormsService:
             form = await self.get_form_by_slug(slug)
             if not form:
                 return None, "Form not found or not available"
+
+            if form.require_authentication and not submitted_by:
+                return None, "Authentication is required to submit this form"
+
+            if not form.allow_multiple_submissions:
+                if not submitted_by:
+                    return None, "Authentication is required to submit this form"
+                # Serialize same-form submissions before checking. A plain
+                # check-then-insert allows two concurrent requests from the
+                # same member to both pass the duplicate check.
+                await self.db.execute(
+                    select(Form.id).where(Form.id == str(form.id)).with_for_update()
+                )
+                prior = await self.db.execute(
+                    select(FormSubmission.id).where(
+                        FormSubmission.form_id == str(form.id),
+                        FormSubmission.submitted_by == submitted_by,
+                    )
+                )
+                if prior.scalar_one_or_none() is not None:
+                    return None, "You have already submitted this form"
 
             # Validate required fields (FORM-6: presence AND a non-empty value —
             # a key holding "" / whitespace / [] does not satisfy "required").
@@ -963,6 +985,7 @@ class FormsService:
                 is_public_submission=True,
                 ip_address=ip_address,
                 user_agent=user_agent,
+                submitted_by=submitted_by,
             )
             self.db.add(submission)
             await self.db.commit()

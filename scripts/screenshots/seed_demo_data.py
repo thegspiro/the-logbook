@@ -130,6 +130,10 @@ OFFICER_RANKS = frozenset(
 # per-section point totals and a percentage.
 SCORED_TEMPLATE_NAME = "Handline Advance — Weighted Evaluation"
 
+# The candidate on the one failed test. Not the demo member, whose passed test
+# the scorecard screenshots are built around.
+FAILED_TEST_CANDIDATE_USERNAME = "cfrazier"
+
 # How many active applicants `--bulk-prospects` tops the pipeline up to.
 # Comfortably past the board's 200-card ceiling, so the truncation notice reads
 # as a real overflow rather than an off-by-one, while staying small enough to
@@ -143,6 +147,11 @@ BULK_PROSPECT_TARGET = 247
 # The scheduling module refuses to double-book a member across overlapping
 # shifts. That is the rule working, not a seeding error — matched on the message
 # because the status code is a plain 400.
+# A phase whose own name repeats the number the progress view already puts
+# in front of it — "Phase 1 — Orientation" rendering as "Phase 1: Phase 1 —
+# Orientation".
+PHASE_NUMBER_PREFIX = re.compile(r"^\s*Phase\s+\d+\s*[—–-]\s*")
+
 SHIFT_CONFLICT = re.compile(r"conflicting shift", re.IGNORECASE)
 
 RSVP_CLOSED = re.compile(
@@ -355,14 +364,64 @@ def criterion_payload(entry: Any, sort_order: int) -> dict:
     return criterion
 
 
+def _minimal_pdf(title: str, subtitle: str) -> bytes:
+    """A valid single-page PDF, assembled by hand.
+
+    Enough of the format for a magic-byte sniffer to accept it and for a reader
+    to render the two lines: catalog, pages, one page, a Helvetica font and a
+    content stream, with a cross-reference table whose offsets are measured off
+    the bytes actually written.
+    """
+
+    def _escape(text: str) -> str:
+        return text.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+
+    stream = (
+        "BT /F1 18 Tf 72 696 Td (" + _escape(title) + ") Tj ET\n"
+        "BT /F1 11 Tf 72 672 Td (" + _escape(subtitle) + ") Tj ET\n"
+        "BT /F1 11 Tf 72 640 Td (Oakville Fire Department) Tj ET\n"
+    ).encode("latin-1", "replace")
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length "
+        + str(len(stream)).encode()
+        + b" >>\nstream\n"
+        + stream
+        + b"endstream",
+    ]
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets: list[int] = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n".encode() + body + b"\nendobj\n"
+
+    xref_at = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n".encode()
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode()
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_at}\n%%EOF\n"
+    ).encode()
+    return bytes(out)
+
+
 def _demo_pdf(title: str, subtitle: str) -> bytes:
     """A one-page PDF standing in for a real department document.
 
-    The upload route sniffs the MIME type from the file's magic bytes rather
+    The upload routes sniff the MIME type from the file's magic bytes rather
     than trusting the declared Content-Type, so this has to be a genuine PDF,
-    not text with a .pdf name. reportlab is already a backend dependency; where
-    it is missing the caller still gets a valid file, just a plain-text one —
-    text/plain is on the allow-list too.
+    not text with a .pdf name. reportlab is a backend dependency and the seeder
+    is usually run on the system interpreter without it, so the fallback is a
+    hand-built one-page PDF rather than plain text — the prospect-document route
+    allows PDF, Word and images only, and rejected the text file outright.
     """
     try:
         from io import BytesIO
@@ -370,7 +429,7 @@ def _demo_pdf(title: str, subtitle: str) -> bytes:
         from reportlab.lib.pagesizes import LETTER
         from reportlab.pdfgen import canvas
     except ImportError:
-        return f"{title}\n\n{subtitle}\n".encode()
+        return _minimal_pdf(title, subtitle)
 
     buffer = BytesIO()
     page = canvas.Canvas(buffer, pagesize=LETTER)
@@ -448,6 +507,20 @@ SHIFT_POSITIONS = ["officer", "driver", "firefighter", "firefighter", "ems"]
 # Crew template, whose minimum staffing of four leaves three rows open beside
 # the officer's filled one.
 PART_STAFFED_SHIFT = (4, 2)
+
+# The requirement each programme makes members finish before the rest of its
+# phase. Chosen among the requirements the seeded members have *not* finished,
+# so the lock has siblings left to hold back.
+PROGRAM_GATE_REQUIREMENTS = {
+    "Probationary Firefighter Pipeline": "Hose Deployment",
+}
+
+# The one enrollment left past its deadline, so Expired and the reopen dialog
+# are reachable. Deliberately not one of the four recruits: their enrollments
+# are what the progression screenshots are built around.
+EXPIRED_ENROLLMENT_PROGRAM = "Recruit School Pipeline"
+EXPIRED_ENROLLMENT_USERNAME = "bhollis"
+EXPIRED_ENROLLMENT_DAYS_OVER = 23
 
 # Steps behind a checklist requirement, keyed on the requirement name.
 CHECKLIST_ITEMS = {
@@ -527,6 +600,105 @@ APPARATUS_SPECS = {
         "seatingCapacity": 5,
         "minStaffing": 1,
     },
+}
+
+# The department's own shift-report vocabulary. All of it was NULL, which is
+# indistinguishable from a configured department at a glance — the report form
+# falls back to the frontend's built-in samples — right up to the point where
+# something reads the *per-apparatus* mappings. The "+ Add" control under Tasks
+# Performed pre-fills a task name from `apparatus_type_tasks`; unset, it appends
+# a blank row on every rig.
+#
+# The rating labels are the department's, not the code's: a five-point scale
+# ending in "Exemplary" rather than "Excellent", which is the point of the
+# setting existing at all.
+RATING_SCALE_LABELS = {
+    "1": "Unsatisfactory",
+    "2": "Developing",
+    "3": "Competent",
+    "4": "Proficient",
+    "5": "Exemplary",
+}
+
+SHIFT_REVIEW_CALL_TYPES = [
+    "Structure Fire",
+    "Vehicle Fire",
+    "Brush/Wildland",
+    "EMS/Medical",
+    "Motor Vehicle Accident",
+    "Hazmat",
+    "Rescue/Extrication",
+    "Alarm Investigation",
+    "Public Assist",
+    "Mutual Aid",
+]
+
+SHIFT_REVIEW_SKILLS = [
+    "SCBA donning/doffing",
+    "Hose deployment",
+    "Ladder operations",
+    "Search and rescue",
+    "Ventilation",
+    "Pump operations",
+    "Patient assessment",
+    "Radio communications",
+    "Scene size-up",
+    "Apparatus check-off",
+]
+
+SHIFT_REVIEW_TASKS = [
+    "Apparatus check",
+    "Station duties",
+    "Hose testing",
+    "Equipment inventory",
+    "Public education",
+]
+
+# Per rig class, so an engine crew is not asked about aerial placement and a
+# medic crew is not asked about pump pressures.
+APPARATUS_TYPE_SKILLS = {
+    "engine": [
+        "Pump operations",
+        "Hose deployment",
+        "Hydrant connection",
+        "Nozzle technique",
+        "SCBA donning/doffing",
+    ],
+    "ladder": [
+        "Aerial placement",
+        "Ground ladder throw",
+        "Ventilation",
+        "Search and rescue",
+        "Forcible entry",
+    ],
+    "ambulance": [
+        "Patient assessment",
+        "Vitals monitoring",
+        "CPR/AED",
+        "Stretcher operations",
+        "Radio communications",
+    ],
+}
+
+APPARATUS_TYPE_TASKS = {
+    "engine": [
+        "Pump test",
+        "Hose load inventory",
+        "Hydrant survey",
+        "Foam level check",
+    ],
+    "ladder": [
+        "Aerial inspection",
+        "Ground ladder inventory",
+        "Saw and fan service",
+        "Rope and rigging check",
+    ],
+    "ambulance": [
+        "Narcotics count",
+        "Oxygen level check",
+        "Cot and stair-chair service",
+        "Airway kit inventory",
+    ],
 }
 
 FACILITIES = [
@@ -1829,7 +2001,7 @@ class Seeder:
                 self.blocked.append(f"shift officer seat: {exc}")
 
     def _align_crew_to_seats(self, shifts: list[dict]) -> None:
-        """Match a future shift's roster to the seats the crew board renders.
+        """Match each shift's roster to the seats its crew board renders.
 
         The board seats members by position name, so a crew assigned entirely
         as "firefighter" leaves the Driver/Operator seat open on every rig in
@@ -1842,17 +2014,21 @@ class Seeder:
         Both are repaired here rather than only in the create path, so an
         existing demo database is brought into line instead of needing a wipe:
         members already sitting in a seat stay put, the rest are moved into
-        whatever is still open, and anyone left over is dropped.
+        whatever is still open.
 
-        Future shifts only: a past shift's roster is what actually worked it,
-        and its attendance records hang off those assignments.
+        Anyone still left over is dropped, but on a past shift only when they
+        have no attendance record — a past roster is what actually worked the
+        shift, and the hours hang off those assignments. A past assignment with
+        no check-in is one this seeder invented; a real one is left alone, extra
+        body and all, because rigs do run over.
         """
         for shift in shifts:
             shift_id = pick(shift, "id")
             day = str(pick(shift, "shift_date", "shiftDate") or "")
             slots = pick(shift, "positions") or []
-            if not shift_id or not slots or day <= str(TODAY):
+            if not shift_id or not slots:
                 continue
+            is_past = day <= str(TODAY)
             seats = [str(pick(slot, "position") or "") for slot in slots]
             crew = [
                 row
@@ -1875,6 +2051,19 @@ class Seeder:
                     unclaimed.remove(position)
                 else:
                     unseated.append(row)
+            if not unseated:
+                continue
+
+            worked = set()
+            if is_past:
+                worked = {
+                    str(pick(row, "user_id", "userId"))
+                    for row in items(
+                        self.api.get(f"/scheduling/shifts/{shift_id}/attendance"),
+                        "attendance",
+                    )
+                    if pick(row, "checked_in_at", "checkedInAt")
+                }
 
             for row in unseated:
                 if unclaimed:
@@ -1882,7 +2071,7 @@ class Seeder:
                         f"/scheduling/assignments/{pick(row, 'id')}",
                         {"position": unclaimed.pop(0)},
                     )
-                else:
+                elif str(pick(row, "user_id", "userId")) not in worked:
                     self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
 
     def _seed_shift_attendance(self, shifts: list[dict]) -> None:
@@ -2931,33 +3120,6 @@ class Seeder:
         "Normal Saline 1000mL": [("NS-5520", 148, 18)],
     }
 
-    # How many units to put aboard each position, and from how many lots — one
-    # entry per lot, drawn soonest-expiring first.
-    #
-    # Explicit rather than derived, because what each row has to *picture* is
-    # different and a uniform rule cannot produce all of it: two dates in one
-    # bracket, a position under par that still carries an expiry, and one at
-    # par for contrast.
-    DEPLOY_PLAN = {
-        # Two lots on one bracket, which is the case `check_item_deployed_lots`
-        # was added for and the only row that can picture "soonest aboard".
-        "Naloxone 4mg Nasal": [1, 1],
-        "Epinephrine 1:1000": [2],
-        # Deliberately under its target of 24, and drawn from a dated lot, so
-        # the row reads **short and dated** rather than short and blank. Doing
-        # this by recount instead would draw the shortfall back off
-        # soonest-first and eat the very lot the row needs.
-        "Gauze 4x4 Sterile": [18],
-        # One short of its target, so the row reaches the supply worklist —
-        # which is the only place the *expired* glove lot on the shelf is
-        # visible, struck through in this position's ready stock and refused by
-        # the swap. At par the position never appears and the guard cannot be
-        # pictured at all.
-        "Nitrile Gloves — Large": [3],
-        # Full here; the member's report below takes it to 4 of 6.
-        "Normal Saline 1000mL": [6],
-    }
-
     # compartment -> [(position name, catalog item or None, target quantity)]
     #
     # The None entries are load-bearing. A template where every position is
@@ -3089,19 +3251,14 @@ class Seeder:
                     "condition": "good",
                     "status": "available",
                     "tracking_type": "pool",
-                    # Not the real count, and deliberately nothing like it.
-                    # On-hand for a lot-stocked item comes from its in-date
-                    # lots; `quantity` is only the fallback for items with
-                    # none, and nothing maintains it once lots exist. Setting
-                    # it to the floor keeps the two ledgers visibly different
-                    # in the items grid — a screenshot of the two-ledger Qty
-                    # column is worthless if the numbers agree by luck.
-                    #
-                    # One rather than zero because the API refuses a pool item
-                    # with no units ("Pool items must have a quantity of at
-                    # least 1"), which is the right rule for stock somebody is
-                    # about to issue and simply does not describe an item whose
-                    # real count lives in its lots.
+                    # Not the real count. On-hand for a lot-stocked item comes
+                    # from its in-date lots; `quantity` is only the fallback
+                    # for items with none. It is deliberately a value no lot
+                    # total shares (the smallest seeded lot is 6), so a
+                    # screenshot of the two-ledger Qty column cannot be read as
+                    # the two agreeing by luck. Zero would say that more
+                    # plainly but `create_item` rejects it — a pool item must
+                    # carry a quantity of at least 1.
                     "quantity": 1,
                     "asset_tag": f"SUP-{2000 + index}",
                 }
@@ -3230,14 +3387,31 @@ class Seeder:
         whose real exposure is the earlier of them. Going through the swap
         endpoint rather than writing rows directly also exercises the decrement
         on the shelf lot, so the ready-stock figures stay honest.
+
+        Each position is counted to zero first and then filled to its par. A
+        position nobody has counted reports its **target** as the units aboard
+        — a NULL count means "not counted since this was defined", not "empty"
+        — and the first swap turns that assumption into a real undated lot row
+        before adding the swapped units on top. Skipping the zero left every
+        truck holding roughly double its par behind a phantom lot with no
+        number and no date, which is both wrong and the one thing these screens
+        exist to rule out.
         """
+        targets = {
+            position: target
+            for _, contents in self.MEDIC_COMPARTMENTS
+            for position, _catalog_name, target in contents
+            if target
+        }
         for position, item_id in positions.items():
             aboard = self.api.get(f"/equipment-checks/items/{item_id}/deployed-lots")
             if items(aboard, "lots"):
                 continue
             catalog_item = catalog.get(position)
-            if not catalog_item:
+            target = targets.get(position)
+            if not catalog_item or not target:
                 continue
+            self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 0})
             lots = items(
                 self.api.get(f"/inventory/items/{pick(catalog_item, 'id')}/lots"),
                 "lots",
@@ -3259,18 +3433,23 @@ class Seeder:
             )
             if not usable:
                 continue
-            plan = self.DEPLOY_PLAN.get(position, [1])
-            # Zero the position before the first swap.
-            #
-            # A swap onto a position whose `quantity_on_truck` is NULL treats
-            # the target as units already aboard and gives them an undated row
-            # so they are not lost behind the incoming lot. That is right for a
-            # real truck being restocked and wrong here: nothing has ever been
-            # on this rig, so the phantom row inflates every count past its
-            # target and leaves an undated lot in a sheet whose whole subject is
-            # dates. Starting from an explicit zero makes the lots the count.
-            self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 0})
-            for lot, quantity in zip(usable, plan):
+            take = usable[:2] if position == "Naloxone 4mg Nasal" else usable[:1]
+            # Fill to par, split evenly across the lots taken. Par rather than a
+            # fixed two so the truck starts the story at full: the positions
+            # that end up short are the ones `_leave_one_short` and
+            # `_report_one_used` make short, and a screenshot where everything
+            # is under par cannot tell a shortfall from the starting state.
+            share, extra = divmod(target, len(take))
+            for index, lot in enumerate(take):
+                # Clamped to the shelf lot rather than redistributed: every
+                # seeded lot comfortably covers its share, and a seeder that
+                # quietly rebalances would hide the day one stops.
+                quantity = min(
+                    share + (1 if index < extra else 0),
+                    int(pick(lot, "quantity") or 0),
+                )
+                if quantity < 1:
+                    continue
                 try:
                     self.api.post(
                         f"/equipment-checks/items/{item_id}/swap",
@@ -3289,6 +3468,20 @@ class Seeder:
                         f"supply: {position} refused lot "
                         f"{pick(lot, 'lot_number', 'lotNumber')}"
                     )
+
+    def _leave_one_short(self, positions: dict[str, str]) -> None:
+        """Record 18 of 24 gauze.
+
+        Two screens need a truck that is short. The supply worklist needs a row
+        that is under par rather than merely expiring, and **Set All to Par**
+        needs something whose count it would raise — its warning is suppressed
+        on a compartment already full, so a fully stocked demo department cannot
+        picture the guard at all.
+        """
+        item_id = positions.get("Gauze 4x4 Sterile")
+        if not item_id:
+            return
+        self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 18})
 
     def _report_one_used(self, positions: dict[str, str], apparatus_id: str) -> None:
         """Raise a restock report as an ordinary member, not as the chief.
@@ -3351,15 +3544,18 @@ class Seeder:
         """Rewrite checklist items this seeder stored under a type nothing reads.
 
         Earlier runs wrote ``"check_type": "presence"``. The column is a free
-        `String(30)`, so the API accepted it — but the eight types the check
-        form recognises spell it ``present``, and an unrecognised value falls
-        through the form's switch to the pass/fail branch. Every seeded item
-        therefore rendered **Pass / Fail** buttons under a guide that describes
-        Present / Missing, and nothing anywhere reported a problem.
+        `String(30)`, and the API used to accept anything that fit — but the
+        types the check form recognises spell it ``present``, and an
+        unrecognised value falls through the form's switch to the pass/fail
+        branch. Every seeded item therefore rendered **Pass / Fail** buttons
+        under a guide that describes Present / Missing, and nothing anywhere
+        reported a problem.
 
-        New rows are written correctly now, but a long-lived demo database still
-        holds the old ones, and re-seeding does not touch a template that
-        already exists by name.
+        The API now validates ``check_type`` against the set the template
+        builder offers, so no new row can be written this way from any client.
+        This stays for the long-lived demo databases that still hold the old
+        rows: re-seeding does not touch a template that already exists by name,
+        so nothing else would ever correct them.
         """
         for template in items(self.api.get("/equipment-checks/templates"), "templates"):
             template_id = pick(template, "id")
@@ -3667,6 +3863,51 @@ class Seeder:
 
     # -- scheduling: equipment check templates and completed checks --
 
+    def _add_section_header(self, template_id: str | None) -> None:
+        """Put one section header on the engine checklist.
+
+        Headers are a documented grouping device — a bold caption inside a
+        compartment, with no pass/fail control and no effect on the score — and
+        no seeded template had one, so the feature was undocumentable and the
+        renderer untested against real data.
+
+        Written as a top-up rather than folded into the create payload above:
+        the template is created once and every existing demo database already
+        has it, so a header only in the create branch would never appear.
+        """
+        if not template_id:
+            return
+        template = self.api.get(f"/equipment-checks/templates/{template_id}")
+        cab = next(
+            (c for c in items(template, "compartments") if pick(c, "name") == "Cab"),
+            None,
+        )
+        if not cab:
+            return
+        existing = items(cab, "items")
+        # Keyed on check_type, not the `is_header` column. That column is a
+        # compartment-level flag; on an item it is write-only — the item
+        # response schema does not carry it and the check form switches on
+        # `checkType === "header"`.
+        if any(pick(i, "check_type", "checkType") == "header" for i in existing):
+            return
+        header = self.api.post(
+            f"/equipment-checks/compartments/{pick(cab, 'id')}/items",
+            {
+                "name": "Safety Equipment",
+                "check_type": "header",
+                "is_required": False,
+                # Appended, then moved: sort_order is stored verbatim and the
+                # three existing items already hold 0, 1 and 2, so there is no
+                # gap to insert into without renumbering them anyway.
+                "sort_order": len(existing),
+            },
+        )
+        self.api.put(
+            f"/equipment-checks/compartments/{pick(cab, 'id')}/items/reorder",
+            {"ordered_ids": [pick(header, "id")] + [pick(i, "id") for i in existing]},
+        )
+
     def seed_equipment_checks(self) -> dict[str, Any]:
         """A template plus completed checks, which the reports page aggregates."""
         self._repair_check_types()
@@ -3722,6 +3963,8 @@ class Seeder:
                 },
             )
             templates.append(engine_daily)
+
+        self._add_section_header(pick(engine_daily, "id"))
 
         def close_out_template_for(apparatus_type: str) -> dict:
             """Get or create the end-of-shift template for an apparatus type.
@@ -4096,6 +4339,20 @@ class Seeder:
                 # them, so the demo department is one that has turned member
                 # self-export on.
                 "allow_member_report_export": True,
+                # The department's own shift-report vocabulary. Every one of
+                # these was NULL, so the report form ran entirely on the
+                # frontend's built-in samples — which look identical to a
+                # configured department until you notice that the per-apparatus
+                # mappings are what the "+ Add" task pre-fill reads. With
+                # `apparatus_type_tasks` unset it appends a blank row on every
+                # rig, and the guide's whole "Task Defaults Pre-Population"
+                # section describes something that cannot happen.
+                "rating_scale_labels": RATING_SCALE_LABELS,
+                "shift_review_call_types": SHIFT_REVIEW_CALL_TYPES,
+                "shift_review_default_skills": SHIFT_REVIEW_SKILLS,
+                "shift_review_default_tasks": SHIFT_REVIEW_TASKS,
+                "apparatus_type_skills": APPARATUS_TYPE_SKILLS,
+                "apparatus_type_tasks": APPARATUS_TYPE_TASKS,
             },
         )
 
@@ -4167,7 +4424,14 @@ class Seeder:
         have = {pick(r, "review_status", "reviewStatus") for r in existing}
         months = {str(pick(r, "shift_date", "shiftDate"))[:7] for r in existing}
         if wanted <= have and len(months) >= 2:
-            return items(self.api.get("/training/shift-reports/all?limit=50"))
+            # The review states still get topped up on the way out. This return
+            # is about not re-filing reports, and a guard that only asks whether
+            # each state name appears somewhere is satisfied by a single flagged
+            # report — which is why the Flagged view stayed a queue of one on
+            # every existing demo database no matter how often it was re-seeded.
+            reports = items(self.api.get("/training/shift-reports/all?limit=50"))
+            self._flag_review_queue(reports, demo_member_id)
+            return reports
 
         shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
         past = sorted(
@@ -4351,31 +4615,50 @@ class Seeder:
                 f"/training/shift-reports/{pick(report, 'id')}/review",
                 {"review_status": "approved"},
             )
-        # Two flagged, not one: the Flagged view is a queue, and a queue of one
-        # pictures neither the batch-review bar (which needs more than one
-        # report) nor the fact that reviewers write a different reason on each.
-        flag_notes = [
-            (
-                "Hours do not match the roster for this shift — please "
-                "confirm the relief time and resubmit."
-            ),
-            (
-                "No narrative for the pump evolution. Add what was attempted "
-                "and what needed prompting, then resubmit."
-            ),
+        self._flag_review_queue(reports, demo_member_id)
+        return reports
+
+    #: Two flagged reports, not one. The Flagged view is a queue, and a queue of
+    #: one pictures neither the batch-review bar — which renders only above a
+    #: single report — nor the fact that reviewers write a different reason on
+    #: each.
+    FLAG_NOTES = (
+        (
+            "Hours do not match the roster for this shift — please confirm "
+            "the relief time and resubmit."
+        ),
+        (
+            "No narrative for the pump evolution. Add what was attempted and "
+            "what needed prompting, then resubmit."
+        ),
+    )
+
+    def _flag_review_queue(self, reports: list[dict], demo_member_id: str) -> None:
+        """Top the Flagged view up to FLAG_NOTES.
+
+        Never the demo member's own report: a trainee sees only their approved
+        reports, so flagging theirs empties the one view a member's session can
+        picture. Never the first of the others either — that one is approved,
+        so the queue keeps an example of each outcome.
+
+        Keyed on how many are already flagged, so a re-run fills the queue up
+        rather than flagging two more reports every time.
+        """
+        queued = [
+            r
+            for r in reports
+            if pick(r, "review_status", "reviewStatus") != "draft"
+            and str(pick(r, "trainee_id", "traineeId")) != demo_member_id
         ]
-        # Keyed on how many are already flagged, so a re-run tops the queue up
-        # rather than flagging two more of them every time.
-        already = [
-            r for r in others if pick(r, "review_status", "reviewStatus") == "flagged"
+        flagged = [
+            r for r in queued if pick(r, "review_status", "reviewStatus") == "flagged"
         ]
-        candidates = [r for r in others[1:] if r not in already]
-        for report, note in zip(candidates, flag_notes[len(already) :]):
+        candidates = [r for r in queued[1:] if r not in flagged]
+        for report, note in zip(candidates, self.FLAG_NOTES[len(flagged) :]):
             self.api.post(
                 f"/training/shift-reports/{pick(report, 'id')}/review",
                 {"review_status": "flagged", "reviewer_notes": note},
             )
-        return reports
 
     # -- notification rules ------------------------------------------
 
@@ -4769,9 +5052,13 @@ class Seeder:
                 "Probationary Firefighter Pipeline",
                 "PROB-FF",
                 "Firefighter",
+                # Phase names carry no "Phase N —" prefix of their own: the
+                # progress view numbers them itself, so a phase called
+                # "Phase 1 — Orientation" renders as "Phase 1: Phase 1 —
+                # Orientation" in its heading and again under "Current phase".
                 [
                     (
-                        "Phase 1 — Orientation",
+                        "Orientation",
                         [
                             ("Department Orientation", "hours", 8),
                             ("PPE Familiarization", "hours", 4),
@@ -4780,7 +5067,7 @@ class Seeder:
                         ],
                     ),
                     (
-                        "Phase 2 — Basic Skills",
+                        "Basic Skills",
                         [
                             ("Hose Deployment", "hours", 12),
                             ("Ladder Evolutions", "hours", 12),
@@ -4791,7 +5078,7 @@ class Seeder:
                         ],
                     ),
                     (
-                        "Phase 3 — Certification",
+                        "Certification",
                         [
                             ("Firefighter I Written Exam", "knowledge_test", None),
                             ("Practical Skills Evaluation", "skills_evaluation", None),
@@ -4806,14 +5093,14 @@ class Seeder:
                 "Driver",
                 [
                     (
-                        "Phase 1 — Classroom",
+                        "Classroom",
                         [
                             ("Pump Theory", "hours", 16),
                             ("Hydraulics Calculations", "hours", 8),
                         ],
                     ),
                     (
-                        "Phase 2 — Behind the Wheel",
+                        "Behind the Wheel",
                         [
                             ("Supervised Driving Hours", "hours", 20),
                             ("Pump Panel Evolutions", "shifts", 6),
@@ -4925,7 +5212,259 @@ class Seeder:
                     "/training/programs/enrollments",
                     {"program_id": program_id, "user_id": user_id},
                 )
+        self._strip_phase_number_prefixes(programs)
+        self._flag_gating_requirements(programs)
+        self._expire_one_enrollment(programs, members)
+        self._advance_pipeline_progress(programs)
         return programs
+
+    def _expire_one_enrollment(self, programs: list[dict], members: list[dict]) -> None:
+        """Leave one enrollment past its deadline, so Expired is reachable.
+
+        Every seeded enrollment ran to 2027, so the expiry status, the Expired
+        filter and the reopen dialog had nothing to render — the officer's
+        Enrollments tab could only ever be shown in one state.
+
+        The member is one of the department's EMTs rather than one of the four
+        recruits, whose enrollments the progression shots are built around, and
+        the programme is Recruit School for the same reason. Enrolling with a
+        past target date is enough: the status is written the first time anyone
+        opens the enrollment, which is what the GET below does.
+        """
+        program = next(
+            (
+                p
+                for p in programs
+                if str(pick(p, "name") or "") == EXPIRED_ENROLLMENT_PROGRAM
+            ),
+            None,
+        )
+        if not program:
+            return
+        program_id = pick(program, "id")
+        enrollments = items(
+            self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+            "enrollments",
+        )
+        if any(str(pick(e, "status") or "") == "expired" for e in enrollments):
+            return
+        member = next(
+            (
+                m
+                for m in members
+                if str(pick(m, "username") or "") == EXPIRED_ENROLLMENT_USERNAME
+            ),
+            None,
+        )
+        user_id = pick(member or {}, "id")
+        if not user_id:
+            return
+        enrolled = {pick(e, "user_id") for e in enrollments}
+        if user_id not in enrolled:
+            self.api.post(
+                "/training/programs/enrollments",
+                {
+                    "program_id": program_id,
+                    "user_id": user_id,
+                    "target_completion_date": str(
+                        date.today() - timedelta(days=EXPIRED_ENROLLMENT_DAYS_OVER)
+                    ),
+                },
+            )
+            enrollments = items(
+                self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+                "enrollments",
+            )
+        for enrollment in enrollments:
+            if pick(enrollment, "user_id") == user_id:
+                # Reading it is what writes the status.
+                self.api.get(f"/training/programs/enrollments/{pick(enrollment, 'id')}")
+                break
+
+    def _flag_gating_requirements(self, programs: list[dict]) -> None:
+        """Mark one requirement per programme as the one to do first.
+
+        Requirement prerequisites lock the rest of a phase until the gate is
+        finished, and nothing seeded one — so every pipeline showed the officer
+        a row of "Any order" chips and every member an unlocked list, with the
+        whole feature invisible.
+
+        The gate is a requirement whose siblings are *not* already finished for
+        the seeded members, so the lock has something to act on: locking behind
+        work that is already done shows nothing either.
+        """
+        for program in programs:
+            program_id = pick(program, "id")
+            gate_name = PROGRAM_GATE_REQUIREMENTS.get(str(pick(program, "name") or ""))
+            if not program_id or not gate_name:
+                continue
+            links = items(
+                self.api.get(f"/training/programs/programs/{program_id}/requirements"),
+                "requirements",
+            )
+            for link in links:
+                requirement = pick(link, "requirement") or {}
+                if str(pick(requirement, "name") or "") != gate_name:
+                    continue
+                if pick(link, "is_prerequisite"):
+                    break
+                self.api.patch(
+                    f"/training/programs/programs/{program_id}"
+                    f"/requirements/{pick(link, 'id')}",
+                    {"is_prerequisite": True},
+                )
+                break
+
+    def _strip_phase_number_prefixes(self, programs: list[dict]) -> None:
+        """Drop a "Phase N — " prefix a phase carries in its own name.
+
+        The progress view numbers phases itself, so a phase named
+        "Phase 1 — Orientation" renders as "Phase 1: Phase 1 — Orientation" in
+        its heading and again under "Current phase". Fixed in the blueprint
+        above for new databases and repaired here for existing ones, which the
+        create path skips.
+        """
+        for program in programs:
+            program_id = pick(program, "id")
+            if not program_id:
+                continue
+            phases = items(
+                self.api.get(f"/training/programs/programs/{program_id}/phases"),
+                "phases",
+            )
+            for phase in phases:
+                name = str(pick(phase, "name") or "")
+                stripped = PHASE_NUMBER_PREFIX.sub("", name)
+                if stripped == name or not stripped:
+                    continue
+                self.api.patch(
+                    f"/training/programs/programs/{program_id}"
+                    f"/phases/{pick(phase, 'id')}",
+                    {"name": stripped},
+                )
+
+    def _advance_pipeline_progress(self, programs: list[dict]) -> None:
+        """Move every enrollment partway through its programme.
+
+        A fresh enrollment is 0% with every phase "not started", and that is
+        what all of them stayed at: the guides describe a progress view with a
+        "You are here" marker on a live phase, a filled progress bar, phases
+        ticked off behind it and requirements in flight ahead — none of which an
+        untouched enrollment can show. The officer-side progress detail is the
+        same screen from the other side, with its Complete / In Progress /
+        Verify controls acting on rows that all read the same.
+
+        Roughly the first third of each member's requirements are completed and
+        the next two set in progress, so a programme shows finished work,
+        current work and work not yet begun at once. Completed rows go through
+        the officer's own PATCH, which is what stamps `verified_by` and
+        recalculates the enrollment's overall percentage — writing the rows
+        directly would leave the percentage at zero and the screens unchanged.
+
+        Keyed on the enrollment already having progress, so a re-run leaves a
+        demo database that has been clicked through by hand alone.
+        """
+        for program in programs:
+            program_id = pick(program, "id")
+            if not program_id:
+                continue
+            enrollments = items(
+                self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+                "enrollments",
+            )
+            for enrollment in enrollments:
+                enrollment_id = pick(enrollment, "id")
+                if not enrollment_id:
+                    continue
+                detail = self.api.get(f"/training/programs/enrollments/{enrollment_id}")
+                rows = items(detail, "requirement_progress")
+                if not rows:
+                    continue
+                # Keyed on a *completed* requirement, not on any row having
+                # moved. An enrollment part-way through a previous run has rows
+                # at in_progress, and a guard that counted those as progress
+                # skipped the enrollment for ever after — leaving it at 0%,
+                # which is the state this step exists to get past.
+                if any(pick(row, "status") == "completed" for row in rows):
+                    continue
+                # Only the requirements the member has actually reached. A
+                # requirement in a phase behind a gate is refused by the API,
+                # which is the phase gate working — driving it from a slice of
+                # the row order instead completed one requirement in six and
+                # left the rest silently rejected.
+                locked = {
+                    str(rid) for rid in (pick(detail, "locked_requirements") or [])
+                }
+                open_rows = [
+                    row
+                    for row in rows
+                    if str(pick(row, "requirement_id", "requirementId")) not in locked
+                ]
+                if not open_rows:
+                    continue
+                done = max(1, len(open_rows) * 2 // 3)
+                for index, row in enumerate(open_rows):
+                    progress_id = pick(row, "id")
+                    if not progress_id:
+                        continue
+                    requirement = pick(row, "requirement") or {}
+                    # A checklist is never completed here. Its steps are the
+                    # record, and marking the status complete without ticking
+                    # them reads "Completed · 0 / 3 steps · Verified" — a tick
+                    # and a zero in the same line. Left in progress, which is
+                    # what the checklist screens are for anyway.
+                    is_checklist = (
+                        pick(requirement, "requirement_type", "requirementType")
+                        == "checklist"
+                    )
+                    # Complete the *count* as well as the status. Setting the
+                    # status alone leaves a requirement reading "Completed ·
+                    # 0 / 12 shifts · Verified", a tick and a zero side by side.
+                    target = next(
+                        (
+                            requirement.get(key)
+                            for key in (
+                                "required_shifts",
+                                "required_hours",
+                                "required_calls",
+                            )
+                            if requirement.get(key)
+                        ),
+                        None,
+                    )
+                    complete = index < done and not is_checklist
+                    # A knowledge test is completed by *recording a score*, not
+                    # by setting a status: the score fills in the "Last score"
+                    # line and spends one of the requirement's attempts, and a
+                    # pass completes it by itself. Setting the status instead
+                    # leaves "Attempts: 0 / 3" beside a finished test.
+                    is_test = (
+                        pick(requirement, "requirement_type", "requirementType")
+                        == "knowledge_test"
+                    )
+                    payload: dict[str, Any]
+                    if complete and is_test:
+                        payload = {"test_score": 86}
+                    else:
+                        payload = (
+                            {"status": "completed"}
+                            if complete
+                            else {"status": "in_progress"}
+                        )
+                        if complete and target:
+                            payload["progress_value"] = target
+                    try:
+                        self.api.patch(
+                            f"/training/programs/progress/{progress_id}", payload
+                        )
+                    except ApiError as exc:
+                        if exc.code not in (400, 403):
+                            raise
+                        # Recorded rather than swallowed: a refusal here means
+                        # the reason is something other than the phase gate,
+                        # and a step that quietly does nothing is worse than no
+                        # step at all.
+                        self.blocked.append(f"pipeline progress: {exc}")
 
     # -- advanced training (Training Admin > Advanced / Compliance) ----
 
@@ -5877,6 +6416,122 @@ class Seeder:
         )
         return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
 
+    def seed_failed_test(
+        self, templates: list[dict], members: list[dict]
+    ) -> dict | None:
+        """One completed test that did not pass, on the weighted sheet.
+
+        Every seeded test passed, so the result screen could only ever be
+        photographed green — and the guide's whole Result Determination section
+        is about the other outcome. This one fails both ways at once, which is
+        the case worth showing: the percentage lands under the passing mark
+        *and* a critical step was marked failed, so an examiner can see which of
+        the two sank it.
+        """
+        scored_template = next(
+            (t for t in templates if pick(t, "name") == SCORED_TEMPLATE_NAME), None
+        )
+        if not scored_template or not members:
+            return None
+        template_id = pick(scored_template, "id")
+
+        existing = items(
+            self.api.get("/training/skills-testing/tests?limit=100"), "tests"
+        )
+        for test in existing:
+            if pick(test, "result") == "fail":
+                return test
+
+        examiner_id = next(
+            (
+                pick(m, "id")
+                for m in members
+                if pick(m, "username") == DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        candidate = next(
+            (
+                m
+                for m in members
+                if pick(m, "username") == FAILED_TEST_CANDIDATE_USERNAME
+                and pick(m, "id") != examiner_id
+            ),
+            None,
+        )
+        if not candidate or not template_id:
+            return None
+
+        test = self.api.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": pick(candidate, "id"),
+                "notes": "First attempt. Re-test scheduled.",
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        # Under the passing mark on points, and the critical step failed — the
+        # two independent ways to fail, so the screen names both.
+        awarded = {
+            "Selects and stretches the correct line": 5,
+            "Advances without kinks or snags": 4,
+            "Bleeds the line and sets the pattern": 6,
+            "Maintains control under flow": 9,
+        }
+        failed_labels = {"Full PPE worn, including hood and gloves"}
+        notes = {
+            "Advances without kinks or snags": (
+                "Line kinked twice on the stairwell; lost time clearing it."
+            ),
+            "Full PPE worn, including hood and gloves": (
+                "Hood not deployed before entry."
+            ),
+        }
+
+        detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
+        section_results = []
+        for si, section in enumerate(detail.get("template_sections") or []):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if (
+                    not isinstance(criterion, dict)
+                    or criterion.get("type") == "statement"
+                ):
+                    continue
+                label = criterion.get("label", "")
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": label,
+                        "passed": label not in failed_labels,
+                        "score": awarded.get(label),
+                        "notes": notes.get(label),
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+
+        self.api.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 337,
+            },
+        )
+        return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
+
     def seed_in_progress_test(
         self, templates: list[dict], members: list[dict]
     ) -> dict | None:
@@ -6721,7 +7376,62 @@ class Seeder:
         self._enable_public_status(pipelines)
         self._seed_election_packages(prospects)
         self._link_prospect_events(prospects)
+        self._upload_prospect_documents(prospects)
         return {"pipelines": pipelines, "prospects": prospects}
+
+    # The paperwork an applicant hands in, by document type. Two of them, so
+    # the drawer shows a list rather than one row that could be mistaken for
+    # the whole feature.
+    PROSPECT_DOCUMENTS = [
+        ("application", "Membership Application", "Signed application form"),
+        ("id", "Driver's License", "Photo identification on file"),
+    ]
+
+    def _upload_prospect_documents(self, prospects: list[dict]) -> None:
+        """Put real files on an applicant's record.
+
+        Nothing seeded any, so the drawer's documents area could only ever be
+        photographed empty — and the guide describes downloading a file that
+        has been uploaded. Only the furthest-along applicant carries them: an
+        applicant at the first stage with their ID already on file would say
+        the wrong thing about the pipeline.
+        """
+        # The list rows carry the stage's *name*, not its index, so order by
+        # where that name sits in the pipeline this seeder built.
+        stage_order = {
+            stage[0]: index for index, stage in enumerate(self.PIPELINE_STAGES)
+        }
+        target = max(
+            prospects,
+            key=lambda p: stage_order.get(str(pick(p, "current_step_name") or ""), -1),
+            default=None,
+        )
+        if not target:
+            return
+        prospect_id = pick(target, "id")
+        if not prospect_id:
+            return
+        existing = {
+            str(pick(doc, "document_type") or "")
+            for doc in items(
+                self.api.get(f"/prospective-members/prospects/{prospect_id}/documents"),
+                "documents",
+            )
+        }
+        for document_type, title, description in self.PROSPECT_DOCUMENTS:
+            if document_type in existing:
+                continue
+            try:
+                self.api.post_file(
+                    f"/prospective-members/prospects/{prospect_id}/documents",
+                    {"document_type": document_type},
+                    f"{title}.pdf",
+                    _demo_pdf(title, description),
+                    "application/pdf",
+                )
+            except ApiError as exc:
+                self.blocked.append(f"prospect document: {exc}")
+                return
 
     def _link_prospect_events(self, prospects: list[dict]) -> None:
         """Attach an upcoming event to the prospects past the first stage.
@@ -7261,6 +7971,152 @@ class Seeder:
 
     # -- facilities: maintenance & inspections -----------------------
 
+    # name, description, membership types, priority, how many requirements
+    COMPLIANCE_PROFILES = [
+        (
+            "Line Officers",
+            "Officers carry the full requirement set and are held to it strictly.",
+            ["active"],
+            10,
+            3,
+        ),
+        (
+            "Probationary Members",
+            "A probationary member is graded on the core set only, until release.",
+            ["probationary"],
+            5,
+            1,
+        ),
+    ]
+
+    def seed_compliance_profiles(self) -> dict[str, Any]:
+        """Save a compliance configuration, then the profiles it unlocks.
+
+        The Profiles tab refuses to build anything until a threshold
+        configuration has been saved — "Save the compliance thresholds first
+        before creating profiles" — and a department that has only ever *looked*
+        at the Thresholds tab has not saved one: the numbers it shows before a
+        first save are the code's defaults, not a stored row. So the tab renders
+        that notice and nothing else, which is a truthful screen of an
+        unconfigured department and a useless one for documenting profiles.
+        """
+        config = self.api.get("/compliance/config")
+        if not config:
+            config = self.api.post(
+                "/compliance/config/initialize",
+                {
+                    "threshold_type": "percentage",
+                    "compliant_threshold": 100,
+                    "at_risk_threshold": 75,
+                    "grace_period_days": 0,
+                    "notify_on_non_compliant": False,
+                    "reminder_days": [30, 14, 7],
+                },
+            )
+
+        existing = {p.get("name") for p in items(config, "profiles")}
+        # One id per *distinct name*. The department carries three separate
+        # requirements all called "Aerial Operations" — one per program — and
+        # the picker returns only id, name, type, source and frequency, so
+        # nothing at any layer tells them apart. Three identical chips on a
+        # profile read as a rendering bug when they are the honest answer, and
+        # they teach nothing about what a profile is for.
+        seen_names: set[str] = set()
+        requirement_ids = []
+        for requirement in items(
+            self.api.get("/compliance/config/requirements"), "requirements"
+        ):
+            name = str(pick(requirement, "name") or "")
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            requirement_ids.append(pick(requirement, "id"))
+        created = 0
+        for name, description, types, priority, wanted in self.COMPLIANCE_PROFILES:
+            if name in existing:
+                continue
+            self.api.post(
+                "/compliance/config/profiles",
+                {
+                    "name": name,
+                    "description": description,
+                    "membership_types": types,
+                    # Sliced from whatever the department actually has rather
+                    # than named: requirement ids are per-install, and a profile
+                    # naming one that does not exist is refused.
+                    "required_requirement_ids": requirement_ids[:wanted],
+                    "is_active": True,
+                    "priority": priority,
+                },
+            )
+            created += 1
+
+        reports = self.api.get("/compliance/reports?limit=20")
+        if not items(reports, "reports"):
+            # One generated report, so Report History is a history rather than
+            # its own empty state. Last month rather than this one: a report for
+            # a month still in progress grades everyone against requirements
+            # they still have time to meet, which is not what the screen is for.
+            first_of_month = TODAY.replace(day=1)
+            previous = first_of_month - timedelta(days=1)
+            self.api.post(
+                "/compliance/reports/generate",
+                {
+                    "report_type": "monthly",
+                    "year": previous.year,
+                    "month": previous.month,
+                    # Never true here. Generating a report is safe to seed;
+                    # mailing one to every officer in the demo department is not.
+                    "send_email": False,
+                },
+            )
+        return {"profiles_created": created}
+
+    def seed_external_provider(self) -> dict[str, Any]:
+        """Configure the department's LMS so Integrations is not an empty state.
+
+        Only the *configuration* is seeded. `connection_verified`, `last_sync_at`
+        and the import queue are written by a real sync against a real vendor
+        API, and no create/update field sets them — so this department reads
+        "Connection not verified" and "Last Sync: Never", which is what a
+        department that has entered its credentials and not yet pressed Sync
+        actually sees.
+        """
+        existing = items(self.api.get("/training/external/providers"), "providers")
+        if existing:
+            return {"providers": existing}
+
+        # The API base URL is fetched server-side during a sync, so it goes
+        # through an SSRF guard that resolves the hostname and rejects anything
+        # private. A made-up host would fail to resolve and the create would
+        # 400; the vendor's real API host is the one value that passes.
+        categories = items(self.api.get("/training/categories"), "categories")
+        default_category = next(
+            (c for c in categories if pick(c, "name") == "Fire Suppression"),
+            categories[0] if categories else None,
+        )
+        provider = self.api.post(
+            "/training/external/providers",
+            {
+                "name": "Vector Solutions",
+                "provider_type": "vector_solutions",
+                "description": (
+                    "Department LMS. Completed courses sync into each member's "
+                    "training record and count toward their requirements."
+                ),
+                "api_base_url": "https://api.vectorsolutions.com/v1",
+                "auth_type": "api_key",
+                # Stored encrypted, and never sent anywhere: no sync is seeded.
+                "api_key": "demo-key-not-a-real-credential",
+                "auto_sync_enabled": True,
+                "sync_interval_hours": 24,
+                "default_category_id": (
+                    pick(default_category, "id") if default_category else None
+                ),
+            },
+        )
+        return {"providers": [provider] if provider else []}
+
     def seed_facility_activity(self, facilities: list[dict]) -> dict[str, list[dict]]:
         maintenance = items(self.api.get("/facilities/maintenance"), "maintenance")
         inspections = items(self.api.get("/facilities/inspections"), "inspections")
@@ -7684,6 +8540,10 @@ class Seeder:
             lambda: self.seed_scored_test(templates, members),
         )
         self.step(
+            "skills test that failed",
+            lambda: self.seed_failed_test(templates, members),
+        )
+        self.step(
             "skills test in progress",
             lambda: self.seed_in_progress_test(templates, members),
         )
@@ -7736,6 +8596,8 @@ class Seeder:
             )
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
+        self.step("compliance profiles", self.seed_compliance_profiles)
+        self.step("external training provider", self.seed_external_provider)
         self.step("facility activity", lambda: self.seed_facility_activity(facilities))
         self.step("storefront", self.seed_storefront)
         finance = self.step("finance", self.seed_finance) or {}

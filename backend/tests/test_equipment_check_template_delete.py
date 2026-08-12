@@ -1,67 +1,117 @@
-"""Deleting an equipment-check template must not write to its own changelog.
+"""Deleting an equipment-check template must not 500.
 
-`template_change_logs.template_id` is a foreign key onto the template with
-ON DELETE CASCADE. A row recording the template's *own* deletion is therefore
-impossible by construction: written before the delete it is cascaded away,
-written after it is rejected.
+The reported bug: ``DELETE /equipment-checks/templates/{id}`` failed for every
+template with an ``IntegrityError`` — MySQL 1452, "Cannot add or update a child
+row", on ``fk_template_change_logs_template_id_equipment_check_templates``.
 
-It used to be written after — and after `delete_template` had already
-committed. So every call inserted a child row for a parent that no longer
-existed, MySQL refused it with error 1452, and the endpoint returned 500 over
-a deletion that had in fact succeeded. Deleting a checklist template could not
-be done without an error, and the error described none of what happened.
+The endpoint deleted the template (and committed), then recorded the deletion
+in the template's own changelog. ``template_change_logs.template_id`` is a NOT
+NULL foreign key to the row that had just been deleted, so the audit insert
+could never succeed and templates could not be deleted at all.
 
-Asserted at the source rather than through a live request: reproducing 1452
-needs a real MySQL with the constraint in place, which the sandboxed suite does
-not have, and a mocked session would happily accept the insert the database
-rejects — passing against exactly the code that was broken.
+The deletion is now recorded in the org-wide audit log, which has no foreign
+key to the template and outlives it. The template's own changelog is only ever
+read back per template, so a surviving delete row would have been unreachable
+regardless.
+
+DB mocked; no MySQL.
 """
 
-from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-ENDPOINTS = (
-    Path(__file__).resolve().parents[1]
-    / "app"
-    / "api"
-    / "v1"
-    / "endpoints"
-    / "equipment_check.py"
-)
-
-SOURCE = ENDPOINTS.read_text()
+from app.api.v1.endpoints import equipment_check as ec
 
 
-def _handler(name: str) -> str:
-    """The body of one endpoint handler, up to the next decorator."""
-    start = SOURCE.index(f"async def {name}(")
-    nxt = SOURCE.find("\n@router.", start)
-    return SOURCE[start : nxt if nxt != -1 else len(SOURCE)]
+def _user():
+    return SimpleNamespace(
+        id="user-1",
+        username="chief",
+        first_name="Ada",
+        last_name="Byron",
+        organization_id="org-1",
+    )
 
 
-class TestTemplateDeleteChangelog:
-    def test_delete_template_writes_no_changelog_entry(self):
-        body = _handler("delete_template")
-        assert "log_template_change" not in body, (
-            "delete_template must not write a changelog row: the FK cascades "
-            "with the template, so the insert is rejected and the endpoint "
-            "500s over a deletion that already committed"
-        )
+def _service(template):
+    service = MagicMock()
+    service.get_template = AsyncMock(return_value=template)
+    service.delete_template = AsyncMock(return_value=template is not None)
+    service.log_template_change = AsyncMock()
+    return service
 
-    def test_delete_template_still_reports_a_missing_template(self):
-        # Removing the changelog write must not take the 404 with it.
-        body = _handler("delete_template")
-        assert "status_code=404" in body
 
-    @pytest.mark.parametrize("handler", ["delete_compartment", "delete_item"])
-    def test_child_deletes_still_log_against_the_parent(self, handler):
-        # These are unaffected and must stay that way: they log against the
-        # template, which survives the child's deletion. Deleting their
-        # changelog writes alongside the template's would silently drop the
-        # audit trail for every edit that *can* be recorded.
-        body = _handler(handler)
-        assert "log_template_change" in body, (
-            f"{handler} logs against the parent template, which survives — "
-            "that write is correct and must not be removed"
-        )
+@pytest.fixture
+def patched(monkeypatch):
+    """Patch the endpoint's service class and audit helper, returning both."""
+    template = SimpleNamespace(id="tmpl-1", name="Engine 1 — Daily Check")
+    service = _service(template)
+    monkeypatch.setattr(ec, "EquipmentCheckService", lambda _db: service)
+    audit = AsyncMock()
+    monkeypatch.setattr(ec, "log_audit_event", audit)
+    return SimpleNamespace(service=service, audit=audit, template=template)
+
+
+async def test_delete_does_not_write_a_changelog_row_for_the_deleted_template(
+    patched,
+):
+    """The insert that produced the 1452 is gone."""
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    await ec.delete_template(template_id="tmpl-1", db=db, current_user=_user())
+
+    patched.service.delete_template.assert_awaited_once_with("tmpl-1", "org-1")
+    assert patched.service.log_template_change.await_count == 0
+
+
+async def test_delete_records_the_deletion_in_the_org_audit_log(patched):
+    """The action is still audited — just somewhere that survives the delete."""
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    await ec.delete_template(template_id="tmpl-1", db=db, current_user=_user())
+
+    patched.audit.assert_awaited_once()
+    kwargs = patched.audit.await_args.kwargs
+    assert kwargs["event_type"] == "equipment_check_template_deleted"
+    assert kwargs["organization_id"] == "org-1"
+    assert kwargs["user_id"] == "user-1"
+    # The name is captured before the row goes; without it the audit entry
+    # names a template nobody can look up any more.
+    assert kwargs["event_data"]["template_name"] == "Engine 1 — Daily Check"
+    assert kwargs["event_data"]["template_id"] == "tmpl-1"
+    db.commit.assert_awaited()
+
+
+async def test_missing_template_is_a_404_and_writes_no_audit_entry(monkeypatch):
+    service = _service(None)
+    monkeypatch.setattr(ec, "EquipmentCheckService", lambda _db: service)
+    audit = AsyncMock()
+    monkeypatch.setattr(ec, "log_audit_event", audit)
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    with pytest.raises(ec.HTTPException) as exc:
+        await ec.delete_template(template_id="nope", db=db, current_user=_user())
+
+    assert exc.value.status_code == 404
+    assert audit.await_count == 0
+
+
+@pytest.mark.parametrize("handler", ["delete_compartment", "delete_item"])
+def test_child_deletes_still_log_against_the_parent(handler):
+    """Compartment and item deletes log against the *parent* template, which
+    survives them — that write is correct and must not be removed alongside
+    the template-level one. Asserted against the source because these handlers
+    hit the database directly and the guard is about the write existing at
+    all, not its arguments."""
+    from inspect import getsource
+
+    body = getsource(getattr(ec, handler))
+    assert "log_template_change" in body, (
+        f"{handler} logs against the parent template, which survives — "
+        "that write is correct and must not be removed"
+    )
