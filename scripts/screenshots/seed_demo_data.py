@@ -4046,6 +4046,53 @@ class Seeder:
             {"ordered_ids": [pick(header, "id")] + [pick(i, "id") for i in existing]},
         )
 
+    # Genuinely optional kit: carried on some engines, not required to be.
+    OPTIONAL_CHECK_ITEMS = [
+        "Chock blocks (if carried)",
+        "Spare SCBA mask (if carried)",
+        "Traffic cones (if carried)",
+    ]
+
+    def _add_optional_compartment(self, template_id: str | None) -> None:
+        """Give the engine checklist some items that are not required.
+
+        Every checkable item on every seeded template was `is_required`, and
+        the submit button is disabled until all required items are answered —
+        so `checkedItems < totalItems` was unreachable and the "submit an
+        incomplete check?" confirmation could never appear. Section headers do
+        not help: the form filters them out of `checkableItems` entirely, so a
+        template of nine required items and one header is still 9 of 9.
+
+        A separate compartment rather than optional items mixed into an
+        existing one, because the per-compartment "Pass All" answers every item
+        it contains — with the optional kit in its own section a crew (or a
+        screenshot) can leave exactly that section blank.
+        """
+        if not template_id:
+            return
+        template = self.api.get(f"/equipment-checks/templates/{template_id}")
+        compartments = items(template, "compartments")
+        if any(pick(c, "name") == "As-Carried Kit" for c in compartments):
+            return
+        created = self.api.post(
+            f"/equipment-checks/templates/{template_id}/compartments",
+            {"name": "As-Carried Kit", "sort_order": len(compartments)},
+        )
+        compartment_id = pick(created, "id")
+        if not compartment_id:
+            return
+        for order, name in enumerate(self.OPTIONAL_CHECK_ITEMS):
+            self.api.post(
+                f"/equipment-checks/compartments/{compartment_id}/items",
+                {
+                    "name": name,
+                    "check_type": "present",
+                    "is_required": False,
+                    "expected_quantity": 1,
+                    "sort_order": order,
+                },
+            )
+
     def seed_equipment_checks(self) -> dict[str, Any]:
         """A template plus completed checks, which the reports page aggregates."""
         self._repair_check_types()
@@ -4103,6 +4150,7 @@ class Seeder:
             templates.append(engine_daily)
 
         self._add_section_header(pick(engine_daily, "id"))
+        self._add_optional_compartment(pick(engine_daily, "id"))
 
         def close_out_template_for(apparatus_type: str) -> dict:
             """Get or create the end-of-shift template for an apparatus type.

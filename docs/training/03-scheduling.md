@@ -2215,11 +2215,16 @@ The page is formatted for **letter-size (8.5" × 11")** printing and automatical
 
 ### Incomplete Checklist Warning
 
-When submitting an equipment check with unanswered items, a **confirmation dialog** now warns about the incomplete state before allowing submission. The dialog shows the count of unanswered items and asks the member to confirm.
+When submitting an equipment check with unanswered items, a **confirmation dialog** warns about the incomplete state before allowing submission. It names how many of the items are unanswered and says the report will be filed as incomplete, offering **Go back** and **Submit anyway**.
 
-This prevents accidental submission of partially completed checks while still allowing intentional partial submissions (e.g., when an item is not accessible).
+> **What this does and does not cover _(2026-08-12)_.** **Required** items are not
+> a matter of confirmation — **Submit Report** stays disabled until every one of
+> them is answered, with a line beneath it counting what is still outstanding.
+> So this dialog is only ever about **optional** items: kit that is carried on
+> some rigs and not others, which a crew may legitimately skip. You cannot reach
+> it by submitting a check you have not started.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the confirmation dialog showing "3 items not answered" warning with "Go Back" and "Submit Anyway" buttons._
+![The confirmation before filing an incomplete equipment check — how many of the items are unanswered, and the choice between going back and submitting anyway](./images/03-98-incomplete-check-warning.png)
 
 ### Resuming In-Progress Checks
 

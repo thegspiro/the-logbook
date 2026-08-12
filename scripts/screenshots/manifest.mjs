@@ -7043,6 +7043,50 @@ export const SHOTS = [
     selector: "aside, nav",
   },
   {
+    id: "03-98-incomplete-check-warning",
+    doc: "03-scheduling.md",
+    line: 2222,
+    anchor:
+      "Screenshot of the confirmation shown when submitting an equipment check with unanswered items",
+    alt: "The confirmation before filing an incomplete equipment check — how many of the items are unanswered, and the choice between going back and submitting anyway",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Engine Daily Check")(page);
+      await page.waitForSelector("text=Hose Bed", { timeout: 20_000 });
+      // Answer the required compartments and leave the optional one alone.
+      // Submit stays disabled until every *required* item is answered, so the
+      // dialog is only ever about optional kit — nothing-answered can't reach
+      // it. "Pass All" marks a whole compartment, which is why the optional
+      // items are seeded in a compartment of their own.
+      for (const compartment of [
+        "Cab",
+        "Compartment 1 — Driver Front",
+        "Hose Bed",
+      ]) {
+        await page
+          .getByRole("button", {
+            name: `Mark all items in ${compartment} as passed`,
+          })
+          .click({ timeout: 15_000 });
+        await page.waitForTimeout(200);
+      }
+      await page
+        .getByRole("button", { name: /Submit Report|Save Offline/ })
+        .click({ timeout: 15_000 });
+      await page.waitForSelector("text=Submit an incomplete check?", {
+        timeout: 15_000,
+      });
+      // The compartments collapse as they are answered, so the page behind is
+      // still animating when the dialog opens — long enough for the transitions
+      // to finish, or the crop catches half-drawn text under the panel.
+      await page.waitForTimeout(1500);
+    },
+    // The panel, not the full-screen overlay that carries role="dialog".
+    selector: "div[role='dialog'] div.bg-theme-surface-modal.relative",
+  },
+  {
     id: "05-71-impact-planner-replacement",
     doc: "05-inventory.md",
     line: 1968,
