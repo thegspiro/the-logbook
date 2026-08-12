@@ -28,7 +28,7 @@ git clone https://github.com/thegspiro/the-logbook.git
 cd the-logbook
 cp .env.example .env
 # Edit .env with your settings
-docker-compose up -d
+docker compose up -d
 ```
 
 **[→ Complete Installation Guide](Installation)**

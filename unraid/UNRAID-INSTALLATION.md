@@ -187,7 +187,7 @@ networks:
 
    ```bash
    cd /mnt/user/appdata/the-logbook
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. Use these settings in The Logbook template:
@@ -714,15 +714,19 @@ backup without its era's keys cannot decrypt encrypted fields. _(2026-07-31)_
 
 ### Manual Backup
 
+`backup.sh` is a host-side script (it is not shipped inside the container
+image) — run it from a clone of the repository on the Unraid host:
+
 ```bash
 # Create backup
-docker exec TheLogbook /app/scripts/backup.sh
+cd /mnt/user/appdata/the-logbook && ./scripts/backup.sh
 
 # List backups
 ls -lh /mnt/user/backups/the-logbook/
 
 # Restore backup
-docker exec -it TheLogbook /app/scripts/backup.sh --restore /backups/logbook_backup_20260120_020000.tar.gz
+cd /mnt/user/appdata/the-logbook && \
+  ./scripts/backup.sh --restore /mnt/user/backups/the-logbook/logbook_backup_20260120_020000.tar.gz
 ```
 
 ### Cloud Backup Integration
@@ -758,9 +762,10 @@ AZURE_STORAGE_CONTAINER=logbook-backups
 
 3. **Test Restores:**
    ```bash
-   # Test restore monthly
-   docker exec -it TheLogbook /app/scripts/backup.sh --list
-   docker exec -it TheLogbook /app/scripts/backup.sh --restore /backups/latest_backup.tar.gz
+   # Test restore monthly (host-side, from the repository clone)
+   cd /mnt/user/appdata/the-logbook
+   ./scripts/backup.sh --list
+   ./scripts/backup.sh --restore /mnt/user/backups/the-logbook/logbook_backup_TIMESTAMP.tar.gz
    ```
 
 ---
@@ -804,7 +809,7 @@ docker restart TheLogbook
 1. **Backup First:**
 
    ```bash
-   docker exec TheLogbook /app/scripts/backup.sh
+   cd /mnt/user/appdata/the-logbook && ./scripts/backup.sh
    ```
 
 2. **Check Release Notes:**

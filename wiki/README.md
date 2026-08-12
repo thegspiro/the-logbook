@@ -259,7 +259,7 @@ Or use relative paths if images are in the wiki:
 
 ````markdown
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 ````
 

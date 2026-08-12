@@ -13,13 +13,25 @@ SSH into your Unraid server and run:
 curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh | bash
 ```
 
-That's it! The script will:
+Prefer to read scripts before running them? Download and inspect first:
+
+```bash
+curl -sSLO https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh
+less unraid-setup.sh
+bash unraid-setup.sh
+```
+
+The script will:
 
 - ✅ Clean up any existing containers (fixes the conflict error)
 - ✅ Clone the repository
 - ✅ Generate secure passwords
 - ✅ Build and start all containers
 - ✅ Verify deployment
+
+> **Requires Docker Compose** — install the **Docker Compose Manager** plugin
+> from Community Applications first (the script detects `docker compose` or a
+> legacy `docker-compose` binary and tells you if neither is present).
 
 ## Manual Installation (Step by Step)
 
@@ -69,8 +81,8 @@ Error: The container name "/logbook-redis" is already in use
 
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker-compose down --remove-orphans
-docker-compose up -d
+docker compose down --remove-orphans
+docker compose up -d
 ```
 
 **Or use the cleanup script:**
@@ -97,8 +109,8 @@ docker network rm the-logbook_logbook-internal 2>/dev/null || true
 
 # Now rebuild
 cd /mnt/user/appdata/the-logbook
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ---
@@ -119,6 +131,7 @@ The setup script automatically:
 - **Backend** - FastAPI (Port 7881)
 - **Database** - MySQL 8.0
 - **Cache** - Redis 7
+- **Backup** - nightly database + uploads archives with restore drills
 
 ### 📁 Directory Structure
 
@@ -132,7 +145,7 @@ The setup script automatically:
 └── .env             # Configuration (auto-generated)
 
 /mnt/user/backups/the-logbook/
-└── backup_YYYYMMDD_HHMMSS/  # Automatic backups
+└── logbook_backup_YYYYMMDD_HHMMSS.tar.gz  # Nightly backup archives
 ```
 
 ---
@@ -158,28 +171,33 @@ TZ=America/New_York
 After changing `.env`, restart:
 
 ```bash
-docker-compose restart
+docker compose restart
 ```
 
 ---
 
 ## Security Note
 
-This stack runs in **production posture**, which enforces a startup security
-gate:
+This stack runs in **production posture**. The setup script configures a
+**LAN-trial mode** so the quick start works out of the box on a trusted LAN:
 
+- The generated `.env` sets `SECURITY_ENFORCE_HTTPS=true` (required by the
+  production startup gate) **and `COOKIE_SECURE=false`** — without the latter,
+  browsers refuse to send the app's `Secure` auth cookies over plain
+  `http://`, and logins fail.
+- **Before real use**: front the app with an HTTPS reverse proxy (SWAG /
+  Nginx Proxy Manager / Cloudflare Tunnel), point `ALLOWED_ORIGINS` at your
+  `https://` origin, and **delete the `COOKIE_SECURE` line from `.env`** —
+  session cookies over cleartext HTTP are readable by anyone on the network
+  path.
 - **API docs (`/docs`) are OFF by default** and enabling them blocks boot in
   production.
-- **HTTPS is required** — the app refuses to start unless strong secrets are
-  set, `DEBUG=false`, docs are disabled, and `SECURITY_ENFORCE_HTTPS=true`. Front
-  the app with an HTTPS reverse proxy (SWAG / Nginx Proxy Manager / Cloudflare
-  Tunnel) and point `ALLOWED_ORIGINS` at your `https://` origin.
 - **Leave `TRUSTED_PROXY_IPS` empty** — the compose publishes the backend port
   directly, so the connecting peer is the real client. Only set it if you add a
   reverse proxy.
 
-See the [Security Hardening](./UNRAID-INSTALLATION.md#security-hardening)
-section of the installation guide for full details.
+See [HTTPS with Reverse Proxy](../docs/deployment/unraid.md#https-with-reverse-proxy)
+in the full guide for proxy configuration examples.
 
 ---
 
@@ -190,27 +208,27 @@ section of the installation guide for full details.
 cd /mnt/user/appdata/the-logbook
 
 # View all logs
-docker-compose logs -f
+docker compose logs -f
 
 # View specific service logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker compose logs -f backend
+docker compose logs -f frontend
 
 # Restart services
-docker-compose restart
+docker compose restart
 
 # Stop everything
-docker-compose down
+docker compose down
 
 # Start everything
-docker-compose up -d
+docker compose up -d
 
 # Rebuild after updates
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 
 # Check status
-docker-compose ps
+docker compose ps
 
 # Access database
 docker exec -it logbook-db mysql -u logbook_user -p
@@ -240,9 +258,9 @@ git pull
 ./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
 # Rebuild containers
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
 
 > `./unraid/update.sh` does all of this — plus a verified database dump and
@@ -282,7 +300,7 @@ awaiting publication — see [README.md](./README.md) for status.)
 ### Check Logs First
 
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ### Documentation
@@ -308,10 +326,10 @@ uname -a
 docker --version
 
 # Container status
-docker-compose ps
+docker compose ps
 
 # Recent logs
-docker-compose logs --tail=50
+docker compose logs --tail=50
 
 # Config (redact passwords!)
 cat .env | grep -v PASSWORD | grep -v KEY
@@ -329,22 +347,22 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 http://YOUR-UNRAID-IP:7880
 
 # Logs
-cd /mnt/user/appdata/the-logbook && docker-compose logs -f
+cd /mnt/user/appdata/the-logbook && docker compose logs -f
 
 # Restart
-cd /mnt/user/appdata/the-logbook && docker-compose restart
+cd /mnt/user/appdata/the-logbook && docker compose restart
 
 # Update
-cd /mnt/user/appdata/the-logbook && git pull && docker-compose build --no-cache && docker-compose up -d
+cd /mnt/user/appdata/the-logbook && git pull && docker compose build --no-cache && docker compose up -d
 
 # Stop
-cd /mnt/user/appdata/the-logbook && docker-compose down
+cd /mnt/user/appdata/the-logbook && docker compose down
 
 # Start
-cd /mnt/user/appdata/the-logbook && docker-compose up -d
+cd /mnt/user/appdata/the-logbook && docker compose up -d
 
 # Cleanup conflicts
-cd /mnt/user/appdata/the-logbook && docker-compose down --remove-orphans && docker-compose up -d
+cd /mnt/user/appdata/the-logbook && docker compose down --remove-orphans && docker compose up -d
 ```
 
 ---
@@ -353,11 +371,11 @@ cd /mnt/user/appdata/the-logbook && docker-compose down --remove-orphans && dock
 
 After installation, verify:
 
-- [ ] All 4 containers running: `docker-compose ps`
+- [ ] All 5 containers running (frontend, backend, db, redis, backup): `docker compose ps`
 - [ ] Frontend accessible: `http://YOUR-IP:7880`
 - [ ] Backend healthy: `curl http://localhost:7881/health`
 - [ ] API docs are OFF by default (`/docs` disabled in production; see Security Note)
-- [ ] No errors in logs: `docker-compose logs --tail=50`
+- [ ] No errors in logs: `docker compose logs --tail=50`
 - [ ] Can complete onboarding wizard
 - [ ] Database persists after restart
 

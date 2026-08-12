@@ -24,8 +24,10 @@ Applications template, and the guides below.
 
   The script clones the repository to `/mnt/user/appdata/the-logbook`,
   generates secure credentials, sets Unraid permissions, and builds and starts
-  all containers (frontend, backend, MySQL 8.0, Redis 7). Access the app at
-  `http://YOUR-UNRAID-IP:7880` and complete the onboarding wizard.
+  all containers (frontend, backend, MySQL 8.0, Redis 7, nightly backup
+  sidecar). Access the app at `http://YOUR-UNRAID-IP:7880` and complete the
+  onboarding wizard. Requires Docker Compose — install the **Docker Compose
+  Manager** plugin from Community Applications first.
 
 - **Community Applications (pending).** The template
   ([the-logbook.xml](./the-logbook.xml)) and its installation guide
@@ -37,11 +39,15 @@ Applications template, and the guides below.
 ## Security posture
 
 The Unraid stack runs with `ENVIRONMENT=production`, which enforces a startup
-security gate: strong secrets required, `DEBUG=false`, **API docs (`/docs`)
-off** (enabling them blocks boot), and `SECURITY_ENFORCE_HTTPS=true` — so front
-the app with an HTTPS reverse proxy (Swag, Nginx Proxy Manager) and point
-`ALLOWED_ORIGINS` at your `https://` origin. Leave `TRUSTED_PROXY_IPS` empty
-unless you actually add a proxy. Details:
+security gate (strong secrets required, `DEBUG=false`, **API docs (`/docs`)
+off** — enabling them blocks boot, and `SECURITY_ENFORCE_HTTPS=true`) — and
+marks auth cookies `Secure`, which browsers refuse to send over plain
+`http://`. The setup script therefore configures a **LAN-trial posture**
+(`COOKIE_SECURE=false`) so logins work over plain HTTP on a trusted LAN.
+Before real use, front the app with an HTTPS reverse proxy (Swag, Nginx Proxy
+Manager), point `ALLOWED_ORIGINS` at your `https://` origin, and delete the
+`COOKIE_SECURE` line from `.env`. Leave `TRUSTED_PROXY_IPS` empty unless you
+actually add a proxy. Details:
 [HTTPS with Reverse Proxy](../docs/deployment/unraid.md#https-with-reverse-proxy)
 and [Security Hardening](./UNRAID-INSTALLATION.md#security-hardening).
 

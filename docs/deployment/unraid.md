@@ -35,7 +35,11 @@ Complete guide for installing and running The Logbook on Unraid.
 | Disk      | 20 GB     | 50 GB+      |
 | CPU       | 2 cores   | 4+ cores    |
 
-Docker must be enabled on your Unraid server (Settings > Docker > Enable Docker: Yes).
+Docker must be enabled on your Unraid server (Settings > Docker > Enable
+Docker: Yes), and Docker Compose must be available — install the **Docker
+Compose Manager** plugin from Community Applications (Apps tab), which
+provides the `docker compose` command. The setup script detects either
+`docker compose` (v2) or a legacy standalone `docker-compose` binary.
 
 ---
 
@@ -56,7 +60,7 @@ The script will:
 - Clone the repository to `/mnt/user/appdata/the-logbook`
 - Generate secure passwords and encryption keys
 - Create the directory structure with correct Unraid permissions
-- Build and start all containers (frontend, backend, MySQL, Redis)
+- Build and start all containers (frontend, backend, MySQL, Redis, nightly backup sidecar)
 - Verify the deployment
 
 When prompted, choose:
@@ -105,6 +109,11 @@ DB_PASSWORD=<strong password>
 REDIS_PASSWORD=<strong password>
 ALLOWED_ORIGINS=http://YOUR-UNRAID-IP:7880
 TZ=America/New_York  # Your timezone
+
+# Only for a LAN trial without HTTPS: allow cookie auth over plain http://.
+# Without this, production marks auth cookies Secure and logins over plain
+# HTTP fail. Remove once an HTTPS reverse proxy is in front (see below).
+COOKIE_SECURE=false
 ```
 
 Create directories and start:
@@ -114,8 +123,8 @@ mkdir -p mysql redis data uploads logs
 mkdir -p /mnt/user/backups/the-logbook
 chown -R 99:100 mysql redis data uploads logs
 
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 ```
 
 ---
@@ -140,7 +149,7 @@ All settings live in `/mnt/user/appdata/the-logbook/.env`. After editing, restar
 
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker-compose restart
+docker compose restart
 ```
 
 ### Ports
@@ -188,16 +197,28 @@ SMTP_FROM_EMAIL=noreply@yourdomain.com
 
 ## HTTPS with Reverse Proxy
 
-> **Required in production.** The Unraid compose runs with
-> `ENVIRONMENT=production`, which enforces a startup security gate: the app
-> refuses to boot unless strong secrets are set, `DEBUG=false`, API docs are
-> disabled, and HTTPS is enforced. So a reverse proxy is not optional here —
-> front the app with one of the options below, set `ALLOWED_ORIGINS` to your
-> `https://` origin, and set `SECURITY_ENFORCE_HTTPS=true`. Two related settings:
-> **API docs (`/docs`) are OFF by default** (enabling them blocks boot), and
-> **leave `TRUSTED_PROXY_IPS` empty** unless you actually add a proxy — the
-> compose publishes the backend port directly, so the connecting peer is the
-> real client, and setting it otherwise lets clients spoof `X-Forwarded-For`.
+> **Required for real use — logins depend on it.** Two separate mechanisms are
+> at work:
+>
+> 1. **The startup gate.** The Unraid compose runs with
+>    `ENVIRONMENT=production`, and the app refuses to boot unless strong
+>    secrets are set, `DEBUG=false`, API docs are disabled, and
+>    `SECURITY_ENFORCE_HTTPS=true`.
+> 2. **Secure cookies.** In production the app marks auth cookies `Secure`,
+>    and browsers refuse to send `Secure` cookies over plain `http://` — so
+>    without HTTPS, **logins fail silently** even on a booted stack.
+>
+> The setup script configures a **LAN-trial posture** by default:
+> `SECURITY_ENFORCE_HTTPS=true` (passes the gate) plus `COOKIE_SECURE=false`
+> (allows cookie auth over plain HTTP on a trusted LAN). Before real use,
+> front the app with one of the proxies below, point `ALLOWED_ORIGINS` at your
+> `https://` origin, and **delete the `COOKIE_SECURE` line from `.env`** —
+> session cookies over cleartext HTTP are readable by anyone on the network
+> path. Two related settings: **API docs (`/docs`) are OFF by default**
+> (enabling them blocks boot), and **leave `TRUSTED_PROXY_IPS` empty** unless
+> you actually add a proxy — the compose publishes the backend port directly,
+> so the connecting peer is the real client, and setting it otherwise lets
+> clients spoof `X-Forwarded-For`.
 
 ### Using Swag
 
@@ -239,10 +260,11 @@ server {
 
 ### Automated Backups
 
-Runs daily at 02:00 UTC via the `backup` service in
-`docker-compose.prod.yml`, stored in the `backups` volume (map it to
-`/mnt/user/backups/the-logbook/` in your Unraid template). There is no on/off
-env flag — backups run whenever that service is up.
+The Unraid compose file includes a `backup` sidecar service that runs a
+nightly `mysqldump` + uploads archive at `BACKUP_TIME` (default 02:00, in the
+container's `TZ`), writing `logbook_backup_TIMESTAMP.tar.gz` archives directly
+to `/mnt/user/backups/the-logbook/`. There is no on/off env flag — backups run
+whenever that service is up.
 
 Configure in `.env`:
 
@@ -261,25 +283,36 @@ era's keys cannot decrypt encrypted fields. _(2026-07-31)_
 
 ### Manual Backup
 
+`backup.sh` is a host-side script (it is not shipped inside the backend
+image) — run it from the install directory:
+
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker-compose exec backend /app/scripts/backup.sh
+./scripts/backup.sh
 ```
 
 ### Restore
 
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker-compose down
 
-# Restore database
-gunzip < /mnt/user/backups/the-logbook/backup_YYYYMMDD.sql.gz | \
+# List available archives
+./scripts/backup.sh --list
+ls -lh /mnt/user/backups/the-logbook/
+
+# Restore (verifies the checksum, then restores database + uploads)
+./scripts/backup.sh --restore /mnt/user/backups/the-logbook/logbook_backup_TIMESTAMP.tar.gz
+
+docker compose restart
+```
+
+To restore the database by hand instead, extract the archive and pipe the dump
+through the DB container (MySQL's port is not published to the host):
+
+```bash
+tar -xzf logbook_backup_TIMESTAMP.tar.gz
+gunzip < logbook_backup_TIMESTAMP/database.sql.gz | \
   docker exec -i logbook-db mysql -u logbook_user -p the_logbook
-
-# Restore uploads
-cp -r /mnt/user/backups/the-logbook/backup_YYYYMMDD/uploads/* uploads/
-
-docker-compose up -d
 ```
 
 ---
@@ -305,9 +338,9 @@ git pull origin main
 # minutes into the rebuild, with the stack already down.
 ./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
 
 > **Why the extra step:** a pull can change what a Dockerfile copies out of its
@@ -319,7 +352,7 @@ docker-compose up -d
 Back up before updating:
 
 ```bash
-docker-compose exec backend /app/scripts/backup.sh
+./scripts/backup.sh   # host-side script, run from the install directory
 ```
 
 ---
@@ -357,8 +390,8 @@ If you see `Error: The container name "/logbook-redis" is already in use`:
 
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker-compose down --remove-orphans
-docker-compose up -d
+docker compose down --remove-orphans
+docker compose up -d
 ```
 
 Or remove containers manually:
@@ -366,7 +399,7 @@ Or remove containers manually:
 ```bash
 docker stop logbook-frontend logbook-backend logbook-db logbook-redis 2>/dev/null
 docker rm -f logbook-frontend logbook-backend logbook-db logbook-redis 2>/dev/null
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Port Conflicts
@@ -379,34 +412,34 @@ netstat -tuln | grep 7880
 nano /mnt/user/appdata/the-logbook/.env
 # Update FRONTEND_PORT, BACKEND_PORT, and ALLOWED_ORIGINS
 
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 ### Frontend Not Loading
 
 ```bash
 docker ps | grep logbook-frontend
-docker-compose logs frontend
+docker compose logs frontend
 
 # Rebuild if needed
-docker-compose build --no-cache frontend
-docker-compose up -d frontend
+docker compose build --no-cache frontend
+docker compose up -d frontend
 ```
 
 ### Backend Errors
 
 ```bash
 curl http://localhost:7881/health
-docker-compose logs backend
-docker-compose restart backend
+docker compose logs backend
+docker compose restart backend
 ```
 
 ### Database Connection Issues
 
 ```bash
 docker ps | grep logbook-db
-docker-compose logs db
+docker compose logs db
 
 # Access the database directly
 docker exec -it logbook-db mysql -u logbook_user -p
@@ -431,10 +464,10 @@ FLUSH PRIVILEGES;
 
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker-compose down
+docker compose down
 docker system prune -a
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ---
@@ -445,25 +478,25 @@ docker-compose up -d
 cd /mnt/user/appdata/the-logbook
 
 # Status
-docker-compose ps
+docker compose ps
 
 # Logs (all services)
-docker-compose logs -f
+docker compose logs -f
 
 # Logs (single service)
-docker-compose logs -f backend
+docker compose logs -f backend
 
 # Restart
-docker-compose restart
+docker compose restart
 
 # Stop
-docker-compose down
+docker compose down
 
 # Start
-docker-compose up -d
+docker compose up -d
 
 # Rebuild
-docker-compose build --no-cache && docker-compose up -d
+docker compose build --no-cache && docker compose up -d
 
 # Database shell
 docker exec -it logbook-db mysql -u logbook_user -p

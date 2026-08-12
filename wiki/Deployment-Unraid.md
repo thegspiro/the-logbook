@@ -17,8 +17,12 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 
 The script clones the repository to `/mnt/user/appdata/the-logbook`, generates
 secure credentials, sets Unraid permissions, and builds and starts all
-containers (frontend, backend, MySQL 8.0, Redis 7). When prompted, choose
-**1** for a fresh installation.
+containers (frontend, backend, MySQL 8.0, Redis 7, nightly backup sidecar).
+When prompted, choose **1** for a fresh installation.
+
+Docker Compose must be available — install the **Docker Compose Manager**
+plugin from Community Applications first (the script detects `docker compose`
+or a legacy `docker-compose` binary).
 
 Then open `http://YOUR-UNRAID-IP:7880` and complete the onboarding wizard.
 
@@ -59,28 +63,28 @@ git pull origin main
 # minutes into the rebuild, with the stack already down.
 ./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
 
 Back up before updating:
 
 ```bash
-docker-compose exec backend /app/scripts/backup.sh
+./scripts/backup.sh   # host-side script, run from the install directory
 ```
 
 ## Verify after install or update
 
 ```bash
 # All containers running?
-docker-compose ps
+docker compose ps
 
 # Backend healthy?
 curl http://localhost:7881/health
 
 # Any errors in the logs?
-docker-compose logs --tail=50
+docker compose logs --tail=50
 ```
 
 Then open `http://YOUR-UNRAID-IP:7880` in a browser.
@@ -88,13 +92,17 @@ Then open `http://YOUR-UNRAID-IP:7880` in a browser.
 ## Security posture
 
 The Unraid stack runs with `ENVIRONMENT=production`, which enforces a startup
-security gate:
+security gate and marks auth cookies `Secure`:
 
 - **API docs (`/docs`) are OFF by default** — enabling them blocks boot.
-- **HTTPS is required** — the app refuses to start unless strong secrets are
-  set, `DEBUG=false`, docs are disabled, and `SECURITY_ENFORCE_HTTPS=true`.
-  Front the app with an HTTPS reverse proxy (Swag, Nginx Proxy Manager) and
-  point `ALLOWED_ORIGINS` at your `https://` origin.
+- **The gate requires** strong secrets, `DEBUG=false`, docs disabled, and
+  `SECURITY_ENFORCE_HTTPS=true`, or the app refuses to start.
+- **Logins need HTTPS** — browsers refuse to send `Secure` auth cookies over
+  plain `http://`. The setup script configures a LAN-trial mode
+  (`COOKIE_SECURE=false` in `.env`) so logins work over plain HTTP on a
+  trusted LAN; before real use, front the app with an HTTPS reverse proxy
+  (Swag, Nginx Proxy Manager), point `ALLOWED_ORIGINS` at your `https://`
+  origin, and delete the `COOKIE_SECURE` line.
 - **Leave `TRUSTED_PROXY_IPS` empty** unless you add a reverse proxy — the
   compose publishes the backend port directly, so the connecting peer is the
   real client.
@@ -113,14 +121,14 @@ in use` error:
 
 ```bash
 cd /mnt/user/appdata/the-logbook
-docker-compose down --remove-orphans
-docker-compose up -d
+docker compose down --remove-orphans
+docker compose up -d
 ```
 
 ## Getting help
 
 - [GitHub Issues](https://github.com/thegspiro/the-logbook/issues) — include
-  your Unraid version, container logs (`docker-compose logs --tail=50`), and
+  your Unraid version, container logs (`docker compose logs --tail=50`), and
   steps to reproduce
 - [Unraid Community Forums](https://forums.unraid.net/) — Docker Containers
   section

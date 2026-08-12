@@ -17,7 +17,7 @@ git clone https://github.com/thegspiro/the-logbook.git
 cd the-logbook
 cp .env.example .env
 # Edit .env with your settings
-docker-compose up -d
+docker compose up -d
 ```
 
 > **Production hardening.** The bare `docker compose ...` commands throughout
@@ -37,46 +37,46 @@ docker-compose up -d
 ### Container Management
 ```bash
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # Stop all services
-docker-compose down
+docker compose down
 
 # Restart all services
-docker-compose restart
+docker compose restart
 
 # Restart specific service
-docker-compose restart backend
+docker compose restart backend
 
 # Rebuild and start
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 
 # Remove containers and volumes (⚠️ deletes data!)
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Logs
 ```bash
 # View all logs (follow)
-docker-compose logs -f
+docker compose logs -f
 
 # View specific service logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
-docker-compose logs -f db
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f db
 
 # Last 50 lines
-docker-compose logs --tail=50 backend
+docker compose logs --tail=50 backend
 
 # Since specific time
-docker-compose logs --since 30m backend
+docker compose logs --since 30m backend
 ```
 
 ### Status & Health
 ```bash
 # Container status
-docker-compose ps
+docker compose ps
 
 # Resource usage
 docker stats
@@ -143,10 +143,10 @@ docker exec -it logbook-backend alembic upgrade head
 ### Update Application
 ```bash
 cd /path/to/the-logbook
-docker-compose down
+docker compose down
 git pull
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ### Update Unraid
@@ -168,7 +168,7 @@ docker exec logbook-backend alembic upgrade head
 ### Manual Backup
 ```bash
 # Full backup
-docker exec logbook-backend /app/scripts/backup.sh
+./scripts/backup.sh   # host-side script, run from the install directory
 
 # Database only
 docker exec logbook-db mysqldump -u logbook_user -p the_logbook > backup.sql
@@ -243,16 +243,16 @@ curl http://localhost:3001/api/v1/users/rank-validation
 ### Container Won't Start
 ```bash
 # Check logs for errors
-docker-compose logs backend
+docker compose logs backend
 
 # Remove and recreate
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 
 # Full rebuild
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ### Port Conflicts
@@ -262,8 +262,8 @@ nano .env
 # Change FRONTEND_PORT and BACKEND_PORT
 
 # Restart
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 ### Permission Issues
@@ -281,10 +281,10 @@ chown -R 99:100 /mnt/user/appdata/the-logbook/
 ### Database Connection Failed
 ```bash
 # Check database is running
-docker-compose ps db
+docker compose ps db
 
 # View database logs
-docker-compose logs db
+docker compose logs db
 
 # Verify credentials
 cat .env | grep DB_
@@ -296,12 +296,12 @@ docker exec logbook-backend python -c "import pymysql; pymysql.connect(host='db'
 ### Frontend Not Loading
 ```bash
 # Check frontend logs
-docker-compose logs frontend
+docker compose logs frontend
 
 # Rebuild frontend
-docker-compose stop frontend
-docker-compose build --no-cache frontend
-docker-compose up -d frontend
+docker compose stop frontend
+docker compose build --no-cache frontend
+docker compose up -d frontend
 
 # Check nginx config
 docker exec logbook-frontend cat /etc/nginx/conf.d/default.conf
@@ -313,10 +313,10 @@ docker exec logbook-frontend cat /etc/nginx/conf.d/default.conf
 curl http://localhost:3001/health
 
 # View backend logs
-docker-compose logs backend
+docker compose logs backend
 
 # Restart backend
-docker-compose restart backend
+docker compose restart backend
 
 # Check environment variables
 docker exec logbook-backend env | grep -i secret
@@ -363,7 +363,7 @@ docker exec -it logbook-db mysql -u root -p
 ### Container Health
 ```bash
 # All containers
-docker-compose ps
+docker compose ps
 
 # Specific health check
 docker inspect --format='{{.State.Health.Status}}' logbook-backend
@@ -378,7 +378,7 @@ docker stats
 docker system df
 
 # Logs size
-docker-compose exec backend du -sh /app/logs
+docker compose exec backend du -sh /app/logs
 ```
 
 ### API Health
@@ -418,9 +418,9 @@ docker system prune -a --volumes
 truncate -s 0 $(docker inspect --format='{{.LogPath}}' logbook-backend)
 
 # Or rotate logs
-docker-compose down
+docker compose down
 find /var/lib/docker/containers -name "*.log" -delete
-docker-compose up -d
+docker compose up -d
 ```
 
 ---
@@ -487,10 +487,10 @@ docker --version
 docker-compose --version
 
 # Container status
-docker-compose ps
+docker compose ps
 
 # Recent logs
-docker-compose logs --tail=100 backend > logs.txt
+docker compose logs --tail=100 backend > logs.txt
 
 # Environment (sanitized)
 cat .env | grep -v PASSWORD | grep -v KEY
