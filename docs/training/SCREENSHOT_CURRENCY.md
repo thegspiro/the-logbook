@@ -96,29 +96,31 @@ and `last_sync_at` are written by a real sync, so the card reads "Connection
 not verified" and "Last Sync: Never", which the guide's prose now explains
 rather than contradicts.
 
-### Blocked on seed data — no member can reach a quantity checklist
+### A seed gap that wasn't — the quantity checklist was reachable all along
 
-Three 03-scheduling placeholders sit on the same gap and none of them has been
-attempted, because the screen cannot be reached at all in the demo department:
+**Withdrawn 2026-08-12, the day after it was written.** This section claimed
+three 03-scheduling placeholders — the carry-over banner, the Set All to Par
+confirmation, and the flat check form on a phone — were unreachable because the
+only template with quantity items is bound to **M-3** and `seed_scheduling`
+rosters shifts onto `fleet[:3]` only. The premise about the roster is true. The
+conclusion drawn from it was not.
 
-- the check form's **carry-over banner** with counts reading against par
-- the **Set All to Par** confirmation naming the items it would raise
-- the **flat scrollable check form** on a phone
+**A check does not need a shift.** `MyChecklistsPage` has an **Unscheduled
+checklist** button that offers every active template and starts a check with no
+shift attached — the same standalone-check feature the guide documents two
+sections further down. All three shots were captured through it with no seeder
+change at all, and they are now applied.
 
-All three need a member holding a checklist that has **quantity** items. The
-only seeded template with any is **Medic 3 Supply Check**, which is bound to
-apparatus **M-3** — and `seed_scheduling` rosters shifts onto `fleet[:3]` only,
-which is E-1, E-2 and B-5. No shift ever runs on the medic, so
-`/equipment-checks/my-checklists` returns Engine Daily Check and Engine
-Close-Out for every member, both of them `present`-type throughout. With no
-quantity item in the compartment the form renders **Pass All** instead of
-Confirm Counts / Set All to Par, and there is no count to carry over.
+The mistake was reasoning from `/equipment-checks/my-checklists` (which is
+shift-derived, and was correctly read) to "the screen is unreachable", without
+reading the page that renders it. Recorded rather than deleted because the
+cheap check — open the page and look at what else is on it — is the one that
+was skipped.
 
-The fix is a seeder change — put one shift on M-3 with a member on it — not a
-manifest one. It is deliberately not bolted on at the end of a tick: the shift
-roster is built from a per-day member pool that the API rejects double-booking
-from, so an extra rig has to be threaded through that allocation rather than
-appended to it.
+**What was genuinely missing** was smaller and got fixed here: no seeded
+template had a **section header**, so the bold in-compartment caption the guide
+documents could not be pictured and the renderer had never met one in demo
+data. `_add_section_header` now puts one on the engine checklist.
 
 ---
 

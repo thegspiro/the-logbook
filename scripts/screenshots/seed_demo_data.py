@@ -3785,6 +3785,51 @@ class Seeder:
 
     # -- scheduling: equipment check templates and completed checks --
 
+    def _add_section_header(self, template_id: str | None) -> None:
+        """Put one section header on the engine checklist.
+
+        Headers are a documented grouping device — a bold caption inside a
+        compartment, with no pass/fail control and no effect on the score — and
+        no seeded template had one, so the feature was undocumentable and the
+        renderer untested against real data.
+
+        Written as a top-up rather than folded into the create payload above:
+        the template is created once and every existing demo database already
+        has it, so a header only in the create branch would never appear.
+        """
+        if not template_id:
+            return
+        template = self.api.get(f"/equipment-checks/templates/{template_id}")
+        cab = next(
+            (c for c in items(template, "compartments") if pick(c, "name") == "Cab"),
+            None,
+        )
+        if not cab:
+            return
+        existing = items(cab, "items")
+        # Keyed on check_type, not the `is_header` column. That column is a
+        # compartment-level flag; on an item it is write-only — the item
+        # response schema does not carry it and the check form switches on
+        # `checkType === "header"`.
+        if any(pick(i, "check_type", "checkType") == "header" for i in existing):
+            return
+        header = self.api.post(
+            f"/equipment-checks/compartments/{pick(cab, 'id')}/items",
+            {
+                "name": "Safety Equipment",
+                "check_type": "header",
+                "is_required": False,
+                # Appended, then moved: sort_order is stored verbatim and the
+                # three existing items already hold 0, 1 and 2, so there is no
+                # gap to insert into without renumbering them anyway.
+                "sort_order": len(existing),
+            },
+        )
+        self.api.put(
+            f"/equipment-checks/compartments/{pick(cab, 'id')}/items/reorder",
+            {"ordered_ids": [pick(header, "id")] + [pick(i, "id") for i in existing]},
+        )
+
     def seed_equipment_checks(self) -> dict[str, Any]:
         """A template plus completed checks, which the reports page aggregates."""
         self._repair_check_types()
@@ -3840,6 +3885,8 @@ class Seeder:
                 },
             )
             templates.append(engine_daily)
+
+        self._add_section_header(pick(engine_daily, "id"))
 
         def close_out_template_for(apparatus_type: str) -> dict:
             """Get or create the end-of-shift template for an apparatus type.

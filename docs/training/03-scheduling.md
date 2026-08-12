@@ -837,18 +837,24 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 
 During a shift, members see pending equipment checks on their dashboard or on **My Equipment Checklists**, which is the Equipment Checks tab of Scheduling as a member sees it.
 
-1. Open the checklist for your current shift
+1. Open the checklist for your current shift. **You do not need one** —
+   **Unscheduled checklist**, at the top of the page, offers every active
+   template and starts a check with no shift attached.
 2. Work through each compartment and item:
    - **Pass/Fail**: Tap pass or fail
    - **Quantity**: Enter the count
    - **Level**: Enter the level reading
    - **Date/Lot**: Verify expiration date and lot number
    - **Reading**: Enter the reading value
-3. Optionally attach photos to any item (up to 3 per item)
+3. Optionally attach photos to any item (up to 3 per item). The button is
+   inside the item's note panel — tap **Note** first, then **Add photo**.
 4. Submit the completed check
 
-> **Screenshot needed:**
-> _[Screenshot of the equipment check form on a mobile device showing a compartment heading, several check items with pass/fail toggle buttons, a quantity field, and the photo attachment button]_
+Every item also offers **Not on truck**, and a pass/fail item adds **Out of
+service** — a rig that has the tool but cannot use it is not the same as one
+that never had it.
+
+![Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below](./images/03-72-check-item-controls.png)
 
 > **Fixed 2026-08-08.** Submitting a check used to return a server error on
 > **any shift with an apparatus assigned** — so in practice, on any real shift.
@@ -1089,8 +1095,7 @@ A line at the top of the form says once that counts have been carried over, and
 is what confirms a number you agree with — the same single tap, without a
 "carried over" label printed sixty times.
 
-> **Screenshot needed:**
-> _[Screenshot of the equipment check form on a phone showing the carry-over banner at the top, a compartment with three quantity items reading "4/4 Each", "2/4 Box" and "1/1 Each", none of them yet marked pass or fail, and the progress counter in the header]_
+![The check form's carry-over banner above a compartment of quantity items, each reading against par with its unit and none yet marked](./images/03-70-check-form-carryover.png)
 
 #### Confirm Counts vs. Set All to Par
 
@@ -1110,8 +1115,11 @@ already at par is untouched by the warning and stays one tap.
 Status still comes from the number, so confirming eighteen of twenty-four files a
 **failure** rather than quietly passing it.
 
-> **Screenshot needed:**
-> _[Screenshot of the "Set All to Par" confirmation dialog naming two items whose counts would be raised (e.g. "Gauze 4x4 — 18 → 24") with Cancel and Set to Par buttons]_
+The confirmation names each item and the size of the claim — `18 → 24` — and
+its buttons say what they do rather than restating the feature: **Keep the
+counts** or **Yes, they are full**.
+
+![The Set All to Par confirmation, naming each item it would raise and by how much](./images/03-71-set-all-to-par-confirm.png)
 
 #### Working from the item instead of the truck
 
@@ -1919,10 +1927,15 @@ The equipment check form has been redesigned from a tabbed compartment view to a
 
 - All compartments are displayed inline with clear section headers
 - Sub-compartments are merged under their parent compartment heading
-- Section headers (items with `is_header: true`) appear as bold black labels for visual grouping — they have no pass/fail controls and are not scored
+- Section headers appear as bold labels for visual grouping — they have no pass/fail controls, and neither the compartment's `n/m checked` nor the header's progress counter includes them
 
-> **Screenshot needed:**
-> _[Screenshot of the flat equipment check form on a mobile device showing a compartment header ("Cab Interior"), a section header in bold ("Safety Equipment"), and several check items below with pass/fail buttons and quantity fields]_
+> **Corrected 2026-08-12.** A section header was described as "items with
+> `is_header: true`". `is_header` is a **compartment**-level flag; on an item it
+> is write-only — the item response schema does not carry it, and the check form
+> switches on `check_type: "header"`. Set that, not `is_header`, when building a
+> template through the API.
+
+![The flat check form on a phone — a compartment heading, a bold section header beneath it, and the items it groups](./images/03-73-flat-check-form-header.png)
 
 ### Text Check Type
 

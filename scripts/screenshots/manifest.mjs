@@ -4848,6 +4848,129 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "03-73-flat-check-form-header",
+    doc: "03-scheduling.md",
+    line: 1931,
+    anchor:
+      "Screenshot of the flat equipment check form on a mobile device showing a compartment header",
+    alt: "The flat check form on a phone — a compartment heading, a bold section header beneath it, and the items it groups",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Engine Daily Check")(page);
+      // The section header seeded into Cab by `_add_section_header`. Waiting
+      // on it rather than on the compartment name is the point: without it the
+      // shot is a checklist with nothing to picture.
+      await page.waitForSelector("text=Safety Equipment", { timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    viewport: { width: 414, height: 1050 },
+  },
+  {
+    id: "03-72-check-item-controls",
+    doc: "03-scheduling.md",
+    line: 850,
+    anchor:
+      "Screenshot of the equipment check form on a mobile device showing check items with",
+    alt: "Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Medic 3 Supply Check")(page);
+      await page.waitForSelector("text=Trauma Bag", { timeout: 20_000 });
+
+      // The photo button lives inside the note panel, so the note has to be
+      // open for it to exist at all. `:near` rather than an index: the Note
+      // buttons are identical and unlabelled, and an index would move the
+      // moment the seeded template gains an item.
+      await page
+        .locator(
+          'button:has-text("Note"):near(:text-is("Nitrile Gloves — Large"), 160)',
+        )
+        .first()
+        .click({ timeout: 15_000 });
+      await page.getByLabel("Upload photo for Nitrile Gloves — Large").waitFor({
+        state: "attached",
+        timeout: 15_000,
+      });
+
+      // Put that item at the top of the frame, so the shot runs from its
+      // quantity stepper down through the pass/fail item beneath it.
+      await page.evaluate(() => {
+        const heading = Array.from(document.querySelectorAll("span")).find(
+          (node) => node.textContent === "Nitrile Gloves — Large",
+        );
+        if (heading) heading.scrollIntoView({ block: "start" });
+        // `block: "start"` puts the heading under the sticky app bar and the
+        // check's own header; back off far enough that the item's name and its
+        // quantity stepper are both in frame.
+        window.scrollBy(0, -190);
+      });
+      await page.waitForTimeout(500);
+    },
+    viewport: { width: 414, height: 900 },
+  },
+  {
+    id: "03-71-set-all-to-par-confirm",
+    doc: "03-scheduling.md",
+    line: 1113,
+    anchor:
+      'Screenshot of the "Set All to Par" confirmation dialog naming the items whose counts',
+    alt: "The Set All to Par confirmation, naming each item it would raise and by how much",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Medic 3 Supply Check")(page);
+      await page.waitForSelector("text=Trauma Bag", { timeout: 20_000 });
+
+      // Trauma Bag arrives with one item already short (gauze, 18 of 24).
+      // Counting the gloves down gives the dialog a second row, which is what
+      // it is for — a single-item warning reads as a quirk, two reads as the
+      // claim it actually is.
+      const decrease = page.getByLabel("Decrease Nitrile Gloves — Large quantity");
+      await decrease.scrollIntoViewIfNeeded();
+      for (let i = 0; i < 2; i += 1) {
+        await decrease.click();
+        await page.waitForTimeout(150);
+      }
+
+      await page.getByLabel("Set all items in Trauma Bag to par").click();
+      await page.waitForSelector("text=Only do this if you have actually restocked.", {
+        timeout: 15_000,
+      });
+      await page.waitForTimeout(400);
+    },
+    selector: '[role="dialog"]',
+    viewport: { width: 414, height: 1000 },
+  },
+  {
+    id: "03-70-check-form-carryover",
+    doc: "03-scheduling.md",
+    line: 1092,
+    anchor:
+      "Screenshot of the equipment check form on a phone showing the carry-over banner",
+    alt: "The check form's carry-over banner above a compartment of quantity items, each reading against par with its unit and none yet marked",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      // A check does not need a shift. "Unscheduled checklist" offers every
+      // active template, which is the only way to reach the medic's supply
+      // check — no seeded shift runs on M-3, and the engines' checklists are
+      // pass/fail throughout with no counts to carry over.
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Medic 3 Supply Check")(page);
+      await page.waitForSelector("text=Drug Bag", { timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    // Not fullPage: the whole checklist is eight items and four screens tall,
+    // and the subject is the top of it — the banner, the progress counter and
+    // the first compartment's counts.
+    viewport: { width: 414, height: 1000 },
+  },
+  {
     id: "03-69-catalog-quick-add",
     doc: "03-scheduling.md",
     line: 1055,
