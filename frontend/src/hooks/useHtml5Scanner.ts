@@ -124,7 +124,14 @@ export function useHtml5Scanner({
     // and gives us device IDs across desktop and mobile.
     const cameras = await Html5Qrcode.getCameras();
     if (cameras.length === 0) {
-      throw new Error('No cameras found on this device');
+      // Named as the DOMException `getUserMedia` raises for the same fact, so
+      // `describeCameraError` gives an empty enumeration and a rejected
+      // request the one answer they share — this device has no camera — rather
+      // than sending one of the two to browser settings for a permission that
+      // does not exist.
+      const error = new Error('No cameras found on this device');
+      error.name = 'NotFoundError';
+      throw error;
     }
 
     // Choose the scan target. Use a back-camera device id only when its label

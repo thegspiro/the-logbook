@@ -30,13 +30,13 @@ import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
 import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
 import { FlashlightToggle } from './ux/FlashlightToggle';
-import { getErrorMessage } from '../utils/errorHandling';
 import { trackSupportsFlashlight, setTrackFlashlight } from '../utils/cameraTorch';
 import {
   HAS_BARCODE_DETECTOR,
   BARCODE_SCAN_CONFIG,
   INVENTORY_BARCODE_FORMATS,
   NATIVE_BARCODE_FORMATS,
+  describeCameraError,
   getCameraUnavailableReason,
 } from '../constants/camera';
 
@@ -241,9 +241,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
         setCameraActive(true);
       } catch (err: unknown) {
-        setLookupError(
-          getErrorMessage(err, 'Camera access denied. Please allow camera permissions, or type codes manually.')
-        );
+        setLookupError(describeCameraError(err));
         setCameraActive(false);
       }
     } else {
@@ -251,9 +249,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         await startHtml5Scanner();
         setCameraActive(true);
       } catch (err: unknown) {
-        setLookupError(
-          getErrorMessage(err, 'Camera access denied. Please allow camera permissions, or type codes manually.')
-        );
+        setLookupError(describeCameraError(err));
         setCameraActive(false);
       }
     }

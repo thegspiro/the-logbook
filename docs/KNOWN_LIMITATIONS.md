@@ -1051,6 +1051,81 @@ carries no seeded shift checklists, so nothing already published moved; a future
 template bound to a rig that does needs the neighbouring equipment-check shots
 re-captured and diffed before applying.
 
+## Compliance Reports — A "Monthly" Report Contains The Whole Year (2026-08-11)
+
+Open decision, and user-visible.
+
+`ComplianceConfigService.generate_report` accepts `report_type="monthly"` with a
+month, builds the right period label ("July 2026"), stores `period_month`, and
+then calls `AnnualComplianceReportService.generate_annual_report(org, year=year)`
+— the whole year. The comment says "If monthly, filter/annotate the data" but
+only the annotation happens: a `report_period` block is added and nothing is
+filtered.
+
+The consequences are silent:
+
+- A July report and an October report for the same year hold **identical
+  figures**, differing only in their label.
+- The stored payload's own `report_type` still reads `annual_compliance`, which
+  is the honest name for what it is.
+- The summary an officer reads on the Report History row — compliance
+  percentage, compliant members, total training hours — is the year's, under a
+  month's heading.
+
+Fixing it means giving the annual report builder a date range rather than a
+year, and deciding what "compliant in July" should mean for a requirement whose
+frequency is annual — a member with an annual requirement met in March is
+compliant for the year but did nothing in July. That is a product question, not
+a refactor, which is why this is recorded rather than fixed here.
+
+Until it is decided, treat monthly and annual as the same report. The guide says
+so.
+`backend/tests/test_compliance_report_period.py` pins the current behaviour so
+whichever answer is chosen changes something deliberate.
+
+## Email Templates — A Chosen Footer Is Silently Ignored By Most Bodies (2026-08-11)
+
+Open decision, and user-visible.
+
+The footer library gives every template a **Closes with** selector, and the
+Footers tab reports "N templates close with this footer". But the closing block
+reaches the message as the `{{footer_html}}` variable, and there is no fallback
+that appends it: a body without that variable renders **no footer at all**, no
+matter what the selector says. Nothing on the screen distinguishes the two —
+choosing a footer, saving and sending looks identical either way.
+
+Most shipped bodies do include the variable. Two populations do not:
+
+- **A department that customised a template body** before this release, or since.
+- **Any database seeded before the footers release.** Re-seeding never touches a
+  template that already exists by name, which is the same drift that left
+  `check_type: "presence"` rows behind (see `_repair_seeded_check_types` in
+  `scripts/screenshots/seed_demo_data.py`). In the screenshot demo database
+  **31 of 35 templates** carry no `{{footer_html}}`, so the Footers tab's count
+  of 35 is a count of templates _pointing at_ the footer, not of templates that
+  will print it.
+
+The count is not wrong for what it measures — a template really does resolve to
+that footer — but read beside a selector that appears to take effect, it
+overstates what will happen.
+
+Three options, none obviously right, which is why this is recorded rather than
+fixed:
+
+1. **Append the footer when the body omits the variable.** Makes the selector
+   always mean something, and changes the output of every customised template
+   that deliberately closes its own way.
+2. **A repair pass over legacy bodies**, as `check_type` got. Fixes the upgrade
+   population without touching deliberate customisation, but has to guess where
+   in the body the variable belongs.
+3. **Say so in the UI** — mark a template whose body omits `{{footer_html}}`,
+   and grey its selector. Smallest change, and leaves the work with the
+   administrator.
+
+`backend/tests/test_email_footer_rendering.py` pins the current contract in
+either direction, so whichever option is chosen has something deliberate to
+change rather than a silent behavioural shift.
+
 ## Prospective Members — A Configured Checklist Stage Cannot Be Passed (2026-08-11)
 
 Blocking, for any department that fills in a checklist stage's item list.

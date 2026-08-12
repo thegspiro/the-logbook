@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
 import type { MeetingRecord } from '../services/api';
@@ -102,7 +102,21 @@ export const ElectionDetailPage: React.FC = () => {
   const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Tabbed workflow state
-  const [activeTab, setActiveTab] = useState('ballot');
+  // Addressable, so a secretary can send "the eligibility roster for this
+  // election" as a link. Plain state before, which also broke the Back button
+  // after a tab change and pinned the screenshot harness to Ballot. Sixth page
+  // to get this treatment, after Email Templates, Notifications, Medical
+  // Screening, Compliance Config and Item Detail.
+  //
+  // Derived from the URL rather than mirrored into state: mirroring reads the
+  // parameter once, on mount, so every later URL change — which is what Back
+  // is — would be ignored. `ElectionWorkflowTabs` already falls back to its
+  // first visible tab when the active one is not one this viewer may see, so
+  // an unknown or forbidden `?tab=` lands somewhere sensible rather than on a
+  // blank panel.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') ?? 'ballot';
+  const setActiveTab = (tab: string) => setSearchParams({ tab });
 
   // Pending election packages state
   const [pendingPackages, setPendingPackages] = useState<ElectionPackage[]>([]);
