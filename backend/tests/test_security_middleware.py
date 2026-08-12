@@ -597,7 +597,10 @@ class TestSecurityHeadersMiddleware:
         assert headers["x-frame-options"] == "DENY"
         assert headers["x-xss-protection"] == "1; mode=block"
         assert headers["referrer-policy"] == "strict-origin-when-cross-origin"
-        assert "geolocation=()" in headers["permissions-policy"]
+        assert (
+            headers["permissions-policy"]
+            == "geolocation=(), microphone=(), camera=(self)"
+        )
         assert "content-security-policy" in headers
 
     @pytest.mark.unit
