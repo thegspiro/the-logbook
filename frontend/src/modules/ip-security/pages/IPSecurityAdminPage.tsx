@@ -16,6 +16,7 @@ import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { IPExceptionApprovalStatus } from '../../../constants/enums';
 import type { CountryBlockRuleCreate } from '../types';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 const tabClass = (active: boolean) =>
   `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -28,6 +29,7 @@ const labelClass = 'form-label';
 type Tab = 'pending' | 'all' | 'blocked-attempts' | 'blocked-countries';
 
 const IPSecurityAdminPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const {
     pendingExceptions,
     allExceptions,
@@ -148,7 +150,15 @@ const IPSecurityAdminPage: React.FC = () => {
   };
 
   const handleRemoveCountry = async (code: string) => {
-    if (!confirm(`Remove ${code} from the blocked countries list?`)) return;
+    if (
+      !(await confirm({
+        title: 'Unblock country',
+        message: `Remove ${code} from the blocked countries list? Sign-ins from ${code} will be allowed again.`,
+        confirmLabel: 'Unblock',
+        cancelLabel: 'Keep blocked',
+      }))
+    )
+      return;
     try {
       await removeBlockedCountry(code);
       toast.success(`${code} unblocked`);
@@ -170,7 +180,7 @@ const IPSecurityAdminPage: React.FC = () => {
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-600 p-2">
+            <div className="shrink-0 rounded-lg bg-red-600 p-2">
               <Shield className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -180,7 +190,7 @@ const IPSecurityAdminPage: React.FC = () => {
           </div>
           <button
             onClick={refresh}
-            className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
+            className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
@@ -414,7 +424,7 @@ const IPSecurityAdminPage: React.FC = () => {
         {/* Add Country Modal */}
         <Modal isOpen={countryModal} onClose={() => setCountryModal(false)} title="Add Blocked Country">
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="country-code" className={labelClass}>
                   Country Code

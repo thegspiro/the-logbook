@@ -79,7 +79,7 @@ const PublicPortalAdmin: React.FC = () => {
       <div className="bg-theme-surface border-theme-surface-border border-b">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="py-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center space-x-3">
                 <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-500/20">
                   <Globe className="h-6 w-6 text-blue-600" />
@@ -91,7 +91,7 @@ const PublicPortalAdmin: React.FC = () => {
               </div>
 
               {/* Status Toggle */}
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center space-x-2">
                   {config?.enabled ? (
                     <>
@@ -137,7 +137,7 @@ const PublicPortalAdmin: React.FC = () => {
           </div>
 
           {/* Tabs */}
-          <div className="border-theme-surface-border flex space-x-1 border-b">
+          <div className="border-theme-surface-border hscroll flex space-x-1 border-b">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (

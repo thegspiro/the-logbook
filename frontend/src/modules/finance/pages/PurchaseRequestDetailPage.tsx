@@ -149,7 +149,7 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
             </div>
             {/* Content */}
             <div className="flex-1 pt-0.5">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-theme-text-primary text-sm font-medium">
                   {step.stepName ?? `Step ${String((step.stepOrder ?? 0) + 1)}`}
                 </span>
@@ -317,7 +317,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
       <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-theme-text-primary text-xl font-bold">{pr.title}</h1>
               <span
                 className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${PURCHASE_REQUEST_STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}

@@ -3264,7 +3264,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   return (
     <div className="pb-16">
       {/* Header */}
-      <div className="mx-auto mb-4 flex max-w-7xl items-center justify-between">
+      <div className="mx-auto mb-4 flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
@@ -3278,7 +3278,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             {isEditing ? `Edit: ${form.name || 'Template'}` : 'New Equipment Check Template'}
           </h1>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
           {isEditing && templateId && (
             <button
               type="button"
@@ -3447,7 +3447,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
                 <button
                   type="button"
@@ -3540,7 +3540,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {stats.totalItems > 0 && (
         <div className="border-theme-surface-border bg-theme-surface/95 pb-safe fixed right-0 bottom-0 left-0 z-40 border-t backdrop-blur-sm">
           <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-1 px-4 py-2 sm:flex-row sm:items-center sm:gap-0">
-            <div className="text-theme-text-muted flex items-center gap-4 text-xs">
+            <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span className="flex items-center gap-1">
                 <Hash className="h-3 w-3" />
                 {stats.compartmentCount} compartment{stats.compartmentCount !== 1 ? 's' : ''}

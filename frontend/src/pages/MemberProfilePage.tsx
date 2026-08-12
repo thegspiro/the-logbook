@@ -557,7 +557,7 @@ export const MemberProfilePage: React.FC = () => {
           </button>
 
           <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-center gap-4">
                 {/* Profile Photo with Upload */}
                 <div className="group relative">
@@ -612,12 +612,14 @@ export const MemberProfilePage: React.FC = () => {
                   )}
                 </div>
                 <div>
-                  <h1 className="text-theme-text-primary text-3xl font-bold">{user.full_name || user.username}</h1>
+                  <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">
+                    {user.full_name || user.username}
+                  </h1>
                   <p className="text-theme-text-muted mt-1">@{user.username}</p>
                   {user.membership_number && (
                     <p className="text-theme-text-secondary mt-1 text-sm">#{user.membership_number}</p>
                   )}
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     {(user.roles || []).map((role) => (
                       <span
                         key={role.id}
