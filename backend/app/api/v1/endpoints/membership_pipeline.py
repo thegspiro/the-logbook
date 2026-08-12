@@ -1529,7 +1529,6 @@ async def get_election_package(
         require_permission(
             "prospective_members.view",
             "prospective_members.manage",
-            "elections.view",
             "elections.manage",
         )
     ),
@@ -1537,7 +1536,7 @@ async def get_election_package(
     """
     Get the election package for a prospect.
 
-    **Requires permission: prospective_members.view or prospective_members.manage or elections.view or elections.manage**
+    **Requires permission: prospective_members.view, prospective_members.manage, or elections.manage**
     """
     service = MembershipPipelineService(db)
     pkg = await service.get_election_package(
@@ -1629,7 +1628,6 @@ async def list_election_packages(
         require_permission(
             "prospective_members.view",
             "prospective_members.manage",
-            "elections.view",
             "elections.manage",
         )
     ),
@@ -1641,7 +1639,7 @@ async def list_election_packages(
     The package built for the caller's own application is omitted — it
     bundles the interview and coordinator material the vote is based on.
 
-    **Requires permission: prospective_members.view or prospective_members.manage or elections.view or elections.manage**
+    **Requires permission: prospective_members.view, prospective_members.manage, or elections.manage**
     """
     service = MembershipPipelineService(db)
     packages = await service.list_election_packages(

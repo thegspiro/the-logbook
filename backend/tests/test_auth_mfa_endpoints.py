@@ -7,7 +7,13 @@ regeneration endpoint exists and is rate limited, and that the login
 challenge endpoint is rate limited.
 """
 
-from app.api.v1.endpoints.auth import router
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from starlette.requests import Request
+
+from app.api.v1.endpoints.auth import _finish_oauth_login, router
 
 
 def _route(path: str, method: str):
@@ -58,3 +64,29 @@ class TestMfaEndpoints:
 
     def test_mfa_status_route_exists(self):
         assert _route("/mfa/status", "GET") is not None
+
+
+@pytest.mark.asyncio
+async def test_oauth_login_requires_mfa_before_session_creation():
+    user = SimpleNamespace(
+        id="user-id", email="member@example.com", username="member", mfa_enabled=True
+    )
+    request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
+
+    with (
+        patch(
+            "app.api.v1.endpoints.auth.create_mfa_pending_token",
+            return_value="pending-token",
+        ),
+        patch("app.api.v1.endpoints.auth.log_audit_event", new=AsyncMock()),
+        patch(
+            "app.api.v1.endpoints.auth.AuthService.create_user_tokens",
+            new=AsyncMock(),
+        ) as create_tokens,
+    ):
+        response = await _finish_oauth_login(AsyncMock(), user, request, "google")
+
+    assert response.status_code == 302
+    assert response.headers["location"].endswith("#mfa_token=pending-token")
+    assert "access_token=" not in response.headers.get("set-cookie", "")
+    create_tokens.assert_not_awaited()
