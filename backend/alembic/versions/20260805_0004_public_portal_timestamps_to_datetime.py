@@ -21,8 +21,8 @@ written it may hold either the ISO form this column was sized for
 (``2026-01-01T00:00:00.000000``) or MySQL's own rendering of a bound Python
 datetime (``2026-01-01 00:00:00.000000``), because the model has said
 ``DateTime`` while the column stayed ``VARCHAR``. Both are handled, along with
-a trailing ``Z`` or ``+00:00`` offset — all timestamps in this system are
-already UTC, so dropping the marker loses nothing.
+trailing ISO-8601 offsets. Offset-aware values are converted to UTC before
+their marker is removed.
 
 Revision ID: 20260805_0004
 Revises: 20260805_0003
@@ -81,7 +81,23 @@ def upgrade() -> None:
         if not isinstance(columns[column]["type"], sa.String):
             continue
 
-        # 1. Normalise the stored text into a form MySQL will accept.
+        # 1. Convert offset-aware ISO-8601 values to UTC. Simply removing the
+        # offset would change the instant, while leaving it in place would make
+        # the validation below discard a valid expiration. CONVERT_TZ accepts
+        # fixed offsets without relying on MySQL's named-time-zone tables.
+        op.execute(
+            sa.text(
+                f"UPDATE `{table}` "
+                f"SET `{column}` = COALESCE(DATE_FORMAT(CONVERT_TZ("
+                f"  REPLACE(LEFT(`{column}`, CHAR_LENGTH(`{column}`) - 6), 'T', ' '), "
+                f"  RIGHT(`{column}`, 6), '+00:00'), '%Y-%m-%d %H:%i:%s.%f'), "
+                f"  `{column}`) "
+                f"WHERE `{column}` REGEXP "
+                f"'[+-]((0[0-9]|1[0-3]):[0-5][0-9]|14:00)$'"
+            )
+        )
+
+        # Normalise the remaining offset-free text into a form MySQL accepts.
         op.execute(
             sa.text(
                 f"UPDATE `{table}` "
@@ -94,7 +110,16 @@ def upgrade() -> None:
         # 2. Neutralise anything still unparseable, so the ALTER cannot fail
         #    or silently produce a zero date under strict sql_mode.
         valid = _VALID.format(col=column)
-        if nullable:
+        if table == "public_portal_api_keys" and column == "expires_at":
+            # Fail closed: malformed legacy expiration data must not turn an
+            # expiring API key into a key that is valid indefinitely.
+            op.execute(
+                sa.text(
+                    f"UPDATE `{table}` SET `{column}` = UTC_TIMESTAMP(6) "
+                    f"WHERE `{column}` IS NOT NULL AND NOT ({valid})"
+                )
+            )
+        elif nullable:
             op.execute(
                 sa.text(
                     f"UPDATE `{table}` SET `{column}` = NULL "
