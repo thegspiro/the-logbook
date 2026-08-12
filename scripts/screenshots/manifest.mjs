@@ -4778,6 +4778,29 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "10-16-mobile-item-detail",
+    doc: "10-mobile-pwa.md",
+    line: 613,
+    anchor:
+      "Screenshot of an inventory item's detail page on a phone showing its cards stacked",
+    alt: "An inventory item's detail page on a phone — the status and condition badges under the name, with the Basic Info and Location cards stacked",
+    route: "/inventory/items",
+    prepare: openFirstFromApi(
+      "/inventory/items?limit=200",
+      (id) => `/inventory/items/${id}`,
+      "items",
+      // The gas monitor the walkthrough scans. Named rather than taken first
+      // so the shot matches the story around it.
+      (item) => item.name === "Gas Meter",
+    ),
+    // Deliberately not fullPage. The bottom nav is `position: fixed`, and a
+    // full-page capture is stitched from several viewport shots with fixed
+    // elements painted at their document offset — so on a page this long the
+    // nav bar lands across the middle of the image, over real content. One
+    // viewport is also the truer picture of a phone.
+    viewport: { width: 414, height: 1000 },
+  },
+  {
     id: "10-05-mobile-inventory",
     doc: "10-mobile-pwa.md",
     line: 304,

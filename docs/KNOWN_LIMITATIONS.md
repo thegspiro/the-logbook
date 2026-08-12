@@ -447,6 +447,43 @@ check requests were all charged against the budgets and the panel still said
 Verified 2026-08-09 by counting non-test call sites for each store action and
 service method, and by reading the render bodies.
 
+## Finance — Nobody Can Approve Anything (2026-08-12)
+
+`finance.approve` is defined in `app/core/permissions.py`, gates all three
+approval endpoints (`GET /finance/approvals/pending`,
+`POST /finance/approvals/{id}/approve`, `.../deny`), and is granted by **no
+role in the shipped catalogue** — 27 roles, none of them include it.
+
+| Role           | Finance permissions              |
+| -------------- | -------------------------------- |
+| Treasurer      | `finance.view`, `finance.manage` |
+| Fire Chief     | none                             |
+| President      | none                             |
+| Vice President | none                             |
+| IT Manager     | `*`                              |
+
+So the only account that can reach the approval queue is one holding the `*`
+wildcard. And that account is then refused by separation of duties —
+_"You cannot approve your own purchase request. Separation of duties requires
+a second person"_ — for anything it raised itself. In a department using the
+shipped roles, every purchase request, expense report and check request stays
+in `pending_approval` for ever.
+
+**Needs an owner decision, not a patch.** The fix is to grant
+`FINANCE_APPROVE` to whichever roles a department expects to sign off
+spending — Treasurer alone is not enough, because the Treasurer is usually the
+one raising the request and separation of duties would then block them.
+Widening who can authorise money is an authorisation decision and is
+deliberately not being made from a documentation pass.
+
+This is also why **budget detail can never show a filled progress bar**: spend
+and encumbrance accrue on approval, and no approval can happen. That compounds
+the transaction-table stub recorded in the section above — the bar is real code
+that is permanently stuck at 0%, and the table below it is not wired at all.
+
+Found 2026-08-12 while trying to seed a budget with charges for
+`11-05-budget-detail`.
+
 ## Two Migrations Claimed 20260808_0002 — and What It Left Behind (2026-08-09)
 
 Two pull requests merged migrations numbered `20260808_0002`: "drop the
