@@ -5724,6 +5724,41 @@ export const SHOTS = [
     route: "/inventory/admin/allowances",
   },
   {
+    id: "05-13-issue-allowance-exceeded",
+    doc: "05-inventory.md",
+    line: 324,
+    anchor:
+      'Screenshot of the pool-item issue dialog showing an "allowance exceeded" warning',
+    alt: 'Pool item issue dialog warning that the quantity exceeds the member’s uniform allowance, with the "Override allowance" checkbox',
+    route: "/inventory/admin/pool",
+    prepare: async (page) => {
+      // Job Shirt is a Uniforms pool item, and the seeder has already spent 2
+      // of the demo member's 3 annual uniform allowance — so asking for 2 is
+      // one over, which is what the warning is about.
+      const heading = page
+        .getByRole("heading", { name: "Job Shirt", exact: true })
+        .first();
+      await heading.waitFor({ timeout: 20_000 });
+      await heading.scrollIntoViewIfNeeded();
+      // The list is a card grid, not a table — walk up to the card and take
+      // its own Issue button rather than the first one on the page.
+      const card = heading.locator("xpath=ancestor::div[contains(@class,'card-secondary')][1]");
+      await card.getByRole("button", { name: /^Issue$/ }).first().click();
+      const dialog = page.locator('[role="dialog"]');
+      await dialog.waitFor({ timeout: 20_000 });
+      await dialog.getByPlaceholder("Search members...").fill("Belhaj");
+      await dialog.getByRole("button", { name: /Belhaj/ }).first().click();
+      // The allowance banner only appears once the check returns.
+      await page.waitForTimeout(900);
+      const qty = dialog.locator('input[type="number"]').first();
+      await qty.fill("2");
+      await qty.blur();
+      await page.waitForTimeout(400);
+    },
+    selector: '[role="dialog"]',
+    fullPage: false,
+  },
+  {
     id: "05-14-reorder-requests",
     doc: "05-inventory.md",
     line: 367,
