@@ -699,6 +699,16 @@ may know an attempt happened before they are told how it went.
 
 ![The member's own skill test results on My Training — official attempts badged PASS or FAIL with their dates, and a practice attempt badged Practice](./images/09-21-my-skill-test-results.png)
 
+> **A failed test can still read 100% _(2026-08-12)_, and that is correct.** The
+> percentage measures the **scored** criteria only. A plain pass/fail step
+> carries no points unless the template opts in to scoring them, and a checklist
+> or time-limit criterion never does — those are gates on the evolution rather
+> than measures of how well it went. So a candidate who takes full marks on
+> every scored criterion and then misses a critical pass/fail step (in the shot
+> above, full PPE) fails the test at 100%. Read the outcome badge for whether
+> they passed and the percentage for how they scored; they answer different
+> questions. The scorecard names the criterion that failed it.
+
 ### A completed scorecard is frozen _(2026-08-08)_
 
 Every test now stores a snapshot of the template it was scored against, taken
@@ -1247,11 +1257,20 @@ Skills tests integrate with the broader training compliance system:
 Skills observed during shift completion reports now support **1-5 scoring** that connects to the formal skills tracking system:
 
 - When an officer files a shift completion report with observed skills, each skill can be scored 1-5 (Needs work → Excellent)
-- If the skill name matches a `SkillEvaluation` record in the training module, the score flows through to a `SkillCheckoff` record, updating the trainee's competency score history
-- The **Skill Linkage Status** feature in Scheduling Settings shows whether each apparatus-type skill is linked to a formal SkillEvaluation (green = linked, amber = unlinked)
+- If the skill name matches a `SkillEvaluation` record in the training module — matched case-insensitively by name — the score flows through to a `SkillCheckoff` record, updating the trainee's competency score history
 - Unlinked skills are still recorded in the shift report but do not feed into formal competency tracking
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form's skills section showing 3 skills with 1-5 score buttons (violet), one skill with score 4 selected, and a small green "linked" indicator badge next to the skill name._
+The scoring buttons are pictured in
+[Scheduling → Score Labels](./03-scheduling.md#score-labels), where the same
+panel is documented as part of filing a report.
+
+> **There is no linkage indicator _(2026-08-12)_.** This section previously
+> described a **Skill Linkage Status** feature in Scheduling Settings showing
+> green for a linked skill and amber for an unlinked one, and a green "linked"
+> badge beside each skill name on the report form. Neither exists — there is no
+> such setting, and the skill chips carry no badge. The matching happens
+> silently at submission, so the only way to tell whether a skill linked is to
+> look at whether a checkoff was recorded against the trainee.
 
 **Data flow:**
 
