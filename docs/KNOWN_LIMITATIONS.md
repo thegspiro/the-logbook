@@ -1297,6 +1297,57 @@ Two related facts worth carrying:
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
 
+## Events — There Is No Per-Event Analytics Panel (2026-08-12)
+
+`docs/training/02-training.md` described a post-event analytics panel on the
+event detail page, with an attendance-rate pie chart, an average-hours bar, a
+participant count, and a breakdown by apparatus showing skills observed per
+unit. None of it exists.
+
+What does exist, and is easy to mistake for it:
+
+- **`/events/analytics`** (`EventAnalyticsPage`) — a **department-wide**
+  attendance-trends dashboard: summary cards and charts across all events, not
+  one event.
+- **`/events/:id/analytics`** (`AnalyticsDashboardPage`) — per-event, but it is
+  **QR check-in analytics**: total scans, successful and failed check-ins,
+  success rate, time-to-check-in, device breakdown, hourly activity. No hours,
+  no skills observations, no apparatus breakdown.
+
+The event detail page itself has attendance finalization and a printable
+attendance roster, and no analytics section at all. The guide's metrics table
+(attendance rate, average hours, skills observations, apparatus used) was
+narrative from a worked example presented as a description of a real screen; it
+is now marked as such and the screenshot placeholder is retired.
+
+Needs an owner decision on whether the panel should be built. This loop does
+not make that call.
+
+## Inventory — Nothing In The UI Can Choose a Temporary Assignment (2026-08-12)
+
+An item assignment carries an `assignment_type` of `permanent` or `temporary`,
+`assign_item_to_user` accepts both along with an `expected_return_date`, and the
+member-facing equipment lists render a "Permanent Assignments" group and a
+"Due:" date — so the concept is visible throughout. No screen can create one:
+
+- `ItemDetailPage` is the only UI caller of `inventoryService.assignItem`, and
+  it passes no options, so the API default (`permanent`) always applies.
+- `batch_checkout` — the bulk flow the guide pictured issuing six SCBA units —
+  hardcodes `AssignmentType.PERMANENT`.
+
+Fixed in passing, because it was losing data rather than merely missing a
+control: fulfilling an equipment request for an **individually tracked** item
+dropped the expected-return date entirely and issued the item permanently. The
+fulfil form collects that date, and the pool branch of the same function already
+honoured it by creating a checkout. That branch now marks the assignment
+temporary and stores the date; two tests in `test_inventory_gaps.py` pin both
+outcomes.
+
+Still missing is any control letting an officer choose Temporary directly on an
+assign or batch-checkout form, which is what
+`docs/training/02-training.md` described. That placeholder is retired. Needs an
+owner decision on whether the control should exist.
+
 ## Elections — The Public Ballot Cannot Be Screenshotted, By Design (2026-08-12)
 
 The public ballot page works; it just cannot be reached by the capture harness,
