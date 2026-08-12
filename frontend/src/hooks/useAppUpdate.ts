@@ -16,6 +16,11 @@
  * installed PWA picks up a new deployment without waiting for the browser's
  * own ~24h service worker update cadence. This hook (via UpdateNotification,
  * mounted above the router) is the single owner of update detection.
+ *
+ * A detected update is applied two ways: immediately when the user taps
+ * "Reload now" on the banner, or automatically on the next route change —
+ * a natural boundary where page state is discarded anyway. Dismissing the
+ * banner suppresses both until the next deployment.
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
@@ -90,6 +95,22 @@ export function useAppUpdate(): AppUpdateState {
   useEffect(() => {
     void checkForUpdate();
   }, [location.pathname, checkForUpdate]);
+
+  // Apply a pending update automatically on the NEXT route change after
+  // detection. A navigation discards page state anyway, so reloading there is
+  // invisible except for the refresh itself — members who never tap the
+  // banner still get the new build. Deliberately not the same navigation that
+  // detected the update (detection is async, and reloading a page someone is
+  // already reading is the interruption this avoids), and dismissing the
+  // banner also opts out of this until the next deployment.
+  const prevPathRef = useRef(location.pathname);
+  useEffect(() => {
+    if (location.pathname === prevPathRef.current) return;
+    prevPathRef.current = location.pathname;
+    if (updateAvailable) {
+      void reloadForNewVersion();
+    }
+  }, [location.pathname, updateAvailable]);
 
   // Check on tab focus
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
-import { BrowserRouter } from 'react-router';
+import { BrowserRouter, MemoryRouter, useNavigate } from 'react-router';
 
 // Must define __BUILD_ID__ before importing the hook
 vi.stubGlobal('__BUILD_ID__', 'test-build-123');
@@ -173,6 +173,101 @@ describe('useAppUpdate', () => {
     });
 
     Reflect.deleteProperty(window.navigator, 'serviceWorker');
+  });
+
+  describe('auto-reload on next navigation', () => {
+    const originalLocation = window.location;
+
+    // MemoryRouter navigations never touch window.location, so it can be
+    // safely replaced with a reload spy for these tests.
+    function memoryWrapper({ children }: { children: React.ReactNode }) {
+      return React.createElement(MemoryRouter, { initialEntries: ['/dashboard'] }, children);
+    }
+
+    function renderWithNavigate() {
+      return renderHook(() => ({ update: useAppUpdate(), navigate: useNavigate() }), {
+        wrapper: memoryWrapper,
+      });
+    }
+
+    beforeEach(() => {
+      Object.defineProperty(window, 'location', {
+        writable: true,
+        value: { reload: vi.fn() },
+      });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(window, 'location', {
+        writable: true,
+        value: originalLocation,
+      });
+    });
+
+    it('applies a pending update on the next route change', async () => {
+      fetchSpy.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ buildId: 'new-build-456' }),
+      });
+
+      const { result } = renderWithNavigate();
+
+      await waitFor(() => {
+        expect(result.current.update.updateAvailable).toBe(true);
+      });
+
+      act(() => {
+        void result.current.navigate('/settings');
+      });
+
+      await waitFor(() => {
+        expect(window.location.reload).toHaveBeenCalledExactlyOnceWith();
+      });
+    });
+
+    it('does not reload on navigation when no update is pending', async () => {
+      fetchSpy.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ buildId: 'test-build-123' }),
+      });
+
+      const { result } = renderWithNavigate();
+
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+      });
+
+      await act(async () => {
+        void result.current.navigate('/settings');
+        await Promise.resolve();
+      });
+
+      expect(window.location.reload).not.toHaveBeenCalled();
+    });
+
+    it('does not reload on navigation after the update was dismissed', async () => {
+      fetchSpy.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ buildId: 'new-build-456' }),
+      });
+
+      const { result } = renderWithNavigate();
+
+      await waitFor(() => {
+        expect(result.current.update.updateAvailable).toBe(true);
+      });
+
+      act(() => {
+        result.current.update.dismiss();
+      });
+
+      await act(async () => {
+        void result.current.navigate('/settings');
+        await Promise.resolve();
+      });
+
+      expect(window.location.reload).not.toHaveBeenCalled();
+    });
   });
 
   it('checks on visibility change after rate-limit window', async () => {
