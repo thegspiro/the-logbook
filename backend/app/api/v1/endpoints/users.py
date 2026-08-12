@@ -708,6 +708,29 @@ async def _enforce_rank_grant_ceiling(
             )
 
 
+async def _enforce_account_reset_ceiling(
+    current_user: User,
+    target_user: User,
+    db: AsyncSession,
+) -> None:
+    """Prevent account resets from becoming a privilege-escalation path.
+
+    Member managers may assist users whose effective permissions are within
+    their own permission ceiling, but may not reset credentials or MFA for a
+    user who has permissions they do not possess.
+    """
+    caller_perms = _collect_user_permissions(current_user)
+    target_perms = _collect_user_permissions(target_user)
+    if any(not _has_permission(perm, caller_perms) for perm in target_perms):
+        await report_privilege_escalation_attempt(
+            db, str(current_user.id), f"account-reset:{target_user.id}", None
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot reset the account of a user with privileges beyond your own.",
+        )
+
+
 @router.put("/{user_id}/roles", response_model=UserRoleResponse)
 async def assign_user_roles(
     user_id: UUID,
@@ -1558,6 +1581,7 @@ async def admin_reset_password(
         .where(User.id == str(user_id))
         .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
+        .options(selectinload(User.positions))
     )
     user = result.scalar_one_or_none()
 
@@ -1566,6 +1590,8 @@ async def admin_reset_password(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    await _enforce_account_reset_ceiling(current_user, user, db)
 
     # Validate the new password
     is_valid, error_msg = validate_password_strength(reset_data.new_password)
@@ -1657,6 +1683,7 @@ async def admin_reset_mfa(
         .where(User.id == str(user_id))
         .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
+        .options(selectinload(User.positions))
     )
     user = result.scalar_one_or_none()
 
@@ -1665,6 +1692,8 @@ async def admin_reset_mfa(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    await _enforce_account_reset_ceiling(current_user, user, db)
 
     if not user.mfa_enabled:
         raise HTTPException(
