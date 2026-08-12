@@ -1,5 +1,6 @@
 """DB-free regression tests for inventory endpoint query/response behavior."""
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -7,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from app.api.v1.endpoints.inventory import (
+    _build_checkout_response,
     list_equipment_requests,
     list_storage_areas,
 )
@@ -128,3 +130,68 @@ async def test_equipment_kit_persists_optional_line_flag():
     ]
     assert len(line_items) == 1
     assert line_items[0].optional is True
+
+
+def _checkout(*, due, is_returned=False, is_overdue=False):
+    return SimpleNamespace(
+        id=str(uuid4()),
+        item_id=str(uuid4()),
+        item=SimpleNamespace(name="Gas Meter"),
+        user_id=str(uuid4()),
+        user=SimpleNamespace(first_name="Nadia", last_name="Belhaj"),
+        checked_out_at=datetime(2026, 8, 12, tzinfo=timezone.utc),
+        expected_return_at=due,
+        is_returned=is_returned,
+        is_overdue=is_overdue,
+        checkout_reason="CO investigation",
+    )
+
+
+def test_checkout_response_reports_a_past_due_loan_as_overdue():
+    """The Active tab must not badge a late loan green.
+
+    ``is_overdue`` is only written by a daily task, so a checkout that fell due
+    an hour ago still has the column set False while the Overdue tab — which
+    compares the due date live — already lists it.
+    """
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+
+    body = _build_checkout_response(_checkout(due=yesterday, is_overdue=False))
+
+    assert body["is_overdue"] is True
+
+
+def test_checkout_response_leaves_a_loan_due_later_alone():
+    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+
+    body = _build_checkout_response(_checkout(due=tomorrow, is_overdue=False))
+
+    assert body["is_overdue"] is False
+
+
+def test_checkout_response_treats_a_naive_due_date_as_utc():
+    """MySQL hands back naive datetimes; comparing them raw would raise."""
+    naive_yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).replace(
+        tzinfo=None
+    )
+
+    body = _build_checkout_response(_checkout(due=naive_yesterday))
+
+    assert body["is_overdue"] is True
+
+
+def test_checkout_response_falls_back_to_the_stored_flag_without_a_due_date():
+    body = _build_checkout_response(_checkout(due=None, is_overdue=True))
+
+    assert body["is_overdue"] is True
+
+
+def test_checkout_response_never_calls_a_returned_loan_overdue():
+    """Returning it late does not leave it outstanding."""
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+
+    body = _build_checkout_response(
+        _checkout(due=yesterday, is_returned=True, is_overdue=False)
+    )
+
+    assert body["is_overdue"] is False

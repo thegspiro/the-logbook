@@ -1643,6 +1643,27 @@ class InventoryService:
         )
         return result.scalars().all()
 
+    @staticmethod
+    def checkout_is_overdue(record: CheckOutRecord) -> bool:
+        """Whether *record* is past its due date, decided at read time.
+
+        ``CheckOutRecord.is_overdue`` is a stored column that only
+        :meth:`mark_overdue_checkouts` writes, from a daily scheduled task.
+        Between a checkout falling due and that task's next run the column
+        still reads ``False`` — while :meth:`get_overdue_checkouts` compares
+        ``expected_return_at`` live, so the same loan appeared under the
+        Overdue tab and wore a green "Active" badge on the Active tab at the
+        same time. Every read path answers through this so they agree; the
+        stored flag remains the fallback for a record with no due date on file.
+        """
+        if record.is_returned or record.expected_return_at is None:
+            return bool(record.is_overdue)
+        due = record.expected_return_at
+        if due.tzinfo is None:
+            # MySQL hands back naive datetimes; every stored value is UTC.
+            due = due.replace(tzinfo=timezone.utc)
+        return due < datetime.now(timezone.utc)
+
     async def mark_overdue_checkouts(self, organization_id: UUID) -> int:
         """Batch-mark overdue checkouts.  Call from a scheduled task, not from
         read endpoints, to avoid write-on-read overhead.
@@ -2258,7 +2279,7 @@ class InventoryService:
                     "item_name": c.item.name,
                     "checked_out_at": c.checked_out_at,
                     "expected_return_at": c.expected_return_at,
-                    "is_overdue": c.is_overdue,
+                    "is_overdue": self.checkout_is_overdue(c),
                 }
                 for c in checkouts
             ],
@@ -3260,7 +3281,7 @@ class InventoryService:
                             else None
                         ),
                         "is_returned": c.is_returned,
-                        "is_overdue": c.is_overdue,
+                        "is_overdue": self.checkout_is_overdue(c),
                     },
                 }
             )
@@ -5361,7 +5382,9 @@ class InventoryService:
         Returns ``(stock_by_size, unit_cost_by_size, avg_unit_cost)``:
 
         - ``stock_by_size``: available units keyed by normalized size. Pool
-          items contribute unissued quantity (``quantity - quantity_issued``);
+          items contribute their on-hand ``quantity`` — issuing already
+          decrements it and a return adds it back, so subtracting
+          ``quantity_issued`` again would count every issued unit twice;
           individually-tracked items contribute one unit when ``available``.
         - ``unit_cost_by_size``: mean unit cost of priced items at each size,
           used to estimate per-size purchase cost.
@@ -5393,9 +5416,7 @@ class InventoryService:
             key = self._normalize_size_key(self._item_stock_size_value(item))
 
             if item.tracking_type == TrackingType.POOL:
-                avail = (item.quantity or 0) - (item.quantity_issued or 0)
-                if avail < 0:
-                    avail = 0
+                avail = max(0, item.quantity or 0)
             else:
                 avail = 1 if item.status == ItemStatus.AVAILABLE else 0
             if avail > 0:
@@ -5442,7 +5463,8 @@ class InventoryService:
 
         by_size: Dict[str, List[Dict[str, Any]]] = {}
         for item in items:
-            avail = (item.quantity or 0) - (item.quantity_issued or 0)
+            # On-hand is `quantity` alone; see _get_stock_and_cost_by_size.
+            avail = item.quantity or 0
             if avail <= 0:
                 continue
             key = self._normalize_size_key(self._item_stock_size_value(item))

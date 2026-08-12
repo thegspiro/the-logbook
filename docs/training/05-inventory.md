@@ -114,9 +114,12 @@ The inventory system supports two tracking modes:
 
 ### Pool Items
 
-- Tracked by total quantity on hand and quantity currently issued
+- Tracked by two separate counts: **Quantity**, the units on hand, and
+  **Issued**, the units currently out with members
 - Members receive issuances (e.g., "3 pairs of gloves")
-- Returns increase the on-hand count
+- Issuing moves units from one count to the other, and a return moves them
+  back — so the department's total is on-hand **plus** issued, and an item
+  with every unit out reads `0` on hand, never a negative number
 - Pool items must have a quantity of at least 1 when created
 
 > **Hint:** Set the tracking type when creating an item. It determines whether the item appears in the assignment workflow (individual) or the issue/return workflow (pool).
@@ -319,10 +322,9 @@ When a quartermaster issues a **pool** item to a member, the system checks the m
 - The member's **highest-priority position** determines which allowance applies (a role-specific allowance wins over the org-wide default).
 - **Annual** allowances count issuances since January 1 of the current year; **Career** and **One-time** count all-time issuances.
 - A category with **no** configured allowance is **unlimited**.
-- If an issuance would exceed the cap, it is blocked with a message stating how many remain versus how many were requested. An admin can check **Override allowance** to issue anyway for a documented exception.
+- If an issuance would exceed the cap, it is blocked with a message stating how many remain versus how many were requested. The issue dialog checks the allowance as soon as you pick the member, so the warning and the **Override allowance** checkbox appear before you submit rather than after — check it to issue anyway for a documented exception. The checkbox only appears when the quantity you have entered would actually exceed the cap.
 
-> **Screenshot needed:**
-> _[Screenshot of the pool-item issue dialog showing an "allowance exceeded" warning (e.g., "Member has 1 of 3 remaining for this category (annual), but 2 requested") with an "Override allowance" checkbox available to administrators]_
+![Pool item issue dialog warning that the quantity exceeds the member’s uniform allowance, with the "Override allowance" checkbox](./images/05-13-issue-allowance-exceeded.png)
 
 ### Edge Cases
 

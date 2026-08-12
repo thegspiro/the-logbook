@@ -152,9 +152,7 @@ const ItemsPanel: React.FC<ItemsPanelProps> = ({ areaId, indent }) => {
             </span>
             <span className={`shrink-0 text-xs capitalize ${condColor}`}>{item.condition.replace(/_/g, ' ')}</span>
             {item.tracking_type === 'pool' && (
-              <span className="text-theme-text-muted shrink-0 text-xs">
-                qty: {item.quantity - item.quantity_issued}
-              </span>
+              <span className="text-theme-text-muted shrink-0 text-xs">qty: {item.quantity}</span>
             )}
             <ExternalLink className="text-theme-text-muted h-3 w-3 shrink-0 transition-opacity sm:opacity-0 sm:group-hover/item:opacity-100" />
           </Link>

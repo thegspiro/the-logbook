@@ -1869,7 +1869,9 @@ def _build_checkout_response(record: CheckOutRecord) -> dict:
         "expected_return_at": (
             record.expected_return_at.isoformat() if record.expected_return_at else None
         ),
-        "is_overdue": record.is_overdue,
+        # Derived rather than read off the stored column; see
+        # InventoryService.checkout_is_overdue.
+        "is_overdue": InventoryService.checkout_is_overdue(record),
         "checkout_reason": record.checkout_reason,
     }
 

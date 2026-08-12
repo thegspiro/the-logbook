@@ -2906,6 +2906,12 @@ class Seeder:
             for i in inventory_items
             if (i.get("tracking_type") or i.get("trackingType")) == "individual"
         ]
+        # Held back from the round-robin below, which otherwise assigns every
+        # available individual item and leaves the checkout workflow with
+        # nothing to draw on — both checkout screens then picture an empty
+        # state. Checkout is the temporary loan, so the reserved items are the
+        # shared diagnostic tools rather than personal turnout gear.
+        checked_out = self._check_out_shared_tools(members, assignable)
         # Before the round-robin, not after: the spread hands every spare piece
         # to a different member, so a kit built afterwards has nothing left to
         # build from.
@@ -2915,6 +2921,8 @@ class Seeder:
             status = (item.get("status") or "").lower()
             item_id = pick(item, "id")
             if (status and status != "available") or item_id in kitted:
+                continue
+            if item_id in checked_out:
                 continue
             user_id = pick(members[index % len(members)], "id")
             if not user_id or not item_id:
@@ -2929,9 +2937,147 @@ class Seeder:
                 },
             )
 
+        self._issue_against_allowance(members, category_ids, inventory_items)
+
         self._wear_out_one_members_gear()
 
         return {"storage_areas": areas, "kits": kits, "allowances": allowances}
+
+    # One due back, one already late: the checkouts page splits Active from
+    # Overdue into two tabs, and a single on-time loan leaves the second one
+    # empty. The overdue item goes to the demo member so "My Equipment" shows
+    # the late badge from the member's own side too.
+    CHECKOUT_PLAN = (
+        ("Thermal Imaging Camera", 6, "Loaned for the district's night drill."),
+        ("Gas Meter", -3, "Carried on the CO investigation; not yet returned."),
+    )
+
+    def _check_out_shared_tools(
+        self, members: list[dict], assignable: list[dict]
+    ) -> set[str]:
+        """Loan two shared tools, and report which items were consumed.
+
+        Returns the item ids so the caller's round-robin skips them — an item
+        that is checked out is no longer ``available``, and assigning it on top
+        of the loan would either fail or silently contradict it.
+        """
+        member_ids = [pick(m, "id") for m in members if pick(m, "id")]
+        if not member_ids:
+            return set()
+
+        active = self.api.get("/inventory/checkout/active")
+        overdue = self.api.get("/inventory/checkout/overdue")
+        if items(active, "checkouts") or items(overdue, "checkouts"):
+            # Already loaned on a previous run. Return the ids anyway so the
+            # round-robin still skips them.
+            return {
+                pick(c, "item_id")
+                for c in items(active, "checkouts") + items(overdue, "checkouts")
+                if pick(c, "item_id")
+            }
+
+        member_id = pick(
+            next(
+                (m for m in members if pick(m, "username") == DEMO_MEMBER_USERNAME),
+                {},
+            ),
+            "id",
+        )
+        reserved: set[str] = set()
+        for index, (name, due_in_days, reason) in enumerate(self.CHECKOUT_PLAN):
+            item = next(
+                (
+                    i
+                    for i in assignable
+                    if pick(i, "name") == name
+                    and (pick(i, "status") or "").lower() == "available"
+                    and pick(i, "id") not in reserved
+                ),
+                None,
+            )
+            item_id = pick(item, "id") if item else None
+            if not item_id:
+                continue
+            # The late loan is the demo member's; the on-time one goes to
+            # somebody else so the page shows two different borrowers.
+            borrower = (
+                member_id
+                if due_in_days < 0 and member_id
+                else member_ids[index % len(member_ids)]
+            )
+            try:
+                self.api.post(
+                    "/inventory/checkout",
+                    {
+                        "item_id": item_id,
+                        "user_id": borrower,
+                        "expected_return_at": (
+                            NOW + timedelta(days=due_in_days)
+                        ).isoformat(),
+                        "checkout_reason": reason,
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"check out {name}: {exc}")
+                continue
+            reserved.add(item_id)
+        return reserved
+
+    # The Uniforms allowance seeded above is 3 a year. Spending two of them
+    # leaves one, which is the only interesting number: a member at 0 remaining
+    # is blocked whatever the quantity, and a member at 3 is never blocked, so
+    # neither shows the quantity mattering.
+    ALLOWANCE_SPEND_CATEGORY = "Uniforms"
+    ALLOWANCE_SPEND_ITEMS = ("Job Shirt", "Class B Uniform Shirt")
+
+    def _issue_against_allowance(
+        self,
+        members: list[dict],
+        category_ids: dict[str, str | None],
+        inventory_items: list[dict],
+    ) -> None:
+        """Spend part of the demo member's uniform allowance.
+
+        Without this every member sits at their full allowance, so the issue
+        dialog can only ever show the unremarkable "3 of 3 remaining" — the
+        over-allowance warning and its override are unreachable, and the pool
+        items page has no issuance history to show either.
+        """
+        category_id = category_ids.get(self.ALLOWANCE_SPEND_CATEGORY)
+        member_id = pick(
+            next(
+                (m for m in members if pick(m, "username") == DEMO_MEMBER_USERNAME),
+                {},
+            ),
+            "id",
+        )
+        if not category_id or not member_id:
+            return
+
+        # Idempotent on the state rather than on a marker: re-running must not
+        # spend a third unit and take the member to 0 remaining.
+        check = self.api.get(f"/inventory/allowances/check/{member_id}/{category_id}")
+        if (check.get("issued_this_period") or 0) > 0:
+            return
+
+        by_name = {pick(i, "name"): i for i in inventory_items}
+        for name in self.ALLOWANCE_SPEND_ITEMS:
+            item = by_name.get(name)
+            item_id = pick(item, "id") if item else None
+            if not item_id:
+                continue
+            try:
+                self.api.post(
+                    f"/inventory/items/{item_id}/issue",
+                    {
+                        "user_id": member_id,
+                        "quantity": 1,
+                        "issue_reason": "Annual uniform issue",
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"issue {name} against allowance: {exc}")
+                return
 
     WORN_GEAR_CATEGORY = "Structural PPE"
 
