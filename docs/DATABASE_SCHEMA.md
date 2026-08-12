@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**238 tables · 4106 columns · 773 foreign keys**
+**239 tables · 4129 columns · 778 foreign keys**
 
 ---
 
@@ -86,8 +86,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_status_history`](#apparatus_status_history) | `ApparatusStatusHistory` | 9 | History of status changes for apparatus |
 | [`apparatus_statuses`](#apparatus_statuses) | `ApparatusStatus` | 17 | Apparatus Status model for tracking vehicle availability |
 | [`apparatus_types`](#apparatus_types) | `ApparatusType` | 14 | Apparatus Type model for categorizing vehicles |
+| [`check_item_deployed_lots`](#check_item_deployed_lots) | `CheckItemDeployedLot` | 11 | A lot physically on the apparatus for one checklist position. |
 | [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 11 | A named section/area within a checklist template. |
-| [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 22 | An individual item to check within a compartment. |
+| [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 27 | An individual item to check within a compartment. |
 | [`equipment_check_templates`](#equipment_check_templates) | `EquipmentCheckTemplate` | 14 | Master template for an equipment checklist. |
 | [`evoc_levels`](#evoc_levels) | `EvocLevel` | 13 | Organization-configurable EVOC (Emergency Vehicle Operator Course) levels. |
 | [`template_change_logs`](#template_change_logs) | `TemplateChangeLog` | 11 | Granular audit trail for equipment check template edits. |
@@ -149,7 +150,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`email_attachments`](#email_attachments) | `EmailAttachment` | 8 | Stored attachment that can be included with email templates. |
-| [`email_templates`](#email_templates) | `EmailTemplate` | 18 | Configurable email template stored in the database. |
+| [`email_templates`](#email_templates) | `EmailTemplate` | 19 | Configurable email template stored in the database. |
 | [`message_history`](#message_history) | `MessageHistory` | 12 | Log of every email sent by the application. |
 | [`scheduled_emails`](#scheduled_emails) | `ScheduledEmail` | 15 | An email scheduled to be sent at a future date/time. |
 
@@ -177,10 +178,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 16 | External (non-member) attendee at an event. |
+| [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 20 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 27 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 46 | Event model for managing department events |
+| [`events`](#events) | `Event` | 48 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
 
 ### Facilities
@@ -428,7 +429,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`skill_templates`](#skill_templates) | `SkillTemplate` | 20 | Skill Template model |
+| [`skill_templates`](#skill_templates) | `SkillTemplate` | 21 | Skill Template model |
 | [`skill_test_viewers`](#skill_test_viewers) | `SkillTestViewer` | 5 | A person granted sight of one specific test's result. |
 | [`skill_tests`](#skill_tests) | `SkillTest` | 29 | Skill Test model |
 
@@ -472,7 +473,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`program_enrollments`](#program_enrollments) | `ProgramEnrollment` | 22 | Program Enrollment model |
 | [`program_milestones`](#program_milestones) | `ProgramMilestone` | 10 | Program Milestone model |
 | [`program_phases`](#program_phases) | `ProgramPhase` | 10 | Program Phase model |
-| [`program_requirements`](#program_requirements) | `ProgramRequirement` | 11 | Program Requirement model |
+| [`program_requirements`](#program_requirements) | `ProgramRequirement` | 12 | Program Requirement model |
 | [`recertification_pathways`](#recertification_pathways) | `RecertificationPathway` | 21 | Recertification Pathway model |
 | [`renewal_tasks`](#renewal_tasks) | `RenewalTask` | 18 | Renewal Task model |
 | [`requirement_progress`](#requirement_progress) | `RequirementProgress` | 14 | Requirement Progress model |
@@ -482,7 +483,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_attendance`](#shift_attendance) | `ShiftAttendance` | 8 | Shift Attendance model (Framework) |
 | [`shift_calls`](#shift_calls) | `ShiftCall` | 13 | Shift Call model (Framework) |
 | [`shift_completion_reports`](#shift_completion_reports) | `ShiftCompletionReport` | 28 | Shift Completion Report model |
-| [`shift_equipment_check_items`](#shift_equipment_check_items) | `ShiftEquipmentCheckItem` | 22 | Individual item result within a completed equipment check. |
+| [`shift_equipment_check_items`](#shift_equipment_check_items) | `ShiftEquipmentCheckItem` | 23 | Individual item result within a completed equipment check. |
 | [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 17 | A completed equipment checklist submission for a shift. |
 | [`shift_patterns`](#shift_patterns) | `ShiftPattern` | 17 | Recurring shift pattern for automatic schedule generation. |
 | [`shift_swap_requests`](#shift_swap_requests) | `ShiftSwapRequest` | 13 | Request to swap shifts between two members. |
@@ -1356,6 +1357,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_apparatus_types_is_system` (`is_system`)
 - UNIQUE `idx_apparatus_types_org_code` (`organization_id`, `code`)
 
+### `check_item_deployed_lots`
+
+**CheckItemDeployedLot** · `app/models/apparatus.py`
+
+> A lot physically on the apparatus for one checklist position. A position that carries four of something can be carrying four units from three different lots with three different expiration dates. The single ``lot_number`` / ``expiration_date`` pair on ``CheckTemplateItem`` can only describe one of them, so the truck's real exposure — the *soonest* date aboard — was unrepresentable, and restocking a partial shortfall silently overwrote the date of the units already there. Each row is one lot's presence on one position. The position's on-truck count is the sum of these, and the date that matters is the earliest. Lot number and expiration are snapshotted rather than read through ``inventory_lot_id``: shelf lots get consumed and deleted, and what is on the truck must remain answerable after the shelf record is gone.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `template_item_id` | VARCHAR(36) | no | FK, IDX |  | → `check_template_items.id` ON DELETE CASCADE |
+| `inventory_lot_id` | VARCHAR(36) | yes | FK |  | → `inventory_lots.id` ON DELETE SET NULL |
+| `lot_number` | VARCHAR(100) | yes |  |  |  |
+| `expiration_date` | DATE | yes |  |  |  |
+| `quantity` | INTEGER | no |  | `0` |  |
+| `deployed_at` | DATETIME | yes |  | `now()` |  |
+| `deployed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_deployed_lot_item_exp` (`template_item_id`, `expiration_date`)
+- `ix_check_item_deployed_lots_organization_id` (`organization_id`)
+- `ix_check_item_deployed_lots_template_item_id` (`template_item_id`)
+
 ### `check_template_compartments`
 
 **CheckTemplateCompartment** · `app/models/apparatus.py`
@@ -1401,6 +1428,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `required_quantity` | INTEGER | yes |  |  |  |
 | `expected_quantity` | INTEGER | yes |  |  |  |
 | `critical_minimum_quantity` | INTEGER | yes |  |  |  |
+| `quantity_on_truck` | INTEGER | yes |  |  |  |
 | `min_level` | FLOAT | yes |  |  |  |
 | `level_unit` | VARCHAR(50) | yes |  |  |  |
 | `serial_number` | VARCHAR(100) | yes |  |  |  |
@@ -1409,6 +1437,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `has_expiration` | BOOL | no |  | `False` |  |
 | `expiration_date` | DATE | yes |  |  |  |
 | `expiration_warning_days` | INTEGER | no |  | `30` |  |
+| `restock_needed` | BOOL | no | IDX | `0` |  |
+| `restock_reported_at` | DATETIME | yes |  |  |  |
+| `restock_reported_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `restock_note` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -1417,6 +1449,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_check_item_compartment` (`compartment_id`)
 - `idx_check_item_equipment` (`equipment_id`)
 - `idx_check_item_inventory` (`inventory_item_id`)
+- `idx_check_item_restock` (`restock_needed`)
 
 ### `equipment_check_templates`
 
@@ -2013,6 +2046,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `html_body` | TEXT | no |  |  |  |
 | `text_body` | TEXT | yes |  |  |  |
 | `css_styles` | TEXT | yes |  |  |  |
+| `footer_key` | VARCHAR(32) | yes |  |  |  |
 | `is_active` | BOOL | no |  | `1` |  |
 | `allow_attachments` | BOOL | no |  | `0` |  |
 | `default_cc` | JSON | yes |  |  |  |
@@ -2227,6 +2261,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `source` | VARCHAR(50) | yes |  |  |  |
 | `source_id` | VARCHAR(36) | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
+| `prospect_id` | VARCHAR(36) | yes | FK, IDX |  | → `prospective_members.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -2237,6 +2272,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_ext_attendees_email` (`email`)
 - `ix_ext_attendees_event_id` (`event_id`)
 - `ix_ext_attendees_org_id` (`organization_id`)
+- `ix_ext_attendees_prospect_id` (`prospect_id`)
 
 ### `event_rsvps`
 
@@ -2346,6 +2382,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `check_in_minutes_before` | INTEGER | yes |  | `30` |  |
 | `check_in_minutes_after` | INTEGER | yes |  | `15` |  |
 | `require_checkout` | BOOL | no |  | `0` |  |
+| `allow_guest_check_in` | BOOL | no |  | `0` |  |
+| `guest_check_in_creates_prospect` | BOOL | no |  | `0` |  |
 | `is_recurring` | BOOL | no |  | `0` |  |
 | `recurrence_pattern` | ENUM(`daily`, `weekly`, `biweekly`, `monthly`, `monthly_weekday`, `annually`, `annually_weekday`, `custom`) | yes |  |  |  |
 | `recurrence_end_date` | DATETIME | yes |  |  |  |
@@ -5058,9 +5096,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `scheduled_date` | DATE | yes |  |  |  |
 | `completed_date` | DATE | yes |  |  |  |
 | `expiration_date` | DATE | yes |  |  |  |
-| `provider_name` | VARCHAR(255) | yes |  |  |  |
+| `provider_name` | TEXT | yes |  |  |  |
 | `result_summary` | TEXT | yes |  |  |  |
-| `result_data` | JSON | yes |  |  |  |
+| `result_data` | TEXT | yes |  |  |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reviewed_at` | DATETIME | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
@@ -5653,7 +5691,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `message` | TEXT | yes |  |  |  |
 | `category` | VARCHAR(50) | yes | IDX |  |  |
 | `sent_at` | DATETIME | yes |  | `now()` |  |
-| `delivered` | BOOL | yes |  | `False` |  |
+| `delivered` | BOOL | yes |  | `_delivered_default()` |  |
 | `read` | BOOL | yes |  | `False` |  |
 | `read_at` | DATETIME | yes |  |  |  |
 | `pinned` | BOOL | yes |  | `False` |  |
@@ -5995,6 +6033,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `time_limit_seconds` | INTEGER | yes |  |  |  |
 | `passing_percentage` | FLOAT | yes |  |  |  |
 | `require_all_critical` | BOOL | yes |  | `True` |  |
+| `score_pass_fail_criteria` | BOOL | no |  | `0` |  |
 | `requirement_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_requirements.id` ON DELETE SET NULL |
 | `result_disclosure` | VARCHAR(20) | yes |  |  |  |
 | `result_release` | VARCHAR(20) | yes |  |  |  |
@@ -7032,6 +7071,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_required` | BOOL | yes |  | `True` |  |
 | `is_prerequisite` | BOOL | yes |  | `False` |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
+| `owns_requirement` | BOOL | no |  | `true` |  |
 | `program_specific_description` | TEXT | yes |  |  |  |
 | `custom_deadline_days` | INTEGER | yes |  |  |  |
 | `notification_message` | TEXT | yes |  |  |  |
@@ -7346,6 +7386,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `lot_number` | VARCHAR(100) | yes |  |  |  |
 | `serial_found` | VARCHAR(100) | yes |  |  |  |
 | `lot_found` | VARCHAR(100) | yes |  |  |  |
+| `expiration_found` | DATE | yes |  |  |  |
 | `updated_serial` | BOOL | no |  | `0` |  |
 | `photo_urls` | JSON | yes |  |  |  |
 | `is_expired` | BOOL | no |  | `False` |  |
@@ -7370,7 +7411,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `shift_id` | VARCHAR(36) | yes | FK, IDX |  | → `shifts.id` ON DELETE SET NULL |
 | `template_id` | VARCHAR(36) | yes | FK, IDX |  | → `equipment_check_templates.id` ON DELETE SET NULL |
-| `apparatus_id` | VARCHAR(36) | yes | FK |  | → `apparatus.id` ON DELETE SET NULL |
+| `apparatus_id` | VARCHAR(36) | yes |  |  |  |
 | `checked_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `checked_at` | DATETIME | yes |  | `now()` |  |
 | `check_timing` | VARCHAR(30) | no |  |  |  |
@@ -8400,7 +8441,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (288 references)
+### → `users` (290 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8439,8 +8480,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `budgets` | `created_by` | NO ACTION | no |
 | `candidates` | `nominated_by` | SET NULL | yes |
 | `candidates` | `user_id` | SET NULL | yes |
+| `check_item_deployed_lots` | `deployed_by` | SET NULL | yes |
 | `check_requests` | `approved_by` | SET NULL | yes |
 | `check_requests` | `requested_by` | NO ACTION | no |
+| `check_template_items` | `restock_reported_by` | SET NULL | yes |
 | `checkout_records` | `checked_in_by` | NO ACTION | yes |
 | `checkout_records` | `checked_out_by` | NO ACTION | yes |
 | `checkout_records` | `user_id` | CASCADE | no |
@@ -8693,7 +8736,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (187 references)
+### → `organizations` (188 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8721,6 +8764,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `basic_apparatus` | `organization_id` | CASCADE | no |
 | `budget_categories` | `organization_id` | CASCADE | no |
 | `budgets` | `organization_id` | CASCADE | no |
+| `check_item_deployed_lots` | `organization_id` | CASCADE | no |
 | `check_requests` | `organization_id` | CASCADE | no |
 | `checkout_records` | `organization_id` | CASCADE | no |
 | `competency_matrices` | `organization_id` | CASCADE | no |
@@ -8885,28 +8929,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
 
-### → `apparatus` (17 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
-| `apparatus_components` | `apparatus_id` | CASCADE | no |
-| `apparatus_documents` | `apparatus_id` | CASCADE | no |
-| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
-| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
-| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
-| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
-| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
-| `apparatus_operators` | `apparatus_id` | CASCADE | no |
-| `apparatus_photos` | `apparatus_id` | CASCADE | no |
-| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
-| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
-| `purchase_requests` | `apparatus_id` | SET NULL | yes |
-| `shift_equipment_checks` | `apparatus_id` | SET NULL | yes |
-| `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
-| `training_records` | `apparatus_id` | SET NULL | yes |
-| `training_sessions` | `apparatus_id` | SET NULL | yes |
-
 ### → `facilities` (17 references)
 
 | From table | Column | On delete | Nullable |
@@ -8928,6 +8950,27 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_utility_accounts` | `facility_id` | CASCADE | no |
 | `locations` | `facility_id` | SET NULL | yes |
 | `purchase_requests` | `facility_id` | SET NULL | yes |
+
+### → `apparatus` (16 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
+| `apparatus_components` | `apparatus_id` | CASCADE | no |
+| `apparatus_documents` | `apparatus_id` | CASCADE | no |
+| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
+| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
+| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
+| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
+| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
+| `apparatus_operators` | `apparatus_id` | CASCADE | no |
+| `apparatus_photos` | `apparatus_id` | CASCADE | no |
+| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
+| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
+| `purchase_requests` | `apparatus_id` | SET NULL | yes |
+| `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
+| `training_records` | `apparatus_id` | SET NULL | yes |
+| `training_sessions` | `apparatus_id` | SET NULL | yes |
 
 ### → `inventory_items` (16 references)
 
@@ -9029,6 +9072,19 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_courses` | `program_id` | SET NULL | yes |
 | `training_sessions` | `program_id` | SET NULL | yes |
 
+### → `prospective_members` (8 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_external_attendees` | `prospect_id` | SET NULL | yes |
+| `prospect_activity_log` | `prospect_id` | CASCADE | no |
+| `prospect_documents` | `prospect_id` | CASCADE | no |
+| `prospect_election_packages` | `prospect_id` | CASCADE | no |
+| `prospect_event_links` | `prospect_id` | CASCADE | no |
+| `prospect_interviews` | `prospect_id` | CASCADE | no |
+| `prospect_step_progress` | `prospect_id` | CASCADE | no |
+| `screening_records` | `prospect_id` | CASCADE | yes |
+
 ### → `training_requirements` (8 references)
 
 | From table | Column | On delete | Nullable |
@@ -9053,18 +9109,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `issuance_allowances` | `category_id` | CASCADE | no |
 | `item_variant_groups` | `category_id` | SET NULL | yes |
 | `reorder_requests` | `category_id` | SET NULL | yes |
-
-### → `prospective_members` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `prospect_activity_log` | `prospect_id` | CASCADE | no |
-| `prospect_documents` | `prospect_id` | CASCADE | no |
-| `prospect_election_packages` | `prospect_id` | CASCADE | no |
-| `prospect_event_links` | `prospect_id` | CASCADE | no |
-| `prospect_interviews` | `prospect_id` | CASCADE | no |
-| `prospect_step_progress` | `prospect_id` | CASCADE | no |
-| `screening_records` | `prospect_id` | CASCADE | yes |
 
 ### → `shifts` (7 references)
 
@@ -9313,6 +9357,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
 | `check_template_items` | `compartment_id` | CASCADE | no |
 
+### → `check_template_items` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_item_deployed_lots` | `template_item_id` | CASCADE | no |
+| `shift_equipment_check_items` | `template_item_id` | SET NULL | yes |
+
 ### → `course_cohorts` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -9419,12 +9470,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `votes` | `candidate_id` | CASCADE | no |
-
-### → `check_template_items` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `shift_equipment_check_items` | `template_item_id` | SET NULL | yes |
 
 ### → `checkout_records` (1 references)
 
@@ -9539,6 +9584,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `grant_applications` | `opportunity_id` | SET NULL | yes |
+
+### → `inventory_lots` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_item_deployed_lots` | `inventory_lot_id` | SET NULL | yes |
 
 ### → `ip_exceptions` (1 references)
 
@@ -9663,7 +9714,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `blocked_access_attempts` | `users` |
 | `candidates` | `elections`, `users` |
 | `check_template_compartments` | `check_template_compartments`, `equipment_check_templates` |
-| `check_template_items` | `apparatus_equipment`, `check_template_compartments`, `inventory_items` |
+| `check_template_items` | `apparatus_equipment`, `check_template_compartments`, `inventory_items`, `users` |
 | `compliance_profiles` | `compliance_configs` |
 | `country_block_rules` | `users` |
 | `department_message_reads` | `department_messages`, `users` |

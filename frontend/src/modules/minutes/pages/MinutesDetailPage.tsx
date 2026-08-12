@@ -27,6 +27,7 @@ import type {
   SectionEntry,
 } from '../types/minutes';
 import type { Event as EventDetail, EventListItem } from '../../../types/event';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -58,6 +59,7 @@ const ACTION_STATUS_BADGES: Record<string, string> = {
 };
 
 export const MinutesDetailPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const { minutesId } = useParams<{ minutesId: string }>();
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
@@ -228,7 +230,16 @@ export const MinutesDetailPage: React.FC = () => {
   };
 
   const handleDeleteSection = async (sectionKey: string) => {
-    if (!minutesId || !minutes || !confirm('Delete this section?')) return;
+    if (!minutesId || !minutes) return;
+    if (
+      !(await confirm({
+        title: 'Delete section',
+        message: 'Delete this section and its content from the minutes?',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     const filtered = minutes.sections.filter((s) => s.key !== sectionKey).map((s, i) => ({ ...s, order: i }));
 
     try {
@@ -323,7 +334,16 @@ export const MinutesDetailPage: React.FC = () => {
   };
 
   const handleDeleteMotion = async (motionId: string) => {
-    if (!minutesId || !confirm('Delete this motion?')) return;
+    if (!minutesId) return;
+    if (
+      !(await confirm({
+        title: 'Delete motion',
+        message: 'Delete this motion from the minutes?',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await minutesService.deleteMotion(minutesId, motionId);
       void fetchMinutes();
@@ -359,7 +379,16 @@ export const MinutesDetailPage: React.FC = () => {
   };
 
   const handleDeleteActionItem = async (itemId: string) => {
-    if (!minutesId || !confirm('Delete this action item?')) return;
+    if (!minutesId) return;
+    if (
+      !(await confirm({
+        title: 'Delete action item',
+        message: 'Delete this action item from the minutes?',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await minutesService.deleteActionItem(minutesId, itemId);
       void fetchMinutes();
@@ -411,7 +440,16 @@ export const MinutesDetailPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!minutesId || !confirm('Delete these draft minutes? This cannot be undone.')) return;
+    if (!minutesId) return;
+    if (
+      !(await confirm({
+        title: 'Delete draft minutes',
+        message: 'Delete these draft minutes? This cannot be undone.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep them',
+      }))
+    )
+      return;
     try {
       await minutesService.deleteMinutes(minutesId);
       toast.success('Minutes deleted');
@@ -505,7 +543,7 @@ export const MinutesDetailPage: React.FC = () => {
               )}
             </div>
             {linkedEvent ? (
-              <div className="mt-2 flex items-center gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-3">
                 <span className="rounded-sm bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                   Business Meeting
                 </span>
@@ -694,7 +732,7 @@ export const MinutesDetailPage: React.FC = () => {
 
           {/* Add Section Form */}
           {showAddSection && (
-            <div className="card-secondary flex items-end gap-3 p-4" role="form" aria-label="Add new section">
+            <div className="card-secondary flex flex-wrap items-end gap-3 p-4" role="form" aria-label="Add new section">
               <div className="flex-1">
                 <label htmlFor="new-section-title" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                   Section Title

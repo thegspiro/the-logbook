@@ -112,6 +112,11 @@ describe('StartSkillTestPage', () => {
      *  also what a screen-reader user needs to tell them apart. */
     const templateChangeButton = () => screen.queryByRole('button', { name: 'Change template' });
 
+    /** The pre-selection waits on a template fetch and then an effect. Testing
+     *  Library's 1s default is enough in isolation and marginal under a full
+     *  parallel run, where this was the one test in 2,650 that flaked. */
+    const SELECTION_TIMEOUT = { timeout: 5000 };
+
     it('should pre-select the template the user tapped', async () => {
       currentSearchParams = new URLSearchParams('template=tpl-2&from=member');
       renderWithRouter(<StartSkillTestPage />);
@@ -119,7 +124,7 @@ describe('StartSkillTestPage', () => {
       // The template name alone is not the signal — it is also a row in the
       // unselected picker. The step's Change button only exists once the
       // selection has applied, so wait on that.
-      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument());
+      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument(), SELECTION_TIMEOUT);
 
       expect(screen.getByText('Ladder Operations')).toBeInTheDocument();
       expect(screen.queryByPlaceholderText('Search templates...')).not.toBeInTheDocument();
@@ -130,7 +135,7 @@ describe('StartSkillTestPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<StartSkillTestPage />);
 
-      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument());
+      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument(), SELECTION_TIMEOUT);
       await user.click(templateChangeButton() as HTMLElement);
 
       expect(screen.getByPlaceholderText('Search templates...')).toBeInTheDocument();
@@ -143,7 +148,7 @@ describe('StartSkillTestPage', () => {
 
       await waitFor(() => {
         expect(mockToastError).toHaveBeenCalledWith('That test is no longer available — choose one below.');
-      });
+      }, SELECTION_TIMEOUT);
       expect(screen.getByPlaceholderText('Search templates...')).toBeInTheDocument();
     });
 
@@ -160,8 +165,6 @@ describe('StartSkillTestPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<StartSkillTestPage />);
 
-      // Clear the self-default so the search box is on screen.
-      await user.click(await screen.findByRole('button', { name: 'Change candidate' }));
       await user.type(screen.getByPlaceholderText('Type a name to search...'), 'a');
 
       // Long enough to outlast the debounce, so this is "never fired" rather
@@ -176,8 +179,7 @@ describe('StartSkillTestPage', () => {
       mockSearchCandidates.mockResolvedValue([{ id: 'user-9', name: 'Dana Whitfield' }]);
       renderWithRouter(<StartSkillTestPage />);
 
-      await user.click(await screen.findByRole('button', { name: 'Change candidate' }));
-      await user.type(screen.getByPlaceholderText('Type a name to search...'), 'whit');
+      await user.type(await screen.findByPlaceholderText('Type a name to search...'), 'whit');
 
       expect(await screen.findByText('Dana Whitfield')).toBeInTheDocument();
       // The query goes to the server — the page never holds a roster to filter.
@@ -189,14 +191,15 @@ describe('StartSkillTestPage', () => {
       mockSearchCandidates.mockResolvedValue([{ id: 'user-9', name: 'Dana Whitfield' }]);
       renderWithRouter(<StartSkillTestPage />);
 
-      await user.click(await screen.findByRole('button', { name: 'Change candidate' }));
-      await user.type(screen.getByPlaceholderText('Type a name to search...'), 'whit');
+      await user.type(await screen.findByPlaceholderText('Type a name to search...'), 'whit');
       await user.click(await screen.findByText('Dana Whitfield'));
 
-      // Selecting clears the search box, which empties the results — the name
-      // has to survive that, since it is no longer in any list.
-      expect(await screen.findByText('Dana Whitfield')).toBeInTheDocument();
-      expect(screen.queryByPlaceholderText('Type a name to search...')).not.toBeInTheDocument();
+      // Picking clears the search box, which empties the results — the name has
+      // to survive that, since it is no longer in any list. The box itself
+      // stays: adding the next of a squad is one more tap, not a trip back
+      // through this page.
+      expect(await screen.findByRole('button', { name: 'Remove Dana Whitfield' })).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Type a name to search...')).toBeInTheDocument();
     });
 
     it('should default a members practice run to themselves without a lookup', async () => {
@@ -223,6 +226,112 @@ describe('StartSkillTestPage', () => {
         'href',
         '/training/admin?page=skills-testing&tab=tests'
       );
+    });
+  });
+
+  // Drill night is a batch: twelve people through one SCBA evolution used to
+  // mean twelve trips back through this page, re-picking the same sheet.
+  describe('Testing a squad against one sheet', () => {
+    /** Clears the member self-default, then picks each name in turn.
+     *  The mocked user is a plain member, so the page has already defaulted
+     *  their own practice run to themselves. */
+    const pickCandidates = async (user: ReturnType<typeof userEvent.setup>, names: string[]) => {
+      const self = screen.queryByRole('button', { name: 'Remove Alex Rivera' });
+      if (self) await user.click(self);
+      for (const name of names) {
+        mockSearchCandidates.mockResolvedValue([{ id: `user-${name}`, name }]);
+        await user.clear(screen.getByPlaceholderText('Type a name to search...'));
+        await user.type(screen.getByPlaceholderText('Type a name to search...'), name.slice(0, 3));
+        await user.click(await screen.findByText(name));
+      }
+    };
+
+    it('creates one test per candidate and opens the first', async () => {
+      const user = userEvent.setup();
+      mockCreateTest.mockImplementation((data: { candidate_id: string }) =>
+        Promise.resolve({ id: `test-${data.candidate_id}` })
+      );
+      currentSearchParams = new URLSearchParams('template=tpl-1');
+      renderWithRouter(<StartSkillTestPage />);
+      await screen.findByPlaceholderText('Type a name to search...');
+
+      await pickCandidates(user, ['Ana', 'Bem']);
+      await user.click(screen.getByRole('button', { name: /start 2 evaluations/i }));
+
+      expect(mockCreateTest).toHaveBeenCalledTimes(2);
+      expect(mockNavigate).toHaveBeenCalledWith('/training/skills-testing/test/test-user-Ana/active');
+    });
+
+    it('sends the same template and mode for every candidate', async () => {
+      const user = userEvent.setup();
+      mockCreateTest.mockResolvedValue({ id: 'test-1' });
+      currentSearchParams = new URLSearchParams('template=tpl-1');
+      renderWithRouter(<StartSkillTestPage />);
+      await screen.findByPlaceholderText('Type a name to search...');
+
+      await pickCandidates(user, ['Ana', 'Bem']);
+      await user.click(screen.getByRole('button', { name: /start 2 evaluations/i }));
+
+      for (const call of mockCreateTest.mock.calls) {
+        expect(call[0]).toMatchObject({ template_id: 'tpl-1' });
+      }
+      expect(mockCreateTest.mock.calls.map((c) => (c[0] as { candidate_id: string }).candidate_id)).toEqual([
+        'user-Ana',
+        'user-Bem',
+      ]);
+    });
+
+    // A candidate out of attempts is a fact about them, not about the drill.
+    it('starts the rest of the squad when one candidate is refused', async () => {
+      const user = userEvent.setup();
+      mockCreateTest.mockRejectedValueOnce(new Error('No attempts remaining')).mockResolvedValueOnce({ id: 'test-2' });
+      currentSearchParams = new URLSearchParams('template=tpl-1');
+      renderWithRouter(<StartSkillTestPage />);
+      await screen.findByPlaceholderText('Type a name to search...');
+
+      await pickCandidates(user, ['Ana', 'Bem']);
+      await user.click(screen.getByRole('button', { name: /start 2 evaluations/i }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/training/skills-testing/test/test-2/active');
+      expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('No attempts remaining'));
+    });
+
+    it('reports the failure and goes nowhere when every candidate is refused', async () => {
+      const user = userEvent.setup();
+      mockCreateTest.mockRejectedValue(new Error('No attempts remaining'));
+      currentSearchParams = new URLSearchParams('template=tpl-1');
+      renderWithRouter(<StartSkillTestPage />);
+      await screen.findByPlaceholderText('Type a name to search...');
+
+      await pickCandidates(user, ['Ana']);
+      await user.click(screen.getByRole('button', { name: /begin/i }));
+
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('No attempts remaining'));
+    });
+
+    it('picking the same person twice adds them once', async () => {
+      const user = userEvent.setup();
+      currentSearchParams = new URLSearchParams('template=tpl-1');
+      renderWithRouter(<StartSkillTestPage />);
+      await screen.findByPlaceholderText('Type a name to search...');
+
+      await pickCandidates(user, ['Ana', 'Ana']);
+
+      expect(screen.getAllByRole('button', { name: 'Remove Ana' })).toHaveLength(1);
+    });
+
+    it('a candidate can be taken back off the list', async () => {
+      const user = userEvent.setup();
+      currentSearchParams = new URLSearchParams('template=tpl-1');
+      renderWithRouter(<StartSkillTestPage />);
+      await screen.findByPlaceholderText('Type a name to search...');
+
+      await pickCandidates(user, ['Ana', 'Bem']);
+      await user.click(screen.getByRole('button', { name: 'Remove Ana' }));
+
+      expect(screen.queryByRole('button', { name: 'Remove Ana' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Remove Bem' })).toBeInTheDocument();
     });
   });
 });

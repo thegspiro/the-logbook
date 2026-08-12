@@ -1568,4 +1568,121 @@ adding member conveniences, and fixing correctness/security issues.
 
 ---
 
-*Last Updated: July 16, 2026*
+## Supply Tracking: Inventory ↔ Equipment Checks (2026-08-10)
+
+An equipment check produces a **report**: a scheduled, signed pass over a whole
+apparatus. It was also the only write path into a truck's stock, so a crew that
+used the last of something mid-shift had nowhere to put that fact. This closes
+the loop between the shelf (Inventory) and the truck (Equipment Checks).
+
+### New pages
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/scheduling/supply/expiring` | Expiring on Apparatus — the supply worklist | any of `scheduling.manage`, `equipment_check.view`, `inventory.view` |
+| `/scheduling/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+
+The worklist is reached from the **Supply** tile on the Scheduling hub (which
+carries a count badge) and from the Inventory Admin Hub. The apparatus view is
+reached from **My Equipment Checklists → Apparatus Inventory**.
+
+### Schema
+
+| Object | Purpose |
+|--------|---------|
+| `check_item_deployed_lots` | One row per lot's presence on one position. A position's count is their **sum**, its expiration the **earliest**. `inventory_lot_id` is `SET NULL` and lot number/expiration are **snapshotted**, so a consumed shelf lot does not erase the truck's record |
+| `check_template_items.quantity_on_truck` | The live count. **NULL = never counted**; the target stands in |
+| `check_template_items.restock_needed` (+ `_reported_by` / `_at` / `_note`) | A report raised by whoever used the unit, at the time they used it |
+| `shift_equipment_check_items.expiration_found` | The counterpart to `serial_found` / `lot_found`, written back onto the template item on submit |
+
+### Endpoints
+
+All under `/api/v1/equipment-checks`. **Writes accept `equipment_check.submit`**
+— the default member position — as well as the manage permissions.
+
+```
+GET    /supply/expiring-items?days_ahead=30
+GET    /supply/item-deployments/{inventory_item_id}
+GET    /apparatus/{apparatus_id}/inventory
+POST   /items/{id}/used            DELETE /items/{id}/used
+PUT    /items/{id}/quantity        POST   /items/{id}/swap
+GET    /items/{id}/deployed-lots   PUT    /items/{id}/deployed-lots/{lot_id}
+GET    /templates/{id}/inventory-matches
+POST   /templates/{id}/inventory-links
+```
+
+### Behaviour that is easy to get wrong
+
+- **Expiry is decided server-side**, recomputed from the soonest date aboard. A
+  client-supplied `is_expired` is ignored: that flag is what force-fails a
+  safety-critical item.
+- **Expired shelf stock is not ready stock** — excluded from the count, flagged
+  in the payload, and refused by the swap.
+- **Consumption draws first-expiring-first-out.** Undated lots sort last.
+- **A recount reconciles against the lots**: short comes off soonest-first, over
+  lands in an undated row.
+- **A restock report clears only when the truck is back at target.** Two of four
+  back is still a truck short two.
+- **A quantity item arrives on the check form carrying the running on-truck
+  count and with no pass/fail status.** Seeding a status let a crew submit a
+  sixty-item check untouched and file a complete report against a truck nobody
+  had looked at.
+
+### Also in this release
+
+- **Catalog linking at add time.** The template builder's quick-add bar searches
+  the inventory catalog as you type; the toolbar carries a linked/unlinked count.
+  A reviewed bulk pass proposes a link for every unlinked position on an existing
+  template — **only exact name matches are pre-selected**, because "Oxygen Mask"
+  scores high against both the adult and the pediatric mask.
+- **A weekly `supply_expiration_alerts` task**, split by whether an in-date lot is
+  actually behind each row.
+- **A lot swap now writes a `swap` changelog entry** carrying the previous and new
+  lot/expiration and the shelf lot it came from. It previously took a `user`
+  parameter and never used it, so the one change to a template nobody typed was
+  also the only one with no author.
+
+### Migrations
+
+- `20260810_0005` — `shift_equipment_check_items.expiration_found`
+- `20260810_0006` — `check_template_items.restock_needed` + three companions,
+  `idx_check_item_restock`
+- `20260810_0007` — `check_template_items.quantity_on_truck`
+- `20260810_0008` — `check_item_deployed_lots` + data migration of existing
+  single-lot rows
+
+Renumbered from `_0003`–`_0006` after main landed the email-template pair at
+those ids. **Run `alembic heads` after merging main** — a duplicate revision id
+is not a conflict git can see, and the backend crashes on startup rather than at
+review.
+
+**Source:** `models/apparatus.py`, `schemas/equipment_check.py`,
+`services/equipment_check_service.py`, `services/inventory_service.py`,
+`api/v1/endpoints/equipment_check.py`, `api/v1/endpoints/inventory.py`,
+`services/scheduled_tasks.py`.
+
+---
+
+## Crew Board & Dashboard Fixes (2026-08-10)
+
+- **A designated shift officer held no seat.** `_sync_officer_assignment` read
+  `BasicApparatus.positions` alone to decide whether the board had an "officer"
+  position, while the response builder resolves the list differently — the
+  apparatus's riding positions when it has them, the shift's own otherwise. The
+  two disagreed on **exactly the departments running the full Apparatus module**,
+  which deliberately does not model riding positions. The panel named a Shift
+  Officer who appeared on no roster and counted toward no staffing total. The
+  sync now resolves seats the same way the response does.
+- **Today's shift read as yesterday's.** `shift_date` is a calendar date with no
+  time and no zone; padding it to `T00:00:00` and handing it to a zone-aware
+  formatter rendered Aug 10 as "Sun, Aug 9" for any viewer west of the browser's
+  offset. `formatCalendarDate()` anchors and formats in UTC, and is used for
+  shift dates and leave-of-absence ranges.
+- **Two filter controls painted over their neighbours.** `form-input` carries
+  `w-full`; pinned `sm:flex-none` with no width of its own, that resolves against
+  the whole row rather than the space beside the icon and label preceding it.
+- **"1 calls"** — pluralised on the report card and in the review modal.
+
+---
+
+*Last Updated: August 10, 2026*

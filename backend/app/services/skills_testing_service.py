@@ -39,6 +39,9 @@ def build_template_snapshot(template: SkillTemplate) -> dict[str, Any]:
         "passing_percentage": template.passing_percentage,
         "require_all_critical": template.require_all_critical,
         "time_limit_seconds": template.time_limit_seconds,
+        "score_pass_fail_criteria": bool(
+            getattr(template, "score_pass_fail_criteria", False)
+        ),
     }
 
 
@@ -61,6 +64,11 @@ def resolve_test_template(
         passing_percentage=snapshot.get("passing_percentage"),
         require_all_critical=snapshot.get("require_all_critical"),
         time_limit_seconds=snapshot.get("time_limit_seconds"),
+        # Absent from snapshots taken before the setting existed, and absence
+        # must read as "off" — those tests were scored on point criteria alone,
+        # and defaulting to on would silently re-score every historical result
+        # the moment its scorecard is next opened.
+        score_pass_fail_criteria=bool(snapshot.get("score_pass_fail_criteria", False)),
         # Display name always comes from the live template — a renamed template
         # is the same template, and the snapshot exists to freeze structure and
         # scoring rules, not identity.
@@ -89,6 +97,293 @@ def resolve_elapsed_seconds(
     return None
 
 
+def _find_section_result(
+    section_results: list[Any], section_idx: int, section: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The recorded result for one template section, matched by id or by name."""
+    section_id = f"section-{section_idx}"
+    section_name = section.get("name")
+    for sr in section_results:
+        if not isinstance(sr, dict):
+            continue
+        if sr.get("section_id") == section_id or sr.get("section_name") == section_name:
+            return sr
+    return None
+
+
+def _find_criterion_result(
+    section_result: dict[str, Any] | None,
+    section_idx: int,
+    criterion_idx: int,
+    criterion: dict[str, Any],
+) -> dict[str, Any] | None:
+    """The recorded result for one criterion, matched by id or by label.
+
+    Criterion identity is positional (``criterion-<section>-<index>``), which is
+    why tests are scored against a frozen template snapshot; the label match is
+    the fallback for results written by clients that sent labels instead.
+    """
+    if not section_result:
+        return None
+    criterion_id = f"criterion-{section_idx}-{criterion_idx}"
+    criterion_label = criterion.get("label")
+    for cr in section_result.get("criteria_results", []) or []:
+        if not isinstance(cr, dict):
+            continue
+        if (
+            cr.get("criterion_id") == criterion_id
+            or cr.get("criterion_label") == criterion_label
+        ):
+            return cr
+    return None
+
+
+def _criterion_point_value(
+    criterion: dict[str, Any], score_pass_fail: bool
+) -> float | None:
+    """What this criterion is worth toward the percentage, or None if unscored.
+
+    ``score`` criteria have always carried points. Pass/fail criteria carry them
+    only when the template opts in: a department that writes its knowledge
+    questions as pass/fail steps expects a wrong answer to cost something, but
+    turning that on by default would change the meaning of every percentage
+    already on record.
+
+    Checklist and time-limit criteria stay out of the point pool deliberately.
+    A checklist is partially completable and would need its own earned-fraction
+    rule, and a time limit is a gate on the evolution rather than a measure of
+    how well it was performed — both are better expressed as critical criteria.
+    """
+    ctype = criterion.get("type")
+    if ctype == "score":
+        max_score = criterion.get("max_score")
+        if max_score is None or max_score <= 0:
+            return None
+        return float(max_score)
+    if ctype == "pass_fail" and score_pass_fail:
+        # An author may weight a question by giving it a max_score; a plain
+        # pass/fail step is worth one point, as on a paper skill sheet.
+        max_score = criterion.get("max_score")
+        if max_score is not None and max_score > 0:
+            return float(max_score)
+        return 1.0
+    return None
+
+
+def _criterion_outcome(criterion: dict[str, Any], result: dict[str, Any] | None) -> str:
+    """How one criterion should be tallied on a scorecard: pass, fail, or blank.
+
+    Non-critical ``score`` criteria are deliberately excluded ("points"). The
+    examiner screen stamps ``passed: true`` on every one of them regardless of
+    the number recorded — only critical steps can fail on points — so counting
+    that flag reported a step scored 0 of 1 as "passed". Their contribution is
+    the point total shown alongside, and nothing else.
+    """
+    ctype = criterion.get("type")
+    if ctype == "statement":
+        return "statement"
+
+    is_critical = bool(criterion.get("required", False))
+    if ctype == "score" and not is_critical:
+        return "points"
+
+    if result is None:
+        return "not_scored"
+    if ctype == "score":
+        if result.get("score") is None:
+            return "not_scored"
+        passing_score = criterion.get("passing_score") or 0
+        return "passed" if result.get("score") >= passing_score else "failed"
+
+    passed = result.get("passed")
+    if passed is None:
+        return "not_scored"
+    return "passed" if passed else "failed"
+
+
+def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str, Any]:
+    """The arithmetic behind a test's percentage, section by section.
+
+    Exists so a scorecard can show its own working. The overall percentage is
+    driven entirely by point-carrying criteria, which means whole sections of a
+    template can contribute nothing to it — a set of pass/fail knowledge
+    questions scored nothing at all until this was made configurable. A reader
+    who cannot see which sections counted has no way to tell a 86% earned
+    across the whole sheet from one that ignored half of it.
+
+    This is the single implementation of the scoring rules;
+    :func:`calculate_test_result` reads its totals rather than recomputing them.
+    """
+    section_results = test.section_results or []
+    template_sections = template.sections or []
+    score_pass_fail = bool(getattr(template, "score_pass_fail_criteria", False))
+    require_all_critical = bool(getattr(template, "require_all_critical", False))
+
+    total_earned = 0.0
+    total_available = 0.0
+    sections: list[dict[str, Any]] = []
+    critical_failures: list[dict[str, Any]] = []
+
+    for section_idx, section in enumerate(template_sections):
+        if not isinstance(section, dict):
+            continue
+        sr_match = _find_section_result(section_results, section_idx, section)
+        criteria = section.get("criteria", []) or []
+
+        earned = 0.0
+        available = 0.0
+        tally = {"passed": 0, "failed": 0, "not_scored": 0, "statements": 0}
+
+        for ci, criterion in enumerate(criteria):
+            if not isinstance(criterion, dict):
+                continue
+            cr_result = _find_criterion_result(sr_match, section_idx, ci, criterion)
+
+            point_value = _criterion_point_value(criterion, score_pass_fail)
+            if point_value is not None:
+                available += point_value
+                if criterion.get("type") == "score":
+                    recorded = (cr_result or {}).get("score")
+                    if recorded is not None:
+                        earned += recorded
+                elif (cr_result or {}).get("passed") is True:
+                    earned += point_value
+
+            outcome = _criterion_outcome(criterion, cr_result)
+            if outcome == "statement":
+                tally["statements"] += 1
+            elif outcome in tally:
+                tally[outcome] += 1
+
+            # A required criterion left blank scores exactly like a failed one,
+            # so it is reported as a reason for the outcome rather than left to
+            # look like a harmless omission.
+            if (
+                require_all_critical
+                and criterion.get("required", False)
+                and criterion.get("type") != "statement"
+                and outcome in ("failed", "not_scored")
+            ):
+                critical_failures.append(
+                    {
+                        "section_name": section.get("name"),
+                        "criterion_label": criterion.get("label"),
+                        "reason": outcome,
+                    }
+                )
+
+        total_earned += earned
+        total_available += available
+        sections.append(
+            {
+                # Positional identity, the same scheme section results and the
+                # frontend's hydrated sections use. Matching on it means a
+                # client never has to assume this list lines up index-for-index
+                # with the template's own (non-dict entries are skipped here).
+                "section_id": f"section-{section_idx}",
+                "section_name": section.get("name"),
+                "counts_toward_score": available > 0,
+                "earned": earned if available > 0 else None,
+                "available": available if available > 0 else None,
+                **tally,
+            }
+        )
+
+    if total_available > 0:
+        method = "points"
+        percentage: float | None = round((total_earned / total_available) * 100, 1)
+    else:
+        # Templates built entirely from pass/fail, checklist or timed steps
+        # carry no point pool. Older clients wrote a per-section percentage;
+        # averaging those is the only score such a test can have.
+        method = "section_average"
+        section_scores = [
+            sr["section_score"]
+            for sr in section_results
+            if isinstance(sr, dict) and sr.get("section_score") is not None
+        ]
+        percentage = (
+            round(sum(section_scores) / len(section_scores), 1)
+            if section_scores
+            else None
+        )
+        if percentage is None:
+            method = "none"
+
+    passing_percentage = getattr(template, "passing_percentage", None)
+    meets_threshold = True
+    if passing_percentage is not None and percentage is not None:
+        meets_threshold = percentage >= passing_percentage
+
+    return {
+        "method": method,
+        "score_pass_fail_criteria": score_pass_fail,
+        "earned": total_earned,
+        "available": total_available,
+        "percentage": percentage,
+        "passing_percentage": passing_percentage,
+        "meets_threshold": meets_threshold,
+        "require_all_critical": require_all_critical,
+        "critical_failures": critical_failures,
+        "sections": sections,
+    }
+
+
+def iter_criterion_rows(test: SkillTest, template: Any):
+    """Yield one flat row per criterion on ``test``, in sheet order.
+
+    Exists so an export or a printed scorecard can list what was recorded
+    against each step without re-deriving the matching and outcome rules that
+    :func:`build_score_breakdown` already owns. Those rules are not obvious —
+    results are matched positionally with a label fallback, statements are not
+    judged, and a non-critical scored step is never reported as passed or
+    failed — and a second implementation of them would drift the moment one
+    side was fixed.
+
+    Callers must pass the template :func:`resolve_test_template` returned, not
+    the live row: a test is judged against the structure frozen when it was
+    created.
+
+    Each row is a dict with ``section_index``, ``section_name``,
+    ``criterion_index``, ``label``, ``type``, ``critical``, ``outcome`` (the
+    same vocabulary ``_criterion_outcome`` uses), and whichever of ``score`` /
+    ``max_score`` / ``time_seconds`` / ``checklist`` carries the evidence for
+    that type, plus the examiner's ``notes``.
+    """
+    section_results = getattr(test, "section_results", None) or []
+    template_sections = getattr(template, "sections", None) or []
+
+    for section_idx, section in enumerate(template_sections):
+        if not isinstance(section, dict):
+            continue
+        sr_match = _find_section_result(section_results, section_idx, section)
+
+        for ci, criterion in enumerate(section.get("criteria", []) or []):
+            if not isinstance(criterion, dict):
+                continue
+            cr_result = _find_criterion_result(sr_match, section_idx, ci, criterion)
+            recorded = cr_result or {}
+            checklist = recorded.get("checklist_completed")
+
+            yield {
+                "section_index": section_idx,
+                "section_name": section.get("name") or f"Section {section_idx + 1}",
+                "criterion_index": ci,
+                "label": criterion.get("label") or f"Criterion {ci + 1}",
+                "type": criterion.get("type") or "pass_fail",
+                "critical": bool(criterion.get("required", False)),
+                "outcome": _criterion_outcome(criterion, cr_result),
+                "score": recorded.get("score"),
+                "max_score": criterion.get("max_score"),
+                "time_seconds": recorded.get("time_seconds"),
+                # Rendered as "3/5 ticked" by callers; the raw list is kept so a
+                # caller that wants the individual boxes still has them.
+                "checklist": checklist if isinstance(checklist, list) else None,
+                "checklist_items": criterion.get("checklist_items") or None,
+                "notes": recorded.get("notes"),
+            }
+
+
 def calculate_test_result(
     test: SkillTest, template: SkillTemplate
 ) -> tuple[float | None, str]:
@@ -98,148 +393,12 @@ def calculate_test_result(
     Returns:
         Tuple of (overall_score, result_string)
     """
-    section_results = test.section_results or []
-    template_sections = template.sections or []
-
-    if not section_results:
+    if not (test.section_results or []):
         return None, "fail"
 
-    # Calculate overall score using point-based totals from score criteria.
-    # Sum earned points and total available points across all sections.
-    total_earned = 0.0
-    total_available = 0.0
-    has_score_criteria = False
-
-    for section_idx, section in enumerate(template_sections):
-        if not isinstance(section, dict):
-            continue
-        section_id = f"section-{section_idx}"
-        section_name = section.get("name")
-
-        # Find matching section result
-        sr_match = None
-        for sr in section_results:
-            if not isinstance(sr, dict):
-                continue
-            if (
-                sr.get("section_id") == section_id
-                or sr.get("section_name") == section_name
-            ):
-                sr_match = sr
-                break
-
-        criteria = section.get("criteria", [])
-        for ci, criterion in enumerate(criteria):
-            if not isinstance(criterion, dict):
-                continue
-            if criterion.get("type") != "score":
-                continue
-            max_score = criterion.get("max_score")
-            if max_score is None or max_score <= 0:
-                continue
-
-            has_score_criteria = True
-            total_available += max_score
-
-            if sr_match:
-                criterion_id = f"criterion-{section_idx}-{ci}"
-                criterion_label = criterion.get("label")
-                for cr in sr_match.get("criteria_results", []):
-                    if not isinstance(cr, dict):
-                        continue
-                    if (
-                        cr.get("criterion_id") == criterion_id
-                        or cr.get("criterion_label") == criterion_label
-                    ):
-                        earned = cr.get("score")
-                        if earned is not None:
-                            total_earned += earned
-                        break
-
-    # Use point-based totals when score criteria exist, otherwise fall back
-    # to averaging section_score percentages
-    if has_score_criteria and total_available > 0:
-        overall_score: float | None = round((total_earned / total_available) * 100, 1)
-    else:
-        section_scores = []
-        for sr in section_results:
-            if isinstance(sr, dict) and sr.get("section_score") is not None:
-                section_scores.append(sr["section_score"])
-        overall_score = (
-            round(sum(section_scores) / len(section_scores), 1)
-            if section_scores
-            else None
-        )
-
-    # Check passing percentage
-    passes_percentage = True
-    if template.passing_percentage is not None and overall_score is not None:
-        passes_percentage = overall_score >= template.passing_percentage
-
-    # Check critical criteria (required criteria must all pass)
-    all_critical_passed = True
-    if template.require_all_critical:
-        for section_idx, section in enumerate(template_sections):
-            if not isinstance(section, dict):
-                continue
-            criteria = section.get("criteria", [])
-            section_id = f"section-{section_idx}"
-            section_name = section.get("name")
-
-            # Find matching section result (by ID or name)
-            section_result = None
-            for sr in section_results:
-                if not isinstance(sr, dict):
-                    continue
-                if (
-                    sr.get("section_id") == section_id
-                    or sr.get("section_name") == section_name
-                ):
-                    section_result = sr
-                    break
-
-            if not section_result:
-                # If a section with required criteria has no result, it fails
-                if any(
-                    c.get("required", False) for c in criteria if isinstance(c, dict)
-                ):
-                    all_critical_passed = False
-                continue
-
-            criteria_results = section_result.get("criteria_results", [])
-            for ci, criterion in enumerate(criteria):
-                if not isinstance(criterion, dict) or not criterion.get(
-                    "required", False
-                ):
-                    continue
-                # Statement criteria are read-only informational items
-                # and always count as passed
-                if criterion.get("type") == "statement":
-                    continue
-                criterion_id = f"criterion-{section_idx}-{ci}"
-                criterion_label = criterion.get("label")
-
-                # Find matching criterion result (by ID or label)
-                cr_result = None
-                for cr in criteria_results:
-                    if not isinstance(cr, dict):
-                        continue
-                    if (
-                        cr.get("criterion_id") == criterion_id
-                        or cr.get("criterion_label") == criterion_label
-                    ):
-                        cr_result = cr
-                        break
-                if not cr_result or not cr_result.get("passed", False):
-                    all_critical_passed = False
-
-    # Determine final result
-    if passes_percentage and all_critical_passed:
-        test_result = "pass"
-    else:
-        test_result = "fail"
-
-    return overall_score, test_result
+    breakdown = build_score_breakdown(test, template)
+    passed = breakdown["meets_threshold"] and not breakdown["critical_failures"]
+    return breakdown["percentage"], "pass" if passed else "fail"
 
 
 # A view tier that is not a disclosure setting: the reader may see that the
@@ -267,6 +426,28 @@ def is_pending_validation(test: SkillTest) -> bool:
     if getattr(test, "status", None) != SkillTestStatus.COMPLETED.value:
         return False
     return getattr(test, "validated_at", None) is None
+
+
+def is_under_correction(test: SkillTest) -> bool:
+    """Whether ``test`` is a submission an officer sent back, not yet resubmitted.
+
+    Deliberately *not* folded into ``is_pending_validation``: a returned test is
+    not in anyone's review queue, and the officer counts and the queue filter
+    both read that predicate. This one answers a different question — has this
+    result been submitted once and bounced? — and only the disclosure rules ask
+    it.
+
+    A test reopened this way sits at ``in_progress`` with every mark intact, so
+    without this it reads to the disclosure rules as an evaluation still in
+    progress and discloses in full.
+    """
+    from app.models.skills_testing import SkillTestStatus
+
+    if getattr(test, "is_practice", False):
+        return False
+    if getattr(test, "returned_at", None) is None:
+        return False
+    return getattr(test, "status", None) == SkillTestStatus.IN_PROGRESS.value
 
 
 class AttemptLimitReached(Exception):
@@ -636,7 +817,10 @@ def resolve_result_view(
         if not getattr(test, "released_at", None):
             return ResultDisclosure.NONE.value
 
-    if is_pending_validation(test):
+    # A returned test is between submissions: it has been sat and marked, but
+    # the officer bounced it and nothing about it stands. Same answer as a
+    # pending one — the reader may know it exists, not how it went.
+    if is_pending_validation(test) or is_under_correction(test):
         return RESULT_VIEW_PENDING
 
     return disclosure
@@ -669,6 +853,21 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
         withheld["overall_score"] = None
         withheld["section_results"] = []
         withheld["notes"] = None
+        # The breakdown is the score restated as arithmetic — leaving it would
+        # hand over the very outcome the rest of this branch withholds.
+        withheld["score_breakdown"] = None
+        # The correction trail is the officer's business with the examiner.
+        # "Step 4 contradicts your note" tells the candidate both that something
+        # was wrong with their evaluation and what the examiner is being asked
+        # to change, before anyone has decided the result stands.
+        withheld["return_reason"] = None
+        withheld["returned_at"] = None
+        withheld["returned_by"] = None
+        withheld["returned_by_name"] = None
+        # Zero rather than None: the field is a non-optional count, and zero is
+        # what a test that was never returned carries — so a returned one is
+        # indistinguishable from a clean one, which is the point.
+        withheld["return_count"] = 0
         return withheld
 
     if view != ResultDisclosure.SCORES.value:
@@ -676,6 +875,14 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
 
     redacted = dict(payload)
     redacted["notes"] = None
+    # Return-for-correction metadata is internal reviewer commentary, not part
+    # of the candidate's score.  In particular, exposing the reason would
+    # defeat a scores-only policy's redaction of written notes.
+    redacted["return_reason"] = None
+    redacted["returned_at"] = None
+    redacted["returned_by"] = None
+    redacted["returned_by_name"] = None
+    redacted["return_count"] = 0
 
     sections = redacted.get("section_results") or []
     clean_sections = []

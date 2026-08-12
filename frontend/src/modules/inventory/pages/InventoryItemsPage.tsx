@@ -20,6 +20,7 @@ import {
   ArrowUpDown,
   Plus,
   Package,
+  PackagePlus,
   AlertTriangle,
   Wrench,
   ChevronRight,
@@ -27,6 +28,8 @@ import {
   UserPlus,
   CheckCircle2,
   XCircle,
+  ListPlus,
+  Upload,
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -42,6 +45,8 @@ import { Modal } from '../../../components/Modal';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import { ItemFormModal } from '../components/ItemFormModal';
+import ReceiveStockModal from '../components/ReceiveStockModal';
+import BulkAddItemsModal from '../components/BulkAddItemsModal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import type {
@@ -61,6 +66,7 @@ import {
   getConditionColor,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 const PAGE_SIZE = 50;
 const SORT_COLS = [
@@ -78,6 +84,11 @@ function locLabel(item: InventoryItem, locs: Location[]): string {
 }
 
 function qtyLabel(item: InventoryItem): string {
+  // For an item kept as dated stock lots, the lots are the count. `quantity`
+  // is a separate ledger that lot bookkeeping never writes to, so showing it
+  // here would report a stale number for every consumable the supply officer
+  // manages — the same disagreement the reorder alert had to be taught about.
+  if (item.is_lot_stocked) return String(item.lot_stock ?? 0);
   if (item.tracking_type !== 'pool') return '-';
   const available = item.quantity - item.quantity_issued;
   return `${available} / ${item.quantity}`;
@@ -235,6 +246,14 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   </td>
                   <td data-label="Qty" className="text-theme-text-muted px-3 py-3 text-center tabular-nums">
                     {qtyLabel(item)}
+                    {item.is_lot_stocked && (
+                      <span
+                        className="text-theme-text-muted block text-[10px] leading-tight"
+                        title="Ready units across in-date stock lots. Expired lots are not counted — they cannot be issued or swapped onto an apparatus."
+                      >
+                        in-date lots
+                      </span>
+                    )}
                   </td>
                   <td data-label="Condition" className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>
                     {item.condition.replace(/_/g, ' ')}
@@ -298,6 +317,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
 const InventoryItemsPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
 
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -324,6 +344,8 @@ const InventoryItemsPage: React.FC = () => {
   const [skip, setSkip] = useState(0);
   const [selIds, setSelIds] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
+  const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState('');
@@ -496,7 +518,15 @@ const InventoryItemsPage: React.FC = () => {
   const printLabels = () => void navigate(`/inventory/print-labels?ids=${Array.from(selIds).join(',')}`);
 
   const bulkRetire = async () => {
-    if (!confirm(`Retire ${selIds.size} item(s)? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: 'Retire items',
+        message: `Retire ${selIds.size} item(s)? This cannot be undone.`,
+        confirmLabel: 'Retire',
+        cancelLabel: 'Keep them',
+      }))
+    )
+      return;
     try {
       await Promise.all(Array.from(selIds).map((id) => inventoryService.retireItem(id)));
       toast.success(`${selIds.size} item(s) retired`);
@@ -646,6 +676,32 @@ const InventoryItemsPage: React.FC = () => {
             >
               <UserPlus className="h-4 w-4" /> Assign
             </button>
+          )}
+          {canManage && (
+            <button
+              onClick={() => setReceiveOpen(true)}
+              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+            >
+              <PackagePlus className="h-4 w-4" /> Receive Stock
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={() => setBulkAddOpen(true)}
+              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+              title="Paste a list of item names"
+            >
+              <ListPlus className="h-4 w-4" /> Add Several
+            </button>
+          )}
+          {canManage && (
+            <Link
+              to="/inventory/import"
+              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+              title="Import items from a CSV file"
+            >
+              <Upload className="h-4 w-4" /> Import CSV
+            </Link>
           )}
           {canManage && (
             <button onClick={openAdd} className="btn-info btn-md hidden items-center gap-2 sm:inline-flex">
@@ -990,6 +1046,14 @@ const InventoryItemsPage: React.FC = () => {
         locations={locations}
         storageAreas={storageAreas}
         editItem={editItem}
+      />
+
+      <ReceiveStockModal isOpen={receiveOpen} onClose={() => setReceiveOpen(false)} onReceived={refresh} />
+      <BulkAddItemsModal
+        isOpen={bulkAddOpen}
+        onClose={() => setBulkAddOpen(false)}
+        categories={categories}
+        onCreated={refresh}
       />
 
       {/* Quick-assign: pick a member, then assign items to them */}

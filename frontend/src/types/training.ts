@@ -859,6 +859,16 @@ export type ProgramStructureType = 'sequential' | 'phases' | 'flexible';
 
 export type EnrollmentStatus = 'active' | 'completed' | 'expired' | 'on_hold' | 'withdrawn' | 'failed';
 
+/** Every enrollment status, in the order a status filter should offer them. */
+export const ENROLLMENT_STATUSES: readonly EnrollmentStatus[] = [
+  'active',
+  'completed',
+  'expired',
+  'on_hold',
+  'withdrawn',
+  'failed',
+];
+
 export type RequirementProgressStatus = 'not_started' | 'in_progress' | 'completed' | 'verified' | 'waived';
 
 /**
@@ -891,6 +901,8 @@ export interface TrainingProgram {
   target_position?: string;
   target_roles?: string[];
   structure_type: ProgramStructureType;
+  /** Members currently on this pipeline, withdrawn enrollments excluded. */
+  enrolled_count: number;
   prerequisite_program_ids?: string[];
   allows_concurrent_enrollment: boolean;
   time_limit_days?: number;
@@ -1615,6 +1627,7 @@ export interface TaskPerformed {
   task: string;
   description?: string | undefined;
   comment?: string;
+  equipment_check_id?: string;
 }
 
 export interface ShiftCompletionReportCreate {
@@ -1643,6 +1656,10 @@ export interface ShiftCompletionReport {
   officer_id: string;
   trainee_name?: string;
   officer_name?: string;
+  /** The apparatus the report's shift ran, e.g. "B-5 — Brush 5". Absent for a shift with none. */
+  shift_label?: string;
+  /** The shift's start, UTC. Formatted in the department's timezone for display. */
+  shift_start_time?: string;
   hours_on_shift: number;
   calls_responded: number;
   call_types?: string[];
@@ -2581,11 +2598,9 @@ export interface AnnualComplianceReport {
     nfpa_1401_compliant: boolean;
     field_details: RecordCompletenessField[];
   };
-  iso_readiness: {
-    overall_pct: number;
-    class_estimate: number;
-    categories: ISOCategory[];
-  };
+  // No `iso_readiness` block: the report carries only the headline
+  // `executive_summary.iso_readiness_pct`. The full category breakdown lives
+  // on GET /compliance/iso-readiness, which the ISO Readiness tab calls.
 }
 
 // =============================================================================

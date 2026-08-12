@@ -22,7 +22,7 @@ import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
 import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
 import { isMemberIdPayload } from '../types/scanner';
-import { QR_SCAN_CONFIG } from '../constants/camera';
+import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -129,7 +129,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
       setError(null);
       await startScanner();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Camera access denied. Please allow camera permissions in your browser settings.'));
+      setError(describeCameraError(err));
     }
   }, [startScanner]);
 

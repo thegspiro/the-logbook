@@ -47,6 +47,11 @@ def main() -> int:
         "by `scripts/screenshots/status_report.py`; see that directory's README for",
         "how to capture more.",
         "",
+        "Counts what is **filled**, not what is still **true**. Whether a captured",
+        "image still matches the application is tracked by hand in",
+        "[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is",
+        "regenerated wholesale, so that audit cannot live here.",
+        "",
         f"**{total_captured} of {total_captured + total_remaining} placeholders filled** "
         f"({total_remaining} remaining).",
         "",

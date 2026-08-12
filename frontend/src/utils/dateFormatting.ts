@@ -306,6 +306,151 @@ export const formatDateCustom = (
 };
 
 /**
+ * Format a calendar date ("YYYY-MM-DD") for display, without shifting it.
+ *
+ * A shift date, a leave start date or a due date is a *calendar* date: it has
+ * no time and belongs to no timezone. Padding one out to `"2026-08-10T00:00:00"`
+ * and handing it to a timezone-aware formatter converts a date that was never
+ * an instant — parsed as local midnight, then rendered in the department's
+ * zone, "2026-08-10" comes back as "Sun, Aug 9" for anybody west of the
+ * browser's own offset. Today's shift then reads as yesterday's.
+ *
+ * Anchored at UTC midnight and formatted in UTC, so the day, month and weekday
+ * are the ones written in the string for every viewer.
+ *
+ * @param dateOnly - Calendar date "YYYY-MM-DD" (anything else returns 'N/A')
+ * @param options - Intl.DateTimeFormatOptions (timeZone is set for you)
+ * @returns Formatted string
+ */
+export const formatCalendarDate = (
+  dateOnly: string | null | undefined,
+  options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' }
+): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly ?? '');
+  if (!match) return 'N/A';
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+  if (isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleString('en-US', { ...options, timeZone: 'UTC' });
+};
+
+/**
+ * Format a wall-clock time of day ("HH:MM", 24-hour) for display.
+ *
+ * A template's start and end are times of *day*, not instants: "07:00" means
+ * seven in the morning wherever the shift runs, so — like `formatCalendarDate`
+ * — this must not go near a timezone conversion. It is a pure re-spelling of
+ * the string, matching the AM/PM the time pickers present.
+ *
+ * @param hhmm - "HH:MM" or "HH:MM:SS" (anything else is returned unchanged)
+ * @returns e.g. "7:00 AM", "7:30 PM", "Midnight", "Noon"
+ */
+export const formatTimeOfDay = (hhmm: string | null | undefined): string => {
+  const match = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
+  if (!match) return hhmm ?? '';
+  const hour24 = parseInt(match[1] ?? '', 10);
+  const minute = match[2] ?? '00';
+  if (isNaN(hour24) || hour24 > 23) return hhmm ?? '';
+  if (minute === '00' && hour24 === 0) return 'Midnight';
+  if (minute === '00' && hour24 === 12) return 'Noon';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${minute} ${hour24 < 12 ? 'AM' : 'PM'}`;
+};
+
+/**
+ * Hours spanned between two times of day, wrapping past midnight.
+ *
+ * "19:00" → "07:00" is a twelve-hour night shift, not minus twelve. A span of
+ * zero (identical start and end) is a full 24 hours, which is how 24/48
+ * schedules are written.
+ *
+ * @returns Hours as a number, or null if either time is unparseable
+ */
+export const hoursBetweenTimesOfDay = (
+  start: string | null | undefined,
+  end: string | null | undefined
+): number | null => {
+  const toMinutes = (value: string | null | undefined): number | null => {
+    const match = /^(\d{1,2}):(\d{2})/.exec(value ?? '');
+    if (!match) return null;
+    const h = parseInt(match[1] ?? '', 10);
+    const m = parseInt(match[2] ?? '', 10);
+    if (isNaN(h) || isNaN(m) || h > 23 || m > 59) return null;
+    return h * 60 + m;
+  };
+  const startMinutes = toMinutes(start);
+  const endMinutes = toMinutes(end);
+  if (startMinutes === null || endMinutes === null) return null;
+  const span = endMinutes - startMinutes;
+  return (span > 0 ? span : span + 1440) / 60;
+};
+
+/**
+ * Whole days from one calendar date ("YYYY-MM-DD") to another.
+ *
+ * Negative when `dateOnly` is before `basis`, 0 on the same day. Both sides are
+ * anchored at UTC midnight on purpose: a calendar date belongs to no timezone,
+ * and running either through a zone moves it a day for anywhere west of UTC —
+ * the same trap `formatCalendarDate` documents.
+ *
+ * Prefer this over `daysBetween` for a shift date, a due date or any other
+ * date-only value; `daysBetween` parses its input as an instant.
+ *
+ * @returns Day count, or null if either value is not a calendar date
+ */
+export const calendarDaysBetween = (
+  dateOnly: string | null | undefined,
+  basis: string | null | undefined
+): number | null => {
+  const parse = (value: string | null | undefined): number | null => {
+    if (!/^\d{4}-\d{2}-\d{2}/.test(value ?? '')) return null;
+    const ms = Date.parse((value ?? '').slice(0, 10) + 'T00:00:00Z');
+    return isNaN(ms) ? null : ms;
+  };
+  const target = parse(dateOnly);
+  const from = parse(basis);
+  if (target === null || from === null) return null;
+  return Math.round((target - from) / 86400000);
+};
+
+/**
+ * Whole days between a calendar date and today in the given timezone.
+ *
+ * Only *today* depends on the viewer's zone; see `calendarDaysBetween`, which
+ * does the arithmetic.
+ *
+ * @returns Day count, or null if the value is not a calendar date
+ */
+export const calendarDaysFromToday = (dateOnly: string | null | undefined, timezone?: string): number | null =>
+  calendarDaysBetween(dateOnly, getTodayLocalDate(timezone));
+
+/**
+ * Shift a calendar date by whole days, staying in calendar space.
+ *
+ * A shift date, a target completion date and a deadline are calendar dates, not
+ * instants: "the day after 2026-03-08" is 2026-03-09 for every viewer. Adding a
+ * day to a `new Date()` and reading it back with `toISOString()` answers a
+ * different question — what the UTC date is once the local clock has moved —
+ * and lands a day out either side of midnight.
+ *
+ * @param dateOnly - Calendar date "YYYY-MM-DD" (anything else is returned unchanged)
+ * @param days - Whole days to add; negative moves back
+ * @returns Calendar date "YYYY-MM-DD"
+ */
+export const addCalendarDays = (dateOnly: string | null | undefined, days: number): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly ?? '');
+  if (!match) return dateOnly ?? '';
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+  if (isNaN(date.getTime())) return dateOnly ?? '';
+  date.setUTCDate(date.getUTCDate() + days);
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'UTC',
+  }).format(date);
+};
+
+/**
  * Format a number for display (currency, counts, measurements).
  * Use this instead of `value.toLocaleString()` to avoid ESLint
  * conflicts with the date-method restrictions.

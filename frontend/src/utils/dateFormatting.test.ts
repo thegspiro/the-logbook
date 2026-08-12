@@ -5,6 +5,11 @@ import {
   formatShortDateTime,
   formatTime,
   formatForDateTimeInput,
+  addCalendarDays,
+  calendarDaysBetween,
+  formatCalendarDate,
+  formatTimeOfDay,
+  hoursBetweenTimesOfDay,
   localToUTC,
   getTodayLocalDate,
   toLocalDateString,
@@ -414,5 +419,153 @@ describe('isFutureDate', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-06-15T12:00:00.000Z'));
     expect(isFutureDate(new Date('2030-01-01'))).toBe(true);
+  });
+});
+
+describe('formatCalendarDate', () => {
+  // A shift_date, a leave start_date or a due date is a calendar date: it has
+  // no time and belongs to no timezone. Padding one to midnight and running it
+  // through a viewer timezone moved it a day — "My Upcoming Shifts" showed
+  // today's shift as yesterday's for every zone west of the browser's.
+  it('keeps the day written in the string, west of UTC', () => {
+    expect(formatCalendarDate('2026-08-10', { weekday: 'short', month: 'short', day: 'numeric' })).toBe('Mon, Aug 10');
+  });
+
+  it('keeps the day written in the string, east of UTC', () => {
+    expect(formatCalendarDate('2026-01-01', { year: 'numeric', month: '2-digit', day: '2-digit' })).toBe('01/01/2026');
+  });
+
+  it('ignores a time component rather than letting it shift the day', () => {
+    expect(formatCalendarDate('2026-08-10T23:30:00Z', { month: 'short', day: 'numeric' })).toBe('Aug 10');
+  });
+
+  it('returns N/A for a missing or unparseable value', () => {
+    expect(formatCalendarDate(null)).toBe('N/A');
+    expect(formatCalendarDate('')).toBe('N/A');
+    expect(formatCalendarDate('not-a-date')).toBe('N/A');
+  });
+
+  it('defaults to a readable medium date', () => {
+    expect(formatCalendarDate('2026-08-10')).toBe('Aug 10, 2026');
+  });
+});
+
+describe('formatTimeOfDay', () => {
+  // A template's start is a time of day, not an instant: it must read the same
+  // in every timezone, so this one never goes near a Date.
+  it('re-spells a 24-hour time as AM/PM', () => {
+    expect(formatTimeOfDay('07:00')).toBe('7:00 AM');
+    expect(formatTimeOfDay('19:30')).toBe('7:30 PM');
+    expect(formatTimeOfDay('08:15')).toBe('8:15 AM');
+  });
+
+  it('names midnight and noon rather than printing 12:00 twice', () => {
+    expect(formatTimeOfDay('00:00')).toBe('Midnight');
+    expect(formatTimeOfDay('12:00')).toBe('Noon');
+    expect(formatTimeOfDay('00:30')).toBe('12:30 AM');
+    expect(formatTimeOfDay('12:30')).toBe('12:30 PM');
+  });
+
+  it('tolerates seconds and single-digit hours', () => {
+    expect(formatTimeOfDay('9:05')).toBe('9:05 AM');
+    expect(formatTimeOfDay('17:45:00')).toBe('5:45 PM');
+  });
+
+  it('returns the input unchanged when it is not a time', () => {
+    expect(formatTimeOfDay('')).toBe('');
+    expect(formatTimeOfDay(null)).toBe('');
+    expect(formatTimeOfDay('later')).toBe('later');
+    expect(formatTimeOfDay('99:00')).toBe('99:00');
+  });
+});
+
+describe('hoursBetweenTimesOfDay', () => {
+  it('measures a same-day span', () => {
+    expect(hoursBetweenTimesOfDay('08:00', '20:00')).toBe(12);
+    expect(hoursBetweenTimesOfDay('09:00', '13:30')).toBe(4.5);
+  });
+
+  // A night shift is twelve hours long, not minus twelve.
+  it('wraps past midnight', () => {
+    expect(hoursBetweenTimesOfDay('19:00', '07:00')).toBe(12);
+    expect(hoursBetweenTimesOfDay('22:30', '06:00')).toBe(7.5);
+  });
+
+  // How a 24/48 rotation is written: on at 07:00, off at 07:00.
+  it('reads an identical start and end as a full day', () => {
+    expect(hoursBetweenTimesOfDay('07:00', '07:00')).toBe(24);
+  });
+
+  it('returns null when either end is unparseable', () => {
+    expect(hoursBetweenTimesOfDay('08:00', '')).toBeNull();
+    expect(hoursBetweenTimesOfDay(null, '20:00')).toBeNull();
+    expect(hoursBetweenTimesOfDay('08:00', '24:00')).toBeNull();
+  });
+});
+
+describe('addCalendarDays', () => {
+  // The manual shift-report form rolls the end date forward for an overnight
+  // shift. Doing that with `new Date()` + toISOString() asks what the UTC date
+  // is once the local clock has moved, so an officer filing at 21:00 in
+  // UTC-05:00 got an end date two days out — and a 36-hour shift.
+  it('moves forward a day', () => {
+    expect(addCalendarDays('2026-08-10', 1)).toBe('2026-08-11');
+  });
+
+  it('crosses a month boundary', () => {
+    expect(addCalendarDays('2026-08-31', 1)).toBe('2026-09-01');
+  });
+
+  it('crosses a year boundary', () => {
+    expect(addCalendarDays('2026-12-31', 1)).toBe('2027-01-01');
+  });
+
+  it('handles a leap day', () => {
+    expect(addCalendarDays('2028-02-28', 1)).toBe('2028-02-29');
+  });
+
+  it('moves back on a negative count', () => {
+    expect(addCalendarDays('2026-03-01', -1)).toBe('2026-02-28');
+  });
+
+  it('returns the same date for zero days', () => {
+    expect(addCalendarDays('2026-08-10', 0)).toBe('2026-08-10');
+  });
+
+  it('returns the input unchanged when it is not a calendar date', () => {
+    expect(addCalendarDays('', 1)).toBe('');
+    expect(addCalendarDays(null, 1)).toBe('');
+    expect(addCalendarDays('not-a-date', 1)).toBe('not-a-date');
+  });
+});
+
+describe('calendarDaysBetween', () => {
+  // Both sides are calendar dates, so neither may pass through a timezone: a
+  // handoff's age is measured against the shift being viewed, and an archived
+  // shift must not call its own handoff months old.
+  it('counts forward and back', () => {
+    expect(calendarDaysBetween('2026-08-12', '2026-08-01')).toBe(11);
+    expect(calendarDaysBetween('2026-08-01', '2026-08-12')).toBe(-11);
+  });
+
+  it('is zero on the same day', () => {
+    expect(calendarDaysBetween('2026-08-12', '2026-08-12')).toBe(0);
+  });
+
+  it('crosses a month and a year boundary', () => {
+    expect(calendarDaysBetween('2026-09-01', '2026-08-31')).toBe(1);
+    expect(calendarDaysBetween('2027-01-01', '2026-12-31')).toBe(1);
+  });
+
+  // A DST transition shortens a local day to 23 hours; anchored at UTC these
+  // are still whole days apart.
+  it('is unaffected by a DST transition', () => {
+    expect(calendarDaysBetween('2026-03-09', '2026-03-08')).toBe(1);
+  });
+
+  it('returns null when either side is not a calendar date', () => {
+    expect(calendarDaysBetween('2026-08-12', null)).toBeNull();
+    expect(calendarDaysBetween('', '2026-08-12')).toBeNull();
+    expect(calendarDaysBetween('not-a-date', '2026-08-12')).toBeNull();
   });
 });

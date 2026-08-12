@@ -146,7 +146,15 @@ export default function InspectionsSection({ facilityId }: Props) {
                       <Calendar className="h-3 w-3" />
                       {formatDate(insp.inspectionDate, tz)}
                     </span>
-                    {insp.inspectorName && <span>{insp.inspectorName}</span>}
+                    {/* Same as the cross-facility list: the organization is
+                        collected and searchable, so it belongs on the row. */}
+                    {insp.inspectorName && (
+                      <span>
+                        {insp.inspectorName}
+                        {insp.inspectorOrganization ? ` · ${insp.inspectorOrganization}` : ''}
+                      </span>
+                    )}
+                    {!insp.inspectorName && insp.inspectorOrganization && <span>{insp.inspectorOrganization}</span>}
                     {insp.nextInspectionDate && <span>Next: {formatDate(insp.nextInspectionDate, tz)}</span>}
                     {insp.correctiveActions && !insp.correctiveActionCompleted && (
                       <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">

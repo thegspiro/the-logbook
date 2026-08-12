@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -16,15 +16,19 @@ from app.schemas.base import UTCResponseBase
 # Criterion & Section Schemas (template structure)
 # ============================================
 
+# The criterion types the scorer and the examiner screen both understand.
+# Anything outside this set is scored as nothing and rendered by the fallback
+# branch, so a template built with (say) "checkbox" looks plausible in the
+# builder and then contributes zero points to every percentage it appears in.
+CRITERION_TYPES = ("pass_fail", "score", "checklist", "time_limit", "statement")
+
 
 class SkillCriterionSchema(BaseModel):
     """Schema for a single evaluation criterion within a template section"""
 
     label: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    type: str = Field(
-        "pass_fail", max_length=50
-    )  # pass_fail, score, checklist, time_limit, statement
+    type: str = Field("pass_fail", max_length=50)
     required: bool = False
     sort_order: int = 0
     passing_score: Optional[float] = Field(None, ge=0)
@@ -32,6 +36,24 @@ class SkillCriterionSchema(BaseModel):
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     checklist_items: Optional[List[str]] = None
     statement_text: Optional[str] = None
+    # Statements only. Whether reading this one aloud is inside the timed
+    # evolution. Sheets differ: an opening statement that briefs the candidate
+    # before they are in position is read off the clock, while a mid-evolution
+    # prompt ("the patient is now in the elevator") happens within the time
+    # limit and must be timed. Defaults off, which is how statements have always
+    # behaved — they mark themselves as a section renders, and that is nobody's
+    # action, so it must not start a clock on its own.
+    starts_timer: bool = False
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        if v not in CRITERION_TYPES:
+            raise ValueError(
+                f"Unknown criterion type '{v}'. Expected one of: "
+                + ", ".join(CRITERION_TYPES)
+            )
+        return v
 
 
 class SkillTemplateSectionSchema(BaseModel):
@@ -58,6 +80,9 @@ class SkillTemplateCreate(BaseModel):
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: bool = True
+    # Off by default so a template's percentage keeps the meaning it has
+    # everywhere else: points from score-type criteria only.
+    score_pass_fail_criteria: bool = False
     tags: Optional[List[str]] = None
     visibility: str = "all_members"
     # Optional pipeline requirement this template's tests satisfy (hybrid link:
@@ -71,6 +96,29 @@ class SkillTemplateCreate(BaseModel):
     result_viewer_positions: Optional[List[str]] = None
 
 
+class SkillSheetLibraryItem(BaseModel):
+    """One sheet in the starter library, as the picker lists it.
+
+    Summary only — an officer choosing between ten sheets needs the discipline
+    and the shape, not 100 criteria on screen. The full structure arrives when
+    they import it, and from then on it is their template to edit.
+    """
+
+    slug: str
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    section_count: int = 0
+    criteria_count: int = 0
+    critical_count: int = 0
+    passing_percentage: Optional[float] = None
+    time_limit_seconds: Optional[int] = None
+    # Set when the department already holds a template with this name, so the
+    # picker can say "already added" instead of quietly making a second copy.
+    already_imported: bool = False
+
+
 class SkillTemplateUpdate(BaseModel):
     """Schema for updating a skill template"""
 
@@ -81,6 +129,7 @@ class SkillTemplateUpdate(BaseModel):
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: Optional[bool] = None
+    score_pass_fail_criteria: Optional[bool] = None
     tags: Optional[List[str]] = None
     visibility: Optional[str] = None
     requirement_id: Optional[UUID] = None
@@ -107,6 +156,7 @@ class SkillTemplateResponse(UTCResponseBase):
     time_limit_seconds: Optional[int] = None
     passing_percentage: Optional[float] = None
     require_all_critical: bool
+    score_pass_fail_criteria: bool = False
     requirement_id: Optional[UUID] = None
     result_disclosure: Optional[str] = None
     result_release: Optional[str] = None
@@ -250,6 +300,44 @@ class SkillTestCancelRequest(BaseModel):
     reason: Optional[str] = Field(None, max_length=1000)
 
 
+class SkillTestBulkValidateRequest(BaseModel):
+    """Accept several submissions in one action.
+
+    Capped rather than unbounded: each validation credits a pipeline
+    requirement, spends an attempt and notifies a candidate, so a request is a
+    burst of side effects and not just a write. The cap keeps one click's worth
+    of consequences reviewable — and a queue longer than this is a sign the
+    officer should be filtering, not selecting all.
+    """
+
+    test_ids: List[UUID] = Field(..., min_length=1, max_length=50)
+
+
+class SkillTestBulkValidateResponse(BaseModel):
+    """What actually happened, per test.
+
+    Partial success is the normal case — a colleague may have validated or
+    voided one of the selection between the officer loading the queue and
+    acting on it — so this reports each outcome rather than failing the whole
+    batch on the first refusal.
+    """
+
+    validated: List[UUID] = Field(default_factory=list)
+    skipped: List[dict] = Field(default_factory=list)
+
+
+class SkillTestReturnRequest(BaseModel):
+    """Send a submitted result back to its examiner instead of accepting it.
+
+    The reason is mandatory and non-trivial for the same purpose as a void's,
+    but a different audience: a void explains a withdrawal to whoever reads the
+    candidate's record later, while this tells the examiner what to fix. An
+    examiner who reopens a test to "please correct" has learned nothing.
+    """
+
+    reason: str = Field(..., min_length=10, max_length=1000)
+
+
 class SkillTestVoidRequest(BaseModel):
     """Schema for voiding an official test result.
 
@@ -305,6 +393,15 @@ class SkillTestResponse(UTCResponseBase):
     voided_by: Optional[UUID] = None
     void_reason: Optional[str] = None
 
+    # Return trail — populated while a submission is back with its examiner for
+    # correction, and cleared on the next completion. The examiner screen reads
+    # these to show what the officer asked to be fixed.
+    returned_at: Optional[datetime] = None
+    returned_by: Optional[UUID] = None
+    returned_by_name: Optional[str] = None
+    return_reason: Optional[str] = None
+    return_count: int = 0
+
     # Validation trail — an official result counts only once a training officer
     # signs it off. Unset while a member-run test awaits review; set in the same
     # step when an officer completes the test themselves.
@@ -328,6 +425,18 @@ class SkillTestResponse(UTCResponseBase):
     # a critical criterion left unscored counts as a failure (see
     # calculate_test_result), so the UI warns before the test is submitted.
     template_require_all_critical: Optional[bool] = None
+    # Whether pass/fail steps carry points on this test's template. Drives the
+    # section tallies the examiner sees while scoring, which have to agree with
+    # the ones the finished record reports.
+    template_score_pass_fail_criteria: Optional[bool] = None
+
+    # How the overall percentage was arrived at — point totals per section, the
+    # threshold applied, and any critical step that decided the outcome. Sent
+    # rather than derived client-side so the figures a scorecard shows as its
+    # working cannot drift from the ones that actually scored the test. Shape
+    # is build_score_breakdown()'s return value; None while a test is in
+    # progress or its outcome is withheld.
+    score_breakdown: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)
 

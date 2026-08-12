@@ -537,6 +537,11 @@ class GuestCheckInRequest(BaseModel):
     belongs on the real application form the follow-up email links to.
     """
 
+    # `pattern` carries what _strip_name enforces into the published schema —
+    # min_length=1 alone declares "\n" valid. NAME_HAS_CONTENT is unanchored,
+    # so " Mary Anne " still passes and is stripped; only names that strip()
+    # would empty are refused, and (unlike ``\S``) it refuses them under both
+    # Python's and JSON Schema's whitespace definitions.
     first_name: str = Field(..., min_length=1, max_length=100, pattern=NAME_HAS_CONTENT)
     last_name: str = Field(..., min_length=1, max_length=100, pattern=NAME_HAS_CONTENT)
     email: Optional[EmailStr] = None
@@ -563,10 +568,6 @@ class GuestCheckInResponse(BaseModel):
     attendee_id: str
     event_name: str
     checked_in_at: str
-    prospect_created: bool = Field(
-        default=False,
-        description="Whether a prospective-member record was opened",
-    )
     message: str
 
 

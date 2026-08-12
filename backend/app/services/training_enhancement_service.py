@@ -10,7 +10,7 @@ import io
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
@@ -21,7 +21,9 @@ from app.models.training import (
     RecertificationPathway,
     RenewalTask,
     RenewalTaskStatus,
+    SkillEvaluation,
     TrainingCategory,
+    TrainingCourse,
     TrainingEffectivenessEvaluation,
     TrainingRecord,
     TrainingRequirement,
@@ -72,6 +74,11 @@ class RecertificationService:
         )
         self.db.add(pathway)
         await self.db.flush()
+        # `created_at` / `updated_at` are server-side defaults, so a flush leaves
+        # them expired rather than fetching the values back. See update_pathway:
+        # the endpoint serialises this object after committing, where the lazy
+        # reload raises MissingGreenlet and the POST 500s on a row it did create.
+        await self.db.refresh(pathway)
         return pathway
 
     async def update_pathway(
@@ -83,6 +90,12 @@ class RecertificationService:
             raise ValueError("Pathway not found")
         apply_updates(pathway, data)
         await self.db.flush()
+        # `updated_at` is server-side (onupdate=func.now()), so the flush leaves
+        # it expired rather than fetching the new value back. The endpoint
+        # serialises this object after committing, which is outside the async
+        # greenlet — the lazy reload raises MissingGreenlet and the PATCH 500s.
+        # Reload here, while there is still a transaction to read in.
+        await self.db.refresh(pathway)
         return pathway
 
     async def get_user_renewal_tasks(
@@ -219,6 +232,9 @@ class CompetencyService:
         )
         self.db.add(matrix)
         await self.db.flush()
+        # See create_pathway: server-side timestamps stay expired after a flush
+        # and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(matrix)
         return matrix
 
     async def update_matrix(
@@ -230,6 +246,9 @@ class CompetencyService:
             raise ValueError("Matrix not found")
         apply_updates(matrix, data)
         await self.db.flush()
+        # See update_pathway: server-side `updated_at` stays expired after a
+        # flush and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(matrix)
         return matrix
 
     async def get_member_competencies(self, user_id: str, organization_id: str) -> list:
@@ -249,6 +268,27 @@ class InstructorQualificationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _validate_references(self, organization_id: str, data: dict) -> None:
+        """Ensure qualification foreign keys belong to the current tenant."""
+        references = (
+            ("user_id", User),
+            ("course_id", TrainingCourse),
+            ("skill_evaluation_id", SkillEvaluation),
+            ("category_id", TrainingCategory),
+        )
+        for field, model in references:
+            reference_id = data.get(field)
+            if reference_id is None:
+                continue
+            result = await self.db.execute(
+                select(model.id).where(
+                    model.id == reference_id,
+                    model.organization_id == organization_id,
+                )
+            )
+            if result.scalar_one_or_none() is None:
+                raise ValueError(f"Invalid {field}")
+
     async def get_qualifications(
         self,
         organization_id: str,
@@ -256,9 +296,30 @@ class InstructorQualificationService:
         course_id: Optional[str] = None,
         active_only: bool = True,
     ) -> list:
-        """Get instructor qualifications with optional filters"""
-        query = select(InstructorQualification).where(
-            InstructorQualification.organization_id == organization_id
+        """Get instructor qualifications with optional filters.
+
+        The model carries no ORM relationships, so `user_name` and
+        `course_name` on the response schema resolve to None and the roster
+        renders raw UUIDs where the instructor's name belongs. Join both in
+        and set them on the way out.
+        """
+        query = (
+            select(InstructorQualification, User, TrainingCourse)
+            .outerjoin(
+                User,
+                and_(
+                    User.id == InstructorQualification.user_id,
+                    User.organization_id == organization_id,
+                ),
+            )
+            .outerjoin(
+                TrainingCourse,
+                and_(
+                    TrainingCourse.id == InstructorQualification.course_id,
+                    TrainingCourse.organization_id == organization_id,
+                ),
+            )
+            .where(InstructorQualification.organization_id == organization_id)
         )
         if active_only:
             query = query.where(InstructorQualification.active.is_(True))
@@ -269,12 +330,18 @@ class InstructorQualificationService:
         result = await self.db.execute(
             query.order_by(InstructorQualification.created_at.desc())
         )
-        return result.scalars().all()
+        qualifications = []
+        for qual, user, course in result.all():
+            qual.user_name = user.full_name if user else None
+            qual.course_name = course.name if course else None
+            qualifications.append(qual)
+        return qualifications
 
     async def create_qualification(
         self, organization_id: str, data: dict, created_by: str
     ) -> InstructorQualification:
         """Create an instructor qualification"""
+        await self._validate_references(organization_id, data)
         qual = InstructorQualification(
             organization_id=organization_id,
             created_by=created_by,
@@ -282,6 +349,9 @@ class InstructorQualificationService:
         )
         self.db.add(qual)
         await self.db.flush()
+        # See create_pathway: server-side timestamps stay expired after a flush
+        # and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(qual)
         return qual
 
     async def update_qualification(
@@ -296,8 +366,12 @@ class InstructorQualificationService:
         qual = result.scalar_one_or_none()
         if not qual:
             raise ValueError("Qualification not found")
+        await self._validate_references(organization_id, data)
         apply_updates(qual, data)
         await self.db.flush()
+        # See update_pathway: server-side `updated_at` stays expired after a
+        # flush and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(qual)
         return qual
 
     async def validate_instructor_for_session(
@@ -361,6 +435,9 @@ class TrainingEffectivenessService:
         )
         self.db.add(evaluation)
         await self.db.flush()
+        # See create_pathway: server-side timestamps stay expired after a flush
+        # and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(evaluation)
         return evaluation
 
     async def get_evaluations(
@@ -484,6 +561,9 @@ class MultiAgencyService:
         )
         self.db.add(exercise)
         await self.db.flush()
+        # See create_pathway: server-side timestamps stay expired after a flush
+        # and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(exercise)
         return exercise
 
     async def update_exercise(
@@ -506,6 +586,9 @@ class MultiAgencyService:
 
         apply_updates(exercise, data)
         await self.db.flush()
+        # See update_pathway: server-side `updated_at` stays expired after a
+        # flush and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(exercise)
         return exercise
 
 
@@ -596,6 +679,10 @@ class XAPIService:
         )
         self.db.add(statement)
         await self.db.flush()
+        # See create_pathway: `created_at` is a server-side default and stays
+        # expired after a flush, so it cannot be lazy-loaded during response
+        # serialisation.
+        await self.db.refresh(statement)
         return statement
 
     async def ingest_batch(

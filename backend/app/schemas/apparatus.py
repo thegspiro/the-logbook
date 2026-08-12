@@ -9,7 +9,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
@@ -1064,6 +1064,38 @@ class ApparatusOperatorResponse(ApparatusOperatorBase):
     updated_at: datetime
 
     evoc_level: Optional[EvocLevelListItem] = None
+
+    # The operator's name, so the roster can label a row with a person rather
+    # than the user id. `user` has always been eager-loaded for this response
+    # but never projected, which left the Operators tab listing raw UUIDs.
+    user_name: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def name_from_user(cls, data: Any) -> Any:
+        # The relationship is not a field on this schema, so it is unreachable
+        # from a field validator — the name has to be lifted off the ORM
+        # object before field validation runs. Left as None when `user` was
+        # not eager-loaded, rather than lazy-loading it on an async session.
+        if isinstance(data, dict):
+            if not data.get("user_name"):
+                user = data.get("user")
+                if user is not None:
+                    data["user_name"] = getattr(user, "full_name", None)
+            return data
+        if getattr(data, "user_name", None):
+            return data
+        user = data.__dict__.get("user") if hasattr(data, "__dict__") else None
+        if user is not None:
+            return {
+                **{
+                    field: getattr(data, field, None)
+                    for field in cls.model_fields
+                    if field != "user_name"
+                },
+                "user_name": getattr(user, "full_name", None),
+            }
+        return data
 
     model_config = _response_config
 

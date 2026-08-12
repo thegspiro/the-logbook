@@ -20,7 +20,7 @@ import { schedulingService } from '../modules/scheduling/services/api';
 import type { ApparatusOption } from '../modules/scheduling/services/api';
 import type { ShiftTemplateCreate, ShiftPatternCreate } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import TemplateFormModal from '../modules/scheduling/components/TemplateFormModal';
 import PatternFormModal from '../modules/scheduling/components/PatternFormModal';
 import GenerateShiftsModal from '../modules/scheduling/components/GenerateShiftsModal';
@@ -208,17 +208,17 @@ export const ShiftTemplatesPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl p-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold">
-            <LayoutTemplate className="h-7 w-7" aria-hidden="true" />
+            <LayoutTemplate className="h-7 w-7 shrink-0" aria-hidden="true" />
             Shift Templates & Patterns
           </h1>
           <p className="text-theme-text-muted mt-1">Manage reusable shift configurations and scheduling patterns</p>
         </div>
         <button
           onClick={() => (activeTab === 'templates' ? setShowTemplateModal(true) : setShowPatternModal(true))}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
         >
           <Plus className="h-5 w-5" aria-hidden="true" />
           {activeTab === 'templates' ? 'New Template' : 'New Pattern'}
@@ -372,7 +372,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                           Shift Time
                         </p>
                         <p className="text-theme-text-primary text-sm font-medium">
-                          {template.start_time_of_day} - {template.end_time_of_day}
+                          {formatTimeOfDay(template.start_time_of_day)} - {formatTimeOfDay(template.end_time_of_day)}
                         </p>
                       </div>
                       <div className="bg-theme-surface rounded-lg p-2">
@@ -562,7 +562,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="border-theme-surface-border flex items-center gap-2 border-t pt-3">
+                  <div className="border-theme-surface-border flex flex-wrap items-center gap-2 border-t pt-3">
                     <button
                       onClick={() => setGeneratingPattern(pattern)}
                       className="btn-primary flex items-center gap-1 px-3 py-1.5 text-sm"

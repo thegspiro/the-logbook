@@ -204,13 +204,15 @@ Click on any facility from the dashboard to open its full-page detail view at `/
 
 The facilities module was refactored for maintainability:
 
-- **Shared constants**: Status colors, priority colors, maintenance types, inspection types, room types, and NFPA zone options are centralized in `modules/facilities/constants.ts` and used consistently across all section components
+- **Shared constants**: Inspection, compliance, contact and room type options, the NFPA zone list, and the condition scale with its colours are centralized in `modules/facilities/constants.ts` and used consistently across all section components. **Maintenance types are not** — they are department-configurable records fetched from the API, so the dropdown's contents differ by organization (the demo department has 39)
 - **Custom hooks**: Form state management for inspections (`useInspectionForm`) and maintenance records (`useMaintenanceForm`) is extracted into dedicated hooks, supporting create/edit/delete operations with search and status filtering
 - **Type consolidation**: All facilities TypeScript types live in `modules/facilities/types/` with a barrel export
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the maintenance form showing the type dropdown (with 16 NFPA-aligned options), priority selector (low/medium/high/critical with color badges), date fields, and vendor/cost inputs._
+![New facility maintenance record form with its facility, type, date, vendor and cost fields](./images/06-15-facility-maintenance-form.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the inspections list with the result filter dropdown (All/Passed/Failed/Pending) showing filtered results with inspector name, organization, and pass/fail status badges._
+The inspections list itself is pictured under
+[Recording an Inspection](#recording-an-inspection) below — this section
+describes how it is built, not a second screen.
 
 ---
 
@@ -638,12 +640,51 @@ Apparatus type badges (Engine, Ladder, Rescue, Ambulance) and status badges (In 
 Each apparatus can now specify a minimum EVOC (Emergency Vehicle Operations Course) certification level required for its operators:
 
 1. Navigate to **Apparatus > [Vehicle] > Edit**
-2. Set the **Required EVOC Level** field to Basic, Intermediate, or Advanced
+2. Set the **Required EVOC Level** field
 3. Save
 
-When scheduling assigns a member to a Driver/Operator position on this apparatus, the system validates their EVOC certification level against this requirement.
+When scheduling assigns a member to a Driver/Operator position on this apparatus, the system compares the member's highest current EVOC level against this requirement.
 
 ![Apparatus edit form with the required EVOC level field](./images/06-21-apparatus-evoc-level.png)
+
+> **Corrected 2026-08-10.** The levels are **not** a fixed Basic / Intermediate /
+> Advanced triple — they are **per-organization records** your department
+> configures, and those three names are simply what the demo department uses.
+> A member's level is also not a profile field: it lives on the **operator
+> record for a specific apparatus**, on that rig's Operators tab. The
+> eligibility check reads the **highest level from the member's current
+> (active, certified, unexpired) operator records**, warns rather than blocks,
+> and stays silent when the apparatus names no requirement.
+
+> **Fixed 2026-08-10: setting a required EVOC level used to return a server
+> error — and once one was set, the apparatus detail page and the whole fleet
+> list returned one too.** A single configured apparatus took the fleet list down
+> with it. The gap was invisible for as long as no apparatus had a requirement,
+> which is why none of the demo data did: the feature could not be used. If your
+> department tried this and gave up, it works now.
+
+### Apparatus Operators _(corrected 2026-08-10)_
+
+Each apparatus has an **Operators** tab listing the members certified to drive
+it, with their EVOC level and certification dates.
+
+> **Screenshot needed:**
+> _[Screenshot of an engine's Operators tab listing three operators by name with their EVOC levels, certification dates, and the Add Operator button]_
+
+Two long-standing problems here were fixed on 2026-08-10:
+
+- **Every row was labelled "Operator ID: a8c2c854-…".** The member's name is now
+  shown; the id is only a fallback.
+- **The add form asked you to type a member's UUID into a free-text box** —
+  nothing anywhere in the application displays a member id. It is now a **member
+  picker**.
+- **Adding or editing an operator with an EVOC level returned a server error**,
+  and because the record was saved _before_ the error, the screen reported a
+  failure over an operator that had in fact been created. If you have duplicate
+  operator rows from before this fix, delete the extras.
+
+> **Screenshot needed:**
+> _[Screenshot of the Add Operator form showing the member picker dropdown open with three member names, the EVOC level selector, and the certification date fields]_
 
 ### Standalone Equipment Checks
 
@@ -651,13 +692,27 @@ Equipment checks can now be performed on any apparatus at any time, independent 
 
 See [Shifts & Scheduling > Standalone Equipment Checks](./03-scheduling.md#standalone-equipment-checks) for the full workflow.
 
+### Apparatus Inventory and Supply Tracking _(2026-08-10)_
+
+Separate from checks, there is now a standing view of what a truck is carrying —
+its tracked positions, the lots and expiration dates aboard each one, and the
+ready stock on the shelf behind it. A crew can record what they used at the
+moment they use it rather than waiting for the next morning's check.
+
+See [Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
+for the full workflow, and
+[Inventory → Dated Stock Lots and Receiving](./05-inventory.md#dated-stock-lots-and-receiving-2026-08-10)
+for the shelf side of it.
+
 ### Edge Cases
 
-| Scenario                                           | Behavior                                     |
-| -------------------------------------------------- | -------------------------------------------- |
-| Apparatus with no EVOC level set                   | No validation on driver/operator assignments |
-| Badge with unrecognized apparatus type             | Falls back to generic vehicle icon           |
-| Ad-hoc equipment check on out-of-service apparatus | Allowed — check is recorded normally         |
+| Scenario                                           | Behavior                                                                                     |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Apparatus with no EVOC level set                   | No validation on driver/operator assignments                                                 |
+| Member with no operator record on that apparatus   | No level to compare; the check warns rather than blocks                                      |
+| Member's operator record is expired or uncertified | Excluded. The check reads the **highest current** level across their active operator records |
+| Badge with unrecognized apparatus type             | Falls back to generic vehicle icon                                                           |
+| Ad-hoc equipment check on out-of-service apparatus | Allowed — check is recorded normally                                                         |
 
 ---
 

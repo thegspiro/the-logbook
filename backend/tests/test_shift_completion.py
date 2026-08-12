@@ -14,10 +14,14 @@ Covers:
   - Update field whitelist enforcement
 """
 
+import json
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -969,3 +973,287 @@ class TestShiftDataPreview:
         assert await svc.validate_shift_ownership(d["shift_id"], uuid.UUID(d["org_id"]))
         assert not await svc.validate_shift_ownership(d["shift_id"], uuid.uuid4())
         assert not await svc.validate_shift_ownership(_uid(), uuid.UUID(d["org_id"]))
+
+
+class TestEquipmentCheckTrainingLink:
+    async def test_report_identity_supports_onboarding_apparatus(self):
+        """The shift label resolves through basic_apparatus when the shift's
+        apparatus_id references an onboarding-era row rather than a full
+        Apparatus record — _attach_shift_labels retries unclaimed ids there."""
+        from app.models.training import ShiftCompletionReport
+
+        report = ShiftCompletionReport()
+        report.shift_id = "shift-1"
+
+        shifts_result = MagicMock()
+        shifts_result.__iter__ = lambda self: iter(
+            [SimpleNamespace(id="shift-1", apparatus_id="ba-1", start_time=None)]
+        )
+        no_full_apparatus = MagicMock()
+        no_full_apparatus.__iter__ = lambda self: iter([])
+        basic_result = MagicMock()
+        basic_result.__iter__ = lambda self: iter(
+            [SimpleNamespace(id="ba-1", unit_number="E-1", name="Engine 1")]
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[shifts_result, no_full_apparatus, basic_result]
+        )
+
+        [labeled] = await ShiftCompletionService(db)._attach_shift_labels(
+            [report], uuid.uuid4()
+        )
+
+        assert labeled.shift_label == "E-1 — Engine 1"
+
+    async def test_trainee_checks_become_auditable_report_tasks(self):
+        check = SimpleNamespace(
+            id="check-1",
+            check_timing="start_of_shift",
+            overall_status="pass",
+        )
+        result = MagicMock()
+        result.all.return_value = [(check, "Engine readiness")]
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        tasks = await ShiftCompletionService(
+            db
+        )._get_trainee_equipment_checks_from_shift("shift-1", "trainee-1")
+
+        assert tasks == [
+            {
+                "task": "Engine readiness",
+                "description": "Start of shift equipment check — Pass",
+                "equipment_check_id": "check-1",
+            }
+        ]
+
+
+class TestTraineeReportReleaseBoundary:
+    async def test_trainee_report_query_can_require_officer_release(self):
+        scalar_result = MagicMock()
+        scalar_result.all.return_value = []
+        result = MagicMock()
+        result.scalars.return_value = scalar_result
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        await ShiftCompletionService(db).get_reports_for_trainee(
+            organization_id=uuid.uuid4(),
+            trainee_id="trainee-1",
+            released_only=True,
+        )
+
+        query = db.execute.await_args.args[0]
+        assert "approved" in query.compile().params.values()
+
+    async def test_trainee_cannot_fetch_unreleased_report_by_id(self, monkeypatch):
+        from app.api.v1.endpoints import shift_completion as endpoint
+
+        report = SimpleNamespace(
+            id="report-1",
+            trainee_id="trainee-1",
+            officer_id="officer-1",
+            review_status="draft",
+        )
+
+        class FakeService:
+            def __init__(self, _db):
+                pass
+
+            async def get_report(self, _report_id, _organization_id):
+                return report
+
+        monkeypatch.setattr(endpoint, "ShiftCompletionService", FakeService)
+        user = SimpleNamespace(
+            id="trainee-1",
+            organization_id=uuid.uuid4(),
+            positions=[],
+            rank=None,
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await endpoint.get_shift_report("report-1", MagicMock(), user)
+
+        assert exc.value.status_code == 404
+
+    async def test_unreleased_report_cannot_be_acknowledged(self):
+        report = SimpleNamespace(
+            trainee_id="trainee-1",
+            organization_id=str(uuid.uuid4()),
+            review_status="pending_review",
+        )
+        db = MagicMock()
+        service = ShiftCompletionService(db)
+        service.get_report = AsyncMock(return_value=report)
+
+        acknowledged = await service.acknowledge_report(
+            "report-1", "trainee-1", uuid.UUID(report.organization_id)
+        )
+
+        assert acknowledged is None
+        db.commit.assert_not_called()
+
+
+class TestTrainingCreditReleaseBoundary:
+    async def test_pending_review_does_not_credit_until_approved(self):
+        org_id = uuid.uuid4()
+        report = SimpleNamespace(
+            organization_id=str(org_id),
+            officer_id="officer-1",
+            review_status="draft",
+        )
+        db = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        service = ShiftCompletionService(db)
+        service.get_report = AsyncMock(return_value=report)
+        service._trigger_deferred_progress = AsyncMock()
+
+        await service.update_report(
+            "report-1",
+            org_id,
+            "officer-1",
+            {"review_status": "pending_review"},
+        )
+        service._trigger_deferred_progress.assert_not_awaited()
+
+        await service.update_report(
+            "report-1",
+            org_id,
+            "officer-1",
+            {"review_status": "approved"},
+        )
+        service._trigger_deferred_progress.assert_awaited_once_with(report, "officer-1")
+
+
+# ── Auto-population vs. the officer's own entry ──────────────────────
+
+
+class TestCallCountAutoPopulation:
+    """A linked shift fills the call count in; it does not overrule it.
+
+    The report form's call-count field is editable and pre-filled from the same
+    run log the service reads, so a value that arrives on the request is a
+    correction — a run logged against the wrong crew, a member who rode in on
+    one call and not another. Overwriting it answered 201 and stored the old
+    number, which is indistinguishable from the edit having been saved.
+    """
+
+    async def _log_call(self, db_session, d, riders, incident_type):
+        await db_session.execute(
+            text(
+                "INSERT INTO shift_calls (id, shift_id, organization_id, "
+                "incident_type, responding_members) "
+                "VALUES (:id, :sid, :org, :it, :rm)"
+            ),
+            {
+                "id": _uid(),
+                "sid": d["shift_id"],
+                "org": d["org_id"],
+                "it": incident_type,
+                "rm": json.dumps(riders),
+            },
+        )
+        await db_session.flush()
+
+    async def test_derives_count_when_officer_supplies_none(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"]], "EMS")
+        await self._log_call(db_session, d, [d["crew_1"]], "Structure Fire")
+        svc = ShiftCompletionService(db_session)
+
+        report = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+
+        assert report.calls_responded == 2
+        assert sorted(report.call_types) == ["EMS", "Structure Fire"]
+        assert report.data_sources["calls_responded"] == "shift_calls"
+
+    async def test_keeps_the_count_the_officer_typed(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"]], "EMS")
+        svc = ShiftCompletionService(db_session)
+
+        report = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=3,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+
+        assert report.calls_responded == 3
+        assert "calls_responded" not in report.data_sources
+
+    async def test_an_explicit_zero_is_not_treated_as_absent(
+        self, db_session, setup_shift_with_crew
+    ):
+        """The distinction the old `int = 0` default could not express."""
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"]], "EMS")
+        svc = ShiftCompletionService(db_session)
+
+        report = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=0,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+
+        assert report.calls_responded == 0
+
+    async def test_batch_still_derives_per_trainee(
+        self, db_session, setup_shift_with_crew
+    ):
+        """The batch form's count is per *shift*, so it must not fan out.
+
+        crew_1 rode two calls and crew_2 one; handing both the shift-wide
+        figure would credit crew_2 with a run they were not on.
+        """
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"], d["crew_2"]], "EMS")
+        await self._log_call(db_session, d, [d["crew_1"]], "Structure Fire")
+        svc = ShiftCompletionService(db_session)
+
+        result = await svc.batch_create_reports(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            shift_id=d["shift_id"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=2,
+            call_types=["EMS", "Structure Fire"],
+            officer_narrative=None,
+            crew_member_ids=[d["crew_1"], d["crew_2"]],
+            trainee_evaluations=None,
+        )
+
+        by_trainee = {
+            r.trainee_id: r
+            for r in await svc.get_reports_by_officer(
+                uuid.UUID(d["org_id"]), d["officer_id"]
+            )
+        }
+        assert result["created"] == 2
+        assert by_trainee[d["crew_1"]].calls_responded == 2
+        assert by_trainee[d["crew_2"]].calls_responded == 1

@@ -50,6 +50,12 @@ Both = leadership oversight."]**
 
 ### DASHBOARD OVERVIEW (2:00 – 3:30)
 
+> **📷 B-ROLL NOTE (2026-08-11) — narration is correct, the screen is not.** The
+> **Open Shifts** panel is capped at five with an "N more" line as of
+> 2026-08-10; before that it rendered every open shift in the next 30 days, so
+> any capture taken earlier shows a page several thousand pixels tall. Re-shoot
+> the screen, keep the audio. Nothing in the script below needs changing.
+
 **[SCREEN: The main Dashboard page with all widgets visible.]**
 
 > "The dashboard is the first thing you see when you log in. It's designed to
@@ -132,6 +138,42 @@ event participation, member activity]**
 > contactless attendance tracking."
 
 **[CALLOUT: "QR Check-In = no more paper sign-in sheets"]**
+
+### GUEST CHECK-IN FOR AN OPEN HOUSE (added 2026-08-09)
+
+**[SCREEN: The Check-In Settings section of the event form, ticking "Allow guest
+check-in" and "Create a prospective member from each guest".]**
+
+> "That QR code is for **members**. Scan it without an account and you land on the
+> login page — which is exactly the wrong thing to hand a visitor at a volunteer
+> interest night."
+
+> "So there's a second one. Tick **Allow guest check-in** and the room display
+> shows a **guest QR code** beside the member one. A visitor scans it, types their
+> name, and they're signed in. No account, no login."
+
+**[SCREEN: The room display showing both QR codes side by side.]**
+
+> "And the second toggle is the one I'd actually pay for. **Create a prospective
+> member from each guest** — every visitor who leaves an email address gets a card
+> in your recruitment pipeline, linked back to the event, with a referral source
+> reading 'Attended: Volunteer Interest Night'. Your open-house sign-in sheet
+> becomes your recruiting list, automatically."
+
+**[CALLOUT: "Sign-in sheet → recruiting pipeline, automatically"]**
+
+**[SCREEN: The two toggles, both off, on a business meeting event.]**
+
+> "One warning, and it's the reason both of these are **off by default**. Turning
+> guest check-in on means anyone who can reach that QR code can write to your
+> attendance list without logging in. That's the right trade for an open house. It
+> is the **wrong** trade for a business meeting or a training session, where
+> attendance drives member records. Leave it off there."
+
+> "It's protected — rate limits, a cap of three hundred sign-ins per event per
+> day, and the department is worked out from the room's own display code rather
+> than from anything the visitor sends. But the judgment about which events get it
+> is yours."
 
 ### EVENT TEMPLATES (7:00 – 8:00)
 
@@ -404,7 +446,7 @@ appears — ten advanced, two named and skipped with reasons.]**
 
 ---
 
-## CHAPTER 6: Scheduling & Shift Oversight (18:00 – 21:00)
+## CHAPTER 6: Scheduling & Shift Oversight (18:00 – 22:15)
 
 ### VIEWING THE SCHEDULE (18:00 – 18:45)
 
@@ -452,12 +494,58 @@ who's swapping, which shifts, and the impact on coverage.]**
 
 **[CALLOUT: "Accountability without getting in the way of the run."]**
 
+### WHAT'S EXPIRING ON YOUR TRUCKS (20:15 – 21:30)
+
+**[SCREEN: Scheduling → Supply. The "Expiring on Apparatus" page loads.]**
+
+> "While we're here — this page answers a question you've probably asked out
+> loud and not been able to get a straight answer to. What's about to expire on
+> my apparatus?"
+
+**[SCREEN: Point to the three summary pills at the top]**
+
+> "Everything on your trucks that's expiring, expired, running short, or that a
+> crew has reported using. In one list."
+
+**[SCREEN: Point to a row with ready stock, then to one without]**
+
+> "And here's the bit that makes it useful rather than just alarming. Each row
+> tells you **whether you've actually got a replacement on the shelf**."
+
+**[CALLOUT: "'Swap it' and 'order it' are different jobs"]**
+
+> "Because those are two different jobs. The rows with stock behind them are a
+> job for whoever's on today — go and swap them. The rows without are a
+> purchase order. You plan your week around which is which, and until now you
+> had to work that out by walking the building."
+
+**[SCREEN: Point to the 30/60/90 window selector]**
+
+> "Thirty, sixty or ninety days ahead, depending on how far out you want to
+> think."
+
+**[SCREEN: Point to a struck-through expired row]**
+
+> "Anything already expired on the shelf shows struck through, and the system
+> won't let a crew put it on a truck. That's not a suggestion — the swap is
+> refused."
+
+> "And you get this as a **weekly notification**, so nobody has to remember to
+> come and look. Weekly rather than daily on purpose: something that's _already_
+> expired fails its truck on the next check and tells you that way. This alert
+> exists to get ahead of the date."
+
+**[PRODUCTION NOTE: The demo seeder's `seed_supply_tracking` step produces rows
+in all four states — expiring with stock, expired, short of par, and reported
+used by a crew member. Without it this page is empty and the beat has nothing
+behind it.]**
+
 > "You can also require that only rostered members check in, so attendance
 > matches the crew that actually worked. And if something needs fixing after a
 > shift is closed, an officer can reopen it, make the correction, and finalize
 > again — every reopen is logged too."
 
-### SCHEDULING REPORTS (20:15 – 21:00)
+### SCHEDULING REPORTS (21:30 – 22:15)
 
 **[SCREEN: Navigate to Scheduling Reports (SchedulingReportsPage)]**
 
@@ -475,9 +563,9 @@ who's swapping, which shifts, and the impact on coverage.]**
 
 ---
 
-## CHAPTER 7: Reports & Decision-Making (21:00 – 24:00)
+## CHAPTER 7: Reports & Decision-Making (22:15 – 25:15)
 
-### GENERATING REPORTS (21:00 – 22:30)
+### GENERATING REPORTS (22:15 – 23:45)
 
 **[SCREEN: Navigate to Reports (ReportsPage)]**
 
@@ -502,14 +590,14 @@ and tables.]**
 
 **[SCREEN: Show the export options]**
 
-### SHIFT REPORTS (22:30 – 23:00)
+### SHIFT REPORTS (23:45 – 24:15)
 
 **[SCREEN: Navigate to Shift Reports (ShiftReportPage)]**
 
 > "Shift reports give you a detailed breakdown of each shift — who was on duty,
 > what happened, any incidents or notes."
 
-### USING DATA FOR DECISIONS (23:00 – 24:00)
+### USING DATA FOR DECISIONS (24:15 – 25:15)
 
 > "Here's the bigger picture on reports. The Logbook replaces the filing cabinet,
 > the spreadsheets, and the notebooks. Every data point your officers collect —
@@ -530,9 +618,9 @@ and tables.]**
 
 ---
 
-## CHAPTER 8: Daily Workflow Summary (24:00 – 26:00)
+## CHAPTER 8: Daily Workflow Summary (25:15 – 27:15)
 
-### THE CHIEF'S DAILY ROUTINE (24:00 – 25:30)
+### THE CHIEF'S DAILY ROUTINE (25:15 – 26:45)
 
 > "Let me put it all together with what a typical day looks like on The Logbook
 > as Fire Chief or President."
@@ -559,7 +647,7 @@ and tables.]**
 > "**Monthly:** Generate standing reports for the officer meeting. Review member
 > certifications approaching expiration. Check equipment maintenance schedules."
 
-### WRAP-UP (25:30 – 26:00)
+### WRAP-UP (26:45 – 27:15)
 
 > "The Logbook isn't meant to create more work — it's meant to replace the
 > scattered paper records, spreadsheets, and group texts with a single source of
@@ -575,13 +663,14 @@ and tables.]**
 
 ## Clip Extraction Guide
 
-| Clip                  | Timecode    | Standalone Title                                |
-| --------------------- | ----------- | ----------------------------------------------- |
-| Dashboard Overview    | 2:00–5:00   | "Your Leadership Dashboard Explained"           |
-| Creating an Event     | 5:00–7:00   | "Creating an Event with QR Check-In"            |
-| Event Templates       | 7:00–8:00   | "Save Time with Event Templates"                |
-| Running an Election   | 14:00–18:00 | "How to Run a Department Election"              |
-| Scheduling Overview   | 18:00–21:00 | "Managing Shifts & Scheduling"                  |
-| Shift Close-Out Rules | 19:45–20:15 | "Require End-of-Shift Checks Before Finalizing" |
-| Generating Reports    | 21:00–22:30 | "Generating Reports for Officer Meetings"       |
-| Chief's Daily Routine | 24:00–25:30 | "The Chief's Daily Routine on The Logbook"      |
+| Clip                           | Timecode    | Standalone Title                                |
+| ------------------------------ | ----------- | ----------------------------------------------- |
+| Dashboard Overview             | 2:00–5:00   | "Your Leadership Dashboard Explained"           |
+| Creating an Event              | 5:00–7:00   | "Creating an Event with QR Check-In"            |
+| Event Templates                | 7:00–8:00   | "Save Time with Event Templates"                |
+| Running an Election            | 14:00–18:00 | "How to Run a Department Election"              |
+| Scheduling Overview            | 18:00–22:15 | "Managing Shifts & Scheduling"                  |
+| Shift Close-Out Rules          | 19:45–20:15 | "Require End-of-Shift Checks Before Finalizing" |
+| What's Expiring on Your Trucks | 20:15–21:30 | "What's About to Expire on Your Apparatus"      |
+| Generating Reports             | 22:15–23:45 | "Generating Reports for Officer Meetings"       |
+| Chief's Daily Routine          | 25:15–26:45 | "The Chief's Daily Routine on The Logbook"      |

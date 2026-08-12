@@ -16,6 +16,7 @@ import type { TrainingSessionCreate, TrainingCourse } from '../types/training';
 import type { RecurrencePattern } from '../types/event';
 import type { User } from '../types/user';
 import type { Location } from '../services/api';
+import { TRAINING_TYPE_LABELS } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
@@ -294,7 +295,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                 <React.Fragment key={step.number}>
                   <div className="flex flex-col items-center">
                     <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                      className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all sm:h-12 sm:w-12 ${
                         isComplete
                           ? 'border-green-600 bg-green-600'
                           : isActive
@@ -309,14 +310,14 @@ const CreateTrainingSessionPage: React.FC = () => {
                       )}
                     </div>
                     <p
-                      className={`mt-2 text-sm font-medium ${
+                      className={`mt-2 hidden text-sm font-medium sm:block ${
                         isActive ? 'text-theme-text-primary' : 'text-theme-text-muted'
                       }`}
                     >
                       {step.title}
                     </p>
                   </div>
-                  {index < steps.length - 1 && <div className="bg-theme-surface-hover mx-4 h-0.5 flex-1" />}
+                  {index < steps.length - 1 && <div className="bg-theme-surface-hover mx-2 h-0.5 flex-1 sm:mx-4" />}
                 </React.Fragment>
               );
             })}
@@ -356,14 +357,22 @@ const CreateTrainingSessionPage: React.FC = () => {
                 />
               </div>
 
-              {/* Date and Time */}
+              {/* Date and Time.
+                  These three fields hold a *local wall-clock* string — that is
+                  what DateTimeQuarterHour emits and what localToUTC() expects
+                  on submit — so the value goes to the control unchanged. They
+                  previously round-tripped through formatForDateTimeInput,
+                  which parses a bare string as an instant and re-renders it in
+                  the org timezone: the field lost the org's UTC offset on
+                  every keystroke, compounding once per interaction. Picking
+                  9:00 AM and then changing the minutes left 5:00 AM behind. */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                     Start Date & Time <span className="text-red-700">*</span>
                   </label>
                   <DateTimeQuarterHour
-                    value={formatForDateTimeInput(formData.start_datetime, tz)}
+                    value={formData.start_datetime}
                     onChange={(v) => updateField('start_datetime', v)}
                     className="form-input py-3"
                     required
@@ -374,7 +383,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     End Date & Time <span className="text-red-700">*</span>
                   </label>
                   <DateTimeQuarterHour
-                    value={formatForDateTimeInput(formData.end_datetime, tz)}
+                    value={formData.end_datetime}
                     onChange={(v) => updateField('end_datetime', v)}
                     className="form-input py-3"
                     required
@@ -672,7 +681,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   <div>
                     <label className="text-theme-text-primary mb-2 block text-sm font-semibold">RSVP Deadline</label>
                     <DateTimeQuarterHour
-                      value={formatForDateTimeInput(formData.rsvp_deadline, tz)}
+                      value={formData.rsvp_deadline ?? ''}
                       onChange={(v) => updateField('rsvp_deadline', v)}
                       className="form-input py-3"
                     />
@@ -780,7 +789,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                             <p className="text-theme-text-secondary mt-1 text-xs">{course.description}</p>
                           )}
                           <div className="text-theme-text-muted mt-2 flex flex-wrap gap-3 text-xs">
-                            <span>Type: {course.training_type}</span>
+                            <span>Type: {TRAINING_TYPE_LABELS[course.training_type] ?? course.training_type}</span>
                             {course.credit_hours != null && <span>Credits: {course.credit_hours}h</span>}
                             {course.expiration_months && <span>Expires: {course.expiration_months} months</span>}
                             {course.instructor && <span>Instructor: {course.instructor}</span>}
@@ -1115,7 +1124,7 @@ const CreateTrainingSessionPage: React.FC = () => {
           )}
 
           {/* Navigation Buttons */}
-          <div className="border-theme-surface-border flex justify-between border-t pt-6">
+          <div className="border-theme-surface-border flex flex-wrap justify-between gap-3 border-t pt-6">
             <button
               onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
               disabled={currentStep === 1}

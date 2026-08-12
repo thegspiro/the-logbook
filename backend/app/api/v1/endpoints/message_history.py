@@ -27,7 +27,7 @@ from app.schemas.email_template import (
     MessageHistoryResponse,
     SendTestEmailRequest,
 )
-from app.services.email_service import EmailService
+from app.services.email_service import EmailService, _redact_email
 from app.services.officer_service import OfficerService
 
 router = APIRouter()
@@ -120,6 +120,16 @@ async def send_test_email(
     )
     organization = org_result.scalar_one_or_none()
 
+    # "Send Test Email to Me" has no address field, so it posts a blank one.
+    # Without this the send went to "" — SMTP rejected it, the endpoint still
+    # returned 200, and the UI reported success for an email nobody received.
+    to_email = (body.to_email or "").strip() or (current_user.email or "")
+    if not to_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No recipient address: your account has no email on file.",
+        )
+
     subject = "Test Email from The Logbook"
     template_type = None
     html_body = _build_test_html(organization)
@@ -170,7 +180,7 @@ async def send_test_email(
     # Send the email (also logs to message_history automatically)
     email_svc = EmailService(organization=organization)
     success_count, failure_count = await email_svc.send_email(
-        to_emails=[body.to_email],
+        to_emails=[to_email],
         subject=subject,
         html_body=html_body,
         text_body=text_body,
@@ -182,9 +192,11 @@ async def send_test_email(
 
     is_success = success_count > 0
     if not is_success:
-        logger.warning(f"Test email to {body.to_email} failed")
+        logger.warning(f"Test email to {_redact_email(to_email)} failed")
     else:
-        logger.info(f"Test email sent to {body.to_email} by {current_user.id}")
+        logger.info(
+            f"Test email sent to {_redact_email(to_email)} by {current_user.id}"
+        )
 
     # Return the exact history record this send created. Fetching by the
     # id captured during the send avoids the race where "the latest row for

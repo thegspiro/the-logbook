@@ -152,7 +152,7 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
             placeholder="Renewal pathway details..."
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Renewal Type *</label>
             <select
@@ -180,7 +180,7 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Renewal Window (days)</label>
             <input
@@ -407,7 +407,7 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
             required
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Qualification Type *</label>
             <select
@@ -432,7 +432,7 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Certification Number</label>
             <input
@@ -452,7 +452,7 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Issued Date</label>
             <input
@@ -581,7 +581,7 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
             required
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Exercise Type *</label>
             <select
@@ -617,7 +617,7 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
             placeholder="Exercise scenario and objectives..."
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Lead Agency</label>
             <input
@@ -641,7 +641,7 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
         </div>
         <fieldset className="border-theme-surface-border rounded-lg border p-3">
           <legend className="text-theme-text-secondary px-1 text-sm font-medium">Participating Organization</legend>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={labelClass}>Organization Name</label>
               <input
@@ -737,7 +737,7 @@ const RecertificationSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-theme-text-primary text-lg font-semibold">Recertification Pathways</h3>
           <p className="text-theme-text-muted text-sm">
@@ -861,7 +861,7 @@ const CompetencySection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-theme-text-primary text-lg font-semibold">Competency Matrices</h3>
           <p className="text-theme-text-muted text-sm">
@@ -916,6 +916,7 @@ const CompetencySection: React.FC = () => {
 };
 
 const InstructorsSection: React.FC = () => {
+  const tz = useTimezone();
   const loadQualData = useCallback(() => instructorService.getQualifications(), []);
   const {
     data: qualifications,
@@ -934,7 +935,7 @@ const InstructorsSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-theme-text-primary text-lg font-semibold">Instructor Qualifications</h3>
           <p className="text-theme-text-muted text-sm">Track who is qualified to instruct and evaluate per NFPA 1041</p>
@@ -983,10 +984,12 @@ const InstructorsSection: React.FC = () => {
               {qualifications.map((qual) => (
                 <tr key={qual.id} className="border-theme-surface-border/50 border-b">
                   <td className="text-theme-text-primary py-2 pr-4">{qual.user_name || qual.user_id}</td>
-                  <td className="py-2 pr-4 capitalize">{qual.qualification_type}</td>
+                  {/* The stored values are snake_case (`lead_instructor`), so
+                      `capitalize` alone leaves the underscore on screen. */}
+                  <td className="py-2 pr-4 capitalize">{qual.qualification_type.replace(/_/g, ' ')}</td>
                   <td className="py-2 pr-4">{qual.certification_level || '-'}</td>
                   <td className="py-2 pr-4">{qual.certification_number || '-'}</td>
-                  <td className="py-2 pr-4">{qual.expiration_date || '-'}</td>
+                  <td className="py-2 pr-4">{qual.expiration_date ? formatDate(qual.expiration_date, tz) : '-'}</td>
                   <td className="py-2">
                     <span
                       className={`rounded-sm px-2 py-0.5 text-xs ${
@@ -1134,7 +1137,9 @@ const EffectivenessSection: React.FC = () => {
                       {ev.knowledge_gain_percentage != null ? (
                         <span className={ev.knowledge_gain_percentage >= 0 ? 'text-green-600' : 'text-red-600'}>
                           {ev.knowledge_gain_percentage > 0 ? '+' : ''}
-                          {ev.knowledge_gain_percentage}%
+                          {/* Computed as a ratio of two scores, so it arrives
+                              with full float precision (58.620689655…). */}
+                          {ev.knowledge_gain_percentage.toFixed(1)}%
                         </span>
                       ) : (
                         '-'
@@ -1153,6 +1158,7 @@ const EffectivenessSection: React.FC = () => {
 };
 
 const MultiAgencySection: React.FC = () => {
+  const tz = useTimezone();
   const loadExerciseData = useCallback(() => multiAgencyService.getExercises(), []);
   const { data: exercises, loading, reload: loadData } = useLoadData(loadExerciseData, [] as MultiAgencyTraining[]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1167,7 +1173,7 @@ const MultiAgencySection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-theme-text-primary text-lg font-semibold">Multi-Agency Training</h3>
           <p className="text-theme-text-muted text-sm">
@@ -1198,7 +1204,7 @@ const MultiAgencySection: React.FC = () => {
                   <h4 className="text-theme-text-primary font-medium">{exercise.exercise_name}</h4>
                   <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                     <span className="capitalize">{exercise.exercise_type.replace(/_/g, ' ')}</span>
-                    <span>{exercise.exercise_date}</span>
+                    <span>{formatDate(exercise.exercise_date, tz)}</span>
                     {exercise.total_participants && <span>{exercise.total_participants} participants</span>}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
@@ -1391,7 +1397,7 @@ const ReportsSection: React.FC = () => {
       </div>
 
       <div className="border-theme-surface-border border-t pt-6">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h4 className="text-theme-text-primary text-sm font-medium">Compliance Forecast</h4>
             <p className="text-theme-text-muted text-xs">

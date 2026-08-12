@@ -70,6 +70,22 @@ async function optimize(target) {
 const DESKTOP = { width: 1440, height: 900 };
 const MOBILE = { width: 414, height: 896 };
 
+/**
+ * A shot's `viewport`: "mobile", omitted for desktop, or an explicit
+ * `{ width, height }`.
+ *
+ * The explicit form exists for elements sized against the viewport rather than
+ * their content — a modal at `max-h-[90dvh]` with its own scrollbar is as tall
+ * as the window and no taller, so neither a full-page shot nor an element shot
+ * can reach the buttons at its foot. Giving that one shot a taller window is
+ * the only framing that contains the whole dialog.
+ */
+function viewportFor(shot) {
+  if (!shot.viewport) return DESKTOP;
+  if (shot.viewport === "mobile") return MOBILE;
+  return shot.viewport;
+}
+
 const args = process.argv.slice(2);
 const onlyIndex = args.indexOf("--only");
 const only = onlyIndex >= 0 ? args[onlyIndex + 1] : null;
@@ -83,6 +99,18 @@ const headed = args.includes("--headed");
 async function settle(page) {
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(700);
+  // Then wait out any spinner. A tab switch mounts its panel, which fetches on
+  // mount — the request has not been issued yet when networkidle resolves, so
+  // the wait above returns while the panel is still a spinner and the shot
+  // captures loading state instead of content. Bounded and best-effort: a page
+  // that legitimately spins forever should still produce an image to look at.
+  await page
+    .waitForFunction(
+      () => document.querySelectorAll(".animate-spin").length === 0,
+      undefined,
+      { timeout: 15_000 },
+    )
+    .catch(() => {});
 }
 
 /**
@@ -92,7 +120,7 @@ async function settle(page) {
  * so shots are flagged here and the applier leaves the placeholder alone.
  */
 const EMPTY_STATE =
-  /\bno [a-z .'-]{2,40}\b(found|yet|scheduled|available|to show)|get started by (creating|adding)|nothing (here|to show)/i;
+  /\bno [a-z .'-]{2,40}\b(found|yet|scheduled|available|to show)|get started by (creating|adding)|nothing (here|to show)|^no\s+[a-z0-9 .'-]{2,60}$/i;
 
 /**
  * The app's ErrorBoundary renders this when a page throws during render. It is
@@ -112,7 +140,7 @@ const CRASHED = /Oops! Something went wrong|Show error details/i;
  * page somewhere it cannot render. Failing the shot is what surfaces that.
  */
 const PAGE_ERROR =
-  /no [a-z ]{2,30} (id )?provided|failed to load|could not be loaded|unable to load|invalid (id|request)/i;
+  /no [a-z ]{2,30} (id |ids )?(provided|specified|selected)|failed to load|could not be loaded|unable to load|invalid (id|request)|go back to [a-z ]{2,30} and select/i;
 
 async function detectPageError(page) {
   const text = await pageText(page);
@@ -133,11 +161,27 @@ async function detectCrash(page) {
   return CRASHED.test(text);
 }
 
+/**
+ * Longest line that can plausibly *be* an empty-state message rather than
+ * merely contain the words. Empty states are standalone headings or one-liners
+ * ("No certifications expiring within 90 days", "No Integrations Yet"); the
+ * false positives are the same words buried mid-sentence in body copy.
+ */
+const EMPTY_STATE_MAX_LINE = 80;
+
+/**
+ * The last alternative in EMPTY_STATE — a whole short line beginning "No …" —
+ * is only safe because of the line scoping below, and it closes a real gap:
+ * the earlier pattern required the phrase to end in found/yet/scheduled/
+ * available/to show, so "No certifications expiring within 90 days" scanned as
+ * populated. That page was published-eligible while showing nothing, which is
+ * the failure this whole check exists to prevent.
+ */
+
 async function detectEmptyState(page, selector) {
   // Scan what the image will actually contain. A clipped shot pictures one
   // section, and scanning the whole page around it flags copy that is nowhere
-  // in the screenshot — the account security tab says "nothing here is
-  // required for membership", which is prose, not an empty state.
+  // in the screenshot.
   const text = selector
     ? await page
         .locator(selector)
@@ -145,8 +189,21 @@ async function detectEmptyState(page, selector) {
         .innerText()
         .catch(() => "")
     : await pageText(page);
-  const match = text.match(EMPTY_STATE);
-  return match ? match[0].trim() : null;
+
+  // Match per line, and only on lines short enough to be the message itself.
+  // Scanning the whole blob matches prose that happens to contain the phrase:
+  // the account security tab reads "These are optional — nothing here is
+  // required for membership", which held back a perfectly good screenshot of
+  // the Privacy Choices section. Scoping to `selector` was the previous
+  // mitigation, but a fullPage shot has no selector to scope to, so the guard
+  // has to hold on the text itself.
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.length > EMPTY_STATE_MAX_LINE) continue;
+    const match = trimmed.match(EMPTY_STATE);
+    if (match) return match[0].trim();
+  }
+  return null;
 }
 
 async function signIn(page, credentials) {
@@ -322,7 +379,15 @@ async function main() {
     const target = resolve(OUTPUT_DIR, `${shot.id}.png`);
     const page = await sessions.pageFor(shot);
     try {
-      await page.setViewportSize(shot.viewport === "mobile" ? MOBILE : DESKTOP);
+      await page.setViewportSize(viewportFor(shot));
+      if (shot.beforeNavigate) {
+        // Install route mocks before the first document request. This is used
+        // sparingly for provider-controlled configuration states (for example,
+        // showing both SSO choices without committing real OAuth secrets to the
+        // demo database). A prepare step is too late because the page fetches
+        // that configuration while mounting.
+        await shot.beforeNavigate(page);
+      }
       await page.goto(`${BASE_URL}${shot.route}`, {
         waitUntil: "domcontentloaded",
       });

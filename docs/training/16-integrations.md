@@ -31,6 +31,7 @@ The Integrations module connects The Logbook to external services — calendar s
 Navigate to **Settings > Integrations** (`/integrations`) to view and manage all external connections.
 
 The integrations page shows:
+
 - **Connected integrations** with status indicators (green = healthy, yellow = error)
 - **Available integrations** that can be configured
 - **Coming Soon** integrations planned for future releases
@@ -44,37 +45,37 @@ The integrations page shows:
 
 ### Currently Available
 
-| Category | Integration | Description |
-|----------|-------------|-------------|
-| **Calendar** | Google Calendar | Two-way event sync |
-| **Calendar** | Microsoft Outlook | Calendar and contact sync |
-| **Calendar** | iCalendar (ICS) | Subscribe to filtered ICS feed URLs |
-| **Messaging** | Slack | Event alerts, training reminders, custom channels |
-| **Messaging** | Discord | Webhook notifications, event reminders |
-| **Messaging** | Microsoft Teams | Adaptive Cards, channel notifications |
-| **CRM** | Salesforce | Contact sync, donor management, bidirectional |
-| **Documents** | Documenso | Send documents for e-signature (open-source DocuSign alternative) |
-| **Scheduling** | Cal.com | Self-scheduling links and booking sync (open-source Calendly alternative) |
-| **Payments** | PayPal | Match incoming store payments to department store orders automatically |
-| **Data** | CSV Import/Export | Member import, training/inventory export |
-| **Data** | Generic Webhooks | HMAC-signed event notifications to any URL |
-| **Safety** | NWS Weather Alerts | Tornado, flood, fire weather alerts (free) |
-| **Reporting** | Generic ePCR Import | CSV or NEMSIS XML from any ePCR vendor |
-| **Reporting** | NEMSIS Response Module Export | NEMSIS 3.5 format for state EMS reporting |
-| **Reporting** | NFIRS Export | NFIRS 5.0 format for state fire marshal |
+| Category       | Integration                   | Description                                                               |
+| -------------- | ----------------------------- | ------------------------------------------------------------------------- |
+| **Calendar**   | Google Calendar               | Two-way event sync                                                        |
+| **Calendar**   | Microsoft Outlook             | Calendar and contact sync                                                 |
+| **Calendar**   | iCalendar (ICS)               | Subscribe to filtered ICS feed URLs                                       |
+| **Messaging**  | Slack                         | Event alerts, training reminders, custom channels                         |
+| **Messaging**  | Discord                       | Webhook notifications, event reminders                                    |
+| **Messaging**  | Microsoft Teams               | Adaptive Cards, channel notifications                                     |
+| **CRM**        | Salesforce                    | Contact sync, donor management, bidirectional                             |
+| **Documents**  | Documenso                     | Send documents for e-signature (open-source DocuSign alternative)         |
+| **Scheduling** | Cal.com                       | Self-scheduling links and booking sync (open-source Calendly alternative) |
+| **Payments**   | PayPal                        | Match incoming store payments to department store orders automatically    |
+| **Data**       | CSV Import/Export             | Member import, training/inventory export                                  |
+| **Data**       | Generic Webhooks              | HMAC-signed event notifications to any URL                                |
+| **Safety**     | NWS Weather Alerts            | Tornado, flood, fire weather alerts (free)                                |
+| **Reporting**  | Generic ePCR Import           | CSV or NEMSIS XML from any ePCR vendor                                    |
+| **Reporting**  | NEMSIS Response Module Export | NEMSIS 3.5 format for state EMS reporting                                 |
+| **Reporting**  | NFIRS Export                  | NFIRS 5.0 format for state fire marshal                                   |
 
 ### Coming Soon
 
-| Integration | Description |
-|-------------|-------------|
-| WhatsApp | Notifications and group messages |
-| Active911 | Dispatch alerts and mapping |
-| PulsePoint | CPR alerts and AED locations |
-| ImageTrend ePCR | ePCR sync and run reports |
-| ESO Solutions | ePCR data exchange |
+| Integration         | Description                       |
+| ------------------- | --------------------------------- |
+| WhatsApp            | Notifications and group messages  |
+| Active911           | Dispatch alerts and mapping       |
+| PulsePoint          | CPR alerts and AED locations      |
+| ImageTrend ePCR     | ePCR sync and run reports         |
+| ESO Solutions       | ePCR data exchange                |
 | NREMT Certification | Certification status verification |
-| Google Maps | Hydrant mapping and pre-plans |
-| Zapier | Connect to 5,000+ apps |
+| Google Maps         | Hydrant mapping and pre-plans     |
+| Zapier              | Connect to 5,000+ apps            |
 
 ---
 
@@ -86,7 +87,7 @@ The integrations page shows:
 4. Click **Test Connection** to verify credentials
 5. Save to activate
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of an integration connection dialog (e.g., Slack) showing the webhook URL field, test connection button, and save button._
+![Slack connect dialog with its webhook URL field](./images/16-02-slack-connect.png)
 
 ---
 
@@ -96,23 +97,42 @@ The Salesforce integration provides **bidirectional sync** between The Logbook a
 
 ### Configuration
 
-| Field | Description |
-|-------|-------------|
-| **Instance URL** | Your Salesforce org URL (e.g., `https://yourorg.my.salesforce.com`) |
-| **Client ID** | Connected App client ID from Salesforce Setup |
-| **Client Secret** | OAuth client secret |
-| **Refresh Token** | OAuth refresh token (obtained via OAuth flow) |
-| **Environment** | `production` or `sandbox` |
-| **Sync Direction** | `push` (Logbook → SF), `pull` (SF → Logbook), or `both` |
+| Field              | Description                                                                |
+| ------------------ | -------------------------------------------------------------------------- |
+| **Instance URL**   | Your Salesforce org URL (e.g., `https://yourorg.my.salesforce.com`)        |
+| **Client ID**      | Connected App client ID from Salesforce Setup                              |
+| **Client Secret**  | OAuth client secret                                                        |
+| **Refresh Token**  | Optional OAuth refresh token; leave empty for a service-account connection |
+| **Environment**    | `production` or `sandbox`                                                  |
+| **Sync Direction** | `push` (Logbook → SF), `pull` (SF → Logbook), or `both`                    |
+
+### Choose an Authentication Method
+
+**Interactive connection (recommended for an administrator-managed org):**
+select **Connect with Salesforce**. The authorization-code flow stores the
+resulting refresh token encrypted and renews access tokens automatically.
+
+**Service account (recommended for unattended scheduled sync):** create a
+Salesforce Connected App with **OAuth 2.0 Client Credentials Flow** enabled,
+select a dedicated least-privilege **Run As** integration user, enter the org's
+My Domain URL plus the Connected App client ID and secret, and leave **Refresh
+Token** empty. Do not enter or store the Run As user's password. The Run As user
+needs **API Enabled** and only the object and field permissions required for the
+selected sync types.
+
+Before the first write, run the readiness check and preview. Create the
+recommended `Logbook_*__c` external-ID fields: Contact matching can fall back to
+email, but Task and Event pushes can duplicate records without their external
+IDs.
 
 ### Sync Types
 
-| Action | Description |
-|--------|-------------|
-| **Push Members** | Sync all active members to Salesforce contacts |
-| **Push Training** | Sync training records and certifications |
-| **Push Events** | Sync department events |
-| **Pull Contacts** | Import Salesforce contacts to Logbook |
+| Action            | Description                                    |
+| ----------------- | ---------------------------------------------- |
+| **Push Members**  | Sync all active members to Salesforce contacts |
+| **Push Training** | Sync training records and certifications       |
+| **Push Events**   | Sync department events                         |
+| **Pull Contacts** | Import Salesforce contacts to Logbook          |
 
 ### How to Sync
 
@@ -133,13 +153,14 @@ Salesforce can push contact updates back to The Logbook via a webhook at `POST /
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Salesforce API rate limit hit | Retried with exponential backoff |
-| Field mapping mismatch | Warning logged; unmatched fields skipped |
-| Sandbox vs production mismatch | Warning shown; data won't sync to production from sandbox |
-| OAuth token expired | Auto-refreshed transparently |
-| Conflict on bidirectional sync | Last-write-wins with conflict logged |
+| Scenario                       | Behavior                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Salesforce API rate limit hit  | Retried up to three times, honoring `Retry-After` or using bounded exponential backoff           |
+| A later SOQL result page fails | The pull fails; partial results are never applied as a successful pull                           |
+| Field mapping mismatch         | Warning logged; unmatched fields skipped                                                         |
+| Sandbox vs production mismatch | Warning shown; data won't sync to production from sandbox                                        |
+| OAuth token expired            | Auto-refreshed transparently                                                                     |
+| Conflict on bidirectional sync | There is no conflict-policy setting; the permitted direction determines which write applies last |
 
 ---
 
@@ -149,11 +170,11 @@ Salesforce can push contact updates back to The Logbook via a webhook at `POST /
 
 ### Configuration
 
-| Field | Description |
-|-------|-------------|
-| **API Token** | Create under **Settings > API** in your Documenso dashboard. Stored encrypted. |
-| **API Base URL** | Leave blank for Documenso Cloud. Self-hosted instances use `https://your-host/api/v1`. |
-| **Webhook Secret** *(optional)* | A shared secret that enables automatic pipeline auto-advance when a document is signed (see below). |
+| Field                           | Description                                                                                         |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **API Token**                   | Create under **Settings > API** in your Documenso dashboard. Stored encrypted.                      |
+| **API Base URL**                | Leave blank for Documenso Cloud. Self-hosted instances use `https://your-host/api/v1`.              |
+| **Webhook Secret** _(optional)_ | A shared secret that enables automatic pipeline auto-advance when a document is signed (see below). |
 
 After entering the token, click **Test Connection** to verify it.
 
@@ -171,9 +192,9 @@ Add this URL as a webhook in Documenso and have it send the secret in the `X-Doc
 
 ### Using Documenso in the Membership Pipeline
 
-Once Documenso is connected, a **Document Upload** pipeline stage gains a **Collection Method** option — switch it from *Upload* to *Documenso e-signature*. Applicants then see a "Documents sent for signature" note on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
+Once Documenso is connected, a **Document Upload** pipeline stage gains a **Collection Method** option — switch it from _Upload_ to _Documenso e-signature_. Applicants then see a "Documents sent for signature" note on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Documenso connect dialog showing the API Token, API Base URL, and Webhook Secret fields with the generated callback URL displayed below the secret field._
+![Documenso connect dialog with its API token and webhook fields](./images/16-04-documenso-connect.png)
 
 ---
 
@@ -183,11 +204,11 @@ Once Documenso is connected, a **Document Upload** pipeline stage gains a **Coll
 
 ### Configuration
 
-| Field | Description |
-|-------|-------------|
-| **API Key** | Create under **Settings > Developer > API keys** in Cal.com. Stored encrypted. |
-| **API Base URL** | Leave blank for Cal.com Cloud. Self-hosted instances use `https://your-host/api/v1`. |
-| **Webhook Secret** *(optional)* | A signing secret that enables automatic pipeline auto-advance when an applicant books (see below). |
+| Field                           | Description                                                                                        |
+| ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **API Key**                     | Create under **Settings > Developer > API keys** in Cal.com. Stored encrypted.                     |
+| **API Base URL**                | Leave blank for Cal.com Cloud. Self-hosted instances use `https://your-host/api/v1`.               |
+| **Webhook Secret** _(optional)_ | A signing secret that enables automatic pipeline auto-advance when an applicant books (see below). |
 
 Click **Test Connection** to verify the key.
 
@@ -207,7 +228,7 @@ Add this URL as a Cal.com webhook subscribed to the **BOOKING_CREATED** event, u
 
 ### Using Cal.com in the Membership Pipeline
 
-Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** option — switch it from *Manual* to *Cal.com* and paste your booking link. Applicants then see a **Schedule** button on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
+Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** option — switch it from _Manual_ to _Cal.com_ and paste your booking link. Applicants then see a **Schedule** button on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the connected Cal.com card with the "Bookings" button, and the Bookings panel below listing upcoming interviews with attendee, time, and status._
 
@@ -217,20 +238,20 @@ Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** o
 
 **PayPal** connects your department's own PayPal **Business** account so that incoming payments are matched to [Department Store](./18-storefront.md) orders automatically, instead of somebody ticking "mark paid" for each one.
 
-**The Logbook never takes a payment.** This integration works in the opposite direction: PayPal tells The Logbook what it *received*. There is no checkout and no money passes through the application. Marking orders paid by hand still works exactly as before, and remains the only option for Venmo, Cash App, Zelle, cash and checks.
+**The Logbook never takes a payment.** This integration works in the opposite direction: PayPal tells The Logbook what it _received_. There is no checkout and no money passes through the application. Marking orders paid by hand still works exactly as before, and remains the only option for Venmo, Cash App, Zelle, cash and checks.
 
 > **Why only PayPal?** Venmo publishes no API for personal or peer-to-peer transfers, and Zelle runs inside each bank's own app. PayPal is the only one of the common payment apps that can report back, so it is the only one that can settle an order without a person.
 
 ### Configuration
 
-| Field | Description |
-|-------|-------------|
-| **Environment** | **Sandbox** (testing) or **Live**. Defaults to sandbox. Credentials are not interchangeable between the two. |
+| Field                             | Description                                                                                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Environment**                   | **Sandbox** (testing) or **Live**. Defaults to sandbox. Credentials are not interchangeable between the two.                                                                               |
 | **Client ID** / **Client Secret** | From a REST app at [developer.paypal.com](https://developer.paypal.com) → **Apps & Credentials**. Stored encrypted, never displayed back. Leave blank when editing to keep what is stored. |
-| **Webhook ID** | **Required.** PayPal assigns this when you add the webhook (below). Without it, incoming payments cannot be verified and are rejected. |
-| **Settle orders automatically** | On by default. See the matching rules below. |
+| **Webhook ID**                    | **Required.** PayPal assigns this when you add the webhook (below). Without it, incoming payments cannot be verified and are rejected.                                                     |
+| **Settle orders automatically**   | On by default. See the matching rules below.                                                                                                                                               |
 
-**Test Connection** verifies the credentials. It deliberately reports a *warning* rather than a plain success when the Webhook ID is missing — credentials alone reconcile nothing.
+**Test Connection** verifies the credentials. It deliberately reports a _warning_ rather than a plain success when the Webhook ID is missing — credentials alone reconcile nothing.
 
 ### Adding the Webhook
 
@@ -253,13 +274,13 @@ A payment settles an order automatically only when **both** hold:
 
 Anything else is recorded and left for a person under **Store Admin > Payments**:
 
-| Outcome | Meaning |
-|---------|---------|
-| Applied | Matched and settled |
-| Matched — not applied | Would have settled, but automatic settlement is turned off |
-| No order found | The reference carried no order number |
-| Needs a decision | Amount doesn't match, or the order is cancelled or already square |
-| Dismissed | An administrator decided it wasn't a store payment |
+| Outcome               | Meaning                                                           |
+| --------------------- | ----------------------------------------------------------------- |
+| Applied               | Matched and settled                                               |
+| Matched — not applied | Would have settled, but automatic settlement is turned off        |
+| No order found        | The reference carried no order number                             |
+| Needs a decision      | Amount doesn't match, or the order is cancelled or already square |
+| Dismissed             | An administrator decided it wasn't a store payment                |
 
 Fuzzy matching on payer name or amount alone was considered and rejected: two members can easily owe the same amount in the same order window, and crediting the wrong member's order is worse than a short wait in a queue.
 
@@ -280,7 +301,7 @@ The matcher reads whatever reference the payer or the department attached:
 - **Apply to order** — settles the order. For an unmatched payment, enter the order to credit first. This writes through the normal payment path, so the order timeline, the member's receipt email, and the window rollups all behave as if it had been marked paid by hand.
 - **Dismiss** — for payments that aren't store orders at all (a donation, a dues payment, a refund). An applied payment cannot be dismissed.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the PayPal connect dialog showing the Environment dropdown, Client ID/Secret fields, Webhook ID field with the generated callback URL below it, and the "Settle orders automatically" checkbox._
+![PayPal connect dialog with environment and credential fields](./images/16-06-paypal-connect.png)
 
 For the full store walkthrough, see [Department Store](./18-storefront.md).
 
@@ -351,8 +372,8 @@ The **NWS Weather Alerts** integration pulls tornado, flood, and fire weather wa
 
 ### Configuration
 
-| Field | Description |
-|-------|-------------|
+| Field           | Description                                                                |
+| --------------- | -------------------------------------------------------------------------- |
 | **NWS Zone ID** | Your area's zone code (format: `[STATE][C or Z][3DIGITS]`, e.g., `VAZ053`) |
 
 ### How It Works
@@ -407,10 +428,10 @@ Send event notifications to any external system via HTTP POST:
 
 ### Configuration
 
-| Field | Description |
-|-------|-------------|
-| **Webhook URL** | Your endpoint that receives POST requests |
-| **Secret** | Optional HMAC signing secret for `X-Webhook-Signature` header |
+| Field           | Description                                                   |
+| --------------- | ------------------------------------------------------------- |
+| **Webhook URL** | Your endpoint that receives POST requests                     |
+| **Secret**      | Optional HMAC signing secret for `X-Webhook-Signature` header |
 
 ### Payload Format
 
@@ -443,6 +464,7 @@ Events you can subscribe to include: member created/updated, training completed,
 Training provider integrations are configured from **Training Admin > Integrations** (separate from the general integrations page). See [Training & Certification > External Training Integrations](./02-training.md#external-training-integrations) for details.
 
 Available training providers:
+
 - **Vector Solutions** — Category catalog fetch, credit hours, auto-sync
 - **Target Solutions** — Training record import
 - **Lexipol** — Policy training sync
@@ -455,14 +477,15 @@ Available training providers:
 
 The integrations dashboard shows health status for each connected integration:
 
-| Indicator | Meaning |
-|-----------|---------|
-| **Green checkmark** | Connected and healthy — last sync successful |
-| **Yellow warning** | Connected but last sync failed — check error details |
-| **Gray dot** | Not connected — available to configure |
-| **Red X** | Connection lost — credentials may have expired |
+| Indicator           | Meaning                                              |
+| ------------------- | ---------------------------------------------------- |
+| **Green checkmark** | Connected and healthy — last sync successful         |
+| **Yellow warning**  | Connected but last sync failed — check error details |
+| **Gray dot**        | Not connected — available to configure               |
+| **Red X**           | Connection lost — credentials may have expired       |
 
 Click any integration to see:
+
 - Last sync timestamp
 - Last error message (if any)
 - Consecutive error count
@@ -474,20 +497,20 @@ Click any integration to see:
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| Integration shows "Connection failed" | Verify credentials haven't expired. Click "Test Connection" to diagnose. |
-| Salesforce sync shows field mapping errors | Check field mappings via the integration detail page. Ensure Salesforce fields exist. |
-| Webhook not receiving events | Verify your endpoint is reachable from the internet. Check the webhook URL. Test with a curl command. |
-| Weather alerts not showing | Verify your NWS Zone ID is correct. Check that the NOAA API is responding. |
-| ICS feed not updating | Allow up to 1 hour for calendar apps to refresh. Verify the feed URL is correct. |
-| ePCR import fails | Check the file format (CSV or NEMSIS XML). Ensure column headers match expected format. |
-| Slack notifications not appearing | Verify the webhook URL in Slack workspace settings. Check channel permissions. |
-| Documenso "connection failed" | Verify the API token under **Settings > API** and the base URL (self-hosted instances only). |
-| Cal.com "connection failed" | Verify the API key under **Settings > Developer > API keys**. |
+| Issue                                                   | Solution                                                                                                                                                                                                     |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Integration shows "Connection failed"                   | Verify credentials haven't expired. Click "Test Connection" to diagnose.                                                                                                                                     |
+| Salesforce sync shows field mapping errors              | Check field mappings via the integration detail page. Ensure Salesforce fields exist.                                                                                                                        |
+| Webhook not receiving events                            | Verify your endpoint is reachable from the internet. Check the webhook URL. Test with a curl command.                                                                                                        |
+| Weather alerts not showing                              | Verify your NWS Zone ID is correct. Check that the NOAA API is responding.                                                                                                                                   |
+| ICS feed not updating                                   | Allow up to 1 hour for calendar apps to refresh. Verify the feed URL is correct.                                                                                                                             |
+| ePCR import fails                                       | Check the file format (CSV or NEMSIS XML). Ensure column headers match expected format.                                                                                                                      |
+| Slack notifications not appearing                       | Verify the webhook URL in Slack workspace settings. Check channel permissions.                                                                                                                               |
+| Documenso "connection failed"                           | Verify the API token under **Settings > API** and the base URL (self-hosted instances only).                                                                                                                 |
+| Cal.com "connection failed"                             | Verify the API key under **Settings > Developer > API keys**.                                                                                                                                                |
 | Signed document or booking didn't advance the applicant | Confirm the Webhook Secret matches on both sides, the callback URL is correct, the signer/attendee email matches the applicant, and the applicant's **current** stage is configured to use that integration. |
-| OAuth token expired | Most integrations auto-refresh tokens. If persistent, disconnect and reconnect. |
-| PHI data in integration | ePCR and medical integrations are flagged as containing PHI. Data is processed and deleted after import per HIPAA requirements. |
+| OAuth token expired                                     | Most integrations auto-refresh tokens. If persistent, disconnect and reconnect.                                                                                                                              |
+| PHI data in integration                                 | ePCR and medical integrations are flagged as containing PHI. Data is processed and deleted after import per HIPAA requirements.                                                                              |
 
 ---
 
@@ -556,11 +579,11 @@ Steve also sets up an ICS feed so members can subscribe to their personal shift 
 
 The next week, Steve checks the integrations dashboard:
 
-| Integration | Status | Last Sync | Notes |
-|-------------|--------|-----------|-------|
-| Slack | Green (healthy) | 2 hours ago | 14 notifications sent this week |
-| Google Calendar | Green (healthy) | 30 min ago | 8 events synced |
-| iCalendar (ICS) | Green (healthy) | N/A (pull-based) | 12 subscribers |
+| Integration     | Status          | Last Sync        | Notes                           |
+| --------------- | --------------- | ---------------- | ------------------------------- |
+| Slack           | Green (healthy) | 2 hours ago      | 14 notifications sent this week |
+| Google Calendar | Green (healthy) | 30 min ago       | 8 events synced                 |
+| iCalendar (ICS) | Green (healthy) | N/A (pull-based) | 12 subscribers                  |
 
 **Edge case encountered:** On Wednesday, Slack returns a 429 (rate limit) error during a bulk event creation. The Logbook retries with exponential backoff and succeeds on the second attempt. Steve sees a brief yellow warning that auto-resolves.
 
@@ -568,14 +591,14 @@ The next week, Steve checks the integrations dashboard:
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Slack webhook URL becomes invalid (channel deleted) | Integration shows red status; error: "channel_not_found". Reconnect with new URL. |
-| Google OAuth token expires | Auto-refreshed transparently. If refresh fails, integration shows yellow with "Re-authenticate" button. |
-| ICS feed subscriber exceeds rate limit | Feed returns 429; subscriber's calendar app retries automatically. |
-| Two integrations send the same event notification | Each integration sends independently — member may see duplicate notifications in Slack and email. Configure triggers to avoid overlap. |
-| Webhook secret not configured | Notifications still send but without HMAC signature — receiving system cannot verify authenticity. |
-| Integration configured but module disabled | Events from disabled modules don't trigger notifications (e.g., inventory disabled → no equipment alerts). |
+| Scenario                                            | Behavior                                                                                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Slack webhook URL becomes invalid (channel deleted) | Integration shows red status; error: "channel_not_found". Reconnect with new URL.                                                      |
+| Google OAuth token expires                          | Auto-refreshed transparently. If refresh fails, integration shows yellow with "Re-authenticate" button.                                |
+| ICS feed subscriber exceeds rate limit              | Feed returns 429; subscriber's calendar app retries automatically.                                                                     |
+| Two integrations send the same event notification   | Each integration sends independently — member may see duplicate notifications in Slack and email. Configure triggers to avoid overlap. |
+| Webhook secret not configured                       | Notifications still send but without HMAC signature — receiving system cannot verify authenticity.                                     |
+| Integration configured but module disabled          | Events from disabled modules don't trigger notifications (e.g., inventory disabled → no equipment alerts).                             |
 
 ---
 

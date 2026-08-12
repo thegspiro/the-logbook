@@ -48,6 +48,7 @@ from app.schemas.election import (
     VoterEligibility,
 )
 from app.services.email_service import EmailService
+from app.services.email_theme import TABLE_STYLE, TD_STYLE, TH_STYLE
 
 
 class ElectionService:
@@ -3452,6 +3453,10 @@ class ElectionService:
             description=source.description,
             election_type=source.election_type,
             positions=copy.deepcopy(source.positions),
+            # Ballot items are the core of a reusable ballot.  Copy the JSON
+            # structure deeply so a later edit to the clone cannot mutate a
+            # mutable source value held by the ORM session.
+            ballot_items=copy.deepcopy(source.ballot_items),
             position_eligibility=copy.deepcopy(source.position_eligibility),
             start_date=start_date,
             end_date=end_date,
@@ -6412,13 +6417,13 @@ Best regards,
         # HTML table
         rows = []
         rows.append(
-            '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
-            '<tr style="background:#f3f4f6;">'
-            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Position</th>'
-            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Candidate</th>'
-            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Votes</th>'
-            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">%</th>'
-            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Result</th>'
+            f'<table style="{TABLE_STYLE}">'
+            "<tr>"
+            f'<th style="{TH_STYLE}text-align:left;">Position</th>'
+            f'<th style="{TH_STYLE}text-align:left;">Candidate</th>'
+            f'<th style="{TH_STYLE}text-align:center;">Votes</th>'
+            f'<th style="{TH_STYLE}text-align:center;">%</th>'
+            f'<th style="{TH_STYLE}text-align:center;">Result</th>'
             "</tr>"
         )
 
@@ -6431,11 +6436,11 @@ Best regards,
                 pct = f"{candidate.percentage:.1f}%"
                 result_label = "\u2705 Elected" if candidate.is_winner else "\u2014"
                 rows.append(
-                    f'<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">{position}</td>'
-                    f'<td style="padding:8px;border-bottom:1px solid #e5e7eb;">{name}</td>'
-                    f'<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">{candidate.vote_count}</td>'
-                    f'<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">{pct}</td>'
-                    f'<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">{result_label}</td></tr>'
+                    f'<tr><td style="{TD_STYLE}">{position}</td>'
+                    f'<td style="{TD_STYLE}">{name}</td>'
+                    f'<td style="{TD_STYLE}text-align:center;">{candidate.vote_count}</td>'
+                    f'<td style="{TD_STYLE}text-align:center;">{pct}</td>'
+                    f'<td style="{TD_STYLE}text-align:center;">{result_label}</td></tr>'
                 )
                 winner_text = " — ELECTED" if candidate.is_winner else ""
                 text_parts.append(
@@ -6507,10 +6512,9 @@ Best regards,
             )
 
         html_rows = [
-            '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
-            '<tr style="background:#f3f4f6;">'
-            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Member</th>'
-            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Reason</th>'
+            f'<table style="{TABLE_STYLE}"><tr>'
+            f'<th style="{TH_STYLE}text-align:left;">Member</th>'
+            f'<th style="{TH_STYLE}text-align:left;">Reason</th>'
             "</tr>"
         ]
         text_items = []
@@ -6540,8 +6544,8 @@ Best regards,
             name = html.escape(user.full_name or user.username)
             safe_reason = html.escape(reason)
             html_rows.append(
-                f'<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">{name}</td>'
-                f'<td style="padding:8px;border-bottom:1px solid #e5e7eb;">{safe_reason}</td></tr>'
+                f'<tr><td style="{TD_STYLE}">{name}</td>'
+                f'<td style="{TD_STYLE}">{safe_reason}</td></tr>'
             )
             text_items.append(f"  - {user.full_name or user.username}: {reason}")
 

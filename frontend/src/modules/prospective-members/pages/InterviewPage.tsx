@@ -570,7 +570,7 @@ export const InterviewPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -592,7 +592,7 @@ export const InterviewPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowForm(!showForm)}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:self-auto"
         >
           <MessageSquare className="h-4 w-4" />
           {showForm ? 'Hide Form' : 'New Interview'}

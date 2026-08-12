@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useCallback, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Mail,
   AlertCircle,
@@ -22,12 +23,14 @@ import {
   Eye,
   History,
   RotateCcw,
+  PenLine,
   Send,
   UserCheck,
 } from 'lucide-react';
 import { Breadcrumbs, ConfirmDialog, SkeletonPage } from '../../../components/ux';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
 import { useOfficersStore } from '../store/officersStore';
+import { useFootersStore } from '../store/footersStore';
 import { emailTemplatesService, userService } from '../../../services/api';
 import { TemplateList } from '../components/TemplateList';
 import { TemplateEditor } from '../components/TemplateEditor';
@@ -36,6 +39,7 @@ import ScheduleEmailForm from '../components/ScheduleEmailForm';
 import ScheduledEmailList from '../components/ScheduledEmailList';
 import MessageHistoryList from '../components/MessageHistoryList';
 import OfficersPanel from '../components/OfficersPanel';
+import FootersPanel from '../components/FootersPanel';
 import type { EmailTemplateUpdate, EmailAttachment } from '../types';
 import toast from 'react-hot-toast';
 
@@ -52,6 +56,16 @@ interface PreviewMember {
  * automatically merges type-appropriate sample data from SAMPLE_CONTEXT
  * in email_template_service.py when context is empty.
  */
+
+/**
+ * The page's tabs, in the order they render.
+ *
+ * Declared as a value rather than a bare union so the `?tab=` parameter can be
+ * validated against it — a union alone gives nothing to check an arbitrary
+ * query string against at runtime.
+ */
+const EMAIL_TEMPLATES_TABS = ['templates', 'footers', 'officers', 'scheduled', 'history'] as const;
+type EmailTemplatesTab = (typeof EMAIL_TEMPLATES_TABS)[number];
 
 const EmailTemplatesPage: React.FC = () => {
   const {
@@ -75,8 +89,30 @@ const EmailTemplatesPage: React.FC = () => {
   const [, setIsDirty] = useState(false);
   const officerVariables = useOfficersStore((s) => s.variables);
   const fetchOfficers = useOfficersStore((s) => s.fetchOfficers);
+  const footers = useFootersStore((s) => s.footers);
+  const footerDefaultKey = useFootersStore((s) => s.defaultKey);
+  const fetchFooters = useFootersStore((s) => s.fetchFooters);
 
-  const [activeTab, setActiveTab] = useState<'templates' | 'officers' | 'scheduled' | 'history'>('templates');
+  // All five tabs are addressable. They were plain state, so a link to the
+  // Footers library — the one tab a secretary has cause to send a colleague —
+  // always landed on Templates, and the screenshot harness could only ever
+  // shoot the default.
+  //
+  // Derived from the URL rather than mirrored into state. Mirroring reads the
+  // parameter once, on mount, so every *later* URL change is ignored — and the
+  // Back button is exactly that: click Footers then Officers, press Back, and
+  // the address bar says `?tab=footers` while the page still renders Officers.
+  // One source of truth removes the class of bug rather than patching the
+  // instance, and there is no state left to fall out of step.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab: EmailTemplatesTab = EMAIL_TEMPLATES_TABS.includes(requestedTab as EmailTemplatesTab)
+    ? (requestedTab as EmailTemplatesTab)
+    : 'templates';
+
+  const handleTabChange = (tab: EmailTemplatesTab) => {
+    setSearchParams({ tab });
+  };
   const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [members, setMembers] = useState<PreviewMember[]>([]);
@@ -92,6 +128,9 @@ const EmailTemplatesPage: React.FC = () => {
     // Loaded up front (not only on the Officers tab) so the editor's
     // signature-variable palette is populated on first render.
     void fetchOfficers();
+    // Same reason as the officers: the editor's footer picker has to be
+    // populated before anybody opens the Footers tab.
+    void fetchFooters();
     // Fetch org members for the preview dropdown
     setIsLoadingMembers(true);
     void userService
@@ -111,7 +150,7 @@ const EmailTemplatesPage: React.FC = () => {
         // Non-critical — member dropdown will just be empty
       })
       .finally(() => setIsLoadingMembers(false));
-  }, [fetchTemplates, fetchOfficers]);
+  }, [fetchTemplates, fetchOfficers, fetchFooters]);
 
   // Auto-select first template when loaded
   useEffect(() => {
@@ -268,9 +307,9 @@ const EmailTemplatesPage: React.FC = () => {
         </div>
 
         {/* Tab Bar */}
-        <div className="border-theme-surface-border mb-6 flex items-center gap-1 border-b">
+        <div className="tab-scroll mb-6">
           <button
-            onClick={() => setActiveTab('templates')}
+            onClick={() => handleTabChange('templates')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'templates'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -281,7 +320,18 @@ const EmailTemplatesPage: React.FC = () => {
             Templates
           </button>
           <button
-            onClick={() => setActiveTab('officers')}
+            onClick={() => handleTabChange('footers')}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'footers'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
+            }`}
+          >
+            <PenLine className="h-4 w-4" />
+            Footers
+          </button>
+          <button
+            onClick={() => handleTabChange('officers')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'officers'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -292,7 +342,7 @@ const EmailTemplatesPage: React.FC = () => {
             Officers
           </button>
           <button
-            onClick={() => setActiveTab('scheduled')}
+            onClick={() => handleTabChange('scheduled')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'scheduled'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -303,7 +353,7 @@ const EmailTemplatesPage: React.FC = () => {
             Scheduled
           </button>
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => handleTabChange('history')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'history'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -331,6 +381,9 @@ const EmailTemplatesPage: React.FC = () => {
             </button>
           </div>
         )}
+
+        {/* Footers Tab */}
+        {activeTab === 'footers' && <FootersPanel />}
 
         {/* Officers Tab */}
         {activeTab === 'officers' && <OfficersPanel members={members} isLoadingMembers={isLoadingMembers} />}
@@ -377,7 +430,7 @@ const EmailTemplatesPage: React.FC = () => {
               {selectedTemplate ? (
                 <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
                   {/* Template meta bar */}
-                  <div className="border-theme-surface-border flex items-center justify-between border-b px-5 pt-5 pb-4">
+                  <div className="border-theme-surface-border flex flex-col gap-3 border-b px-5 pt-5 pb-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-4">
                       <p className="text-theme-text-muted text-xs">
                         {selectedTemplate.description || 'No description'}
@@ -460,6 +513,8 @@ const EmailTemplatesPage: React.FC = () => {
                           }}
                           onDirtyChange={setIsDirty}
                           officerVariables={officerVariables}
+                          footers={footers}
+                          footerDefaultKey={footerDefaultKey}
                         />
 
                         {/* Attachments section */}
@@ -586,7 +641,7 @@ const EmailTemplatesPage: React.FC = () => {
             void handleResetToDefault();
           }}
           title="Reset to Default"
-          message="This will restore the template's subject, HTML body, text body, and CSS to the system defaults. Your CC/BCC settings will be preserved. This action cannot be undone."
+          message="This will restore the template's subject, HTML body, text body, styles, and footer choice to the system defaults. Your CC/BCC settings will be preserved. This action cannot be undone."
           confirmLabel="Reset"
           variant="danger"
         />

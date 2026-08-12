@@ -53,8 +53,7 @@ The directory shows all active members with their name, rank, status, and contac
 
 Select members in the directory (the row checkboxes), then click **Print Badges** on the selection bar to open the shared label print page for those members. Choose a label size — any sticker/thermal printer (Dymo, Rollo, or a custom size) — and download a PDF or print. The badge barcode encodes the member's **membership number**. The chosen printer is remembered for your role, separately from the inventory/apparatus printers.
 
-> **Screenshot needed:**
-> _[Screenshot of the Members directory with several rows checked and the "Print Badges" button highlighted on the selection bar, plus the label print page previewing a member badge with name and a membership-number barcode]_
+![The Members directory selection bar with Print Badges, Export Selected and Clear Selection](./images/01-23-print-member-badges.png)
 
 ---
 
@@ -84,13 +83,16 @@ Click on any member in the directory to view their profile. The profile page inc
 
 Members and officers can upload a profile photo:
 
-1. Click the **photo area** on the member's profile (or the camera icon).
-2. Select an image file (JPEG, PNG, or WebP).
-3. Preview and crop the image.
-4. Click **Upload** to save.
+1. Hover the **photo area** on the member's profile — **Upload** appears over
+   it, or **Change** where there is already a photo. On a phone the control is
+   always visible rather than waiting for a hover that cannot happen.
+2. Choose an image file — **JPEG, PNG or WebP, under 5 MB**. Anything else is
+   refused with the reason, before it is sent.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the photo upload modal showing the image preview with crop controls and Upload/Cancel buttons]_
+**The file uploads the moment you choose it.** There is no preview step, no
+crop tool and no Save button: the picture is taken as it comes, so crop it
+before you choose it if it needs cropping. **Remove photo** beside the avatar
+takes it away again.
 
 ### Member Self-Edit
 
@@ -210,8 +212,17 @@ What is checked before anything is created:
 | Duplicates **against the existing roster** | `membershipNumber: 214 belongs to J. Alvarez`                                                 |
 | Row width vs. header width                 | `row has 19 values, header has 21`                                                            |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Import Members review step showing a summary bar reading "58 rows will import, 4 will be skipped", a "Send welcome emails" checkbox left unchecked, and a rejected-rows table listing line numbers with multiple reasons per row]_
+The review reads the count back before anything happens — **"2 of 6 rows are
+ready; 4 will be skipped"** — previews the rows that will import, and lists the
+ones that will not **by their line number in your file**, each with the reason
+in the words above. **Send welcome emails now** is off unless you turn it on,
+and the button says how many members it is about to create.
+
+![The import review — the rows that will import, the rows that will not with their reasons, and the welcome-email choice](./images/01-33-import-review-rejected-rows.png)
+
+A second notice names the optional columns your file left out — "Importing
+without 15 optional column(s)" — which is information, not a fault: those
+members import, with those fields empty.
 
 ### The Rejected-Rows Report
 
@@ -299,12 +310,21 @@ Navigate to **Members > Admin**, click on a member, then click **History** to vi
 The audit history page shows a chronological list of all changes made to a member's record, including:
 
 - **What changed** - Which field was modified (e.g., rank, status, station)
-- **Old value → New value** - The before and after values
 - **Who made the change** - The user who performed the edit
 - **When** - Timestamp of the change
+- **Details** - Expands the entry to show the rest of what was recorded
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Member Audit History page showing a timeline of changes with entries like "Rank changed from 'Firefighter' to 'Lieutenant' by John Smith on 2026-02-15 14:30"]_
+**Before and after values are shown for status and membership-type changes**
+("Status changed: probationary → active"), which record both. A profile field
+edit records _which_ fields were touched, not what they were before — so a rank
+change reads "Member profile updated: rank" and the Details panel names the
+field, but the previous rank is not kept.
+
+Use **Filter by** to narrow the list. This matters more than it sounds: viewing
+a member's page is itself an audited event, so an unfiltered history is mostly
+"Member profile viewed" and the edits are buried among them.
+
+![Member audit history filtered to profile updates, showing what changed and who changed it](./images/01-08-member-audit-history.png)
 
 > **Note:** Audit entries are only created for changes made after the audit history feature was deployed. Earlier changes will not appear in the history.
 
@@ -316,14 +336,24 @@ The audit history page shows a chronological list of all changes made to a membe
 
 To permanently delete a member:
 
-1. Navigate to the member's profile or the Admin Edit page.
-2. Click the **Delete Member** button (typically at the bottom of the page).
-3. A confirmation dialog will appear with clear warnings about the irreversible nature of the action.
-4. Type the member's name or confirm to proceed.
-5. Click **Delete** to permanently remove the member.
+1. Open **Members** and find the member's row (or the Members Admin hub's
+   Member Management tab — both open the same dialog).
+2. Click the **trash icon** in the row's Actions column. You cannot delete
+   yourself, so the icon is absent on your own row.
+3. The **Remove Member** dialog opens on its **Deactivate** tab, which is the
+   reversible option. Switch to **Permanently Delete**.
+4. Read the **Records affected** breakdown — training records, inventory items
+   still issued to the member, and documents whose uploader would be cleared.
+5. Type the member's full name in the confirmation box, exactly as shown, then
+   click **Permanently Delete**. The button stays disabled until the name
+   matches.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Delete Member confirmation modal showing the warning text "This action cannot be undone. All data associated with this member will be permanently deleted." and the confirmation input field]_
+> **Corrected 2026-08-10.** This previously described a "Delete Member button
+> at the bottom of the profile page" and a single-step confirmation. There is
+> no such button on the profile or the Admin Edit page; deletion is a row
+> action in the directory, and the dialog offers deactivation first.
+
+![The Permanently Delete tab of the Remove Member dialog, with its impact breakdown and typed confirmation](./images/01-24-delete-member-modal.png)
 
 **What gets deleted:**
 
@@ -398,15 +428,32 @@ The pipeline offers two views:
 1. **Add a Prospect** - Click **Add Prospect** and fill in their basic information (name, email, phone, interest reason, and **desired membership type** — regular or administrative).
 2. **Complete Steps** - Each pipeline stage has steps (action items, checkboxes, notes). Mark steps as completed as the prospect progresses.
 3. **Advance** - Move the prospect to the next stage when all required steps are complete. If the next stage is an automated email stage, the configured email is sent automatically. If the prospect is already at the final stage, **Advance** now reports that there is nowhere to move them _(2026-08-08)_; it used to say "Advanced" and change nothing, while still writing an entry into the audit log.
-4. **Move Back** - If a prospect needs to return to a previous stage (e.g., missing documents discovered after advancing), click **Move Back** in the prospect's detail drawer. The previous stage's progress is reset to allow re-completion.
+4. **Back** - If a prospect needs to return to a previous stage (e.g., missing documents discovered after advancing), click **Back** in the prospect's detail drawer. The previous stage's progress is reset to allow re-completion. The button is absent while the prospect is still on the first stage, since there is nowhere to go back to.
 5. **Upload Documents** - Attach application documents, ID copies, or other requirements to the prospect's record. Uploaded files are now stored on the prospect's record and can be downloaded later. Each file may be up to **50 MB**; allowed types are PDF, Word (DOC/DOCX), JPEG, PNG, and GIF.
 
-> **[SCREENSHOT NEEDED]:** _The prospect detail drawer's documents area showing an uploaded file in the list with its download link._
+The **Documents** area sits in the applicant's drawer, below Linked Events.
+**Upload** opens the file picker; each file that lands is listed with its type,
+its size and the date it arrived, and its name is the link that downloads it.
+The bin removes one filed by mistake, after asking.
+
+![An applicant's documents — each with its type, size and upload date, and a link that downloads it](./images/01-31-applicant-documents.png)
+
+> **The area is new** _(2026-08-11)_. The upload endpoint, the download endpoint
+> and the client methods for both had been in place since documents were added,
+> but nothing rendered them — so a file could be attached only by calling the
+> API directly, and no officer could read one back.
+
+Uploading and removing are offered on **active** applicants only. A withdrawn or
+rejected applicant's paperwork stays readable — it is part of the record of the
+decision — but is no longer editable.
 
 6. **Transfer to Member** - When the prospect is approved, click **Transfer to Membership** to convert them to a full member account. The membership type is pre-filled from the prospect's desired type.
 
-> **Screenshot needed:**
-> _[Screenshot of the Applicant Detail Drawer showing the "Move Back" button alongside the "Advance" button, with a prospect in the middle of a multi-stage pipeline]_
+The drawer's action bar carries all of these, left to right: **Interview**,
+**Back**, then **Withdraw**, **Hold**, **Skip**, **Reject** and **Advance**.
+On the final stage the last button reads **Convert** instead.
+
+![The applicant drawer's action bar — Interview, Back, Withdraw, Hold, Skip, Reject and Advance](./images/01-25-applicant-action-bar.png)
 
 ### Desired Membership Type
 
@@ -418,41 +465,76 @@ Prospective members can indicate their preferred membership type when applying:
 | **Administrative** | Non-operational administrative role                 |
 
 - The desired type is captured on the **Membership Interest Form** template (if used as the intake form)
-- Coordinators can change the desired type inline at any pipeline stage by clicking the type badge
+- Coordinators can change the desired type at any pipeline stage from the
+  prospect's detail drawer: **Desired Membership Type** there is a pair of
+  cards — Regular Member and Administrative — and clicking the other one
+  switches it. There is no badge or dropdown on the Kanban card itself
 - During conversion to full member, the system pre-fills "Regular" or "Administrative" based on the prospect's selection
 - Regular members start with probationary status; administrative members start with active status
 
-> **Screenshot needed:**
-> _[Screenshot of the Prospective Members pipeline showing a prospect card with the "Regular" membership type badge visible. Also show the inline dropdown that appears when clicking the badge to change it to "Administrative"]_
+![Desired Membership Type — Regular Member selected, Administrative beside it as the alternative](./images/01-34-desired-membership-type.png)
+
+The selected card is outlined and **not clickable** — there is nothing to
+confirm and nothing to undo, because clicking the other card is both the change
+and its reversal.
 
 > **Edge case:** If a prospect's desired membership type is changed from "Regular" to "Administrative" after they have already passed an election/vote stage, the system does not retroactively invalidate the vote. The coordinator should verify that the voting requirements for administrative members were met.
 
-> **Screenshot placeholder:**
-> _[Screenshot of a prospect detail drawer showing the prospect's info at the top, the current pipeline stage, step checklist with some items completed, and the "Transfer to Membership" button]_
+### The applicant's drawer, end to end
+
+Everything about one applicant is in the drawer, in this order: who they are and
+how to reach them, the membership type they asked for, the stage they are on and
+when they reached it, the events they are booked into, their documents, and the
+action bar. On the **last** stage the action bar's final button reads **Convert**
+rather than Advance — the same button, naming what it does there.
+
+![An applicant's drawer on the last stage of the pipeline — their details, the stage they are on, and Convert where Advance sits elsewhere](./images/01-35-applicant-drawer-final-stage.png)
+
+> **Checklist Progress reads "No checklist data recorded yet" for everyone.**
+> Nothing in the application records which checklist items are done — see
+> `docs/KNOWN_LIMITATIONS.md`. Track a checklist stage's items in the stage
+> notes until that is built, and leave the stage's item list unconfigured.
 
 ### Printing Applicant Badges
 
 Select applicants in the pipeline (the checkboxes), then click **Print Badges** on the selection bar — useful for sign-in/check-in at a recruitment or outreach event. It opens the shared label print page; pick a label size and download a PDF or print. The badge barcode encodes the applicant's **status token** (the same scannable code used for public application-status checks), so a scanned badge ties back to that applicant. The outreach team's printer choice is remembered for their role, separately from other modules.
 
-> **Screenshot needed:**
-> _[Screenshot of the Prospective Members pipeline with several applicants selected and the "Print Badges" button highlighted on the bulk-action bar, plus the label print page previewing an applicant badge]_
+![The prospective members bulk-action bar with Print Badges, Advance All and the rest](./images/01-26-print-applicant-badges.png)
 
 ### Pipeline Stage Types
 
-The pipeline supports seven stage types, each tailored to a specific step in the membership process:
+The pipeline supports **twelve** stage types, each tailored to a specific step
+in the membership process. The stage type is chosen from a grid of tiles in the
+Add/Edit Pipeline Stage dialog, and picking one swaps the configuration panel
+below it.
 
-| Stage Type          | Purpose                                | What Happens                                                                                                                                                      |
-| ------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Form Submission** | Collect information from the applicant | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                                |
-| **Document Upload** | Collect required documents             | Applicant uploads documents (ID, certifications, etc.). Can auto-advance when all documents are uploaded                                                          |
-| **Election/Vote**   | Membership vote                        | Auto-creates an election package for the Elections module when a prospect reaches this stage                                                                      |
-| **Manual Approval** | Coordinator sign-off                   | Coordinator manually marks this stage as complete                                                                                                                 |
-| **Automated Email** | Send a notification email              | Automatically sends a configurable email when the prospect reaches this stage. Configure subject, welcome message, FAQ link, meeting details, and custom sections |
-| **Form Dropdown**   | Link an existing form                  | Select a form from the Forms module via dropdown for data collection                                                                                              |
-| **Meeting**         | Schedule interview/orientation         | Links to upcoming events. Includes a "President Interview" quick preset                                                                                           |
+| Stage Type                | Purpose                                | What Happens                                                                                                                                       |
+| ------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Form Submission**       | Collect information from the applicant | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                 |
+| **Document Upload**       | Collect required documents             | Applicant uploads documents (ID, background check, etc.). Can auto-advance when all documents are uploaded                                         |
+| **Meeting**               | Schedule interview/orientation         | Requires attendance at or scheduling of a meeting; links to upcoming events                                                                        |
+| **Election / Vote**       | Membership vote                        | Auto-creates an election package for the Elections module when a prospect reaches this stage                                                       |
+| **Manual Approval**       | Coordinator sign-off                   | An admin or designated role manually marks this stage as complete                                                                                  |
+| **Enable Status Page**    | Turn on public tracking                | Activates the prospect's public application-status page at this stage                                                                              |
+| **Automated Email**       | Send a notification email              | Sends a configurable email when the prospect reaches this stage. Configure subject, welcome message, FAQ link, meeting details and custom sections |
+| **Reference Check**       | Collect references                     | Collect and verify personal or professional references                                                                                             |
+| **Checklist**             | Multi-item sign-off                    | A checklist of items (orientation, gear issue, etc.) rather than a single approval                                                                 |
+| **Interview Requirement** | Require N interviews                   | Requires a set number of interviews before the prospect can advance                                                                                |
+| **Multi-Signer Approval** | Several roles must agree               | Requires multiple designated roles to all sign off                                                                                                 |
+| **Medical Screening**     | Physical or medical clearance          | Requires a physical exam or medical clearance before advancing                                                                                     |
 
-> **Screenshot needed:**
-> _[Screenshot of the Stage Configuration Modal showing the stage type selector with all seven options, and the configuration panel for an automated email stage showing the email subject, welcome message toggle, and custom sections]_
+> **Corrected 2026-08-10.** This table previously listed seven types, one of
+> which — "Form Dropdown" — has never existed; it described the form picker
+> _inside_ the Form Submission stage's configuration panel as though it were a
+> stage type of its own. Five real types were missing.
+
+Above the grid, a row of **Quick Presets** (Application Form, Background Check
+Docs, Chief Interview, President Interview, Membership Vote, Welcome Email,
+Coordinator Approval, Reference Check, New Member Orientation, Interview Panel,
+Officer Sign-Off, Physical Exam) fills in the name, description, type and a
+starting configuration in one click.
+
+![The stage type picker in the Stage Configuration modal, showing all twelve stage types](./images/01-27-stage-type-picker.png)
 
 ### Auto-Advance
 
@@ -470,24 +552,34 @@ When enabled, the prospect automatically moves to the next stage without coordin
 
 When a prospect advances to an automated email stage, the system sends the configured email immediately. Configure the email in the stage settings:
 
-- **Subject line** — customize per stage
-- **Welcome message** — optional introduction section
-- **FAQ link** — link to your department's FAQ page
-- **Next meeting details** — date, time, and location of the next relevant meeting
-- **Custom sections** — add titled content blocks (e.g., "What to Bring", "Parking Information")
-- **Status tracker** — link to the application status page
+- **Email Subject** — customize per stage
+- **Welcome Message** — optional introduction section
+- **Membership FAQ Link** — link to your department's FAQ page
+- **Next Meeting Details** — the event type plus free text for date, time and location
+- **Application Tracker Link** — a link to the prospect's public status page. It
+  requires the public status page to be enabled, and says so under the checkbox
+- **Add custom section** — titled content blocks (e.g. "What to Bring",
+  "Parking Information")
 
-> **Screenshot needed:**
-> _[Screenshot of the email configuration panel in the Stage Config Modal, showing the subject field, welcome message toggle with text area, and a custom section with title and content fields]_
+Each section other than the subject is a checkbox: tick it to include it, and
+its fields appear underneath. The sections have drag handles and can be
+reordered, and **Show Preview** at the foot of the panel renders the assembled
+email. The prospect's name is used as the greeting automatically — there is no
+field for it.
+
+![The automated-email stage configuration with its subject, welcome message and custom sections](./images/01-28-stage-email-config.png)
 
 > **Edge case:** If your department has not configured SMTP email settings (in Settings > Email or during onboarding), automated emails will be skipped silently. Check **Settings > Email** to verify your SMTP configuration.
 
 ### Pipeline Configuration
 
-Navigate to **Administration > Members > Pipeline Settings** to:
+Open **Prospective Members** and click **Pipeline Settings** in the page header
+(the direct route is `/prospective-members/settings`). The page opens on a
+"Select a pipeline" placeholder — choose one from the list on the left before
+any of the configuration below appears. From there you can:
 
 - Create and customize pipelines
-- Add, remove, or reorder stages (seven stage types available)
+- Add, remove, or reorder stages (twelve stage types available)
 - Configure auto-advance, email templates, form links, and event linking per stage
 - Set a default pipeline for new prospects
 - Enable auto-transfer on final step approval
@@ -500,21 +592,30 @@ Navigate to **Administration > Members > Pipeline Settings** to:
 
 **Required Permission:** `members.manage`
 
-Officers can change a member's status from their profile page or the Members Admin area.
+Officers change a member's status from the member's profile page.
 
 ### Changing a Member's Status
 
 1. Navigate to the member's profile.
-2. Click the **status badge** or use the status change action.
-3. Select the new status.
-4. Provide a **reason** for the change.
-5. For drops, optionally:
-   - Send a property return notification email
-   - Set a return deadline
-   - Include custom instructions
+2. Click the **status badge** beside the member's name, or the pencil next to
+   **Status** in the Employment panel. Both open the same dialog.
+3. Pick the new status from **New Status**. The list holds all nine statuses:
+   Active, Inactive, Suspended, Probationary, Leave, Retired, Dropped
+   Voluntary, Dropped Involuntary and Archived.
+4. Optionally give a **reason**. The field is not required.
+5. Click **Update Status**. It stays disabled while the selection still matches
+   the member's current status.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the status change dialog showing the status dropdown (with options like Active, Inactive, Suspended, Dropped), the reason text field, and the property return options for drop statuses]_
+Choosing either drop status adds a note to the dialog: dropping a member
+generates a property return report and may send an email notification. Both
+happen automatically — the dialog has no per-change options for them.
+
+> **Corrected 2026-08-10.** This previously described a return deadline,
+> custom instructions and a "send notification" toggle inside the dialog. None
+> of the three exists; the dialog holds a status dropdown, an optional reason,
+> and the drop note above.
+
+![The Change Member Status dialog with a drop status selected and its property-return note](./images/01-29-status-change-modal.png)
 
 > **The last administrator cannot be removed** _(2026-08-01)_. If the member
 > you are changing is the only remaining active person who can manage members,
@@ -563,15 +664,17 @@ listed there, alongside training waivers.
 > two are closely related (a leave auto-links a training waiver), which is
 > presumably why.
 
-1. Click **Add Leave of Absence**.
+1. Open the **Create Waiver** tab.
 2. Select the **member** from the dropdown.
-3. Choose the **leave type**: Leave of Absence, Medical, Military, Personal, Administrative, or Other.
-4. Set the **start date** and **end date**.
-5. Optionally provide a **reason**.
-6. Click **Create Leave**.
+3. Choose the **waiver type**: Leave of Absence, Medical, Military, Personal, Administrative, or Other.
+4. Under **Applies To**, tick which requirements the leave suspends — training, meeting attendance, shifts, or all three.
+5. Set the **start date** and **end date**, or tick **Permanent (no end date)**.
+6. Optionally provide a **reason**.
+7. Click **Create Waiver**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Add Leave of Absence modal showing the member dropdown selector, leave type dropdown, start/end date pickers, and the reason text area]_
+It is a tab on that page, not a modal, and the button reads **Create Waiver** rather than "Add Leave of Absence" — a leave of absence is a waiver type, not a separate record.
+
+![Create waiver form with the member, type and date fields](./images/01-11-create-waiver.png)
 
 ### How Leave Affects Requirements
 
@@ -779,22 +882,53 @@ screen to fix it from. Budget for that before you archive in bulk.
 
 ---
 
-## EVOC Certification on Member Profiles (2026-03-24)
+## EVOC Certification
 
-Members can now have an EVOC (Emergency Vehicle Operations Course) certification level tracked on their profile:
+A member's EVOC (Emergency Vehicle Operations Course) level is recorded **per
+apparatus**, on their operator record for that rig — not as a single field on
+their profile.
 
-| Level        | Description                                             |
-| ------------ | ------------------------------------------------------- |
-| Basic        | Standard vehicle operation                              |
-| Intermediate | Emergency vehicle operation with lights and sirens      |
-| Advanced     | Specialized apparatus operation (aerials, heavy rescue) |
+> **Corrected 2026-08-10.** This section previously said the level was "tracked
+> on their profile" and "set via the member admin edit page". There is no EVOC
+> field on the profile or the Admin Edit page, and the three levels below are
+> your organization's, not the system's.
 
-The EVOC level is set by administrators via the member admin edit page and is used by the Scheduling module to validate driver/operator position assignments against apparatus requirements.
+**Where to set it.** Open **Operations > Apparatus**, choose the apparatus, and
+go to its **Operators** tab. **Add Operator** picks a member and records their
+qualification on that rig; the pencil on an existing row edits it. The form
+holds:
 
-> **Screenshot needed:**
-> _[Screenshot of the member admin edit page showing the EVOC Level dropdown (Basic/Intermediate/Advanced) in the certifications section alongside other certification fields]_
+- **EVOC Certification Level** — a dropdown of your organization's configured
+  levels, plus "No EVOC level"
+- **Certified to operate**, with certification and expiration dates
+- **License Type Required** (e.g. CDL Class B) and **License verified**, with a
+  verification date
+- **Has operating restrictions**, with notes
+- **Active operator** and free-text notes
 
-> **Edge case:** Members without an EVOC level set can still be assigned to driver/operator positions, but a warning badge appears on the assignment.
+**The levels are yours to define.** EVOC levels are configured per organization
+with a level number, name and code — they are not a fixed Basic / Intermediate
+/ Advanced triple. The numbering follows the national 1–4 convention, and each
+level can be marked cumulative (holding level 3 also grants level 2's
+privileges) or not, for local exceptions. The demo data defines three:
+
+| Level | Name         | Code   | Covers                                     |
+| ----: | ------------ | ------ | ------------------------------------------ |
+|     1 | Basic        | EVOC-1 | Emergency vehicle operation, non-transport |
+|     2 | Intermediate | EVOC-2 | Engine and rescue apparatus                |
+|     3 | Advanced     | EVOC-3 | Aerial and tiller-equipped apparatus       |
+
+**What it is used for.** An apparatus can name a **Required EVOC Level**. When
+scheduling puts a member in a driver/operator position, it takes the highest
+level from their _current_ operator records — active, certified, and not past
+their expiration date — and compares it against that requirement.
+
+> **Edge case:** A member with no EVOC certification, or one whose certification
+> has expired, can still be assigned; the check produces a warning naming the
+> required level rather than blocking the assignment. An apparatus with no
+> required level set never warns at all.
+
+![An apparatus operator's record with its EVOC Certification Level, certification dates and licence fields](./images/01-30-evoc-operator-modal.png)
 
 ---
 
@@ -942,9 +1076,19 @@ Alex discovers OFD's recruitment page and submits an interest form through the *
 4. Alex clicks the link, fills out the interest form online, and submits it.
 5. The stage has **auto-advance** enabled, so Alex's card automatically moves to **Stage 2: Application Review**.
 
-**Edge case — duplicate detection:** When Lt. Morrison creates the prospect, the system detects an archived member with the last name "Rivera" but a different email address. A duplicate warning banner appears on the prospect drawer. Lt. Morrison reviews the archived record, confirms this is a different person, and dismisses the warning. The prospect proceeds normally.
+**Edge case — duplicate detection:** The check runs **before the applicant
+exists**, not after. When Lt. Morrison clicks **Add to Pipeline**, the email and
+name are matched against the membership; a match stops the save and asks, naming
+how many members it found. **Go back** returns her to the form with everything
+she typed still in it; **Create anyway** proceeds, which is the right answer when
+the match is a different person of the same name.
 
-> **[SCREENSHOT NEEDED]:** _The Prospective Members Kanban board showing Alex Rivera's card in Stage 2: Application Review, with the duplicate warning banner visible at the top of the prospect detail drawer._
+![The duplicate warning — the name and email match an existing member, with Create anyway and Go back](./images/01-32-duplicate-applicant-warning.png)
+
+There is no banner on the drawer afterwards and nothing to dismiss later: the
+question is asked once, at the moment it can still be answered cheaply. The
+board itself is pictured in
+[Prospective Members Pipeline](./15-prospective-members.md#the-kanban-board).
 
 ---
 
@@ -1018,18 +1162,36 @@ When Alex reaches the **Election/Vote** stage, the system automatically creates 
    - Helmet
    - Gloves
    - Boots
-7. Alex's sizes are not on file. Lt. Walsh clicks **"Request Sizes"** next to Alex's name. The system sends Alex a notification asking them to enter size preferences.
+7. Alex's sizes are not on file. The results say so — **"_N_ members need the
+   item but have no size on file"** — and the **Request sizes** button beside
+   that line notifies **all of them at once**, not one member at a time. There
+   is no per-member request: the planner works on the whole analysis, and the
+   button reports back how many were notified.
 8. Alex logs in for the first time, changes their password, and navigates to **My Equipment > Size Preferences**. Alex enters:
    - Coat: L Regular
    - Pants: 34x32
    - Helmet: 7 1/4
    - Gloves: XL
    - Boots: 11 Wide
-9. Lt. Walsh returns to the Impact Planner, sees Alex's sizes are now on file, and clicks **Issue PPE Kit**. The system matches available inventory to Alex's size preferences and creates assignment records.
+9. Lt. Walsh re-runs the analysis, sees the sizes are now on file, and clicks
+   **Issue on-hand stock**. It confirms first — "one matching-size item to each
+   member who needs it and has stock available" — and reports back what it did:
+   **"Issued to 6 members, 2 skipped"**, naming each member skipped and why.
 
-**Edge case — stock shortage:** XL gloves are out of stock. The system issues a partial kit (coat, pants, helmet, boots) and flags gloves as **"Pending — Out of Stock"**. An automatic reorder request is created in the Inventory module, and Lt. Walsh receives a notification. Alex's equipment profile shows 4 of 5 items assigned with the gloves line item showing a yellow "Backordered" badge.
+**Edge case — stock shortage:** the planner issues what it can and skips the
+rest, **per member and per item**, with the reason beside each name ("no
+matching stock", "no size on file"). There is no partial-kit record and no
+"Backordered" badge: a member who could not be issued gloves simply has no
+gloves assignment, and still appears in the next analysis as needing one.
 
-> **[SCREENSHOT NEEDED]:** _The Impact Planner results showing Alex Rivera with "Needs item" status for five PPE categories, with the "Request Sizes" button visible and size preference fields partially filled._
+The shortfall itself is handled separately, from the same results — **the
+purchase list and the draft purchase orders raised from it**, described in
+[Inventory](./05-inventory.md).
+
+The planner's results — the per-member "Needs item" rows, the sizes to purchase
+and the shortfall — are pictured in
+[Inventory](./05-inventory.md#impact-planner--demand-forecasting--bulk-operations-2026-06-22). This section covers what a new
+member's first kit looks like through them; it does not repeat the screens.
 
 ---
 

@@ -101,14 +101,21 @@ Add sections to organize the evaluation, then add criteria (scored items) within
 
 1. Within a section, click **Add Criterion**.
 2. Enter the step description (e.g., "Determines scene/situation safety").
-3. Select the **criterion type**:
-   - **Binary** (default) — Simple pass/fail checkbox
-   - **Statement** — Open-ended text box for descriptive responses (e.g., "Describe the patient's chief complaint")
-4. Set the **point value** (default 1) for weighted scoring. Higher-value criteria carry more weight in the overall score.
+3. Select the **criterion type**. The dropdown offers five:
+   - **Pass / Fail** (default) — one tap, the digital equivalent of a tick box
+   - **Numeric Score** — a weighted step scored out of its max, and the only
+     type that feeds the overall percentage unless the template opts pass/fail
+     steps in (see "Pass/Fail steps can be made to carry points" below)
+   - **Timed Task** — a stopwatch on the step itself, with its own limit
+   - **Checklist** — several sub-items ticked off within one step
+   - **Statement** — text the examiner reads aloud to the candidate; it marks
+     itself and is never scored
+4. On a **Numeric Score** step, set **Max Points** — this is where weighting
+   lives, and a step worth 20 moves the percentage twice as far as one worth 10.
+   The field appears for that type alone; the other four have nothing to weight.
 5. Check **Required** if this is a critical criterion — failing a required criterion triggers automatic fail when "Require All Critical" is enabled on the template.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the template builder showing two sections ("Scene Size-Up" and "Primary Survey") expanded with criteria listed under each. Each criterion row shows: description text, a type indicator, point value, a "Required" checkbox (some checked with a red asterisk), and drag handles for reordering. An "Add Criterion" button appears at the bottom of each section]_
+![Skill template builder with its sections and scored criteria](./images/09-04-template-builder.png)
 
 > **Hint:** Required (critical) criteria are the digital equivalent of the "Critical Criteria" section at the bottom of NREMT skill sheets. If a candidate triggers any of these, the result is an automatic FAIL regardless of their point score. Non-critical criteria that are unchecked display as "Not Completed" (not "FAIL").
 
@@ -143,7 +150,7 @@ When building or editing a template, use the **Linked Training Requirement** fie
 
 See the [Training Pipelines](./02-training.md#training-pipelines) guide for how requirements and phases fit into a program.
 
-> **[SCREENSHOT NEEDED]:** _The Create/Edit Template form showing the "Linked Training Requirement" dropdown with a program requirement selected, below the passing percentage and critical criteria fields._
+![Template builder with its linked training requirement field](./images/09-12-template-linked-requirement.png)
 
 ---
 
@@ -240,8 +247,7 @@ them — so you can run a practice test on yourself freely.
 
 - The template's sections and criteria loaded for scoring
 
-> **Screenshot placeholder:**
-> _[Screenshot of the New Test form showing a template dropdown (with "Patient Assessment/Management — Trauma v2" selected), a candidate dropdown showing a member search, and a prominent "Start Test" button]_
+![Start skill test form with its template and candidate fields](./images/09-06-new-test-form.png)
 
 ### Test Statuses
 
@@ -282,19 +288,96 @@ Wall clock is now only a fallback for a test completed with no measured value.
 Reopening an in-progress test also **restores the timer** rather than restarting
 it at 00:00.
 
+#### Moving on no longer loses the reading _(2026-08-09)_
+
+The stopwatch reading used to be recorded **only when you pressed Stop**. Sections
+are torn down when you move between them, so timing an evolution and tapping
+**Next** lost the reading entirely — on the one step whose time limit _is_ the
+pass/fail criterion.
+
+The value is now committed when the step is torn down, whether or not you pressed
+Stop. Starting a stopwatch also starts the test clock, so the two cannot disagree.
+
+#### Coming back to an interrupted test _(2026-08-09)_
+
+Reopening a test in progress now **opens at the first section with blank steps**,
+rather than dropping you back at section 1 to hunt for where you had got to. In
+the officer's **Test Records** tab an unfinished test says **Tap to resume** and
+opens on the scoring screen; a finished one still opens on its scorecard.
+
+A test that has been started says **Tap to resume**; one created but not yet
+begun says **Tap to start**. A cancelled test says neither — it is closed, and
+opening it shows its scorecard rather than the scoring screen.
+
+![Test records showing unfinished, completed and cancelled rows side by side](./images/09-14-test-records-statuses.png)
+
+#### A cancelled test is read-only _(2026-08-09)_
+
+A cancelled test used to render as a **live evaluation**: editable criteria, a
+running clock, and a **Finish** button that the server rejects. It now renders
+read-only and says plainly that **nothing was decided** — it does not show a pass
+or a fail, because there was neither. The officer panel no longer describes an
+abandoned test as counting toward the candidate's record, because it counts
+toward nothing.
+
+Cancelling a test from the Test Records tab now asks for its optional reason in a
+proper dialog. It used to use the browser's own prompt, which some browsers
+suppress — and a suppressed prompt is indistinguishable from pressing Cancel, so
+the cancellation silently did nothing.
+
 ---
 
 ## Scoring & Critical Criteria
 
 During the test, the examiner scores each criterion as the candidate performs the procedure.
 
-### Per-Section Scoring
+### The scoring screen _(rebuilt 2026-08-09)_
 
-Each section displays its criteria as a checklist. The examiner:
+The screen is built for someone standing outdoors, in gloves, watching a
+candidate rather than the tablet.
 
-- **Checks off** each step the candidate completes correctly
-- **Leaves unchecked** any steps the candidate misses or performs incorrectly
-- Notes which criteria are marked as **Required** (critical) — indicated by a red asterisk
+- **The candidate's name is on the screen.** Confirm you have the right person
+  open before you start — nothing on the old screen told you.
+- **Section chips across the top**, 44px and showing their own state, replace the
+  10px progress dots that were unhittable with a glove and silent about what was
+  left.
+- **A running "scored / total" count and a save-status line** sit with them, so
+  "am I finished?" and "did that save?" are both answerable at a glance.
+- **The primary bottom-bar button is Next**, not Finish — on every section but
+  the last, where it becomes **Finish & Review** because there is nowhere left
+  to move on to. On the old screen the biggest, reddest button on _every_
+  section ended the evaluation while moving on was a small grey one.
+- **Moving between sections returns you to the top of the screen**, rather than
+  dropping you halfway down the new one.
+
+![The scoring screen partway through a test, with section chips, the scored count and a mix of scored and unscored steps](./images/09-16-active-scoring-screen.png)
+
+### Recording a mark
+
+Each criterion type is scored differently, and each can be **undone**:
+
+| Criterion type | How you mark it                                                                | Clearing it               |
+| -------------- | ------------------------------------------------------------------------------ | ------------------------- |
+| **Pass/Fail**  | Tap Pass or Fail                                                               | Tap the same one again    |
+| **Score**      | Tap the number                                                                 | Tap the same number again |
+| **Checklist**  | Tick the boxes the candidate completed, or tap **Candidate did none of these** | **Clear this step**       |
+| **Statement**  | Marks itself — nothing to do                                                   | n/a                       |
+| **Timed**      | Start and stop the stopwatch                                                   | Re-run it                 |
+
+> **A mis-tap used to be uncorrectable.** The only way out of tapping the wrong
+> verdict was to record the opposite one on a candidate. Tapping the same value
+> again now clears it. This matters most on a critical step, where a mis-tapped
+> **0** and a deliberate **0** score identically but mean completely different
+> things.
+
+> **"Candidate did none of these" is not the same as an unscored step.** A
+> checklist used to count as scored only once a box was ticked — so the case an
+> examiner most needs to record was indistinguishable from a step they forgot,
+> and could only be entered by ticking a box and unticking it.
+
+**Add note** is a full-size labelled control, not a 12px text link. It is what
+explains a mark to whoever reads the scorecard weeks later; it should not be the
+hardest thing on the screen to hit.
 
 ### Running Score
 
@@ -304,6 +387,89 @@ As the examiner scores criteria, the interface displays:
 - **Overall running score** — total points earned / total possible points across all sections
 - **Percentage** — running percentage updated in real-time (based on points, not simple criterion count)
 
+> **Unscored steps read "—/N" in neutral type, not a red "0/N".** A red zero
+> reads as a fail the examiner never recorded.
+
+### What the percentage is actually made of _(2026-08-09)_
+
+A scorecard once read **86%** over a sheet whose visible sections included four
+knowledge questions, two of them failed — and nothing on the page explained how
+those two could be wrong without moving the number.
+
+They could because **not every criterion type feeds the percentage**:
+
+| Criterion type | Counts toward the percentage?                                |
+| -------------- | ------------------------------------------------------------ |
+| **Score**      | Yes — earns 0…max                                            |
+| **Pass/Fail**  | **Only if the template opts in** (see below); off by default |
+| **Checklist**  | No                                                           |
+| **Timed**      | No                                                           |
+| **Statement**  | No — read aloud, marks itself, never scored                  |
+
+This is a defensible way to build a sheet — the questions still appear on the
+scorecard, and a **critical** one still fails the test outright regardless of
+points. It was simply invisible to whoever read the result.
+
+Two things fixed that:
+
+- **The scorecard now shows its working.** A breakdown panel above the sections
+  gives the per-section point totals, the passing threshold applied, and any
+  critical step that decided the outcome on its own. It **flags any section that
+  contributed nothing** to the percentage, which is exactly the case that made
+  "86%" unreadable. Both the officer's and the candidate's result pages show it.
+- **Pass/Fail steps can be made to carry points**, with a per-template setting.
+  A passed step earns its points (its max score, or 1 if none is set); a failed
+  one earns none.
+
+![A completed scorecard's score breakdown, with per-section totals and the passing threshold](./images/09-15-scorecard-breakdown.png)
+
+> **Turning the setting on never re-scores an old result.** The rule is frozen
+> into each test at the moment it is created, so a test taken under the old
+> behaviour keeps the number it was given. Change it and only new tests follow
+> the new rule.
+
+> **Checklist and timed steps stay out of the point pool deliberately.** A
+> checklist is partly completable and would need its own earned-fraction rule; a
+> time limit is a gate on the evolution, not a measure of how well it was
+> performed. If either must decide the outcome, make it a **critical** criterion.
+
+### A statement that is read on the clock _(2026-08-09)_
+
+The test clock starts on the examiner's first real action — recording a result,
+or moving between sections — because an examiner watching a candidate will not
+reliably remember to press play on a skill whose time limit is itself the
+pass/fail criterion.
+
+**Statements are excluded from that by default.** They mark themselves as a
+section renders, which is nobody's action, so opening a test whose first section
+leads with a statement must not start timing before the candidate is even in
+position.
+
+But sheets differ. Some read the opening statement as a brief _before_ the clock;
+others read it _inside_ the limit — "your time starts now." So a statement can be
+marked **starts the timer**:
+
+| Setting           | What the examiner sees                          | Effect                                    |
+| ----------------- | ----------------------------------------------- | ----------------------------------------- |
+| **Off** (default) | The read-aloud box alone                        | Read off the clock; nothing starts timing |
+| **On**            | A **"Start clock & read"** button under the box | The examiner's tap starts the clock       |
+
+> **[SCREENSHOT NEEDED]:** _A statement criterion on the scoring screen with
+> "starts the timer" enabled, showing the "Start clock & read" button beneath the
+> read-aloud box, and the same statement after tapping it — the button replaced
+> by the note that the statement falls inside the time limit and the clock is
+> running._
+
+> **It is a button, not an automatic start.** Whether a statement is read on the
+> clock is a property of the sheet; _when_ it is read is not. An examiner opens a
+> test to have it ready and reads the prompt once the candidate is in position,
+> which may be minutes later — starting on render would time the wait. Tapping it
+> also clears a manual pause, the way pressing play does.
+
+> **Statement criteria are excluded from every count.** They mark themselves, so
+> counting them showed progress on a section nobody had touched — and a section
+> could read "3 / 3" with a real step still blank.
+
 ### Critical Criteria
 
 If "Require All Critical" is enabled on the template:
@@ -311,8 +477,22 @@ If "Require All Critical" is enabled on the template:
 - Any **required** criterion that is left unchecked (not passed) will result in an **automatic FAIL**
 - This is true even if the candidate's percentage score exceeds the passing threshold
 
-> **Screenshot placeholder:**
-> _[Screenshot of the active test scoring interface showing: a top bar with candidate name, template name, timer counting up (showing "04:32"), and running score "14/18 (78%)". Below, sections are shown as accordion panels — one expanded showing criteria with checkboxes. Required criteria have a red asterisk. A completed section shows "5/5" in green. The bottom shows a prominent "Complete Test" button]_
+A critical step is labelled **(Critical)** in its own text, and where the
+template requires all of them the section header says what that means outright —
+"Steps marked (Critical) must pass. Leaving one unscored counts the same as a
+fail." There is no asterisk to decode.
+
+![A section of the scoring screen — the count of steps scored, a step scored 10/10, and the next one still blank at —/20](./images/09-17-scoring-criteria-mix.png)
+
+An **unscored** step reads **"—/20"** rather than "0/20", which are different
+things: the dash is a step nobody has judged, and a zero is a judgement. The
+section counts only the steps that can be scored — "1 of 2 steps scored" — so
+statements and headings never pad it.
+
+How a score is entered depends on how many points the step is worth: **10 or
+fewer** gives a row of numbered buttons, where tapping the same number again
+clears it; **more than 10** gives a slider. Both leave the step blank until you
+touch them.
 
 ---
 
@@ -321,6 +501,26 @@ If "Require All Critical" is enabled on the template:
 When the candidate finishes the procedure:
 
 1. Click **Complete Test**. The timer automatically stops.
+
+   > **If any steps are still blank, a dialog names the count** and reminds you
+   > that **an unscored critical step scores the same as a fail** — which is what
+   > actually happens. The review screen repeats it, with a button that takes you
+   > straight back to the first unfinished section.
+
+   > The dialog counts the blank steps and offers **Keep scoring** or **Review
+   > anyway**. What it says after the count depends on what is blank: where the
+   > template requires all critical steps **and one of the blank ones is
+   > critical**, it says so and what that costs — otherwise it points at the
+   > green checks on the section chips, which are the sections you have
+   > finished.
+
+   ![The warning raised on finishing — how many steps have no score, and the choice between going back and reviewing anyway](./images/09-18-finish-with-unscored-steps.png)
+
+   > **The clock keeps running while the dialog is open.** An examiner who taps
+   > Finish, reads the warning and goes back to score the last step is still
+   > mid-evaluation, and stopping the clock on them would under-record a test
+   > whose time limit may itself be the criterion.
+
 2. The system shows a **post-completion review screen** where the examiner can:
    - Review each section's criteria and scores
    - Add **section-level notes** with feedback for specific areas
@@ -344,8 +544,22 @@ A candidate **fails** if ANY of the following are true:
 1. Their percentage score is below the passing percentage
 2. Any required criterion was not passed (when "Require All Critical" is enabled)
 
-> **Screenshot placeholder:**
-> _[Screenshot of the test completion/results screen showing: a large PASS indicator in green (or FAIL in red), the final score "16/18 (89%)", time elapsed "07:23", a section-by-section breakdown showing scores per section, and a list of any missed criteria highlighted in yellow. For a failing test, also show which critical criteria were triggered in red]_
+The result screen leads with the outcome and the percentage, then shows the
+candidate, the examiner, the elapsed time and the arithmetic behind the score —
+**"24 of 50 points earned = 48%. Passing mark is 70% — not met."** A passing
+scorecard is pictured in [What the percentage is actually made of](#what-the-percentage-is-actually-made-of-2026-08-09); this is the
+other outcome:
+
+![A failed scorecard — the result, the percentage against the passing mark, and the critical step that failed on its own](./images/09-19-failed-test-result.png)
+
+**When a critical step is what sank it, the screen says so separately** — "A
+critical step failed this test regardless of the percentage", naming the step and
+the section it is in. That banner appears whether or not the percentage also
+fell short, so an examiner explaining the result to a candidate never has to work
+out which of the two rules applied.
+
+Below it, every section is listed with its points, and each step with what it
+scored and any note the examiner left — "Hood not deployed before entry."
 
 ### Effect on Training Pipeline Progress
 
@@ -500,8 +714,7 @@ template used to rewrite the structure that _completed_ tests read from — so:
 > those tests displayed, so nothing visible changed. What the backfill buys is
 > that they are now frozen against _future_ edits.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Skills Tests list page showing a table of test sessions with columns: candidate name, template name, examiner, date, score, result (PASS/FAIL badge), and status. Show filters at the top for status, candidate, and template dropdowns]_
+![Skills test records listing sessions with candidate, template and status](./images/09-09-test-records.png)
 
 ---
 
@@ -535,11 +748,7 @@ Navigate to **Training Admin > Skills Testing > Summary** for a department-wide 
 > it is only actionable by someone who can validate. Members receive `0` rather
 > than a hidden card.
 
-> **[SCREENSHOT NEEDED]:** _The Summary dashboard viewed by a training officer
-> with a non-zero **Needs Validation** card visible, so the review-queue badge
-> that drives officers to the queue can be seen alongside the other stats._
-
-![Skills testing summary with a non-zero Pending Validation count](./images/09-12-summary-pending-validation.png)
+![Skills testing summary with a non-zero Needs Validation count](./images/09-12-summary-pending-validation.png)
 
 ---
 
@@ -834,13 +1043,22 @@ _other_ candidate's results too.
 
 ### Setting the department default
 
-Navigate to **Training Admin > Configuration** and find the **Skills-Test
-Results** group, beside the existing member-visibility switches. The "when"
-question is hidden if you set disclosure to **Nothing**, since there is then
-nothing to time.
+Open **Training → My Training** and, as an officer, the **Member Visibility
+Settings** tab — the same editor that governs what members see of the rest of
+their training. The **Skills-Test Results** group sits at its foot, two
+dropdowns rather than switches:
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Training Configuration editor showing the "Skills-Test Results" group with two controls: a "What the member sees" segmented control set to "Full results", and a "When" radio pair set to "On completion"]_
+![The Skills-Test Results settings — what a member sees of a result, and when they see it](./images/09-20-result-disclosure-settings.png)
+
+**What the member sees** carries the reasoning next to the control: examiner
+notes are often candid working notes for the training file rather than feedback
+written to be read by the member. **When they see it** explains what a release
+buys you — a chance to review the scorecard, or to deliver a failure in person,
+before the member reads it — and notes that practice attempts are never held
+back.
+
+The "when" question disappears entirely if you set disclosure to **Nothing**,
+since there is then nothing to time.
 
 ### Overriding it on a single template _(2026-08-08)_
 

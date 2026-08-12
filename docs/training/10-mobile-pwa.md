@@ -17,7 +17,8 @@ This guide covers installing the app, understanding offline behavior, using mobi
 7. [Push Notifications on Mobile](#push-notifications-on-mobile)
 8. [Mobile-Optimized Features](#mobile-optimized-features)
 9. [Tips for Mobile Use](#tips-for-mobile-use)
-10. [Troubleshooting](#troubleshooting)
+10. [Check Your Understanding](#check-your-understanding)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -124,8 +125,7 @@ button, within thumb reach. Tap **More** to open the full navigation drawer.
 - On tablets and desktop it does not appear at all: the side or top navigation is
   already visible there, so the bar would be redundant.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the app on a phone in standalone mode showing the bottom tab bar with four labelled icons and a "More" button, and the top mobile header clear of the status bar]_
+![Bottom navigation bar as it appears on a phone](./images/10-12-mobile-bottom-nav.png)
 
 ### Everything Is Thumb-Sized Now _(2026-08-08)_
 
@@ -415,6 +415,32 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 
 ---
 
+## Check Your Understanding
+
+1. You tap Submit on a training record while offline. What proves that the
+   server eventually received it?
+2. The camera permission is denied during a scan. What is the safe recovery
+   path?
+3. Why should you avoid assuming that every browser shows the same installation
+   prompt?
+
+<details>
+<summary>Check your answers</summary>
+
+1. The offline indicator proves only that the device queued it. Wait for the
+   queue to synchronize after connectivity returns, then verify that the record
+   appears in Training with its durable **Pending Review** status.
+2. Allow camera access in browser or operating-system settings and retry. Use
+   the provided manual-entry/search option if permission cannot be granted; do
+   not work around it with an unapproved scanning app.
+3. Installation is controlled partly by the operating system and browser. iOS,
+   Android, Chrome, Safari, and Firefox expose different menus and prompts, so
+   follow the instructions for the device actually in use.
+
+</details>
+
+---
+
 ## Troubleshooting
 
 | Issue                                                               | Solution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -433,7 +459,7 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 | No "Push notifications" toggle at all                               | On iPhone/iPad: you are browsing in Safari rather than running the installed app — install it first. On any platform: your department may not have push enabled on its deployment.                                                                                                                                                                                                                                                                                                      |
 | Push stopped after reinstalling the app                             | Subscriptions are tied to the app install on that device. Turn the toggle back on.                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Page not loading — "Network error"                                  | The app requires an internet connection for all data operations. Check your Wi-Fi or cellular signal. Try refreshing the page.                                                                                                                                                                                                                                                                                                                                                          |
-| Form submission failed                                              | Check your connection. The app does not queue submissions — if the network is unavailable at the moment you tap Submit, the submission fails. Wait for connectivity and try again.                                                                                                                                                                                                                                                                                                      |
+| Form submission did not synchronize                                 | Training submissions and event RSVPs queue in IndexedDB while offline. Restore connectivity, use the sync indicator to retry if needed, and verify the durable result in Training or Events. Other forms may still require connectivity; preserve the entered values and follow the error shown by that form.                                                                                                                                                                           |
 | App icon disappeared from home screen                               | Some devices remove PWA icons after system updates or storage cleanups. Reinstall following the steps above.                                                                                                                                                                                                                                                                                                                                                                            |
 | Dark mode not applying in PWA                                       | Dark mode follows the app's theme setting (My Account > Appearance), not the device's system setting. Toggle it from within the app.                                                                                                                                                                                                                                                                                                                                                    |
 | "Update Available" notification not appearing                       | The version detection checks periodically. If you suspect you're on an old version, force refresh with Ctrl+Shift+R or close and reopen the app.                                                                                                                                                                                                                                                                                                                                        |
@@ -508,35 +534,55 @@ Camera scanning (QR codes, barcodes, member IDs) now works on desktop browsers i
 
 ### Camera Error Handling
 
-Camera scanning across the app now provides **specific error messages** instead of generic failures:
+Camera scanning across the app tells you **which** camera problem you have,
+because the fix differs:
 
-| Error                        | Message                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------- |
-| Camera permission denied     | "Camera permission denied. Please allow camera access in your browser settings." |
-| No camera available          | "No camera detected on this device."                                             |
-| Camera in use by another app | "Camera is in use by another application."                                       |
+| What went wrong            | What you are told                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Permission blocked         | "Camera access was blocked. Allow camera permission for this site in your browser settings, then try again." |
+| No camera on the device    | "No camera was found on this device. Use a phone or tablet with a camera, or enter the code by hand."        |
+| Camera held by another app | "The camera is in use by another app. Close anything else using it, then try again."                         |
+| Page not served over HTTPS | "Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan."                   |
+
+The distinction that matters is between the first two. Only a blocked
+permission has anything to grant, so a device with no camera is deliberately
+**not** sent to browser settings to look for a switch that will not be there.
 
 Error messages **stay visible** until you dismiss them (no auto-dismiss), giving you time to read and act on the message.
 
-> **Screenshot needed:**
-> _[Screenshot of the MemberScanPage on a mobile device showing a camera error banner: "Camera permission denied. Please allow camera access in your browser settings." with a "Try Again" button and manual entry field below]_
+![Member ID scan on a phone after the camera is refused — the red banner naming the failure, with Start Scanning still offered](./images/10-14-scan-camera-denied.png)
+
+The banner replaces nothing: **Start Scanning** stays where it was, so
+retrying is the same tap it always was, and the "How to use" steps stay on
+screen underneath. There is no separate "Try Again" button and no manual member
+lookup on this page — to find a member without a camera, use the search on
+**Members**.
 
 ### Inventory Scan Modal
 
-The `InventoryScanModal` now uses `getErrorMessage()` for consistent, specific error display. On desktop browsers where the camera fails, the manual barcode/serial number input field is always available as a fallback.
+The inventory scanner reports the same four camera states, and on any browser
+where the camera fails the manual barcode/serial-number input is always
+available as a fallback — so a failed camera slows the job down rather than
+stopping it.
 
 > **Edge case:** On iOS Safari, camera access requires the page to be served over HTTPS. If your department uses HTTP for local network access, camera scanning will not work — use the manual entry fallback.
 
 ### Notification Badges on Mobile
 
-The notification unread count badge is now visible on both mobile and desktop:
+The unread count reaches you on a phone as well as on a desktop, but **not in
+the same place**:
 
-- **Top navigation**: Bell icon with red badge count
-- **Side navigation**: Notifications link with badge count
-- **Smart polling**: Polling pauses when the app/tab is in the background, preserving battery
+- **Desktop side navigation** — the Notifications link carries the badge
+- **Phone** — the count is on the Notifications entry **inside the menu**. The
+  collapsed top bar is the department logo, the department name and the
+  hamburger: no page title, and no bell. Tap the hamburger to see the count
+- **Smart polling** — polling pauses when the app or tab is in the background,
+  preserving battery
 
-> **Screenshot needed:**
-> _[Screenshot of the mobile top navigation bar showing the hamburger menu, page title, and bell icon with a red "3" badge]_
+![The phone menu open, with the unread count on the Notifications entry](./images/10-15-mobile-menu-notifications.png)
+
+This is worth knowing before you go looking: a member told to "watch for the
+red badge" will not find one on a phone until they open the menu.
 
 ---
 

@@ -484,6 +484,76 @@ The Logbook supports public-facing forms that can be accessed without authentica
 - `member_lookup` field types are excluded from public form display
 - Internal field IDs (UUIDs) are exposed but contain no sensitive information
 
+---
+
+## Guest Event Check-In Security _(2026-08-09)_
+
+### Overview
+
+`Event.allow_guest_check_in` opts a single event into a **second, unauthenticated
+write path**: `POST /api/public/v1/display/{display_code}/events/{event_id}/guest-check-in`,
+reached by scanning a guest QR code on a room display. It exists so a visitor at a
+volunteer interest night can record their own attendance without an account.
+
+**It is off by default, and opt-in per event, precisely because turning it on
+exposes a write path to anyone who can reach that QR code.** It belongs on
+outreach events and must stay off for business meetings and training sessions,
+whose attendance drives records that only apply to members.
+
+### Protection Layers
+
+#### Tenant Resolution — the important one
+- The organization is resolved from the **room's display code**, never from
+  anything in the request body. An anonymous caller cannot name the organization
+  it writes to.
+- The event must actually be **held in that room**, so a valid display code
+  cannot be used to sign people in to an event elsewhere.
+- The event must have `allow_guest_check_in` set. Anything else is a `404`.
+
+#### Rate Limiting
+- Per-IP limiting on both the read and the write, reusing the display endpoint's
+  existing limiter.
+- **Per-event daily ceiling** — `GUEST_CHECK_IN_DAILY_LIMIT`, default `300`, `0`
+  disables it. Per-IP limiting alone cannot stop a distributed flood, and each
+  sign-in can create a pipeline record, which is a far more expensive side effect
+  than a page view. Exceeded → `429`.
+
+#### Bot Detection
+- Hidden `hp_website` honeypot field, named to look attractive to a form-filler.
+- A populated honeypot is answered with a **plausible `201` success** and nothing
+  is written — the same pattern the public forms endpoint uses. A bot that
+  receives a rejection learns which field to stop filling; one that receives a
+  confirmation has no signal to adapt to.
+
+#### Input Constraints
+- `first_name` / `last_name`: 1–100 chars, trimmed, blank-after-trim rejected.
+- `email`: validated `EmailStr`, normalized to lowercase before matching.
+- `phone` ≤ 50, `organization_name` ≤ 255, `interest_reason` ≤ 2000.
+- Nothing richer is accepted. A walk-in is asked for the minimum needed to follow
+  up, not for a membership application.
+
+#### Timing
+- Guests are held to the organizer's configured check-in window **minus the
+  early-arrival grace members get**. A member checking in early is identifiable
+  and correctable; an anonymous early write is neither, so the gate stays shut
+  until the window the organizer actually chose. Outside the window → `400`.
+
+#### Information Disclosure
+- The `GET` companion exposes only what a visitor standing in the room can
+  already see: event name, type, start/end, room, department name, and whether
+  sign-in is open. **The event description is withheld**, matching the kiosk
+  display.
+- The department timezone is returned so an unauthenticated tablet renders local
+  times rather than falling back to the device's zone.
+
+#### Failure Containment
+- Pipeline creation failures are **logged and swallowed** — they never cost a
+  guest their attendance, and they never surface an internal error to an
+  anonymous caller.
+- `event_external_attendees.prospect_id` is `ON DELETE SET NULL`, so purging a
+  prospect (retention, withdrawal) never destroys the record of who was in the
+  room.
+
 ### QR Code Access
 
 Public forms support QR code generation for physical distribution:

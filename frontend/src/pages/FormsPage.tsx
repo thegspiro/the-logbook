@@ -360,9 +360,9 @@ const FormsPage: React.FC = () => {
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Page Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center space-x-3">
-            <div className="rounded-lg bg-red-600 p-2">
+            <div className="shrink-0 rounded-lg bg-red-600 p-2">
               <FormInput className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -440,7 +440,7 @@ const FormsPage: React.FC = () => {
 
         {/* Tabs */}
         <div
-          className="bg-theme-surface-secondary mb-6 flex w-fit space-x-1 rounded-lg p-1"
+          className="bg-theme-surface-secondary hscroll mb-6 flex w-fit space-x-1 rounded-lg p-1"
           role="tablist"
           aria-label="Forms views"
         >
@@ -638,7 +638,7 @@ const FormsPage: React.FC = () => {
                     {canManage && form.status === FormStatus.DRAFT && (
                       <div className="mb-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3">
                         <p className="mb-1 text-xs font-medium text-yellow-700 dark:text-yellow-300">Next steps:</p>
-                        <div className="flex items-center gap-3 text-xs text-yellow-700 dark:text-yellow-400">
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-yellow-700 dark:text-yellow-400">
                           <span
                             className={`flex items-center gap-1 ${(form.field_count ?? 0) > 0 ? 'line-through opacity-50' : 'font-medium'}`}
                           >
@@ -813,7 +813,7 @@ const FormsPage: React.FC = () => {
         {activeTab === 'submissions' && (
           <>
             {/* Form selector dropdown */}
-            <div className="mb-4 flex items-center gap-3">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
               <label
                 htmlFor="submission-form-select"
                 className="text-theme-text-secondary shrink-0 text-sm font-medium"
@@ -896,7 +896,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
               {/* Header */}
-              <div className="mb-6 flex items-center justify-between">
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleCloseEditor}
@@ -924,7 +924,7 @@ const FormsPage: React.FC = () => {
 
               {/* Detail Tabs */}
               <div
-                className="bg-theme-surface-secondary mb-6 flex w-fit space-x-1 rounded-lg p-1"
+                className="bg-theme-surface-secondary hscroll mb-6 flex w-fit space-x-1 rounded-lg p-1"
                 role="tablist"
                 aria-label="Form editor views"
               >

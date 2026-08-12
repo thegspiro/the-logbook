@@ -34,6 +34,8 @@ import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { Skeleton } from '../../../components/ux/Skeleton';
 import { SortableHeader, type SortDirection } from '../../../components/ux/SortableHeader';
+import { enumLabel } from '@/utils/displayValue';
+import { sizeLabel } from '../types';
 import type {
   ImpactPlannerOptions,
   ImpactPlannerRequest,
@@ -740,14 +742,14 @@ const ImpactPlannerPage: React.FC = () => {
                         <div key={b.size} className="flex items-center gap-3">
                           <span
                             className="text-theme-text-primary w-14 shrink-0 truncate text-sm font-semibold"
-                            title={b.size}
+                            title={sizeLabel(b.size)}
                           >
-                            {b.size}
+                            {sizeLabel(b.size)}
                           </span>
                           <div
                             className="bg-theme-surface-secondary relative h-5 flex-1 overflow-hidden rounded"
                             role="img"
-                            aria-label={`${b.size}: ${b.needing} needed`}
+                            aria-label={`${sizeLabel(b.size)}: ${b.needing} needed`}
                           >
                             <div
                               className="h-full bg-purple-500/30"
@@ -881,7 +883,7 @@ const ImpactPlannerPage: React.FC = () => {
                 {/* Members table */}
                 <div className="card p-4 sm:p-5">
                   <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-theme-text-primary text-sm font-semibold">
                         Impacted Members ({filteredMembers.length})
                       </h3>
@@ -995,13 +997,15 @@ const ImpactPlannerPage: React.FC = () => {
                                 )}
                               </td>
                               <td className="text-theme-text-secondary hidden px-3 py-2.5 sm:table-cell">
-                                <span className="capitalize">{m.rank || '—'}</span>
+                                <span>{enumLabel(m.rank) || '—'}</span>
                                 {m.station && <span className="text-theme-text-muted block text-xs">{m.station}</span>}
                               </td>
                               {result.size_field && (
                                 <td className="px-3 py-2.5">
                                   {m.needed_size ? (
-                                    <span className="text-theme-text-primary font-medium">{m.needed_size}</span>
+                                    <span className="text-theme-text-primary font-medium">
+                                      {sizeLabel(m.needed_size)}
+                                    </span>
                                   ) : (
                                     <span className="text-xs text-amber-600 dark:text-amber-400">No size on file</span>
                                   )}

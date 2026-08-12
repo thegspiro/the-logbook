@@ -2,6 +2,10 @@
 
 Welcome to the training documentation for The Logbook. These guides are designed to help new users learn the system and serve as a reference for experienced users.
 
+> **Maintainers:** See the [training materials review and screenshot plan](./TRAINING_MATERIALS_REVIEW.md)
+> for the current learning-design recommendations, screenshot priorities, and
+> image acceptance checklist.
+
 ---
 
 ## Guides
@@ -90,7 +94,7 @@ Throughout these guides you will find screenshot placeholder lines formatted as:
 
 These indicate where a screenshot should be inserted. The description explains what should be captured. Lines marked **Screenshot needed:** are newly added sections that particularly require visual documentation.
 
-Screenshots are captured from a running demo department rather than taken by hand, so they can be refreshed in bulk after a UI change. See [`scripts/screenshots/README.md`](../../scripts/screenshots/README.md) for how to stand up the demo environment, declare a shot, and capture it. [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md) tracks which placeholders are filled.
+Screenshots are captured from a running demo department rather than taken by hand, so they can be refreshed in bulk after a UI change. See [`scripts/screenshots/README.md`](../../scripts/screenshots/README.md) for how to stand up the demo environment, declare a shot, and capture it. [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md) tracks which placeholders are filled; [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) tracks whether what was captured still matches the application, which is a different question and the one that goes stale silently.
 
 If you are adding one by hand instead:
 

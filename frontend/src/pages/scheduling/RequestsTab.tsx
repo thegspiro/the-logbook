@@ -162,7 +162,10 @@ export const RequestsTab: React.FC = () => {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             aria-label="Filter requests by status"
-            className="form-input flex-1 sm:flex-none"
+            // See OpenShiftsTab: `form-input` is w-full, so under
+            // `sm:flex-none` the control overflows its row by the width of the
+            // filter icon beside it and spills past the page's right edge.
+            className="form-input flex-1 sm:w-44 sm:flex-none"
           >
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
@@ -473,7 +476,7 @@ export const RequestsTab: React.FC = () => {
                 className="form-input placeholder-theme-text-muted resize-none py-2.5 focus:ring-violet-500"
               />
             </div>
-            <div className="border-theme-surface-border flex justify-end gap-3 border-t p-6">
+            <div className="border-theme-surface-border flex flex-wrap justify-end gap-3 border-t p-6">
               <button onClick={() => setReviewing(null)} className="text-theme-text-secondary px-4 py-2">
                 Cancel
               </button>

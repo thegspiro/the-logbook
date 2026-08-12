@@ -229,6 +229,39 @@ Each module has view and manage permissions:
 - Budget (`budget.view`, `budget.manage`)
 - Audit (`audit.view`, `audit.export`)
 
+### Reads Gated at the Source, Not at the Report _(2026-08-09)_
+
+Some reads carry the same personal data as the records they are drawn from, and
+holding the *reporting* permission was letting a member read data they could not
+fetch directly. Three were closed by requiring **the permission that protects the
+data at its source**, deliberately reusing existing permissions so that no new
+grant is needed and no current user is locked out:
+
+| Read | Was | Now |
+| --- | --- | --- |
+| **Member roster report** (email, membership number) | `reports.view` | `reports.view` **and** `members.view` |
+| **Pipeline overview report** (applicant name, email, PII) | `reports.view` | `reports.view` **and** `prospective_members.view` |
+| **Full integration config** (list/get, includes credentials) | authenticated | `integrations.manage` |
+| **Expense-report reimbursements** (payee, amounts owed) | `finance.view` | `finance.view` sees **only their own submissions**; the full org queue needs the finance-manager permission |
+
+Notes:
+
+- **Aggregate reports are unchanged** and stay at `reports.view` — the gate is on
+  personal data, not on reporting.
+- The reports **`/available`** endpoint hides the PII reports a caller cannot run,
+  so the restriction shows up as an absent option rather than as an error at the
+  end of a workflow.
+- Integration **status** is consumed cross-module (the membership-pipeline meeting
+  config, under other permissions), so `GET /integrations/connected` returns a
+  status-only projection — `integration_type`, `status`, `enabled`, no config and
+  no secrets — for any authenticated member. Those flows keep working without the
+  integrations-admin permission.
+
+> **`require_permission(...)` does not scope the object.** It asserts the caller
+> holds the permission *in their own organization*; it says nothing about which
+> record they are touching. Every by-id read and mutation must still be resolved
+> through an org-scoped fetch — see CLAUDE.md pitfall #14.
+
 ## Using the System
 
 ### Settings Navigation

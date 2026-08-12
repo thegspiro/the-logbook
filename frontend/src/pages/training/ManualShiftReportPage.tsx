@@ -28,7 +28,8 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ApparatusOption } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { getTodayLocalDate } from '../../utils/dateFormatting';
+import { addCalendarDays, getTodayLocalDate } from '../../utils/dateFormatting';
+import { enumLabel } from '../../utils/displayValue';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { DEFAULT_CALL_TYPE_OPTIONS } from '../../modules/scheduling/constants/shiftReportConstants';
 import { StarRating } from '../../modules/scheduling/components/StarRating';
@@ -114,10 +115,13 @@ export const ManualShiftReportPage: React.FC = () => {
           const endH = Math.floor(endMinutes / 60) % 24;
           const endM = endMinutes % 60;
           setEndTime(`${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`);
-          if (endMinutes >= 24 * 60) {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            setEndDate(tomorrow.toISOString().split('T')[0] ?? getTodayLocalDate(tz));
+          // A 24h default starting at 07:00 ends on the following calendar day —
+          // count the days off the shift date, not off the clock, or an officer
+          // filing in the evening west of UTC gets an end date two days out and
+          // a 36-hour shift.
+          const daysOver = Math.floor(endMinutes / (24 * 60));
+          if (daysOver > 0) {
+            setEndDate((prev) => addCalendarDays(prev, daysOver));
           }
         }
       })
@@ -128,7 +132,9 @@ export const ManualShiftReportPage: React.FC = () => {
       .then((res) => setApparatusOptions(res.options.filter((o) => o.source !== 'default')))
       .catch(() => {})
       .finally(() => setLoadingApparatus(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // Load-once: the config, the member directory and the apparatus list are
+    // fetched on mount and never refetched.
+  }, []);
 
   // Filter apparatus by config's allowed IDs
   const availableApparatus = useMemo(() => {
@@ -300,7 +306,7 @@ export const ManualShiftReportPage: React.FC = () => {
               {availableApparatus.map((a) => (
                 <option key={a.id || a.name} value={a.id || a.name}>
                   {a.name}
-                  {a.unit_number ? ` (${a.unit_number})` : ''} — {a.apparatus_type}
+                  {a.unit_number ? ` (${a.unit_number})` : ''} — {enumLabel(a.apparatus_type)}
                 </option>
               ))}
             </select>
@@ -551,7 +557,7 @@ export const ManualShiftReportPage: React.FC = () => {
         </div>
 
         {/* Submit */}
-        <div className="border-theme-surface-border flex items-center gap-3 border-t pt-2">
+        <div className="border-theme-surface-border flex flex-wrap items-center gap-3 border-t pt-2">
           <button
             onClick={() => {
               void handleSubmit(true);

@@ -79,14 +79,17 @@ Response:
 
 ### Public Endpoints (No Auth Required)
 
-| Prefix                               | Description                                                                                                                                                                    |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/api/public/v1/forms/{slug}`        | Public form access                                                                                                                                                             |
-| `/api/public/v1/forms/{slug}/submit` | Public form submission (rate-limited)                                                                                                                                          |
-| `/api/public/portal/*`               | Public portal endpoints (`X-API-Key` required). IP rate limit runs before bcrypt; keys use a selective 16-char lookup prefix (`logbook_`+8), legacy keys self-heal on next use |
-| `/health`                            | Health check                                                                                                                                                                   |
-| `/health/db`                         | Database health                                                                                                                                                                |
-| `/health/redis`                      | Redis health                                                                                                                                                                   |
+| Prefix                                                           | Description                                                                                                                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/api/public/v1/forms/{slug}`                                    | Public form access                                                                                                                                                             |
+| `/api/public/v1/forms/{slug}/submit`                             | Public form submission (rate-limited)                                                                                                                                          |
+| `/api/public/portal/*`                                           | Public portal endpoints (`X-API-Key` required). IP rate limit runs before bcrypt; keys use a selective 16-char lookup prefix (`logbook_`+8), legacy keys self-heal on next use |
+| `/api/public/v1/display/{code}`                                  | Room display (kiosk) — current events in that room                                                                                                                             |
+| `/api/public/v1/display/{code}/events/{event_id}/guest`          | Guest sign-in page detail _(2026-08-09)_                                                                                                                                       |
+| `/api/public/v1/display/{code}/events/{event_id}/guest-check-in` | Guest (non-member) attendance write _(2026-08-09)_                                                                                                                             |
+| `/health`                                                        | Health check                                                                                                                                                                   |
+| `/health/db`                                                     | Database health                                                                                                                                                                |
+| `/health/redis`                                                  | Redis health                                                                                                                                                                   |
 
 ### Security & Monitoring
 
@@ -143,6 +146,67 @@ GET    /api/v1/equipment-checks/reports/failures             # Failure/deficienc
 GET    /api/v1/equipment-checks/reports/trends               # Item trend history
 GET    /api/v1/equipment-checks/reports/export               # CSV/PDF export
 ```
+
+### Supply & Deployed Lots _(2026-08-10)_
+
+The bridge between Inventory and the Equipment Check system. **Reads** accept
+`equipment_check.view` or `inventory.view`; **writes** accept
+`equipment_check.submit` — the default member position — as well as
+`equipment_check.manage` / `inventory.manage`. Recording what you just used is
+crew work; gating it behind a manage permission is what leaves the gap for the
+next morning's check to find.
+
+```
+GET    /api/v1/equipment-checks/supply/expiring-items                        # ?days_ahead=30 (1-365)
+GET    /api/v1/equipment-checks/supply/item-deployments/{inventory_item_id}  # Reverse lookup
+GET    /api/v1/equipment-checks/apparatus/{apparatus_id}/inventory           # Standing view of one truck
+
+POST   /api/v1/equipment-checks/items/{item_id}/used                # Report used/pulled  → restock report
+DELETE /api/v1/equipment-checks/items/{item_id}/used                # Withdraw the report
+PUT    /api/v1/equipment-checks/items/{item_id}/quantity            # Recount the position
+POST   /api/v1/equipment-checks/items/{item_id}/swap                # Move a ready lot onto the truck
+
+GET    /api/v1/equipment-checks/items/{item_id}/deployed-lots           # Lots aboard, soonest first
+PUT    /api/v1/equipment-checks/items/{item_id}/deployed-lots/{lot_id}  # Correct count + number + date
+
+GET    /api/v1/equipment-checks/templates/{id}/inventory-matches    # Propose catalog links (read-only)
+POST   /api/v1/equipment-checks/templates/{id}/inventory-links      # Apply a reviewed set of links
+```
+
+| Behaviour               | Detail                                                                                                                                                                      |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Derived values**      | A position's count is the **sum** of its deployed lots; its expiration is the **earliest**. Neither is read from `check_template_items` any more                            |
+| **Consumption order**   | First-expiring-first-out. Undated lots sort last                                                                                                                            |
+| **Expiry**              | Recomputed **server-side** from the soonest date aboard. A client-supplied `is_expired` is ignored — that flag is what force-fails a safety-critical item                   |
+| **Expired shelf stock** | Excluded from `ready_stock`, flagged in the payload, and **`POST .../swap` refuses it** with a 400                                                                          |
+| **Partial updates**     | `PUT .../deployed-lots/{lot_id}` uses `exclude_unset`: an omitted field is left alone, an explicit `null` clears, and `quantity: 0` removes the lot                         |
+| **Match confidence**    | `inventory-matches` returns `exact` / `strong` / `weak`. Only `exact` is pre-selected client-side — "Oxygen Mask" scores high against both the adult and the pediatric mask |
+| **404 vs 400**          | An unknown template/item/lot is a 404; a business-rule refusal (expired lot, over-draw, cross-org FK) is a 400 via `safe_error_detail()`                                    |
+
+### Inventory bulk write paths _(2026-08-10)_
+
+```
+POST   /api/v1/inventory/items/bulk    # inventory.manage — existing names skipped and reported
+POST   /api/v1/inventory/lots/bulk     # inventory.manage — receive a delivery, all lines or none
+```
+
+`items/bulk` returns `{created, skipped[], item_ids[]}`. `lots/bulk` returns the
+created lots. **Both are all-or-nothing on validation failure**: a partly applied
+delivery is worse than a rejected one, because the caller cannot tell which lines
+landed and re-entering it would double-count whatever did.
+
+### Email footer library _(2026-08-10)_
+
+```
+GET    /api/v1/email-templates/footers   # settings.manage OR organization.update_settings
+PUT    /api/v1/email-templates/footers   # Replaces the library whole
+```
+
+`GET` seeds the library on first read and returns a live per-footer **usage
+count**, so the screen can say "3 templates use this" before one is deleted. A
+template's `footer_key` of NULL counts toward the library's `default_key`. `PUT`
+replaces the library **whole** — a per-footer save could leave `default_key`
+naming a footer the same request deleted.
 
 ## Shift Completion Reports _(2026-03-28)_
 
@@ -425,6 +489,56 @@ DELETE /api/v1/training/programs/programs/{program_id}/milestones/{milestone_id}
   `send_if_below_percentage` (0–100). Unset falls back to `warning_days_before`
   plus 14- and 7-day follow-ups; the weekly `enrollment_deadline_warnings` sweep
   reads it per program instead of a fixed `[30, 14, 7]`.
+  `milestone_threshold` is accepted and **ignored** — `ProgramMilestone` rows
+  already fire progress-based notifications, and two mechanisms for one job is
+  how the two drift apart.
+
+### Checklist Requirements — Per-Step Sign-Off _(2026-08-09)_
+
+A `checklist` requirement's steps are stored on `checklist_items`, which now
+holds objects rather than bare strings:
+
+```json
+{ "id": "…", "text": "Tour the apparatus bay", "member_visible": true }
+```
+
+- **Both shapes are accepted on input.** A bare string, an object, or a mix
+  normalizes to the object form (`app/utils/checklist.py`); the `id` is assigned
+  server-side when a step is created. Editors send existing ids back so a step
+  keeps its identity — and the ticks recorded against it — through a rename or a
+  reorder. **Legacy string rows normalize on read**, not through a migration.
+- **`PATCH /progress/{progress_id}`** accepts `checklist_done: [step_id, …]` —
+  the steps ticked so far. Completion is `ticked / total`, so the requirement
+  fills up as the work happens instead of being all-or-nothing.
+- **`member_visible: false`** keeps a step off the member's view (references
+  called, background check returned). **Hidden steps still count toward the
+  denominator** — excluding them would let a requirement read 100% while the
+  background check was outstanding — so the member is told "+N more steps your
+  officer records" rather than shown a total that does not match their screen.
+
+### Enrollment Expiry and Reopen _(2026-08-09)_
+
+```
+POST   /api/v1/training/programs/enrollments/{enrollment_id}/reopen    # Put an expired enrollment back to active (training.manage)
+```
+
+Optional body: `{ "target_completion_date": "…" }` — an officer granting an
+extension to a member who ran out of time.
+
+- **Enrollments past `target_completion_date` now become `EXPIRED`.** The status
+  was read (recert treats it as a renewable state) but never written, so a member
+  stayed `ACTIVE` indefinitely with their page reading "42 days overdue" against a
+  status claiming otherwise.
+- Expiry happens **on read** — the progress endpoint transitions an overdue
+  enrollment the moment someone opens it, the same pattern `auto_reset_if_due`
+  already used — and in a **daily** `enrollment_expiry` scheduled task (05:15).
+  The weekly `enrollment_deadline_warnings` sweep no longer expires anything; it
+  sends warnings.
+- **Reopen leaves progress rows untouched** — the member keeps everything they
+  finished — and re-runs the rollup, so someone who quietly completed the work
+  while expired is marked complete rather than waiting for the next edit.
+- Returns `404` when the enrollment is not in the caller's organization, `400`
+  when it is not in a state that can be reopened.
 
 ### Soft Phase Gate on Attendance _(2026-07-14)_
 
@@ -441,6 +555,76 @@ their current phase, these endpoints return HTTP **409**:
 ```
 
 Pass `override=true` to proceed anyway.
+
+## Guest Check-In — Non-Member Attendance _(2026-08-09)_
+
+Unauthenticated endpoints reached by scanning the **guest** QR code on a room
+display. They only work when the event has `allow_guest_check_in` set **and** is
+held in the room the display code belongs to.
+
+```
+GET    /api/public/v1/display/{display_code}/events/{event_id}/guest            # Event detail for the sign-in page
+POST   /api/public/v1/display/{display_code}/events/{event_id}/guest-check-in   # Record a guest's attendance (201)
+```
+
+**Why the display code is in the path.** The department is resolved from the
+room's display code, **never from the request body** — an anonymous caller must
+not be able to name the organization it is writing to. The event is then checked
+to be held in that room, so a valid display code cannot be used to sign people in
+to an event somewhere else.
+
+**Request** (`GuestCheckInRequest`):
+
+| Field               | Type   | Required | Notes                                                                |
+| ------------------- | ------ | -------- | -------------------------------------------------------------------- |
+| `first_name`        | string | yes      | 1–100 chars, must contain a non-whitespace character (`\S`), trimmed |
+| `last_name`         | string | yes      | Same                                                                 |
+| `email`             | email  | no       | Required for a prospect to be created                                |
+| `phone`             | string | no       | ≤ 50 chars                                                           |
+| `organization_name` | string | no       | ≤ 255 chars — the company/agency the guest is with                   |
+| `interest_reason`   | string | no       | ≤ 2000 chars, stored on the attendance row as `notes`                |
+| `hp_website`        | string | no       | **Honeypot.** Hidden in the real form; only a bot fills it in        |
+
+**Response** (`GuestCheckInResponse`): `status` (`checked_in` | `already_checked_in`),
+`attendee_id`, `event_name`, `checked_in_at`, `prospect_created`, `message`.
+
+**GET response** (`GuestCheckInEventInfo`) exposes only what a visitor standing in
+the room can already see — name, type, start/end, room, department name,
+`is_open` + `closed_reason`, `collects_prospect_details`, and the department
+`timezone` so an unauthenticated tablet renders local times rather than UTC. The
+event **description is withheld**, matching the kiosk display.
+
+**Defences and their status codes:**
+
+| Condition                                        | Result                                                               |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| Per-IP rate limit exceeded                       | `429`                                                                |
+| Per-event daily cap exceeded                     | `429` — `GUEST_CHECK_IN_DAILY_LIMIT`, default `300`, `0` disables it |
+| Honeypot field populated                         | **`201` with a plausible success body**, nothing written             |
+| Outside the check-in window                      | `400` with the reason (not opened yet / has closed)                  |
+| Event not in that room, or guest check-in is off | `404`                                                                |
+
+> **Guests do not get the member early-arrival grace.** A member may check in
+> before a FLEXIBLE window opens because a member checking in early is
+> identifiable and correctable; an anonymous early write is neither. Guests are
+> held to the window the organizer actually configured.
+
+> **The honeypot answers with success, not an error.** A bot that receives a
+> rejection learns which field to stop filling; one that receives a plausible
+> confirmation has no signal to adapt to. This matches the public forms endpoint.
+
+**Side effects.** Always writes an `event_external_attendees` row with
+`source = 'kiosk_qr'`. When the event also has `guest_check_in_creates_prospect`
+and the guest supplied an email, it opens (or reuses) a `prospective_members`
+record, links it to the event through `prospect_event_links`, and stores the
+prospect id on the attendance row. **A pipeline failure is logged and swallowed**
+— it never costs a guest their attendance.
+
+**Duplicate handling.** A repeat sign-in matches on email where one was given and
+on name where it was not, and returns `already_checked_in` rather than creating a
+second row. Name matching is the weaker fallback: two different Chris Smiths at
+one open house collapse into a single row. A guest pre-registered by staff keeps
+the details staff entered; the kiosk sign-in only fills blanks.
 
 ## Skills Testing — Pipeline Requirement Link _(2026-07-14)_
 

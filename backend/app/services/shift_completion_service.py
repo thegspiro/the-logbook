@@ -14,6 +14,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.apparatus import Apparatus, EquipmentCheckTemplate
 from app.models.notification import (
     NotificationCategory,
     NotificationChannel,
@@ -21,6 +22,7 @@ from app.models.notification import (
 )
 from app.models.training import (
     AssignmentStatus,
+    BasicApparatus,
     CompetencyLevel,
     EnrollmentStatus,
     MemberCompetency,
@@ -34,6 +36,7 @@ from app.models.training import (
     ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
+    ShiftEquipmentCheck,
     SkillCheckoff,
     SkillEvaluation,
     TrainingRequirement,
@@ -46,6 +49,48 @@ class ShiftCompletionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _get_trainee_equipment_checks_from_shift(
+        self, shift_id: str, trainee_id: str
+    ) -> list[dict]:
+        """Return completed shift checks performed by this trainee.
+
+        Equipment checks are operational records first, but when the member is
+        on a training assignment the evaluator also needs them in the linked
+        shift report. Keeping the check id in the task payload makes the
+        provenance auditable without duplicating checklist answers in training.
+        """
+        result = await self.db.execute(
+            select(ShiftEquipmentCheck, EquipmentCheckTemplate.name)
+            .outerjoin(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == ShiftEquipmentCheck.template_id,
+            )
+            .where(
+                ShiftEquipmentCheck.shift_id == shift_id,
+                ShiftEquipmentCheck.checked_by == trainee_id,
+                ShiftEquipmentCheck.overall_status.in_(["pass", "fail"]),
+            )
+            .order_by(ShiftEquipmentCheck.checked_at)
+        )
+        tasks = []
+        for check, template_name in result.all():
+            timing = (
+                "Start of shift"
+                if check.check_timing == "start_of_shift"
+                else "End of shift"
+            )
+            tasks.append(
+                {
+                    "task": template_name or "Equipment check",
+                    "description": (
+                        f"{timing} equipment check — "
+                        f"{check.overall_status.replace('_', ' ').title()}"
+                    ),
+                    "equipment_check_id": str(check.id),
+                }
+            )
+        return tasks
 
     async def validate_shift_ownership(
         self,
@@ -123,7 +168,7 @@ class ShiftCompletionService:
         trainee_id: str,
         shift_date: date,
         hours_on_shift: float,
-        calls_responded: int = 0,
+        calls_responded: Optional[int] = None,
         call_types: Optional[list] = None,
         shift_id: Optional[str] = None,
         performance_rating: Optional[int] = None,
@@ -219,9 +264,17 @@ class ShiftCompletionService:
             actual_calls, actual_types = await self._get_trainee_call_data_from_shift(
                 shift_id, trainee_id
             )
-            calls_responded = actual_calls
-            data_sources["calls_responded"] = "shift_calls"
-            if actual_types:
+            # Auto-population fills what the officer left blank; it does not
+            # overwrite what they typed. The call count is an editable field on
+            # the report form, pre-filled from these same records and badged
+            # "(auto)", so a value arriving here is a deliberate correction —
+            # a shift whose runs were logged against the wrong crew, or a
+            # member who rode in on one and not the other. Overwriting it
+            # acknowledged the edit with a 201 and stored the old number.
+            if calls_responded is None:
+                calls_responded = actual_calls
+                data_sources["calls_responded"] = "shift_calls"
+            if call_types is None and actual_types:
                 call_types = actual_types
                 data_sources["call_types"] = "shift_calls"
 
@@ -231,6 +284,22 @@ class ShiftCompletionService:
             if actual_hours:
                 hours_on_shift = actual_hours
                 data_sources["hours_on_shift"] = "shift_attendance"
+
+            if tasks_performed is None:
+                equipment_check_tasks = (
+                    await self._get_trainee_equipment_checks_from_shift(
+                        shift_id, trainee_id
+                    )
+                )
+                if equipment_check_tasks:
+                    tasks_performed = equipment_check_tasks
+                    data_sources["tasks_performed"] = "shift_equipment_checks"
+
+        # `None` only ever meant "the officer did not supply one"; past this
+        # point it is a number that gets stored and counted against call-type
+        # requirements.
+        if calls_responded is None:
+            calls_responded = 0
 
         # Validate enrollment_id if provided
         if enrollment_id:
@@ -488,8 +557,15 @@ class ShiftCompletionService:
                     trainee_id=member_id,
                     shift_date=shift_date,
                     hours_on_shift=hours_on_shift,
-                    calls_responded=calls_responded,
-                    call_types=call_types,
+                    # The batch form collects one call count for the *shift*,
+                    # not for each member of the crew. Handing it to a
+                    # per-trainee report would credit every rider with every
+                    # run, so a linked shift defers to the per-trainee figure
+                    # derived from the run log — which is what this path has
+                    # always stored, back when create_report overwrote the
+                    # argument unconditionally.
+                    calls_responded=(None if shift_id else calls_responded),
+                    call_types=(None if shift_id else call_types),
                     shift_id=shift_id,
                     performance_rating=evaluation.get("performance_rating"),
                     areas_of_strength=evaluation.get("areas_of_strength"),
@@ -1035,7 +1111,17 @@ class ShiftCompletionService:
                 ShiftCompletionReport.organization_id == str(organization_id)
             )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        report = result.scalar_one_or_none()
+        if report is not None:
+            if organization_id is not None:
+                await self._attach_shift_labels([report], organization_id)
+            else:
+                # Unscoped callers re-check org themselves; without an org we
+                # cannot resolve the label safely, so leave it empty rather
+                # than reaching across tenants for it.
+                report.shift_label = None
+                report.shift_start_time = None
+        return report
 
     async def update_report(
         self,
@@ -1072,6 +1158,7 @@ class ShiftCompletionService:
             raise ValueError("Only the filing officer can update this report")
 
         was_draft = report.review_status == "draft"
+        was_released = report.review_status == "approved"
 
         # Prevent regression to draft once pipeline has run
         new_status = updates.get("review_status")
@@ -1082,11 +1169,9 @@ class ShiftCompletionService:
             if field in UPDATABLE_FIELDS:
                 setattr(report, field, value)
 
-        # Trigger training progress when a draft is completed
-        if was_draft and report.review_status in (
-            "approved",
-            "pending_review",
-        ):
+        # Training credit is earned only when an officer releases the report.
+        # Pending review is still provisional and may be flagged or corrected.
+        if not was_released and report.review_status == "approved":
             await self._trigger_deferred_progress(report, officer_id)
 
         await self.db.commit()
@@ -1124,6 +1209,101 @@ class ShiftCompletionService:
         if requirements_progressed:
             report.requirements_progressed = requirements_progressed
 
+    async def _attach_shift_labels(
+        self,
+        reports: List[ShiftCompletionReport],
+        organization_id: UUID,
+    ) -> List[ShiftCompletionReport]:
+        """Say which shift each report covers.
+
+        A report carried a person and a date and nothing else, so two reports
+        filed on one day were told apart by author alone — a reader could not
+        see which truck, or which of a day and night pair, either was about.
+        Two transient attributes, not columns: the response schema reads them
+        via `from_attributes` and nothing persists them.
+
+        - ``shift_label`` names the apparatus, and is None for a shift that has
+          none (an event or a detail).
+        - ``shift_start_time`` is the shift's start, in UTC like every other
+          datetime the API returns. The frontend renders it in the department's
+          timezone; formatting a time here would mean picking a zone in the
+          service layer. It is what tells a day shift from a night one on the
+          same apparatus and date, so it is sent even when the label is None.
+
+        Batched into two queries rather than a relationship: an eager
+        `Shift -> Apparatus` chain hanging off this model would load on every
+        query that touches a report, and a lazy one raises MissingGreenlet the
+        moment a response model reads it.
+        """
+        for report in reports:
+            report.shift_label = None
+            report.shift_start_time = None
+        shift_ids = {r.shift_id for r in reports if r.shift_id}
+        if not shift_ids:
+            return reports
+
+        # Org-scoped even though the ids came from org-scoped reports: a
+        # by-id fetch on a client-influenced id is scoped by default here.
+        shift_rows = await self.db.execute(
+            select(Shift.id, Shift.apparatus_id, Shift.start_time).where(
+                Shift.id.in_(shift_ids),
+                Shift.organization_id == str(organization_id),
+            )
+        )
+        shifts_by_id = {
+            str(row.id): (row.apparatus_id, row.start_time) for row in shift_rows
+        }
+        apparatus_ids = {a for a, _ in shifts_by_id.values() if a}
+        labels: Dict[str, str] = {}
+        if apparatus_ids:
+            apparatus_rows = await self.db.execute(
+                select(
+                    Apparatus.id,
+                    Apparatus.unit_number,
+                    Apparatus.name,
+                ).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == str(organization_id),
+                )
+            )
+            for row in apparatus_rows:
+                parts = [p for p in (row.unit_number, row.name) if p]
+                labels[str(row.id)] = " — ".join(parts)
+
+        # `shift.apparatus_id` predates its foreign key and may reference the
+        # onboarding-era basic_apparatus table instead of a full Apparatus
+        # record. Ids the Apparatus query did not claim are retried there, so
+        # a department still on basic apparatus gets its labels too. Apparatus
+        # wins when both tables somehow hold an id — the same priority
+        # app/utils/apparatus_ref.py resolves by.
+        missing_ids = {a for a in apparatus_ids if str(a) not in labels}
+        if missing_ids:
+            basic_rows = await self.db.execute(
+                select(
+                    BasicApparatus.id,
+                    BasicApparatus.unit_number,
+                    BasicApparatus.name,
+                ).where(
+                    BasicApparatus.id.in_(missing_ids),
+                    BasicApparatus.organization_id == str(organization_id),
+                )
+            )
+            for row in basic_rows:
+                parts = [p for p in (row.unit_number, row.name) if p]
+                labels[str(row.id)] = " — ".join(parts)
+
+        for report in reports:
+            if not report.shift_id:
+                continue
+            found = shifts_by_id.get(str(report.shift_id))
+            if not found:
+                continue
+            apparatus_id, start_time = found
+            report.shift_start_time = start_time
+            if apparatus_id:
+                report.shift_label = labels.get(str(apparatus_id))
+        return reports
+
     async def get_reports_for_trainee(
         self,
         organization_id: UUID,
@@ -1131,6 +1311,7 @@ class ShiftCompletionService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         limit: int = 50,
+        released_only: bool = False,
     ) -> List[ShiftCompletionReport]:
         """Get shift completion reports for a specific trainee."""
         query = (
@@ -1146,9 +1327,13 @@ class ShiftCompletionService:
             query = query.where(ShiftCompletionReport.shift_date >= start_date)
         if end_date:
             query = query.where(ShiftCompletionReport.shift_date <= end_date)
+        if released_only:
+            query = query.where(ShiftCompletionReport.review_status == "approved")
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return await self._attach_shift_labels(
+            list(result.scalars().all()), organization_id
+        )
 
     async def get_reports_by_officer(
         self,
@@ -1166,7 +1351,9 @@ class ShiftCompletionService:
             .order_by(ShiftCompletionReport.shift_date.desc())
             .limit(limit)
         )
-        return list(result.scalars().all())
+        return await self._attach_shift_labels(
+            list(result.scalars().all()), organization_id
+        )
 
     async def get_all_reports(
         self,
@@ -1196,7 +1383,9 @@ class ShiftCompletionService:
             query = query.where(ShiftCompletionReport.shift_date <= end_date)
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return await self._attach_shift_labels(
+            list(result.scalars().all()), organization_id
+        )
 
     async def acknowledge_report(
         self,
@@ -1211,6 +1400,7 @@ class ShiftCompletionService:
             not report
             or report.trainee_id != trainee_id
             or report.organization_id != str(organization_id)
+            or report.review_status != "approved"
         ):
             return None
 
@@ -1237,7 +1427,9 @@ class ShiftCompletionService:
             )
             .order_by(ShiftCompletionReport.shift_date.desc())
         )
-        return list(result.scalars().all())
+        return await self._attach_shift_labels(
+            list(result.scalars().all()), organization_id
+        )
 
     async def review_report(
         self,
@@ -1251,15 +1443,14 @@ class ShiftCompletionService:
     ) -> Optional[ShiftCompletionReport]:
         """Review a shift completion report: approve, flag, or redact fields.
 
-        When transitioning from draft to approved/pending_review,
-        triggers training pipeline progress that was deferred at
-        draft creation time.
+        Training pipeline progress is triggered only when the report is
+        approved and released to the trainee.
         """
         report = await self.get_report(report_id, organization_id)
         if not report or report.organization_id != str(organization_id):
             return None
 
-        was_draft = report.review_status == "draft"
+        was_released = report.review_status == "approved"
 
         # Redact specified fields before approving (clear sensitive content)
         REDACTABLE_FIELDS = {
@@ -1292,11 +1483,9 @@ class ShiftCompletionService:
         existing_history.append(history_entry)
         report.review_history = existing_history
 
-        # Trigger deferred training progress when draft is activated
-        if was_draft and review_status in (
-            "approved",
-            "pending_review",
-        ):
+        # Pending review is provisional: do not credit requirements until the
+        # reviewer approves the report and releases it to the trainee.
+        if not was_released and review_status == "approved":
             await self._trigger_deferred_progress(
                 report,
                 reviewer_id,
@@ -1339,6 +1528,7 @@ class ShiftCompletionService:
         trainee_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        released_only: bool = False,
     ) -> dict:
         """Get aggregate stats for a trainee's shift completion reports."""
         base_filter = [
@@ -1346,6 +1536,8 @@ class ShiftCompletionService:
             ShiftCompletionReport.trainee_id == trainee_id,
             ShiftCompletionReport.review_status != "draft",
         ]
+        if released_only:
+            base_filter[-1] = ShiftCompletionReport.review_status == "approved"
         if start_date:
             base_filter.append(ShiftCompletionReport.shift_date >= start_date)
         if end_date:

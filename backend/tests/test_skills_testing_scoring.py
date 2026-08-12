@@ -107,7 +107,7 @@ def test_failed_critical_criterion_fails_despite_passing_percentage():
                 "name": "S",
                 "criteria": [
                     {"type": "score", "label": "scored", "max_score": 10},
-                    {"type": "checkbox", "label": "must-pass", "required": True},
+                    {"type": "pass_fail", "label": "must-pass", "required": True},
                 ],
             }
         ],
@@ -136,7 +136,7 @@ def test_passed_critical_criterion_passes():
                 "name": "S",
                 "criteria": [
                     {"type": "score", "label": "scored", "max_score": 10},
-                    {"type": "checkbox", "label": "must-pass", "required": True},
+                    {"type": "pass_fail", "label": "must-pass", "required": True},
                 ],
             }
         ],
@@ -162,12 +162,12 @@ def test_missing_section_with_required_criterion_fails():
         [
             {
                 "name": "Present",
-                "criteria": [{"type": "checkbox", "label": "ok", "required": True}],
+                "criteria": [{"type": "pass_fail", "label": "ok", "required": True}],
             },
             {
                 "name": "Absent",
                 "criteria": [
-                    {"type": "checkbox", "label": "missing", "required": True}
+                    {"type": "pass_fail", "label": "missing", "required": True}
                 ],
             },
         ],
@@ -208,8 +208,8 @@ def test_statement_criteria_always_pass():
 def test_falls_back_to_section_score_average_without_score_criteria():
     template = _template(
         [
-            {"name": "A", "criteria": [{"type": "checkbox", "label": "x"}]},
-            {"name": "B", "criteria": [{"type": "checkbox", "label": "y"}]},
+            {"name": "A", "criteria": [{"type": "pass_fail", "label": "x"}]},
+            {"name": "B", "criteria": [{"type": "pass_fail", "label": "y"}]},
         ],
         passing_percentage=80,
     )

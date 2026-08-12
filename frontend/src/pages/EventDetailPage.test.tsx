@@ -789,4 +789,63 @@ describe('EventDetailPage', () => {
       expect(dialog).toHaveAttribute('aria-modal', 'true');
     });
   });
+
+  describe('Custom Fields', () => {
+    // `custom_fields` is shared between what a coordinator typed and what the
+    // scheduled tasks write to remember what they have already sent. The
+    // Event Details list dumped the whole column, so members opening an event
+    // were shown "Validation Notification Sent: true" beside the description.
+    const withCustomFields = (custom: Record<string, unknown>) => ({
+      ...mockEvent,
+      custom_fields: custom,
+    });
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+    });
+
+    it('shows a field the coordinator entered', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withCustomFields({ dress_code: 'Class B uniform' }) as unknown as Event
+      );
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('Dress Code')).toBeInTheDocument();
+      expect(screen.getByText('Class B uniform')).toBeInTheDocument();
+    });
+
+    it.each([
+      ['validation_notification_sent', true],
+      ['series_end_reminder_sent', true],
+      ['reminders_sent', [24]],
+    ])('hides the scheduler bookkeeping key %s', async (key, value) => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withCustomFields({ [key]: value, dress_code: 'Class B uniform' }) as unknown as Event
+      );
+
+      renderWithRouter(<EventDetailPage />);
+
+      // The visible field proves the block rendered at all.
+      expect(await screen.findByText('Dress Code')).toBeInTheDocument();
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    });
+
+    it('draws no card at all when only bookkeeping keys are present', async () => {
+      // Otherwise every event the scheduler has touched carries an empty
+      // purple "Training Session Details" box.
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withCustomFields({ validation_notification_sent: true }) as unknown as Event
+      );
+
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Training Session Details')).not.toBeInTheDocument();
+    });
+  });
 });

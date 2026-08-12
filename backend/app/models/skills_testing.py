@@ -134,6 +134,16 @@ class SkillTemplate(Base):
     passing_percentage = Column(Float, nullable=True)
     require_all_critical = Column(Boolean, default=True)
 
+    # Whether pass/fail steps contribute points to the overall percentage.
+    # Off by default, and deliberately so: the percentage has always been
+    # computed from score-type criteria alone, so switching this on for
+    # existing templates would change what every historical result means. A
+    # department whose knowledge questions are written as pass/fail steps turns
+    # it on so a wrong answer costs points instead of nothing.
+    score_pass_fail_criteria = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+
     # Optional pipeline linkage — the training requirement this template's tests
     # satisfy. Tests inherit it at creation (overridable per test), and a passing
     # test marks that requirement complete on the candidate's active enrollment.
@@ -299,6 +309,37 @@ class SkillTest(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+
+    # Return trail — set when an officer sends a submitted result back to its
+    # examiner instead of accepting or voiding it.
+    #
+    # Voiding was previously the only rejection path, and it is the wrong
+    # instrument for "the captain mis-scored step 4, have him redo it": a void
+    # is a permanent, candidate-visible withdrawal of a result, which is right
+    # for a result that was wrong and wrong for one that was never finished
+    # properly. A return spends no void — the test reopens to its examiner, the
+    # marks stay for them to correct, and nothing has yet been claimed about the
+    # candidate.
+    #
+    # Deliberately *not* cleared when the examiner resubmits. The officer
+    # reviewing the second submission needs to see what they asked for in order
+    # to check it was addressed, and the examiner needs it in front of them
+    # while correcting. They describe the most recent return only; the audit log
+    # carries the full history, and return_count carries the tally.
+    #
+    # SET NULL on the author, matching the other trails: a departed officer's
+    # departure must not erase the fact that a test was returned.
+    returned_at = Column(DateTime(timezone=True), nullable=True)
+    returned_by = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    return_reason = Column(Text, nullable=True)
+    # How many times this test has been sent back. An examiner's honest slip is
+    # one return; a third is a training conversation, and an officer looking at
+    # the queue should be able to see the difference without reading the log.
+    return_count = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Void trail — set only when an official result is withdrawn. SET NULL on the
     # author (a departed officer must not erase the void record), so nullable.

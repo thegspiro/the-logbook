@@ -78,6 +78,12 @@ export interface SkillCriterion {
   checklist_items?: string[] | undefined;
   /** For 'statement' type: text the evaluator must read/state */
   statement_text?: string | undefined;
+  /** For 'statement' type: whether reading this aloud falls inside the timed
+   *  evolution. An opening statement that briefs a candidate who is not yet in
+   *  position is read off the clock; a prompt delivered mid-evolution is not.
+   *  Defaults to false — statements mark themselves as a section renders, and
+   *  that is nobody's action, so it cannot start a clock on its own. */
+  starts_timer?: boolean | undefined;
 }
 
 /** A section grouping related criteria within a template */
@@ -106,6 +112,9 @@ export interface SkillTemplate {
   passing_percentage?: number;
   /** Whether all required criteria must pass regardless of overall score */
   require_all_critical: boolean;
+  /** Whether Pass/Fail steps carry points toward the overall percentage. Off by
+   *  default: the percentage is otherwise computed from scored steps alone. */
+  score_pass_fail_criteria?: boolean;
   /** Training-pipeline requirement this template's tests satisfy (optional) */
   requirement_id?: string;
   /** Disclosure overrides for this template; null inherits the org default. */
@@ -127,6 +136,7 @@ export interface SkillTemplateCreate {
   time_limit_seconds?: number | undefined;
   passing_percentage?: number | undefined;
   require_all_critical?: boolean | undefined;
+  score_pass_fail_criteria?: boolean | undefined;
   tags?: string[] | undefined;
   visibility?: TemplateVisibility | undefined;
   requirement_id?: string | undefined;
@@ -156,6 +166,7 @@ export interface SkillCriterionCreate {
   time_limit_seconds?: number | undefined;
   checklist_items?: string[] | undefined;
   statement_text?: string | undefined;
+  starts_timer?: boolean | undefined;
 }
 
 export interface SkillTemplateUpdate {
@@ -168,6 +179,7 @@ export interface SkillTemplateUpdate {
   time_limit_seconds?: number | null | undefined;
   passing_percentage?: number | null | undefined;
   require_all_critical?: boolean | undefined;
+  score_pass_fail_criteria?: boolean | undefined;
   tags?: string[] | undefined;
   requirement_id?: string | null | undefined;
   result_disclosure?: ResultDisclosure | null | undefined;
@@ -195,6 +207,51 @@ export interface SectionResult {
   /** Sent to backend for name-based result matching */
   section_name?: string | undefined;
   criteria_results: CriterionResult[];
+}
+
+/** One section's contribution to the overall percentage. */
+export interface ScoreBreakdownSection {
+  /** Positional id (`section-<n>`), matching the hydrated template section. */
+  section_id: string;
+  section_name?: string | undefined;
+  /** False when the section holds no point-carrying steps — it is on the
+   *  scorecard but contributed nothing to the percentage. */
+  counts_toward_score: boolean;
+  earned?: number | null | undefined;
+  available?: number | null | undefined;
+  /** Pass/fail-style steps marked passed. Excludes statements (which mark
+   *  themselves) and non-critical scored steps (whose contribution is points). */
+  passed: number;
+  failed: number;
+  not_scored: number;
+  /** Statements read aloud by the examiner — informational, never scored. */
+  statements: number;
+}
+
+/** How a test's overall percentage was arrived at.
+ *
+ *  Computed server-side against the template snapshot the test was scored
+ *  under, so the working shown on a scorecard is the working that produced the
+ *  number — not a second implementation in TypeScript that can drift from it. */
+export interface ScoreBreakdown {
+  /** 'points' — earned/available; 'section_average' — legacy per-section
+   *  percentages; 'none' — nothing scorable was recorded. */
+  method: 'points' | 'section_average' | 'none';
+  score_pass_fail_criteria: boolean;
+  earned: number;
+  available: number;
+  percentage?: number | null | undefined;
+  passing_percentage?: number | null | undefined;
+  meets_threshold: boolean;
+  require_all_critical: boolean;
+  /** Required steps that failed or were left unscored — the reason a test with
+   *  a passing percentage can still read as Failed. */
+  critical_failures: {
+    section_name?: string | undefined;
+    criterion_label?: string | undefined;
+    reason: 'failed' | 'not_scored';
+  }[];
+  sections: ScoreBreakdownSection[];
 }
 
 /** A complete skill test instance */
@@ -256,6 +313,22 @@ export interface SkillTest {
    *  pass. Sent so the examiner screen can warn that a critical step left
    *  unscored is scored as a failure — which is what the backend does. */
   template_require_all_critical?: boolean | undefined;
+  /** Whether Pass/Fail steps carry points on the template this test was scored
+   *  against. Drives the section tallies shown while scoring. */
+  template_score_pass_fail_criteria?: boolean | undefined;
+  /** The arithmetic behind `overall_score`. Present only once the test is
+   *  final and the reader is permitted to see the outcome. */
+  score_breakdown?: ScoreBreakdown | undefined;
+  /** Set while a submission is back with its examiner for correction, and kept
+   *  after they resubmit so the reviewing officer can check the request was
+   *  addressed. */
+  returned_at?: string | null | undefined;
+  returned_by?: string | null | undefined;
+  returned_by_name?: string | null | undefined;
+  return_reason?: string | null | undefined;
+  /** How many times this test has been sent back. One is a slip; a third is a
+   *  training conversation. */
+  return_count?: number | undefined;
 }
 
 export interface SkillTestCreate {
@@ -314,7 +387,11 @@ export interface SkillTestListItem {
    *  score is optional, and exactOptionalPropertyTypes rejects a bare `?:`. */
   overall_score?: number | undefined;
   started_at?: string;
-  completed_at?: string;
+  /** Widened for the same reason as overall_score above: returning a test to
+   *  its examiner clears the completion time, and the store patches this row
+   *  from that response — exactOptionalPropertyTypes rejects assigning
+   *  undefined to a bare `?:`. */
+  completed_at?: string | undefined;
   created_at: string;
   /** Set once an officer has released the result to the candidate. */
   released_at?: string | undefined;
@@ -346,4 +423,25 @@ export interface SkillTestingSummary {
   /** Member-run results awaiting an officer's sign-off. 0 for readers who
    *  cannot validate — it is an org-wide count of other people's evaluations. */
   pending_validation?: number | undefined;
+}
+
+/** One sheet in the starter library the API offers a new department.
+ *
+ *  Summary only: an officer choosing between ten sheets needs the discipline
+ *  and the shape, not 100 criteria on screen. The full structure arrives when
+ *  they import it, and from then on it is their template to edit. */
+export interface SkillSheetLibraryItem {
+  slug: string;
+  name: string;
+  description?: string | undefined;
+  category?: string | undefined;
+  tags: string[];
+  section_count: number;
+  criteria_count: number;
+  /** Statements excluded — they are read aloud, not judged. */
+  critical_count: number;
+  passing_percentage?: number | null | undefined;
+  time_limit_seconds?: number | null | undefined;
+  /** The department already holds a template with this name. */
+  already_imported: boolean;
 }

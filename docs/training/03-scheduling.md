@@ -2,6 +2,53 @@
 
 The Scheduling module manages duty rosters, shift assignments, attendance tracking, time-off requests, swap requests, and shift compliance reporting. It supports multiple shift patterns and provides both calendar and list views for managing your department's schedule.
 
+## Lesson at a Glance
+
+|                   |                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Audience**      | Members managing their availability; officers managing coverage and closeout                                     |
+| **Permissions**   | Members use self-service actions; management requires scheduling permission or assignment as the shift's officer |
+| **Prerequisites** | Scheduling module enabled and at least one upcoming shift                                                        |
+| **Member path**   | About 15 minutes                                                                                                 |
+| **Officer path**  | About 30 minutes; configuration is separate reference work                                                       |
+| **Last verified** | 2026-08-11                                                                                                       |
+| **Owner**         | Department scheduling officer                                                                                    |
+
+By the end of the essential path, members can interpret their roster, request
+an open shift, and choose the correct absence or swap workflow. Officers can
+review a request, verify staffing impact, and close a shift without losing
+attendance or readiness information.
+
+> **Practice safely:** Use a demo shift or a future shift designated by your
+> scheduling officer. Never withdraw, swap, cancel, reopen, or finalize a real
+> operational shift solely for practice.
+
+### 15-Minute Member Path
+
+1. Use [My Shifts](#my-shifts) to verify your next assignment and status.
+2. Review [Open Shifts](#open-shifts) and identify one shift you are eligible to request; do not submit unless authorized.
+3. Compare [Time-Off Requests](#time-off-requests) with [Shift Swap Requests](#shift-swap-requests) and decide which fits a planned absence.
+4. Find the durable request or assignment status that would confirm success.
+
+### Officer Coverage and Closeout Path
+
+1. Open the shift detail panel and compare assigned staffing with the target.
+2. Review pending assignment, time-off, or swap requests and their coverage impact.
+3. Record attendance and required checks during the shift.
+4. Before finalizing, verify attendance, reports, end-of-shift checks, and any override reason.
+
+### Try It: Cover a Future Vacancy
+
+- **Starting state:** A demo future shift is one member below its staffing
+  target.
+- **Task:** A member identifies and requests the open shift. An officer reviews
+  the request and confirms the resulting roster and coverage count.
+- **Success:** The member sees a durable request/assignment status and the
+  officer sees the updated roster; neither relies only on a toast.
+- **Variation:** Accepting the member would trigger an hours advisory. Explain
+  whether the warning blocks the assignment and what the officer should
+  consider.
+
 ---
 
 ## Table of Contents
@@ -20,7 +67,8 @@ The Scheduling module manages duty rosters, shift assignments, attendance tracki
 12. [Shift Reports and Compliance](#shift-reports-and-compliance)
 13. [How Shift Hours Feed Training Compliance](#how-shift-hours-feed-training-compliance)
 14. [Realistic Example: Setting Up a 24/48 Platoon Rotation](#realistic-example-setting-up-a-2448-platoon-rotation)
-15. [Troubleshooting](#troubleshooting)
+15. [Supply Tracking: Keeping the Truck and the Shelf in Step](#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -62,10 +110,20 @@ Each shift is displayed as a colored block on the calendar showing:
 
 Click on any shift to open the **Shift Detail Panel** with full information, attendance records, and actions.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the month calendar view showing several shifts across different days, with color coding for different shift types (e.g., Day shift in blue, Night shift in purple). Include the week/month toggle buttons]_
+![Month calendar of shifts with the week and month view toggle](./images/03-44-month-calendar.png)
 
 ![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
+
+The panel opens with a **Readiness** line that answers the two questions an
+officer actually has — how many of the assigned crew are present, and whether
+the shift is staffed to its minimum ("1/1 present · 1/3 staffed —
+understaffed"). Any outstanding start-of-shift checks are named on the same
+line. Below it the crew board is headed by the rig it belongs to, and each open
+seat is listed by position rather than counted.
+
+A legend above the calendar says what its shift-block icons mean: **fully
+crewed**, **short-staffed**, **positions filled of the minimum**, and
+**apparatus unit**.
 
 ---
 
@@ -133,18 +191,30 @@ Officers can edit shift start and end times, apparatus assignment, color, notes,
 
 Attendance is recorded for each shift to track who was present and for how long.
 
-**Recording Attendance:**
+**Recording Attendance:** members check themselves in and out. Open the shift
+from the calendar; **Check In** sits under your own assignment on the detail
+panel, and once you have used it the button becomes **Check Out** with your
+arrival time beside it. The system calculates **duration in minutes**
+automatically from the two.
 
-1. Open the shift from the calendar.
-2. In the detail panel, use the attendance section to:
-   - **Check In** a member (records the check-in time)
-   - **Check Out** a member (records the check-out time)
-   - **Manually set times** for retroactive recording
+There are three places that attendance then shows up, and none of them is a
+table you can edit:
 
-The system calculates **duration in minutes** automatically from check-in and check-out times.
+| Where                                          | What it shows                                                                                                                                               |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The **crew board**, on each member's row       | A badge — `In 07:02` while they are on shift, `12h worked` once they are out. Hover for both times                                                          |
+| The **Readiness** line at the top of the panel | `1/1 present`                                                                                                                                               |
+| **Before you close this shift**, at close-out  | `1 of 1 checked in, 1 checked out`, plus a warning naming anyone who never checked in (pictured under [Shift Finalization](#shift-finalization-2026-03-28)) |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the attendance section within a shift detail panel, showing a table of members with check-in time, check-out time, duration, and edit buttons]_
+> **Corrected 2026-08-12.** This previously described an attendance section
+> where an officer could **Check In** and **Check Out** other members and
+> **manually set times for retroactive recording**, and its screenshot
+> placeholder asked for a per-member table with edit buttons. None of that is
+> in the application. The buttons act on the signed-in member's own record
+> only, and while the API can amend one (`PATCH /scheduling/attendance/{id}`)
+> nothing in the frontend calls it. The nearest thing to retroactive recording
+> is **Add hours for members who didn't check in**, which appears in the
+> close-out checklist and takes a number of hours rather than times.
 
 ### Post-Shift Validation
 
@@ -196,19 +266,31 @@ Officers will review the request and approve or deny it.
 - **Denied** - Request denied (reason provided)
 - **Cancelled** - Withdrawn by the member
 
-> **Screenshot placeholder:**
-> _[Screenshot of the time-off request form showing start date, end date, reason field, and submit button. Below, show a list of past requests with their statuses]_
+![Time-off request modal with its date range and reason](./images/03-43-time-off-request-form.png)
+
+Open it from **Request Time Off** on the My Shifts tab. Submitted requests, and their statuses, are listed under **Requests > Time Off** rather than below the form.
 
 ---
 
 ## Shift Swap Requests
 
-Members can request to swap shifts with another member:
+A swap starts from the shift you are giving up, not from a blank form:
 
-1. Navigate to the **Requests** tab.
-2. Click **Request Swap**.
-3. Select the shift you want to swap and the shift you are offering.
-4. The system notifies the other member and the officer.
+1. Go to **My Shifts** and stay on **Upcoming** — the **Swap** button is only on
+   shifts that have not happened yet.
+2. Click **Swap** on the shift you want covered. The dialog names that shift in
+   its subtitle; there is nothing to pick, because it is the one you clicked.
+3. Choose a **Swap Type**:
+   - **Open Swap** — any member can pick it up. This is the default.
+   - **Specific Shift** — you want a particular shift in return. Pick it from
+     the list of everything scheduled from today onward, each entry showing its
+     day, times and apparatus.
+4. Give a **Reason**, then **Submit Request**.
+
+![The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field](./images/03-67-swap-request-dialog.png)
+
+The request then appears under **Requests > Swap Requests**, where you can
+follow or cancel it.
 
 **Swap Workflow:**
 
@@ -217,8 +299,13 @@ Members can request to swap shifts with another member:
 3. An officer reviews and approves the swap.
 4. Assignments are updated automatically.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the swap request form showing the "Your Shift" and "Requested Shift" selectors, and a list of active swap requests with status indicators]_
+> **Corrected 2026-08-12.** The steps above previously said to open the
+> **Requests** tab and click **Request Swap**, then "select the shift you want
+> to swap and the shift you are offering". The Requests tab has no such button
+> — it only lists requests already made — and the offered shift is never
+> chosen, since the dialog is opened from it. The retired screenshot
+> placeholder asked for "Your Shift" and "Requested Shift" selectors, neither
+> of which exists.
 
 ---
 
@@ -538,6 +625,60 @@ FF Schmidt was on a 2-week Leave of Absence (April 1-14), so his requirement was
 
 ---
 
+## Finding Your Way Around Scheduling Settings (2026-08-09)
+
+**Required Permission:** `scheduling.manage`
+
+Scheduling settings were rebuilt on **2026-08-09** to use the same layout as
+Organization Settings and Event Settings: a **section list down the left** on a
+computer, a **scrollable tab strip across the top** on a phone, and one heading
+rather than the two stacked titles it used to show.
+
+Seven sections, of which six are always present:
+
+| Section           | What it holds                                             |
+| ----------------- | --------------------------------------------------------- |
+| **General**       | Shift defaults, overtime cap, and close-out rules         |
+| **Apparatus**     | Apparatus and resource type defaults                      |
+| **Platoons**      | Platoon rosters and assignments                           |
+| **Eligibility**   | Which membership types may sign themselves up for a shift |
+| **Notifications** | Shift reminders and alerts                                |
+| **Equipment**     | Check requirements and templates                          |
+| **Shift Reports** | End-of-shift reporting options                            |
+
+**Platoons only appears once platoon scheduling is switched on**, from the
+toggle at the top of **General**. A department that does not run A/B/C
+rotations sees six sections and no empty platoon screen — and turning the
+feature off while you are on that section returns you to General rather than
+leaving you on a page that has gone.
+
+![Scheduling settings on desktop, with the section list beside the selected section's card](./images/03-47-settings-desktop.png)
+
+![Scheduling settings at phone width, the section list replaced by a scrollable tab strip](./images/03-48-settings-phone.png)
+
+### Two things that changed with it
+
+**The Save button only appears where it saves something.** General, Apparatus and
+Equipment have the Save/Reset footer. The other four sections each have their own
+save control. Until this change the footer was shown on all seven while saving
+only three — so on Notifications and Shift Reports you could press **Save**, see
+"Settings saved", and have changed nothing.
+
+**A section can now be linked to.** Selecting a section puts it in the address
+bar, so you can bookmark it, refresh into it, and go **back** to the section you
+came from. It previously read the address on load but never wrote it.
+
+> **Eligibility here is not the same screen as rank eligibility.** This section
+> governs which **membership types** may sign themselves up for a shift. Which
+> **positions** a given **rank** may fill is set on **Settings → Ranks**, on the
+> other side of the app. The two are easy to confuse and neither one is the other.
+
+> **A section for a feature your department has switched off** — Platoons, most
+> commonly — falls back to General rather than showing you an empty panel. A
+> saved link to it still works if the feature is turned back on.
+
+---
+
 ## Platoon Management (2026-06-19)
 
 Platoon membership is now a **person-level attribute** — each member belongs to a platoon (A, B, C, etc.) and the schedule is built from that membership.
@@ -576,13 +717,24 @@ When generating shifts from a platoon pattern:
 
 ### Hold-Over Roster
 
-When a shift has a gap (member on leave or open position), the **Shift Detail Panel** shows a **hold-over roster** of available members:
+This is the **platoon** roster, and it appears on a narrower set of shifts than
+the name suggests. The Shift Detail Panel renders it only when **platoons are
+enabled** for the department _and_ the shift belongs to a platoon — a gap alone
+does not bring it up. Where it does appear it lists that platoon's members:
 
 - Same organization, not on leave, not already assigned that day
 - One-click **Assign** button next to each available member
 - Designed for supervisors who need to fill gaps or hold over members
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Detail Panel for a shift with one vacant position, showing the hold-over roster panel below the crew list with available members and "Assign" buttons._
+On a department that does not run platoons, the way to fill a gap is the crew
+board's **Assign** button on the open seat, or **Assign Member** beneath it —
+both pictured under
+[Permission Model](#permission-model).
+
+> **Screenshot held back.** Picturing this needs a department with platoons
+> enabled and shifts generated from a platoon pattern, which the demo
+> department does not run. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
 
 ### Platoon Badge on Shifts
 
@@ -605,7 +757,7 @@ Shifts generated from platoon patterns display a **platoon badge** (e.g., "A Pla
 
 ### Shift Position Eligibility
 
-Operational ranks now define which shift positions each rank is eligible for. When members sign up for open shifts, they only see positions their rank qualifies for.
+Operational ranks define which shift positions each rank is eligible for. When members sign up for open shifts, they only see positions their rank qualifies for.
 
 **Setting up eligible positions:**
 
@@ -647,8 +799,7 @@ Admin functionality has been extracted into dedicated pages for better navigatio
 
 Each page has back navigation to the main scheduling hub. Access requires `scheduling.manage` permission.
 
-> **Screenshot needed:**
-> _[Screenshot of one of the scheduling admin sub-pages (e.g., Templates) showing the page header with back navigation arrow, and the content area below]_
+![A scheduling admin sub-page with its back arrow and page header](./images/03-51-admin-subpage-header.png)
 
 ### Equipment Check System
 
@@ -676,29 +827,34 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 
 6. Items can track serial numbers, lot numbers, expiration dates (with warning windows), and required quantities
 7. Use **drag-and-drop** to reorder compartments and items
-8. Use **vehicle check presets** to import common inspection categories for engine, ladder, or ambulance types
+8. On a **vehicle** or **combined** template, **Load Vehicle Preset** offers nine pre-built checks — Engine/Pumper, Ladder/Tower, Ambulance/Rescue, Tanker/Water Tender, Rescue/Heavy Rescue, Brush/Wildland, Boat/Watercraft, Utility/Command and Generic Vehicle — each showing how many sections and items it will add before you pick it
 
 ![Equipment check template builder with the template header and sections](./images/03-22-equipment-check-builder.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the vehicle check preset picker showing preset categories (Engine, Ladder, Ambulance) with preview of included compartments and items]_
+![The vehicle preset picker listing each pre-built check with its section and item counts](./images/03-50-vehicle-preset-picker.png)
 
 #### For Members: Submitting Equipment Checks
 
-During a shift, members see pending equipment checks on their dashboard or via **Scheduling > My Checklists**.
+During a shift, members see pending equipment checks on their dashboard or on **My Equipment Checklists**, which is the Equipment Checks tab of Scheduling as a member sees it.
 
-1. Open the checklist for your current shift
+1. Open the checklist for your current shift. **You do not need one** —
+   **Unscheduled checklist**, at the top of the page, offers every active
+   template and starts a check with no shift attached.
 2. Work through each compartment and item:
    - **Pass/Fail**: Tap pass or fail
    - **Quantity**: Enter the count
    - **Level**: Enter the level reading
    - **Date/Lot**: Verify expiration date and lot number
    - **Reading**: Enter the reading value
-3. Optionally attach photos to any item (up to 3 per item)
+3. Optionally attach photos to any item (up to 3 per item). The button is
+   inside the item's note panel — tap **Note** first, then **Add photo**.
 4. Submit the completed check
 
-> **Screenshot needed:**
-> _[Screenshot of the equipment check form on a mobile device showing a compartment heading, several check items with pass/fail toggle buttons, a quantity field, and the photo attachment button]_
+Every item also offers **Not on truck**, and a pass/fail item adds **Out of
+service** — a rig that has the tool but cannot use it is not the same as one
+that never had it.
+
+![Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below](./images/03-72-check-item-controls.png)
 
 > **Fixed 2026-08-08.** Submitting a check used to return a server error on
 > **any shift with an apparatus assigned** — so in practice, on any real shift.
@@ -731,32 +887,309 @@ Reports can be exported as **CSV** or **PDF**.
 
 #### Equipment Check Edge Cases
 
-| Scenario                          | Behavior                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| No template assigned to apparatus | No checklist appears for that shift                                      |
-| Position-based template           | Only members in assigned positions see the checklist                     |
-| Expired item submitted as "Pass"  | Auto-fails with "expired" reason                                         |
-| Item below required quantity      | Auto-fails with "under required quantity" reason                         |
-| All items pass                    | Clears apparatus deficiency flag if previously set                       |
-| Photo upload                      | Max 3 per item, max 10 MB each, auto-converted to WebP                   |
-| Template cloning                  | Deep clones compartments and items to another apparatus                  |
-| Serial/lot number update          | Submitting new serial/lot updates the template item for future reference |
+| Scenario                          | Behavior                                                                                                                                                                                           |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No template assigned to apparatus | No checklist appears for that shift                                                                                                                                                                |
+| Position-based template           | Only members in assigned positions see the checklist                                                                                                                                               |
+| Expired item submitted as "Pass"  | Auto-fails with "expired" reason                                                                                                                                                                   |
+| Item below required quantity      | Auto-fails with "under required quantity" reason                                                                                                                                                   |
+| All items pass                    | Clears apparatus deficiency flag if previously set                                                                                                                                                 |
+| Photo upload                      | Max 3 per item, max 10 MB each, auto-converted to WebP                                                                                                                                             |
+| Template cloning                  | Deep clones compartments and items to another apparatus                                                                                                                                            |
+| Serial/lot number update          | Submitting new serial/lot updates the template item for future reference                                                                                                                           |
+| Expiration read off a replacement | Recorded as `expiration_found` and written back to the template item, exactly as the lot number is _(2026-08-10)_                                                                                  |
+| Expiry verdict                    | Recomputed **server-side** from the soonest date aboard, not taken from the form. A client-supplied "expired" flag is what force-fails a safety-critical item, so it is not trusted _(2026-08-10)_ |
+| Quantity item on the form         | Arrives carrying the **running on-truck count** and with **no** pass/fail status, so the progress counter reflects what was actually looked at _(2026-08-10)_                                      |
+
+### Supply Tracking: Keeping the Truck and the Shelf in Step _(2026-08-10)_
+
+An equipment check is a **scheduled, signed pass over a whole apparatus that
+produces a report**. That is what it is for, and it is a poor fit for "we just
+used two of these at three in the morning."
+
+Until this release it was also the _only_ way anything about a truck's stock
+could be written down. A crew that used the last of something either wrote a
+note somewhere or left it for the next morning's check to discover — which is
+exactly the window in which a truck runs a call short.
+
+There are now two screens that live outside a check, and a set of rules that keep
+them and the check form telling the same story.
+
+#### Apparatus Inventory — what the truck is carrying, right now
+
+Open **Scheduling → Equipment Checks → Apparatus Inventory**, pick a rig, and you
+see its tracked positions compartment by compartment: what is aboard, the lots
+and expiration dates on each one, and the ready stock on the shelf behind it.
+
+**No check is required and no shift is required.** It is readable at any hour by
+any member with `equipment_check.submit` — the default member position — because
+recording what you just used is crew work, and putting it behind an officer
+permission is the thing that leaves the bracket empty until morning.
+
+![Apparatus Inventory on a phone — counted positions with what is aboard against par, the short ones called out](./images/03-95-apparatus-inventory.png)
+
+The header counts the truck three ways: **how many positions are tracked**, how
+many **need restock**, and how many are **expiring**. A position at par states
+its count plainly — "2 of 2 Box aboard" — and a position under it carries an
+amber **Short** badge and prints its count in amber too — "18 of 24 Box aboard"
+— so the two are told apart at a glance rather than by shade alone.
+
+The lot number beside a position is **the lot the date belongs to**, not the
+last one swapped aboard. On a position carrying several lots those are
+different lots, and the one that matters is the one expiring soonest.
+
+> **A tracked position comes from a checklist bound to _that_ apparatus.** A
+> template that applies to every engine — bound by apparatus **type** — supplies
+> checklists for shifts but stocks no particular truck, and a rig with only
+> type-bound templates shows an empty inventory. If a truck you expect to see
+> here is bare, that is why.
+
+Each position offers up to five actions, and they mean different things:
+
+| Action   | What it records                                                                                                                                                                                |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **−**    | **Consumption.** The count comes down and a restock report goes up with it, so the shortfall reaches the supply officer without anyone opening a form                                          |
+| **+**    | A hand restock — you put units back yourself                                                                                                                                                   |
+| **Swap** | Draws units off a shelf lot and puts them on the truck. It defaults to the shortfall, so filling a gap needs no arithmetic                                                                     |
+| **Flag** | Damaged, contaminated, missing or recalled — **on a counted position, where − already records use.** It is the honest way to say "this needs attention" without pretending a unit was consumed |
+| **Lots** | Opens the lots aboard. A position carrying lots opens them **instead of** offering a stepper — two units with two dates cannot be moved by one plus or minus                                   |
+
+![The lots-aboard sheet on a phone — two lots on one position, each with its own count and expiry](./images/03-96-lots-aboard-sheet.png)
+
+The sheet lists lots **soonest to expire first**, which is both the order a crew
+should draw from and the order a reported use comes off. **Correct** fixes a
+miscounted or mistyped lot; **Remove** takes it off the truck entirely. A lot
+drawn down to nothing disappears on its own — it is no longer aboard.
+
+**Headers and free-text lines do not appear here.** They are checklist
+scaffolding — "Check all seals", "Officer's compartment" — not things anyone
+stocks.
+
+#### Expiring on Apparatus — the supply officer's worklist
+
+Open **Scheduling → Supply** (the tile carries a count badge when there is
+anything on it), or reach it from the **Inventory Admin Hub**.
+
+The page lists checklist positions that need attention **together with the ready
+replacement stock for each**, because "swap it" and "order it" are different jobs
+and the officer plans the week around which one each row is.
+
+| Control    | Options                                       |
+| ---------- | --------------------------------------------- |
+| Look-ahead | 30 / 60 / 90 days                             |
+| Filter     | All · Needs restock · Used or short · Expired |
+| Sort       | Soonest expiry · By apparatus                 |
+
+Two summary pills sit above the list — how many rows need attention, and how
+many have ready stock behind them. A third, in red, appears **only when
+something has no ready stock to draw on**: `N need restock`. A department whose
+shelves cover every row never sees it, and that absence is the answer to "is
+there anything I have to order this week".
+
+![Expiring on Apparatus: the summary pills, the 30/60/90 window, and three rows — one expiring, one reported used, one short of par](./images/03-59-supply-worklist.png)
+
+**Expired shelf stock is struck through and cannot be swapped.** Offering it
+would put expired supplies in service and fail the item on the very next check,
+so the swap refuses it. For the same reason it is not counted as ready stock: a
+count that includes expired units hides the shortage most in need of ordering.
+
+#### Recording what you used, and the report it raises
+
+Tapping **−** (or **Flag**) raises a **restock report** against that position. The
+report carries who raised it, when, and an optional note, and it appears on the
+supply worklist beside the expiring items — to a supply officer, "expires
+Thursday" and "the crew used it last night" are the same job.
+
+> **Screenshot needed:**
+> _[Screenshot of the "report used" sheet on a phone showing the quantity stepper, the optional note field, and the confirm button, with the position's name and current count visible above it]_
+
+**A report is settled only when the truck is back at its target.** Two of four
+back is still a truck short two, and clearing the flag there would close the gap
+on paper while leaving it open on the apparatus. A swap of fresh stock clears the
+report because the item has been dealt with; clearing also drops the reporter and
+the note, so a stale name is never attached to the next report.
+
+#### Lots aboard: why one date was not enough
+
+A position that carries four of something can be carrying units from three
+different lots with three different expiration dates.
+
+The checklist item itself has room for **one** lot number and **one** expiration
+date, so only one of them could ever be recorded — and the one recorded was
+whichever was restocked last. Restocking two of a four-slot bracket stamped the
+new date onto the two already there, hiding older units behind a later
+expiration. The truck's real exposure, the **soonest date aboard**, could not be
+written down at all.
+
+Each lot aboard is now recorded separately:
+
+- A position's **count** is the sum of its lots.
+- A position's **expiration** is the earliest of them, and that is the date every
+  screen shows and the date the expiry verdict is taken from.
+- **Consumption draws first-expiring-first-out** — the order a crew should be
+  pulling from, and the only order that keeps what remains as fresh as possible.
+- **Undated lots sort last.** An undated unit is never the one that needs using
+  up.
+
+Correcting a lot sets its **count, lot number and expiration together**, from the
+apparatus view or from inside a check. That matters for a changed-out medication:
+a crew swapping a box in could previously record that one was there without
+recording when it expires, leaving the application confidently asserting an
+expiration for a unit that had left the bag.
+
+#### Linking a checklist position to the catalog
+
+Everything above hangs off one thing: the checklist item's **link to an inventory
+item**. An unlinked position has no expiration tracking, no lots, no ready stock
+and no restock reporting.
+
+Setting that link used to be a separate act, three clicks deep in the item's
+advanced panel, so on a real rig checklist almost nothing was linked. There are
+now two paths:
+
+1. **While adding a position.** The template builder's quick-add bar searches the
+   catalog as you type. Picking a result links it and inherits what the catalog
+   knows — its name, whether it is counted or serialized, whether it carries
+   dated stock. Typing a name nobody stocks still adds a plain checklist line,
+   because plenty of lines are not stock and never will be. If the search finds
+   nothing, the bar offers to **create the item in inventory and link it in one
+   step** (this option needs `inventory.manage`).
+2. **For checklists you already have.** A bulk pass proposes a catalog item for
+   every unlinked position on the template. Read down the list once and apply it.
+
+![The template builder's quick-add bar, its catalog matches listed beneath and the create-in-inventory option under them](./images/03-69-catalog-quick-add.png)
+
+Reach the bulk pass from the template builder's toolbar: the button reads
+**_linked_ / _linkable_** and turns amber while anything is unlinked.
+
+![The bulk inventory-match dialog — coverage in the header, exact matches pre-selected, a close match left for the reader to decide](./images/03-68-inventory-match-dialog.png)
+
+Positions the catalog has nothing like are gathered into one dashed panel at the
+bottom — "_N_ items have nothing like them in inventory" — rather than listed as
+failures. Add them to inventory, or leave them as plain checklist lines if they
+are not stock.
+
+**Only exact name matches are pre-selected.** A close match is deliberately never
+pre-selected: "Oxygen Mask" scores high against both the adult and the pediatric
+mask, and quietly picking one would put the wrong expiry on a truck. The template
+toolbar now shows a **linked / unlinked count**, so the holes are visible at all.
+
+#### What the crew sees on the check form
+
+Three things changed about how a quantity item arrives:
+
+- **It carries the running on-truck count**, not the last check's number. A crew
+  that pulled two at 03:00 used to open the morning check at the four the last
+  check had seen — the exact drift this feature set removes, reintroduced at the
+  screen where it matters most.
+- **It arrives with no pass/fail status.** A pre-filled number is a starting point
+  to correct, not an assertion. Before this, a crew could open a sixty-item check,
+  submit it untouched, and file a complete report against a truck nobody had
+  looked at, with the progress counter agreeing.
+- **The count reads against par with the unit beside it** — "2/4 Box" rather than
+  "2/4 Expected" — projected from the linked catalog item, so a department that
+  relabels a unit does not re-enter it on every truck that carries it.
+
+A line at the top of the form says once that counts have been carried over, and
+**retires itself** as soon as nothing is still carried. Touching a quantity field
+is what confirms a number you agree with — the same single tap, without a
+"carried over" label printed sixty times.
+
+![The check form's carry-over banner above a compartment of quantity items, each reading against par with its unit and none yet marked](./images/03-70-check-form-carryover.png)
+
+#### Confirm Counts vs. Set All to Par
+
+These are **different claims**, and only the second used to have a button:
+
+| Button             | The claim it files                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------ |
+| **Confirm Counts** | "The numbers shown are right." Cannot record stock nobody has. It leads, because it is the common case |
+| **Set All to Par** | "It is all full." Writes the required quantity over whatever is showing                                |
+
+Set All to Par is still there and still means what it meant, but it now **names
+the items whose count it is about to raise** before doing it. On a truck carrying
+eighteen of twenty-four gauze, one tap used to record twenty-four — six on the
+record that are not in the bag — with no signal it had done so. A compartment
+already at par is untouched by the warning and stays one tap.
+
+Status still comes from the number, so confirming eighteen of twenty-four files a
+**failure** rather than quietly passing it.
+
+The confirmation names each item and the size of the claim — `18 → 24` — and
+its buttons say what they do rather than restating the feature: **Keep the
+counts** or **Yes, they are full**.
+
+![The Set All to Par confirmation, naming each item it would raise and by how much](./images/03-71-set-all-to-par-confirm.png)
+
+#### Working from the item instead of the truck
+
+The supply worklist answers "what is expiring on my trucks". A recall, or a lot
+you are holding in your hand, is worked from the other direction.
+
+An inventory item's **stock tab** now lists the checklist positions it fills —
+which apparatus, which compartment, and what that truck is carrying right now.
+It is pictured in
+[Inventory → Which trucks carry this item](./05-inventory.md#dated-stock-lots-and-receiving-2026-08-10),
+rather than repeated here.
+
+#### Alerts
+
+A weekly **expiring supplies** alert reports both ends of the loop together,
+splitting the deployed items by whether an in-date lot is actually behind them.
+
+It is weekly rather than daily on purpose: an item that has **already** expired
+force-fails its apparatus on every check and notifies through that path, so this
+alert exists to get ahead of the date rather than to repeat what the check
+already says.
+
+#### Supply Tracking Edge Cases
+
+| Scenario                                                         | Behavior                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nobody has ever counted a position                               | Its count reads as **not counted**, and the required/expected target stands in. It is _not_ reported as zero — that would show every untouched truck as stripped                                                                  |
+| A crew reports more used than the record held                    | It draws what was there. That is a correction to the record, not a negative count                                                                                                                                                 |
+| A position holds units with no lot recorded, then a lot is added | The existing units get a lot row of their own **first**, or they would vanish behind the new lot's count                                                                                                                          |
+| A recount comes out **over** the record                          | The surplus lands in an **undated** row — the honest answer to when found stock expires is that nobody knows                                                                                                                      |
+| A recount comes out **under** the record                         | The difference comes off soonest-expiring-first, like any other consumption                                                                                                                                                       |
+| A lot is counted down to zero                                    | The lot is removed, so a spent box stops contributing its date to the position's reading                                                                                                                                          |
+| A restock puts the truck part-way back                           | The restock report **stays open**. Two of four back is still a truck short two                                                                                                                                                    |
+| A counted position is below target with no report behind it      | It reaches the supply worklist anyway, showing the numbers rather than only that something is needed                                                                                                                              |
+| Shelf stock has expired                                          | Excluded from the ready-stock count, struck through in the list, and **refused by the swap**                                                                                                                                      |
+| Everything on a position has expired                             | Counted as **expired** and reported apart from _expiring_ — one wants attention soon, the other is unusable now. The count renders **red**, because two of two expired units meet the number and are still nothing a crew can use |
+| An item is replaced from untracked stock during a check          | Record the new expiration in the "replaced — new date" control. Without it the old date survives the replacement, the item is force-failed on every submission, and it holds the apparatus in a deficiency state forever          |
+| A position carries lots **and** you are inside a check           | You get the per-lot **Correct** control only. The older single-date "replaced — new date" affordance appears only where there are no lots to correct, so one fact never has two contradictory inputs                              |
+| A template is cloned to a second rig                             | The catalog link comes with it. It used to be dropped silently, which is how a department stands up its second engine with nothing tracked                                                                                        |
+| A shelf lot is deleted while units from it are on a truck        | The truck's record survives. Lot number and expiration are copied onto the deployed record rather than read through the shelf lot                                                                                                 |
+| A member has `equipment_check.submit` but not `inventory.manage` | They can report use, recount, swap and correct lots. They cannot create a new catalog item from the quick-add bar                                                                                                                 |
 
 ### Shift Finalization _(2026-03-28)_
 
 After a shift ends, officers finalize the shift to lock in data and trigger training pipeline integration.
 
-#### How to Finalize a Shift
+#### How to Close Out a Shift
 
 1. Open the **Shift Detail Panel** for a past, un-finalized shift
-2. Click **"Finalize Shift"** — a pre-finalization checklist modal appears
+2. Click **Close out shift** — a checklist headed **Before you close this
+   shift** opens in the panel
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the pre-finalization checklist modal showing the equipment check validation status (green checkmark or red X), attendance count, call count, and the Finalize button at the bottom._
+> **The control is named "Close out shift", not "Finalize".** `is_finalized` is
+> still the flag underneath, and this guide and the API both use the word, but
+> the button names the thing an officer does at the end of a shift rather than
+> the column it sets.
+
+![The close-out checklist with the equipment-check block, attendance, call count, pass-down notes and the Close out shift button](./images/03-45-finalize-checklist.png)
 
 3. The checklist validates:
-   - **End-of-shift equipment checks** must be completed (blocks finalization if incomplete)
+   - **End-of-shift equipment checks** — outstanding checks are called out,
+     but they only _block_ finalization when the department has turned on
+     **require end-of-shift checks before finalizing** in Scheduling
+     Settings → Close-out rules. It is off by default, so the modal warns
+     and lets the officer proceed; with it on, finalizing needs a
+     logged override reason
    - Attendance summary and call count shown for reference
-4. Click **Finalize** to confirm
+   - A staffing line when the shift ran under its minimum ("Ran understaffed —
+     1 of 4 positions filled")
+4. Click **Close out shift** to confirm
 
 #### What Happens on Finalization
 
@@ -768,23 +1201,26 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
 | **Draft reports created**  | ShiftCompletionReport drafts auto-created for all attendees with active training program enrollments                         |
 | **Notification sent**      | Officer receives notification with count of drafts created                                                                   |
 
-After finalization, a green badge shows "Shift finalized on [date]".
+After finalization, a green badge shows "Shift finalized on [date]" with a
+**Reopen** link beside it, and the pass-down note entered at close-out is
+shown underneath. The close-out control is gone, but the crew roster keeps its
+remove buttons — reopening is what unlocks the shift, not the badge alone.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ShiftDetailPanel after finalization showing the green "Finalized" badge with timestamp and the locked state (no edit buttons)._
+![A finalized shift showing the green finalized badge with its date, the Reopen link and the pass-down note](./images/03-46-finalized-badge.png)
 
 #### Shift Finalization Edge Cases
 
-| Scenario                                 | Behavior                                                                   |
-| ---------------------------------------- | -------------------------------------------------------------------------- |
-| End-of-shift equipment checks incomplete | Finalization blocked; Finalize button disabled with tooltip explaining why |
-| Start-of-shift checks incomplete         | Does not block finalization                                                |
-| Shift has not ended yet                  | Finalize button not shown for future/in-progress shifts                    |
-| Already finalized shift                  | Finalize button replaced with finalized badge                              |
-| Editing a finalized shift                | Blocked — edit controls hidden after finalization                          |
-| Deleting a finalized shift               | Blocked — returns "Cannot delete a finalized shift" error                  |
-| Deleting a shift with completion reports | Blocked — returns "Cannot delete a shift with completion reports" error    |
-| Draft creation fails for one trainee     | Error logged; remaining trainees still get draft reports                   |
-| Attendee with no active enrollment       | No draft created for that attendee                                         |
+| Scenario                                 | Behavior                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------- |
+| End-of-shift equipment checks incomplete | Close-out blocked; the confirm button is disabled, with the reason above it |
+| Start-of-shift checks incomplete         | Does not block close-out                                                    |
+| Shift has not ended yet                  | Close-out button not shown for future/in-progress shifts                    |
+| Already finalized shift                  | Close-out button replaced with finalized badge                              |
+| Editing a finalized shift                | Blocked — edit controls hidden after finalization                           |
+| Deleting a finalized shift               | Blocked — returns "Cannot delete a finalized shift" error                   |
+| Deleting a shift with completion reports | Blocked — returns "Cannot delete a shift with completion reports" error     |
+| Draft creation fails for one trainee     | Error logged; remaining trainees still get draft reports                    |
+| Attendee with no active enrollment       | No draft created for that attendee                                          |
 
 ### Shift Reports Settings _(2026-04-04)_
 
@@ -908,14 +1344,23 @@ When filing a report linked to a specific shift, the trainee dropdown automatica
 
 ### Structured Position Slots & Decline Handling
 
-Shifts now define required and optional position slots. When a member declines or is removed from a shift:
+A shift's riding positions are shown on the shift panel as a **Crew Board**,
+headed with the apparatus and a count of how many slots are still open. Each
+position is a row: a filled one names the member and their position with an
+**Assigned** badge and a remove control; an open one reads **Open position**
+and carries its own **Assign** and **Sign Up** buttons. When a member declines
+or is removed:
 
 - The system sends a decline notification
-- The open slot becomes visible on the shift card for re-assignment
-- Other eligible members can sign up for the vacated slot
+- Their position returns to the board as an open slot
+- Other eligible members can sign up for it, or an officer can assign somebody
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel showing position slots — some filled (with member name and green badge), one marked "Open" with a yellow badge, and an "Assign" button next to the open slot]_
+> **The board only appears once the shift has positions.** They come from the
+> apparatus's riding assignments plus any per-shift customizations — the panel
+> says so under the heading. A shift with none configured shows a plain Crew
+> Roster of whoever is assigned, with no open slots to fill.
+
+![A shift's crew board — one filled position and three open, each with Assign and Sign Up](./images/03-54-crew-board-open-slots.png)
 
 ### Additional Fixes (2026-03-19)
 
@@ -941,8 +1386,15 @@ A user with `scheduling.assign` but not `scheduling.manage` can assign members t
 
 Self-signup (the Sign Up button on open shifts) requires no special permission — all authenticated members can sign up for shifts they are eligible for.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel showing the assignment controls (Assign Member dropdown, position change, remove button) visible to a user with scheduling.assign permission, and the Edit/Delete shift buttons visible only to a user with scheduling.manage permission]_
+The shift detail panel below is what somebody holding **both** permissions sees,
+which is the usual case for a shift officer. The two sets are easy to tell apart
+once you know where to look: `scheduling.assign` owns everything on the crew
+board — the pencil beside a member's position, the ⊗ that removes them, the
+**Assign** button on an open seat and **Assign Member** underneath — while
+`scheduling.manage` owns only the pencil and bin in the panel's own header.
+Drop either permission and that group of controls simply is not rendered.
+
+![A shift's crew board with its per-member controls, an open seat, and the Edit and Delete buttons in the header](./images/03-57-shift-assignment-controls.png)
 
 ### Calls/Incidents Section
 
@@ -956,10 +1408,22 @@ The Calls/Incidents placeholder section has been removed from the shift detail p
 
 Shift templates now pass their position definitions and minimum staffing requirements through to created shifts. Previously, only the template's time and apparatus information were inherited — position assignments had to be set up manually on each shift.
 
-When a shift is created from a template (either directly or via pattern-based generation), the template's `positions` and `min_staffing` values are copied to the new shift. In the `ShiftDetailPanel`, if the linked apparatus has no positions defined, the system falls back to the shift-level positions from the template.
+When a shift is created from a template (either directly or via pattern-based
+generation), the template's `positions` and `min_staffing` values are copied to
+the new shift, and the crew board is built from them.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel crew roster showing position assignments inherited from a template, with position labels (Officer, Driver, Firefighter) and the min staffing indicator]_
+> **In practice the shift's own positions are always what you see.** The panel
+> is written to prefer the linked apparatus's riding positions and fall back to
+> the shift's, but the full Apparatus module does not model riding positions at
+> all — it reports them as "not specified" by design. So on a department using
+> the full module, the fallback is the only path, and a shift created without
+> positions has no crew board at all. The board's subheading names both sources
+> ("Positions from E-2 + shift customizations") regardless.
+
+The board is pictured under
+[Structured Position Slots & Decline Handling](#structured-position-slots--decline-handling),
+with the "N assigned / N positions" tile beside it standing in for the minimum
+staffing indicator.
 
 ### Timezone Display Fix
 
@@ -1030,29 +1494,47 @@ These edge cases describe system behavior during shift assignment, time-off appr
 
 When filing shift completion reports, officers can now assign a **1-5 numeric score** to each observed skill. This score is separate from the "demonstrated" checkbox and provides a quantitative assessment of the trainee's proficiency.
 
-| Score | Label      | Color             |
-| ----- | ---------- | ----------------- |
-| 1     | Needs work | Violet (muted)    |
-| 2     | Developing | Violet (muted)    |
-| 3     | Competent  | Violet (standard) |
-| 4     | Proficient | Violet (standard) |
-| 5     | Excellent  | Violet (bright)   |
+| Score | Default label | Colour            |
+| ----- | ------------- | ----------------- |
+| 1     | Needs work    | Violet (muted)    |
+| 2     | Developing    | Violet (muted)    |
+| 3     | Competent     | Violet (standard) |
+| 4     | Proficient    | Violet (standard) |
+| 5     | Excellent     | Violet (bright)   |
 
-Scores appear as interactive buttons on the report form (with tooltip labels) and as inline text in read-only views. Scores flow through to `SkillCheckoff` records and the competency score history in the Training module.
+Those are the defaults. A department that has set **Rating Scale Labels** in
+Scheduling > Settings > Shift Reports sees its own wording everywhere the scale
+appears — the screenshots in this guide come from a department ending its scale
+at "Exemplary".
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form's skills section showing 3-4 skills, each with a row of 5 violet score buttons (1-5), the "demonstrated" checkbox, and a comment field. One skill should have score 4 selected (highlighted), another score 2._
+There is no separate "demonstrated" tick: **selecting the skill is** the record
+that it was demonstrated, and the score row appears underneath once you have.
+Clicking a selected score again clears it, so a skill can be marked observed
+without being scored. The buttons themselves are numbered, not labelled — the
+label for the score you picked appears beside the row, and hovering a button
+shows its label as a tooltip.
+
+The skills section is pictured under
+[Score Labels](#score-labels).
+
+**Where the scores go.** They are stored on the report and shown in every
+read-only view of it. They are _intended_ to flow through to `SkillCheckoff`
+records and the competency score history in the Training module, and the code to
+do it is there — but it matches skill names against `SkillEvaluation` records,
+and nothing in the application creates one. See
+[Skill Linkage Status in Settings](#skill-linkage-status-in-settings).
 
 ### Batch Review
 
 Officers with `training.manage` permission can now review multiple shift reports at once:
 
-1. Navigate to the **Pending Review** or **Flagged** view in the Shift Reports tab
-2. Check individual report cards using the checkbox on each card, or use the **select-all** toggle
-3. Click **"Approve Selected"** or **"Flag Selected"** at the top of the list
-4. In the batch review modal, optionally add **reviewer notes** (applied to all selected reports)
-5. Confirm the action — the system processes up to 100 reports and returns a count of successfully reviewed vs. failed
+1. Open the **Review Queue** or **Flagged** view in the Shift Reports tab
+2. Tick the checkbox on each report you want, or use **Select all (N)** in the bar above the list
+3. The bar then reports how many are selected and offers **Approve Selected** and, in the Review Queue, **Flag Selected**. Neither button carries the count — that is the "N selected" text beside them
+4. Type a comment in the field that appears under the bar. It is applied to every selected report, and it is **required** to flag — flagging without one fails with a message rather than sending unexplained flags to trainees. Approving with one is optional
+5. Click the action. There is no confirmation step and no modal: the reports are reviewed and a toast reports how many
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Pending Review view with 5 report cards visible, 3 checked with checkboxes, the select-all toggle shown, and "Approve Selected (3)" / "Flag Selected (3)" buttons visible at the top._
+![The Review Queue with several reports selected and the batch approve and flag actions above them](./images/03-61-review-queue-batch.png)
 
 > **Hint:** Batch review does not support per-report field redaction. For reports requiring individual redaction, review them one at a time using the standard review modal.
 
@@ -1060,21 +1542,27 @@ Officers with `training.manage` permission can now review multiple shift reports
 
 Reports that reviewers flag for follow-up are now accessible from a dedicated **Flagged** tab in the Shift Reports section:
 
-- View all flagged reports with their reviewer notes and flag date
-- **Re-review** flagged reports — approve them to move to the Approved state, or add additional notes
+- Every flagged report, each collapsed card carrying the red **Flagged** badge, the officer who filed it and the reviewer who flagged it
+- Open a card and the reason is underneath the report itself, in **Reviewer Comment — Flagged**, followed by a **Review History** listing every pass the report has been through with its date and its note
+- **Re-Review Report**, at the foot of the opened card, reopens the review modal — approve to move it to Approved, or flag it again with a new note
 - When a flagged report is approved, deferred pipeline progress is triggered if the report has an enrollment linkage
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Flagged tab showing 2-3 flagged report cards with red "Flagged" badges, reviewer notes visible, and a "Re-review" button on each card._
+The reason and the re-review action are in the opened card, not on the
+collapsed one: a list of flagged reports tells you _which_, not _why_.
+
+![The Flagged view — two reports, one expanded to its reviewer's reason and Re-Review Report button](./images/03-62-flagged-queue.png)
 
 ### Trainee & Officer Names on Report Cards
 
 Report cards now display **trainee and officer names** alongside dates:
 
-- Card header: "**Trainee Name** — April 5, 2026"
-- Card footer: "Filed by **Officer Name** on April 6, 2026"
+- Card header: "**Trainee Name** — Sun, Aug 9, 2026"
+- The metadata row beneath it: hours, calls, the rating badge, the **officer who
+  filed it**, and — once reviewed — "Reviewed by **Name**". All of it is on the
+  collapsed card, so a list of reports is readable without opening any of them
 - Review modal: Shows shift date alongside trainee and officer names in the header
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of a shift report card showing "FF Carter — April 5, 2026" in the header, performance rating stars, hours/calls metadata, and "Filed by Lt. Davis" in the footer._
+![A shift report card naming the trainee in its header and the filing officer in its footer](./images/03-49-report-card-names.png)
 
 ### Full Report Content in Review Modal
 
@@ -1089,65 +1577,82 @@ The review modal now displays the **complete report** so reviewers have full con
 - Trainee comments (if acknowledged)
 - Requirements progressed (if enrollment linked)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the review modal showing the full report content in the top section (hours, rating, narrative, skills with scores) and the review controls (Approve/Flag buttons, reviewer notes textarea) in the bottom section._
+Beneath the report are the **Redact Fields** tick-boxes — clear any field before
+approving and the trainee never sees it — a **Reviewer Comment** box labelled as
+visible to the filing officer and not to the trainee, and the three actions:
+**Cancel**, **Flag for Revision** and **Approve**. Flagging requires a comment;
+approving does not. The modal is taller than a screen, so the report content
+scrolls above the controls rather than sitting beside them.
+
+![The review modal scrolled to its foot — the redaction choices, the reviewer comment box, and Flag for Revision and Approve](./images/03-65-review-modal-full.png)
 
 ### Skill Linkage Status in Settings
 
 The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now shows whether each apparatus-type skill matches a formal `SkillEvaluation` record in the Training module:
 
-- **Green tag** with checkmark: Skill name matches a SkillEvaluation — scores will track competency, create checkoffs, and progress pipeline requirements
-- **Amber tag** with warning: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
-- A **legend** at the bottom of the skills section explains the color coding
+- **Green tag**: Skill name matches a SkillEvaluation — scores will track competency, create checkoffs, and progress pipeline requirements
+- **Amber tag**: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
+- A **legend** below the skills explains the two colours. It appears only once the department has at least one SkillEvaluation on file — with none, there is nothing for the colours to mean
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports settings panel's apparatus skills section (e.g., "Engine" expanded) showing 4 skills with green tags ("Pump operations" ✓, "Hose deployment" ✓) and 2 with amber tags ("Ladder placement" ⚠, "Custom skill" ⚠), plus the explanatory legend below._
+> **Every tag reads amber today.** Nothing in the application creates a
+> `SkillEvaluation`: the table is read by this indicator and by the checkoff
+> writer, and written by neither, so the only way a department acquires one is
+> to be provisioned from a department template that already had some. Scores
+> entered on shift reports are therefore recorded on the report and go no
+> further. Tracked in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md); the screenshot is held back
+> until there is a mixed state to picture rather than a column of amber.
 
 ### Edge Cases
 
-| Scenario                                   | Behavior                                                    |
-| ------------------------------------------ | ----------------------------------------------------------- |
-| Skill score outside 1-5 range via API      | Rejected by Pydantic `Field(ge=1, le=5)` with 422 error     |
-| Batch review with >100 report IDs          | Rejected by `max_length=100` constraint                     |
-| Batch review with mix of valid/invalid IDs | Valid reports processed; `failed` count returned separately |
-| Flagged report re-approved                 | Triggers deferred pipeline progress if enrollment linked    |
-| Skill name matching for linkage            | Case-sensitive exact match against `SkillEvaluation.name`   |
-| No SkillEvaluation records in org          | All apparatus-type skills show amber "unlinked" tags        |
+| Scenario                                   | Behavior                                                                                                                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Skill score outside 1-5 range via API      | Rejected by Pydantic `Field(ge=1, le=5)` with 422 error                                                                                         |
+| Batch review with >100 report IDs          | Rejected by `max_length=100` constraint                                                                                                         |
+| Batch review with mix of valid/invalid IDs | Valid reports processed; `failed` count returned separately                                                                                     |
+| Flagged report re-approved                 | Triggers deferred pipeline progress if enrollment linked                                                                                        |
+| Skill name matching for linkage            | Case-insensitive exact match against `SkillEvaluation.name` — "Pump Operations" and "pump operations" are the same skill, but "Pump ops" is not |
+| No SkillEvaluation records in org          | All apparatus-type skills show amber "unlinked" tags, and the legend is not rendered                                                            |
 
 ---
 
 ## Troubleshooting
 
-| Issue                                               | Solution                                                                                                                                                                                                |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cannot sign up for an open shift                    | Check that you are logged in as an active member and the shift has not already been filled.                                                                                                             |
-| Shift assignment shows "Member is on leave"         | The member has an active leave of absence covering the shift date. The leave must be deactivated before assigning.                                                                                      |
-| Attendance hours not calculating                    | Ensure both check-in and check-out times are recorded. Duration is calculated automatically.                                                                                                            |
-| Generated shifts not appearing on calendar          | Check the date range filter on the calendar. Generated shifts appear for the pattern's date range.                                                                                                      |
-| Swap request stuck in pending                       | Both the other member and an officer must act. Check with the other member first, then the reviewing officer.                                                                                           |
-| Compliance report shows incorrect hours             | Verify that attendance records have accurate check-in/out times. Only shifts with recorded attendance count.                                                                                            |
-| Platoon rotation seems off by a day                 | Check the "Starting Platoon" setting when generating the pattern. If the wrong platoon is set for day 1, the entire rotation shifts.                                                                    |
-| Minimum staffing warning on a fully staffed shift   | Verify all assigned members have confirmed their assignment. Pending assignments may not count toward the staffing total depending on your department's settings.                                       |
-| Shift hours not appearing in Training compliance    | Attendance must be recorded (check-in and check-out). Shifts without attendance data contribute zero hours to training requirements.                                                                    |
-| Scheduling data not updating across tabs            | The module uses a centralized Zustand store. Try refreshing the page. If the issue persists, clear browser cache.                                                                                       |
-| Settings tab not showing                            | The Settings tab requires `scheduling.manage` permission. Contact your administrator.                                                                                                                   |
-| "Too many attempts" on shift signup                 | Rate limiting may be active. Wait a few seconds and try again.                                                                                                                                          |
-| Cannot edit shift times after creation              | Officers with `scheduling.manage` can now edit shift start/end times, apparatus, color, notes, and custom creation times from the shift detail panel.                                                   |
-| Position change requires opening a modal            | Use the new inline position change UI directly on the shift card to change a member's assigned position without navigating away.                                                                        |
-| Shift signup shows no positions                     | Your rank may not have eligible positions configured. Ask your administrator to check Settings > Operational Ranks.                                                                                     |
-| Dashboard still shows cancelled shifts              | Fixed 2026-03-19 — declined and cancelled assignments are now filtered from "My Upcoming Shifts". Pull latest.                                                                                          |
-| Sign Up button not appearing for open shifts        | Your rank may not be eligible for the remaining open positions. Check with your administrator.                                                                                                          |
-| Can see assignment controls but get 403 error       | The shift detail panel now uses separate permissions: `scheduling.manage` for shift editing and `scheduling.assign` for member assignments. Ask your administrator to grant the appropriate permission. |
-| Self-signup form missing on shift detail            | Fixed 2026-03-23 — the self-signup form on non-apparatus shifts is no longer hidden behind a permission gate. All members can self-sign up for open shifts.                                             |
-| "Calls/Incidents" section missing from shift detail | Removed 2026-03-23 — the placeholder section was removed because there is no CAD integration to populate it. Call data will appear once ePCR/NEMSIS integration is implemented.                         |
-| Equipment check template not appearing for shift    | Template must be assigned to the shift's apparatus (or apparatus type) and your position must match the template's assigned positions.                                                                  |
-| Equipment check shows auto-fail on a working item   | Check the item's expiration date — items past their expiration auto-fail regardless of submitted result.                                                                                                |
-| Apparatus shows deficiency badge but check passed   | A subsequent full check must pass ALL items to clear the deficiency flag. Partial checks don't clear it.                                                                                                |
-| Equipment check photo won't upload                  | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item.                                                                                                                               |
-| Equipment check reports showing no data             | Ensure at least one equipment check has been submitted. Check the date range filter.                                                                                                                    |
-| Shift times showing in wrong timezone               | Fixed 2026-03-19 — shift creation now converts local times to UTC using org timezone. Template-generated shifts also inherit correct timezone.                                                          |
-| Cannot assign members to shifts                     | Fixed 2026-03-22 — assignment UI was gated by `scheduling.manage_assignments`; now works with `scheduling.manage`.                                                                                      |
-| Sign Up button not appearing despite eligible rank  | Fixed 2026-03-22 — Open Shifts tab fallback permission and self-signup visibility corrected.                                                                                                            |
-| Dashboard shows cancelled/declined shifts           | Fixed 2026-03-22 — "My Upcoming Shifts" now filters out declined and cancelled assignments.                                                                                                             |
-| Barcode/QR scan not working on desktop              | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers.                                                                                                                   |
+| Issue                                                                                     | Solution                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cannot sign up for an open shift                                                          | Check that you are logged in as an active member and the shift has not already been filled.                                                                                                                            |
+| Shift assignment shows "Member is on leave"                                               | The member has an active leave of absence covering the shift date. The leave must be deactivated before assigning.                                                                                                     |
+| Attendance hours not calculating                                                          | Ensure both check-in and check-out times are recorded. Duration is calculated automatically.                                                                                                                           |
+| Generated shifts not appearing on calendar                                                | Check the date range filter on the calendar. Generated shifts appear for the pattern's date range.                                                                                                                     |
+| Swap request stuck in pending                                                             | Both the other member and an officer must act. Check with the other member first, then the reviewing officer.                                                                                                          |
+| Compliance report shows incorrect hours                                                   | Verify that attendance records have accurate check-in/out times. Only shifts with recorded attendance count.                                                                                                           |
+| Platoon rotation seems off by a day                                                       | Check the "Starting Platoon" setting when generating the pattern. If the wrong platoon is set for day 1, the entire rotation shifts.                                                                                   |
+| Minimum staffing warning on a fully staffed shift                                         | Verify all assigned members have confirmed their assignment. Pending assignments may not count toward the staffing total depending on your department's settings.                                                      |
+| Shift hours not appearing in Training compliance                                          | Attendance must be recorded (check-in and check-out). Shifts without attendance data contribute zero hours to training requirements.                                                                                   |
+| Scheduling data not updating across tabs                                                  | The module uses a centralized Zustand store. Try refreshing the page. If the issue persists, clear browser cache.                                                                                                      |
+| Settings tab not showing                                                                  | The Settings tab requires `scheduling.manage` permission. Contact your administrator.                                                                                                                                  |
+| Clicking a tab snaps straight back to Schedule                                            | Fixed 2026-08-09. Every tab except Schedule could previously only be reached by a direct link — the click selected the tab and the page immediately reset it. Tab clicks now also update the address bar. Pull latest. |
+| Pressing Save on Notifications or Shift Reports said "Settings saved" but changed nothing | Fixed 2026-08-09. Those sections were showing the page-level Save footer, which only ever saved three other sections. Each section now has its own save control and the footer appears only where it applies.          |
+| A saved link to a scheduling settings section opens the wrong section                     | Fixed 2026-08-09 — the section is now written into the address bar when you select it, so links, refresh and the back button all land where you expect.                                                                |
+| "Too many attempts" on shift signup                                                       | Rate limiting may be active. Wait a few seconds and try again.                                                                                                                                                         |
+| Cannot edit shift times after creation                                                    | Officers with `scheduling.manage` can now edit shift start/end times, apparatus, color, notes, and custom creation times from the shift detail panel.                                                                  |
+| Position change requires opening a modal                                                  | Use the new inline position change UI directly on the shift card to change a member's assigned position without navigating away.                                                                                       |
+| Shift signup shows no positions                                                           | Your rank may not have eligible positions configured, or your membership type may be excluded from self-signup. Check both Settings > Ranks and Scheduling > Settings > Eligibility.                                   |
+| Dashboard still shows cancelled shifts                                                    | Fixed 2026-03-19 — declined and cancelled assignments are now filtered from "My Upcoming Shifts". Pull latest.                                                                                                         |
+| Sign Up button not appearing for open shifts                                              | Your rank may not be eligible for the remaining open positions. Check with your administrator.                                                                                                                         |
+| Can see assignment controls but get 403 error                                             | The shift detail panel now uses separate permissions: `scheduling.manage` for shift editing and `scheduling.assign` for member assignments. Ask your administrator to grant the appropriate permission.                |
+| Self-signup form missing on shift detail                                                  | Fixed 2026-03-23 — the self-signup form on non-apparatus shifts is no longer hidden behind a permission gate. All members can self-sign up for open shifts.                                                            |
+| "Calls/Incidents" section missing from shift detail                                       | Removed 2026-03-23 — the placeholder section was removed because there is no CAD integration to populate it. Call data will appear once ePCR/NEMSIS integration is implemented.                                        |
+| Equipment check template not appearing for shift                                          | Template must be assigned to the shift's apparatus (or apparatus type) and your position must match the template's assigned positions.                                                                                 |
+| Equipment check shows auto-fail on a working item                                         | Check the item's expiration date — items past their expiration auto-fail regardless of submitted result.                                                                                                               |
+| Apparatus shows deficiency badge but check passed                                         | A subsequent full check must pass ALL items to clear the deficiency flag. Partial checks don't clear it.                                                                                                               |
+| Equipment check photo won't upload                                                        | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item.                                                                                                                                              |
+| Equipment check reports showing no data                                                   | Ensure at least one equipment check has been submitted. Check the date range filter.                                                                                                                                   |
+| Shift times showing in wrong timezone                                                     | Fixed 2026-03-19 — shift creation now converts local times to UTC using org timezone. Template-generated shifts also inherit correct timezone.                                                                         |
+| Cannot assign members to shifts                                                           | Fixed 2026-03-22 — assignment UI was gated by `scheduling.manage_assignments`; now works with `scheduling.manage`.                                                                                                     |
+| Sign Up button not appearing despite eligible rank                                        | Fixed 2026-03-22 — Open Shifts tab fallback permission and self-signup visibility corrected.                                                                                                                           |
+| Dashboard shows cancelled/declined shifts                                                 | Fixed 2026-03-22 — "My Upcoming Shifts" now filters out declined and cancelled assignments.                                                                                                                            |
+| Barcode/QR scan not working on desktop                                                    | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers.                                                                                                                                  |
 
 ---
 
@@ -1157,15 +1662,25 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 
 The shift assignment UI previously required the `scheduling.manage_assignments` permission, which was more restrictive than intended. As of 2026-03-22, users with the broader `scheduling.manage` permission can assign members to shifts.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel showing the "Add Assignment" button visible for a user with `scheduling.manage` permission, with the member dropdown and position selector]_
+There is no button called "Add Assignment": the control is **Assign Member**,
+beneath the crew board on a rig with riding positions, or **Assign** in the
+Crew Roster heading on one without. Either opens the same form, which asks for
+the position first and defaults it to the first open seat.
+
+The member list is not filtered by who is qualified for that seat — it excludes
+only members who are unavailable for the shift at all (on leave, or already
+committed to a conflicting one). Put somebody in a driver's seat without the
+EVOC level the apparatus requires and the assignment is still created; what you
+get is a warning toast afterwards, alongside any overtime warning. The list is
+long on a large roster, so the search box above it filters by name.
+
+![The Assign Member form on a shift, with its position and member pickers](./images/03-58-assign-member-form.png)
 
 ### Open Shifts Self-Signup Fix
 
 The self-signup button visibility on the Open Shifts tab had a fallback permission issue where non-admin members couldn't see the Sign Up button even when their rank was eligible. This has been corrected.
 
-> **Screenshot needed:**
-> _[Screenshot of the Open Shifts tab showing shift cards with visible "Sign Up" buttons for an eligible non-admin member]_
+![The Open Shifts tab as an ordinary member sees it, each card carrying its own Sign Up button](./images/03-59-open-shifts-signup.png)
 
 ### Dashboard Shift Display
 
@@ -1176,8 +1691,14 @@ The "My Upcoming Shifts" section on the dashboard now correctly filters out:
 
 Only pending and confirmed assignments appear.
 
-> **Screenshot needed:**
-> _[Screenshot of the Dashboard "My Upcoming Shifts" section showing only pending (yellow badge) and confirmed (green badge) shifts, with no declined or cancelled entries]_
+The panel does not distinguish the two: there is no status badge on a dashboard
+row, only the date, the hours and the shift officer. Which of your shifts are
+still awaiting your confirmation is a question for **My Shifts**, where each
+card carries its badge and the bulk Confirm All / Decline All bar sits above
+them. What the dashboard promises is narrower — that everything listed is a
+shift you are still on.
+
+![The dashboard's My Upcoming Shifts panel, listing only shifts the member is still on](./images/03-60-dashboard-my-shifts.png)
 
 ### Desktop Camera Scanning
 
@@ -1215,8 +1736,11 @@ When you have 2 or more pending shift assignments, checkboxes appear on each pen
 
 The UI updates immediately (optimistic update). If the API call fails for any shift, that shift reverts to its previous state and a toast notification shows the error.
 
-> **Screenshot needed:**
-> _[Screenshot of the My Shifts tab showing 3 pending shift cards with checkboxes selected, the "Select All" toggle enabled, and the "Confirm All" / "Decline All" bulk action buttons visible in the action bar above]_
+Only assignments still awaiting an answer carry a checkbox. Once confirmed, a
+card shows a green **Confirmed** badge and drops out of the selection entirely,
+so the count in the bar always matches what is still outstanding.
+
+![The My Shifts bulk bar — every pending assignment selected, with Confirm All and Decline All](./images/03-56-bulk-confirm-shifts.png)
 
 > **Edge case:** If you select 5 shifts and "Confirm All" but one fails (e.g., shift was cancelled by an officer), that one reverts to pending while the other 4 remain confirmed.
 
@@ -1239,8 +1763,10 @@ Shift cards now show staffing status at a glance:
 | Green tint on shift card      | Overrides template color when fully staffed |
 | Amber tint on shift card      | Overrides template color when understaffed  |
 
-> **Screenshot needed:**
-> _[Screenshot of the weekly calendar view showing three shift cards: one with green tint and CheckCircle2 (fully staffed, 4/4), one with amber tint (understaffed, 2/4), and one with template color (no min staffing configured)]_
+A shift with no minimum staffing configured keeps its template colour and
+shows no ratio at all — there is nothing to measure it against.
+
+![The weekly schedule, its cards tinted green when fully staffed and amber when short](./images/03-55-staffing-status-cards.png)
 
 ### Position-First Assignment Flow
 
@@ -1252,22 +1778,40 @@ The crew board in the shift detail panel now uses a position-first workflow:
 
 You can also click the **"Assign"** button directly on an open slot in the crew board to pre-fill the position.
 
-**Bulk Assignment:** When 2+ positions are unfilled, a **"Fill All Open"** button appears. This shows a compact form with one member dropdown per open position, letting you fill all positions at once.
+**Bulk Assignment:** When more than one position is unfilled, a **Fill All
+Open** button appears at the foot of the board, next to **Assign Member**, with
+the open count on it. It shows a compact form with one member dropdown per open
+position, letting you fill them all at once.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel crew board showing two filled positions (with member names and green badges), one open slot with an "Assign" button, and the "Fill All Open" button at the bottom]_
+> **Corrected 2026-08-10.** The screenshot this section used to ask for —
+> two filled positions, _one_ open slot, and the Fill All Open button — cannot
+> exist: the button only renders while two or more slots are open. The board is
+> pictured under
+> [Structured Position Slots & Decline Handling](#structured-position-slots--decline-handling)
+> instead.
 
 > **Edge case:** Members on leave, with approved time-off covering the shift date, or already assigned to the shift are automatically excluded from the member dropdown.
 
 ### Required/Optional Position Toggle
 
-In the shift template editor, each crew position now has a **required/optional toggle**:
+Open **Scheduling > Templates** and click **New Template** (or edit an
+existing one). Under **Crew Positions**, each row is a position dropdown with
+a badge beside it. The badge is the control: **click it to flip the position
+between required and optional.**
 
 - **Required** (violet badge) — the position must be filled for minimum staffing
-- **Optional** (muted) — position is available but not counted toward minimum staffing
+- **Optional** (muted badge) — position is available but not counted toward minimum staffing
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftTemplatesPage position editor showing 4 positions: "Officer" and "Driver" with violet required badges, "Firefighter" with a muted optional badge, and the toggle switch next to each]_
+The dropdown offers Officer, Driver/Operator, Firefighter, EMT, Probationary,
+Volunteer and Other, plus any custom positions your department has configured.
+**Add Position** adds a row, and the − removes one.
+
+> **Corrected 2026-08-10.** There is no toggle switch — the badge itself is
+> the button, and its label is its state. The in-app helper text said "Toggle
+> the switch to mark a position as optional" and has been corrected too. Note
+> also that the driver position is labelled **Driver/Operator**.
+
+![Template crew positions, each with a button reading Required or Optional](./images/03-53-template-position-required.png)
 
 > **Edge case:** Existing templates with bare string positions (created before this update) default to `required=true` automatically.
 
@@ -1355,11 +1899,16 @@ The scheduling page now supports `?tab=` query parameters for direct navigation 
 | `?tab=open-shifts`      | Open Shifts         |
 | `?tab=requests`         | Requests            |
 | `?tab=equipment-checks` | Equipment Checks    |
+| `?tab=shift-reports`    | Shift Reports       |
 
 Shift notifications automatically deep-link to the correct tab. For example, clicking a shift assignment notification opens the scheduling page with My Shifts selected and the shift highlighted.
 
-> **Screenshot needed:**
-> _[Screenshot of the browser URL bar showing `/scheduling?tab=equipment-checks` and the Equipment Checks tab selected on the scheduling page]_
+> **Corrected 2026-08-12.** `?tab=shift-reports` was missing from the table
+> above; the page has six tabs, not five. The screenshot placeholder here asked
+> for the **browser URL bar** alongside the selected tab — nothing the
+> application draws, and so nothing a screenshot of it can show. The tab it
+> lands on is already pictured under
+> [Standalone Equipment Checks](#standalone-equipment-checks) directly below.
 
 ### Standalone Equipment Checks
 
@@ -1378,10 +1927,15 @@ The equipment check form has been redesigned from a tabbed compartment view to a
 
 - All compartments are displayed inline with clear section headers
 - Sub-compartments are merged under their parent compartment heading
-- Section headers (items with `is_header: true`) appear as bold black labels for visual grouping — they have no pass/fail controls and are not scored
+- Section headers appear as bold labels for visual grouping — they have no pass/fail controls, and neither the compartment's `n/m checked` nor the header's progress counter includes them
 
-> **Screenshot needed:**
-> _[Screenshot of the flat equipment check form on a mobile device showing a compartment header ("Cab Interior"), a section header in bold ("Safety Equipment"), and several check items below with pass/fail buttons and quantity fields]_
+> **Corrected 2026-08-12.** A section header was described as "items with
+> `is_header: true`". `is_header` is a **compartment**-level flag; on an item it
+> is write-only — the item response schema does not carry it, and the check form
+> switches on `check_type: "header"`. Set that, not `is_header`, when building a
+> template through the API.
+
+![The flat check form on a phone — a compartment heading, a bold section header beneath it, and the items it groups](./images/03-73-flat-check-form-header.png)
 
 ### Text Check Type
 
@@ -1431,17 +1985,32 @@ This replaces the need for external cron jobs. Tasks resume automatically on con
 
 EVOC (Emergency Vehicle Operations Course) certification levels are now integrated across training, apparatus, and scheduling:
 
-1. **Member profiles** track EVOC level (Basic, Intermediate, Advanced)
-2. **Apparatus records** specify required EVOC level for operators
-3. **Scheduling** validates EVOC certification when assigning members to driver/operator positions
+1. **Operator records** carry a member's EVOC level, one per apparatus, on the
+   rig's **Operators** tab — not on the member's profile. The levels
+   themselves are configured per organization rather than fixed. See
+   [Membership → EVOC Certification](./01-membership.md#evoc-certification)
+2. **Apparatus records** specify the EVOC level required to drive that rig
+3. **Scheduling** checks the two against each other when assigning a member to
+   a driver/operator position
 
-When assigning a member to a Driver/Operator position, the system checks the apparatus's required EVOC level against the member's certification. If the member's level is insufficient, a warning is displayed.
+When assigning a member to a Driver/Operator position, the system takes the
+highest level from the member's **current** operator records — active,
+certified and not past their expiration — and compares it against the
+apparatus's requirement. A member who falls short, or has no EVOC record at
+all, produces a warning naming the required level; the assignment is not
+blocked. An apparatus with no required level never warns.
 
-> **Screenshot needed:**
-> _[Screenshot of a member's profile showing EVOC certification level (e.g., "EVOC Level: Advanced") alongside other certifications]_
+> **Corrected 2026-08-10.** This said member profiles track an EVOC level of
+> Basic, Intermediate or Advanced. No profile has such a field, and those
+> three names are the demo department's configured levels rather than the
+> system's.
 
-> **Screenshot needed:**
-> _[Screenshot of the apparatus detail page showing the "Required EVOC Level" field set to "Intermediate"]_
+**Setting the requirement.** Edit the apparatus (**Operations > Apparatus >**
+_a rig_ **> Edit**) and choose from **Required EVOC Level**. The control is on
+the edit form rather than the detail page, and it only appears once your
+organization has EVOC levels configured.
+
+![The Required EVOC Level control on an apparatus, set to the level needed to drive it](./images/03-52-apparatus-required-evoc.png)
 
 ### Edge Cases
 
@@ -1459,50 +2028,79 @@ The shift report creation flow has been completely redesigned. Instead of creati
 
 ### How It Works
 
-1. Navigate to **Shift Reports** and click **New Report**
-2. **Select a shift** from the dropdown — the system loads all crew members assigned to that shift
-3. Fill in **shared data** once: hours on shift, calls responded, and call types. These values apply to all crew members
-4. For each **trainee** on the crew, expand their evaluation panel to add:
-   - Performance rating (1-5)
-   - Skills observed with individual 1-5 scores
-   - Tasks performed
+1. Go to **Shift Reports** and click **New**
+2. **Pick a shift.** The picker is a scrollable list of cards for the last fortnight, each naming the rig, the date, and how many members, calls and hours it carried — not a dropdown. Choosing one loads the crew and fills the shared fields from the shift itself
+3. Check the **shared data**: hours on shift, calls responded and call types come from the shift and apply to everybody on it. Hours is the one required field. There is also an **Overall Shift Narrative** for observations about the shift rather than about a person
+4. Each **trainee** on the crew has an **Evaluate** control that opens their panel:
+   - Individual remarks
+   - Performance rating, on the department's labelled scale
    - Areas of strength and areas for improvement
-   - Officer narrative
-5. **Non-trainees** (members without active training program enrollments) appear in the crew list but only receive hours/calls credit — no evaluation section is shown for them
-6. Click **Submit All** to create reports for all crew members in a single batch
+   - Skills observed, each with a 1-5 score
+   - Tasks performed
+5. **Non-trainees** (members with no active training-programme enrolment) appear in the crew list with a remarks box and nothing else — they receive hours and calls credit, and no evaluation
+6. Untick anybody who was not actually on the shift; the button counts what is left. **Submit Reports (N)** files them all, or **Save as Draft** keeps them in the Drafts view
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the batch report creation form showing: (1) the shift selector dropdown at top with a selected shift, (2) the shared data section with hours, calls, and call type fields, (3) the crew list below with two trainees expanded showing evaluation fields and one non-trainee showing only hours/calls credit._
+![The batch shift-report form — shared hours and calls, the whole crew, and one trainee's evaluation open](./images/03-63-batch-report-form.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the submission confirmation showing "Created 5 reports, skipped 1" result after a batch submission._
+Submitting reports a count in a toast: how many were created. Crew who already
+have a report for that shift are skipped rather than duplicated, and the skipped
+count comes back from the API — though the toast shows only the number created.
 
 ### Task Defaults Pre-Population
 
-When the selected shift is linked to an apparatus type (e.g., Engine, Ladder, Ambulance), the **Add Task** dialog pre-populates from the apparatus-type task mapping configured in **Scheduling > Settings > Shift Reports**. After selecting a task, the defaults remain visible for reference.
+There is no Add Task dialog. **+ Add**, at the right of the Tasks Performed
+heading, appends a task row with its name already filled in from the
+apparatus-type task mapping configured in **Scheduling > Settings > Shift
+Reports** — the first entry for that rig class that is not already on the
+report. Add a second and you get the next one down. The name is an ordinary text
+field, so overwriting it is how you record something the mapping does not list;
+nothing is offered as a separate "custom" option.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Add Task dialog showing pre-populated tasks from the engine apparatus type mapping (e.g., "Pump test", "Hose load inventory") with an "Add Custom" option at the bottom._
+The same mapping drives the **Skills Observed** list: a ladder crew is asked
+about aerial placement and forcible entry, a medic crew about patient assessment
+and airway management. Where a rig class has no mapping the department-wide
+defaults are used instead.
+
+The pre-filled row is visible at the foot of the evaluation panel in the
+screenshot above — "Aerial inspection", the first task in this department's
+ladder mapping.
+
+> **This did not work before 2026-08-10.** The form keys both lists on the
+> shift's apparatus type, which the API computed but the shift response schema
+> did not carry, so the value reached the browser as undefined on every shift in
+> every department. Both lists silently fell back to the department-wide
+> defaults and **+ Add** appended a blank row. Configuring the mappings had no
+> visible effect. Pull latest.
 
 ### Score Labels
 
-The 1-5 skill score buttons now display descriptive label text inline next to each button:
+Selecting a skill reveals a **Score:** row of five numbered buttons beneath it.
+The buttons are numbered rather than labelled — the label for the score you pick
+appears beside the row, and hovering a button shows its label as a tooltip. The
+wording is the department's own if it has set Rating Scale Labels, and the
+defaults otherwise:
 
-| Score | Label      |
-| ----- | ---------- |
-| 1     | Needs work |
-| 2     | Developing |
-| 3     | Competent  |
-| 4     | Proficient |
-| 5     | Excellent  |
+| Score | Default label |
+| ----- | ------------- |
+| 1     | Needs work    |
+| 2     | Developing    |
+| 3     | Competent     |
+| 4     | Proficient    |
+| 5     | Excellent     |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the skills section in the evaluation panel showing three skills with 1-5 score buttons, each button labeled with its descriptive text (e.g., "3 — Competent" highlighted for "Pump Operations")._
+![Skills Observed — three skills scored 1-5, each showing the department's label for the score chosen](./images/03-64-skill-score-buttons.png)
 
 ### Review Workflow Improvements
 
 - **Require reason when flagging**: When flagging a report, the modal now requires entering a reason before submission. The "Flag" button is disabled until text is entered. This ensures trainees always receive feedback when a report is flagged
-- **Reviewer name displayed**: Report cards show the reviewer's full name next to the review status badge (e.g., "Approved by Lt. Davis")
-- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-review" action in all view modes — not just in the dedicated Flagged tab
+- **Reviewer name displayed**: Report cards carry "Reviewed by _Name_" in the metadata row beneath the trainee's name, beside the hours, calls and rating
+- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-Review Report" action in all view modes — not just in the dedicated Flagged tab. Both are inside the opened card
 - **Actual server error messages**: Toast notifications now display the server's error message instead of generic text like "Failed to submit", improving troubleshooting
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of a flagged report card showing the orange "Flagged" badge, the reviewer name, the reason text, and the "Re-review" button._
+The card is pictured under
+[Flagged Reports View](#flagged-reports-view). The badge is red rather than
+orange; orange is the ageing indicator that appears beside it once a report has
+sat unreviewed for three days.
 
 ### Edge Cases
 
@@ -1560,26 +2158,38 @@ A new **print-formatted page** renders shift completion reports for paper output
 
 ### What's Included on the Printed Report
 
-- **Header**: Department name and logo
-- **Shift information**: Date, start/end time, apparatus, station
-- **Personnel**: Trainee name and rank, filing officer name and rank
-- **Performance data**: Hours on shift, calls responded, call types, performance rating with label
+- **Header**: "Shift Completion Report", the report's id, the date it was filed,
+  and its review status. The sheet is not branded — no department name and no
+  logo; the department's identity is on the covering paperwork, not here
+- **Shift information**: The shift date. Start and end times, apparatus and
+  station are not printed
+- **Personnel**: The member and the filing officer, by name. Ranks are not
+  printed
+- **Performance data**: Hours on shift, calls responded, call types, and the
+  rating as a bare "3 / 5" — the descriptive label is not printed alongside it
 - **Assessment**: Areas of strength, areas for improvement, officer narrative
-- **Skills observed**: Each skill with its 1-5 score and descriptive label
-- **Tasks performed**: Each task with description
-- **Reviewer information** (if reviewed): Reviewer name, review date, review status
-- **Signature lines**: Spaces for officer and trainee signatures at the bottom
+- **Skills observed**: A table of skill, score out of five, and the officer's
+  comment on each
+- **Tasks performed**: A table of task and description
+- **Reviewer information** (if reviewed): "Reviewed by _Name_ on _date_" beneath
+  the signature block
+- **Signature lines**: One for the filing officer and one for the member, the
+  latter headed "Member Acknowledgment" and marked pending until they
+  acknowledge the report in the app
 
 The page is formatted for **letter-size (8.5" × 11")** printing and automatically opens the browser's print dialog after loading.
 
 ### How to Print a Report
 
-1. Navigate to **Shift Reports** and find the report you want to print
-2. Click the **Print** button on the report card
-3. The print page opens in a new tab with the formatted report
-4. Your browser's print dialog opens automatically — select your printer and print
+1. Go to **Shift Reports** and find the report you want to print
+2. Open its card and click **Print Report**, at the foot of the opened card —
+   there is no print control on the collapsed one
+3. The print page opens with the formatted sheet
+4. Your browser's print dialog opens by itself a moment later — choose your
+   printer and print. The application's navigation is on screen around the
+   sheet but is dropped from the printed page
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the print-formatted shift report showing the letter-size layout with department branding header, structured sections, and signature lines at the bottom._
+![The print layout of a shift report — its sections, the skills and tasks tables, and the two signature lines](./images/03-66-print-report.png)
 
 ### Edge Cases
 
@@ -1605,12 +2215,12 @@ This prevents accidental submission of partially completed checks while still al
 
 Previously, if you started an equipment check but couldn't finish it, the check was stuck in an incomplete state. Now:
 
-1. Navigate to **Scheduling > My Checklists**
-2. In-progress checks show a **"Resume"** button alongside the completion percentage (e.g., "Resume — 65% complete")
-3. Click Resume to open the check form with previously answered items pre-filled
-4. Complete the remaining unanswered items and submit
+1. Open the **Equipment Checks** tab — as a member it is headed **My Equipment Checklists**
+2. Each row shows the rig, whether it is a start- or end-of-shift check, the date, and how many of its items are answered. An untouched one reads **Not Started** with a **Start Check** button; a part-answered one shows its progress and offers **Resume**
+3. Resume opens the form with the answered items already filled in
+4. Complete what is left and submit
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the My Checklists page showing two checklists: one completed (green checkmark) and one in-progress with "Resume — 65% complete" button and a progress bar._
+> **[SCREENSHOT NEEDED]:** _Screenshot of My Equipment Checklists with a finished check beside a part-answered one showing its progress and a Resume button._
 
 ### Edge Cases
 
@@ -1644,9 +2254,8 @@ the old one and get a new one.
 > **Note:** The feed is read-only and shows roughly the last two months through
 > the next year of your assigned (non-cancelled) shifts.
 
-> **[SCREENSHOT NEEDED]:** \_[The "Subscribe to my shifts" card on My Shifts,
->
-> > expanded to show the calendar URL, Copy button, and Reset link.]\_
+> **Screenshot omitted for security:** Expanding this card reveals a private
+> calendar-feed credential. Do not capture or publish the expanded card.
 
 ### The On-Duty Officer Can Run Their Own Shift
 
@@ -1668,7 +2277,7 @@ Open a shift while it's active and you'll see a **readiness** strip at the top:
 Departments can require end-of-shift equipment checks to be complete before a
 shift is finalized. Turn it on in **Scheduling → Settings → Close-out rules**.
 
-- When it's on, the **Finalize** button is blocked while any end-of-shift check
+- When it's on, the **Close out shift** button is blocked while any end-of-shift check
   is outstanding. An officer can still **finalize with an override** by checking
   the box and entering a reason — the override is recorded in the audit log.
 - When it's off (the default), you can finalize freely, but you'll see a tip

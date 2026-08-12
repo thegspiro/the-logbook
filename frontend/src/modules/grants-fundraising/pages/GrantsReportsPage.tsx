@@ -227,7 +227,7 @@ const GrantsReportsPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-theme-surface-border bg-theme-surface flex space-x-1 overflow-x-auto rounded-lg border p-1">
+      <div className="border-theme-surface-border bg-theme-surface hscroll flex space-x-1 rounded-lg border p-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}

@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router';
+import { useParams, useSearchParams, Link } from 'react-router';
 import {
   ArrowLeft,
   Printer,
@@ -57,7 +57,8 @@ import toast from 'react-hot-toast';
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-type Tab = 'history' | 'nfpa' | 'inspections' | 'exposures' | 'stock';
+const ITEM_DETAIL_TABS = ['history', 'nfpa', 'inspections', 'exposures', 'stock'] as const;
+type Tab = (typeof ITEM_DETAIL_TABS)[number];
 
 const HISTORY_ICONS: Record<string, React.ReactNode> = {
   assignment: <User className="h-4 w-4 text-blue-500" />,
@@ -140,7 +141,18 @@ const ItemDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<Tab>('history');
+  // Addressable, so an officer can send "here is where that lot is deployed"
+  // as a link rather than as directions. Plain state before, which also broke
+  // the Back button after a tab change and pinned the screenshot harness to
+  // History. Fifth page to get this treatment.
+  //
+  // Derived from the URL rather than mirrored into state: mirroring reads the
+  // parameter once, on mount, so every later URL change — which is what Back
+  // is — would be ignored.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab: Tab = ITEM_DETAIL_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : 'history';
+  const setActiveTab = (tab: Tab) => setSearchParams({ tab });
   const [history, setHistory] = useState<ItemHistoryEvent[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
   const [nfpa, setNfpa] = useState<NFPACompliance | null>(null);
@@ -335,7 +347,7 @@ const ItemDetailPage: React.FC = () => {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link to="/inventory/items" className="btn-secondary btn-sm inline-flex items-center gap-1">
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
@@ -439,7 +451,7 @@ const ItemDetailPage: React.FC = () => {
                       to={`/members/${item.assigned_to_user_id}`}
                       className="text-blue-600 hover:underline dark:text-blue-400"
                     >
-                      {item.assigned_to_user_id}
+                      {item.assigned_to_name ?? item.assigned_to_user_id}
                     </Link>
                   }
                 />
@@ -707,7 +719,9 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, ca
                 )}
               </p>
               {rec.description && <p className="text-theme-text-muted mt-0.5 text-xs">{rec.description}</p>}
-              {rec.performed_by && <p className="text-theme-text-muted text-xs">By: {rec.performed_by}</p>}
+              {rec.performed_by && (
+                <p className="text-theme-text-muted text-xs">By: {rec.performed_by_name ?? rec.performed_by}</p>
+              )}
             </div>
             <div className="text-theme-text-muted text-right text-xs whitespace-nowrap">
               <p>{rec.completed_date ? formatDate(rec.completed_date, tz) : 'Pending'}</p>

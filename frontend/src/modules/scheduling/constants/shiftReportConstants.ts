@@ -200,3 +200,24 @@ export const SAMPLE_APPARATUS_TASKS: Record<string, string[]> = {
   tanker: ['Tank integrity check', 'Dump valve function test', 'Portable tank condition check'],
   hazmat: ['Detection equipment calibration', 'PPE suit integrity check', 'Decon supplies inventory'],
 };
+
+/**
+ * The hours to credit **one** member for a shift.
+ *
+ * Not `shift.total_hours`: that is the sum of every attendee's minutes — crew
+ * hours — so a three-person 12-hour shift carries 36. The batch form files one
+ * report per crew member, and pre-filling each of them from the crew total
+ * credited every rider with everybody's hours, into the requirement progress
+ * and the state reports downstream of it.
+ *
+ * The shift's own span is the right default. Where it is unknown, 0 is returned
+ * and the officer types the hours — the field is required, so an empty one is
+ * refused rather than filed wrong.
+ */
+export function shiftHoursForOneMember(shift: { start_time?: string | null; end_time?: string | null }): number {
+  if (!shift.start_time || !shift.end_time) return 0;
+  const start = new Date(shift.start_time).getTime();
+  const end = new Date(shift.end_time).getTime();
+  if (!(end > start)) return 0;
+  return Math.round(((end - start) / 3_600_000) * 100) / 100;
+}

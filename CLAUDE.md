@@ -39,7 +39,7 @@ Fixing an error means resolving its root cause. The following are **not** fixes:
 
 ### Hard Stop Before Continuing
 
-This is the escalation path from response #2 above — the *only* sanctioned
+This is the escalation path from response #2 above — the _only_ sanctioned
 alternative to fixing an error, never a license to ignore one. If fixing a
 discovered error would genuinely exceed the scope of the current task (e.g.,
 hundreds of strict-mode violations across unrelated files), **stop and report
@@ -149,6 +149,49 @@ Strict mode is **on** (`"strict": true` in `frontend/tsconfig.json`) with additi
 
 All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps to `./src/*`.
 
+### Two TypeScript installs — do not "tidy" this away
+
+The frontend depends on TypeScript twice, on purpose:
+
+| Declared as                                     | Version | Used by                                          |
+| ----------------------------------------------- | ------- | ------------------------------------------------ |
+| `typescript`                                    | 5.9.3   | typescript-eslint (type-aware lint rules)        |
+| `typescript-native` (npm alias of `typescript`) | 7.0.2   | `npm run typecheck`, `npm run build`, the editor |
+
+**typescript-eslint cannot run on TypeScript 7.** It throws `typescript-eslint does
+not support TS 7.0` from a hard version guard, and every published version caps
+its peer range at `<6.1.0` (typescript-eslint#10940 tracks TS >=7.1 support). A
+workspace can only declare one package named `typescript`, and npm resolves a
+peer against the workspace's own copy — so the linter's TypeScript has to be the
+one named `typescript`, and the compiler gets the alias.
+
+This is not cosmetic. Before it was set up this way, `rm package-lock.json &&
+npm install` failed outright with ERESOLVE: the lockfile in the repo could not be
+regenerated, and any bump of typescript-eslint broke the install.
+
+Consequences worth knowing:
+
+- `npm run typecheck` / `npm run build` go through `frontend/scripts/tsc-native.mjs`,
+  which resolves the aliased compiler. Plain `tsc` on `PATH` is the **5.9.3** one —
+  both installs ship a `tsc` bin and npm links only one, so do not "simplify" the
+  scripts back to bare `tsc` or you will silently typecheck with 5.9.3 (~12x
+  slower: ~41s vs ~3.5s, measured).
+- **Point your editor at the aliased compiler**, or it will report 5.9.3's
+  errors while CI reports 7.0.2's. In VS Code, set this in your local
+  `.vscode/settings.json` (the directory is gitignored, so this cannot be
+  committed for you — and the tracked copy's stale
+  `frontend/node_modules/typescript/lib` no longer exists, since npm hoists
+  both installs to the repo root):
+
+  ```json
+  "typescript.tsdk": "node_modules/typescript-native/lib"
+  ```
+
+- Type-aware lint runs against 5.9.3 while the build uses 7.0.2. That gap is
+  forced by upstream, not chosen. **When typescript-eslint ships TS 7 support,
+  collapse this back to a single `typescript` dependency** and delete the alias,
+  the wrapper script, and this section.
+
 ## Testing
 
 ### Frontend (Vitest + Testing Library)
@@ -180,24 +223,26 @@ The test setup (`src/test/setup.ts`) automatically mocks `window.matchMedia`, `I
 - **Navigation mocks** — `mockNavigate`, `mockUseParams`
 
 **Component test pattern:**
+
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 ```
 
-**Store test pattern** (mock dependencies *before* importing the store):
+**Store test pattern** (mock dependencies _before_ importing the store):
+
 ```typescript
 const mockLogin = vi.fn();
-vi.mock('../services/api', () => ({
+vi.mock("../services/api", () => ({
   authService: { login: (...args: unknown[]) => mockLogin(...args) as unknown },
 }));
 // Import store AFTER mocks are in place
-import { useMyStore } from './myStore';
+import { useMyStore } from "./myStore";
 
 // Access state via getState(), reset in beforeEach:
 beforeEach(() => {
-  useMyStore.setState({ /* initial state */ });
+  useMyStore.setState({/* initial state */});
   vi.clearAllMocks();
 });
 ```
@@ -292,19 +337,19 @@ backend/app/
 
 ### Naming Conventions
 
-| Item | Frontend | Backend |
-|------|----------|---------|
-| Components / Pages | `PascalCase.tsx` | N/A |
-| Hooks | `useCamelCase.ts` | N/A |
-| Stores | `camelCaseStore.ts` | N/A |
-| Services | `camelCase.ts` | `snake_case_service.py` |
-| Types | `PascalCase` (interfaces) | `PascalCase` (Pydantic/Enum classes) |
-| Utilities | `camelCase.ts` | `snake_case.py` |
-| DB tables | N/A | `plural_snake_case` |
-| DB columns | N/A | `snake_case` |
-| API endpoints | N/A | `snake_case` functions, `/kebab-case` URLs |
-| Constants | `SCREAMING_SNAKE` | `SCREAMING_SNAKE` |
-| Enums (frontend) | `as const` objects + extracted type | N/A |
+| Item               | Frontend                            | Backend                                    |
+| ------------------ | ----------------------------------- | ------------------------------------------ |
+| Components / Pages | `PascalCase.tsx`                    | N/A                                        |
+| Hooks              | `useCamelCase.ts`                   | N/A                                        |
+| Stores             | `camelCaseStore.ts`                 | N/A                                        |
+| Services           | `camelCase.ts`                      | `snake_case_service.py`                    |
+| Types              | `PascalCase` (interfaces)           | `PascalCase` (Pydantic/Enum classes)       |
+| Utilities          | `camelCase.ts`                      | `snake_case.py`                            |
+| DB tables          | N/A                                 | `plural_snake_case`                        |
+| DB columns         | N/A                                 | `snake_case`                               |
+| API endpoints      | N/A                                 | `snake_case` functions, `/kebab-case` URLs |
+| Constants          | `SCREAMING_SNAKE`                   | `SCREAMING_SNAKE`                          |
+| Enums (frontend)   | `as const` objects + extracted type | N/A                                        |
 
 ### Frontend Patterns
 
@@ -317,14 +362,15 @@ backend/app/
 - **Toast notifications:** `react-hot-toast` — use `toast.success()`, `toast.error()` for user feedback. `<Toaster>` is mounted in `App.tsx`
 - **Styling:** Tailwind CSS with `theme-*` CSS variable classes defined in `styles/index.css` (e.g., `bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`). Dark mode via `class` strategy. High-contrast mode also supported (`ThemeContext` handles `'light' | 'dark' | 'system' | 'high-contrast'`). Size variants as objects (`{ sm: 'max-w-md', md: 'max-w-lg' }`)
 - **Shared component/mobile utilities:** `styles/index.css` defines reusable `@utility` classes (grouped and documented in that file) — prefer these over repeating inline class strings or hand-rolling arbitrary values. Component utilities: `form-input`/`form-label`, `card`/`card-secondary`, `btn-primary`/`btn-icon` (44px touch target), `alert-*`, `badge`, `modal-body`. Mobile utilities: `tab-scroll` (scrollable bordered tab bar) and `hscroll` (scrollable strip) for tab/pill rows that would overflow a phone; `mobile-touch-target` (44px); `pb-safe` / `action-bar-safe` for bottom bars that must clear the iPhone home indicator; `rwd-table` for tables that reflow to stacked cards under 768px. When adding a new shared pattern, define it as an `@utility` under the matching group header rather than scattering arbitrary values
-- **UX component library:** Reusable components in `components/ux/` — use these before building custom UI: `Skeleton`/`SkeletonCard`/`SkeletonPage` (loading states), `Pagination`, `EmptyState`, `ConfirmDialog`, `Tooltip`, `CommandPalette`, `SortableHeader`, `Breadcrumbs`, `ProgressSteps`, `Collapsible`, `DateRangePicker`, `FileDropzone`, `InlineEdit`, `PageTransition`, `ScanSuccessFlash`/`FlashlightToggle` (barcode-scanner overlays)
+- **UX component library:** Reusable components in `components/ux/` — use these before building custom UI: `Skeleton`/`SkeletonCard`/`SkeletonPage` (loading states), `Pagination`, `EmptyState`, `ConfirmDialog`, `PromptDialog` (single typed value), `Tooltip`, `CommandPalette`, `SortableHeader`, `Breadcrumbs`, `ProgressSteps`, `Collapsible`, `DateRangePicker`, `FileDropzone`, `InlineEdit`, `PageTransition`, `ScanSuccessFlash`/`FlashlightToggle` (barcode-scanner overlays). **Confirmations go through `useConfirm()`**, whose dialog is mounted once by `ConfirmProvider` at the app root — see Pitfall #16
+- **Settings screens:** All three (Organization, Events, Scheduling) render through `components/settings/SettingsLayout.tsx` — section sidebar with descriptions on desktop, scrollable tab strip on phones, body in a surface card, `aria-current` on the active section, and the selected section mirrored into `?tab=`. A new settings screen uses this rather than a fourth design; the section list is a `SettingsSection[]` declared beside the screen (see `modules/scheduling/components/schedulingSettingsSections.ts`). Show a Save/Reset footer **only** on sections the footer actually writes
 - **Barcode scanning & pull-to-refresh:** Camera scanning goes through the `useHtml5Scanner` hook (rear-camera constraint, secure-context guard, responsive scan box, flashlight support); pair it with `useScanFeedback` + `ScanSuccessFlash` for capture confirmation. App-wide pull-to-refresh is layout-level: a page opts in by calling `useRegisterPullToRefresh(handler)` (the gesture + indicator are mounted once in `AppLayout` via `PullToRefreshProvider`)
 - **Form input classes:** Forms define shared Tailwind class constants (`inputClass`, `selectClass`, `labelClass`, `checkboxClass`) for consistency. Reuse these patterns in new forms
 - **Types:** Defined as `interface` (not `type`) for domain objects. One file per domain in `types/`. Enums use `as const` objects with an extracted type of the same name (value union pattern):
   ```typescript
   export const EventType = {
-    BUSINESS_MEETING: 'business_meeting',
-    TRAINING: 'training',
+    BUSINESS_MEETING: "business_meeting",
+    TRAINING: "training",
   } as const;
   export type EventType = (typeof EventType)[keyof typeof EventType];
   ```
@@ -410,13 +456,65 @@ These are recurring errors identified from the project's change history. Follow 
 
 ```typescript
 // WRONG — empty string passes through ??
-const phone = formData.phone?.trim() ?? undefined;  // '' ?? undefined === ''
+const phone = formData.phone?.trim() ?? undefined; // '' ?? undefined === ''
 
 // CORRECT — empty string is converted to undefined by ||
-const phone = formData.phone?.trim() || undefined;   // '' || undefined === undefined
+const phone = formData.phone?.trim() || undefined; // '' || undefined === undefined
 ```
 
 **Rule:** When converting form values to send to the API, always use `||` (logical OR), never `??` (nullish coalescing), to coerce empty strings to `undefined` so they are omitted from the JSON payload. This applies to all optional string fields in forms, onboarding flows, modals, and CSV exports.
+
+#### …on **create**. On **update**, omitting the key is the bug _(2026-08-09)_
+
+`|| undefined` is right on a create payload and **wrong on an update payload**.
+Update payloads are `model_dump(exclude_unset=True)` on the backend, so an
+**omitted key means "leave this alone"** — the user emptied the box, the key
+never left the browser, and the old value survives behind a success toast.
+
+Three states, three distinct wire values:
+
+| Intent                | Send             | Backend reads it as |
+| --------------------- | ---------------- | ------------------- |
+| Leave the field alone | **omit the key** | untouched           |
+| Clear the field       | **`null`**       | write NULL          |
+| Set a value           | the value        | write the value     |
+
+```typescript
+// CREATE — omit blanks so "" never reaches a Pydantic validator
+const phone = formData.phone?.trim() || undefined;
+
+// UPDATE — send an explicit null so the clear actually persists
+import { blankToNull, numberOrNull } from "@/utils/formValues";
+const phone = blankToNull(formData.phone); // '' -> null
+const hours = numberOrNull(formData.requiredHours); // '' -> null
+```
+
+On the backend, never write the mirror-image bug:
+
+```python
+# WRONG — drops the explicit null; acknowledges the write with a 200 and
+# leaves the old value in the database
+for key, value in updates.items():
+    if value is not None:
+        setattr(instance, key, value)
+
+# CORRECT
+from app.utils.model_updates import apply_updates
+apply_updates(instance, updates, skip={"organization_id", "id"})
+```
+
+`apply_updates` clears on an explicit null, raises `ValueError` (→ 400) for a
+null against a `NOT NULL` column rather than failing at flush time, and reports
+a field the model does not have instead of dropping it. Protected columns —
+tenancy and identity — go in `skip`, not in a hand-rolled per-field guard. Also
+do not dump update payloads with `exclude_none`: it strips the nulls a layer
+earlier, for the same result.
+
+**Rule:** On an update path, use `blankToNull` / `numberOrNull` on the frontend
+and `apply_updates` on the backend. Send **every** field the form owns on every
+save — a requirement switched from hours to shifts kept grading against its stale
+`required_hours` precisely because the payload omitted the field it no longer
+used.
 
 ### 2. Database Models: `ondelete="SET NULL"` Requires `nullable=True`
 
@@ -438,10 +536,10 @@ With `noUncheckedIndexedAccess: true`, array indexing and `.split()` results ret
 
 ```typescript
 // WRONG — TS error: string | undefined is not assignable to string
-const datePart = isoString.split('T')[0];
+const datePart = isoString.split("T")[0];
 
 // CORRECT — provide a fallback
-const datePart = isoString.split('T')[0] ?? '';
+const datePart = isoString.split("T")[0] ?? "";
 ```
 
 **Rule:** Always add `?? defaultValue` after indexed access (`arr[0]`, `.split()[n]`, `Object.keys()[n]`). Never use non-null assertions (`!`) as a workaround — use safe fallbacks instead.
@@ -613,7 +711,7 @@ result = await db.execute(
 ```
 
 **14b — `require_permission(...)` does NOT scope the object (XC-3).** A permission
-dependency only asserts the caller holds the permission *in their own org*. An
+dependency only asserts the caller holds the permission _in their own org_. An
 admin update/delete that then fetches the target by a path/body id without an org
 filter lets an org-A admin mutate an org-B row. Always resolve the target through
 an org-scoped fetch (e.g. `get_election(id, current_user.organization_id)`)
@@ -623,7 +721,7 @@ before mutating it — the permission check is not enough.
 (XC-1).** When a create/update stores a client-supplied foreign key
 (`user_id`, `category_id`, `apparatus_id`, `template_id`, `pipeline_id`,
 `assignee_id`, …), verify that referenced row is in the caller's org before
-storing it. Even when the write is org-stamped (so it can't be *read*
+storing it. Even when the write is org-stamped (so it can't be _read_
 cross-tenant), an unvalidated FK persists a dangling/mis-attributed reference —
 and in some cases (e.g. an eager-loaded template relationship with no org filter
 on the join) it leaks the other org's data back in the response. Prefer a shared
@@ -632,7 +730,7 @@ on the join) it leaks the other org's data back in the response. Prefer a shared
 **Rule:** When writing or reviewing any endpoint/service that takes an id or FK
 from the client: (1) org-scope every by-id query, (2) resolve mutation targets
 through an org-scoped fetch even behind `require_permission`, (3) validate
-client-supplied FK ids are in-org before persisting them. Also fail *closed* in
+client-supplied FK ids are in-org before persisting them. Also fail _closed_ in
 access-control helpers — if a referenced folder/parent can't be resolved, deny,
 don't grant.
 
@@ -662,23 +760,89 @@ finance/QuickBooks exports, audit hand-offs) MUST be written with
 prefixes formula-trigger cells with a `'`, transparent to the reader. The same
 applies to any other spreadsheet-bound output.
 
+### 16. Never Use `window.confirm` / `window.alert` / `window.prompt` _(2026-08-09)_
+
+**A browser may suppress them, and a suppressed dialog is indistinguishable from
+Cancel.** Chrome suppresses repeated dialogs and dialogs inside cross-origin
+frames; iOS and Firefox offer the user a "prevent this page from creating further
+dialogs" checkbox. `window.confirm` then returns `false` and `window.prompt`
+returns `null` — the same values as pressing Cancel — so the action silently does
+nothing, with no error and no clue as to why.
+
+```typescript
+// WRONG — suppressible, and indistinguishable from Cancel when it is
+if (!window.confirm("Delete this?")) return;
+const reason = window.prompt("Reason?");
+
+// CORRECT — same control flow, promise-based
+const confirm = useConfirm();
+if (!(await confirm({ message: "Delete this?", confirmLabel: "Delete" })))
+  return;
+```
+
+- `useConfirm()` returns **only** `confirm()`. The dialog is rendered once by
+  `ConfirmProvider` at the app root, above the router so public routes get one
+  too — there is nothing for a consumer to render and so nothing to forget.
+- **Without a provider the hook throws.** Neither default is safe: `true` carries
+  out a deletion nobody agreed to, `false` swallows the action without a word. A
+  missing provider is a wiring mistake and should fail loudly at the call, not
+  quietly at the consequence. `renderWithRouter` wraps in the provider, matching
+  the app shell.
+- For a single typed value, use `PromptDialog` from `components/ux` — validation
+  is shown rather than swallowed, and the field resets on each open so a reason
+  typed for one record cannot be filed against the next.
+- **Name the decision on the buttons** ("Keep it" / "Delete", "Stay here" /
+  "Discard changes"), and state the consequence a native one-liner had no room
+  for.
+
+**Rule:** No new `window.confirm` / `window.alert` / `window.prompt` anywhere in
+the frontend. A `.ts` hook that cannot render JSX does not need to — it calls
+`useConfirm()` like everything else.
+
+### 17. Form Controls: Use the `form-*` Utilities, Not a Hand-Rolled Box _(2026-08-10)_
+
+`form-input`, `form-input-sm`, `form-checkbox`, `form-label`, `toggle-track` /
+`toggle-track-sm` / `toggle-track-md` and `toggle-knob` are defined in
+`styles/index.css` and are the app's standard at 800+ call sites. A hand-typed
+class string drifts: the 2026-08-10 sweep found **169 distinct strings for what
+is one control**, several of which had lost the 44px touch minimum or replaced
+the theme focus-ring token with a raw palette colour.
+
+```tsx
+// WRONG — re-typed box; drifts, and loses the mobile touch minimum
+<input className="w-full rounded-md border border-theme-surface-border px-3 py-2 focus:ring-1 focus:ring-violet-500" />
+
+// CORRECT — width and other per-call-site concerns still go on the element
+<input className="form-input w-28" />
+```
+
+Widths, icon padding, alignment, responsive sizes, disabled states and shadows
+stay at the call site — their standalone rules are emitted **after** the
+composite utility, so they still win.
+
+**Rule:** Reach for the utility first. If a new shared pattern is needed, define
+it as an `@utility` under the matching group header in `styles/index.css` rather
+than assembling it at the call site — that is what left `toggle-knob` in the
+sheet with no matching track and fifteen hand-built switches around it.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.
 
 ### Required (Production)
 
-| Variable | Purpose |
-|----------|---------|
-| `SECRET_KEY` | JWT signing key (64+ chars) |
-| `ENCRYPTION_KEY` | AES-256 key (64-char hex) |
-| `ENCRYPTION_SALT` | Key derivation salt (32-char hex) |
-| `DB_PASSWORD` | MySQL user password |
-| `MYSQL_ROOT_PASSWORD` | MySQL root password |
-| `REDIS_PASSWORD` | Redis auth password |
-| `ALLOWED_ORIGINS` | Comma-separated CORS origins |
+| Variable              | Purpose                           |
+| --------------------- | --------------------------------- |
+| `SECRET_KEY`          | JWT signing key (64+ chars)       |
+| `ENCRYPTION_KEY`      | AES-256 key (64-char hex)         |
+| `ENCRYPTION_SALT`     | Key derivation salt (32-char hex) |
+| `DB_PASSWORD`         | MySQL user password               |
+| `MYSQL_ROOT_PASSWORD` | MySQL root password               |
+| `REDIS_PASSWORD`      | Redis auth password               |
+| `ALLOWED_ORIGINS`     | Comma-separated CORS origins      |
 
 Generate secrets:
+
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(64))"   # SECRET_KEY
 python3 -c "import secrets; print(secrets.token_hex(32))"        # ENCRYPTION_KEY
@@ -687,28 +851,28 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 
 ### Core Application
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ENVIRONMENT` | `development` | `development`, `staging`, or `production` |
-| `DEBUG` | `false` | Never `true` in production |
-| `DB_HOST` | `localhost` | MySQL hostname (`mysql` in Docker) |
-| `DB_PORT` | `3306` | MySQL port |
-| `DB_NAME` | `intranet_db` | Database name |
-| `DB_USER` | `intranet_user` | Database user |
-| `REDIS_HOST` | `localhost` | Redis hostname (`redis` in Docker) |
-| `REDIS_PORT` | `6379` | Redis port |
-| `FRONTEND_PORT` | `3000` | Frontend exposed port |
-| `BACKEND_PORT` | `3001` | Backend exposed port |
-| `LOG_LEVEL` | `INFO` | Logging level |
-| `ENABLE_DOCS` | `true` | API docs at `/docs` (disable in prod) |
+| Variable        | Default         | Purpose                                   |
+| --------------- | --------------- | ----------------------------------------- |
+| `ENVIRONMENT`   | `development`   | `development`, `staging`, or `production` |
+| `DEBUG`         | `false`         | Never `true` in production                |
+| `DB_HOST`       | `localhost`     | MySQL hostname (`mysql` in Docker)        |
+| `DB_PORT`       | `3306`          | MySQL port                                |
+| `DB_NAME`       | `intranet_db`   | Database name                             |
+| `DB_USER`       | `intranet_user` | Database user                             |
+| `REDIS_HOST`    | `localhost`     | Redis hostname (`redis` in Docker)        |
+| `REDIS_PORT`    | `6379`          | Redis port                                |
+| `FRONTEND_PORT` | `3000`          | Frontend exposed port                     |
+| `BACKEND_PORT`  | `3001`          | Backend exposed port                      |
+| `LOG_LEVEL`     | `INFO`          | Logging level                             |
+| `ENABLE_DOCS`   | `true`          | API docs at `/docs` (disable in prod)     |
 
 ### Frontend (Vite)
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `VITE_API_URL` | `/api/v1` | API base URL |
-| `VITE_BACKEND_URL` | `http://localhost:3001` | Backend URL for Vite dev proxy |
-| `VITE_SESSION_KEY` | (random per session) | Onboarding session encryption key — set a 32+ char value in production |
+| Variable           | Default                 | Purpose                                                                |
+| ------------------ | ----------------------- | ---------------------------------------------------------------------- |
+| `VITE_API_URL`     | `/api/v1`               | API base URL                                                           |
+| `VITE_BACKEND_URL` | `http://localhost:3001` | Backend URL for Vite dev proxy                                         |
+| `VITE_SESSION_KEY` | (random per session)    | Onboarding session encryption key — set a 32+ char value in production |
 
 ### Optional Services
 

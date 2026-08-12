@@ -20,11 +20,13 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
 from app.models.user import User
 from app.schemas.equipment_check import (
+    ApparatusInventoryResponse,
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
@@ -32,12 +34,21 @@ from app.schemas.equipment_check import (
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
     ComplianceReportResponse,
+    DeployedLotUpdateRequest,
     EquipmentCheckCompleteItems,
     EquipmentCheckTemplateCreate,
     EquipmentCheckTemplateResponse,
     EquipmentCheckTemplateUpdate,
     FailureLogResponse,
+    InventoryLinkRequest,
+    InventoryLinkResponse,
+    InventoryMatchesResponse,
+    ItemDeployedLots,
+    ItemDeployment,
+    ItemQuantityRequest,
+    ItemRestockStateResponse,
     ItemTrendResponse,
+    ItemUsedRequest,
     LotSwapRequest,
     LotSwapResponse,
     ReorderRequest,
@@ -108,15 +119,28 @@ async def list_templates(
     apparatus_type: str | None = Query(None),
     check_timing: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    # EC-7: view OR submit (see get_shift_checklists). The member-facing
+    # "Start a Check" picker lists templates to choose from, so gating this
+    # behind the officer's view permission leaves the picker empty for the
+    # people the feature is for.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """List equipment check templates with optional filters."""
     service = EquipmentCheckService(db)
+    permissions = _collect_user_permissions(current_user)
+    visible_positions = None
+    if not _has_permission("equipment_check.view", permissions):
+        visible_positions = await service.get_user_check_positions(
+            str(current_user.id), str(current_user.organization_id)
+        )
     return await service.list_templates(
         organization_id=current_user.organization_id,
         apparatus_id=apparatus_id,
         apparatus_type=apparatus_type,
         check_timing=check_timing,
+        visible_positions=visible_positions,
     )
 
 
@@ -127,11 +151,27 @@ async def list_templates(
 async def get_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    # EC-7: view OR submit (see get_shift_checklists). This is the endpoint the
+    # check form itself loads — the member taps "Start Check" on a checklist
+    # assigned to them, and without submit here the form never opens, so the
+    # whole start/end-of-shift flow 403s for the crew it is meant for.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
-    template = await service.get_template(template_id, current_user.organization_id)
+    permissions = _collect_user_permissions(current_user)
+    visible_positions = None
+    if not _has_permission("equipment_check.view", permissions):
+        visible_positions = await service.get_user_check_positions(
+            str(current_user.id), str(current_user.organization_id)
+        )
+    template = await service.get_template(
+        template_id,
+        current_user.organization_id,
+        visible_positions=visible_positions,
+    )
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     return template
@@ -190,15 +230,26 @@ async def delete_template(
     deleted = await service.delete_template(template_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
-    await service.log_template_change(
-        organization_id=str(current_user.organization_id),
-        template_id=template_id,
+    # The deletion cannot be recorded in the template's own changelog:
+    # `template_change_logs.template_id` is a NOT NULL foreign key to the row
+    # being deleted, so the insert failed with MySQL 1452 and every template
+    # delete returned a 500. The changelog is also only ever read back per
+    # template (`GET /templates/{id}/changelog`), so a surviving delete row
+    # would be unreachable anyway. A template's edit history dies with the
+    # template; the fact that someone deleted it belongs in the org-wide
+    # audit log, which outlives both.
+    await log_audit_event(
+        db=db,
+        event_type="equipment_check_template_deleted",
+        event_category="equipment_check",
+        severity="warning",
+        event_data={
+            "template_id": template_id,
+            "template_name": tmpl_name,
+        },
         user_id=str(current_user.id),
-        user_name=_user_display_name(current_user),
-        action="delete",
-        entity_type="template",
-        entity_id=template_id,
-        entity_name=tmpl_name,
+        username=current_user.username,
+        organization_id=str(current_user.organization_id),
     )
     await db.commit()
 
@@ -228,6 +279,82 @@ async def clone_template(
         return template
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+# =====================================================================
+# Catalog Linking (template setup)
+# =====================================================================
+
+
+@router.get(
+    "/templates/{template_id}/inventory-matches",
+    response_model=InventoryMatchesResponse,
+)
+async def suggest_inventory_matches(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Propose a catalog item for each unlinked position on this template.
+
+    Read-only — nothing is linked until the reviewed set comes back through
+    ``POST /templates/{id}/inventory-links``.
+
+    **Requires permission: equipment_check.manage**
+    """
+    service = EquipmentCheckService(db)
+    result = await service.suggest_inventory_matches(
+        template_id, current_user.organization_id
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return result
+
+
+@router.post(
+    "/templates/{template_id}/inventory-links",
+    response_model=InventoryLinkResponse,
+)
+async def link_inventory_items(
+    template_id: str,
+    data: InventoryLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Apply a reviewed set of catalog links to this template's items.
+
+    **Requires permission: equipment_check.manage**
+    """
+    service = EquipmentCheckService(db)
+    try:
+        changed = await service.link_inventory_items(
+            template_id, current_user.organization_id, data.links
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if changed is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    if changed:
+        await service.log_template_change(
+            organization_id=str(current_user.organization_id),
+            template_id=template_id,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="update",
+            entity_type="template",
+            entity_id=template_id,
+            changes={
+                "inventory_links": data.links,
+                "changed_count": changed,
+            },
+        )
+        await db.commit()
+
+    coverage = await service.get_link_coverage(
+        template_id, current_user.organization_id
+    )
+    return {"linked": changed, "coverage": coverage or {}}
 
 
 # =====================================================================
@@ -551,7 +678,9 @@ async def submit_check(
     shift_id: str,
     data: ShiftEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Submit an equipment check for a shift."""
     service = EquipmentCheckService(db)
@@ -561,8 +690,13 @@ async def submit_check(
             organization_id=current_user.organization_id,
             checked_by=str(current_user.id),
             data=data.model_dump(exclude_unset=True),
+            allow_manage=_has_permission(
+                "equipment_check.manage", _collect_user_permissions(current_user)
+            ),
         )
         return check
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
@@ -877,12 +1011,18 @@ async def upload_check_item_photos(
             )
 
         # Optimize: resize, strip EXIF, convert to WebP
-        optimized = optimize_image(
-            contents,
-            max_size=(1920, 1080),
-            quality=80,
-            output_format="WEBP",
-        )
+        try:
+            optimized = optimize_image(
+                contents,
+                max_size=(1920, 1080),
+                quality=80,
+                output_format="WEBP",
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid image {upload.filename}: {safe_error_detail(exc)}",
+            ) from exc
         encoded = base64.b64encode(optimized).decode()
         data_uri = f"data:image/webp;base64,{encoded}"
         new_urls.append(data_uri)
@@ -1071,7 +1211,9 @@ async def export_csv(
                 "Period",
                 "Pass",
                 "Fail",
+                "Not Applicable",
                 "Not Checked",
+                "Not On Truck",
             ]
         )
         for t in data.get("trends", []):
@@ -1080,7 +1222,9 @@ async def export_csv(
                     t.get("period", ""),
                     t.get("pass_count", 0),
                     t.get("fail_count", 0),
+                    t.get("not_applicable_count", 0),
                     t.get("not_checked_count", 0),
+                    t.get("not_applicable_count", 0),
                 ]
             )
     else:
@@ -1283,6 +1427,224 @@ async def get_supply_expiring_items(
     )
 
 
+@router.get(
+    "/apparatus/{apparatus_id}/inventory",
+    response_model=ApparatusInventoryResponse,
+)
+async def get_apparatus_inventory(
+    apparatus_id: str,
+    db: AsyncSession = Depends(get_db),
+    # equipment_check.submit is the default member position: recording what you
+    # just used is crew work, not officer work, and gating it behind a manage
+    # permission is what leaves the gap for the next morning's check to find.
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.view", "equipment_check.submit", "inventory.view"
+        )
+    ),
+):
+    """What this apparatus is carrying right now, with the stock behind it.
+
+    Readable at any hour and outside any check — the standing view a crew opens
+    mid-shift rather than a scheduled, signed pass over the whole truck.
+    """
+    service = EquipmentCheckService(db)
+    result = await service.get_apparatus_inventory(
+        apparatus_id=apparatus_id,
+        organization_id=str(current_user.organization_id),
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Apparatus not found")
+    return result
+
+
+@router.post(
+    "/items/{template_item_id}/used",
+    response_model=ItemRestockStateResponse,
+)
+async def report_item_used(
+    template_item_id: str,
+    data: ItemUsedRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
+    ),
+):
+    """Report a checklist item used or pulled, at the time it happened.
+
+    Puts the item on the supply worklist immediately instead of leaving the
+    gap for the next crew's check to discover.
+    """
+    service = EquipmentCheckService(db)
+    result = await service.report_item_used(
+        template_item_id=template_item_id,
+        organization_id=str(current_user.organization_id),
+        user=current_user,
+        note=data.note,
+        quantity_used=data.quantity_used,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result
+
+
+@router.get(
+    "/items/{template_item_id}/deployed-lots",
+    response_model=ItemDeployedLots,
+)
+async def get_item_deployed_lots(
+    template_item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.view", "equipment_check.submit", "inventory.view"
+        )
+    ),
+):
+    """Which lots are on the truck for this position, and how many of each.
+
+    Listed soonest-to-expire first — the order a crew should draw from, and the
+    order consumption is applied in.
+    """
+    service = EquipmentCheckService(db)
+    result = await service.get_item_deployed_lots(
+        template_item_id=template_item_id,
+        organization_id=str(current_user.organization_id),
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result
+
+
+@router.put(
+    "/items/{template_item_id}/deployed-lots/{deployed_lot_id}",
+    response_model=ItemDeployedLots,
+)
+async def update_deployed_lot(
+    template_item_id: str,
+    deployed_lot_id: str,
+    data: DeployedLotUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
+    ),
+):
+    """Correct one lot aboard — count, lot number and expiration together.
+
+    This is how a crew that changed a drug out makes the application say what
+    the box in the bag says. Zero quantity removes the lot from the truck.
+    """
+    updates = data.model_dump(exclude_unset=True)
+    if {"lot_number", "expiration_date"} & updates.keys():
+        permissions = _collect_user_permissions(current_user)
+        can_manage_lot_metadata = _has_permission(
+            "equipment_check.manage", permissions
+        ) or _has_permission("inventory.manage", permissions)
+        if not can_manage_lot_metadata:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.update_deployed_lot(
+            template_item_id=template_item_id,
+            deployed_lot_id=deployed_lot_id,
+            organization_id=str(current_user.organization_id),
+            user=current_user,
+            updates=updates,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Deployed lot not found")
+    return result
+
+
+@router.put(
+    "/items/{template_item_id}/quantity",
+    response_model=ItemRestockStateResponse,
+)
+async def set_item_quantity(
+    template_item_id: str,
+    data: ItemQuantityRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
+    ),
+):
+    """Set how many of this item are on the truck right now.
+
+    A recount rather than a consumption: the crew saying what is actually in
+    the compartment, which is also how a drifted count gets put right without
+    inventing a use that never happened.
+    """
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.set_item_quantity(
+            template_item_id=template_item_id,
+            organization_id=str(current_user.organization_id),
+            user=current_user,
+            quantity=data.quantity,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result
+
+
+@router.delete(
+    "/items/{template_item_id}/used",
+    response_model=ItemRestockStateResponse,
+)
+async def clear_item_restock(
+    template_item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.manage", "inventory.manage")
+    ),
+):
+    """Withdraw a restock report — restocked by hand, or raised in error."""
+    service = EquipmentCheckService(db)
+    result = await service.clear_item_restock(
+        template_item_id=template_item_id,
+        organization_id=str(current_user.organization_id),
+        user=current_user,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result
+
+
+@router.get(
+    "/supply/item-deployments/{inventory_item_id}",
+    response_model=list[ItemDeployment],
+)
+async def get_item_deployments(
+    inventory_item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "inventory.view")
+    ),
+):
+    """Which apparatus checklists carry this inventory item, and what is on
+    each of them now.
+
+    The reverse of /supply/expiring-items: worked from an item in hand (a
+    recall, an expiring lot) rather than from a truck.
+    """
+    service = EquipmentCheckService(db)
+    return await service.get_item_deployments(
+        inventory_item_id=inventory_item_id,
+        organization_id=str(current_user.organization_id),
+    )
+
+
 @router.post(
     "/items/{template_item_id}/swap",
     response_model=LotSwapResponse,
@@ -1307,6 +1669,7 @@ async def swap_item_lot(
             inventory_lot_id=data.inventory_lot_id,
             organization_id=str(current_user.organization_id),
             user=current_user,
+            quantity=data.quantity,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

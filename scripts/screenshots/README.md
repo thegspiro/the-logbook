@@ -17,7 +17,7 @@ after a UI change refreshes the images rather than leaving stale ones behind.
 | `manifest.mjs`          | Declares each screenshot: which placeholder it fills, which route to visit, and any interaction needed                                                                                                                                                          |
 | `capture.mjs`           | Logs in, walks the manifest, writes PNGs to `docs/training/images/`, and records the result in `capture-report.json`                                                                                                                                            |
 | `apply_placeholders.py` | Rewrites the placeholder blocks in `docs/training/*.md` into `![alt](./images/....png)`                                                                                                                                                                         |
-| `status_report.py`      | Regenerates `docs/training/SCREENSHOT_STATUS.md`                                                                                                                                                                                                                |
+| `status_report.py`      | Regenerates `docs/training/SCREENSHOT_STATUS.md` (filled counts). Staleness of already-captured images is tracked by hand in `docs/training/SCREENSHOT_CURRENCY.md`                                                                                             |
 
 ## Running it
 

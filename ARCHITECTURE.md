@@ -107,7 +107,7 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/event-requests` | `event_requests.py` | event-requests | 18 |
 | `/api/v1/locations` | `locations.py` | locations | 6 |
 | `/api/v1/apparatus` | `apparatus.py` | apparatus | ~68 |
-| `/api/v1/equipment-checks` | `equipment_check.py` | equipment-checks | ~25 |
+| `/api/v1/equipment-checks` | `equipment_check.py` | equipment-checks | 43 |
 | `/api/v1/facilities` | `facilities.py` | facilities | ~28 |
 | `/api/v1/security` | `security_monitoring.py` | security | 13 |
 | `/api/v1/dashboard` | `dashboard.py` | dashboard | 4 |
@@ -185,6 +185,19 @@ These endpoints bridge data across modules:
 | `/users/{user_id}/property-return-report` | GET | Property return preview | Users + Inventory |
 | `/equipment-checks/shifts/{shift_id}/checklists` | GET | Applicable checklists for shift | Equipment Checks + Scheduling + Apparatus |
 | `/equipment-checks/reports/compliance` | GET | Apparatus compliance stats | Equipment Checks + Apparatus |
+| `/equipment-checks/supply/expiring-items` | GET | Positions expiring soon or reported used, with the ready stock behind each | Equipment Checks + Apparatus + Inventory |
+| `/equipment-checks/supply/item-deployments/{inventory_item_id}` | GET | The reverse lookup — which apparatus checklists carry this catalog item, and what each is holding now | Inventory → Equipment Checks + Apparatus |
+| `/equipment-checks/apparatus/{apparatus_id}/inventory` | GET | Standing view of one truck's tracked positions, lots aboard and ready stock | Equipment Checks + Apparatus + Inventory |
+| `/equipment-checks/items/{id}/swap` | POST | Move a ready lot onto a truck: decrement the shelf lot, record the deployed lot, log the change | Inventory → Equipment Checks |
+| `/equipment-checks/items/{id}/used` | POST/DELETE | Raise or withdraw a restock report at the moment of use | Equipment Checks + Inventory |
+| `/equipment-checks/items/{id}/quantity` | PUT | Recount a position; reconciles against the deployed lots | Equipment Checks + Inventory |
+| `/equipment-checks/items/{id}/deployed-lots` | GET | Lots aboard for one position, soonest-to-expire first | Equipment Checks + Inventory |
+| `/equipment-checks/items/{id}/deployed-lots/{lotId}` | PUT | Correct one lot — count, lot number and expiration together | Equipment Checks + Inventory |
+| `/equipment-checks/templates/{id}/inventory-matches` | GET | Propose a catalog item for every unlinked position (read-only) | Equipment Checks → Inventory |
+| `/equipment-checks/templates/{id}/inventory-links` | POST | Apply a reviewed set of catalog links | Equipment Checks → Inventory |
+| `/inventory/items/bulk` | POST | Create many catalog items in one pass; existing names skipped and reported | Inventory |
+| `/inventory/lots/bulk` | POST | Receive a delivery — one dated lot per line, all-or-nothing | Inventory (+ upstream of Equipment Checks) |
+| `/email-templates/footers` | GET/PUT | The department's footer library, with a live per-footer usage count | Organization → Communications |
 | `/scheduling/shifts/{id}/finalize` | POST | Finalize shift, snapshot data, auto-create draft reports | Scheduling + Training + Equipment Checks |
 | `/training/shift-reports/shift-preview/{shift_id}/{trainee_id}` | GET | Auto-populate report from shift data | Training + Scheduling |
 | `/training/shift-reports/officer-analytics` | GET | Org-wide shift report analytics | Training + Users |
@@ -212,9 +225,9 @@ These endpoints bridge data across modules:
 | `training.py` | TrainingCategory (+ `registry_code`), TrainingCourse (+ `program_id`), CourseClass, CourseCohort, CourseCohortClass, CourseCohortMember, TrainingRecord, TrainingRequirement (+ `include_current_month`), TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation, SkillCheckoff, ExternalTrainingProvider, ExternalCategoryMapping, ExternalUserMapping, ExternalTrainingSyncLog, ExternalTrainingImport (+ `credit_hours`), Shift, ShiftAttendance, ShiftCall, ShiftCompletionReport | training_categories, training_courses, course_classes, course_cohorts, course_cohort_classes, course_cohort_members, training_records, training_requirements, training_sessions, training_approvals, training_programs, program_phases, program_requirements, program_milestones, program_enrollments, requirement_progress, skill_evaluations, skill_checkoffs, external_training_providers, external_category_mappings, external_user_mappings, external_training_sync_logs, external_training_imports, shifts, shift_attendance, shift_calls, shift_completion_reports |
 | `skills_testing.py` | SkillTemplate, SkillTest | skill_templates, skill_tests |
 | `election.py` | Election, Candidate, Vote, VotingToken | elections, candidates, ballots, voting_tokens |
-| `inventory.py` | InventoryCategory, InventoryItem, ItemAssignment, CheckOutRecord, MaintenanceRecord, StorageArea, InventoryNotificationQueue (+ `attempt_count`, `last_attempt_at`) | inventory_categories, inventory_items, item_assignments, inventory_checkouts, maintenance_records, storage_areas, inventory_notification_queue |
+| `inventory.py` | InventoryCategory, InventoryItem, InventoryLot, ItemAssignment, ItemIssuance, IssuanceAllowance, CheckOutRecord, MaintenanceRecord, DepartureClearance, DepartureClearanceItem, InventoryNotificationQueue (+ `attempt_count`, `last_attempt_at`), PropertyReturnReminder, EquipmentRequest, StorageArea, WriteOffRequest, NFPAItemCompliance, NFPAInspectionDetail, NFPAExposureRecord, ReturnRequest, ReorderRequest, ItemVariantGroup, EquipmentKit, EquipmentKitItem, MemberSizePreferences, InventoryImpactPlan | inventory_categories, inventory_items, inventory_lots, item_assignments, item_issuances, issuance_allowances, checkout_records, maintenance_records, departure_clearances, departure_clearance_items, inventory_notification_queue, property_return_reminders, equipment_requests, storage_areas, inventory_write_offs, nfpa_item_compliance, nfpa_inspection_details, nfpa_exposure_records, return_requests, reorder_requests, item_variant_groups, equipment_kits, equipment_kit_items, member_size_preferences, inventory_impact_plans |
 | `compliance_config.py` | ComplianceConfig (+ `include_current_month`), ComplianceProfile, ComplianceReport | compliance_configs, compliance_profiles, compliance_reports |
-| `apparatus.py` | Apparatus, ApparatusType, ApparatusStatus, ApparatusCustomField, ApparatusPhoto, ApparatusDocument, ApparatusMaintenanceType, ApparatusMaintenance, ApparatusFuelLog, ApparatusOperator, ApparatusEquipment, ApparatusLocationHistory, ApparatusStatusHistory, ApparatusNFPACompliance, ApparatusReportConfig, EquipmentCheckTemplate, CheckTemplateCompartment, CheckTemplateItem, ShiftEquipmentCheck, ShiftEquipmentCheckItem | apparatus, apparatus_types, apparatus_statuses, apparatus_custom_fields, apparatus_photos, apparatus_documents, apparatus_maintenance_types, apparatus_maintenance, apparatus_fuel_logs, apparatus_operators, apparatus_equipment, apparatus_location_history, apparatus_status_history, apparatus_nfpa_compliance, apparatus_report_configs, equipment_check_templates, check_template_compartments, check_template_items, shift_equipment_checks, shift_equipment_check_items |
+| `apparatus.py` | Apparatus, ApparatusType, ApparatusStatus, ApparatusCustomField, ApparatusPhoto, ApparatusDocument, ApparatusMaintenanceType, ApparatusMaintenance, ApparatusFuelLog, ApparatusOperator, ApparatusEquipment, ApparatusLocationHistory, ApparatusStatusHistory, ApparatusNFPACompliance, ApparatusReportConfig, EquipmentCheckTemplate, CheckTemplateCompartment, CheckTemplateItem, ShiftEquipmentCheck, ShiftEquipmentCheckItem, CheckItemDeployedLot | apparatus, apparatus_types, apparatus_statuses, apparatus_custom_fields, apparatus_photos, apparatus_documents, apparatus_maintenance_types, apparatus_maintenance, apparatus_fuel_logs, apparatus_operators, apparatus_equipment, apparatus_location_history, apparatus_status_history, apparatus_nfpa_compliance, apparatus_report_configs, equipment_check_templates, check_template_compartments, check_template_items, shift_equipment_checks, shift_equipment_check_items, check_item_deployed_lots |
 | `facilities.py` | Facility, FacilityType, FacilityStatus, FacilityPhoto, FacilityDocument, FacilityMaintenanceType, FacilityMaintenance, FacilitySystem, FacilityInspection, FacilityUtilityAccount, FacilityUtilityReading, FacilityAccessKey, FacilityRoom, FacilityEmergencyContact, FacilityShutoffLocation, FacilityCapitalProject, FacilityInsurancePolicy, FacilityOccupant, FacilityComplianceChecklist, FacilityComplianceItem, FacilityCategory | facilities, facility_types, facility_statuses, facility_photos, facility_documents, facility_maintenance_types, facility_maintenance, facility_systems, facility_inspections, facility_utility_accounts, facility_utility_readings, facility_access_keys, facility_rooms, facility_emergency_contacts, facility_shutoff_locations, facility_capital_projects, facility_insurance_policies, facility_occupants, facility_compliance_checklists, facility_compliance_items, facility_categories |
 | `meeting.py` | Meeting, MeetingAttendee, MeetingActionItem | meetings, meeting_attendees, meeting_action_items |
 | `minute.py` | MeetingMinutes, MinutesTemplate, Motion, ActionItem | meeting_minutes, minute_templates, motions, action_items |
@@ -392,9 +405,9 @@ All services in `backend/app/services/`:
 | `skills_testing_service.py` | SkillsTestingService | SkillTemplate, SkillTest | create_template, publish_template, create_test, complete_test, calculate_score; module-level `calculate_test_result()` (extracted, unit-tested scoring) |
 | `scheduling_service.py` | SchedulingService | Shift, ShiftAttendance, ShiftCall, ShiftTemplate, ShiftPattern, ShiftAssignment, ShiftSwapRequest, ShiftTimeOff | create_shift, manage_attendance, create_template, create_pattern, generate_shifts, manage_assignments, manage_swap_requests, manage_time_off, get_reports, finalize_shift |
 | `election_service.py` | ElectionService | Election, Candidate, Vote, VotingToken | create_election, open_election, close_election, cast_vote, get_results, verify_integrity, manage_proxy_voting |
-| `inventory_service.py` | InventoryService | InventoryItem, InventoryCategory, ItemAssignment, CheckOutRecord | create_item, assign_item, checkout, checkin, get_summary, import_csv, generate_labels |
+| `inventory_service.py` | InventoryService | InventoryItem, InventoryCategory, ItemAssignment, CheckOutRecord, InventoryLot | create_item, create_items_bulk, assign_item, checkout, checkin, get_summary, import_csv, generate_labels, add_lots_bulk, ready-lot-stock helper (shared by the reorder alert, the items grid and the CSV export) |
 | `apparatus_service.py` | ApparatusService | Apparatus, ApparatusType, ApparatusStatus, ApparatusMaintenance | create_apparatus, manage_types, manage_statuses, manage_maintenance, manage_fuel_logs, manage_operators, manage_equipment |
-| `equipment_check_service.py` | EquipmentCheckService | EquipmentCheckTemplate, ShiftEquipmentCheck | manage_templates, manage_compartments, manage_items, submit_check, get_reports, manage_photos |
+| `equipment_check_service.py` | EquipmentCheckService | EquipmentCheckTemplate, ShiftEquipmentCheck, CheckTemplateItem, CheckItemDeployedLot, InventoryLot | manage_templates, manage_compartments, manage_items, submit_check, get_reports, manage_photos, suggest_inventory_matches, link_inventory_items, get_link_coverage, get_supply_overview, get_apparatus_inventory, report_item_used, clear_item_restock, set_item_quantity, get_item_deployed_lots, update_deployed_lot, swap_item_lot, get_item_deployments |
 | `facilities_service.py` | FacilitiesService | Facility, FacilityType, FacilityMaintenance, FacilityInspection | create_facility, manage_maintenance, manage_inspections, manage_utility_readings |
 | `location_service.py` | LocationService | Location | create_location, update_location, get_display_info |
 | `meetings_service.py` | MeetingsService | Meeting, MeetingAttendee, MeetingActionItem | create_meeting, manage_attendees, manage_action_items, create_from_event |
@@ -441,6 +454,9 @@ All services in `backend/app/services/`:
 | `ip_security_service.py` | IPSecurityService | IP blocking and geofencing |
 | `security_monitoring.py` | SecurityMonitoringService | Intrusion detection, data exfiltration checks |
 | `template_service.py` | TemplateService | Jinja2 email template rendering |
+| `email_theme.py` | (module constants/functions) | **One** stylesheet, document shell and table style for every outbound email _(2026-08-10)_. Shared by the template service, the storefront and the election report, which previously carried three copies with drifting hex codes |
+| `email_footers.py` | (module functions) | The department's named footer library, read from and written to `Organization.settings`. `read_library()` seeds on first read and **falls back to the seeded library on malformed settings rather than raising — mail has to keep going out** |
+| `name_matching.py` | (module functions) | Normalized name scoring behind the checklist→catalog match proposals. Returns `exact` / `strong` / `weak`; **only `exact` is ever pre-selected**, because "Oxygen Mask" scores high against both the adult and the pediatric mask |
 | `training_period.py` | (module functions) | Compliance evaluation-period helpers: `effective_include_current_month()` (per-requirement override resolving against org config), `resolve_as_of_date()` (as-of date for current vs prior month) |
 | `scheduled_tasks.py` | ScheduledTasksService | Background task execution |
 
@@ -620,6 +636,8 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | `/scheduling/equipment-check-templates/new` | EquipmentCheckTemplateBuilder | `equipment_check.manage` |
 | `/scheduling/equipment-check-templates/:templateId` | EquipmentCheckTemplateBuilder | `equipment_check.manage` |
 | `/scheduling/equipment-check-reports` | EquipmentCheckReportsPage | `equipment_check.manage` |
+| `/scheduling/supply/expiring` | SupplyExpiringPage | any of `scheduling.manage`, `equipment_check.view`, `inventory.view` |
+| `/scheduling/apparatus-inventory` | ApparatusInventoryPage | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
 
 #### Facilities & Locations
 
@@ -795,6 +813,7 @@ Creates axios instances with:
 | apparatus | `store/apparatusStore.ts` | `useApparatusStore` | apparatus, types, statuses, fleetSummary, pagination |
 | communications | `store/emailTemplatesStore.ts` | `useEmailTemplatesStore` | templates, selectedTemplate, isLoading |
 | communications | `store/scheduledEmailsStore.ts` | `useScheduledEmailsStore` | scheduledEmails, isLoading |
+| communications | `store/footersStore.ts` | `useFootersStore` | footers, defaultKey, variables, usage counts _(2026-08-10)_ |
 | membership | `store/membershipStore.ts` | `useMembershipStore` | members, stats, filters, pagination |
 | onboarding | `store/onboardingStore.ts` | `useOnboardingStore` | currentStep, organizationData, sessionId |
 | prospective-members | `store/prospectiveMembersStore.ts` | `useProspectiveMembersStore` | pipelines, applicants, kanbanData, stats, inactivitySettings |
@@ -852,7 +871,7 @@ Creates axios instances with:
 | admin | Y | Y | — | — | — | — | — | — |
 | admin-hours | Y | Y | Y (4) | Y | Y | Y | Y | — |
 | apparatus | Y | Y | Y (3) | Y (2) | Y | Y | Y | — |
-| communications | Y | Y | Y (1) | Y (5) | Y | Y (2) | Y | 4 files |
+| communications | Y | Y | Y (3) | Y (18) | Y | Y (3) | Y | 5 files |
 | documents | Y | Y | — | — | — | — | — | — |
 | elections | Y | Y | — | — | — | — | — | — |
 | events | Y | Y | — | — | — | — | — | — |
@@ -860,7 +879,7 @@ Creates axios instances with:
 | forms | Y | Y | — | — | — | — | — | — |
 | grants-fundraising | Y | Y | Y (8) | — | Y | Y | Y | — |
 | integrations | Y | Y | — | — | — | — | — | — |
-| inventory | Y | Y | Y (2) | — | — | — | — | — |
+| inventory | Y | Y | Y (2) | Y (11) | — | — | Y | 3 files |
 | membership | Y | Y | — | — | — | Y | Y | — |
 | minutes | Y | Y | — | — | — | — | — | — |
 | notifications | Y | Y | — | — | — | — | — | — |
@@ -868,7 +887,7 @@ Creates axios instances with:
 | prospective-members | Y | Y | Y (3) | Y (7) | Y | Y | Y | — |
 | public-portal | Y | Y | Y (1) | Y (5) | Y | — | Y | — |
 | reports | Y | Y | Y (1) | Y | Y | Y | Y | — |
-| scheduling | Y | Y | — | Y (2) | Y | Y | Y | 1 file |
+| scheduling | Y | Y | — | Y (28) | Y | Y | Y | 9 files |
 | settings | Y | Y | — | — | — | — | — | — |
 | training | Y | Y | Y (36) | Y (9) | — | Y | — | 10 files |
 
@@ -907,6 +926,110 @@ Frontend:
   authStore.checkPermission("resource.action") → checks against cached permissions
   Navigation items gated by checkPermission() + isModuleOn()
 ```
+
+### Partial-Update Flow _(2026-08-09)_
+
+```
+Edit form → blankToNull(value) / numberOrNull(value)   [utils/formValues.ts]
+  → PATCH body carries: omitted key | null | value
+  → Pydantic {Resource}Update, dumped model_dump(exclude_unset=True)
+     (NOT exclude_none — that strips the clears a layer early)
+  → service: apply_updates(instance, updates, skip={tenancy/identity columns})
+       omitted  -> untouched
+       value    -> written
+       null     -> cleared, or ValueError -> 400 if the column is NOT NULL
+       unknown  -> ValueError, rather than silently dropped
+```
+
+The three states are distinct end to end. On **create** the opposite coercion
+applies — `|| undefined` omits blanks so `""` never reaches a validator. Getting
+this backwards is what let a cleared field return after a reload behind a success
+toast, and what left a requirement grading against a stale `required_hours` after
+being switched from hours to shifts. See CLAUDE.md pitfall #1.
+
+### Guest Check-In Flow _(2026-08-09)_
+
+```
+Visitor scans the guest QR on a room display
+  → GET  /api/public/v1/display/{code}/events/{id}/guest        (no auth)
+       resolve org FROM THE DISPLAY CODE, never from the request
+       require event.allow_guest_check_in AND event held in that room
+       → event name/type/time/room + is_open (description withheld)
+  → POST /api/public/v1/display/{code}/events/{id}/guest-check-in
+       per-IP limiter · per-event daily cap · honeypot (fake 201)
+       organizer's check-in window, minus the member early-arrival grace
+       → EventExternalAttendee (source='kiosk_qr')                [always]
+       → ProspectiveMember + ProspectEventLink                    [if opted in
+         and an email was supplied; failures logged and swallowed]
+       → attendee.prospect_id (SET NULL, so purging a prospect
+         never destroys the attendance)
+```
+
+Cross-module: this is the one path where **Events writes into the Membership
+Pipeline**, and it is the reason `event_external_attendees` carries a
+`prospect_id` at all.
+
+### Shelf-to-Truck Supply Flow _(2026-08-10)_
+
+The path an expiration date takes between Inventory and the Equipment Check
+system. Before this existed the two records never spoke: the truck's contents
+and the shelf stock behind them were separate ledgers.
+
+```
+Catalog                     Position on a truck              What a crew does
+─────────────────────────   ──────────────────────────────   ───────────────────
+InventoryItem
+  └ InventoryLot (dated)    CheckTemplateItem
+      quantity                inventory_item_id ────────────┐ link (quick-add
+      expiration_date         required_quantity             │  search, or the
+      │                       expected_quantity             │  reviewed bulk
+      │                       quantity_on_truck  ◄── NULL = │  match pass)
+      │                       restock_needed         never  │
+      │                       lot_number / expiration_date  │  (legacy single-lot
+      │                                                     │   columns; still
+      │                       CheckItemDeployedLot[]  ◄─────┘   written, no longer
+      └──── swap ──────────►    inventory_lot_id (SET NULL)     authoritative)
+            −N on the lot       lot_number    ┐ snapshotted
+            +N on the truck     expiration_date┘ so a deleted
+                                quantity         shelf lot does not
+                                                 erase the truck's record
+```
+
+**Derived, not stored.** A position's on-truck count is the **sum** of its
+deployed lots; its expiration is the **earliest** of them. The supply worklist,
+the apparatus inventory page, the equipment-check form and the item-to-apparatus
+lookup all read those two derivations rather than `CheckTemplateItem`'s own
+columns.
+
+**Write paths into `quantity_on_truck` / `CheckItemDeployedLot`:**
+
+| Entry point | Endpoint | Effect |
+|---|---|---|
+| Minus on the apparatus page | `POST /equipment-checks/items/{id}/used` | Consumption — draws **first-expiring-first-out**, raises a restock report |
+| Plus / recount | `PUT /equipment-checks/items/{id}/quantity` | Reconciles against the lots: short comes off soonest-first, over lands in an **undated** row |
+| Correct one lot | `PUT /equipment-checks/items/{id}/deployed-lots/{lotId}` | Count, lot number and expiration together; zero quantity removes the lot |
+| Swap fresh stock | `POST /equipment-checks/items/{id}/swap` | `−N` on `inventory_lots.quantity`, `+N` as a deployed lot, `swap` changelog entry, clears the restock report |
+| Withdraw a report | `DELETE /equipment-checks/items/{id}/used` | Clears the flag, reporter and note together |
+| Submitting an equipment check | `POST /equipment-checks/shifts/{id}/submit` | A **recount** — a crew at the compartment outranks a running total that has drifted; `expiration_found` / `lot_found` / `serial_found` are written back onto the template item |
+
+**Permissions.** Everything in that table is crew work and sits behind
+`equipment_check.submit` (the default member position) as well as the manage
+permissions. Requiring an officer to record a replacement is what leaves the
+bracket empty until morning. Reading — `GET .../apparatus/{id}/inventory`,
+`GET .../items/{id}/deployed-lots` — additionally accepts `equipment_check.view`
+or `inventory.view`.
+
+**Guards worth knowing:**
+
+- **Expired shelf stock is not ready stock.** Excluded from `ready_stock`, flagged
+  in the payload, struck through in the UI and **refused by the swap** — putting
+  it in service would fail the item on the next check.
+- **Expiry is decided server-side**, recomputed from the soonest date aboard
+  rather than from a client-supplied `is_expired` flag, because that flag is what
+  force-fails a safety-critical item.
+- **On-hand comes from in-date lots** for any item that has them and from
+  `InventoryItem.quantity` for the rest. One shared helper backs the reorder
+  alert, the items grid and the CSV export so the three cannot disagree.
 
 ### Module Availability Flow
 
@@ -962,6 +1085,16 @@ HIPAA exclusions (UNCACHEABLE_PREFIXES):
 | Users | Notifications | User notification preferences | `NotificationRule` per user/org |
 | Scheduling | Apparatus | Equipment check templates per apparatus | `equipment_check_template.apparatus_id` FK |
 | Scheduling | Apparatus | Deficiency flag from failed checks | `apparatus.has_deficiency` set by check results |
+| Scheduling | Inventory | Checklist position → catalog item | `check_template_items.inventory_item_id` FK (set at add time by the quick-add search, or in bulk via `GET`/`POST /equipment-checks/templates/{id}/inventory-matches` / `-links`) |
+| Scheduling | Inventory | Lots physically aboard a position | `check_item_deployed_lots.inventory_lot_id` FK (`SET NULL`; lot number and expiration are **snapshotted** so a consumed shelf lot does not erase the truck's record) |
+| Scheduling | Inventory | Swap ready stock onto a truck | `POST /equipment-checks/items/{id}/swap` — decrements `inventory_lots.quantity`, writes a `CheckItemDeployedLot`, logs a `swap` changelog entry |
+| Scheduling | Inventory | "What is expiring on my trucks", with the stock behind it | `GET /equipment-checks/supply/expiring-items` |
+| Inventory | Scheduling | "Which trucks carry this item" (the reverse lookup) | `GET /equipment-checks/supply/item-deployments/{inventory_item_id}` |
+| Inventory | Scheduling | On-hand counted from in-date lots, not `quantity` | Shared ready-lot-stock helper backs the reorder alert, the items grid and the CSV export |
+| Scheduling | Notifications | Weekly expiring-supply alert | `supply_expiration_alerts` in `scheduled_tasks.py`, split by whether an in-date lot is behind each row |
+| Organization | Communications | Email footer library | `Organization.settings["email_footers"]` → `{{footer_html}}` / `{{footer_text}}`, resolved by `build_context` a step before the template body |
+| Organization | Communications | Department fields as template variables | `ORGANIZATION_FIELD_VARIABLES` (offered) / `ORGANIZATION_FIELDS_WITHOUT_VARIABLES` (withheld, with a reason) |
+| Communications | Email Templates | Which footer a template closes with | `email_templates.footer_key` (NULL = the library's `default_key`) |
 | Scheduling | Notifications | Persistent dept. messages on dashboard | `DepartmentMessage.is_persistent` flag |
 | Inventory | Camera/Scanner | Barcode/QR lookup via camera | `GET /inventory/lookup` from `InventoryScanModal` |
 | Members | Camera/Scanner | Member ID QR/barcode lookup | `GET /users` from `MemberIdScannerModal` / `MemberScanPage` |
@@ -1250,10 +1383,17 @@ All permissions follow dot notation: `resource.action`
 |------|---------|
 | `utils/apiCache.ts` | In-memory SWR cache for axios |
 | `utils/errorHandling.ts` | `toAppError()`, `getErrorMessage()` |
-| `utils/dateFormatting.ts` | Timezone-aware date/time formatting |
+| `utils/dateFormatting.ts` | Timezone-aware date/time formatting. **`formatCalendarDate()`** _(2026-08-10)_ is the exception that anchors and formats in **UTC** — a `shift_date` is a calendar date with no time and no zone, so padding it to `T00:00:00` and handing it to a zone-aware formatter renders yesterday for any viewer west of the browser's offset |
 | `utils/lazyWithRetry.ts` | Retry-capable `React.lazy()` for chunk loading |
 | `utils/simpleMarkdown.ts` | React-based safe markdown renderer (bold, italic, links, lists) — replaces dangerouslySetInnerHTML |
 | `utils/colorContrast.ts` | WCAG AA contrast ratio calculation, accessible text color generation |
+| `utils/formValues.ts` | `blankToNull()`, `numberOrNull()` — **update**-path coercions. Create payloads omit blanks (`\|\| undefined`); update payloads must send an explicit `null`, because the backend's `exclude_unset` dump reads an omitted key as "leave alone" |
+| `utils/csv.ts` | RFC 4180 CSV parser _(2026-08-10)_. Replaces three hand-rolled `split(',')` readers — a supply catalog is exactly the data that breaks them: `"Gauze Pads, 4x4 Sterile"` is **one** field, and splitting on commas shifted every column after it |
+| `utils/displayValue.ts` | `enumLabel()` — turns a stored `snake_case` value into a display label. CSS `capitalize` uppercases the first letter of each *word*, and a snake_case value is one word, so `deputy_chief` rendered as "Deputy_chief". Moved here from `facilities/types` _(2026-08-10)_ and re-exported there so the 27 existing imports keep working |
+| `utils/checklistItems.ts` | Normalizes a checklist requirement's steps between the legacy bare-string shape and `{id, text, member_visible}` |
+| `contexts/ConfirmContext.tsx` | `ConfirmProvider` + `useConfirm()` — the promise-based replacement for `window.confirm`. Mounted **once** at the app root, above the router so public routes get one too; the hook **throws** without a provider rather than returning an unsafe default |
+| `components/settings/SettingsLayout.tsx` | The shared settings shell — section sidebar on desktop, tab strip on phones, `aria-current`, `?tab=` mirroring. Used by Organization, Events and Scheduling settings |
+| `components/ux/PromptDialog.tsx` | Single-value in-app prompt replacing `window.prompt`, with validation shown rather than swallowed |
 | `hooks/useEmailListInput.ts` | Shared email list input hook with validation, add/remove, and state management |
 | `hooks/useHtml5Scanner.ts` | Reusable HTML5 QR/barcode scanner hook with camera fallback logic |
 | `hooks/useNotificationPoller.ts` | Smart notification polling with Page Visibility API pause/resume |
@@ -1293,6 +1433,7 @@ The `WebSocketManager` (`core/websocket_manager.py`) manages connections per org
 | `send_shift_reminders` | Every 30 min | Sends start-of-shift reminders within configurable lookahead window (default 2 hours). Includes equipment checklist info |
 | `end_of_shift_summary` | Every 30 min | Sends each member who attended a shift an end-of-shift summary (email + in-app) with hours, calls, and a link to their completion report |
 | `trainee_report_escalation` | Daily 08:00 | Escalates approved shift completion reports awaiting trainee acknowledgment beyond the configured window (default 7 days) |
+| `supply_expiration_alerts` | Weekly | Reports both ends of the shelf-to-truck loop together: checklist positions expiring soon or reported used, **split by whether an in-date lot is actually behind them** ("swap it" and "order it" are different jobs). Weekly rather than daily because an item that has *already* expired force-fails its apparatus on every check and notifies through that path |
 | `cleanup_old_notifications` | Daily | Purges read notifications older than configurable retention period |
 
 ### Admin API for Tasks

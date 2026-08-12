@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -66,6 +66,7 @@ from app.models.user import (
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels
+from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 
 # Valid status→condition combinations.  If a status is listed here,
@@ -100,6 +101,39 @@ BARCODE_MIN_DIGITS = 6
 def _format_sequential_barcode(prefix: str, number: int) -> str:
     """Render a sequential barcode, e.g. ``INV-000001``."""
     return f"{prefix}{number:0{BARCODE_MIN_DIGITS}d}"
+
+
+# Sizes whose display form is not just the code upper-cased. Mirrors the
+# frontend's STANDARD_SIZES labels so an item named here matches the label the
+# member picked from.
+_SIZE_LABELS = {
+    "xxl": "XXL",
+    "xxxl": "3XL",
+    "xxxxl": "4XL",
+    "one_size": "One Size",
+    "custom": "Custom",
+}
+
+
+def _size_label(size: str) -> str:
+    """Display form of a stored size code — ``l`` reads as ``L``.
+
+    Numeric sizes (boot 10.5, waist 34) are returned unchanged; upper-casing
+    them would be a no-op but the explicit path keeps that obvious.
+    """
+    code = (size or "").strip()
+    if not code:
+        return ""
+    # Accept a value that has already been through here ("One Size") as well as
+    # the stored code ("one_size").
+    key = code.lower().replace(" ", "_")
+    if key in _SIZE_LABELS:
+        return _SIZE_LABELS[key]
+    if any(character.isdigit() for character in code):
+        return code
+    if "_" in code or " " in code:
+        return code.replace("_", " ").title()
+    return code.upper()
 
 
 # Supported extra-line field keys that can be requested on labels.
@@ -693,7 +727,12 @@ class InventoryService:
             query = query.where(InventoryItem.category_id.in_(select(cat_subq)))
 
         if assigned_to:
-            query = query.where(InventoryItem.assigned_to_user_id == assigned_to)
+            # str(): the column is String(36) and the parameter is a UUID, so
+            # the comparison bound a UUID against a char column and matched
+            # nothing at all — "everything issued to this member" answered
+            # "nothing" for every member. Every other id filter here already
+            # casts; this one was the exception.
+            query = query.where(InventoryItem.assigned_to_user_id == str(assigned_to))
 
         if location_id:
             query = query.where(InventoryItem.location_id == str(location_id))
@@ -753,7 +792,33 @@ class InventoryService:
         result = await self.db.execute(query)
         items = list(result.scalars().all())
 
+        await self._attach_lot_stock(str(organization_id), items)
+
         return items, total
+
+    async def _attach_lot_stock(
+        self, organization_id: str, items: List[InventoryItem]
+    ) -> None:
+        """Hang ready-lot figures on each item for the response schema.
+
+        ``quantity`` and stock lots are separate ledgers: receiving a lot does
+        not touch the column, and an equipment-check swap decrements only the
+        lot. A grid that shows ``quantity`` alone therefore reports a stale
+        number for every consumable a department keeps as dated stock, which is
+        the same disagreement the reorder alert had to be taught about.
+
+        Transient attributes rather than mapped columns — nothing is persisted
+        and no flush is triggered; they exist to be read by
+        ``InventoryItemResponse``.
+        """
+        if not items:
+            return
+        totals = await self._in_date_lot_totals(
+            organization_id, [item.id for item in items]
+        )
+        for item in items:
+            item.is_lot_stocked = item.id in totals
+            item.lot_stock = totals.get(item.id)
 
     async def get_item_by_id(
         self, item_id: UUID, organization_id: UUID
@@ -3559,7 +3624,11 @@ class InventoryService:
         items_created: List[InventoryItem] = []
 
         for size, color, style in combos:
-            name_parts = [base_name, size]
+            # Sizes arrive as the stored codes ("l", "xxl", "one_size") because
+            # that is what the size picker submits. Styles were already being
+            # humanised here; sizes were not, so a coat came out named
+            # "Structural Coat — l" everywhere the item name is shown.
+            name_parts = [base_name, _size_label(size)]
             if color:
                 name_parts.append(color)
             if style:
@@ -3968,21 +4037,96 @@ class InventoryService:
     # Low Stock & Overdue Alerts
     # ------------------------------------------------------------------
 
+    async def _in_date_lot_totals(
+        self, organization_id: str, item_ids: List[str]
+    ) -> Dict[str, int]:
+        """Ready units per item, counting only lots that have not expired.
+
+        One row per item that has *any* lot at all, so membership in the result
+        is what marks an item as lot-stocked. That distinction carries the
+        weight: an item whose lots have all expired must read as zero ready
+        units, not fall back to an ``InventoryItem.quantity`` column that lot
+        bookkeeping never touches.
+
+        Expired lots are excluded because the equipment-check swap refuses
+        them — they are not stock anyone can put on a truck, and counting them
+        would paper over the shortage.
+        """
+        if not item_ids:
+            return {}
+        today = date.today()
+        result = await self.db.execute(
+            select(
+                InventoryLot.inventory_item_id,
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                or_(
+                                    InventoryLot.expiration_date.is_(None),
+                                    InventoryLot.expiration_date >= today,
+                                ),
+                                InventoryLot.quantity,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+            )
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryLot.inventory_item_id.in_(item_ids),
+            )
+            .group_by(InventoryLot.inventory_item_id)
+        )
+        return {item_id: int(total) for item_id, total in result.all()}
+
     async def get_low_stock_items_for_alerts(
         self,
         organization_id: UUID,
-    ) -> List[InventoryItem]:
-        """Get items below their reorder point for email alerts."""
+    ) -> List[Tuple[InventoryItem, int, bool]]:
+        """Items at or below their reorder point, as (item, on_hand, from_lots).
+
+        On-hand is read from stock lots for any item that has them, and from
+        ``InventoryItem.quantity`` for the rest. The two are separate ledgers —
+        adding a lot does not touch ``quantity`` — so a consumable stocked
+        purely through lots (which is what the supply-officer screens create)
+        could sit at zero ready units without ever tripping this alert, and one
+        whose ``quantity`` was never maintained could trip it every day.
+
+        Lots past their expiration do not count toward on-hand: the swap
+        refuses them, so they are not stock anyone can use, and counting them
+        would hide exactly the shortage that most needs ordering.
+
+        ``from_lots`` tells the caller which ledger the number came from, so an
+        alert can say so rather than appear to contradict the item's own
+        quantity field.
+        """
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active.is_(True))
             .where(InventoryItem.reorder_point.isnot(None))
-            .where(InventoryItem.quantity <= InventoryItem.reorder_point)
             .options(selectinload(InventoryItem.category))
-            .order_by(InventoryItem.quantity.asc())
         )
-        return list(result.scalars().all())
+        candidates = list(result.scalars().all())
+        if not candidates:
+            return []
+
+        lot_totals = await self._in_date_lot_totals(
+            str(organization_id), [i.id for i in candidates]
+        )
+
+        low: List[Tuple[InventoryItem, int, bool]] = []
+        for item in candidates:
+            from_lots = item.id in lot_totals
+            on_hand = lot_totals[item.id] if from_lots else (item.quantity or 0)
+            if on_hand <= (item.reorder_point or 0):
+                low.append((item, on_hand, from_lots))
+
+        low.sort(key=lambda row: row[1])
+        return low
 
     # ------------------------------------------------------------------
     # Stock Lots (ready replacement stock with lot # + expiration)
@@ -4047,6 +4191,141 @@ class InventoryService:
         await self.db.commit()
         await self.db.refresh(lot)
         return lot
+
+    async def add_lots_bulk(
+        self,
+        organization_id: str,
+        entries: List[Dict[str, Any]],
+        created_by: Optional[str] = None,
+    ) -> List[InventoryLot]:
+        """Record a whole delivery at once — one lot per item line.
+
+        Pre-stocking is how dated stock reaches the crews: a lot added here is
+        immediately offered in the check screen's swap picker, so a member
+        pulling an expired or used unit has a replacement to select. Entering a
+        shipment one item-detail page at a time was the friction that kept that
+        stock from existing.
+
+        All or nothing. A partially-applied delivery is worse than a rejected
+        one: the officer has no way to tell which lines landed, and re-entering
+        the shipment would double-count whatever did.
+        """
+        if not entries:
+            return []
+
+        # XC-1: every inventory_item_id here is client-supplied. Resolve them
+        # in one org-scoped query rather than trusting the ids — an unchecked
+        # one would file a lot against another department's item.
+        item_ids = {str(e["inventory_item_id"]) for e in entries}
+        result = await self.db.execute(
+            select(InventoryItem.id).where(
+                InventoryItem.id.in_(item_ids),
+                InventoryItem.organization_id == organization_id,
+            )
+        )
+        known = {row for row in result.scalars().all()}
+        missing = item_ids - known
+        if missing:
+            raise ValueError(
+                f"{len(missing)} item(s) in this delivery are not in your "
+                f"inventory and were not received"
+            )
+
+        lots: List[InventoryLot] = []
+        for entry in entries:
+            data = {k: v for k, v in entry.items() if k != "inventory_item_id"}
+            lot = InventoryLot(
+                organization_id=organization_id,
+                inventory_item_id=str(entry["inventory_item_id"]),
+                created_by=created_by,
+                **data,
+            )
+            self.db.add(lot)
+            lots.append(lot)
+
+        await self.db.commit()
+        for lot in lots:
+            await self.db.refresh(lot)
+        return lots
+
+    async def create_items_bulk(
+        self,
+        organization_id,
+        entries: List[Dict[str, Any]],
+        created_by,
+    ) -> Tuple[List[InventoryItem], List[str]]:
+        """Create many catalog items at once, skipping names already on file.
+
+        Stocking a catalog is a list-shaped job — a department types up its
+        consumables once, thirty lines at a time — and the one-item-per-modal
+        form is what leaves that catalog half-built. A half-built catalog is
+        what leaves checklist positions unlinked, which is what leaves
+        expirations untracked.
+
+        Returns ``(created, skipped_names)``. A name that already exists is
+        skipped rather than rejected: re-pasting a list after adding two lines
+        to it is the normal way this gets used, and failing the whole batch for
+        the twenty-eight that already landed would punish exactly that.
+
+        All or nothing on *errors*, though — a validation failure writes
+        nothing, because a partially-applied paste gives the officer no way to
+        tell where the list stopped.
+        """
+        if not entries:
+            return [], []
+
+        existing = await self.db.execute(
+            select(InventoryItem.name).where(
+                InventoryItem.organization_id == organization_id
+            )
+        )
+        seen = {normalize_name(n) for n in existing.scalars().all() if n}
+
+        items: List[InventoryItem] = []
+        skipped: List[str] = []
+
+        for entry in entries:
+            data = dict(entry)
+            name = (data.get("name") or "").strip()
+            if not name:
+                raise ValueError("Every item needs a name")
+
+            key = normalize_name(name)
+            # Guards against duplicates already on file *and* repeats within
+            # this paste, which is where a copied spreadsheet column usually
+            # goes wrong.
+            if key in seen:
+                skipped.append(name)
+                continue
+            seen.add(key)
+
+            data["name"] = name
+            cat_err = await self._validate_category_requirements(data, organization_id)
+            if cat_err:
+                raise ValueError(f"{name}: {cat_err}")
+
+            # INV-4 (XC-1): category/location/storage ids arrive from the
+            # client on every row of the paste, not just the first.
+            await self._assert_item_fks_in_org(data, organization_id)
+
+            if data.get("tracking_type") == "pool" and data.get("quantity", 1) < 1:
+                raise ValueError(
+                    f"{name}: pool items must have a quantity of 1 or more"
+                )
+
+            if not data.get("barcode"):
+                data["barcode"] = await self._next_sequential_barcode(organization_id)
+
+            item = InventoryItem(
+                organization_id=organization_id, created_by=created_by, **data
+            )
+            self.db.add(item)
+            items.append(item)
+
+        await self.db.commit()
+        for item in items:
+            await self.db.refresh(item)
+        return items, skipped
 
     async def update_lot(
         self,
@@ -4503,6 +4782,7 @@ class InventoryService:
                     item_name=item_data["item_name"],
                     quantity=item_data.get("quantity", 1),
                     size_selectable=item_data.get("size_selectable", False),
+                    optional=item_data.get("optional", False),
                     sort_order=idx,
                 )
                 self.db.add(kit_item)
@@ -4517,13 +4797,20 @@ class InventoryService:
     async def get_equipment_kits(
         self, organization_id: UUID, active_only: bool = True
     ) -> List[EquipmentKit]:
-        """List equipment kits for an organization."""
+        """List equipment kits for an organization.
+
+        Line items are eager-loaded so the caller can report how many each kit
+        holds — the list card shows that count, and without them every kit read
+        "0 items".
+        """
         query = select(EquipmentKit).where(
             EquipmentKit.organization_id == str(organization_id)
         )
         if active_only:
             query = query.where(EquipmentKit.active.is_(True))
-        query = query.order_by(EquipmentKit.name)
+        query = query.order_by(EquipmentKit.name).options(
+            selectinload(EquipmentKit.line_items)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -4545,13 +4832,54 @@ class InventoryService:
     async def update_equipment_kit(
         self, kit_id: UUID, organization_id: UUID, data: dict
     ) -> Tuple[Optional[EquipmentKit], Optional[str]]:
-        """Update a kit's metadata (not its items)."""
+        """Update a kit's metadata and, when supplied, replace its line items."""
         try:
             kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
             if not kit:
                 return None, "Equipment kit not found"
+            line_items_data = data.pop("line_items", None)
             for key, value in data.items():
                 setattr(kit, key, value)
+            if line_items_data is not None:
+                replacement_items = []
+                for idx, item_data in enumerate(line_items_data):
+                    await assert_in_org(
+                        self.db,
+                        InventoryItem,
+                        item_data.get("item_id"),
+                        organization_id,
+                        allow_none=True,
+                        label="item",
+                    )
+                    await assert_in_org(
+                        self.db,
+                        InventoryCategory,
+                        item_data.get("category_id"),
+                        organization_id,
+                        allow_none=True,
+                        label="category",
+                    )
+                    replacement_items.append(
+                        EquipmentKitItem(
+                            kit_id=kit.id,
+                            item_id=(
+                                str(item_data["item_id"])
+                                if item_data.get("item_id")
+                                else None
+                            ),
+                            category_id=(
+                                str(item_data["category_id"])
+                                if item_data.get("category_id")
+                                else None
+                            ),
+                            item_name=item_data["item_name"],
+                            quantity=item_data.get("quantity", 1),
+                            size_selectable=item_data.get("size_selectable", False),
+                            optional=item_data.get("optional", False),
+                            sort_order=idx,
+                        )
+                    )
+                kit.line_items = replacement_items
             await self.db.flush()
             await self.db.refresh(kit)
             return kit, None
@@ -4601,14 +4929,7 @@ class InventoryService:
                         UUID(kit_item.item_id), organization_id
                     )
                     if not item:
-                        # INV-6: EquipmentKitItem has no `optional` column, so a
-                        # bare `kit_item.optional` raised AttributeError on this
-                        # (error-only) branch — caught by the outer except and
-                        # surfaced as a confusing generic failure. getattr with a
-                        # False default makes every item required (the intended
-                        # behavior until the `optional` field is actually
-                        # persisted — see the flagged follow-up).
-                        if not getattr(kit_item, "optional", False):
+                        if not kit_item.optional:
                             return (
                                 None,
                                 f"Required kit item not found: {kit_item.item_id}",
@@ -4631,7 +4952,7 @@ class InventoryService:
                             assigned_by=issued_by,
                         )
 
-                    if err and not getattr(kit_item, "optional", False):
+                    if err and not kit_item.optional:
                         return None, f"Failed to issue kit item: {err}"
                     if result:
                         issuances.append(result)

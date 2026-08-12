@@ -31,7 +31,7 @@ import { CreditCard, Pencil } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatDateCustom } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
@@ -557,7 +557,7 @@ export const MemberProfilePage: React.FC = () => {
           </button>
 
           <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-center gap-4">
                 {/* Profile Photo with Upload */}
                 <div className="group relative">
@@ -612,12 +612,14 @@ export const MemberProfilePage: React.FC = () => {
                   )}
                 </div>
                 <div>
-                  <h1 className="text-theme-text-primary text-3xl font-bold">{user.full_name || user.username}</h1>
+                  <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">
+                    {user.full_name || user.username}
+                  </h1>
                   <p className="text-theme-text-muted mt-1">@{user.username}</p>
                   {user.membership_number && (
                     <p className="text-theme-text-secondary mt-1 text-sm">#{user.membership_number}</p>
                   )}
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     {(user.roles || []).map((role) => (
                       <span
                         key={role.id}
@@ -1053,18 +1055,20 @@ export const MemberProfilePage: React.FC = () => {
                         <span className="text-theme-text-muted text-xs">Active</span>
                       </div>
                       <p className="text-theme-text-secondary text-xs">
-                        {formatDateCustom(
-                          leave.start_date + 'T00:00:00',
-                          { year: 'numeric', month: '2-digit', day: '2-digit' },
-                          tz
-                        )}{' '}
+                        {/* Calendar dates, not instants — run through a
+                            timezone these render a day early. */}
+                        {formatCalendarDate(leave.start_date, {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                        })}{' '}
                         &ndash;{' '}
                         {leave.end_date
-                          ? formatDateCustom(
-                              leave.end_date + 'T00:00:00',
-                              { year: 'numeric', month: '2-digit', day: '2-digit' },
-                              tz
-                            )
+                          ? formatCalendarDate(leave.end_date, {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                            })
                           : 'Permanent'}
                       </p>
                       {leave.reason && <p className="text-theme-text-muted mt-1 text-xs">{leave.reason}</p>}

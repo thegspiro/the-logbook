@@ -131,9 +131,25 @@ const NotificationsPage: React.FC = () => {
   const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const initialTab =
-    searchParams.get('tab') === 'inbox' ? ('inbox' as const) : canView ? ('rules' as const) : ('inbox' as const);
-  const [activeTab, setActiveTab] = useState<'inbox' | 'rules' | 'templates' | 'log'>(initialTab);
+  // All four tabs are addressable, not just the inbox. `?tab=log` used to
+  // fall through to the rules tab, so a link to the Send Log — the one tab
+  // anyone has cause to send somebody — opened the wrong screen.
+  //
+  // Derived from the URL rather than mirrored into state _(2026-08-11)_. The
+  // first fix read the parameter once, on mount, which left every later URL
+  // change ignored — the Back button being the one that matters: click Send Log
+  // then Rules, press Back, and the address bar says `?tab=log` while the page
+  // still renders Rules. Deriving removes the state that could fall out of step
+  // at all.
+  const requestedTab = searchParams.get('tab');
+  const activeTab: 'inbox' | 'rules' | 'templates' | 'log' =
+    requestedTab === 'inbox'
+      ? 'inbox'
+      : canView && (requestedTab === 'rules' || requestedTab === 'templates' || requestedTab === 'log')
+        ? requestedTab
+        : canView
+          ? 'rules'
+          : 'inbox';
   const [logChannelFilter, setLogChannelFilter] = useState<'all' | 'email' | 'in_app'>('all');
 
   // Create form states
@@ -316,13 +332,7 @@ const NotificationsPage: React.FC = () => {
   };
 
   const handleTabChange = (tab: typeof activeTab) => {
-    setActiveTab(tab);
-    if (tab === 'inbox') {
-      setSearchParams({ tab: 'inbox' });
-    } else {
-      searchParams.delete('tab');
-      setSearchParams(searchParams);
-    }
+    setSearchParams({ tab });
   };
 
   if (loading && loadingInbox) {
@@ -342,9 +352,9 @@ const NotificationsPage: React.FC = () => {
         <Breadcrumbs />
 
         {/* Page Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center space-x-3">
-            <div className="rounded-lg bg-orange-600 p-2">
+            <div className="shrink-0 rounded-lg bg-orange-600 p-2">
               <Bell className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -411,7 +421,7 @@ const NotificationsPage: React.FC = () => {
 
         {/* Tabs */}
         <div
-          className="bg-theme-surface-secondary mb-6 flex w-fit space-x-1 rounded-lg p-1"
+          className="bg-theme-surface-secondary hscroll mb-6 flex w-fit space-x-1 rounded-lg p-1"
           role="tablist"
           aria-label="Notification views"
         >
@@ -478,7 +488,7 @@ const NotificationsPage: React.FC = () => {
 
         {activeTab === 'inbox' && (
           <div role="tabpanel">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-3">
                 <p className="text-theme-text-muted text-sm">
                   {myUnreadCount > 0 ? `${myUnreadCount} unread` : 'All caught up'}
@@ -700,7 +710,7 @@ const NotificationsPage: React.FC = () => {
             const filteredLogs = logChannelFilter === 'all' ? logs : logs.filter((l) => l.channel === logChannelFilter);
             return (
               <>
-                <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <div className="bg-theme-surface-secondary flex items-center space-x-1 rounded-lg p-1">
                     {(
                       [

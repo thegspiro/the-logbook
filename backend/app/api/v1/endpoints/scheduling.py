@@ -437,7 +437,11 @@ async def get_shift(
             ShiftAttendance.shift_id == str(shift_id)
         )
     )
-    total_min = total_min_result.scalar() or 0
+    # MySQL's SUM() over an integer column comes back as DECIMAL, and Decimal
+    # does not support division by a float — dividing straight through raises
+    # TypeError and 500s the whole shift detail response. The list endpoint
+    # above coerces for the same reason.
+    total_min = float(total_min_result.scalar() or 0)
     total_hours = round(total_min / 60.0, 1) if total_min > 0 else None
 
     attendees = await service.enrich_attendance_records(
@@ -446,6 +450,14 @@ async def get_shift(
 
     platoon_roster = await service.get_platoon_roster_for_shift(shift)
 
+    # Whether check-in is open, decided by the same helper the check-in endpoint
+    # enforces with. Published so the check-in screen can disable its own button
+    # and say why, rather than offering an action the API will refuse — and so
+    # the rule has one implementation rather than one per side.
+    checkin_closed_reason = await service.checkin_closed_reason(
+        shift, current_user.organization_id
+    )
+
     return {
         **d,
         "attendees": attendees,
@@ -453,6 +465,8 @@ async def get_shift(
         "call_count": call_count,
         "total_hours": total_hours,
         "platoon_roster": platoon_roster,
+        "checkin_open": checkin_closed_reason is None,
+        "checkin_closed_reason": checkin_closed_reason,
     }
 
 

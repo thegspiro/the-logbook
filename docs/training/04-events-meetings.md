@@ -9,18 +9,19 @@ The Events module handles department events, attendance tracking with QR code ch
 1. [Events Overview](#events-overview)
 2. [Viewing and RSVPing to Events](#viewing-and-rsvping-to-events)
 3. [QR Code Check-In](#qr-code-check-in)
-4. [Creating Events (Officers)](#creating-events-officers)
-5. [Event Templates and Recurring Events](#event-templates-and-recurring-events)
-6. [Calendar View, Analytics & Templates](#calendar-view-analytics--templates-2026-03-13)
-7. [RSVP Enhancements](#rsvp-enhancements-2026-03-13)
-8. [Event Notifications](#event-notifications-2026-03-13)
-9. [Bulk Operations & Import](#bulk-operations--import-2026-03-13)
-10. [Meeting Minutes](#meeting-minutes)
-11. [Action Items](#action-items)
-12. [Elections and Voting](#elections-and-voting)
-13. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
-14. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
-15. [Troubleshooting](#troubleshooting)
+4. [Guest Check-In for Non-Members](#guest-check-in-for-non-members-2026-08-09)
+5. [Creating Events (Officers)](#creating-events-officers)
+6. [Event Templates and Recurring Events](#event-templates-and-recurring-events)
+7. [Calendar View, Analytics & Templates](#calendar-view-analytics--templates-2026-03-13)
+8. [RSVP Enhancements](#rsvp-enhancements-2026-03-13)
+9. [Event Notifications](#event-notifications-2026-03-13)
+10. [Bulk Operations & Import](#bulk-operations--import-2026-03-13)
+11. [Meeting Minutes](#meeting-minutes)
+12. [Action Items](#action-items)
+13. [Elections and Voting](#elections-and-voting)
+14. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
+15. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -109,6 +110,93 @@ Officers can view real-time check-in activity from the event's **Monitoring** vi
 
 ---
 
+## Guest Check-In for Non-Members (2026-08-09)
+
+The QR code above is for **members**. Scanning it without an account takes you to
+the login page — which is exactly the wrong answer at a volunteer interest night,
+where most of the room has no account and no reason to make one just to sign in.
+
+An event can now show a **second QR code** for guests. The two sit side by side
+on the room display. A guest scans theirs, types their name, and is signed in.
+
+![A room display showing the member and guest QR codes side by side under the event name](./images/04-30-room-display-guest-qr.png)
+
+### Switching it on
+
+Both settings live on **Edit Event → Check-In Settings**, and both start off.
+
+| Setting                                            | What it does                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Allow guest (non-member) sign-in**               | Adds the guest QR code to the room display and opens the public sign-in page for this event |
+| **Add guests to the prospective members pipeline** | Also opens a record in the recruitment pipeline for every guest who leaves an email address |
+
+The second only appears once the first is ticked — it is nested underneath it,
+since a pipeline record can only come from a guest who signed in.
+
+![Check-In Settings on the event form with both guest toggles switched on](./images/04-31-guest-check-in-settings.png)
+
+> **Only switch this on for outreach events.** Turning on guest check-in means
+> anyone who can reach that QR code can write to your event's attendance list
+> without logging in. That is the right trade for an open house or an interest
+> night. It is the wrong trade for a business meeting or a training session,
+> whose attendance drives records that only apply to members — leave it off
+> there.
+
+### What the guest fills in
+
+Name is required. Everything else is optional: email, phone, and why they came.
+
+The API also accepts an `organization_name` for a guest who arrives with a
+neighbouring department or a partner agency, but the sign-in page does not ask
+for it — record it by hand on the external attendee afterwards if you need it.
+
+The form is deliberately short. A walk-in at an interest night should be asked
+for the minimum needed to follow up, not for a membership application — the real
+application form is what your follow-up email links to.
+
+![The guest sign-in form on a phone, with the event name above the name and contact fields](./images/04-32-guest-sign-in-form.png)
+
+![The guest sign-in confirmation naming the event and the time signed in](./images/04-33-guest-sign-in-confirmation.png)
+
+### Where the guest ends up
+
+| Record                                             | When                                                                       |
+| -------------------------------------------------- | -------------------------------------------------------------------------- |
+| An entry on the event's **external attendee** list | Always                                                                     |
+| A card in the **prospective members** pipeline     | Only if the event has the second toggle on **and** the guest left an email |
+
+A prospect opened this way is linked back to the event it came from: the detail
+drawer's **Linked Events** panel names the open house, its date and its type, so
+at the next pipeline review you can see which one each lead walked in from.
+
+Its `referral_source` is also stamped **"Attended: _event name_"**. That is
+stored and returned by the API, but no screen shows it — read it from an export
+or the API if you need it in a report.
+
+![The prospect opened by a guest sign-in, its Linked Events panel naming the open house](./images/04-34-guest-prospect-card.png)
+
+### Edge cases
+
+| What happens                                                                                                                                     | Why                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A guest who arrives early is turned away** until the check-in window opens. Members get a grace period before a flexible window; guests do not | A member who checks in early can be identified and corrected afterwards. An anonymous early sign-in can be neither, so guests are held to the window you actually set    |
+| **A guest who taps the code twice is not counted twice** — they see "already checked in"                                                         | Matched on their email if they gave one, on their name if they did not                                                                                                   |
+| **Two guests with the same name and no email become one entry**                                                                                  | The name match is the weaker fallback. It is the deliberate trade: a duplicate on every double-tap is far more common at a kiosk than two Chris Smiths at one open house |
+| **A guest you pre-registered keeps the details you typed**                                                                                       | The kiosk sign-in only fills in blanks; it never overwrites something a person entered on purpose                                                                        |
+| **A guest already in your pipeline does not get a second card**                                                                                  | Their existing record is linked to the event instead                                                                                                                     |
+| **A guest with no email is still signed in** — they just do not get a pipeline card                                                              | There would be no way to follow up, so there is nothing to open                                                                                                          |
+| **If the pipeline card cannot be created, the guest is still signed in**                                                                         | The sign-in is what they came to do. The failure is logged for you; it never costs them their attendance                                                                 |
+| **Deleting a prospect does not delete the attendance**                                                                                           | Who was in the room is the event's history, not the prospect's                                                                                                           |
+| **A busy night can hit the daily ceiling** — 300 sign-ins per event per day by default                                                           | Sized for an open house, not a stadium. Past that is abuse rather than attendance. Ask your administrator if you genuinely need it raised                                |
+
+> **Troubleshooting: the guest QR code is missing from the display.** Check three
+> things, in this order: the event has **Allow guest (non-member) sign-in** ticked; the event
+> is actually assigned to **that room**; and the display is showing the event you
+> think it is. The guest code is drawn per event, not per room, so an event
+> without the setting simply shows the member code alone.
+
+---
+
 ## Creating Events (Officers)
 
 **Required Permission:** `events.manage`
@@ -165,19 +253,25 @@ Save frequently used event configurations as templates:
 
 Create a series of repeating events:
 
-1. Navigate to **Events Admin**.
-2. Click **Create Recurring Event**.
-3. Set the recurrence pattern:
-   - **Daily** — Every day or every N days
-   - **Weekly** — Every week on selected days (e.g., every Monday and Wednesday)
-   - **Monthly** — On the same date each month (e.g., the 15th)
-   - **Monthly by Weekday** — On a specific weekday occurrence (e.g., "2nd Tuesday of every month" or "last Friday of every month"). The weekday auto-populates from your event date
-   - **Annual** — On the same date each year
-4. Set the start and end dates for the series.
-5. Each occurrence is created as an individual event that can be modified independently.
+1. Navigate to **Events Admin > Create Event** and fill in the event as usual.
+2. Tick **Make this a recurring event**. The recurrence controls appear beneath
+   it — there is no separate "Create Recurring Event" button.
+3. Choose the pattern from **Repeats**. Eight are offered:
+   - **Daily**
+   - **Weekly**
+   - **Every 2 Weeks**
+   - **Monthly (same date)** — e.g. the 15th
+   - **Monthly (by weekday)** — reveals **Which Occurrence** (1st–4th, Last) and
+     **Day of Week**, so "2nd Tuesday of every month" is two dropdowns
+   - **Annually (same date)**
+   - **Annually (by weekday)** — same two dropdowns
+   - **Custom Days**
+4. Set the series end date under **Duration**, or tick **Rolling 12-month cycle**
+   to keep it running.
+5. Add any **Exception Dates** to skip — a date picker and an **Add** button.
+6. Each occurrence is created as an individual event that can be modified independently.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the recurring event creation form showing the base event settings plus the recurrence pattern selector (daily/weekly/monthly/monthly-by-weekday/annual), weekday selectors, and the series date range]_
+![The event form with recurrence switched on, showing the pattern and series end date](./images/04-35-recurring-event-form.png)
 
 ### Managing Recurring Event Series
 
@@ -214,8 +308,7 @@ A monthly calendar view is available alongside the list view:
 - Navigate between months using the arrow buttons
 - All times display in the organization's configured timezone
 
-> **Screenshot needed:**
-> _[Screenshot of the CalendarView component showing a monthly grid with colored event dots on several days, one day expanded to show a list of events for that day with titles and times]_
+![Events calendar month grid with events marked on their days](./images/04-08-calendar-view.png)
 
 ### Event Analytics Dashboard
 
@@ -255,17 +348,24 @@ For simple events, use the quick-create flow:
 3. All other settings use sensible defaults
 4. Click **Create** to save immediately
 
-### Rich Text Descriptions
+### Markdown Descriptions
 
-Event descriptions now support rich text formatting:
+The description field is a plain textarea with a **markdown** toolbar above it —
+four buttons that wrap the selected text rather than a what-you-see editor. The
+raw markdown stays visible as you type and is rendered when the event is shown.
 
-- Bold, italic, underline
-- Bullet and numbered lists
-- Links
-- Headings
+| Button      | Inserts       |
+| ----------- | ------------- |
+| **B**       | `**bold**`    |
+| _I_         | `*italic*`    |
+| Bullet list | `- item`      |
+| Link        | `[text](url)` |
 
-> **Screenshot needed:**
-> _[Screenshot of the event creation form showing the rich text editor for the description field with the formatting toolbar visible]_
+Underline, numbered lists and headings have no button. The hint beside the
+toolbar — `Supports **bold**, *italic*, - lists, [links](url)` — is the full
+list of what the field supports.
+
+![The event description field with its markdown toolbar and syntax hint](./images/04-36-description-markdown.png)
 
 ---
 
@@ -280,8 +380,7 @@ When RSVPing to an event, members can now provide:
 
 This information is visible to event coordinators in the attendee list.
 
-> **Screenshot needed:**
-> _[Screenshot of the RSVP form showing the dietary restrictions text field and accessibility requirements text field below the Going/Maybe/Not Going buttons]_
+![RSVP modal with its dietary and accessibility fields](./images/04-09-rsvp-modal.png)
 
 ### RSVP History
 
@@ -314,8 +413,7 @@ When an event reaches its capacity limit:
 - **Capacity Bar** — Visual progress bar on event cards showing RSVP count vs. capacity
 - **Non-Respondent Reminders** — Send targeted reminder notifications to members who haven't RSVP'd. Excludes members who already responded (going, not going, or maybe)
 
-> **Screenshot needed:**
-> _[Screenshot of the EventRSVPSection on an event detail page showing the attendee list with check-in times, RSVP statuses, the CSV Export and Print Roster buttons, and the RSVP activity history collapsed section]_
+![Event attendance list with each member's RSVP and check-in state](./images/04-10-event-attendance.png)
 
 ---
 
@@ -345,8 +443,7 @@ From any event's detail page, coordinators can send targeted notifications:
 | **Checked In**     | Members who checked in to the event            |
 | **Not Checked In** | Members who RSVP'd "Going" but didn't check in |
 
-> **Screenshot needed:**
-> _[Screenshot of the EventNotificationPanel showing the notification type dropdown, target audience radio buttons, message text area, and the Send button with confirmation dialog]_
+![Event notification panel with its type and audience controls](./images/04-11-event-notifications.png)
 
 ---
 
@@ -471,8 +568,11 @@ attendance_pct = meetings_attended / eligible_meetings × 100
 
 Where `eligible_meetings = total_meetings − per_meeting_waivers − meetings_during_leave`.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Attendance Dashboard showing a table of members with their attendance percentage, number of meetings attended, meetings on leave, and voting eligibility status]_
+**Not yet built:** there is no Attendance Dashboard screen. The calculation
+above is real and the data is served by `GET /meetings/attendance/dashboard`,
+which the frontend even has a client method for — but nothing calls it, so no
+page renders the table. Per-meeting attendance is visible on each meeting's
+own record in the meantime.
 
 ### Leave of Absence & Meeting Attendance
 
@@ -899,60 +999,60 @@ Events support three check-in window modes that control when QR and manual check
 
 ## Troubleshooting
 
-| Issue                                                      | Solution                                                                                                                                                                                                                                                                                                                                  |
+| Issue | Solution |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | -------------------------------------------------------------------- |
-| QR code not scanning                                       | Ensure good lighting and that the code is displayed at a readable size. Try the manual check-in option.                                                                                                                                                                                                                                   |
-| "Already checked in" error                                 | The member has already checked in. Use the monitoring view to verify or override times.                                                                                                                                                                                                                                                   |
-| Cannot RSVP to an event                                    | Check that the event is still open for RSVPs and that you are logged in. Past events cannot be RSVP'd to.                                                                                                                                                                                                                                 |
-| Training records not created from event                    | The event must have a linked Training Session that has been finalized and approved.                                                                                                                                                                                                                                                       |
-| Minutes not showing attendees                              | If creating minutes from an event, attendees are imported from check-in records, not RSVPs. Ensure members checked in.                                                                                                                                                                                                                    |
-| "Already voted" error                                      | Each member can only vote once per candidate/position (approval and ranked-choice elections allow additional votes for _different_ candidates or ranks). This is by design — votes are never overwritten.                                                                                                                                 |
-| Election results not visible                               | Results are gated until the election is closed **and** its scheduled end date has passed (or `results_visible_immediately` is on). If the election was closed early, flip "results visible immediately" on the closed election to show them now.                                                                                          |
-| Candidates not showing in ballot preview                   | Fixed in March 2026 — ballot items from templates were missing the `position` field for candidate matching. Pull latest and rebuild.                                                                                                                                                                                                      |
-| Ballot builder only shows one candidate per position       | As of 2026-03-06, one ballot item per position is enforced. Use separate positions for multiple candidate races.                                                                                                                                                                                                                          |
-| Election settings not saving or loading                    | Fixed in March 2026 — GET/PATCH endpoints returned wrong structure. Pull latest and restart.                                                                                                                                                                                                                                              |
-| Event request form not showing outreach types              | Add outreach types in **Events > Settings > Outreach Types**. At least one type must be configured.                                                                                                                                                                                                                                       |
-| Submitted request not appearing for coordinator            | Coordinator needs `events.manage` permission. Check role permissions in Administration.                                                                                                                                                                                                                                                   |
-| Room double-booking error when scheduling                  | Another event is already booked at that location and time. Choose a different room or time slot.                                                                                                                                                                                                                                          |
-| Email template variables showing as `{{variable}}`         | Use double curly braces with no spaces: `{{contact_name}}`. Check supported variable names in email template docs.                                                                                                                                                                                                                        |
-| Cannot cancel from public status page                      | Only requests in active states (submitted, in_progress, scheduled) can be cancelled. Terminal states cannot be changed.                                                                                                                                                                                                                   |
-| Pipeline tasks not visible to requester                    | Public progress visibility is off by default. Enable it in **Events > Settings > Request Pipeline > Public Progress Visibility**.                                                                                                                                                                                                         |
-| Custom event categories not appearing in form              | Configure categories in **Events Settings > Custom Event Categories**. Then toggle visibility in **Event Type & Category Visibility** section.                                                                                                                                                                                            |
-| Custom categories not showing as filter tabs               | Category visibility must be enabled separately — go to Events Settings and enable each custom category under the visibility section.                                                                                                                                                                                                      |
-| Events Settings page layout changed                        | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout (matching Organization Settings) instead of collapsible sections. Desktop shows a sidebar with section descriptions; mobile uses horizontal scrollable tabs. As of 2026-03-12, the settings tab is further refactored into 6 focused section components. |
-| EventRequestStatusPage colors look wrong in light mode     | Fixed in March 2026 — hardcoded colors replaced with theme-aware CSS variables. Pull latest and rebuild.                                                                                                                                                                                                                                  |
-| Email templates missing CC/BCC fields                      | As of 2026-03-04, each email template now supports configurable CC/BCC addresses. Run the latest migration and restart.                                                                                                                                                                                                                   |
-| Members show 0 hours despite checking in                   | As of 2026-03-06, use **Finalize Attendance** from the event detail "More" menu to calculate duration for members who checked in but didn't check out. Auto-triggers when recording actual end time.                                                                                                                                      |
-| Past events not visible to regular members                 | As of 2026-03-06, all users can toggle between Upcoming and Past events. Previously past events were only accessible via the admin hub.                                                                                                                                                                                                   |
-| Facility rooms not in event location picker                | As of 2026-03-06, facility rooms auto-create linked Location records. Existing rooms get locations on next update.                                                                                                                                                                                                                        |
-| QR check-in window shows "N/A"                             | Fixed 2026-03-12 — backend was returning bare date/time strings instead of ISO 8601 format. Pull latest and restart.                                                                                                                                                                                                                      |
-| QR check-in times showing in wrong timezone                | Fixed 2026-03-12 — QR data now includes `organizationTimezone` for local time display. Self check-in falls back to browser timezone if missing.                                                                                                                                                                                           |
-| Recurring event dates seem wrong                           | Monthly-by-weekday events with "5th week" fall back to last occurrence. Annual Feb 29 events shift to Feb 28 in non-leap years. These are expected behaviors.                                                                                                                                                                             |
-| Custom categories sent as strings cause 422                | Fixed 2026-03-12 — schema now accepts objects (`{id, label, color}`). Existing string-format categories auto-migrate on next save.                                                                                                                                                                                                        |
-| Settings changes not persisting                            | Fixed 2026-03-12 — SQLAlchemy JSON column shallow copy issue. Pull latest to get `deepcopy()` fix.                                                                                                                                                                                                                                        |
-| Event form sending empty strings causes 422                | Fixed 2026-03-12 — `??` replaced with `                                                                                                                                                                                                                                                                                                   |     | `for all optional form fields to coerce empty strings to`undefined`. |
-| Calendar view not showing events                           | Ensure events exist for the displayed month. Use the navigation arrows to check other months. Events are filtered by the currently selected event type filter.                                                                                                                                                                            |
-| Analytics page shows no data                               | Verify `analytics.view` permission is assigned to your role. Analytics require at least one event to have been created. Use the date range filter to widen the search window.                                                                                                                                                             |
-| Template picker shows no templates                         | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden.                                                                                                                                                                                       |
-| Waitlist not promoting attendees                           | Promotion occurs automatically when a "Going" member changes to "Not Going". Check that the event has a capacity limit set.                                                                                                                                                                                                               |
-| CSV import skipping rows                                   | Rows missing required fields (title, date) are skipped. Check the error details in the import preview for specific validation failures.                                                                                                                                                                                                   |
-| Draft event visible to regular members                     | Verify the event was saved as a draft, not published. Only users with `events.manage` permission can see drafts.                                                                                                                                                                                                                          |
-| Non-respondent reminder sent to someone who already RSVP'd | This should not happen — reminders exclude all members who have responded (going, not going, or maybe). If it occurs, refresh the RSVP data and retry. _(fixed 2026-03-13)_                                                                                                                                                               |
-| Conflict detection false positive                          | Conflict detection checks time + location overlap. Events at different locations at the same time are not flagged. The warning is advisory — you can proceed with creation.                                                                                                                                                               |
-| Recurrence exception not restoring                         | Deleting a recurrence exception should restore the occurrence. If the occurrence doesn't reappear, check the series management view for the full series timeline. _(added 2026-03-13)_                                                                                                                                                    |
-| Check-in modal shows error or blank                        | The eligible-members endpoint was missing prior to 2026-03-15. Pull latest and restart. The modal now also has correct z-index stacking.                                                                                                                                                                                                  |
-| Recurring event creation crashes                           | Fixed 2026-03-15 — certain recurrence patterns generating dates beyond the series end date caused a crash. Pull latest.                                                                                                                                                                                                                   |
-| Series end reminder not received                           | Reminders are sent 7 days before the last occurrence. If the series has already ended, no reminder is sent. Verify the series has a defined end date.                                                                                                                                                                                     |
-| Event times show wrong in edit form                        | Fixed 2026-03-15 — the time extraction function was returning UTC instead of local time. Shift/event edit forms now use `Intl.DateTimeFormat` with the user's timezone.                                                                                                                                                                   |
-| Conflict detection false negative near midnight            | Fixed 2026-03-15 — conflict detection now uses timezone-aware date arithmetic. Events spanning midnight in the org's timezone are correctly identified.                                                                                                                                                                                   |
-| In-app event notifications not appearing                   | Fixed 2026-03-17 — event notifications now deliver via in-app notifications in addition to email. Check the notification bell icon.                                                                                                                                                                                                       |
-| Time picker allows non-quarter-hour values                 | Fixed 2026-03-17 — all time pickers now enforce 15-minute increments (`:00`, `:15`, `:30`, `:45`).                                                                                                                                                                                                                                        |
-| Valid check-in rejected as "outside window"                | Fixed 2026-03-17 — QR display and self-check-in pages were using different datetime sources for the check-in window. Now consistent.                                                                                                                                                                                                      |
-| Event times display incorrectly across timezones           | Fixed 2026-03-16 — all event response schemas now stamp naive datetimes with UTC timezone markers via `UTCResponseBase`.                                                                                                                                                                                                                  |
-| Election ballot emails sent but 0 recipients               | Fixed 2026-03-19 — `User.is_active` converted to `hybrid_property` for SQLAlchemy query compatibility. Added per-recipient exception handling.                                                                                                                                                                                            |
-| Election error messages unhelpful                          | Fixed 2026-03-19 — error messages now include actionable details (e.g., "Election has no candidates").                                                                                                                                                                                                                                    |
-| Election results not arriving by email                     | Use the new **Send Report Email** button on the election detail page to email formatted results. Added 2026-03-19.                                                                                                                                                                                                                        |
-| Ballot sending skips voters without explanation            | The secretary now receives an eligibility summary email after ballot dispatch listing all skipped voters with reasons. Added 2026-03-19.                                                                                                                                                                                                  |
+| QR code not scanning | Ensure good lighting and that the code is displayed at a readable size. Try the manual check-in option. |
+| "Already checked in" error | The member has already checked in. Use the monitoring view to verify or override times. |
+| Cannot RSVP to an event | Check that the event is still open for RSVPs and that you are logged in. Past events cannot be RSVP'd to. |
+| Training records not created from event | The event must have a linked Training Session that has been finalized and approved. |
+| Minutes not showing attendees | If creating minutes from an event, attendees are imported from check-in records, not RSVPs. Ensure members checked in. |
+| "Already voted" error | Each member can only vote once per candidate/position (approval and ranked-choice elections allow additional votes for _different_ candidates or ranks). This is by design — votes are never overwritten. |
+| Election results not visible | Results are gated until the election is closed **and** its scheduled end date has passed (or `results_visible_immediately` is on). If the election was closed early, flip "results visible immediately" on the closed election to show them now. |
+| Candidates not showing in ballot preview | Fixed in March 2026 — ballot items from templates were missing the `position` field for candidate matching. Pull latest and rebuild. |
+| Ballot builder only shows one candidate per position | As of 2026-03-06, one ballot item per position is enforced. Use separate positions for multiple candidate races. |
+| Election settings not saving or loading | Fixed in March 2026 — GET/PATCH endpoints returned wrong structure. Pull latest and restart. |
+| Event request form not showing outreach types | Add outreach types in **Events > Settings > Outreach Types**. At least one type must be configured. |
+| Submitted request not appearing for coordinator | Coordinator needs `events.manage` permission. Check role permissions in Administration. |
+| Room double-booking error when scheduling | Another event is already booked at that location and time. Choose a different room or time slot. |
+| Email template variables showing as `{{variable}}` | Use double curly braces with no spaces: `{{contact_name}}`. Check supported variable names in email template docs. |
+| Cannot cancel from public status page | Only requests in active states (submitted, in_progress, scheduled) can be cancelled. Terminal states cannot be changed. |
+| Pipeline tasks not visible to requester | Public progress visibility is off by default. Enable it in **Events > Settings > Request Pipeline > Public Progress Visibility**. |
+| Custom event categories not appearing in form | Configure categories in **Events Settings > Custom Event Categories**. Then toggle visibility in **Event Type & Category Visibility** section. |
+| Custom categories not showing as filter tabs | Category visibility must be enabled separately — go to Events Settings and enable each custom category under the visibility section. |
+| Events Settings page layout changed | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout (matching Organization Settings) instead of collapsible sections. Desktop shows a sidebar with section descriptions; mobile uses horizontal scrollable tabs. As of 2026-03-12, the settings tab is further refactored into 6 focused section components. |
+| EventRequestStatusPage colors look wrong in light mode | Fixed in March 2026 — hardcoded colors replaced with theme-aware CSS variables. Pull latest and rebuild. |
+| Email templates missing CC/BCC fields | As of 2026-03-04, each email template now supports configurable CC/BCC addresses. Run the latest migration and restart. |
+| Members show 0 hours despite checking in | As of 2026-03-06, use **Finalize Attendance** from the event detail "More" menu to calculate duration for members who checked in but didn't check out. Auto-triggers when recording actual end time. |
+| Past events not visible to regular members | As of 2026-03-06, all users can toggle between Upcoming and Past events. Previously past events were only accessible via the admin hub. |
+| Facility rooms not in event location picker | As of 2026-03-06, facility rooms auto-create linked Location records. Existing rooms get locations on next update. |
+| QR check-in window shows "N/A" | Fixed 2026-03-12 — backend was returning bare date/time strings instead of ISO 8601 format. Pull latest and restart. |
+| QR check-in times showing in wrong timezone | Fixed 2026-03-12 — QR data now includes `organizationTimezone` for local time display. Self check-in falls back to browser timezone if missing. |
+| Recurring event dates seem wrong | Monthly-by-weekday events with "5th week" fall back to last occurrence. Annual Feb 29 events shift to Feb 28 in non-leap years. These are expected behaviors. |
+| Custom categories sent as strings cause 422 | Fixed 2026-03-12 — schema now accepts objects (`{id, label, color}`). Existing string-format categories auto-migrate on next save. |
+| Settings changes not persisting | Fixed 2026-03-12 — SQLAlchemy JSON column shallow copy issue. Pull latest to get `deepcopy()` fix. |
+| Event form sending empty strings causes 422 | Fixed 2026-03-12 — `??` replaced with `                                                                                                                                                                                                                                                                                                  |     |`for all optional form fields to coerce empty strings to`undefined`. |
+| Calendar view not showing events | Ensure events exist for the displayed month. Use the navigation arrows to check other months. Events are filtered by the currently selected event type filter. |
+| Analytics page shows no data | Verify `analytics.view` permission is assigned to your role. Analytics require at least one event to have been created. Use the date range filter to widen the search window. |
+| Template picker shows no templates | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden. |
+| Waitlist not promoting attendees | Promotion occurs automatically when a "Going" member changes to "Not Going". Check that the event has a capacity limit set. |
+| CSV import skipping rows | Rows missing required fields (title, date) are skipped. Check the error details in the import preview for specific validation failures. |
+| Draft event visible to regular members | Verify the event was saved as a draft, not published. Only users with `events.manage` permission can see drafts. |
+| Non-respondent reminder sent to someone who already RSVP'd | This should not happen — reminders exclude all members who have responded (going, not going, or maybe). If it occurs, refresh the RSVP data and retry. _(fixed 2026-03-13)_ |
+| Conflict detection false positive | Conflict detection checks time + location overlap. Events at different locations at the same time are not flagged. The warning is advisory — you can proceed with creation. |
+| Recurrence exception not restoring | Deleting a recurrence exception should restore the occurrence. If the occurrence doesn't reappear, check the series management view for the full series timeline. _(added 2026-03-13)_ |
+| Check-in modal shows error or blank | The eligible-members endpoint was missing prior to 2026-03-15. Pull latest and restart. The modal now also has correct z-index stacking. |
+| Recurring event creation crashes | Fixed 2026-03-15 — certain recurrence patterns generating dates beyond the series end date caused a crash. Pull latest. |
+| Series end reminder not received | Reminders are sent 7 days before the last occurrence. If the series has already ended, no reminder is sent. Verify the series has a defined end date. |
+| Event times show wrong in edit form | Fixed 2026-03-15 — the time extraction function was returning UTC instead of local time. Shift/event edit forms now use `Intl.DateTimeFormat` with the user's timezone. |
+| Conflict detection false negative near midnight | Fixed 2026-03-15 — conflict detection now uses timezone-aware date arithmetic. Events spanning midnight in the org's timezone are correctly identified. |
+| In-app event notifications not appearing | Fixed 2026-03-17 — event notifications now deliver via in-app notifications in addition to email. Check the notification bell icon. |
+| Time picker allows non-quarter-hour values | Fixed 2026-03-17 — all time pickers now enforce 15-minute increments (`:00`, `:15`, `:30`, `:45`). |
+| Valid check-in rejected as "outside window" | Fixed 2026-03-17 — QR display and self-check-in pages were using different datetime sources for the check-in window. Now consistent. |
+| Event times display incorrectly across timezones | Fixed 2026-03-16 — all event response schemas now stamp naive datetimes with UTC timezone markers via `UTCResponseBase`. |
+| Election ballot emails sent but 0 recipients | Fixed 2026-03-19 — `User.is_active` converted to `hybrid_property` for SQLAlchemy query compatibility. Added per-recipient exception handling. |
+| Election error messages unhelpful | Fixed 2026-03-19 — error messages now include actionable details (e.g., "Election has no candidates"). |
+| Election results not arriving by email | Use the new **Send Report Email** button on the election detail page to email formatted results. Added 2026-03-19. |
+| Ballot sending skips voters without explanation | The secretary now receives an eligibility summary email after ballot dispatch listing all skipped voters with reasons. Added 2026-03-19. |
 
 ---
 
@@ -985,17 +1085,18 @@ The ballot email dispatch system has been significantly hardened:
 
 ### Election Report Email
 
-Officers can email election results as a formatted report directly from the election detail page using the **Send Report Email** button.
-
-> **Screenshot needed:**
-> _[Screenshot of the election detail page with the "Send Report Email" button visible in the actions area, and the report email preview showing round-by-round results]_
+**Not yet built.** There is no **Send Report Email** button on the election
+detail page. Results are shared by exporting them from the Results tab, or by
+generating the pre-meeting package.
 
 ### Upcoming Business Meetings
 
-The election detail page now shows a section listing **upcoming business meetings** that the election can be linked to for procedural compliance.
-
-> **Screenshot needed:**
-> _[Screenshot of the election detail page showing the "Upcoming Business Meetings" section with a list of upcoming meetings and "Link" buttons]_
+**Not yet built.** The election detail page has no **Upcoming Business
+Meetings** section and no **Link to Election** control. The link itself is
+real — an election carries `meeting_id` and `event_id`, and an event it is
+linked to shows a **Linked Elections** card (see below) — but it is set when
+the election is created, or through the API, not from a list of candidate
+meetings.
 
 ### Edge Cases — Elections (2026-03-19)
 
@@ -1019,11 +1120,13 @@ Recurring events can now use a **rolling 12-month window** that automatically ex
 To enable rolling recurrence:
 
 1. Create or edit a recurring event
-2. Select "Rolling (12 months)" as the recurrence end option
-3. The system generates occurrences up to 12 months from today and auto-refreshes the window
+2. Under **Duration**, tick **Rolling 12-month cycle**. It is a checkbox rather
+   than an option in a list, and ticking it replaces the series end-date field —
+   the two are alternatives, not settings you combine
+3. The note beneath confirms what will happen: "New occurrences are created
+   automatically to maintain a 12-month horizon"
 
-> **Screenshot needed:**
-> _[Screenshot of the recurring event form showing the "Rolling (12 months)" option selected in the recurrence end date area, with a note explaining that the system will auto-generate future occurrences]_
+![The recurrence controls with the rolling 12-month cycle ticked](./images/04-38-rolling-recurrence.png)
 
 > **Edge case:** Rolling recurrence with a monthly-by-weekday pattern (e.g., "2nd Tuesday") generates all occurrences correctly, including months where the weekday pattern falls on the last week.
 
@@ -1032,14 +1135,25 @@ To enable rolling recurrence:
 Officers can now delete an entire recurring event series at once:
 
 1. Navigate to any event in the series
-2. Click **More > Delete Series**
-3. A confirmation dialog shows the total number of events that will be removed
-4. Confirm to delete all events in the series (past and future)
+2. Click **More > Delete Event**
+3. Because the event recurs, the confirmation dialog offers a choice:
+   **Delete only this event** or **Delete all events in this series**. Pick the
+   second
+4. The confirm button changes to **Delete Entire Series**; click it. **Go Back**
+   leaves everything alone
 
-> **Screenshot needed:**
-> _[Screenshot of the delete series confirmation dialog showing "This will permanently delete 24 events in this series. This action cannot be undone." with Cancel and Delete buttons]_
+> **Corrected 2026-08-10.** There is no "Delete Series" menu item — the choice
+> lives inside the Delete Event dialog, and only appears on a recurring event.
+> The dialog does not count the occurrences; it warns that RSVPs and attendance
+> records go with them.
 
-> **Edge case:** Deleting a series removes all events including past ones. If you need to keep historical records, use "Delete Future Events" instead to preserve past occurrences.
+> **Edge case:** Deleting a series removes all events including past ones, and
+> there is no "delete future occurrences only" option — the dialog offers
+> exactly two scopes. To keep the historical record, **Cancel Entire Series**
+> from the More menu instead: cancelled events stay on the calendar with their
+> attendance intact.
+
+![The Delete Event dialog on a recurring event, with the single/series choice](./images/04-39-delete-event-series.png)
 
 ### "End Event" — Bulk Checkout
 
@@ -1050,23 +1164,29 @@ The new **End Event** button on the event detail page checks out all currently c
 3. Confirm the bulk checkout
 4. All checked-in attendees are marked as checked out with the current timestamp
 
-> **Screenshot needed:**
-> _[Screenshot of the event detail page showing the "End Event" button in the action area, with a tooltip explaining "Check out all attendees at once"]_
+![The End Event action on an event that is currently running](./images/04-40-end-event.png)
 
 > **Edge case:** If no attendees are currently checked in, the button shows an informational message ("No attendees to check out") and performs no action.
 
 ### Compact Event Create Form
 
-The event creation form has been redesigned with a **2-column grid layout**:
+The event creation form pairs several of its **sections** two-up on desktop to
+cut scrolling, while staying a single column on mobile:
 
-- Left column: Title, type, category, description
-- Right column: Date, time, location, settings
-- Settings and recurrence sections pair side-by-side
+- **Attendance** beside **RSVP Settings**
+- **Check-In Settings** beside **Notifications**
+- Within Event Details, **Start Date & Time** beside **End Date & Time**
 
-This reduces scrolling significantly on desktop while remaining single-column on mobile.
+Everything else — Start from a Template, Event Details, Location, Recurrence —
+is a full-width card in a single column.
 
-> **Screenshot needed:**
-> _[Screenshot of the redesigned event creation form showing the 2-column layout with the title and type fields on the left, date/time fields on the right, and the recurrence section below spanning both columns]_
+> **Corrected 2026-08-10.** This described a two-column grid with "title, type,
+> category, description" on the left and "date, time, location, settings" on
+> the right. The form has never been laid out that way: the title and
+> description are full width, and it is whole sections that pair up rather
+> than fields.
+
+![Attendance and RSVP settings side by side on the event creation form](./images/04-41-event-create-layout.png)
 
 ### Event-to-Admin-Hours Integration
 
@@ -1074,14 +1194,20 @@ Events can now be linked to administrative hour tracking categories, automatical
 
 **Setting up the integration:**
 
-1. Navigate to **Events Settings > Hour Tracking**
-2. Map event types to admin hour categories (e.g., "Business Meeting" → "Administrative Hours")
-3. Set compliance requirements (e.g., "4 hours per quarter")
+1. Navigate to **Events Admin > Settings > Hour Tracking**
+2. Pick an event source and an admin hours category in the **Add Mapping** row,
+   set the percentage of the attendance to credit, and click **Add**
+3. Each event source becomes a card listing its categories, with a badge showing
+   how much of it is allocated. **A source can be split across categories** —
+   the percentages per source add up to at most 100, and anything unallocated
+   is simply not tracked
+
+**Compliance thresholds are not set here.** This screen decides where the hours
+land; how many are required lives with the admin hours categories themselves.
 
 When members attend events with configured mappings, their attendance hours are automatically credited.
 
-> **Screenshot needed:**
-> _[Screenshot of the Events Settings > Hour Tracking section showing a mapping table with event types on the left, admin hour categories on the right, and a "Requirements" section below with compliance thresholds]_
+![Event hour-tracking settings mapping event types to admin hour categories](./images/04-37-hour-tracking-mapping.png)
 
 > **Edge case:** If no mapping is configured for an event type, attendance is not credited to admin hours. The mapping must be explicitly set up in Events Settings.
 
@@ -1096,8 +1222,10 @@ Dashboard notification cards now include **clear** and **dismiss** buttons, allo
 - **Dismiss**: Hides the notification from your dashboard (personal action, doesn't affect others)
 - **Clear**: Marks the notification as read
 
-> **Screenshot needed:**
-> _[Screenshot of the Dashboard notifications section showing notification cards with dismiss (X) and clear (checkmark) buttons on each card]_
+The dashboard panel is pictured under
+[Administration & Reports → Dashboard Notification Management](./08-admin-reports.md#dashboard-notification-management);
+this guide does not repeat the screenshot. Each card carries one control, the
+✕, which marks it read; **Clear All** in the panel header does the lot.
 
 ### Department Messages
 
@@ -1117,8 +1245,10 @@ The Notifications page now includes a **channel filter** to view notifications b
 - **In-App** — Only in-app notifications
 - **SMS** — Only SMS notifications (when Twilio is enabled)
 
-> **Screenshot needed:**
-> _[Screenshot of the Notifications page showing the channel filter tabs (All, Email, In-App, SMS) at the top, with the In-App filter active showing only in-app notification entries]_
+The filter is pictured under
+[Administration & Reports → Notification Channel Filter](./08-admin-reports.md#notification-channel-filter);
+this guide does not repeat the screenshot. Note that it offers three channels
+— All, Email and In-App — not four; SMS sends are not written to the log.
 
 ---
 
@@ -1146,8 +1276,23 @@ Voter eligibility now correctly uses `User.membership_type` instead of role slug
 - A member with membership_type "active" **is** eligible for operational items regardless of their assigned roles
 - See the [Elections Voter Eligibility](#elections-and-voting) section above for the full eligibility matrix
 
-> **Screenshot needed:**
-> _[Screenshot of the election detail page showing voter eligibility breakdown — listing eligible membership types and the count of members in each type]_
+![The Voter Eligibility Roster: four counts, then every member with the ballot items they qualify for](./images/04-03-election-eligibility.png)
+
+The **Eligibility** tab on an election answers this member by member rather than
+by membership type. Four counts head it — will receive a ballot, ineligible,
+secretary overrides, already voted — and beneath them every member is listed
+with the number of ballot items they qualify for ("3/3"), a tick if they will
+get a ballot, and a **reason** when they will not. Filter chips narrow the list
+to any one of those four states, and the search box takes a membership type as
+well as a name or email, which is the closest thing to a per-type breakdown.
+
+> **The tab is addressable.** `/elections/<id>?tab=eligibility` opens straight
+> onto it, so the roster can be sent to a colleague, and the Back button works
+> after a tab change.
+
+A member's row expands to show which items they are eligible for and why, so a
+disputed exclusion is answerable from this screen without cross-referencing the
+matrix above.
 
 ### Ballot Email Improvements
 
@@ -1160,16 +1305,13 @@ Voter eligibility now correctly uses `User.membership_type` instead of role slug
 
 ### Election Meeting Integration
 
-The election detail page now shows **upcoming business meetings** in a dedicated section, making it easy to link elections to meeting records for procedural compliance.
-
-> **Screenshot needed:**
-> _[Screenshot of the election detail page "Upcoming Business Meetings" section showing a list of upcoming meetings with dates and "Link to Election" buttons]_
+**Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings). An election does carry a meeting/event link, and the linked event shows a **Linked Elections** card; what is missing is the section on the election side that lists meetings to link to.
 
 | Troubleshooting                     | Solution                                                                                                                            |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Ballot emails sent but 0 recipients | Fixed 2026-03-22 — eligibility now uses `membership_type`. Check that members have the correct membership type and email addresses. |
 | Election error messages are generic | Fixed 2026-03-22 — errors now include specific guidance.                                                                            |
-| Can't find report email button      | Look for "Send Report Email" in the election detail page actions area.                                                              |
+| Can't find report email button      | There is no such button. Export results from the Results tab, or send the pre-meeting package.                                      |
 
 ---
 
@@ -1183,8 +1325,7 @@ Event detail pages now display elections that are linked to the event. Each link
 - Direct link to the election detail page
 - Vote count summary
 
-> **Screenshot needed:**
-> _[Screenshot of an event detail page showing a "Linked Elections" section with one election card displaying the election title, "Open" status badge in blue, and a "View Election" link]_
+![Linked elections card on the event the vote is held at](./images/04-12-linked-elections.png)
 
 ### Viewing Linked Elections on Meeting Minutes
 
@@ -1199,21 +1340,24 @@ Officers can populate an election's ballot recipient list directly from a linked
 
 1. Open the election detail page
 2. Navigate to the **Ballot** tab
-3. Click **Import Attendees** and select the linked event
-4. Checked-in attendees from the event are added to the ballot recipient list
+3. Click **Import Attendees from Meeting** (or **… from Event**)
+4. Checked-in attendees are added to the ballot recipient list
 5. Members already in the ballot list are automatically skipped
 
 This streamlines the workflow for in-meeting elections where only present members should vote.
 
-> **Screenshot needed:**
-> _[Screenshot of the election Ballot tab showing the "Import Attendees" button with a dropdown of linked events, and a success message "12 attendees imported, 3 already in list (skipped)"]_
+> **There is no event picker.** The control is a single button that imports from
+> **the** meeting or event this election is already linked to — it names which
+> one, and it only appears when the election has such a link and is still in
+> **draft**. An election already taking nominations or open for voting does not
+> show it: the recipient list is settled by then.
 
 ### Quick-Link Buttons on Upcoming Meetings
 
-The election detail page's Upcoming Meetings list now includes quick-action buttons for faster meeting-to-election association, eliminating the need to navigate to the meeting page separately.
-
 > **Screenshot needed:**
 > _[Screenshot of the Upcoming Meetings section on the election detail page showing meeting cards with "Link to Election" quick-action buttons]_
+
+**Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings) above. There is no Upcoming Meetings list on the election detail page and no quick-link button.
 
 ### Edge Cases
 

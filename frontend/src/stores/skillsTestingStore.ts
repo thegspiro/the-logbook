@@ -70,6 +70,10 @@ interface SkillsTestingState {
   deleteTest: (id: string) => Promise<void>;
   discardPracticeTest: (id: string) => Promise<void>;
   voidTest: (id: string, reason: string) => Promise<SkillTest>;
+  returnTest: (id: string, reason: string) => Promise<SkillTest>;
+  bulkValidateTests: (
+    ids: string[]
+  ) => Promise<{ validated: string[]; skipped: { test_id: string; reason: string }[] }>;
   cancelTest: (id: string, reason?: string) => Promise<SkillTest>;
   validateTest: (id: string) => Promise<SkillTest>;
   releaseTest: (id: string) => Promise<SkillTest>;
@@ -228,7 +232,18 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     set({ testLoading: true, error: null });
     try {
       const test = await skillsTestingService.getTest(id);
-      set({ currentTest: test, testLoading: false, activeSectionIndex: 0 });
+      // Only a *different* test starts at section 1. Re-loading the one
+      // already open — a second in-flight load, a retry after a failed save,
+      // a manual refresh — used to reset the index unconditionally, and it
+      // resolved after the screen had already jumped the examiner to the
+      // first section with blank steps. The jump ran, then this overwrote it,
+      // and a half-scored evaluation reopened at section 1 with no clue why.
+      const sameTest = get().currentTest?.id === test.id;
+      set({
+        currentTest: test,
+        testLoading: false,
+        ...(sameTest ? {} : { activeSectionIndex: 0 }),
+      });
     } catch (err: unknown) {
       set({
         testLoading: false,
@@ -331,6 +346,50 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
       return voided;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to void test');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
+  returnTest: async (id: string, reason: string) => {
+    set({ error: null });
+    try {
+      const returned = await skillsTestingService.returnTest(id, reason);
+      // The row leaves the review queue but stays in the list: it is back with
+      // its examiner at in_progress, not withdrawn. Patched in place with the
+      // reopened status so a queue filtered to pending drops it on the next
+      // render without a refetch.
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.map((t: SkillTestListItem) =>
+          t.id === id
+            ? {
+                ...t,
+                status: returned.status,
+                result: returned.result,
+                completed_at: returned.completed_at,
+                pending_validation: false,
+              }
+            : t
+        ),
+        currentTest: state.currentTest?.id === id ? returned : state.currentTest,
+      }));
+      return returned;
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to return test');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
+  bulkValidateTests: async (ids: string[]) => {
+    set({ error: null });
+    try {
+      // The caller refetches: partial success means the rows that did validate
+      // must leave the queue while the ones that did not stay, and patching
+      // that in place would have to reimplement the server's per-id verdict.
+      return await skillsTestingService.bulkValidateTests(ids);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to accept results');
       set({ error: msg });
       throw err;
     }

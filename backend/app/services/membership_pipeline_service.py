@@ -3705,6 +3705,12 @@ class MembershipPipelineService:
         )
 
         await self.db.commit()
+        # `created_at` / `updated_at` are server-side defaults, so the INSERT
+        # leaves them expired. The endpoint serialises this object through a
+        # response_model that requires both, and Pydantic's attribute read is
+        # synchronous — the lazy reload it triggers raises MissingGreenlet and
+        # the POST 500s on a package it did create. Load them here instead.
+        await self.db.refresh(pkg)
         return pkg
 
     _ELECTION_PKG_PROTECTED_FIELDS = frozenset(
@@ -4009,7 +4015,17 @@ class MembershipPipelineService:
         # Build stage timeline — only include public-visible steps
         completed_stages = []
         if prospect.step_progress:
-            for sp in sorted(prospect.step_progress, key=lambda p: p.created_at):
+            # Pipeline position, not created_at. Progress rows for an applicant
+            # who moves several stages in quick succession share a timestamp to
+            # the second, and the DATETIME tie then renders the applicant's own
+            # status page with its stages in an arbitrary order.
+            for sp in sorted(
+                prospect.step_progress,
+                key=lambda p: (
+                    p.step.sort_order if p.step else 0,
+                    p.created_at,
+                ),
+            ):
                 if str(sp.step_id) not in public_step_ids:
                     continue
                 completed_stages.append(
@@ -4584,6 +4600,12 @@ class MembershipPipelineService:
         )
 
         await self.db.commit()
+
+        # The commit expired every attribute on `link`, and the response below
+        # reads several of them — including the server-side `created_at`. Those
+        # reads are synchronous, so the lazy reload they trigger raises
+        # MissingGreenlet and the POST 500s on a link it did create.
+        await self.db.refresh(link)
 
         # Return enriched response
         linker_result = await self.db.execute(select(User).where(User.id == linked_by))

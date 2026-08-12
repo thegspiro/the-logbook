@@ -112,11 +112,60 @@ export interface CheckTemplateItem {
   imageUrl?: string;
   equipmentId?: string;
   inventoryItemId?: string;
+  /** The running on-truck count, including anything used since the last check. */
+  quantityOnTruck?: number;
+  /** Projected from the linked catalog item — "Each", "Box", "Lot". */
+  unitOfMeasure?: string;
+  /**
+   * The lots physically aboard, soonest first.
+   *
+   * A position can hold three boxes with three dates. A crew checking a drug
+   * bag is reading those dates off the boxes, so the form has to show all of
+   * them — one date cannot describe what is in the bag.
+   */
+  lotsAboard?: DeployedLot[];
   hasExpiration: boolean;
   expirationDate?: string;
   expirationWarningDays: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** How much of a template is wired to the inventory catalog. */
+export interface LinkCoverage {
+  /** Positions that could carry a link — headers and unnamed rows excluded. */
+  linkable: number;
+  linked: number;
+  unlinked: number;
+}
+
+export interface InventoryMatchSuggestion {
+  id: string;
+  name: string;
+  /**
+   * 1.0 only when the two names normalize identically. Anything less is a
+   * judgement call: "Oxygen Mask" scores high against both the adult and the
+   * pediatric mask, which is exactly the case a person has to arbitrate.
+   */
+  score: number;
+  confidence: 'exact' | 'strong' | 'weak';
+}
+
+export interface InventoryMatch {
+  templateItemId: string;
+  itemName: string;
+  checkType?: string;
+  suggestions: InventoryMatchSuggestion[];
+}
+
+export interface InventoryMatchesResult {
+  coverage: LinkCoverage;
+  matches: InventoryMatch[];
+}
+
+export interface InventoryLinkResult {
+  linked: number;
+  coverage: LinkCoverage;
 }
 
 export interface CheckTemplateItemCreate {
@@ -253,12 +302,34 @@ export interface EquipmentCheckTemplateUpdate {
 // Shift Equipment Check Submission
 // ============================================================================
 
+/**
+ * How an item was answered.
+ *
+ * `not_applicable` is a real answer rather than a fault: a tool legitimately
+ * off the truck used to have to be filed as a failure, which the compliance
+ * reports then counted as one. It counts as answered wherever completeness is
+ * measured, and never toward failures.
+ *
+ * `out_of_service` also counts as answered, but does count as a failure —
+ * the item was looked at and found unusable.
+ */
+export type CheckItemStatus = 'pass' | 'fail' | 'not_checked' | 'not_applicable' | 'out_of_service';
+
+/** How each answer reads on screen. Never print the raw token. */
+export const CHECK_ITEM_STATUS_LABELS: Record<string, string> = {
+  pass: 'Pass',
+  fail: 'Fail',
+  not_checked: 'Not checked',
+  not_applicable: 'Not on truck',
+  out_of_service: 'Out of service',
+};
+
 export interface CheckItemResultSubmit {
   template_item_id: string;
   compartment_name: string;
   item_name: string;
   check_type?: string | undefined;
-  status: 'pass' | 'fail' | 'not_checked';
+  status: CheckItemStatus;
   quantity_found?: number | undefined;
   required_quantity?: number | undefined;
   critical_minimum_quantity?: number | undefined;
@@ -268,6 +339,8 @@ export interface CheckItemResultSubmit {
   lot_number?: string | undefined;
   serial_found?: string | undefined;
   lot_found?: string | undefined;
+  /** Expiration read off a replacement unit; written back onto the template. */
+  expiration_found?: string | undefined;
   photo_urls?: string[] | undefined;
   is_expired?: boolean | undefined;
   expiration_date?: string | undefined;
@@ -302,7 +375,7 @@ export interface ShiftEquipmentCheckItemRecord {
   compartmentName: string;
   itemName: string;
   checkType?: string;
-  status: 'pass' | 'fail' | 'not_checked';
+  status: CheckItemStatus;
   quantityFound?: number;
   requiredQuantity?: number;
   criticalMinimumQuantity?: number;
@@ -312,6 +385,7 @@ export interface ShiftEquipmentCheckItemRecord {
   lotNumber?: string;
   serialFound?: string;
   lotFound?: string;
+  expirationFound?: string;
   updatedSerial?: boolean;
   photoUrls?: string[];
   isExpired: boolean;
@@ -376,6 +450,7 @@ export interface LastCheckItemResult {
   level_reading?: number;
   serial_number?: string;
   lot_number?: string;
+  expiration_date?: string;
   notes?: string;
 }
 
@@ -436,6 +511,8 @@ export interface ItemTrendEntry {
   passCount: number;
   failCount: number;
   notCheckedCount: number;
+  /** Answered "not on truck" — an answer, unlike notCheckedCount. */
+  notApplicableCount?: number;
 }
 
 export interface ItemTrendResponse {
@@ -451,6 +528,8 @@ export interface ReadyLot {
   lotNumber?: string;
   expirationDate?: string;
   quantity: number;
+  /** Stock that expired on the shelf: listed, but not swappable onto a truck. */
+  isExpired?: boolean;
 }
 
 export interface SupplyExpiringItem {
@@ -465,6 +544,12 @@ export interface SupplyExpiringItem {
   expirationDate?: string;
   daysUntilExpiration?: number;
   isExpired: boolean;
+  restockNeeded?: boolean;
+  restockNote?: string;
+  restockReportedAt?: string;
+  quantityOnTruck?: number;
+  targetQuantity?: number;
+  isShort?: boolean;
   inventoryItemId?: string;
   inventoryItemName?: string;
   readyStock: number;
@@ -477,11 +562,114 @@ export interface SupplyOverview {
   items: SupplyExpiringItem[];
 }
 
+/**
+ * A tracked position on an apparatus, with the ready stock behind it.
+ *
+ * Read outside any check: the standing view a crew opens mid-shift to record
+ * what they used and to put fresh stock in a bracket.
+ */
+/**
+ * One lot physically aboard for a checklist position.
+ *
+ * A four-slot bracket can hold units from three lots with three dates; the
+ * position's exposure is the earliest of them, which is why these are listed
+ * rather than collapsed into one number and one date.
+ */
+export interface DeployedLot {
+  id: string;
+  lotNumber?: string;
+  expirationDate?: string;
+  quantity: number;
+  isExpired: boolean;
+}
+
+export interface ItemDeployedLots {
+  templateItemId: string;
+  itemName: string;
+  targetQuantity?: number;
+  quantityOnTruck?: number;
+  isShort: boolean;
+  unitOfMeasure?: string;
+  lots: DeployedLot[];
+}
+
+export interface ApparatusInventoryItem {
+  templateItemId: string;
+  itemName: string;
+  checkType?: string;
+  /** What the position should hold. Absent when it is not a counted position. */
+  targetQuantity?: number;
+  /** What it holds now — falls back to the target until someone counts. */
+  quantityOnTruck?: number;
+  isShort: boolean;
+  unitOfMeasure?: string;
+  deployedLots: DeployedLot[];
+  serialNumber?: string;
+  lotNumber?: string;
+  expirationDate?: string;
+  daysUntilExpiration?: number;
+  isExpired: boolean;
+  restockNeeded: boolean;
+  restockNote?: string;
+  restockReportedAt?: string;
+  restockReportedByName?: string;
+  inventoryItemId?: string;
+  readyStock: number;
+  readyLots: ReadyLot[];
+}
+
+export interface ApparatusInventoryCompartment {
+  compartmentId: string;
+  compartmentName: string;
+  items: ApparatusInventoryItem[];
+}
+
+export interface ApparatusInventory {
+  apparatusId: string;
+  apparatusName?: string;
+  compartments: ApparatusInventoryCompartment[];
+}
+
+/** The restock report currently standing against a checklist item. */
+export interface ItemRestockState {
+  templateItemId: string;
+  restockNeeded: boolean;
+  restockNote?: string;
+  restockReportedAt?: string;
+  quantityOnTruck?: number;
+  targetQuantity?: number;
+  isShort: boolean;
+}
+
+/**
+ * A checklist position on an apparatus that an inventory item fills — the
+ * supply link read from the item's side rather than the truck's, which is the
+ * direction a recall or an expiring lot is worked from.
+ */
+export interface ItemDeployment {
+  templateItemId: string;
+  itemName: string;
+  compartmentName?: string;
+  templateId?: string;
+  templateName?: string;
+  apparatusId?: string;
+  apparatusName?: string;
+  apparatusType?: string;
+  lotNumber?: string;
+  serialNumber?: string;
+  expirationDate?: string;
+  daysUntilExpiration?: number;
+  isExpired: boolean;
+}
+
 export interface LotSwapResult {
   templateItemId: string;
   lotNumber?: string;
   expirationDate?: string;
   remainingQuantity: number;
+  /** A full restock settles the report; a partial one leaves it standing. */
+  restockNeeded?: boolean;
+  quantityOnTruck?: number;
 }
 
 // ─── Template Change Log ────────────────────────────────────────────────────

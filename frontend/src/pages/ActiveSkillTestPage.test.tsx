@@ -34,6 +34,7 @@ const mockCompletedTest = {
   completed_at: '2026-01-15T10:30:00Z',
   created_at: '2026-01-15T10:00:00Z',
   updated_at: '2026-01-15T10:30:00Z',
+  version: 7,
 };
 
 const mockInProgressTest = {
@@ -85,6 +86,26 @@ const mockTestWithSections = {
     {
       name: 'Doffing',
       criteria: [{ label: 'Mask stowed', type: 'pass_fail' }],
+    },
+  ] as unknown as Record<string, unknown>[],
+};
+
+/** A scorecard whose opening statement is read inside the time limit, so the
+ *  examiner starts the clock as they read it. */
+const mockTestWithTimedStatement = {
+  ...mockInProgressPracticeTest,
+  template_sections: [
+    {
+      name: 'Donning',
+      criteria: [
+        {
+          label: 'Read this to the candidate',
+          type: 'statement',
+          statement_text: 'Your time starts now.',
+          starts_timer: true,
+        },
+        { label: 'Straps tightened', type: 'pass_fail', required: true },
+      ],
     },
   ] as unknown as Record<string, unknown>[],
 };
@@ -421,6 +442,7 @@ describe('ActiveSkillTestPage', () => {
         status: 'in_progress',
         section_results: [],
         elapsed_seconds: 0,
+        expected_version: 7,
       });
     });
 
@@ -451,6 +473,44 @@ describe('ActiveSkillTestPage', () => {
         'Read this to the candidate'
       );
       expect(mockSetActiveTestRunning).not.toHaveBeenCalledWith(true);
+    });
+
+    // Sheets differ on where the opening statement sits. When it is read inside
+    // the time limit the examiner needs a way to start the clock as they read
+    // it — but still on their tap, not on render: a test is often opened
+    // several minutes before the candidate is in position.
+    it('should offer a start-clock button on a statement read inside the time limit', () => {
+      currentMockTest = mockTestWithTimedStatement;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByRole('button', { name: /start clock & read/i })).toBeInTheDocument();
+      expect(mockSetActiveTestRunning).not.toHaveBeenCalledWith(true);
+    });
+
+    it('should start the clock when that button is tapped', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithTimedStatement;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /start clock & read/i }));
+
+      expect(mockSetActiveTestRunning).toHaveBeenCalledWith(true);
+    });
+
+    it('should not offer the button on a statement read before the clock starts', () => {
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.queryByRole('button', { name: /start clock & read/i })).not.toBeInTheDocument();
+    });
+
+    it('should replace the button with a running-clock note once timing', () => {
+      currentMockTest = mockTestWithTimedStatement;
+      mockTimerRunning = true;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.queryByRole('button', { name: /start clock & read/i })).not.toBeInTheDocument();
+      expect(screen.getByText(/inside the time limit\. The clock is running\./i)).toBeInTheDocument();
     });
 
     // A pause is a decision — equipment reset, an interruption — and scoring

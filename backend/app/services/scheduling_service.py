@@ -6,6 +6,7 @@ attendance tracking, and calendar views.
 """
 
 import calendar
+import html as _html
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
@@ -54,6 +55,21 @@ from app.utils.apparatus_ref import (
     apparatus_ref_exists,
     resolve_apparatus_display_map,
 )
+
+
+def _position_label(position) -> str:
+    """Human-readable position for a notification body.
+
+    `ShiftPosition` is declared twice — once in `app.models.training` and once
+    in `app.schemas.scheduling` — so an `isinstance` check against either one
+    misses members of the other, and the enum falls through to its repr:
+    members were told they had been assigned to the
+    "ShiftPosition.FIREFIGHTER position". Reading `.value` off whatever arrives
+    is indifferent to which class it came from, and also covers the ORM
+    attribute, whose `str()` is the same repr.
+    """
+    value = getattr(position, "value", position)
+    return str(value) if value else "unspecified"
 
 
 class SchedulingService:
@@ -155,6 +171,28 @@ class SchedulingService:
             await self.db.rollback()
             return False, str(e)
 
+    @staticmethod
+    def _frontend_url() -> str:
+        """Base URL for links in outgoing email."""
+        from app.core.config import settings
+
+        return (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
+
+    async def _member_display_name(self, user_id: Any) -> str:
+        """Full name for a member, or an empty string if it cannot be resolved.
+
+        Empty rather than a placeholder: the templates open with
+        "Hello {{recipient_name}}," and an unresolved name reads better as
+        "Hello," than as "Hello Unknown,".
+        """
+        result = await self.db.execute(select(User).where(User.id == str(user_id)))
+        user = result.scalar_one_or_none()
+        if not user:
+            return ""
+        first = user.first_name or ""
+        last = user.last_name or ""
+        return (user.full_name or f"{first} {last}".strip()) or ""
+
     async def _send_notification(
         self,
         recipient_ids: set,
@@ -169,12 +207,21 @@ class SchedulingService:
         email_html_body: Optional[str] = None,
         email_cc: Optional[list] = None,
         email_template_type: Optional[str] = None,
+        email_template: Optional[Any] = None,
+        email_context: Optional[dict] = None,
+        email_defaults: Optional[tuple] = None,
         org: Optional[Any] = None,
     ) -> None:
         """Create in-app NotificationLog records and optionally send email.
 
         This is the shared backbone for all scheduling notification methods.
         Failures are logged but never propagated.
+
+        Pass *email_template* (an ``EmailTemplateType``) together with
+        *email_context* and *email_defaults* — ``(subject, html, text)`` — to
+        send through the department's editable template, falling back to those
+        defaults. Callers that have no template still pass *email_html_body*
+        and get the generic chrome.
         """
         try:
             for rid in recipient_ids:
@@ -205,17 +252,36 @@ class SchedulingService:
                     )
                     to_emails = [r[0] for r in recipient_result.all() if r[0]]
                     if to_emails:
-                        content = email_html_body or f"<p>{message}</p>"
-                        html = wrap_email_body(
-                            org,
-                            email_subject or subject,
-                            content,
-                        )
                         email_svc = EmailService(organization=org)
+                        if email_template and email_defaults:
+                            (
+                                send_subject,
+                                html,
+                                text,
+                            ) = await email_svc._render_with_fallback(
+                                template_type=email_template,
+                                context=dict(email_context or {}),
+                                db=self.db,
+                                organization_id=str(organization_id),
+                                default_subject=email_defaults[0],
+                                default_html=email_defaults[1],
+                                default_text=email_defaults[2],
+                            )
+                        else:
+                            # message is assembled from member names and
+                            # position labels, so it is escaped rather than
+                            # dropped into the body as markup.
+                            content = (
+                                email_html_body or f"<p>{_html.escape(message)}</p>"
+                            )
+                            send_subject = email_subject or subject
+                            html = wrap_email_body(org, send_subject, content)
+                            text = None
                         await email_svc.send_email(
                             to_emails=to_emails,
-                            subject=email_subject or subject,
+                            subject=send_subject,
                             html_body=html,
+                            text_body=text,
                             cc_emails=email_cc or None,
                             db=self.db,
                             template_type=email_template_type or category,
@@ -418,14 +484,33 @@ class SchedulingService:
         user_ids = list({a.user_id for a in assignments if a.user_id})
         name_map = await self._get_user_name_map(user_ids)
 
-        # Batch-load shifts for all assignments
+        # Batch-load shifts for all assignments. Org-scoped: the ids come from
+        # the caller's own assignments, but the filter is what makes that
+        # guarantee live in the query rather than in the caller — and it is why
+        # this method takes organization_id at all.
         shift_ids = list({a.shift_id for a in assignments if a.shift_id})
         shift_map: Dict[str, Any] = {}
         if shift_ids:
             shift_result = await self.db.execute(
-                select(Shift).where(Shift.id.in_(shift_ids))
+                select(Shift).where(
+                    Shift.id.in_(shift_ids),
+                    Shift.organization_id == str(organization_id),
+                )
             )
-            for s in shift_result.scalars().all():
+            shifts = list(shift_result.scalars().all())
+            # My Shifts tells a member when to turn out but could not tell them
+            # which rig: the assignment carried apparatus_id and nothing else,
+            # so the row had no unit to name. Only the two display fields are
+            # resolved here — EmbeddedShiftInfo is deliberately minimal, and the
+            # rest of _enrich_shift_dict's output (positions, min_staffing) is
+            # for the crew board, not a member's own list.
+            apparatus_map = await self._get_apparatus_map(
+                organization_id, [s.apparatus_id for s in shifts if s.apparatus_id]
+            )
+            for s in shifts:
+                apparatus = (
+                    apparatus_map.get(s.apparatus_id) if s.apparatus_id else None
+                )
                 shift_map[str(s.id)] = {
                     "id": s.id,
                     "shift_date": s.shift_date.isoformat() if s.shift_date else None,
@@ -433,6 +518,10 @@ class SchedulingService:
                     "end_time": s.end_time.isoformat() if s.end_time else None,
                     "notes": s.notes,
                     "apparatus_id": s.apparatus_id,
+                    "apparatus_name": apparatus.name if apparatus else None,
+                    "apparatus_unit_number": (
+                        apparatus.unit_number if apparatus else None
+                    ),
                     "shift_officer_id": s.shift_officer_id,
                     "color": s.color,
                 }
@@ -1062,24 +1151,37 @@ class SchedulingService:
         self, shift: "Shift", officer_id: str, organization_id: UUID
     ) -> None:
         """Ensure the shift officer is assigned to the 'officer'
-        position on the apparatus.
+        position on the shift's crew board.
 
-        When a shift officer is designated and the apparatus has an 'officer'
+        When a shift officer is designated and the crew board has an 'officer'
         position, this creates or updates assignments so the officer fills that
-        seat on the crew board.
+        seat on the board.
         """
-        # Load apparatus to check if it has an "officer" position
+        # Resolve the seats the crew board actually renders, which is what
+        # `_enrich_shift_dict` puts on the wire as `apparatus_positions`: the
+        # apparatus's riding positions when it has them, the shift's own
+        # otherwise. Reading `apparatus.positions` alone left the designated
+        # officer off the board entirely on any department using the full
+        # Apparatus module — that module deliberately does not model riding
+        # positions, so the fallback is the only path there, and the panel
+        # named a Shift Officer who held no seat and appeared on no roster.
+        slots: List[Dict[str, Any]] = []
         apparatus_id = shift.apparatus_id
-        if not apparatus_id:
+        if apparatus_id:
+            apparatus_map = await self._get_apparatus_map(
+                organization_id, [apparatus_id]
+            )
+            apparatus = apparatus_map.get(apparatus_id)
+            if apparatus:
+                slots = self.normalize_positions(apparatus.positions)
+        if not slots:
+            slots = self.normalize_positions(shift.positions)
+        if not slots:
             return
 
-        apparatus_map = await self._get_apparatus_map(organization_id, [apparatus_id])
-        apparatus = apparatus_map.get(apparatus_id)
-        if not apparatus or not apparatus.positions:
-            return
-
-        # Check if the apparatus has an "officer" position
-        has_officer_position = any(p.lower() == "officer" for p in apparatus.positions)
+        has_officer_position = any(
+            str(slot.get("position") or "").lower() == "officer" for slot in slots
+        )
         if not has_officer_position:
             return
 
@@ -1361,6 +1463,68 @@ class SchedulingService:
             await self.db.rollback()
             return None, str(e)
 
+    async def checkin_closed_reason(
+        self, shift: Shift, organization_id: UUID
+    ) -> Optional[str]:
+        """Why check-in is closed for this shift, or None if it is open.
+
+        The public form of _checkin_window_error, for callers that want to show
+        the state rather than enforce it — the check-in screen disables its
+        button and prints this instead of offering an action the API refuses.
+        """
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        return self._checkin_window_error(shift, (org.settings or {}) if org else {})
+
+    @staticmethod
+    def _checkin_window_error(shift: Shift, settings: Dict[str, Any]) -> Optional[str]:
+        """Why this shift is outside its check-in window, or None if it is inside.
+
+        Attendance used to be refused only once an officer had finalised the
+        shift, which meant a link to a shift that ended last week still checked
+        somebody in — and stamped the arrival at the moment they tapped it. The
+        bounds come from the department's checklist-timing settings so a
+        department that runs long call-backs can widen them.
+
+        A shift with no recorded times cannot be bounded, so it is allowed
+        through: refusing it would block check-in on data this function cannot
+        judge.
+        """
+        timing = (settings.get("shift_reports") or {}).get("checklist_timing") or {}
+        opens_before = timing.get("checkin_opens_hours_before", 2)
+        closes_after = timing.get("checkin_closes_hours_after", 12)
+
+        # MySQL DATETIME carries no offset, so a value read back through
+        # DateTime(timezone=True) arrives naive and comparing it against an aware
+        # `now` raises TypeError — which would 500 every check-in. Everything is
+        # stored as UTC (see UTCResponseBase), so that is what a naive value is.
+        def as_utc(value: Optional[datetime]) -> Optional[datetime]:
+            if value is None:
+                return None
+            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        start = as_utc(shift.start_time)
+        end = as_utc(shift.end_time) or start
+        if start is None:
+            return None
+
+        if now < start - timedelta(hours=opens_before):
+            when = "when the shift starts"
+            if opens_before:
+                when = f"{opens_before} hour{'s' if opens_before != 1 else ''} before the shift starts"
+            return f"This shift has not started yet. Check-in opens {when}."
+
+        if end is not None and now > end + timedelta(hours=closes_after):
+            return (
+                "This shift ended too long ago to check in to. "
+                "Ask an officer to record your attendance."
+            )
+        return None
+
     async def member_check_in(
         self,
         shift_id: str,
@@ -1382,10 +1546,14 @@ class SchedulingService:
                 select(Organization).where(Organization.id == str(organization_id))
             )
         ).scalar_one_or_none()
+        settings = (org.settings or {}) if org else {}
+
+        window_error = self._checkin_window_error(shift, settings)
+        if window_error:
+            return None, window_error
+
         restrict = bool(
-            ((org.settings or {}) if org else {})
-            .get("scheduling", {})
-            .get("restrict_checkin_to_assigned", False)
+            settings.get("scheduling", {}).get("restrict_checkin_to_assigned", False)
         )
         if restrict and not shift.open_to_all_members:
             assigned = (
@@ -2721,21 +2889,21 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
+            position_label = _position_label(position)
             message = (
-                f"{user_name} {action} the {position} position "
+                f"{user_name} {action} the {position_label} position "
                 f"on the {shift_date_str} shift. "
                 f"This position is now open."
             )
 
+            from app.models.email_template import EmailTemplateType
+            from app.services.email_template_service import (
+                DEFAULT_SHIFT_DECLINE_HTML,
+                DEFAULT_SHIFT_DECLINE_SUBJECT,
+                DEFAULT_SHIFT_DECLINE_TEXT,
+            )
+
             wants_email = sched_cfg.get("send_email", False)
-            email_subj = (
-                f"Shift Coverage Needed \u2014 " f"{position} on {shift_date_str}"
-            )
-            email_html = (
-                f"<p>{message}</p>"
-                f"<p>Please log in to the scheduling "
-                f"module to assign a replacement.</p>"
-            )
 
             await self._send_notification(
                 recipient_ids=recipient_ids,
@@ -2745,10 +2913,21 @@ class SchedulingService:
                 organization_id=organization_id,
                 action_url=f"/scheduling?shift={shift_id}",
                 send_email=wants_email,
-                email_subject=email_subj,
-                email_html_body=email_html,
                 email_cc=sched_cfg.get("cc_emails", []),
                 email_template_type="shift_decline",
+                email_template=EmailTemplateType.SHIFT_DECLINE,
+                email_context={
+                    "member_name": user_name,
+                    "action": action,
+                    "position": position,
+                    "shift_date": shift_date_str,
+                    "shift_url": f"{self._frontend_url()}/scheduling?shift={shift_id}",
+                },
+                email_defaults=(
+                    DEFAULT_SHIFT_DECLINE_SUBJECT,
+                    DEFAULT_SHIFT_DECLINE_HTML,
+                    DEFAULT_SHIFT_DECLINE_TEXT,
+                ),
                 org=org,
             )
 
@@ -2791,7 +2970,7 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
-            position_label = position or "unspecified"
+            position_label = _position_label(position)
 
             from app.services.scheduled_tasks import resolve_check_templates
 
@@ -2827,15 +3006,14 @@ class SchedulingService:
             if shift.start_time:
                 notif_metadata["shift_start_time"] = shift.start_time.isoformat()
 
+            from app.models.email_template import EmailTemplateType
+            from app.services.email_template_service import (
+                DEFAULT_SHIFT_ASSIGNMENT_HTML,
+                DEFAULT_SHIFT_ASSIGNMENT_SUBJECT,
+                DEFAULT_SHIFT_ASSIGNMENT_TEXT,
+            )
+
             wants_email = assign_cfg.get("send_email", False)
-            email_subj = (
-                f"Shift Assignment \u2014 " f"{position_label} on {shift_date_str}"
-            )
-            email_html = (
-                f"<p>{message}</p>"
-                f"<p>Please log in to the scheduling "
-                f"module to confirm or decline this assignment.</p>"
-            )
 
             await self._send_notification(
                 recipient_ids={str(user_id)},
@@ -2846,10 +3024,41 @@ class SchedulingService:
                 action_url=f"/scheduling?shift={shift_id}",
                 notification_metadata=notif_metadata,
                 send_email=wants_email,
-                email_subject=email_subj,
-                email_html_body=email_html,
                 email_cc=assign_cfg.get("cc_emails", []),
                 email_template_type="shift_assignment",
+                email_template=EmailTemplateType.SHIFT_ASSIGNMENT,
+                email_context={
+                    "recipient_name": await self._member_display_name(user_id),
+                    "position": position_label,
+                    "shift_date": shift_date_str,
+                    "shift_start": (
+                        shift.start_time.astimezone(org_tz).strftime("%H:%M")
+                        if shift.start_time
+                        else "See the schedule"
+                    ),
+                    "checklist_html": (
+                        "<p><strong>Equipment checklists to complete:</strong></p>"
+                        "<ul>"
+                        + "".join(
+                            f"<li>{_html.escape(n)}</li>" for n in checklist_names
+                        )
+                        + "</ul>"
+                        if checklist_names
+                        else ""
+                    ),
+                    "checklist_text": (
+                        "Equipment checklists to complete: "
+                        + ", ".join(checklist_names)
+                        if checklist_names
+                        else ""
+                    ),
+                    "shift_url": f"{self._frontend_url()}/scheduling?shift={shift_id}",
+                },
+                email_defaults=(
+                    DEFAULT_SHIFT_ASSIGNMENT_SUBJECT,
+                    DEFAULT_SHIFT_ASSIGNMENT_HTML,
+                    DEFAULT_SHIFT_ASSIGNMENT_TEXT,
+                ),
                 org=org,
             )
 
@@ -2981,7 +3190,7 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
-            position_label = str(assignment.position or "")
+            position_label = _position_label(assignment.position)
 
             message = (
                 f"{user_name} has confirmed the "

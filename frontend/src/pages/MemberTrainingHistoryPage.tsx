@@ -339,9 +339,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             ]}
           />
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-theme-text-primary text-3xl font-bold">Training History</h1>
+              <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Training History</h1>
               <p className="text-theme-text-muted mt-1">{user.full_name || user.username}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2 print:hidden">

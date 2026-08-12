@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
 import { Stethoscope, Plus, Loader2, AlertTriangle, CheckCircle, Shield, Trash2, Edit2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
@@ -24,10 +25,23 @@ import type {
   ScreeningRecordUpdate,
 } from '../types';
 
-type Tab = 'requirements' | 'records' | 'compliance';
+const MEDICAL_SCREENING_TABS = ['requirements', 'records', 'compliance'] as const;
+type Tab = (typeof MEDICAL_SCREENING_TABS)[number];
 
 export const MedicalScreeningPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('requirements');
+  // All three tabs are addressable. They were plain state, so Compliance —
+  // the tab an officer has cause to send a colleague, and the one this
+  // module's reporting lives on — could not be linked to and the Back button
+  // did nothing after a tab change.
+  //
+  // Derived from the URL rather than mirrored into state: mirroring reads the
+  // parameter once, on mount, so every later URL change is ignored, which is
+  // precisely what Back is. Same fix, and same reasoning, as the Email
+  // Templates tabs.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab: Tab = MEDICAL_SCREENING_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : 'requirements';
+  const setActiveTab = (tab: Tab) => setSearchParams({ tab });
   const [showRequirementForm, setShowRequirementForm] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState<ScreeningRequirement | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
@@ -58,6 +72,17 @@ export const MedicalScreeningPage: React.FC = () => {
     void fetchRecords();
     void fetchExpiringScreenings(30);
   }, [fetchRequirements, fetchRecords, fetchExpiringScreenings]);
+
+  // Counted from the rows, not taken from `length`. The banner and the
+  // Compliance tab read one store slice but fill it with different windows —
+  // this page asks for 30 days, `ComplianceDashboard` asks for 60 — so opening
+  // that tab replaced the banner's data with a wider set while the banner went
+  // on claiming "the next 30 days". It read 3 against a list of 6, 31 and 56
+  // days. Filtering here makes the sentence true whatever window was fetched
+  // last.
+  const expiringWithin30 = expiringScreenings.filter(
+    (screening) => (screening.days_until_expiration ?? Infinity) <= 30
+  );
 
   const handleSaveRequirement = useCallback(
     async (data: ScreeningRequirementCreate | ScreeningRequirementUpdate) => {
@@ -122,9 +147,9 @@ export const MedicalScreeningPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <Stethoscope className="text-theme-text-muted h-6 w-6" />
+          <Stethoscope className="text-theme-text-muted h-6 w-6 shrink-0" />
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold">Medical Screening</h1>
             <p className="text-theme-text-muted text-sm">
@@ -138,7 +163,7 @@ export const MedicalScreeningPage: React.FC = () => {
               setEditingRequirement(null);
               setShowRequirementForm(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 sm:self-auto"
           >
             <Plus className="h-4 w-4" />
             Add Requirement
@@ -150,7 +175,7 @@ export const MedicalScreeningPage: React.FC = () => {
               setEditingRecord(null);
               setShowRecordForm(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 sm:self-auto"
           >
             <Plus className="h-4 w-4" />
             Add Record
@@ -159,13 +184,12 @@ export const MedicalScreeningPage: React.FC = () => {
       </div>
 
       {/* Expiring Soon Alert */}
-      {expiringScreenings.length > 0 && (
+      {expiringWithin30.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
-              {expiringScreenings.length} screening{expiringScreenings.length === 1 ? '' : 's'} expiring in the next 30
-              days
+              {expiringWithin30.length} screening{expiringWithin30.length === 1 ? '' : 's'} expiring in the next 30 days
             </span>
           </div>
         </div>
@@ -173,7 +197,7 @@ export const MedicalScreeningPage: React.FC = () => {
 
       {/* Tabs */}
       <div className="border-theme-surface-border mb-6 border-b">
-        <div className="flex gap-1">
+        <div className="hscroll flex gap-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (

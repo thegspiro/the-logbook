@@ -73,14 +73,14 @@ const ComplianceMatrixTab: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-full px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-theme-text-primary text-lg font-semibold">Compliance Matrix</h2>
           <p className="text-theme-text-muted text-sm">
             {members.length} members × {requirements.length} requirements
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <p className="text-theme-text-muted text-xs">Generated {formatShortDateTime(matrix.generated_at, tz)}</p>
           <button
             onClick={() => window.open('/training/print/compliance', '_blank')}
@@ -152,7 +152,7 @@ const ComplianceMatrixTab: React.FC = () => {
       </div>
 
       {/* Legend */}
-      <div className="text-theme-text-muted mt-4 flex items-center gap-4 text-xs">
+      <div className="text-theme-text-muted mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         <span className="flex items-center gap-1">{STATUS_ICONS.completed} Completed</span>
         <span className="flex items-center gap-1">{STATUS_ICONS.in_progress} In Progress</span>
         <span className="flex items-center gap-1">{STATUS_ICONS.expired} Expired</span>

@@ -22,7 +22,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -92,9 +92,12 @@ from app.schemas.inventory import (
     InventoryCategoryCreate,
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
+    InventoryItemBulkCreate,
+    InventoryItemBulkResult,
     InventoryItemCreate,
     InventoryItemResponse,
     InventoryItemUpdate,
+    InventoryLotBulkCreate,
     InventoryLotCreate,
     InventoryLotResponse,
     InventoryLotUpdate,
@@ -172,7 +175,15 @@ async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
             },
         )
     except Exception:
-        pass  # Never let WS publishing break an API response
+        # Real-time delivery is best-effort, but failures still need to be
+        # visible to operators instead of disappearing silently.
+        from loguru import logger
+
+        logger.exception(
+            "Failed to publish inventory WebSocket event org={} action={}",
+            org_id,
+            action,
+        )
 
 
 async def _planner_contact_visibility(db, organization_id) -> dict:
@@ -519,6 +530,62 @@ async def create_item(
     return new_item
 
 
+@router.post(
+    "/items/bulk",
+    response_model=InventoryItemBulkResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_items_bulk(
+    data: InventoryItemBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create many inventory items in one pass.
+
+    Names already in the catalog are skipped and reported, not rejected, so a
+    list can be re-pasted after it grows. Any validation failure writes
+    nothing.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    try:
+        items, skipped = await service.create_items_bulk(
+            organization_id=current_user.organization_id,
+            entries=[e.model_dump(exclude_unset=True) for e in data.entries],
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(str(e)),
+        )
+
+    if items:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_items_bulk_created",
+            event_category="inventory",
+            severity="info",
+            event_data={"count": len(items), "skipped": len(skipped)},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "items_bulk_created",
+            {"count": len(items)},
+        )
+
+    return InventoryItemBulkResult(
+        created=len(items),
+        skipped=skipped,
+        item_ids=[item.id for item in items],
+    )
+
+
 @router.get("/items/export")
 async def export_items_csv(
     category_id: UUID | None = None,
@@ -568,6 +635,10 @@ async def export_items_csv(
             "Manufacturer",
             "Model Number",
             "Quantity",
+            # Lot-stocked consumables carry their real count here; the Quantity
+            # column above is not maintained for them, and an export that shows
+            # only it disagrees with every screen.
+            "Ready Lot Stock",
             "Tracking Type",
             "Purchase Date",
             "Purchase Price",
@@ -600,6 +671,11 @@ async def export_items_csv(
                 item.manufacturer or "",
                 item.model_number or "",
                 item.quantity,
+                (
+                    getattr(item, "lot_stock", None)
+                    if getattr(item, "is_lot_stocked", False)
+                    else ""
+                ),
                 (
                     item.tracking_type.value
                     if hasattr(item.tracking_type, "value")
@@ -1119,7 +1195,12 @@ async def get_item(
             detail="Item not found",
         )
 
-    return item
+    payload = InventoryItemResponse.model_validate(item)
+    if item.assigned_to_user:
+        # The detail page's Assignment card prints who holds the item; without
+        # a name it showed the raw user id.
+        payload.assigned_to_name = item.assigned_to_user.full_name
+    return payload
 
 
 @router.get("/items/{item_id}/history")
@@ -1973,7 +2054,13 @@ async def get_item_maintenance_history(
         skip=skip,
         limit=limit,
     )
-    return maintenance_records
+    responses = []
+    for record in maintenance_records:
+        payload = MaintenanceRecordResponse.model_validate(record)
+        if record.technician:
+            payload.performed_by_name = record.technician.full_name
+        responses.append(payload)
+    return responses
 
 
 @router.get("/maintenance/due", response_model=list[InventoryItemResponse])
@@ -2040,11 +2127,27 @@ async def get_summary_by_location(
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
-    Get inventory summary grouped by location
+    Get inventory summary grouped by location.
+
+    Only admins (inventory.manage or settings.manage) see the department's
+    per-location totals. Regular users receive an empty list — matching
+    `/summary`, which returns a member their own holdings, and `/low-stock`,
+    which returns them nothing. This endpoint was the one of the three that
+    never branched, so a member's inventory page reported their own three items
+    in its header and the department's entire stock and valuation in the panel
+    directly beneath it.
 
     **Authentication required**
     **Requires permission: inventory.view**
     """
+    user_perms = _collect_user_permissions(current_user)
+    is_admin = _has_permission("inventory.manage", user_perms) or _has_permission(
+        "settings.manage", user_perms
+    )
+
+    if not is_admin:
+        return []
+
     service = InventoryService(db)
     return await service.get_summary_by_location(
         organization_id=current_user.organization_id
@@ -3196,6 +3299,9 @@ async def list_equipment_requests(
     if status_filter:
         query = query.where(EquipmentRequest.status == status_filter)
 
+    count_query = select(func.count()).select_from(query.order_by(None).subquery())
+    total = int((await db.execute(count_query)).scalar_one())
+
     query = query.order_by(EquipmentRequest.created_at.desc()).offset(skip).limit(limit)
 
     result = await db.execute(query)
@@ -3242,7 +3348,7 @@ async def list_equipment_requests(
             }
             for r in requests
         ],
-        "total": len(requests),
+        "total": total,
         "skip": skip,
         "limit": limit,
     }
@@ -3428,12 +3534,6 @@ async def list_storage_areas(
         query = query.where(StorageArea.location_id == location_id)
     if parent_id:
         query = query.where(StorageArea.parent_id == parent_id)
-    elif not flat and not location_id:
-        # For tree view, start with top-level items
-        query = query.where(StorageArea.parent_id.is_(None))
-
-    result = await db.execute(query)
-    areas = result.scalars().all()
 
     count_result = await db.execute(
         select(
@@ -3465,22 +3565,22 @@ async def list_storage_areas(
             ),
         )
 
+    # Use the same filtered row set for flat and tree responses. Previously the
+    # tree branch discarded `location_id` and `parent_id` by re-querying every
+    # area in the organization.
+    result = await db.execute(query)
+    areas = result.scalars().all()
+
     if flat:
         return [build_response(a) for a in areas]
 
-    # Build tree: load all areas for this org to build complete tree
-    all_result = await db.execute(
-        select(StorageArea)
-        .where(StorageArea.organization_id == str(current_user.organization_id))
-        .where(StorageArea.is_active == True)  # noqa: E712
-        .order_by(StorageArea.sort_order, StorageArea.name)
-    )
-    all_areas = all_result.scalars().all()
-    area_map = {a.id: build_response(a) for a in all_areas}
+    # Build the requested hierarchy. When a filtered row's parent is outside
+    # the result set, that row becomes a root of the returned subtree.
+    area_map = {a.id: build_response(a) for a in areas}
 
     # Attach children to parents
     roots = []
-    for a in all_areas:
+    for a in areas:
         resp = area_map[a.id]
         if a.parent_id and a.parent_id in area_map:
             resp["parent_name"] = area_map[a.parent_id]["name"]
@@ -5170,7 +5270,12 @@ async def list_equipment_kits(
     kits = await service.get_equipment_kits(
         current_user.organization_id, active_only=active_only
     )
-    return [EquipmentKitResponse.model_validate(k) for k in kits]
+    responses = []
+    for kit in kits:
+        payload = EquipmentKitResponse.model_validate(kit)
+        payload.item_count = len(kit.line_items or [])
+        responses.append(payload)
+    return responses
 
 
 @router.post(
@@ -5232,7 +5337,7 @@ async def update_equipment_kit(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
-    Update a kit's metadata.
+    Update a kit's metadata and optionally replace its line items.
 
     **Authentication required**
     **Requires permission: inventory.manage**
@@ -5522,6 +5627,33 @@ async def add_item_lot(
     if lot is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return lot
+
+
+@router.post(
+    "/lots/bulk",
+    response_model=list[InventoryLotResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_lots_bulk(
+    data: InventoryLotBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Receive a delivery: add one dated stock lot per item line, in one pass.
+
+    Pre-stocked lots become selectable replacements in the equipment-check
+    swap picker, so a crew pulling an expired or used unit has fresh stock to
+    put on the truck.
+    """
+    service = InventoryService(db)
+    try:
+        return await service.add_lots_bulk(
+            organization_id=str(current_user.organization_id),
+            entries=[e.model_dump(exclude_unset=True) for e in data.entries],
+            created_by=str(current_user.id),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
 @router.patch(

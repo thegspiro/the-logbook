@@ -170,6 +170,7 @@ PATCH  /api/v1/training/programs/progress/{id}             # Update progress (lo
 POST   /api/v1/training/programs/progress/{id}/reset       # Reset one requirement's progress for a new recert cycle (2026-07-15)
 POST   /api/v1/training/programs/enrollments/{id}/reset    # Reset a member's whole enrollment for a new recert cycle (2026-07-15)
 POST   /api/v1/training/programs/enrollments/{id}/withdraw # Withdraw from a program (self or officer; soft) (2026-07-16)
+POST   /api/v1/training/programs/enrollments/{id}/reopen   # Put an EXPIRED enrollment back to active, optionally on a new deadline (training.manage) (2026-08-09)
 POST   /api/v1/training/programs/recert/run-due            # Auto-reset every enrollment past its stored recert deadline (scheduled sweep) (2026-07-15)
 POST   /api/v1/training/programs/apply-training-record     # Officer applies an approved training record toward a pipeline requirement (2026-07-16)
 POST   /api/v1/training/programs/programs/{id}/duplicate   # Duplicate program
@@ -502,8 +503,9 @@ MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_t
 | `RequirementType`             | hours, courses, certification, shifts, calls, skills_evaluation, checklist, knowledge_test |
 | `RequirementFrequency`        | annual, biannual, quarterly, monthly, one_time                                             |
 | `DueDateType`                 | calendar_period, rolling, certification_period, fixed_date                                 |
-| `ProgramStructureType`        | sequential, phases, flexible                                                               |
-| `EnrollmentStatus`            | active, completed, expired, on_hold, withdrawn, failed                                     |
+| `ProgramStructureType`        | sequential _(retired from the pickers 2026-08-09; still a valid stored value)_, phases, flexible |
+| `EnrollmentStatus`            | active, completed, **expired** _(first actually written 2026-08-09)_, on_hold, withdrawn, failed |
+
 | `RequirementProgressStatus`   | not_started, in_progress, completed, verified, waived                                      |
 | `ProgressCreditSource`        | training_session, shift_report, external_import, officer_apply                             |
 | `SubmissionStatus`            | draft, pending_review, approved, rejected, revision_requested                              |
@@ -513,6 +515,35 @@ MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_t
 | `InstructorQualificationType` | instructor, evaluator, lead_instructor, mentor                                             |
 | `SkillTemplateStatus`         | draft, published, archived                                                                 |
 | `SkillTestStatus`             | not_started, in_progress, completed, cancelled                                             |
+
+> **`sequential` was retired from the structure pickers** _(2026-08-09)_ because
+> nothing ever enforced an order — it behaved exactly like `flexible` while
+> saying otherwise. The enum value remains so existing programs keep loading; new
+> programs choose between **phases** and a single flat list, and choosing the flat
+> list skips the Phases step of the wizard rather than showing a step to leave
+> empty.
+
+### Enrollment Expiry and Reopen _(2026-08-09)_
+
+`EnrollmentStatus.EXPIRED` was **read but never written** until 2026-08-09.
+Recertification already treated it as a renewable state, but nothing ever set it,
+so a member past their `target_completion_date` stayed `active` indefinitely:
+their page read "42 days overdue" against a status claiming otherwise, and no
+officer view could filter for it.
+
+| Transition | Trigger |
+| --- | --- |
+| `active` → `expired` | **On read** — the progress endpoint transitions an overdue enrollment the moment anyone opens it (the pattern `auto_reset_if_due` already used) — and in the daily `enrollment_expiry` scheduled task (05:15), which covers records nobody opens |
+| `expired` → `active` | `POST /enrollments/{id}/reopen` (`training.manage`), with an optional new `target_completion_date` |
+
+- Both the member and the training officers are notified on expiry.
+- **Reopen leaves progress rows untouched** — the member keeps everything they
+  finished — and re-runs the rollup, so someone who quietly completed the work
+  while expired is marked complete rather than waiting for the next edit.
+- Expiry is deliberately **its own daily task**, not part of the weekly
+  `enrollment_deadline_warnings` sweep it was first folded into: that left up to
+  six days where an enrollment nobody had opened still read "active, N days
+  overdue", and put a member-visible state change on the cadence of a reminder.
 
 ---
 

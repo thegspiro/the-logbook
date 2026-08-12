@@ -644,6 +644,8 @@ export interface ApparatusOperator {
   createdAt: string;
   updatedAt: string;
   evocLevel: EvocLevelListItem | null;
+  /** Null when the backend did not eager-load the operator's user record. */
+  userName: string | null;
 }
 
 export interface ApparatusOperatorCreate {

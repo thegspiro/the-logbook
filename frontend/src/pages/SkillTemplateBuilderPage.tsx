@@ -157,6 +157,16 @@ const CriterionEditor: React.FC<{
                   placeholder="3"
                   className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
+                {/* A scored step with no maximum carries no points at all —
+                    the percentage is computed from max_score, so the step is
+                    on the sheet, is marked by the examiner, and contributes
+                    nothing. Said here as well as in the save-time errors
+                    because this is where the author can still fix it. */}
+                {(criterion.max_score == null || criterion.max_score <= 0) && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    Without a maximum this step earns no points toward the score.
+                  </p>
+                )}
               </div>
               {/* A passing threshold only means anything on a critical
                   criterion: a non-critical one contributes its points to the
@@ -231,6 +241,25 @@ const CriterionEditor: React.FC<{
                 placeholder="Enter the statement the evaluator must read or announce..."
                 className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
               />
+              {/* Sheets differ on this and the difference is invisible from the
+                  scorecard afterwards: an opening brief read before the
+                  candidate is in position is off the clock, while a prompt
+                  delivered mid-evolution runs against the time limit. */}
+              <label className="mt-2 flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={criterion.starts_timer ?? false}
+                  onChange={(e) => onChange({ ...criterion, starts_timer: e.target.checked })}
+                  className="border-theme-surface-border focus:ring-theme-focus-ring mt-0.5 rounded-sm text-blue-600"
+                />
+                <span>
+                  <span className="text-theme-text-primary text-xs">Read inside the time limit</span>
+                  <p className="text-theme-text-muted text-xs">
+                    The examiner gets a &ldquo;Start clock &amp; read&rdquo; button on this statement. Leave off for an
+                    opening brief read before the clock starts.
+                  </p>
+                </span>
+              </label>
             </div>
           )}
 
@@ -397,6 +426,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | undefined>();
   const [passingPercentage, setPassingPercentage] = useState<number | undefined>();
   const [requireAllCritical, setRequireAllCritical] = useState(true);
+  // Off by default so a new template's percentage means the same thing as every
+  // one already on record: points from scored steps only.
+  const [scorePassFailCriteria, setScorePassFailCriteria] = useState(false);
   const [tags, setTags] = useState('');
   const [requirementId, setRequirementId] = useState<string>('');
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
@@ -431,7 +463,20 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   useEffect(() => {
     void (async () => {
       try {
-        setPositions(await roleService.getRoles());
+        // Sorted by name, not by the order the API returns.
+        //
+        // `list_roles` orders by `priority DESC`, which is an *authorization*
+        // ranking — "higher priority = more powerful" — not an org chart. IT
+        // Manager is seeded at 100, above Fire Chief at 95, so the rank order
+        // opens this list with the most privileged account rather than the
+        // most senior officer. That reads as a recommendation here, and it
+        // isn't one.
+        //
+        // Rank order earns nothing anyway in a checkbox list someone is
+        // scanning for a specific title, which is what this is: alphabetical
+        // is the order you can predict before you look.
+        const roles = await roleService.getRoles();
+        setPositions([...roles].sort((a, b) => a.name.localeCompare(b.name)));
       } catch {
         // Non-fatal — position grants are optional.
       }
@@ -465,20 +510,26 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       );
       setPassingPercentage(currentTemplate.passing_percentage ?? undefined);
       setRequireAllCritical(currentTemplate.require_all_critical);
+      setScorePassFailCriteria(currentTemplate.score_pass_fail_criteria ?? false);
       setRequirementId(currentTemplate.requirement_id ?? '');
       setResultDisclosure(currentTemplate.result_disclosure ?? '');
       setResultRelease(currentTemplate.result_release ?? '');
       setViewerPositions(currentTemplate.result_viewer_positions ?? []);
       setTags((currentTemplate.tags ?? []).join(', '));
       setSections(
+        // localId falls back to a generated one: the API serves a template's
+        // sections straight out of the JSON column, and nothing ever wrote an
+        // `id` into it, so `s.id` / `c.id` arrive undefined on every load. They
+        // are React keys — undefined for every row means duplicate keys and a
+        // list React cannot reconcile.
         currentTemplate.sections.map((s) => ({
-          localId: s.id,
+          localId: s.id || generateLocalId(),
           name: s.name,
           description: s.description,
           sort_order: s.sort_order,
           collapsed: false,
           criteria: s.criteria.map((c) => ({
-            localId: c.id,
+            localId: c.id || generateLocalId(),
             label: c.label,
             description: c.description,
             type: c.type,
@@ -489,6 +540,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
             time_limit_seconds: c.time_limit_seconds,
             checklist_items: c.checklist_items,
             statement_text: c.statement_text,
+            starts_timer: c.starts_timer ?? false,
           })),
         }))
       );
@@ -522,6 +574,20 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         ) {
           errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Passing score cannot exceed max score`);
         }
+        // A scored step's points come entirely from max_score: _criterion_point_value
+        // returns null without one, so the step is marked by the examiner and
+        // contributes nothing to the percentage — silently. That is the same
+        // shape of failure as the unrenderable criterion type, and it is caught
+        // here rather than in the API schema because the template PUT resends
+        // every section: a 422 would block edits to templates saved before this
+        // rule existed, with no way to see which step was at fault. Blocking
+        // rather than advisory, matching the checklist and statement rules
+        // below — a step that cannot score is not a step.
+        if (criterion.type === 'score' && (criterion.max_score == null || criterion.max_score <= 0)) {
+          errors.push(
+            `Section ${si + 1}, Criterion ${ci + 1}: Scored steps need a max points value, or they earn nothing`
+          );
+        }
         if (criterion.type === 'checklist' && (!criterion.checklist_items || criterion.checklist_items.length === 0)) {
           errors.push(`Section ${si + 1}, Criterion ${ci + 1}: At least one checklist item is required`);
         }
@@ -547,6 +613,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       time_limit_seconds: timeLimitMinutes != null ? Math.round(timeLimitMinutes * 60) : undefined,
       passing_percentage: passingPercentage,
       require_all_critical: requireAllCritical,
+      score_pass_fail_criteria: scorePassFailCriteria,
       requirement_id: requirementId || undefined,
       // null, not undefined: undefined is dropped by exclude_unset on the
       // backend, so clearing an override back to "inherit" would silently keep
@@ -570,6 +637,10 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           time_limit_seconds: c.time_limit_seconds,
           checklist_items: c.checklist_items?.length ? c.checklist_items : undefined,
           statement_text: c.statement_text?.trim() || undefined,
+          // Only meaningful on a statement, and a stale true left behind by a
+          // type change would put a start-clock button on a step that has no
+          // statement to read.
+          starts_timer: c.type === 'statement' ? (c.starts_timer ?? false) : false,
         })),
       })),
     };
@@ -581,6 +652,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     timeLimitMinutes,
     passingPercentage,
     requireAllCritical,
+    scorePassFailCriteria,
     requirementId,
     resultDisclosure,
     resultRelease,
@@ -682,9 +754,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
             <ArrowLeft className="mr-2 h-5 w-5" />
             Back to Skills Testing
           </Link>
-          <div className="flex items-center justify-between">
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-              <ClipboardCheck className="h-8 w-8 text-red-700" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+              <ClipboardCheck className="h-8 w-8 shrink-0 text-red-700" />
               <span>{isEditing ? 'Edit Template' : 'New Template'}</span>
             </h1>
             <div className="flex gap-2">
@@ -958,6 +1030,32 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 <span className="text-theme-text-primary text-sm">Require all critical criteria to pass</span>
               </label>
             </div>
+          </div>
+
+          {/* Which steps the percentage is actually computed from. Without this
+              setting, Pass/Fail steps were worth nothing at all — a template
+              whose knowledge questions are written as Pass/Fail produced a
+              percentage that ignored every one of them, and nothing said so. */}
+          <div className="border-theme-surface-border mt-4 border-t pt-4">
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={scorePassFailCriteria}
+                onChange={(e) => setScorePassFailCriteria(e.target.checked)}
+                className="border-theme-surface-border focus:ring-theme-focus-ring mt-0.5 rounded-sm text-blue-600"
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm font-medium">
+                  Count Pass/Fail steps toward the overall percentage
+                </span>
+                <span className="text-theme-text-muted block text-xs">
+                  A passed step earns its points, a failed one earns none. Each is worth 1 point unless you set a point
+                  value on it. Leave this off and the percentage comes from scored steps only — Pass/Fail steps still
+                  appear on the scorecard and can still fail the test outright when marked critical, but they do not
+                  move the number.
+                </span>
+              </span>
+            </label>
           </div>
         </div>
 

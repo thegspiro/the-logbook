@@ -207,6 +207,45 @@ describe('Dashboard', () => {
       });
     });
 
+    // The panel used to render every open shift in the next 30 days. On a
+    // department running two platoons that is ~60 rows, and the dashboard
+    // became one long list with events, training and equipment pushed off the
+    // bottom of a 7,000px page.
+    it('should list at most five open shifts', async () => {
+      mockGetOpenShifts.mockResolvedValue(
+        Array.from({ length: 12 }, (_, i) => makeShift({ id: `open-${i}`, shift_date: `2026-03-${10 + i}` }))
+      );
+
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: /sign up/i })).toHaveLength(5);
+      });
+    });
+
+    it('should say how many open shifts it is not showing', async () => {
+      mockGetOpenShifts.mockResolvedValue(
+        Array.from({ length: 12 }, (_, i) => makeShift({ id: `open-${i}`, shift_date: `2026-03-${10 + i}` }))
+      );
+
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/7 more open shifts in the next 30 days/)).toBeInTheDocument();
+      });
+    });
+
+    it('should not add a "more" line when everything fits', async () => {
+      mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1' })]);
+
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /sign up/i })).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/more open shift/)).not.toBeInTheDocument();
+    });
+
     it('should call signupForShift when sign up button is clicked', async () => {
       mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1', shift_date: '2026-03-20' })]);
       mockSignupForShift.mockResolvedValue(undefined);

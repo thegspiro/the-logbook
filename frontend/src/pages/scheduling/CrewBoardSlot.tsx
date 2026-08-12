@@ -141,14 +141,19 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
           </>
         ) : (
           !isPast && (
+            /* "Assign" and "Sign Up" side by side never said which was which —
+               and on a phone the first collapsed to a bare icon. The labels
+               carry the difference: one puts somebody else in the seat, the
+               other puts you in it. */
             <div className="flex items-center gap-1.5">
               {canAssign && (
                 <button
                   onClick={() => onAssignToPosition(position)}
                   className="inline-flex items-center gap-1 rounded-lg border border-violet-500/30 px-2.5 py-1.5 text-xs font-medium text-violet-600 hover:bg-violet-500/10 sm:px-3 dark:text-violet-400"
                 >
-                  <UserPlus className="h-3 w-3" />
-                  <span className="hidden sm:inline">Assign</span>
+                  <UserPlus className="h-3 w-3" aria-hidden="true" />
+                  <span className="hidden sm:inline">Assign someone</span>
+                  <span className="sm:hidden">Assign</span>
                 </button>
               )}
               {!isUserAssigned && (
@@ -162,8 +167,8 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
                   ) : (
                     <UserPlus className="h-3 w-3" />
                   )}
-                  <span className="hidden sm:inline">Sign Up</span>
-                  <span className="sm:hidden">Join</span>
+                  <span className="hidden sm:inline">Sign myself up</span>
+                  <span className="sm:hidden">Sign up</span>
                 </button>
               )}
             </div>
@@ -174,27 +179,36 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
   );
 };
 
-/** Attendance badge shown on filled crew board slots (hours worked or check-in indicator). */
+/**
+ * Attendance badge shown on filled crew board slots.
+ *
+ * A bare "12h" beside a name could be the hours they are scheduled for, the
+ * hours they will be credited, or the hours they actually worked — three
+ * numbers that differ in practice, and this one is the third: check-in to
+ * check-out. The chip says which, rather than leaving it to a hover a phone
+ * cannot perform.
+ */
 const AttendanceBadge: React.FC<{ record: ShiftAttendanceRecord | undefined; tz: string }> = ({ record, tz }) => {
   if (!record) return null;
   if (record.checked_out_at) {
     const hrs = Math.round(((record.duration_minutes ?? 0) / 60) * 10) / 10;
     return (
       <span
-        className="rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-400"
+        className="rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-green-700 dark:text-green-400"
         title={`In: ${formatTime(record.checked_in_at, tz)} Out: ${formatTime(record.checked_out_at, tz)}`}
       >
-        {hrs}h
+        {hrs}h worked
       </span>
     );
   }
   if (record.checked_in_at) {
     return (
       <span
-        className="rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400"
+        className="rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-blue-700 dark:text-blue-400"
         title={`Checked in at ${formatTime(record.checked_in_at, tz)}`}
       >
-        <LogIn className="inline h-3 w-3" />
+        <LogIn className="mr-0.5 inline h-3 w-3" aria-hidden="true" />
+        In {formatTime(record.checked_in_at, tz)}
       </span>
     );
   }

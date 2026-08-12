@@ -32,12 +32,13 @@ import {
   Vote,
   FileText,
   LayoutTemplate,
+  Save,
   PenLine,
   Loader2,
   X,
 } from 'lucide-react';
 import { electionService } from '../services/api';
-import type { Election, BallotItem, BallotTemplate, VictoryCondition } from '../types/election';
+import type { Election, BallotItem, BallotTemplate, SavedBallotTemplate, VictoryCondition } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ElectionStatus, VoteType, BallotItemType, VictoryCondition as VC } from '../constants/enums';
 
@@ -510,6 +511,7 @@ interface BallotBuilderProps {
 
 export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, election, onUpdate }) => {
   const [templates, setTemplates] = useState<BallotTemplate[]>([]);
+  const [savedTemplates, setSavedTemplates] = useState<SavedBallotTemplate[]>([]);
   const [ballotItems, setBallotItems] = useState<BallotItem[]>(election.ballot_items || []);
   const [saving, setSaving] = useState(false);
 
@@ -517,6 +519,10 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
   const [showTemplatePopover, setShowTemplatePopover] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<BallotTemplate | null>(null);
   const [templateNameInput, setTemplateNameInput] = useState('');
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [savedTemplateName, setSavedTemplateName] = useState('');
+  const [pendingSavedTemplateId, setPendingSavedTemplateId] = useState<string | null>(null);
+  const [pendingDeleteTemplateId, setPendingDeleteTemplateId] = useState<string | null>(null);
   const templateRef = useRef<HTMLDivElement>(null);
 
   // Custom item form
@@ -573,10 +579,55 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
 
   const loadTemplates = async () => {
     try {
-      const data = await electionService.getBallotTemplates();
-      setTemplates(data);
+      const [builtIn, saved] = await Promise.all([
+        electionService.getBallotTemplates(),
+        electionService.getSavedBallotTemplates(),
+      ]);
+      setTemplates(builtIn);
+      setSavedTemplates(saved);
     } catch (_err) {
       // Templates list will be empty
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!savedTemplateName.trim() || ballotItems.length === 0) return;
+    try {
+      setSaving(true);
+      await electionService.saveBallotTemplate({
+        name: savedTemplateName.trim(),
+        ballot_items: ballotItems,
+      });
+      await loadTemplates();
+      setSavedTemplateName('');
+      setShowSaveTemplate(false);
+      toast.success('Reusable ballot template saved');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save ballot template'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleApplySavedTemplate = async (template: SavedBallotTemplate) => {
+    // Generate fresh IDs so applying a snapshot never carries identifiers
+    // that may already be referenced by this draft's local UI state.
+    const items = template.ballot_items.map((item) => ({ ...item, id: generateId() }));
+    if (await saveItems(items)) {
+      setShowTemplatePopover(false);
+      setPendingSavedTemplateId(null);
+      toast.success(`Applied "${template.name}"`);
+    }
+  };
+
+  const handleDeleteSavedTemplate = async (template: SavedBallotTemplate) => {
+    try {
+      await electionService.deleteSavedBallotTemplate(template.id);
+      setSavedTemplates((current) => current.filter((item) => item.id !== template.id));
+      setPendingDeleteTemplateId(null);
+      toast.success('Saved template deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete ballot template'));
     }
   };
 
@@ -590,8 +641,10 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
         setBallotItems(items);
         onUpdate(updated);
         toast.success('Ballot items saved');
+        return true;
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to save ballot items'));
+        return false;
       } finally {
         setSaving(false);
       }
@@ -723,6 +776,16 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
         <h3 className="text-theme-text-primary text-lg font-medium">Ballot Items ({ballotItems.length})</h3>
         {!isClosed && (
           <div className="relative flex gap-2" ref={templateRef}>
+            {ballotItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowSaveTemplate((value) => !value)}
+                className="btn-info inline-flex items-center gap-1.5 rounded-md text-sm"
+              >
+                <Save className="h-4 w-4" />
+                Save as Template
+              </button>
+            )}
             {/* Template button + popover */}
             <div className="relative">
               <button
@@ -744,6 +807,81 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                   {!selectedTemplate ? (
                     <>
                       <h4 className="text-theme-text-primary mb-3 text-sm font-semibold">Select a Template</h4>
+                      {savedTemplates.length > 0 && (
+                        <div className="mb-4">
+                          <p className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wide uppercase">
+                            Your saved ballots
+                          </p>
+                          <div className="space-y-2">
+                            {savedTemplates.map((template) => (
+                              <div
+                                key={template.id}
+                                className="bg-theme-surface-secondary border-theme-surface-border flex items-center gap-2 rounded-lg border p-3"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingSavedTemplateId(template.id)}
+                                  className="min-w-0 flex-1 text-left"
+                                >
+                                  <span className="text-theme-text-primary block truncate text-sm font-medium">
+                                    {template.name}
+                                  </span>
+                                  <span className="text-theme-text-muted text-xs">
+                                    {template.ballot_items.length} item{template.ballot_items.length === 1 ? '' : 's'} ·
+                                    replaces current ballot
+                                  </span>
+                                </button>
+                                {pendingSavedTemplateId === template.id && (
+                                  <span className="flex shrink-0 items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleApplySavedTemplate(template)}
+                                      className="btn-primary rounded px-2 py-1 text-xs"
+                                    >
+                                      Replace
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPendingSavedTemplateId(null)}
+                                      className="text-theme-text-muted px-1 text-xs"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </span>
+                                )}
+                                {pendingDeleteTemplateId === template.id ? (
+                                  <span className="flex shrink-0 items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDeleteSavedTemplate(template)}
+                                      className="rounded bg-red-600 px-2 py-1 text-xs text-white"
+                                    >
+                                      Delete
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPendingDeleteTemplateId(null)}
+                                      className="text-theme-text-muted px-1 text-xs"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPendingDeleteTemplateId(template.id)}
+                                    className="text-theme-text-muted hover:text-red-600 dark:hover:text-red-400"
+                                    aria-label={`Delete saved template ${template.name}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="border-theme-surface-border mt-4 border-t" />
+                        </div>
+                      )}
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         {templates.map((template) => {
                           const TIcon = BALLOT_TYPE_ICONS[template.type] ?? FileText;
@@ -887,6 +1025,41 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
           </div>
         )}
       </div>
+
+      {showSaveTemplate && !isClosed && (
+        <div className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label className={labelClass} htmlFor="saved-ballot-template-name">
+              Template name
+            </label>
+            <input
+              id="saved-ballot-template-name"
+              className={inputClass}
+              value={savedTemplateName}
+              onChange={(event) => setSavedTemplateName(event.target.value)}
+              maxLength={200}
+              placeholder="e.g., Annual officer election"
+              autoFocus
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Saves ballot configuration only—never candidates, voters, votes, or attendance.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" className="btn-info rounded-md text-sm" onClick={() => setShowSaveTemplate(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary rounded-md text-sm"
+              disabled={saving || !savedTemplateName.trim()}
+              onClick={() => void handleSaveTemplate()}
+            >
+              {saving ? 'Saving...' : 'Save Template'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Empty state ── */}
       {ballotItems.length === 0 && !showCustomForm ? (

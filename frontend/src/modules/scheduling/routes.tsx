@@ -32,6 +32,8 @@ const EquipmentCheckReportsPage = lazyWithRetry(() => import('../../pages/schedu
 
 const SupplyExpiringPage = lazyWithRetry(() => import('../../pages/scheduling/SupplyExpiringPage'));
 
+const ApparatusInventoryPage = lazyWithRetry(() => import('../../pages/scheduling/ApparatusInventoryPage'));
+
 const ShiftCheckInPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftCheckInPage'));
 
 const ShiftCheckInPrintPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftCheckInPrintPage'));
@@ -134,6 +136,20 @@ export const getSchedulingRoutes = () => {
           <Suspense fallback={null}>
             <ProtectedRoute requiredAnyPermission={['scheduling.manage', 'equipment_check.view', 'inventory.view']}>
               <SupplyExpiringPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/apparatus-inventory"
+        element={
+          <Suspense fallback={null}>
+            {/* Crew-level, not officer-level: recording what you just used is
+                the whole point, so the default member permission opens it. */}
+            <ProtectedRoute
+              requiredAnyPermission={['equipment_check.submit', 'equipment_check.view', 'inventory.view']}
+            >
+              <ApparatusInventoryPage />
             </ProtectedRoute>
           </Suspense>
         }

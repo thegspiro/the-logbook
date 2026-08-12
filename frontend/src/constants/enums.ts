@@ -409,6 +409,24 @@ export const CohortStatus = {
 } as const;
 export type CohortStatus = (typeof CohortStatus)[keyof typeof CohortStatus];
 
+/**
+ * Display names for `TrainingType`.
+ *
+ * Two divergent copies of this map used to live in CourseLibraryPicker and
+ * ReviewSubmissionsPage — one saying "Skills practice", the other "Skills
+ * Practice" — while the course preview card on the Create Training Session
+ * wizard rendered the raw value and showed "Type: skills_practice" to the
+ * user. One map, here with the other label maps.
+ */
+export const TRAINING_TYPE_LABELS: Record<string, string> = {
+  certification: 'Certification',
+  continuing_education: 'Continuing Education',
+  skills_practice: 'Skills Practice',
+  orientation: 'Orientation',
+  refresher: 'Refresher',
+  specialty: 'Specialty',
+};
+
 export const COHORT_STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
   scheduled: 'Scheduled',

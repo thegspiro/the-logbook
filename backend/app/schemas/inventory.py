@@ -283,6 +283,39 @@ class InventoryItemCreate(InventoryItemBase):
     """Schema for creating a new inventory item"""
 
 
+class InventoryItemBulkEntry(BaseModel):
+    """One line of a pasted or imported list of catalog items.
+
+    Deliberately a small subset of the full create schema. This path exists to
+    get names into the catalog fast — the detail that matters per item is
+    edited afterwards, on the item, where there is room for it.
+    """
+
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[FreeText] = None
+    category_id: Optional[UUID] = None
+    unit_of_measure: Optional[str] = Field(None, max_length=50)
+    quantity: Optional[int] = Field(None, ge=0)
+    reorder_point: Optional[int] = Field(None, ge=0)
+    tracking_type: Optional[TrackingTypeLiteral] = None
+
+
+class InventoryItemBulkCreate(BaseModel):
+    """A list of catalog items entered in one pass."""
+
+    entries: List[InventoryItemBulkEntry] = Field(..., min_length=1, max_length=500)
+
+
+class InventoryItemBulkResult(BaseModel):
+    """What a bulk create wrote, and what it left alone."""
+
+    created: int = 0
+    # Names already in the catalog. Reported rather than rejected so re-pasting
+    # a list that grew by two lines does the obvious thing.
+    skipped: List[str] = []
+    item_ids: List[UUID] = []
+
+
 class InventoryItemUpdate(BaseModel):
     """Schema for updating an inventory item"""
 
@@ -336,6 +369,9 @@ class InventoryItemResponse(InventoryItemBase):
     id: UUID
     organization_id: UUID
     assigned_to_user_id: Optional[UUID] = None
+    # Set by the detail endpoint, which eager-loads the holder. The list
+    # endpoints leave it None rather than joining a user per row.
+    assigned_to_name: Optional[str] = None
     assigned_date: Optional[datetime] = None
     quantity_issued: int = 0
     last_inspection_date: Optional[date] = None
@@ -344,6 +380,14 @@ class InventoryItemResponse(InventoryItemBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+
+    # Ready units across the item's in-date stock lots, and whether it is
+    # stocked that way at all. Lots and `quantity` are separate ledgers, so a
+    # consumable kept as dated stock has a `quantity` nothing maintains; a
+    # display that shows only that column reports a stale number. Null when
+    # the item has no lots — there is nothing to prefer over `quantity`.
+    lot_stock: Optional[int] = None
+    is_lot_stocked: bool = False
 
     model_config = _response_config
 
@@ -365,6 +409,22 @@ class InventoryLotBase(BaseModel):
 
 class InventoryLotCreate(InventoryLotBase):
     """Schema for adding a stock lot to an item."""
+
+
+class InventoryLotBulkEntry(InventoryLotBase):
+    """One line of a received shipment: which item, and the lot it arrived as."""
+
+    inventory_item_id: str
+    # A received line with no units is a data-entry slip, not an empty lot: the
+    # base schema's 0 default is right for "I am tracking this lot but have
+    # none left", and wrong for goods coming through the door.
+    quantity: int = Field(..., ge=1)
+
+
+class InventoryLotBulkCreate(BaseModel):
+    """A whole delivery entered at once, one lot per item line."""
+
+    entries: List[InventoryLotBulkEntry] = Field(..., min_length=1, max_length=200)
 
 
 class InventoryLotUpdate(BaseModel):
@@ -654,6 +714,9 @@ class MaintenanceRecordResponse(MaintenanceRecordBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # The service history prints who did the work. Without a name the record
+    # showed "By: a8c2c854-7bb9-…", the raw user id.
+    performed_by_name: Optional[str] = None
 
     model_config = _response_config
 
@@ -1659,6 +1722,7 @@ class EquipmentKitItemCreate(BaseModel):
     item_name: str = Field(..., min_length=1, max_length=255)
     quantity: int = Field(default=1, ge=1)
     size_selectable: bool = False
+    optional: bool = False
 
 
 class EquipmentKitCreate(BaseModel):
@@ -1681,6 +1745,9 @@ class EquipmentKitUpdate(BaseModel):
     restricted_to_roles: Optional[List[str]] = None
     min_rank_order: Optional[int] = None
     active: Optional[bool] = None
+    line_items: Optional[List[EquipmentKitItemCreate]] = Field(
+        default=None, min_length=1
+    )
 
 
 class EquipmentKitItemResponse(BaseModel):
@@ -1693,6 +1760,7 @@ class EquipmentKitItemResponse(BaseModel):
     item_name: str
     quantity: int
     size_selectable: bool = False
+    optional: bool = False
     sort_order: int = 0
 
     model_config = _response_config
@@ -1711,6 +1779,9 @@ class EquipmentKitResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # The list card reports how many items a kit holds. The full line items are
+    # only on the detail response, so the count travels on its own.
+    item_count: int = 0
 
     model_config = _response_config
 

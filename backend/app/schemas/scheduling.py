@@ -97,6 +97,13 @@ class ShiftResponse(UTCResponseBase):
     apparatus_id: Optional[str] = None
     apparatus_name: Optional[str] = None
     apparatus_unit_number: Optional[str] = None
+    # `_enrich_shift_dict` has always computed this — resolved across both
+    # apparatus tables, lowercased — but the schema did not project it, so it
+    # was dropped on serialization and every shift reached the client with no
+    # type. The report form keys its per-apparatus skill and task defaults on
+    # it, so those mappings could never apply to any shift in any department:
+    # "+ Add" appended a blank task row on an engine and a ladder alike.
+    apparatus_type: Optional[str] = None
     platoon: Optional[str] = None
     positions: Optional[List[Any]] = None
     apparatus_positions: Optional[List[Any]] = None
@@ -265,6 +272,12 @@ class ShiftDetailResponse(ShiftResponse):
     # Full duty-platoon roster for the shift's platoon (when set), so officers
     # can see who is on, who is on leave, and who could fill in / be held over.
     platoon_roster: List[PlatoonRosterEntry] = []
+    # Whether check-in is inside its window, and the reason when it is not.
+    # Declared so the response model does not strip them: the check-in screen
+    # disables its button on these rather than reimplementing the rule, and
+    # undeclared keys leave it offering an action the API refuses.
+    checkin_open: bool = True
+    checkin_closed_reason: Optional[str] = None
 
     model_config = _response_config
 
@@ -587,6 +600,11 @@ class EmbeddedShiftInfo(BaseModel):
     end_time: Optional[str] = None
     notes: Optional[str] = None
     apparatus_id: Optional[str] = None
+    # Resolved so a member's own shift list can name the rig. Without these the
+    # row could only show a date and a position — the id alone is not something
+    # anyone can read.
+    apparatus_name: Optional[str] = None
+    apparatus_unit_number: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
 

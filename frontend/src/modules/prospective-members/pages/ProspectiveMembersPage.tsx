@@ -650,7 +650,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             <>
               {/* Bulk Actions Bar */}
               {selectedApplicants.size > 0 && (
-                <div className="bg-theme-surface border-theme-surface-border mb-3 flex items-center gap-3 rounded-lg border p-3">
+                <div className="bg-theme-surface border-theme-surface-border mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3">
                   <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -660,7 +660,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     />
                     {selectedApplicants.size} selected
                   </label>
-                  <div className="ml-auto flex items-center gap-2">
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
                     <button
                       onClick={() =>
                         void navigate(`/prospective-members/print-labels?ids=${[...selectedApplicants].join(',')}`)
@@ -773,7 +773,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         <div>
           {/* Inactive Bulk Actions */}
           {selectedInactive.size > 0 && (
-            <div className="bg-theme-surface border-theme-surface-border mb-3 flex items-center gap-3 rounded-lg border p-3">
+            <div className="bg-theme-surface border-theme-surface-border mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3">
               <span className="text-theme-text-secondary text-sm">{selectedInactive.size} selected</span>
               <div className="ml-auto flex items-center gap-2">
                 <button
@@ -1215,14 +1215,14 @@ export const ProspectiveMembersPage: React.FC = () => {
               </button>
             </div>
             <div className="space-y-4 p-6">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="text-theme-text-muted mb-1 block text-sm">First Name *</label>
                   <input
                     type="text"
                     value={newApplicant.first_name}
                     onChange={(e) => setNewApplicant({ ...newApplicant, first_name: e.target.value })}
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input text-sm"
                   />
                 </div>
                 <div>
@@ -1231,7 +1231,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     type="text"
                     value={newApplicant.last_name}
                     onChange={(e) => setNewApplicant({ ...newApplicant, last_name: e.target.value })}
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input text-sm"
                   />
                 </div>
               </div>
@@ -1241,7 +1241,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   type="email"
                   value={newApplicant.email}
                   onChange={(e) => setNewApplicant({ ...newApplicant, email: e.target.value })}
-                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input text-sm"
                 />
               </div>
               <div>
@@ -1250,7 +1250,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   type="tel"
                   value={newApplicant.phone}
                   onChange={(e) => setNewApplicant({ ...newApplicant, phone: e.target.value })}
-                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input text-sm"
                 />
               </div>
               <div>
@@ -1263,7 +1263,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       target_membership_type: e.target.value as 'regular' | 'administrative',
                     })
                   }
-                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input text-sm"
                 >
                   <option value="regular">Regular Member</option>
                   <option value="administrative">Administrative</option>

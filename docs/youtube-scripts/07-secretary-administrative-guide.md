@@ -322,7 +322,7 @@ Approve button refusing]**
 
 ---
 
-## CHAPTER 6: Supporting Elections & Communications (14:00 – 16:00)
+## CHAPTER 6: Supporting Elections & Communications (14:00 – 17:35)
 
 ### ELECTION ADMINISTRATION (14:00 – 15:00)
 
@@ -384,9 +384,9 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 
 **[SCREEN: Show the acknowledgment report and the schedule field]**
 
-### EMAIL TEMPLATES — FINDING THINGS, AND SIGNING THEM (15:20 – 15:45)
+### EMAIL TEMPLATES — FINDING THINGS, SIGNING THEM, AND CLOSING THEM (15:20 – 17:20)
 
-**[SCREEN: Administration → Email Templates. The sidebar shows seven collapsible
+**[SCREEN: Communications → Email Templates. The sidebar shows seven collapsible
 categories with counts.]**
 
 > "Email Templates is where the wording of every automated notice lives — welcome
@@ -427,7 +427,106 @@ real name.]**
 > nightly, which is what catches a change made to the member rather than to the
 > assignment."
 
-### PUBLIC PORTAL (15:45 – 16:00)
+#### Footers — the bit at the bottom of every email
+
+**[SCREEN: Scroll to the bottom of the open template's preview. Highlight the
+footer block.]**
+
+> "Now look at the bottom of that email. 'This is an automated message from…',
+> the contact line, the address. Every notice ends with some version of it."
+
+> "Until recently that block was **copy-pasted into all thirty-five templates**.
+> Which meant changing one word in it was thirty-five edits — and if you'd
+> already customised a template by hand, your only way to pick up the new wording
+> was Reset, which throws away everything else you'd changed in it."
+
+**[SCREEN: Click the Footers tab.]**
+
+> "It's a library now. You edit it once, here."
+
+**[SCREEN: Show the three seeded footers in the list, Internal marked as
+default.]**
+
+> "Three come set up, and they're **different on purpose**, because you don't say
+> the same thing to everybody."
+
+**[SCREEN: Expand each in turn while narrating]**
+
+> "**Internal** — for members. The routine 'do not reply' close. That's your
+> default."
+
+> "**Public** — for people outside the department. This one **invites a reply**
+> and carries your mailing address. That matters: somebody who emailed to ask if
+> the department would bring an engine to their school's fair should not get a
+> notice back telling them not to reply. Event requesters and applicants get this
+> one automatically."
+
+> "**Official notice** — for things going on the record. Separations, property
+> return, election results."
+
+**[SCREEN: Edit a footer's lines; toggle the contact and address blocks.]**
+
+> "Rename them, reword them, add your own, delete ones you don't use. Each footer
+> has its own lines and switches for the contact block and the address."
+
+**[SCREEN: Point to the "N templates use this" count beside a footer]**
+
+> "Before you delete one, it tells you how many templates use it — so that's a
+> decision, not a guess."
+
+**[CALLOUT: "Deleting a footer never leaves an email with none"]**
+
+> "And if you do delete one that templates were using, those templates fall back
+> to your default. Losing a footer entirely is never the right answer, so it
+> doesn't happen."
+
+**[SCREEN: Open a template; show the footer selector, set to Public.]**
+
+> "To point one specific template at one specific footer, open the template and
+> pick it here. Leave it alone and it uses your default — which means changing
+> your default changes every template that hasn't overridden it, in one go."
+
+#### Nine more things you can put in an email
+
+**[SCREEN: Open the variable palette; expand the Organization group.]**
+
+> "Last thing on templates. There are fields you've already filled in under
+> Organization Settings that you previously couldn't actually use in an email.
+> They're all available now."
+
+> "Your **tax ID** — if you're a 501(c)(3) asking for money, you're expected to
+> state your EIN on the message that asks. Your **county** and **founded year**,
+> for the 'Serving the county since 1923' line people type by hand. Fax, if
+> you're still asked for one."
+
+**[SCREEN: Insert {{organization_identifier_label}} {{organization_identifier}}
+into a template; show the preview rendering "FDID 12345"]**
+
+> "And this pair is the useful one. Departments carry three different official
+> identifiers — FDID, a state ID, a department ID. This inserts **whichever one
+> your department nominated, with the name of the scheme in front of it**. So an
+> official notice reads 'FDID 12345' and is actually right about which number
+> that is."
+
+#### Your emails look different now
+
+**[SCREEN: Show the preview pane — white card on a grey page, rounded header
+band, a details table.]**
+
+> "You'll notice the design changed. White card on a grey page, cleaner tables,
+> consistent spacing — one look shared across your templates, the store's
+> receipts and election results."
+
+> "If you never edited a template's CSS, you're now **tracking** the built-in
+> design, so future improvements reach you without you doing anything. If you
+> did customise one, it's untouched — exactly as you left it."
+
+**[PRODUCTION NOTE: Re-shoot every email preview in this script. Anything
+captured before 2026-08-10 shows the retired full-bleed red band over a grey
+slab. The Footers tab is at `/communications/email-templates?tab=footers` — it
+became linkable on 2026-08-11, so a shot of it no longer needs a click.]**
+
+### PUBLIC PORTAL (17:20 – 17:35)
 
 **[SCREEN: Navigate to Public Portal settings]**
 
@@ -442,9 +541,9 @@ real name.]**
 
 ---
 
-## CHAPTER 7: The Secretary's Weekly Workflow (16:00 – 18:00)
+## CHAPTER 7: The Secretary's Weekly Workflow (17:35 – 19:35)
 
-### BEFORE A MEETING (16:00 – 16:30)
+### BEFORE A MEETING (17:35 – 18:05)
 
 **[CALLOUT: Pre-meeting checklist]**
 
@@ -453,7 +552,7 @@ real name.]**
 > the business meeting is created and RSVPs are tracked. Prepare any reports
 > or documents needed."
 
-### DURING A MEETING (16:30 – 17:00)
+### DURING A MEETING (18:05 – 18:35)
 
 > "**During the meeting:** Record minutes in real time using The Logbook on a
 > laptop or tablet. Use the structured sections — roll call, reports, old
@@ -462,13 +561,13 @@ real name.]**
 
 **[SCREEN: Show the minutes editor in use during a simulated meeting flow]**
 
-### AFTER A MEETING (17:00 – 17:30)
+### AFTER A MEETING (18:35 – 19:05)
 
 > "**After the meeting:** Review and edit the minutes for clarity. Finalize
 > attendance. Publish the minutes for the membership. Verify action items are
 > assigned with due dates."
 
-### WEEKLY TASKS (17:30 – 18:00)
+### WEEKLY TASKS (19:05 – 19:35)
 
 **[CALLOUT: Weekly task list]**
 
@@ -483,7 +582,7 @@ real name.]**
 > "**Annually:** Support the election process. Update SOPs and policies in the
 > document repository. Generate year-end attendance and participation reports."
 
-### WRAP-UP (18:00 – 18:30)
+### WRAP-UP (19:35 – 20:05)
 
 > "The Secretary role is all about record-keeping and organizational memory.
 > The Logbook replaces the paper filing system, the attendance clipboard, and
@@ -500,12 +599,13 @@ real name.]**
 
 ## Clip Extraction Guide
 
-| Clip                         | Timecode    | Standalone Title                            |
-| ---------------------------- | ----------- | ------------------------------------------- |
-| Recording Meeting Minutes    | 1:30–5:00   | "Recording Meeting Minutes in The Logbook"  |
-| Creating Action Items        | 3:00–4:00   | "Tracking Action Items from Meetings"       |
-| Event Attendance Tracking    | 7:30–8:30   | "Managing Event Attendance"                 |
-| Adding a New Member          | 10:00–10:30 | "How to Add a New Member (Secretary)"       |
-| Document Organization        | 12:00–13:00 | "Organizing Your Department's Documents"    |
-| Custom Forms Builder         | 13:30–14:00 | "Building Custom Forms for Your Department" |
-| Secretary's Meeting Workflow | 16:00–17:30 | "The Secretary's Meeting Workflow"          |
+| Clip                         | Timecode    | Standalone Title                              |
+| ---------------------------- | ----------- | --------------------------------------------- |
+| Recording Meeting Minutes    | 1:30–5:00   | "Recording Meeting Minutes in The Logbook"    |
+| Creating Action Items        | 3:00–4:00   | "Tracking Action Items from Meetings"         |
+| Event Attendance Tracking    | 7:30–8:30   | "Managing Event Attendance"                   |
+| Adding a New Member          | 10:00–10:30 | "How to Add a New Member (Secretary)"         |
+| Document Organization        | 12:00–13:00 | "Organizing Your Department's Documents"      |
+| Custom Forms Builder         | 13:30–14:00 | "Building Custom Forms for Your Department"   |
+| Email Footers, Once          | 16:05–17:00 | "Change Your Email Footer Once, Not 35 Times" |
+| Secretary's Meeting Workflow | 17:35–19:05 | "The Secretary's Meeting Workflow"            |
