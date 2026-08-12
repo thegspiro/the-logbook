@@ -14,8 +14,10 @@ from sqlalchemy.orm import selectinload
 
 from app.core.utils import generate_display_code
 from app.models.event import Event
+from app.models.facilities import Facility
 from app.models.location import Location
 from app.schemas.location import LocationCreate, LocationUpdate
+from app.utils.org_scoping import assert_in_org
 
 
 class LocationService:
@@ -28,6 +30,14 @@ class LocationService:
         self, location_data: LocationCreate, organization_id: str, created_by: str
     ) -> Location:
         """Create a new location"""
+        await assert_in_org(
+            self.db,
+            Facility,
+            location_data.facility_id,
+            organization_id,
+            allow_none=True,
+            label="facility",
+        )
         # Check if location with same name already exists within the same
         # building/station.  Rooms at different stations may share a name
         # (e.g. "Bunk Room" at Station 1 and Station 2).
@@ -136,6 +146,15 @@ class LocationService:
 
         # Update fields
         update_data = location_data.model_dump(exclude_unset=True)
+        if "facility_id" in update_data:
+            await assert_in_org(
+                self.db,
+                Facility,
+                update_data["facility_id"],
+                organization_id,
+                allow_none=True,
+                label="facility",
+            )
         for field, value in update_data.items():
             setattr(location, field, value)
 

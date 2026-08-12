@@ -34,6 +34,7 @@ from app.schemas.facilities import (  # Facility Type; Facility Status; Main Fac
     FacilityComplianceItemResponse,
     FacilityComplianceItemUpdate,
     FacilityCreate,
+    FacilityDashboardCounts,
     FacilityDocumentCreate,
     FacilityDocumentResponse,
     FacilityDocumentUpdate,
@@ -400,6 +401,12 @@ async def list_facilities(
     facility_type_id: str | None = Query(None, description="Filter by facility type"),
     status_id: str | None = Query(None, description="Filter by status"),
     is_archived: bool | None = Query(False, description="Include archived facilities"),
+    search: str | None = Query(
+        None,
+        min_length=1,
+        max_length=200,
+        description="Search by name, number, or city",
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -419,10 +426,28 @@ async def list_facilities(
         facility_type_id=facility_type_id,
         status_id=status_id,
         is_archived=is_archived,
+        search=search,
         skip=skip,
         limit=limit,
     )
     return facilities
+
+
+@router.get(
+    "/dashboard-counts",
+    response_model=FacilityDashboardCounts,
+    tags=["Facilities"],
+)
+async def get_facility_dashboard_counts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("facilities.view", "facilities.manage")
+    ),
+):
+    """Return unpaginated counts for the Facilities dashboard summary cards."""
+    return await FacilitiesService(db).get_dashboard_counts(
+        current_user.organization_id
+    )
 
 
 @router.post(

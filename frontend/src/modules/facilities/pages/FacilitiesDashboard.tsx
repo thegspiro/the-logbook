@@ -20,6 +20,7 @@ import {
   MapPin,
   Activity,
   Calendar,
+  Search,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
@@ -27,12 +28,15 @@ import type { Facility } from '../types';
 import CreateFacilityModal from '../components/CreateFacilityModal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
+import { facilitiesService } from '../../../services/api';
+import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
 
 const PREVIEW_ITEM_COUNT = 5;
 
 export default function FacilitiesDashboard() {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { canCreate } = useFacilitiesAccess();
   const {
     facilities,
     facilityTypes,
@@ -45,6 +49,8 @@ export default function FacilitiesDashboard() {
   } = useFacilitiesStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Facility[] | null>(null);
 
   const facilityMap = useMemo(() => new Map(facilities.map((f) => [f.id, f.name])), [facilities]);
   const getFacilityName = (id: string) => facilityMap.get(id) || 'Unknown';
@@ -57,6 +63,25 @@ export default function FacilitiesDashboard() {
   useEffect(() => {
     if (error) toast.error(error);
   }, [error]);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchResults(null);
+      return;
+    }
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      void facilitiesService
+        .getFacilities({ is_archived: false, search: query, limit: 100 })
+        .then((results) => active && setSearchResults(results))
+        .catch(() => active && toast.error('Failed to search facilities'));
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [searchQuery]);
 
   const handleFacilityClick = (facility: Facility) => {
     void navigate(`/facilities/${facility.id}`);
@@ -82,10 +107,12 @@ export default function FacilitiesDashboard() {
               Print Labels
             </button>
           )}
-          <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2 py-2.5">
-            <Plus className="h-4 w-4" />
-            Add Facility
-          </button>
+          {canCreate && (
+            <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2 py-2.5">
+              <Plus className="h-4 w-4" />
+              Add Facility
+            </button>
+          )}
         </div>
       </div>
 
@@ -127,7 +154,7 @@ export default function FacilitiesDashboard() {
             <SummaryCard
               icon={ClipboardCheck}
               label="Upcoming Inspections"
-              value={stats?.upcomingInspections.length ?? 0}
+              value={stats?.upcomingInspectionCount ?? 0}
               subtext="Next 30 days"
               color="amber"
               onClick={() => void navigate('/facilities/inspections')}
@@ -266,27 +293,33 @@ export default function FacilitiesDashboard() {
 
           {/* Facility Grid */}
           <div>
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-theme-text-primary text-lg font-semibold">All Facilities</h2>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-sm transition-colors max-md:min-h-[44px]"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Facility
-              </button>
+              <div className="relative w-full sm:w-80">
+                <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search name, number, or city"
+                  aria-label="Search facilities"
+                  className="form-input py-2 pr-3 pl-9"
+                />
+              </div>
             </div>
 
-            {facilities.length === 0 ? (
+            {(searchResults ?? facilities).length === 0 ? (
               <div className="bg-theme-surface border-theme-surface-border rounded-xl border py-16 text-center">
                 <Building2 className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-                <p className="text-theme-text-muted mb-4">No facilities yet. Add your first facility to get started.</p>
-                <button onClick={() => setShowCreateModal(true)} className="btn-primary inline-flex items-center gap-2">
-                  <Plus className="h-4 w-4" /> Add Facility
-                </button>
+                <p className="text-theme-text-muted mb-4">
+                  {searchQuery
+                    ? 'No facilities match your search.'
+                    : 'No facilities yet. Add your first facility to get started.'}
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {facilities.map((facility) => (
+                {(searchResults ?? facilities).map((facility) => (
                   <FacilityCard key={facility.id} facility={facility} onClick={handleFacilityClick} />
                 ))}
               </div>
@@ -296,7 +329,7 @@ export default function FacilitiesDashboard() {
       )}
 
       {/* Create Modal */}
-      {showCreateModal && (
+      {canCreate && showCreateModal && (
         <CreateFacilityModal
           facilityTypes={facilityTypes}
           facilityStatuses={facilityStatuses}
