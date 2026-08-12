@@ -199,6 +199,56 @@ class TestVoteSigning:
 
 
 class TestVoteDedupHash:
+    async def test_cast_vote_locks_election_before_multi_vote_checks(self):
+        """Concurrent requests must serialize before inspecting prior votes."""
+        service = _make_service()
+        election_id = uuid4()
+        organization_id = uuid4()
+        candidate_id = uuid4()
+        election = _make_election(
+            id=str(election_id),
+            organization_id=str(organization_id),
+            voting_method="ranked_choice",
+        )
+        candidate = SimpleNamespace(
+            id=str(candidate_id),
+            accepted=True,
+            is_write_in=False,
+            position="Chief",
+        )
+        election_result = MagicMock()
+        election_result.scalar_one_or_none.return_value = election
+        candidate_result = MagicMock()
+        candidate_result.scalar_one_or_none.return_value = candidate
+        service.db.execute.side_effect = [election_result, candidate_result]
+        service.check_voter_eligibility = AsyncMock(
+            return_value=SimpleNamespace(is_eligible=True, reason=None)
+        )
+        service._get_user_votes = AsyncMock(
+            return_value=[
+                _make_vote(
+                    str(election_id),
+                    candidate_id=str(candidate_id),
+                    position="Chief",
+                    vote_rank=1,
+                )
+            ]
+        )
+
+        vote, error = await service.cast_vote(
+            user_id=uuid4(),
+            election_id=election_id,
+            candidate_id=candidate_id,
+            position="Chief",
+            organization_id=organization_id,
+            vote_rank=2,
+        )
+
+        assert vote is None
+        assert error == "You have already ranked this candidate"
+        election_query = service.db.execute.await_args_list[0].args[0]
+        assert election_query._for_update_arg is not None
+
     def test_same_inputs_produce_same_hash(self):
         from app.services.election_service import ElectionService
 
