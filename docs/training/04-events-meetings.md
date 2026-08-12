@@ -1060,8 +1060,11 @@ Events support three check-in window modes that control when QR and manual check
 
 Event notifications now deliver via **in-app notifications** in addition to email. When a coordinator sends a notification from the event detail page (announcement, reminder, follow-up, missed_event, or check_in_confirmation), targeted members receive the notification in their notification bell.
 
-> **Screenshot needed:**
-> _[Screenshot of the notification bell dropdown showing an event notification entry (e.g., "Reminder: Monthly Business Meeting tomorrow at 7 PM") alongside other notification types]_
+> **Corrected 2026-08-12.** There is no bell **dropdown**. The bell is a link
+> straight to **Notifications > Inbox**, carrying an unread-count badge; event
+> notifications arrive in that inbox alongside every other type. The inbox is
+> pictured in
+> [Admin & Reports > Notifications Inbox](./08-admin-reports.md#notification-center).
 
 ## Time Picker Standardization (2026-03-17)
 
@@ -1080,14 +1083,21 @@ The ballot email dispatch system has been significantly hardened:
 3. **Diagnostic logging**: When no recipients are found, detailed logs explain why (no email address, ineligible, already voted)
 4. **Eligibility summary email**: The secretary who dispatched ballots receives a summary listing all skipped voters with actionable reasons
 
-> **Screenshot needed:**
-> _[Screenshot of the election detail page showing the "Send Ballots" button and, after sending, the eligibility summary showing "Sent: 45, Skipped: 3" with expandable reasons for skipped voters]_
+> **Corrected 2026-08-12.** The eligibility summary is an **email** sent to
+> the officer who dispatched the ballots — the wording above says so — not a
+> panel on the election page. Nothing renders "Sent: 45, Skipped: 3" on
+> screen, so there is no screenshot to take of it.
 
 ### Election Report Email
 
-**Not yet built.** There is no **Send Report Email** button on the election
-detail page. Results are shared by exporting them from the Results tab, or by
-generating the pre-meeting package.
+**Send Report** sits in the **Results & Publishing** panel on the election
+page, under _Email Results Report — send final results to all eligible voters
+by email_. Results can also be exported from the Results tab or folded into the
+pre-meeting package.
+
+> **Corrected 2026-08-12.** This section said the button was "not yet built"
+> and did not exist. It does, on `PublishResultsPanel`, backed by
+> `POST /elections/{id}/send-report`.
 
 ### Upcoming Business Meetings
 
@@ -1300,8 +1310,8 @@ matrix above.
 - **Eligibility summary email**: The secretary who dispatched ballots receives a summary listing all sent and skipped voters with reasons (no email address, ineligible, already voted)
 - **Election report email**: New "Send Report Email" button emails formatted round-by-round results
 
-> **Screenshot needed:**
-> _[Screenshot of the eligibility summary showing "Sent: 45 ballots, Skipped: 3 voters" with expandable reasons — "John Smith: no email address", "Jane Doe: membership type not eligible"]_
+> **Corrected 2026-08-12.** Same as above: the summary is emailed to the
+> dispatching officer, not shown on the election page.
 
 ### Election Meeting Integration
 
@@ -1331,8 +1341,17 @@ Event detail pages now display elections that are linked to the event. Each link
 
 Meeting minutes detail pages also display any elections associated with the meeting, using the same card format as event pages.
 
-> **Screenshot needed:**
-> _[Screenshot of a meeting minutes detail page showing a "Linked Elections" section below the minutes content]_
+The card is keyed on the **event** the minutes record, not on the minutes
+record itself — so it appears when the minutes name a meeting event and an
+election points at that same event.
+
+![The Linked Elections card on a minutes record — the election held at that meeting, with its type, position and status](./images/04-35-minutes-linked-elections.png)
+
+> **Fixed 2026-08-12.** This card could not appear at all. The page looked its
+> elections up by passing the minutes id as `meeting_id`, but
+> `Election.meeting_id` holds a `meetings` row id and a minutes record is a
+> `meeting_minutes` row — two different id spaces, so the query matched
+> nothing however many elections were held at the meeting.
 
 ### Importing Event Attendees into Election Ballot
 
@@ -1353,9 +1372,6 @@ This streamlines the workflow for in-meeting elections where only present member
 > show it: the recipient list is settled by then.
 
 ### Quick-Link Buttons on Upcoming Meetings
-
-> **Screenshot needed:**
-> _[Screenshot of the Upcoming Meetings section on the election detail page showing meeting cards with "Link to Election" quick-action buttons]_
 
 **Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings) above. There is no Upcoming Meetings list on the election detail page and no quick-link button.
 
@@ -1394,7 +1410,10 @@ GET /api/v1/elections/{id}/verify-receipt?receipt=<receipt_code>
 
 This endpoint is **rate-limited** to prevent brute-force attacks. It returns verification status without revealing vote content.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the vote receipt verification page showing the receipt input field, verify button, and a success/failure status message._
+> **Corrected 2026-08-12.** There is no receipt-verification **page**. The
+> endpoint above is real and rate-limited, but nothing in the frontend calls
+> it — `verifyReceipt` exists in the election service with no consumer — so a
+> member verifies a receipt by requesting that URL directly.
 
 ### Send Report Endpoint
 

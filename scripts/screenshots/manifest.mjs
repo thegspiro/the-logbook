@@ -8131,6 +8131,25 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "04-35-minutes-linked-elections",
+    doc: "04-events-meetings.md",
+    line: 1357,
+    anchor:
+      "Screenshot of a meeting minutes detail page showing a Linked Elections section",
+    alt: "The Linked Elections card on a minutes record — the election held at that meeting, with its type, position and status",
+    route: "/minutes",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records",
+        (id) => `/minutes/${id}`,
+        "minutes",
+      )(page);
+      await page.getByText("Linked Elections").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: 'div:has(> h3:text-is("Linked Elections"))',
+  },
+  {
     id: "04-12-linked-elections",
     doc: "04-events-meetings.md",
     line: 1184,

@@ -7169,7 +7169,86 @@ class Seeder:
 
     # -- elections ---------------------------------------------------
 
-    def seed_elections(self) -> list[dict]:
+    MINUTES_TITLE = "July Business Meeting"
+
+    def seed_minutes(self) -> list[dict]:
+        """One approved set of minutes, linked to the meeting it records.
+
+        `/minutes-records` was empty, so the whole module — the list, the
+        detail page, its Linked Elections card, the approval trail — had
+        nothing to render. The record is carried through submit and approve
+        rather than left in draft: a draft shows the editing affordances and
+        none of the workflow ones, and the guides describe both.
+        """
+        # The list item omits `event_id`, and the closed election needs it, so
+        # a re-run re-reads the detail rather than trusting the summary.
+        existing = items(self.api.get("/minutes-records"), "minutes", "records")
+        if existing:
+            return [self.api.get(f"/minutes-records/{pick(existing[0], 'id')}")]
+
+        events = items(self.api.get("/events?limit=100"), "events")
+        meeting = next(
+            (
+                e
+                for e in events
+                if (pick(e, "title") or "") == "Monthly Business Meeting"
+                and not pick(e, "is_cancelled", "isCancelled")
+            ),
+            None,
+        )
+        payload: dict[str, Any] = {
+            "title": self.MINUTES_TITLE,
+            "meeting_type": "business",
+            "meeting_date": iso(NOW - timedelta(days=2)),
+            "location": "Station 1 — Training Room",
+            "called_by": "Chief Dana Ruiz",
+            "quorum_met": True,
+            "sections": [
+                {
+                    "key": "call_to_order",
+                    "order": 0,
+                    "title": "Call to Order",
+                    "content": (
+                        "Called to order at 19:04 by Chief Ruiz. Quorum "
+                        "confirmed by the Secretary."
+                    ),
+                },
+                {
+                    "key": "old_business",
+                    "order": 1,
+                    "title": "Old Business",
+                    "content": (
+                        "Engine 2's pump test scheduling was carried over from "
+                        "June; the vendor has confirmed the last week of the "
+                        "month."
+                    ),
+                },
+                {
+                    "key": "new_business",
+                    "order": 2,
+                    "title": "New Business",
+                    "content": (
+                        "Special election held to fill the Assistant Chief "
+                        "vacancy. Paper ballots counted in the room and "
+                        "attested by two officers."
+                    ),
+                },
+            ],
+        }
+        if meeting:
+            payload["event_id"] = pick(meeting, "id")
+        minutes = self.api.post("/minutes-records", payload)
+        minutes_id = pick(minutes, "id")
+        if minutes_id:
+            for step in ("submit", "approve"):
+                try:
+                    minutes = self.api.post(f"/minutes-records/{minutes_id}/{step}")
+                except ApiError as exc:
+                    self.blocked.append(f"minutes {step}: {exc}")
+                    break
+        return [minutes]
+
+    def seed_elections(self, minutes: list[dict] | None = None) -> list[dict]:
         elections = items(self.api.get("/elections"), "elections")
         titles = {e.get("title") for e in elections}
         start = NOW + timedelta(days=14)
@@ -7232,7 +7311,7 @@ class Seeder:
             )
         self._link_elections_to_meetings(elections)
         self._seed_nominations(elections)
-        self._seed_closed_election(elections)
+        self._seed_closed_election(elections, minutes or [])
         return elections
 
     # Who attests the paper tally. Neither may be a candidate, and neither may
@@ -7241,7 +7320,7 @@ class Seeder:
 
     CLOSED_ELECTION_TITLE = "Assistant Chief Special Election"
 
-    def _seed_closed_election(self, elections: list[dict]) -> None:
+    def _seed_closed_election(self, elections: list[dict], minutes: list[dict]) -> None:
         """A finished election, so results and forensics have something to show.
 
         The other two seeded elections are a draft and one taking nominations,
@@ -7271,9 +7350,15 @@ class Seeder:
         }
 
         opened = NOW - timedelta(days=2)
+        # Set at creation, not patched afterwards: a closed election accepts no
+        # field update except `results_visible_immediately`. The event is what
+        # links this election to the meeting *and* to the minutes recording it
+        # — both sides key on the event, so one id does both jobs.
+        event_id = pick(minutes[0], "event_id", "eventId") if minutes else None
         election = self.api.post(
             "/elections",
             {
+                **({"event_id": event_id} if event_id else {}),
                 "title": self.CLOSED_ELECTION_TITLE,
                 "description": (
                     "Special election to fill the Assistant Chief vacancy — "
@@ -8870,7 +8955,10 @@ class Seeder:
             lambda: self.seed_form_submissions(self.base_url, forms, members),
         )
         self.step("event templates", self.seed_event_templates)
-        self.step("elections", self.seed_elections)
+        # Minutes before elections: the closed election links itself to the
+        # minutes record at creation, and it cannot be patched once closed.
+        minutes = self.step("meeting minutes", self.seed_minutes) or []
+        self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}
         )
