@@ -27,6 +27,10 @@ Bring up a backend on `:3001` and the frontend dev server on `:3000` (see
 schema on first start, so an empty database is the expected starting point.
 
 ```bash
+# Use a unique password for this disposable environment. It is consumed by all
+# three commands and is never stored in the repository.
+export SCREENSHOT_ADMIN_PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
+
 # 1. Create the demo organization and administrator (once per database)
 python scripts/screenshots/bootstrap_demo.py
 
@@ -58,6 +62,12 @@ acting as the member.
 
 `SCREENSHOT_BASE_URL` overrides the frontend origin (default
 `http://localhost:3000`).
+
+The backend scripts refuse non-loopback `--base-url` values by default, which
+prevents accidentally creating this privileged demo account on a reachable
+environment. For an intentionally isolated remote demo, pass `--allow-remote`
+to both scripts and keep `SCREENSHOT_ADMIN_PASSWORD` secret. The administrator
+username defaults to `chief`; `SCREENSHOT_ADMIN_USERNAME` can override it.
 
 ## Empty states are held back
 
