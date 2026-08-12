@@ -1867,6 +1867,46 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "04-43-create-election",
+    doc: "04-events-meetings.md",
+    line: 649,
+    anchor: "Screenshot of the election creation form showing the title",
+    alt: "The Create New Election dialog — title, description, voting window, and the victory-condition and runoff settings",
+    route: "/elections",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Create Election$/ })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 20_000 });
+      await dialog.getByLabel(/^Title/).fill("Fall 2026 Officer Election");
+      await dialog
+        .getByLabel(/^Description/)
+        .fill(
+          "Annual officer election held at the November business meeting. " +
+            "Polls open at the call to order and close before adjournment.",
+        );
+      // The labelled control is the date half of DateTimeQuarterHour — a
+      // native `type=date` input — so it takes a plain date, not a
+      // datetime-local value. The time is three separate selects beside it.
+      // Filling the start date also reveals the quick-duration row beneath the
+      // end date, which is part of what this shot is for.
+      await dialog.getByLabel(/^Start Date & Time/).fill("2026-11-10");
+      await dialog.getByLabel(/^End Date & Time/).fill("2026-11-10");
+      // Blur so the last field is not left with a focus ring and a selected
+      // date segment, which reads as a half-finished edit.
+      await dialog.getByLabel(/^Title/).click();
+      await page.waitForTimeout(600);
+    },
+    selector: '[role="dialog"]',
+    // "No linked meeting" is the Linked Meeting select's default option, which
+    // is in the DOM on every new election — the field is optional and the
+    // guide's steps do not ask for it to be set.
+    allowEmptyState: true,
+    fullPage: false,
+  },
+  {
     id: "04-38-rolling-recurrence",
     doc: "04-events-meetings.md",
     line: 1136,

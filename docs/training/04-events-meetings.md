@@ -625,8 +625,14 @@ Each election shows:
 **Required Permission:** `elections.manage`
 
 1. Navigate to **Elections** and click **Create Election**.
-2. Set the election title, description, and voting period.
-3. Add **ballot items** using the card-based Ballot Builder with drag-and-drop reordering:
+2. Set the election title, description, and voting period. The **How is the
+   Winner Determined?** control here sets the election's default; each ballot
+   item can override it later. The dialog also carries the optional link to a
+   meeting, the anonymous-voting and runoff settings, and a **Positions** box —
+   but **not** the ballot items themselves. Those come next, on the election's
+   own page, once it exists.
+3. Open the new election and add **ballot items** using the card-based Ballot
+   Builder with drag-and-drop reordering:
    - Use templates for common items (officer election, bylaw vote, membership approval) or create custom items
    - Each position can only have one ballot item (the dropdown shows only unused positions)
    - Positions load from your organization's operational ranks (Chief, Captain, etc.) with type-ahead filtering
@@ -639,8 +645,12 @@ Each election shows:
 6. Optionally enable **email ballots** for members who cannot access the system.
 7. Open the election for voting.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the election creation form showing the title, date range, ballot items section with candidates, and the configuration options (write-ins, victory type)]_
+![The Create New Election dialog — title, description, voting window, and the victory-condition and runoff settings](./images/04-43-create-election.png)
+
+Ballot items and their candidates are not on this form — see
+[Elections & Voting > Configuring Ballot Items](./14-elections.md#configuring-ballot-items)
+for the Ballot Builder, which is where write-ins and per-item victory
+conditions are set.
 
 ### Public Ballot Access
 
