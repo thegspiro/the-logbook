@@ -80,10 +80,21 @@ this note exists so the guide does not silently endorse the number.
 
 ### Held back deliberately
 
-`02-42-external-integrations` and `02-68-vector-category-mapping` capture an
-empty "No Integrations Yet" state. The harness flags them and does not apply
-them, and they are **not committed**, so the guide keeps its unfilled
-placeholders rather than gaining a picture of nothing.
+`02-68-vector-category-mapping` still has nothing to photograph. Category
+mappings are created **only** by `POST /providers/{id}/sync-categories`, which
+fetches the live vendor catalogue over the network — there is no create
+endpoint the seeder could call, so the table stays empty however much demo data
+is added. The harness flags the shot and does not apply it, and it is **not
+committed**, so the guide keeps its unfilled placeholder rather than gaining a
+picture of an empty table under a caption describing a full one.
+
+**Resolved 2026-08-12 for `02-42-external-integrations`.** That one was empty
+for a reason the seeder _could_ fix — the demo department had no provider
+configured at all. `seed_external_provider` now saves one, and the shot is
+captured and applied. Only the configuration is seeded: `connection_verified`
+and `last_sync_at` are written by a real sync, so the card reads "Connection
+not verified" and "Last Sync: Never", which the guide's prose now explains
+rather than contradicts.
 
 ---
 

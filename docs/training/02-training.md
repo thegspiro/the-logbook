@@ -217,8 +217,7 @@ Each class shows the gap since the one before it — **"Next day"**, **"2 days l
 
 Generating creates **one training event per class**, each with a linked training session. Students see the classes on their calendar, sign in and out with the QR code as usual, and the hours flow into their program.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the cohort wizard on the Preview step, showing a numbered list of computed class dates with a quarter-hour date/time picker on each row, an amber warning on one class reading "Moved from 2026-09-12 to 2026-09-14 — 2026-09-12 is a weekend", and a row of suggested holiday blackout dates above]_
+![The cohort wizard's Preview step — computed class dates, a weekend-move warning, and the holidays offered as blackout dates](./images/02-104-cohort-preview-step.png)
 
 ### Running a Cohort
 
@@ -1366,8 +1365,18 @@ Supported integrations:
 - User mapping (link external user accounts to Logbook members)
 - Sync logs and import history
 
-> **Screenshot placeholder:**
-> _[Screenshot of the External Training Integrations page showing a connected provider with sync status, last sync date, and a list of recent imports]_
+The page has three tabs. **Providers** is one card per provider, giving its
+name and platform, whether it is active, when it last synced, and its auto-sync
+interval — with **Test**, **Fetch Categories**, **Sync Now** and **Mappings**
+along the bottom. **Import Queue** and **All Mappings** are what a sync fills;
+both stay empty until one has run.
+
+The icon beside Active/Inactive is a **separate** fact: it reports whether the
+credentials have been proved to work. A newly saved provider carries an amber
+triangle reading _Connection not verified_ — it is active, it has simply never
+been tested. Press **Test** to turn it green.
+
+![The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions](./images/02-42-external-integrations.png)
 
 ### Vector Solutions Enhancements _(2026-04-11)_
 
@@ -1532,17 +1541,23 @@ Navigate to **Training Admin > Advanced > Recertification** to configure recerti
 
 ![Recertification pathways with renewal type, window and grace period](./images/02-68-recertification-pathways.png)
 
-### Member View
+### Where A Member Sees Their Own Renewal Tasks
 
-Members can view their upcoming recertification tasks at **Training > My Training** in the recertification section. Each task shows:
+**Active Renewal Tasks** appears on this same Recertification section, under
+the pathway list, once **Generate Tasks** has found something for **you**. The
+list is scoped to the signed-in account, so it is your own renewals it shows,
+not the department's — an officer looking here sees their tasks and no one
+else's. Each row gives the pathway, the expiration date it is racing, and a
+progress bar.
 
-- The certification requiring renewal
-- Days until expiration
-- Required renewal steps and their completion status
-- Links to relevant courses or submission forms
-
-> **Screenshot placeholder:**
-> _[Screenshot of the member's My Training page showing the recertification section with a certification expiring in 45 days, renewal tasks with checkmarks for completed steps, and a progress indicator]_
+> **Corrected 2026-08-12.** This previously said members could see their
+> recertification tasks at **Training > My Training** in a "recertification
+> section", listing days-until-expiration, per-step checkmarks and links
+> through to courses. My Training has no such section, and no screen anywhere
+> breaks a renewal into steps. The endpoint behind the list
+> (`GET /training/recertification/tasks/me`) is read by the admin
+> Recertification section and nowhere else, so a member without
+> `training.manage` cannot reach their own renewal tasks at all.
 
 ### Edge Cases
 
@@ -1956,18 +1971,37 @@ none of it.
 
 ![The Training Category dropdown on the submission form, listing the organization's categories](./images/02-84-record-category-field.png)
 
-### Virginia NCCR Recertification Standards
+### NCCR Recertification Standards
 
-Virginia's National Continued Competency Requirements (NCCR) recertification standards have been added to the compliance tracking system. These define:
+The National Continued Competency Requirements (NCCR) model ships as **four
+importable registries** — one per NREMT provider level, so a department imports
+only what it staffs:
 
-- Required training categories for recertification
-- Hour minimums per category
-- Recertification cycle periods
+| Registry      | Covers                                |
+| ------------- | ------------------------------------- |
+| **EMR**       | Emergency Medical Responder           |
+| **EMT**       | Emergency Medical Technician          |
+| **AEMT**      | Advanced Emergency Medical Technician |
+| **Paramedic** | Paramedic                             |
 
-The compliance dashboard shows progress toward NCCR requirements with category breakdowns.
+Import them the same way as NFPA and Pro Board — from the **Requirements** tab
+of **Training > Programs**, in the **Import from Registry** panel, which offers
+each registry as its own button and then lets you tick the individual
+requirements you want. Each registry names its NCCR topic areas (Airway,
+Cardiology, Trauma, Medical, Operations) and splits its hours into the
+national, local and individual components the model defines.
 
-> **Screenshot needed:**
-> _[Screenshot of the compliance dashboard showing a Virginia NCCR progress card with category bars (Fire: 12/16 hours, EMS: 8/8 hours, Hazmat: 2/4 hours) and an overall progress percentage]_
+> **Corrected 2026-08-12.** This section previously described a
+> **Virginia**-specific NCCR standard and claimed "the compliance dashboard
+> shows progress toward NCCR requirements with category breakdowns" with a
+> per-category progress card. Neither is in the product. The registries are
+> national NREMT ones with no state variant, and nothing in the application
+> renders an NCCR card: the only per-category hours endpoint,
+> `GET /training/category-hours/{user_id}`, has no caller in the frontend at
+> all. Its screenshot placeholder has been removed rather than left standing
+> for a screen that was never built. Category minimums are tracked the ordinary
+> way — as requirements with an evaluation period — and shown on the compliance
+> matrix.
 
 ### EVOC Certification Levels
 

@@ -7947,6 +7947,51 @@ class Seeder:
             )
         return {"profiles_created": created}
 
+    def seed_external_provider(self) -> dict[str, Any]:
+        """Configure the department's LMS so Integrations is not an empty state.
+
+        Only the *configuration* is seeded. `connection_verified`, `last_sync_at`
+        and the import queue are written by a real sync against a real vendor
+        API, and no create/update field sets them — so this department reads
+        "Connection not verified" and "Last Sync: Never", which is what a
+        department that has entered its credentials and not yet pressed Sync
+        actually sees.
+        """
+        existing = items(self.api.get("/training/external/providers"), "providers")
+        if existing:
+            return {"providers": existing}
+
+        # The API base URL is fetched server-side during a sync, so it goes
+        # through an SSRF guard that resolves the hostname and rejects anything
+        # private. A made-up host would fail to resolve and the create would
+        # 400; the vendor's real API host is the one value that passes.
+        categories = items(self.api.get("/training/categories"), "categories")
+        default_category = next(
+            (c for c in categories if pick(c, "name") == "Fire Suppression"),
+            categories[0] if categories else None,
+        )
+        provider = self.api.post(
+            "/training/external/providers",
+            {
+                "name": "Vector Solutions",
+                "provider_type": "vector_solutions",
+                "description": (
+                    "Department LMS. Completed courses sync into each member's "
+                    "training record and count toward their requirements."
+                ),
+                "api_base_url": "https://api.vectorsolutions.com/v1",
+                "auth_type": "api_key",
+                # Stored encrypted, and never sent anywhere: no sync is seeded.
+                "api_key": "demo-key-not-a-real-credential",
+                "auto_sync_enabled": True,
+                "sync_interval_hours": 24,
+                "default_category_id": (
+                    pick(default_category, "id") if default_category else None
+                ),
+            },
+        )
+        return {"providers": [provider] if provider else []}
+
     def seed_facility_activity(self, facilities: list[dict]) -> dict[str, list[dict]]:
         maintenance = items(self.api.get("/facilities/maintenance"), "maintenance")
         inspections = items(self.api.get("/facilities/inspections"), "inspections")
@@ -8427,6 +8472,7 @@ class Seeder:
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)
+        self.step("external training provider", self.seed_external_provider)
         self.step("facility activity", lambda: self.seed_facility_activity(facilities))
         self.step("storefront", self.seed_storefront)
         finance = self.step("finance", self.seed_finance) or {}

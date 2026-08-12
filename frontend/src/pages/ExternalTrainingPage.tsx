@@ -26,6 +26,7 @@ import {
   Edit2,
   PlayCircle,
 } from 'lucide-react';
+import { Tooltip } from '../components/ux';
 import { externalTrainingService, trainingService } from '../services/api';
 import type {
   ExternalTrainingProvider,
@@ -466,8 +467,18 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
             <p className="text-theme-text-muted text-sm">{getProviderTypeLabel()}</p>
           </div>
         </div>
+        {/* Two independent facts sit side by side here: whether the connection
+            has been proved to work, and whether the provider is switched on.
+            The first was conveyed by icon colour alone, so a sighted reader saw
+            an unexplained amber triangle next to the word "Active" and had no
+            way to tell which of the two it referred to. The label is the icon's
+            accessible name and its tooltip. */}
         <div className="flex items-center gap-2">
-          <span aria-label={getStatusLabel()}>{getStatusIcon()}</span>
+          <Tooltip content={getStatusLabel()}>
+            <span aria-label={getStatusLabel()} className="flex">
+              {getStatusIcon()}
+            </span>
+          </Tooltip>
           <span
             className={`text-sm ${provider.active ? 'text-green-700 dark:text-green-400' : 'text-theme-text-muted'}`}
           >

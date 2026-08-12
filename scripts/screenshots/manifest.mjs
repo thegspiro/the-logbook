@@ -1570,6 +1570,52 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "02-104-cohort-preview-step",
+    doc: "02-training.md",
+    line: 220,
+    anchor:
+      "Screenshot of the cohort wizard on the Preview step, showing a numbered list",
+    alt: "The cohort wizard's Preview step — computed class dates, a weekend-move warning, and the holidays offered as blackout dates",
+    route: "/training/admin?tab=cohorts",
+    prepare: async (page) => {
+      await clickByName("New cohort")(page);
+      // The wizard fetches the course list and the member roster before it
+      // renders step 1 at all; until they land it is a pair of skeletons.
+      await page.waitForSelector("#cohort-course", { timeout: 20_000 });
+
+      // Recruit School is the only seeded course with a syllabus, and the
+      // wizard refuses to advance without one. Matched on the option's text
+      // rather than passed as a label: the picker appends each course's code,
+      // so the exact label is "Recruit School (RS-100)".
+      const courseValue = await page.$eval("#cohort-course", (select) => {
+        const match = Array.from(select.options).find((option) =>
+          option.text.startsWith("Recruit School"),
+        );
+        return match ? match.value : "";
+      });
+      await page.selectOption("#cohort-course", courseValue);
+      await page.fill("#cohort-name", "Recruit School — Fall 2026");
+      await clickByName("Next")(page);
+
+      // 5 Nov 2026 is chosen so the syllabus's own day offsets (0, 3, 7, 10,
+      // 14) land two classes on a Sunday and put Veterans Day inside the
+      // span — which is what makes the warning and the blackout suggestion
+      // appear at all. Any other start date renders the step empty of both.
+      await page.fill("#cohort-start", "2026-11-05");
+      await page.selectOption("#cohort-policy", "next_business_day");
+      await page.fill("#cohort-time", "19:00");
+      await clickByName("Next")(page);
+
+      // The Next click fires the preview request; the step renders a skeleton
+      // until it lands.
+      await page.waitForSelector("text=Holidays in this range", {
+        timeout: 20_000,
+      });
+      await page.waitForTimeout(600);
+    },
+    viewport: { width: 1440, height: 1500 },
+  },
+  {
     id: "02-80-session-course-autopopulate",
     doc: "02-training.md",
     line: 1728,
@@ -3480,8 +3526,8 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 984,
     anchor:
-      "Screenshot of the External Training Integrations page showing a connected provider with",
-    alt: "External Training Integrations page showing provider connection status",
+      "Screenshot of the External Training Integrations page showing a saved provider card with",
+    alt: "The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions",
     route: "/training/integrations",
   },
   {
