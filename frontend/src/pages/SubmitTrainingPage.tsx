@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Send, FileText, Clock, CheckCircle2, XCircle, RotateCcw, Trash2, Edit2, Info } from 'lucide-react';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { trainingSubmissionService, trainingService } from '../services/api';
 import type {
   TrainingSubmission,
@@ -478,6 +479,7 @@ const SubmissionForm: React.FC<{
 
 const SubmitTrainingPage: React.FC = () => {
   const navigate = useNavigate();
+  const { confirm } = useConfirm();
   const [config, setConfig] = useState<SelfReportConfig | null>(null);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [submissions, setSubmissions] = useState<TrainingSubmission[]>([]);
@@ -510,7 +512,15 @@ const SubmitTrainingPage: React.FC = () => {
   }, []);
 
   const handleDelete = async (submissionId: string) => {
-    if (!confirm('Are you sure you want to delete this submission?')) return;
+    if (
+      !(await confirm({
+        title: 'Delete submission',
+        message: 'Delete this training submission? This cannot be undone.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await trainingSubmissionService.deleteSubmission(submissionId);
       toast.success('Submission deleted');

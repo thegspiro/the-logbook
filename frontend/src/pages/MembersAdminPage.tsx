@@ -24,6 +24,7 @@ import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
 import { UserStatus } from '../constants/enums';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type ViewMode = 'by-member' | 'by-role';
 
@@ -39,6 +40,7 @@ interface EditProfileForm {
 }
 
 export const MembersAdminPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const navigate = useNavigate();
   const { checkPermission, user: currentUser } = useAuthStore();
   const { rankOptions } = useRanks();
@@ -263,7 +265,14 @@ export const MembersAdminPage: React.FC = () => {
   };
 
   const handleQuickRemoveRole = async (user: UserWithRoles, roleId: string) => {
-    if (!confirm(`Remove role from ${user.full_name || user.username}?`)) {
+    if (
+      !(await confirm({
+        title: 'Remove role',
+        message: `Remove this role from ${user.full_name || user.username}?`,
+        confirmLabel: 'Remove',
+        cancelLabel: 'Keep it',
+      }))
+    ) {
       return;
     }
 
@@ -281,7 +290,14 @@ export const MembersAdminPage: React.FC = () => {
     const user = users.find((u) => u.id === userId);
     if (!user) return;
 
-    if (!confirm(`Remove ${user.full_name || user.username} from ${role.name}?`)) {
+    if (
+      !(await confirm({
+        title: 'Remove from role',
+        message: `Remove ${user.full_name || user.username} from ${role.name}?`,
+        confirmLabel: 'Remove',
+        cancelLabel: 'Keep it',
+      }))
+    ) {
       return;
     }
 

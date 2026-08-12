@@ -29,6 +29,7 @@ import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType } from '../types/minutes';
 import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
 import { asArray } from '../../../utils/asArray';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   {
@@ -71,6 +72,7 @@ const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
 
 const MinutesPage: React.FC = () => {
   const navigate = useNavigate();
+  const { confirm } = useConfirm();
   const { checkPermission } = useAuthStore();
   // MM-3: minutes writes and restricted reads are gated on minutes.manage on
   // the backend, not meetings.manage — check the same permission the API does.
@@ -179,7 +181,15 @@ const MinutesPage: React.FC = () => {
   };
 
   const handleDeleteMeeting = async (meetingId: string) => {
-    if (!confirm('Are you sure you want to delete this meeting?')) return;
+    if (
+      !(await confirm({
+        title: 'Delete meeting',
+        message: 'Delete this meeting and its minutes?',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     setDeletingId(meetingId);
     try {
       await meetingsService.deleteMeeting(meetingId);

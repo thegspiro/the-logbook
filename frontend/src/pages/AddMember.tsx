@@ -9,10 +9,12 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
 import { useRanks } from '../hooks/useRanks';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const { rankOptions } = useRanks();
   const [isSaving, setIsSaving] = useState(false);
   const [membershipIdPreview, setMembershipIdPreview] = useState<string | null>(null);
@@ -238,9 +240,16 @@ const AddMember: React.FC = () => {
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (Object.values(formData).some((val) => val !== '' && val !== 'active' && val !== 'phone')) {
-      if (confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
+      if (
+        await confirm({
+          title: 'Discard new member?',
+          message: 'All unsaved changes will be lost.',
+          confirmLabel: 'Discard changes',
+          cancelLabel: 'Keep editing',
+        })
+      ) {
         void navigate('/members');
       }
     } else {
@@ -264,7 +273,7 @@ const AddMember: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={handleCancel}
+              onClick={() => void handleCancel()}
               className="text-theme-text-secondary hover:text-theme-text-primary shrink-0 self-start text-sm transition-colors sm:self-auto"
             >
               ← Back to Members
@@ -888,7 +897,7 @@ const AddMember: React.FC = () => {
           <div className="border-theme-surface-border flex items-center justify-between border-t pt-6">
             <button
               type="button"
-              onClick={handleCancel}
+              onClick={() => void handleCancel()}
               disabled={isSaving}
               className="bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary flex items-center space-x-2 rounded-lg px-6 py-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >

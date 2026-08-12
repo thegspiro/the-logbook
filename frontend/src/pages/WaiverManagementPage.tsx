@@ -24,6 +24,8 @@ import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { getErrorMessage } from '../utils/errorHandling';
 import { UserStatus } from '../constants/enums';
+import { useConfirm } from '../contexts/ConfirmContext';
+import toast from 'react-hot-toast';
 
 type WaiverTab = 'active' | 'create' | 'history';
 
@@ -82,6 +84,7 @@ interface UnifiedWaiver {
 }
 
 export const WaiverManagementPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as WaiverTab | null;
   const [activeTab, setActiveTab] = useState<WaiverTab>(
@@ -305,7 +308,15 @@ export const WaiverManagementPage: React.FC = () => {
   };
 
   const handleDeactivate = async (waiver: UnifiedWaiver) => {
-    if (!confirm(`Deactivate waiver for ${waiver.member_name}?`)) return;
+    if (
+      !(await confirm({
+        title: 'Deactivate waiver',
+        message: `Deactivate the waiver for ${waiver.member_name}? They will be held to the full requirements again.`,
+        confirmLabel: 'Deactivate',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
 
     try {
       if (waiver.source === 'leave') {
@@ -315,7 +326,7 @@ export const WaiverManagementPage: React.FC = () => {
       }
       void fetchData();
     } catch {
-      alert('Failed to deactivate waiver');
+      toast.error('Failed to deactivate waiver');
     }
   };
 

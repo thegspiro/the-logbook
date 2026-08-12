@@ -32,6 +32,7 @@ import type {
   RegistryInfo,
 } from '../types/training';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type FilterSource = 'all' | 'department' | 'state' | 'national';
 
@@ -42,6 +43,7 @@ type FilterSource = 'all' | 'department' | 'state' | 'national';
  * Supports department, state, and national registry requirements.
  */
 const TrainingRequirementsPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [registries, setRegistries] = useState<RegistryInfo[]>([]);
@@ -92,7 +94,15 @@ const TrainingRequirementsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this requirement? This action cannot be undone.')) return;
+    if (
+      !(await confirm({
+        title: 'Delete requirement',
+        message: 'Permanently delete this requirement? This cannot be undone.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
 
     try {
       await trainingService.deleteRequirement(id);

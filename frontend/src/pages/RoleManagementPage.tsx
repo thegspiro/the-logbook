@@ -8,8 +8,10 @@ import React, { useEffect, useState } from 'react';
 import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const RoleManagementPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissionCategories, setPermissionCategories] = useState<PermissionCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +97,14 @@ export const RoleManagementPage: React.FC = () => {
   };
 
   const handleDelete = async (role: Role) => {
-    if (!confirm(`Are you sure you want to delete the role "${role.name}"?`)) {
+    if (
+      !(await confirm({
+        title: 'Delete role',
+        message: `Delete the role "${role.name}"? Members assigned to it will lose its permissions.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    ) {
       return;
     }
 

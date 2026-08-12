@@ -28,6 +28,7 @@ import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { PromptDialog } from '../components/ux';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
@@ -53,6 +54,7 @@ const MIN_VOID_REASON_LENGTH = 3;
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
   const navigate = useNavigate();
+  const { confirm } = useConfirm();
   // Core election state
   const [election, setElection] = useState<Election | null>(null);
   const [loading, setLoading] = useState(true);
@@ -311,7 +313,14 @@ export const ElectionDetailPage: React.FC = () => {
   const handleCloseElection = async () => {
     if (!electionId) return;
 
-    if (!confirm('Are you sure you want to close this election? This action cannot be undone.')) {
+    if (
+      !(await confirm({
+        title: 'Close election',
+        message: 'Close this election? Voting ends immediately and this cannot be undone.',
+        confirmLabel: 'Close election',
+        cancelLabel: 'Keep it open',
+      }))
+    ) {
       return;
     }
 

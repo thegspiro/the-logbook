@@ -16,6 +16,7 @@ import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { IPExceptionApprovalStatus } from '../../../constants/enums';
 import type { CountryBlockRuleCreate } from '../types';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 const tabClass = (active: boolean) =>
   `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -28,6 +29,7 @@ const labelClass = 'form-label';
 type Tab = 'pending' | 'all' | 'blocked-attempts' | 'blocked-countries';
 
 const IPSecurityAdminPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const {
     pendingExceptions,
     allExceptions,
@@ -148,7 +150,15 @@ const IPSecurityAdminPage: React.FC = () => {
   };
 
   const handleRemoveCountry = async (code: string) => {
-    if (!confirm(`Remove ${code} from the blocked countries list?`)) return;
+    if (
+      !(await confirm({
+        title: 'Unblock country',
+        message: `Remove ${code} from the blocked countries list? Sign-ins from ${code} will be allowed again.`,
+        confirmLabel: 'Unblock',
+        cancelLabel: 'Keep blocked',
+      }))
+    )
+      return;
     try {
       await removeBlockedCountry(code);
       toast.success(`${code} unblocked`);
