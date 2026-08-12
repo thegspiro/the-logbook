@@ -23,7 +23,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
+from starlette.middleware.cors import CORSMiddleware
 
 from app.api.public import responses as public_responses
 from app.api.public.calendar import router as public_calendar_router
@@ -1948,24 +1948,6 @@ app.openapi = _custom_openapi  # type: ignore[method-assign]
 # ============================================
 # Middleware
 # ============================================
-
-
-class CORSMiddleware(_StarletteCORSMiddleware):
-    """Thin wrapper that lets WebSocket connections bypass CORS origin checks.
-
-    Starlette's CORSMiddleware rejects WebSocket upgrades whose ``Origin``
-    header is not in ``allow_origins``.  Browsers *always* send ``Origin``
-    on WebSocket handshakes (even same-origin), so deployments behind a
-    reverse-proxy whose public URL differs from ``ALLOWED_ORIGINS`` get a
-    spurious 403.  WebSocket endpoints already perform their own JWT-based
-    authentication, so the CORS gate is redundant for them.
-    """
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] == "websocket":
-            await self.app(scope, receive, send)
-            return
-        await super().__call__(scope, receive, send)
 
 
 # Security Headers Middleware (add first so it wraps all responses)

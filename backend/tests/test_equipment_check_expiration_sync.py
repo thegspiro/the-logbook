@@ -171,6 +171,11 @@ class TestTrendOutcomeBuckets:
         assert service._trend_bucket_for_status("out_of_service") == "fail_count"
         assert service._trend_bucket_for_status("not_checked") == "not_checked_count"
 
+    def test_trend_schema_has_one_not_applicable_bucket(self):
+        from app.schemas.equipment_check import ItemTrendEntry
+
+        assert list(ItemTrendEntry.model_fields).count("not_applicable_count") == 1
+
 
 class TestApplyFoundValuesToTemplate:
     def test_expiration_is_not_written_back_to_template(self, service):

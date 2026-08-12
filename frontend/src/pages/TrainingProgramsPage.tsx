@@ -25,6 +25,7 @@ import RegistryImportModal from './RegistryImportModal';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { enumLabel } from '@/utils/displayValue';
+import { isSafeExternalUrl } from '@/utils/safeUrl';
 import type {
   TrainingProgram,
   TrainingRequirementEnhanced,
@@ -480,7 +481,7 @@ const TrainingProgramsPage: React.FC = () => {
                             {registry.requirement_count} requirements
                           </span>
                         )}
-                        {registry.source_url && (
+                        {registry.source_url && isSafeExternalUrl(registry.source_url) && (
                           <a
                             href={registry.source_url}
                             target="_blank"

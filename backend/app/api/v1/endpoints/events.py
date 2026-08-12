@@ -86,6 +86,7 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
 from app.services.notifications_service import NotificationsService
+from app.utils.mime_validation import detect_mime_type
 
 router = APIRouter()
 
@@ -225,8 +226,8 @@ async def list_events(
     end_before: datetime | None = None,
     include_cancelled: bool = False,
     include_drafts: bool = False,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -685,8 +686,8 @@ async def get_visible_event_types(
 @router.get("/templates", response_model=list[EventTemplateResponse])
 async def list_event_templates(
     include_inactive: bool = False,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -1355,8 +1356,8 @@ async def rsvp_to_series(
 async def list_event_rsvps(
     event_id: UUID,
     status_filter: str | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -1381,7 +1382,7 @@ async def list_event_rsvps(
 @router.get("/{event_id}/rsvp-history", response_model=list[RSVPHistoryResponse])
 async def get_rsvp_history(
     event_id: UUID,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -2280,20 +2281,22 @@ async def upload_event_attachment(
 
     # SEC: Validate actual file content via magic bytes, not just extension
     try:
-        import magic
-
-        detected_mime = magic.from_buffer(content[:2048], mime=True)
-        if detected_mime not in ALLOWED_ATTACHMENT_MIME_TYPES:
-            logger.warning(
-                f"Event attachment rejected: detected MIME '{detected_mime}' "
-                f"(claimed: '{file.content_type}') for file '{file.filename}'"
-            )
-            raise HTTPException(
-                status_code=400,
-                detail=f"File content type '{detected_mime}' not allowed.",
-            )
-    except ImportError:
-        pass  # magic library optional — fall back to extension check only
+        detected_mime = detect_mime_type(content)
+    except RuntimeError:
+        logger.error("Event attachment validation unavailable: libmagic missing")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Attachment validation is temporarily unavailable.",
+        )
+    if detected_mime not in ALLOWED_ATTACHMENT_MIME_TYPES:
+        logger.warning(
+            f"Event attachment rejected: detected MIME '{detected_mime}' "
+            f"(claimed: '{file.content_type}') for file '{file.filename}'"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"File content type '{detected_mime}' not allowed.",
+        )
 
     # Save file
     org_dir = os.path.join(
