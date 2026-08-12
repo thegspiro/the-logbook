@@ -2134,9 +2134,26 @@ After enrollment, the program dashboard for Alex shows:
 | Phases           | 4 (Phase 1 unlocked, Phases 2-4 locked) |
 | Requirements     | 0 of 15 complete                        |
 
-Phase 1 (Orientation) is immediately accessible. Phases 2 through 4 display a lock icon with the tooltip "Complete the previous phase to unlock." Alex can see her enrollment on the **My Training** dashboard under **Active Program Enrollments** with a progress bar at 0%.
+Alex can see her enrollment on the **My Training** dashboard under **Active Program Enrollments** with a progress bar at 0%. Opening it shows every phase at once.
 
-> **[SCREENSHOT NEEDED]:** _The program enrollment detail page showing Alex Rivera's enrollment at 0% progress, Phase 1 unlocked with 4 requirements listed, and Phases 2-4 showing lock icons._
+> **Phases are not locked as units _(2026-08-12)_.** This guide previously said
+> later phases carry a lock icon and the tooltip "Complete the previous phase to
+> unlock". They do not — a member can work on any phase, and the seeded example
+> below has requirements finished in Phase 2 and Phase 3 while Phase 1 is still
+> in progress. What **is** locked is an individual **requirement** with a
+> prerequisite, which greys out and says which requirement it is waiting on
+> ("Locked until you finish Hose Deployment"). The current phase is marked
+> **You are here** rather than by unlocking, and **Next milestones** at the top
+> lists the phase completions still ahead.
+
+![A member's program enrollment — overall progress, and every requirement grouped by phase with the locked ones marked](./images/02-105-program-enrollment-progress.png)
+
+> **Why the count and the bar disagree.** The header shows two different
+> measures side by side: "7 of 13 requirements complete" counts requirements
+> that are **finished**, while the percentage beside it averages how far along
+> **every** requirement is. A checklist four steps into six lifts the bar
+> without moving the count, so the bar normally runs ahead of the fraction.
+> Both figures are right.
 
 **Edge case — duplicate enrollment:** Later that week, Lt. Park (another officer) attempts to enroll Alex in the same program. The system returns: "Member is already enrolled in this program" and prevents the duplicate. Each member can have only one active enrollment per program.
 
@@ -2322,7 +2339,15 @@ Lt. Santos navigates to **Inventory > Check Out** to reserve training equipment:
 | Thermal Imaging Cameras | 2          | Temporary (same-day return) | June 13, 16:00  |
 | Attack Hose (1.75")     | 12 lengths | Pool item issuance          | June 13, 16:00  |
 
-> **[SCREENSHOT NEEDED]:** _The Inventory checkout form showing the 6 SCBA units being checked out with "Temporary" selected, the return date auto-filled, and the equipment list below showing current availability counts._
+> **No "Temporary" control on the checkout form _(2026-08-12)_.** The
+> assignment types in the table above are real — an assignment is `permanent` or
+> `temporary`, and the member's equipment list groups them accordingly — but
+> nothing in the interface lets you pick one. Assigning from an item's detail
+> page and the bulk batch-checkout both create **permanent** assignments with no
+> choice offered. The one way to produce a loan today is to fulfil an equipment
+> request with an expected-return date. Pool issuance (the hose lengths above)
+> is a separate flow and does honour a return date. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#inventory--nothing-in-the-ui-can-choose-a-temporary-assignment-2026-08-12).
 
 **Edge case — equipment in maintenance:** When Lt. Santos attempts to check out 6 SCBA units, the system reports that SCBA Unit #14 is currently flagged as "In Maintenance" (last inspection failed — regulator issue). Only 5 of the 6 requested units from that batch are available. Lt. Santos substitutes SCBA Unit #22 from a different station's inventory, and the checkout proceeds with 6 available units.
 
@@ -2440,7 +2465,16 @@ After all 26 reports are approved, the training compliance matrix refreshes. Lt.
 
 **Event analytics:**
 
-The event detail page now shows post-event analytics:
+> **This panel does not exist _(2026-08-12)_.** The figures below are from the
+> worked example, not a description of a screen. The event detail page has no
+> analytics section. Two things nearby are easy to mistake for one:
+> **/events/analytics** is a department-wide attendance-trends dashboard across
+> all events, and **/events/:id/analytics** is per-event but reports **QR
+> check-in** activity — scans, success rate, device breakdown — not hours,
+> skills observations or apparatus. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#events--there-is-no-per-event-analytics-panel-2026-08-12).
+
+For this drill the numbers would be:
 
 | Metric              | Value                            |
 | ------------------- | -------------------------------- |
@@ -2449,8 +2483,6 @@ The event detail page now shows post-event analytics:
 | Total Participants  | 26                               |
 | Skills Observations | 78 (3 skills avg per trainee)    |
 | Apparatus Used      | 3 (Engine 1, Engine 3, Ladder 1) |
-
-> **[SCREENSHOT NEEDED]:** _The event analytics panel showing the attendance rate pie chart, average hours bar, participant count, and a breakdown table by apparatus showing skills observed per unit._
 
 **PDF report generation:**
 

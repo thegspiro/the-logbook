@@ -2929,7 +2929,75 @@ class Seeder:
                 },
             )
 
+        self._wear_out_one_members_gear()
+
         return {"storage_areas": areas, "kits": kits, "allowances": allowances}
+
+    WORN_GEAR_CATEGORY = "Structural PPE"
+
+    def _wear_out_one_members_gear(self) -> None:
+        """Retire one member's structural gear so it needs replacing.
+
+        Every assigned item is seeded `good`, which makes the Impact Planner's
+        replacement-aware analysis invisible: it separates a member holding a
+        *serviceable* item from one whose holdings are all worn or past their
+        NFPA retirement, and with nothing worn in the data the second case never
+        appears.
+
+        It has to be **every** item that member holds in the category, not one
+        of them. The rule is `has_any and serviceable == 0`, so wearing out a
+        single coat on a member who also holds good pants still reads as "has
+        item" — which is exactly what the first attempt at this produced.
+        """
+        # Re-fetched rather than reusing the assignment list, which was read
+        # before the assignments were made and still says "available".
+        categories = items(
+            self.api.get("/inventory/categories?limit=100"), "categories"
+        )
+        category_id = next(
+            (
+                pick(c, "id")
+                for c in categories
+                if pick(c, "name") == self.WORN_GEAR_CATEGORY
+            ),
+            None,
+        )
+        if not category_id:
+            return
+        current = items(self.api.get("/inventory/items?limit=200"), "items")
+        in_category = [
+            i for i in current if pick(i, "category_id", "categoryId") == category_id
+        ]
+        # Idempotent: a second run must not retire a second member's gear.
+        if any((pick(i, "condition") or "").lower() == "poor" for i in in_category):
+            return
+
+        by_holder: dict[str, list[dict]] = {}
+        for item in in_category:
+            holder = pick(item, "assigned_to_user_id", "assignedToUserId")
+            if holder:
+                by_holder.setdefault(str(holder), []).append(item)
+        if not by_holder:
+            return
+
+        # The member holding the fewest pieces, so the smallest edit produces
+        # the badge and the rest of the roster keeps its serviceable gear.
+        _, gear = min(by_holder.items(), key=lambda kv: len(kv[1]))
+        for item in gear:
+            item_id = pick(item, "id")
+            if not item_id:
+                continue
+            try:
+                self.api.patch(
+                    f"/inventory/items/{item_id}",
+                    {
+                        "condition": "poor",
+                        "notes": "End of service life — due for replacement.",
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"worn gear: {exc}")
+                return
 
     def _kit_out_one_member(
         self, members: list[dict], assignable: list[dict], target: int = 3
@@ -3005,6 +3073,90 @@ class Seeder:
             taken.add(item_id)
             shortfall -= 1
         return taken
+
+    # -- inventory: equipment requests --------------------------------
+
+    # (item name, request type, member's reason, review note, fulfil?)
+    # A review note of None leaves the request pending.
+    EQUIPMENT_REQUESTS = [
+        (
+            "Nitrile Gloves — Large",
+            "issuance",
+            "Box in the medic bag is down to two pairs.",
+            "Approved — issue from quartermaster stock.",
+            True,
+        ),
+        (
+            "Portable Radio",
+            "checkout",
+            "Mine failed its battery check on Tuesday.",
+            "Approved — collect from the quartermaster.",
+            False,
+        ),
+        (
+            "Structural Helmet",
+            "issuance",
+            "Shell is cracked at the brim after the Third Street fire.",
+            None,
+            False,
+        ),
+    ]
+
+    def seed_equipment_requests(self, base_url: str) -> dict[str, Any]:
+        """One request in each state the Equipment Requests page can show.
+
+        A request is raised by the member who wants the kit, so these are
+        created over a second session signed in as the demo member — the admin
+        cannot raise one on somebody's behalf, and a request the admin raised
+        for themselves would never show the reviewer/requester split the page
+        is built around.
+
+        Three states, because each one renders differently: **pending** carries
+        the Approve and Deny actions, **approved** carries **Fulfill**, and
+        **fulfilled** is terminal and carries a link through to the issuance it
+        created.
+        """
+        existing = items(self.api.get("/inventory/requests"), "requests")
+        if existing:
+            return {"requests": existing}
+
+        catalog = items(self.api.get("/inventory/items?limit=200"), "items")
+
+        def by_name(name: str) -> dict | None:
+            return next((i for i in catalog if pick(i, "name") == name), None)
+
+        member_api = Api(base_url)
+        member_api.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+
+        created = []
+        for name, request_type, reason, review, fulfill in self.EQUIPMENT_REQUESTS:
+            item = by_name(name)
+            if item is None:
+                continue
+            payload = {
+                "item_name": name,
+                "item_id": pick(item, "id"),
+                "quantity": 1,
+                "request_type": request_type,
+                "priority": "normal",
+                "reason": reason,
+            }
+            request = member_api.post("/inventory/requests", payload)
+            request_id = pick(request, "id")
+            if review:
+                self.api.put(
+                    f"/inventory/requests/{request_id}/review",
+                    {"status": "approved", "review_notes": review},
+                )
+            if fulfill:
+                # Fulfilling routes by the item's tracking type — a pool item
+                # becomes an issuance, an individual one a checkout — and the
+                # request then carries a reference to whichever it made.
+                self.api.put(
+                    f"/inventory/requests/{request_id}/fulfill", {"quantity": 1}
+                )
+            created.append(request)
+        return {"requests": created}
 
     # -- inventory: variants and reorder requests --------------------
 
@@ -3894,6 +4046,53 @@ class Seeder:
             {"ordered_ids": [pick(header, "id")] + [pick(i, "id") for i in existing]},
         )
 
+    # Genuinely optional kit: carried on some engines, not required to be.
+    OPTIONAL_CHECK_ITEMS = [
+        "Chock blocks (if carried)",
+        "Spare SCBA mask (if carried)",
+        "Traffic cones (if carried)",
+    ]
+
+    def _add_optional_compartment(self, template_id: str | None) -> None:
+        """Give the engine checklist some items that are not required.
+
+        Every checkable item on every seeded template was `is_required`, and
+        the submit button is disabled until all required items are answered —
+        so `checkedItems < totalItems` was unreachable and the "submit an
+        incomplete check?" confirmation could never appear. Section headers do
+        not help: the form filters them out of `checkableItems` entirely, so a
+        template of nine required items and one header is still 9 of 9.
+
+        A separate compartment rather than optional items mixed into an
+        existing one, because the per-compartment "Pass All" answers every item
+        it contains — with the optional kit in its own section a crew (or a
+        screenshot) can leave exactly that section blank.
+        """
+        if not template_id:
+            return
+        template = self.api.get(f"/equipment-checks/templates/{template_id}")
+        compartments = items(template, "compartments")
+        if any(pick(c, "name") == "As-Carried Kit" for c in compartments):
+            return
+        created = self.api.post(
+            f"/equipment-checks/templates/{template_id}/compartments",
+            {"name": "As-Carried Kit", "sort_order": len(compartments)},
+        )
+        compartment_id = pick(created, "id")
+        if not compartment_id:
+            return
+        for order, name in enumerate(self.OPTIONAL_CHECK_ITEMS):
+            self.api.post(
+                f"/equipment-checks/compartments/{compartment_id}/items",
+                {
+                    "name": name,
+                    "check_type": "present",
+                    "is_required": False,
+                    "expected_quantity": 1,
+                    "sort_order": order,
+                },
+            )
+
     def seed_equipment_checks(self) -> dict[str, Any]:
         """A template plus completed checks, which the reports page aggregates."""
         self._repair_check_types()
@@ -3951,6 +4150,7 @@ class Seeder:
             templates.append(engine_daily)
 
         self._add_section_header(pick(engine_daily, "id"))
+        self._add_optional_compartment(pick(engine_daily, "id"))
 
         def close_out_template_for(apparatus_type: str) -> dict:
             """Get or create the end-of-shift template for an apparatus type.
@@ -4060,6 +4260,11 @@ class Seeder:
         # bare truthiness guard meant a database seeded before end-of-shift
         # checks were added here never grew them, and the pre-finalization
         # checklist's equipment row stayed absent through every re-seed.
+        # Before the early return below, not after it: on a database that has
+        # already been seeded this function returns here, so anything appended
+        # to the end never runs again.
+        self._seed_member_checklist_states(template_id)
+
         if all(
             {"start_of_shift", "end_of_shift"} <= timings
             for timings in existing_by_shift.values()
@@ -4180,6 +4385,130 @@ class Seeder:
                     if exc.code not in (400, 409):
                         raise
         return {"templates": templates, "checks": checks}
+
+    def _seed_member_checklist_states(self, template_id: str | None) -> None:
+        """Leave the demo member one finished check and one part-answered.
+
+        "My Equipment Checklists" is built from the member's own upcoming shift
+        assignments, and offers **Resume** only for a check whose status is
+        `in_progress` or `incomplete` with fewer items answered than it has.
+        Every seeded check was submitted and then completed, so every row read
+        either Not Started or done, and the Resume path could not be shown.
+
+        Submitted **as the member**, not as the admin running the seeder:
+        `complete_incomplete_check` only lets the original checker finish a
+        check unless the caller holds `equipment_check.manage`, so a check
+        started by the chief would give the member a Resume button that refuses
+        them.
+
+        A check is left incomplete simply by not calling `/complete` on it —
+        the status falls out of `completed < total` server-side.
+        """
+        if not template_id:
+            return
+        member = Api(self.base_url)
+        member.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+
+        shifts = [
+            s
+            for s in items(member.get("/scheduling/my-shifts?limit=50"), "shifts")
+            if pick(s, "id")
+            and str(pick(s, "shift_date", "shiftDate") or "") >= str(TODAY)
+        ]
+        shifts.sort(key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""))
+
+        # Idempotent on the state, not on the shift: once one part-answered
+        # check exists there is nothing to add, and re-running must not keep
+        # minting a fresh completed check on the next free shift each time.
+        existing = items(member.get("/equipment-checks/my-checklists"), "checklists")
+        if any(
+            str(pick(c, "status") or "") in {"in_progress", "incomplete"}
+            for c in existing
+        ):
+            return
+
+        untouched = [
+            s
+            for s in shifts
+            if not items(
+                member.get(f"/equipment-checks/shifts/{pick(s, 'id')}/checks"),
+                "checks",
+            )
+        ]
+        if len(untouched) < 2:
+            return
+
+        detail = self.api.get(f"/equipment-checks/templates/{template_id}")
+        rows = []
+        for compartment in items(detail, "compartments"):
+            for item in items(compartment, "items"):
+                # Headers carry no answer and are not counted by the form.
+                if pick(item, "check_type", "checkType") == "header":
+                    continue
+                rows.append(
+                    {
+                        "template_item_id": pick(item, "id"),
+                        "compartment_name": pick(compartment, "name"),
+                        "item_name": pick(item, "name"),
+                        "status": "pass",
+                        "quantity_found": 1,
+                        "required_quantity": 1,
+                    }
+                )
+        if not rows:
+            return
+
+        # The optional As-Carried Kit left unanswered, which is what a crew
+        # interrupted mid-check actually leaves behind. The server derives
+        # `incomplete` from completed < total, so simply not calling /complete
+        # afterwards is the whole trick — and submitting every item lands the
+        # other check as `pass` with no follow-up needed (completing an already
+        # complete check is refused).
+        # The quantity keys are dropped, not zeroed: the server rewrites any
+        # item whose quantity_found is below required_quantity to `fail`, so
+        # sending 0 turned these into answered-and-failed and the check came
+        # back complete — the opposite of what is wanted.
+        part_rows = [
+            (
+                {
+                    key: value
+                    for key, value in row.items()
+                    if key not in {"quantity_found", "required_quantity"}
+                }
+                | {"status": "not_checked"}
+                if row["compartment_name"] == "As-Carried Kit"
+                else row
+            )
+            for row in rows
+        ]
+
+        # Tried against each free shift in turn rather than the first two: this
+        # template is engine-only, and a shift on any other apparatus is
+        # refused with "Template is not applicable to this shift".
+        wanted = [rows, part_rows]
+        for shift in untouched:
+            if not wanted:
+                break
+            try:
+                member.post(
+                    f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
+                    {
+                        "template_id": template_id,
+                        "check_timing": "start_of_shift",
+                        "items": wanted[0],
+                    },
+                )
+            except ApiError as exc:
+                if exc.code == 400:
+                    continue
+                self.blocked.append(f"member checklist states: {exc}")
+                return
+            wanted.pop(0)
+        if wanted:
+            self.blocked.append(
+                "member checklist states: no engine shift free for a "
+                "part-answered check"
+            )
 
     # -- shift finalization ------------------------------------------
 
@@ -6756,6 +7085,138 @@ class Seeder:
         )
         return peer.post(f"/training/skills-testing/tests/{test_id}/complete")
 
+    def seed_skill_test_result_mix(
+        self,
+        base_url: str,
+        templates: list[dict],
+        members: list[dict],
+    ) -> dict | None:
+        """Give the demo member a failed official test and a practice one.
+
+        Every seeded skill test passed and none was practice, so the member's
+        Skills Tests list on My Training was 51 identical PASS rows — it could
+        not show what a failure looks like, and the Practice badge existed only
+        in the code. Both states are what the list is *for*: a practice attempt
+        never counts, and a failure is the case a member most needs to find.
+
+        A test fails on a **required** criterion, not on any miss: the existing
+        seeding deliberately drops one non-required criterion and still passes
+        overall, which is why that test cannot be reused for this.
+        """
+        published = [t for t in templates if pick(t, "status") == "published"]
+        candidate = next(
+            (m for m in members if m.get("username") == DEMO_MEMBER_USERNAME), None
+        )
+        examiner = next(
+            (m for m in members if m.get("username") == DEMO_PEER_EXAMINER_USERNAME),
+            None,
+        )
+        if not published or not candidate or not examiner:
+            return None
+
+        existing = items(self.api.get("/training/skills-testing/tests"), "tests")
+        candidate_id = pick(candidate, "id")
+        mine = [t for t in existing if pick(t, "candidate_id") == candidate_id]
+        # Idempotent on the two states, not on a count: a re-run must not keep
+        # adding failures to the member's record.
+        needs_practice = not any(pick(t, "is_practice") for t in mine)
+        needs_failure = not any(
+            pick(t, "result") == "fail" and not pick(t, "is_practice") for t in mine
+        )
+        if not needs_practice and not needs_failure:
+            return None
+
+        peer = self.member_session(
+            base_url, pick(examiner, "id"), DEMO_PEER_EXAMINER_USERNAME
+        )
+        template_id = pick(published[0], "id")
+
+        created = None
+        for is_practice, should_fail, note in (
+            (True, False, "Practice run before the formal attempt."),
+            (False, True, "Missed a required step; rebooked for a retest."),
+        ):
+            if is_practice and not needs_practice:
+                continue
+            if not is_practice and not needs_failure:
+                continue
+            created = self._score_skill_test(
+                peer, template_id, candidate_id, is_practice, should_fail, note
+            )
+        return created
+
+    def _score_skill_test(
+        self,
+        peer: Api,
+        template_id: str,
+        candidate_id: str,
+        is_practice: bool,
+        should_fail: bool,
+        note: str,
+    ) -> dict | None:
+        """Create, score and complete one skill test."""
+        test = peer.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": candidate_id,
+                "is_practice": is_practice,
+                "notes": note,
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        # Scored against the snapshot frozen on the test, not the live template.
+        detail = peer.get(f"/training/skills-testing/tests/{test_id}")
+        sections = detail.get("template_sections") or []
+        failed_one = False
+        section_results = []
+        for si, section in enumerate(sections):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if (
+                    not isinstance(criterion, dict)
+                    or criterion.get("type") == "statement"
+                ):
+                    continue
+                # The first *required* criterion is the one dropped, because a
+                # miss on an optional one leaves the test passing overall.
+                miss = (
+                    should_fail and not failed_one and bool(criterion.get("required"))
+                )
+                if miss:
+                    failed_one = True
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": criterion.get("label", ""),
+                        "passed": not miss,
+                        "score": 0 if miss else criterion.get("max_score", 1),
+                        "notes": "Not demonstrated to standard." if miss else None,
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+
+        peer.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 291 if is_practice else 358,
+            },
+        )
+        return peer.post(f"/training/skills-testing/tests/{test_id}/complete")
+
     def seed_test_viewer(self, members: list[dict]) -> dict | None:
         """One named viewer on one test, so the Viewers panel is not empty.
 
@@ -7085,7 +7546,86 @@ class Seeder:
 
     # -- elections ---------------------------------------------------
 
-    def seed_elections(self) -> list[dict]:
+    MINUTES_TITLE = "July Business Meeting"
+
+    def seed_minutes(self) -> list[dict]:
+        """One approved set of minutes, linked to the meeting it records.
+
+        `/minutes-records` was empty, so the whole module — the list, the
+        detail page, its Linked Elections card, the approval trail — had
+        nothing to render. The record is carried through submit and approve
+        rather than left in draft: a draft shows the editing affordances and
+        none of the workflow ones, and the guides describe both.
+        """
+        # The list item omits `event_id`, and the closed election needs it, so
+        # a re-run re-reads the detail rather than trusting the summary.
+        existing = items(self.api.get("/minutes-records"), "minutes", "records")
+        if existing:
+            return [self.api.get(f"/minutes-records/{pick(existing[0], 'id')}")]
+
+        events = items(self.api.get("/events?limit=100"), "events")
+        meeting = next(
+            (
+                e
+                for e in events
+                if (pick(e, "title") or "") == "Monthly Business Meeting"
+                and not pick(e, "is_cancelled", "isCancelled")
+            ),
+            None,
+        )
+        payload: dict[str, Any] = {
+            "title": self.MINUTES_TITLE,
+            "meeting_type": "business",
+            "meeting_date": iso(NOW - timedelta(days=2)),
+            "location": "Station 1 — Training Room",
+            "called_by": "Chief Dana Ruiz",
+            "quorum_met": True,
+            "sections": [
+                {
+                    "key": "call_to_order",
+                    "order": 0,
+                    "title": "Call to Order",
+                    "content": (
+                        "Called to order at 19:04 by Chief Ruiz. Quorum "
+                        "confirmed by the Secretary."
+                    ),
+                },
+                {
+                    "key": "old_business",
+                    "order": 1,
+                    "title": "Old Business",
+                    "content": (
+                        "Engine 2's pump test scheduling was carried over from "
+                        "June; the vendor has confirmed the last week of the "
+                        "month."
+                    ),
+                },
+                {
+                    "key": "new_business",
+                    "order": 2,
+                    "title": "New Business",
+                    "content": (
+                        "Special election held to fill the Assistant Chief "
+                        "vacancy. Paper ballots counted in the room and "
+                        "attested by two officers."
+                    ),
+                },
+            ],
+        }
+        if meeting:
+            payload["event_id"] = pick(meeting, "id")
+        minutes = self.api.post("/minutes-records", payload)
+        minutes_id = pick(minutes, "id")
+        if minutes_id:
+            for step in ("submit", "approve"):
+                try:
+                    minutes = self.api.post(f"/minutes-records/{minutes_id}/{step}")
+                except ApiError as exc:
+                    self.blocked.append(f"minutes {step}: {exc}")
+                    break
+        return [minutes]
+
+    def seed_elections(self, minutes: list[dict] | None = None) -> list[dict]:
         elections = items(self.api.get("/elections"), "elections")
         titles = {e.get("title") for e in elections}
         start = NOW + timedelta(days=14)
@@ -7148,7 +7688,440 @@ class Seeder:
             )
         self._link_elections_to_meetings(elections)
         self._seed_nominations(elections)
+        self._seed_closed_election(elections, minutes or [])
+        self._seed_open_election(elections)
+        self._seed_runoff_chain(elections)
         return elections
+
+    RUNOFF_ELECTION_TITLE = "Fire Chief Election — 2027 Term"
+
+    # Three candidates so round one splits and nobody clears half.
+    RUNOFF_ELECTION_CANDIDATES = [
+        ("Amara Osei", "Twenty years in, eight as Deputy Chief."),
+        ("Jonah Whitfield", "Ran the station's rebuild of the duty roster."),
+        ("Esme Caldwell", "Fire prevention officer; wrote the inspection program."),
+    ]
+
+    def _seed_runoff_chain(self, elections: list[dict]) -> None:
+        """An election that took three rounds to produce a chief.
+
+        There is no endpoint that creates a runoff. `_check_and_create_runoff`
+        fires on close, when an election with `enable_runoffs` finishes without
+        a winner, so a chain has to be *played out* rather than constructed:
+        each round is opened, tallied on paper, attested and closed, and
+        closing it is what mints the next round.
+
+        Victory condition is `majority` — strictly more than half — because
+        under the default `most_votes` a plurality wins and no runoff is ever
+        needed. Round one splits 8/6/5 of 19 (10 required), round two ties 9/9
+        of 18, and round three settles it 11/7.
+        """
+        if any(pick(e, "title") == self.RUNOFF_ELECTION_TITLE for e in elections):
+            return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{pick(m, 'first_name', 'firstName')} "
+            f"{pick(m, 'last_name', 'lastName')}": pick(m, "id")
+            for m in members
+        }
+
+        election = self.api.post(
+            "/elections",
+            {
+                "title": self.RUNOFF_ELECTION_TITLE,
+                "description": (
+                    "Election for Fire Chief. No candidate reached a majority "
+                    "in the first two rounds."
+                ),
+                "election_type": "position",
+                "positions": ["Fire Chief"],
+                "ballot_items": [
+                    {
+                        "id": "item-chief",
+                        "type": "officer_election",
+                        "title": "Fire Chief",
+                        "description": "Vote for Fire Chief.",
+                        "position": "Fire Chief",
+                        "vote_type": "candidate_selection",
+                        "voting_method": "simple_majority",
+                    }
+                ],
+                "start_date": iso(NOW - timedelta(days=6)),
+                "end_date": iso(NOW + timedelta(days=1)),
+                "anonymous_voting": True,
+                "allow_write_ins": False,
+                "results_visible_immediately": True,
+                "voting_method": "simple_majority",
+                "victory_condition": "majority",
+                "enable_runoffs": True,
+                "runoff_type": "top_two",
+                "max_runoff_rounds": 3,
+                "quorum_type": "none",
+            },
+        )
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+
+        for name, statement in self.RUNOFF_ELECTION_CANDIDATES:
+            self.api.post(
+                f"/elections/{election_id}/candidates",
+                {
+                    "election_id": election_id,
+                    "name": name,
+                    "position": "Fire Chief",
+                    "user_id": by_name.get(name),
+                    "statement": statement,
+                },
+            )
+
+        # (tally for this round, note) — the last round has a majority, which
+        # is what stops the chain.
+        rounds = [
+            ([8, 6, 5], "First ballot, September business meeting. No majority."),
+            ([9, 9], "Second ballot, same meeting. Tied — a third was called."),
+            ([11, 7], "Third ballot. Chief elected."),
+        ]
+
+        current_id = election_id
+        try:
+            for counts, note in rounds:
+                if current_id is None:
+                    break
+                self._play_paper_round(current_id, counts, note)
+                current_id = self._next_runoff_id(current_id)
+        except ApiError as exc:
+            self.blocked.append(f"runoff chain: {exc}")
+            return
+        elections.append(self.api.get(f"/elections/{election_id}"))
+
+    def _play_paper_round(self, election_id: str, counts: list[int], note: str) -> None:
+        """Open a round, record a paper tally against it, attest, and close."""
+        detail = self.api.get(f"/elections/{election_id}")
+        if str(pick(detail, "status") or "").lower() == "draft":
+            self.api.post(f"/elections/{election_id}/open")
+
+        candidates = items(
+            self.api.get(f"/elections/{election_id}/candidates"), "candidates"
+        )
+        entries = [
+            {"candidate_id": pick(c, "id"), "count": n}
+            for c, n in zip(candidates, counts)
+        ]
+        if not entries:
+            return
+        self.api.post(
+            f"/elections/{election_id}/manual-ballots",
+            {"entries": entries, "notes": note},
+        )
+        batches = items(
+            self.api.get(f"/elections/{election_id}/manual-ballots"), "batches"
+        )
+        batch_id = pick(batches[0], "batch_id", "id") if batches else None
+        if batch_id:
+            self._attest_ballot_batch(election_id, batch_id)
+        self.api.post(f"/elections/{election_id}/close")
+
+    def _next_runoff_id(self, parent_id: str) -> str | None:
+        """The runoff that closing `parent_id` just created, if any.
+
+        The list representation does not carry parent_election_id, so each
+        candidate has to be fetched — the same reason RunoffChain.tsx walks the
+        list one detail call at a time.
+        """
+        for entry in items(self.api.get("/elections?limit=50"), "elections"):
+            entry_id = pick(entry, "id")
+            if not entry_id or entry_id == parent_id:
+                continue
+            detail = self.api.get(f"/elections/{entry_id}")
+            if pick(detail, "parent_election_id", "parentElectionId") == parent_id:
+                return entry_id
+        return None
+
+    OPEN_ELECTION_TITLE = "Line Officer Election — 2027 Term"
+
+    # Two candidates and a separate yes/no question, so one ballot shows both
+    # controls a voter meets: a candidate choice and an approval vote.
+    OPEN_ELECTION_CANDIDATES = [
+        (
+            "Dana Ruiz",
+            "Nine years on Engine 1, acting officer since 2025.",
+        ),
+        (
+            "Emeka Adeyemi",
+            "Rescue technician and lead instructor for vehicle extrication.",
+        ),
+    ]
+
+    def _seed_open_election(self, elections: list[dict]) -> None:
+        """An election actually taking votes, so the member ballot can be shown.
+
+        The other three seeded elections are a draft, one taking nominations
+        and one closed — between them they cover everything except the screen
+        a rank-and-file member actually uses. Without one in ``open`` status
+        the voting page can only ever be photographed empty.
+
+        Deliberately left with no votes recorded: the shot wanted is an
+        unmarked ballot, and any member who has already voted is shown the
+        receipt instead.
+        """
+        if any(pick(e, "title") == self.OPEN_ELECTION_TITLE for e in elections):
+            return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{pick(m, 'first_name', 'firstName')} "
+            f"{pick(m, 'last_name', 'lastName')}": pick(m, "id")
+            for m in members
+        }
+
+        election = self.api.post(
+            "/elections",
+            {
+                "title": self.OPEN_ELECTION_TITLE,
+                "description": (
+                    "Annual election for line officer positions, plus one "
+                    "bylaw amendment carried over from the August meeting."
+                ),
+                "election_type": "position",
+                "positions": ["Captain"],
+                "ballot_items": [
+                    {
+                        "id": "item-captain",
+                        "type": "officer_election",
+                        "title": "Captain",
+                        "description": (
+                            "Vote for one candidate for Captain, two-year term "
+                            "beginning January 2027."
+                        ),
+                        "position": "Captain",
+                        "vote_type": "candidate_selection",
+                        "voting_method": "simple_majority",
+                    },
+                    {
+                        "id": "item-bylaw",
+                        "type": "general_vote",
+                        "title": "Bylaw Amendment — Article IV, Meeting Quorum",
+                        "description": (
+                            "Shall Article IV be amended to reduce the quorum "
+                            "for a business meeting from 40% to 30% of active "
+                            "members?"
+                        ),
+                        "vote_type": "approval",
+                    },
+                ],
+                "start_date": iso(NOW - timedelta(days=1)),
+                "end_date": iso(NOW + timedelta(days=5)),
+                "anonymous_voting": True,
+                "allow_write_ins": True,
+                "results_visible_immediately": False,
+                "voting_method": "simple_majority",
+                "victory_condition": "most_votes",
+                "quorum_type": "percentage",
+                "quorum_value": 50,
+            },
+        )
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+
+        for name, statement in self.OPEN_ELECTION_CANDIDATES:
+            self.api.post(
+                f"/elections/{election_id}/candidates",
+                {
+                    "election_id": election_id,
+                    "name": name,
+                    "position": "Captain",
+                    "user_id": by_name.get(name),
+                    "statement": statement,
+                },
+            )
+
+        try:
+            self.api.post(f"/elections/{election_id}/open")
+        except ApiError as exc:
+            self.blocked.append(f"open election: {exc}")
+            return
+        elections.append(self.api.get(f"/elections/{election_id}"))
+
+    # Who attests the paper tally. Neither may be a candidate, and neither may
+    # be the officer who recorded the batch — the API enforces both.
+    ELECTION_ATTESTERS = [("okittredge", "Secretary"), ("smarchetti", "Vice President")]
+
+    CLOSED_ELECTION_TITLE = "Assistant Chief Special Election"
+
+    def _seed_closed_election(self, elections: list[dict], minutes: list[dict]) -> None:
+        """A finished election, so results and forensics have something to show.
+
+        The other two seeded elections are a draft and one taking nominations,
+        which between them cover the front half of the lifecycle and leave
+        every results-side screen — the tally, turnout, the certified result,
+        the integrity report — permanently empty.
+
+        Votes are recorded as a **paper batch** rather than cast one at a time.
+        Casting electronically needs a separate authenticated session per
+        voter, and a volunteer department voting in the room on paper is the
+        commoner case anyway. It also gives the Paper Batches panel a batch.
+
+        Order matters and the API enforces it: a batch can only be recorded
+        while voting is open, attestations can only be added while voting is
+        open, and an unattested batch does not count in results. Recording,
+        attesting and closing therefore all happen before the election is
+        closed — not after.
+        """
+        if any(pick(e, "title") == self.CLOSED_ELECTION_TITLE for e in elections):
+            return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{pick(m, 'first_name', 'firstName')} "
+            f"{pick(m, 'last_name', 'lastName')}": pick(m, "id")
+            for m in members
+        }
+
+        opened = NOW - timedelta(days=2)
+        # Set at creation, not patched afterwards: a closed election accepts no
+        # field update except `results_visible_immediately`. The event is what
+        # links this election to the meeting *and* to the minutes recording it
+        # — both sides key on the event, so one id does both jobs.
+        event_id = pick(minutes[0], "event_id", "eventId") if minutes else None
+        election = self.api.post(
+            "/elections",
+            {
+                **({"event_id": event_id} if event_id else {}),
+                "title": self.CLOSED_ELECTION_TITLE,
+                "description": (
+                    "Special election to fill the Assistant Chief vacancy — "
+                    "conducted at the July business meeting."
+                ),
+                "election_type": "position",
+                "positions": ["Assistant Chief"],
+                "ballot_items": [
+                    {
+                        "id": "item-1",
+                        "type": "officer_election",
+                        "title": "Assistant Chief",
+                        "description": "Vote for Assistant Chief.",
+                        "position": "Assistant Chief",
+                        "vote_type": "candidate_selection",
+                        "voting_method": "simple_majority",
+                    }
+                ],
+                # The open call refuses an election whose end date has already
+                # passed, so the window has to still be live at the moment it
+                # opens. It is closed by hand a few lines below.
+                "start_date": iso(opened),
+                "end_date": iso(NOW + timedelta(days=1)),
+                "anonymous_voting": True,
+                "allow_write_ins": True,
+                "results_visible_immediately": True,
+                "voting_method": "simple_majority",
+                "victory_condition": "most_votes",
+                "quorum_type": "percentage",
+                "quorum_value": 50,
+            },
+        )
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+
+        candidates = []
+        for name, statement in self.CLOSED_ELECTION_CANDIDATES:
+            candidates.append(
+                self.api.post(
+                    f"/elections/{election_id}/candidates",
+                    {
+                        "election_id": election_id,
+                        "name": name,
+                        "position": "Assistant Chief",
+                        "user_id": by_name.get(name),
+                        "statement": statement,
+                    },
+                )
+            )
+        if len(candidates) < 2:
+            return
+
+        try:
+            self.api.post(f"/elections/{election_id}/open")
+            self.api.post(
+                f"/elections/{election_id}/manual-ballots",
+                {
+                    # Under the eligible-voter count, or the plausibility check
+                    # rejects the batch — 22 members are eligible.
+                    "entries": [
+                        {"candidate_id": pick(candidates[0], "id"), "count": 12},
+                        {"candidate_id": pick(candidates[1], "id"), "count": 7},
+                    ],
+                    "notes": (
+                        "In-room paper tally, July business meeting. Counted by "
+                        "the Secretary, witnessed by the Chief."
+                    ),
+                },
+            )
+            batches = items(
+                self.api.get(f"/elections/{election_id}/manual-ballots"), "batches"
+            )
+            batch_id = pick(batches[0], "batch_id", "id") if batches else None
+            if batch_id:
+                self._attest_ballot_batch(election_id, batch_id)
+            self.api.post(f"/elections/{election_id}/close")
+        except ApiError as exc:
+            self.blocked.append(f"closed election: {exc}")
+            return
+        elections.append(self.api.get(f"/elections/{election_id}"))
+
+    # Two candidates, so the result is a margin rather than a coronation.
+    CLOSED_ELECTION_CANDIDATES = [
+        (
+            "Priya Raman",
+            "Twelve years on Engine 1, six of them as a company officer.",
+        ),
+        (
+            "Marcus Bell",
+            "Training officer since 2022; wrote the current recruit syllabus.",
+        ),
+    ]
+
+    def _attest_ballot_batch(self, election_id: str, batch_id: str) -> None:
+        """Have two officers attest a paper batch so its votes count.
+
+        Until the required attestations are in, the batch sits `pending` and
+        results read zero — which is the control working, and a useless screen
+        to document. The roster ships every member with only the base `Member`
+        role, so the two attesters are granted the corporate offices a
+        volunteer department actually elects; `elections.manage` rides on
+        those, not on operational rank.
+        """
+        roles = self.api.get("/roles")
+        role_ids = {
+            pick(r, "name"): pick(r, "id")
+            for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+        }
+        users = items(self.api.get("/users?limit=100"), "users")
+        user_ids = {pick(u, "username"): pick(u, "id") for u in users}
+
+        for username, role_name in self.ELECTION_ATTESTERS:
+            user_id = user_ids.get(username)
+            role_id = role_ids.get(role_name)
+            if not user_id or not role_id:
+                continue
+            try:
+                self.api.post(f"/users/{user_id}/roles/{role_id}", {})
+            except ApiError as exc:
+                # Already held is fine; anything else is worth surfacing.
+                if exc.code not in (400, 409):
+                    raise
+            officer = Api(self.base_url)
+            officer.login_as(username, DEMO_MEMBER_PASSWORD)
+            try:
+                officer.post(
+                    f"/elections/{election_id}/manual-ballots/{batch_id}/attest",
+                    {},
+                )
+            except ApiError as exc:
+                self.blocked.append(f"ballot attestation ({username}): {exc}")
 
     def _link_elections_to_meetings(self, elections: list[dict]) -> None:
         """Attach each election to the meeting it is conducted at.
@@ -7170,6 +8143,21 @@ class Seeder:
         for index, election in enumerate(elections):
             election_id = pick(election, "id")
             if not election_id or pick(election, "event_id", "eventId"):
+                continue
+            # Only a draft or nominating election accepts an event_id: an open
+            # one takes end_date and nothing else, a closed one takes
+            # results_visible_immediately and nothing else. An allowlist rather
+            # than a denylist, because the denylist that named closed and
+            # cancelled still walked into the open election added later.
+            #
+            # It matters on a re-run: the list representation omits event_id, so
+            # an already-linked election looks unlinked here and we would try to
+            # link it again — failing the whole elections step, and with it every
+            # election seeded after this call.
+            if str(pick(election, "status") or "").lower() not in {
+                "draft",
+                "nominations",
+            }:
                 continue
             meeting_id = pick(meetings[index % len(meetings)], "id")
             if not meeting_id:
@@ -7360,10 +8348,50 @@ class Seeder:
                     f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
                 )
         self._enable_public_status(pipelines)
+        self._seed_report_stage_groups(pipelines)
         self._seed_election_packages(prospects)
         self._link_prospect_events(prospects)
         self._upload_prospect_documents(prospects)
         return {"pipelines": pipelines, "prospects": prospects}
+
+    # Consolidated reporting buckets, in pipeline order. Named by what the
+    # stages have in common rather than by stage count, because the Pipeline
+    # Overview report prints these names and "Group 1" tells a chief nothing.
+    REPORT_STAGE_GROUPS = [
+        ("Early Stages", ["Application Received", "Application Review"]),
+        ("Assessment", ["Interview", "Background & Medical"]),
+        ("Final Steps", ["Membership Vote", "Onboarding"]),
+    ]
+
+    def _seed_report_stage_groups(self, pipelines: list[dict]) -> None:
+        """Group the pipeline's stages for the Pipeline Overview report.
+
+        Without these the report lists every stage individually and the
+        Report Stage Groups editor is an empty panel with one Add Group
+        button — which documents neither what a group is nor that ungrouped
+        stages still appear on their own.
+        """
+        for pipeline in pipelines:
+            pipeline_id = pick(pipeline, "id")
+            if not pipeline_id:
+                continue
+            detail = self.api.get(f"/prospective-members/pipelines/{pipeline_id}")
+            if detail.get("report_stage_groups"):
+                continue
+            # The pipeline detail calls them "steps"; the editor and the report
+            # call them stages. Same rows.
+            by_name = {s.get("name"): s.get("id") for s in detail.get("steps", [])}
+            groups = []
+            for name, stage_names in self.REPORT_STAGE_GROUPS:
+                step_ids = [by_name[s] for s in stage_names if s in by_name]
+                if step_ids:
+                    groups.append({"name": name, "step_ids": step_ids})
+            if not groups:
+                continue
+            self.api.patch(
+                f"/prospective-members/pipelines/{pipeline_id}/report-settings",
+                {"report_stage_groups": groups},
+            )
 
     # The paperwork an applicant hands in, by document type. Two of them, so
     # the drawer shows a list rather than one row that could be mistaken for
@@ -8540,6 +9568,10 @@ class Seeder:
             ),
         )
         self.step("skills test viewer", lambda: self.seed_test_viewer(members))
+        self.step(
+            "skills test result mix",
+            lambda: self.seed_skill_test_result_mix(self.base_url, templates, members),
+        )
         inventory = self.step("inventory", lambda: self.seed_inventory(stations)) or {}
         self.step(
             "inventory operations",
@@ -8556,6 +9588,12 @@ class Seeder:
                 inventory.get("categories", []), stations
             ),
         )
+        # After the variants: the requests name catalog items, and the gloves
+        # one of them asks for is created by the variant pass.
+        self.step(
+            "equipment requests",
+            lambda: self.seed_equipment_requests(self.base_url),
+        )
         self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)
         self.step("notification rules", self.seed_notification_rules)
@@ -8567,7 +9605,10 @@ class Seeder:
             lambda: self.seed_form_submissions(self.base_url, forms, members),
         )
         self.step("event templates", self.seed_event_templates)
-        self.step("elections", self.seed_elections)
+        # Minutes before elections: the closed election links itself to the
+        # minutes record at creation, and it cannot be patched once closed.
+        minutes = self.step("meeting minutes", self.seed_minutes) or []
+        self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}
         )

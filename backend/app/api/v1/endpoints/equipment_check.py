@@ -875,7 +875,17 @@ async def get_my_checklists(
                 "totalItems": (
                     check.total_items
                     if check
-                    else sum(len(c.items) for c in tmpl.compartments)
+                    # Headers and free-text rows are captions, not questions.
+                    # The form excludes them and a submitted check's
+                    # total_items excludes them, so counting them here made an
+                    # unstarted card advertise more items than it asked for —
+                    # 0/13 before opening, 12/12 after submitting.
+                    else sum(
+                        1
+                        for c in tmpl.compartments
+                        for item in c.items
+                        if item.check_type not in ("header", "text")
+                    )
                 ),
                 "completedItems": check.completed_items if check else 0,
                 "checkId": (

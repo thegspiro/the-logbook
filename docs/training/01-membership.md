@@ -980,11 +980,11 @@ their expiration date — and compares it against that requirement.
 
 When a prospect is elected to full membership (transferred from the prospective pipeline), the system can now **automatically generate a department email address** (e.g., `john.smith@firedept.org`).
 
-**Configuration** (Settings > Organization > Department Email):
+**Configuration** — three values on your organization's settings:
 
 | Setting     | Description                                           |
 | ----------- | ----------------------------------------------------- |
-| **Enabled** | Toggle department email generation on/off             |
+| **Enabled** | Turn department email generation on/off               |
 | **Domain**  | Your department's email domain (e.g., `firedept.org`) |
 | **Format**  | Choose from 4 patterns (see below)                    |
 
@@ -997,8 +997,15 @@ When a prospect is elected to full membership (transferred from the prospective 
 | `firstlast`                    | johnsmith@firedept.org  |
 | `last.first`                   | smith.john@firedept.org |
 
-> **Screenshot needed:**
-> _[Screenshot of the Organization Settings page showing the "Department Email" section with an enabled toggle, domain field showing "firedept.org", and a format dropdown set to "first.last"]_
+> **Corrected 2026-08-12 — there is no settings screen for this.** Earlier
+> versions of this guide sent you to "Settings > Organization > Department
+> Email". No such section exists: the frontend has no toggle, domain field or
+> format selector anywhere. Generation is off by default (`enabled: false`,
+> empty domain), and switching it on today means writing the three values to
+> your organization's settings through the API. Everything below — the format
+> patterns, the personal-email preservation, the numeric-suffix collision
+> handling — is real and works once it is enabled. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#membership--department-email-generation-has-no-settings-screen-2026-08-12).
 
 The prospect's **personal email** is preserved in the `personal_email` field on their user profile, so you always have a way to contact them outside the department system.
 
@@ -1033,8 +1040,21 @@ Membership IDs are now auto-generated when a member is created or transferred. A
 - When a member is reactivated, their previous membership number is automatically restored
 - The active membership number column is NULLed on archive so the number can be reassigned if needed
 
-> **Screenshot needed:**
-> _[Screenshot of a member profile showing the auto-generated Membership ID field (e.g., "2026-0042") in the member details section, with the field marked as read-only]_
+The generated number appears on the member's **admin edit** page, under
+Department Information, next to Rank and Station. It shows on the member's
+profile too, as `#021` beneath their name.
+
+![The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, all editable](./images/01-36-membership-number-field.png)
+
+> **Corrected 2026-08-12 — the number is editable, not read-only.** This guide
+> previously described it as a read-only field. It is a normal text input: an
+> officer can overwrite a generated number, which is what makes reassigning a
+> retired number possible. Two guardrails apply instead of read-only — the field
+> is one of the restricted ones (`rank`, `station`, `platoon`,
+> `membership_number`), so it takes leadership, secretary or membership
+> coordinator permission to change; and the number must be unique within your
+> department, so saving a number another active member already holds is refused
+> with "A member with this membership number already exists".
 
 > **Edge case:** If a member is archived and then a new member is assigned their old number, reactivating the archived member will generate a new number instead of conflicting.
 

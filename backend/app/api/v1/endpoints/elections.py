@@ -159,6 +159,17 @@ async def _build_election_response(
     """Build an ElectionResponse with meeting details populated."""
     await _load_meeting_for_election(db, election)
     response = ElectionResponse.model_validate(election)
+    # `total_votes`, `total_voters` and `voter_turnout_percentage` are declared
+    # on the response but are not columns, so validating off the ORM row left
+    # all three null on every detail fetch. The Publish Results panel reads
+    # them, and so reported "No votes cast yet" beside a finished tally.
+    (
+        response.total_votes,
+        response.total_voters,
+        response.voter_turnout_percentage,
+    ) = await ElectionService(db).get_vote_totals(
+        election, UUID(str(election.organization_id))
+    )
     if election.meeting:
         response.meeting_title = election.meeting.title
         response.meeting_type = (
