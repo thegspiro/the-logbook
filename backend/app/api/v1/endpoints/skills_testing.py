@@ -859,6 +859,9 @@ async def duplicate_template(
         score_pass_fail_criteria=source.score_pass_fail_criteria,
         tags=source.tags,
         visibility=source.visibility,
+        result_disclosure=source.result_disclosure,
+        result_release=source.result_release,
+        result_viewer_positions=source.result_viewer_positions,
     )
 
     db.add(new_template)
