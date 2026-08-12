@@ -127,6 +127,32 @@ GUEST_EMAIL = "rosa.delgado@example.com"
 # non-empty. `rduarte` is a firefighter, which does not.
 DEMO_PEER_EXAMINER_USERNAME = "rduarte"
 
+# The one member enrolled in TOTP, so the login page's authentication-code step
+# and the members admin page's Reset MFA action have something to picture.
+#
+# Enrolling an account has a cost the rest of this file has to respect: once
+# MFA is on, `login_as` no longer yields a session — it stops at the code step,
+# and every call the returned Api makes answers 401. Several steps below sign
+# in as *every* non-administrator member, so the account cannot be one they
+# reach. `password_login_members` is the filter they all go through; adding the
+# 2FA member to any bare `members` loop that logs in will break that step.
+#
+# It must also not be DEMO_ADMIN_USERNAME, DEMO_MEMBER_USERNAME or
+# DEMO_PEER_EXAMINER_USERNAME — each of those is signed into by name elsewhere.
+# `_assert_two_factor_account_is_unused` checks that at seed time.
+TWO_FACTOR_USERNAME = "whalloway"
+
+
+def password_login_members(members: list[dict]) -> list[dict]:
+    """Members a step may sign in as with a password.
+
+    Excludes the administrator (who has their own credentials) and the TOTP
+    account (whose password sign-in stops at the code step).
+    """
+    excluded = {DEMO_ADMIN_USERNAME, TWO_FACTOR_USERNAME}
+    return [m for m in members if m.get("username") not in excluded]
+
+
 # Ranks whose default permissions include training.manage. Mirrors
 # app/core/permissions.py's rank defaults; kept here as a literal because the
 # seeder talks to the API over HTTP and does not import the backend.
@@ -839,10 +865,32 @@ class Seeder:
         self._enable_two_factor_for_one_member(created)
         return created
 
-    # Not the administrator and not DEMO_MEMBER_USERNAME: those two are the
-    # accounts every capture signs in as, and a session that has to clear a
-    # TOTP prompt first would break all of them.
-    TWO_FACTOR_USERNAME = "rduarte"
+    # Accounts something else signs into by name. Enrolling any of them in TOTP
+    # breaks that caller, because a password sign-in on an MFA account stops at
+    # the code step and returns no session.
+    PASSWORD_LOGIN_ACCOUNTS = frozenset(
+        {
+            DEMO_ADMIN_USERNAME,
+            DEMO_MEMBER_USERNAME,
+            DEMO_PEER_EXAMINER_USERNAME,
+        }
+    )
+
+    def _assert_two_factor_account_is_unused(self) -> None:
+        """Fail loudly if the TOTP account is one somebody signs into.
+
+        The first choice here was DEMO_PEER_EXAMINER_USERNAME, picked after
+        checking only the two accounts *captures* sign in as. The seeder signs
+        in as far more than that, and the result was three steps failing with
+        401s a long way from the cause.
+        """
+        if TWO_FACTOR_USERNAME in self.PASSWORD_LOGIN_ACCOUNTS:
+            raise SystemExit(
+                f"TWO_FACTOR_USERNAME is {TWO_FACTOR_USERNAME!r}, which is also "
+                "signed into by password elsewhere in this file. Enrolling it "
+                "in TOTP breaks that caller — choose an account no step signs "
+                "in as."
+            )
 
     def _enable_two_factor_for_one_member(self, members: list[dict]) -> None:
         """Enrol one member in TOTP.
@@ -851,8 +899,9 @@ class Seeder:
         authentication-code step, and the **Reset MFA** action on the members
         admin page, which only renders for a user who has it on.
         """
+        self._assert_two_factor_account_is_unused()
         target = next(
-            (m for m in members if pick(m, "username") == self.TWO_FACTOR_USERNAME),
+            (m for m in members if pick(m, "username") == TWO_FACTOR_USERNAME),
             None,
         )
         if not target:
@@ -865,7 +914,7 @@ class Seeder:
         # It has to be /users/with-roles specifically; the plain /users list
         # does not carry mfa_enabled.
         enrolled = any(
-            pick(row, "username") == self.TWO_FACTOR_USERNAME
+            pick(row, "username") == TWO_FACTOR_USERNAME
             and pick(row, "mfa_enabled")
             for row in items(self.api.get("/users/with-roles"), "users")
         )
@@ -874,7 +923,7 @@ class Seeder:
 
         session = Api(self.base_url)
         try:
-            session.login_as(self.TWO_FACTOR_USERNAME, DEMO_MEMBER_PASSWORD)
+            session.login_as(TWO_FACTOR_USERNAME, DEMO_MEMBER_PASSWORD)
         except ApiError as exc:
             self.blocked.append(f"two-factor: sign in as member: {exc}")
             return
@@ -888,7 +937,7 @@ class Seeder:
                 {"code": totp_now(secret)},
             )
         except ApiError as exc:
-            self.blocked.append(f"two-factor: enrol {self.TWO_FACTOR_USERNAME}: {exc}")
+            self.blocked.append(f"two-factor: enrol {TWO_FACTOR_USERNAME}: {exc}")
 
     def _fill_in_the_administrator(self, members: list[dict]) -> None:
         """Give the demo administrator the contact details everyone else has.
@@ -5385,7 +5434,7 @@ class Seeder:
         # Acknowledging is a first-person action — there is no "acknowledge on
         # behalf of" route — so each member signs in, exactly as they do for
         # RSVPs. Two thirds of the roster, leaving the rest outstanding.
-        signers = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME]
+        signers = password_login_members(members)
         for member in signers[: (len(signers) * 2) // 3]:
             username = member.get("username")
             if not username:
@@ -6791,10 +6840,10 @@ class Seeder:
         if not event_ids:
             return
 
-        for member_index, member in enumerate(members):
+        for member_index, member in enumerate(password_login_members(members)):
             user_id = pick(member, "id")
             username = member.get("username")
-            if not user_id or username == DEMO_ADMIN_USERNAME:
+            if not user_id:
                 continue
 
             member_api = self.member_session(base_url, user_id, username)
@@ -7548,6 +7597,7 @@ class Seeder:
                 for m in members
                 if pick(m, "id") not in excluded
                 and m.get("username") != DEMO_ADMIN_USERNAME
+                and m.get("username") != TWO_FACTOR_USERNAME
             ),
             None,
         )
@@ -7763,9 +7813,7 @@ class Seeder:
         """
         rounds = 4
         submitters: list[Api] = []
-        for member in [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME][
-            :rounds
-        ]:
+        for member in password_login_members(members)[:rounds]:
             member_api = Api(base_url)
             try:
                 member_api.login_as(member["username"], DEMO_MEMBER_PASSWORD)
