@@ -60,7 +60,12 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const [creating, setCreating] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [anchor, setAnchor] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -200,7 +205,18 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      setAnchor({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      const gap = 4;
+      const desiredHeight = 256;
+      const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - gap);
+      const spaceAbove = Math.max(0, rect.top - gap);
+      const openBelow = spaceBelow >= 128 || spaceBelow >= spaceAbove;
+      const maxHeight = Math.min(desiredHeight, openBelow ? spaceBelow : spaceAbove);
+      setAnchor({
+        top: openBelow ? rect.bottom + gap : Math.max(gap, rect.top - gap - maxHeight),
+        left: rect.left,
+        width: rect.width,
+        maxHeight,
+      });
     };
     measure();
     // Capture phase: the builder scrolls the page *and* individual panels, and
@@ -254,8 +270,13 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
 
       {open && typed.length > 0 && anchor && (
         <div
-          style={{ top: anchor.top, left: anchor.left, width: anchor.width }}
-          className="border-theme-surface-border bg-theme-surface fixed z-50 max-h-64 overflow-auto rounded-md border shadow-lg"
+          style={{
+            top: anchor.top,
+            left: anchor.left,
+            width: anchor.width,
+            maxHeight: anchor.maxHeight,
+          }}
+          className="border-theme-surface-border bg-theme-surface fixed z-50 overflow-auto rounded-md border shadow-lg"
         >
           {results.map((r) => (
             <button
