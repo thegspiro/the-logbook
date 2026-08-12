@@ -30,7 +30,11 @@ from time import monotonic, sleep
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from bootstrap_demo import DEMO_ADMIN_PASSWORD, DEMO_ADMIN_USERNAME
+from bootstrap_demo import (
+    DEMO_ADMIN_USERNAME,
+    admin_password,
+    require_safe_base_url,
+)
 
 
 class Throttle:
@@ -300,7 +304,7 @@ class Api:
         )
 
     def login(self) -> None:
-        self.login_as(DEMO_ADMIN_USERNAME, DEMO_ADMIN_PASSWORD)
+        self.login_as(DEMO_ADMIN_USERNAME, admin_password())
 
     def login_as(self, username: str, password: str) -> None:
         self.call("POST", "/auth/login", {"username": username, "password": password})
@@ -8363,6 +8367,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:3001")
     parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="allow an explicitly chosen non-loopback demo backend",
+    )
+    parser.add_argument(
         "--bulk-prospects",
         nargs="?",
         type=int,
@@ -8380,6 +8389,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    require_safe_base_url(args.base_url, args.allow_remote)
     api = Api(args.base_url)
     api.login()
     return Seeder(api, args.base_url, bulk_prospects=args.bulk_prospects).run()
