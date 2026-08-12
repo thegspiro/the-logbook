@@ -1439,10 +1439,16 @@ class StorefrontService:
 
         lines: List[Dict[str, Any]] = []
         requested_per_product: Dict[str, int] = {}
-        for (product_id, _variant_id, _text), quantity in merged.items():
+        requested_per_variant: Dict[Tuple[str, str], int] = {}
+        for (product_id, variant_id, _text), quantity in merged.items():
             requested_per_product[product_id] = (
                 requested_per_product.get(product_id, 0) + quantity
             )
+            if variant_id is not None:
+                variant_key = (product_id, str(variant_id))
+                requested_per_variant[variant_key] = (
+                    requested_per_variant.get(variant_key, 0) + quantity
+                )
 
         for (product_id, variant_id, personalization), quantity in merged.items():
             product = await self.get_product(product_id, organization_id)
@@ -1504,7 +1510,11 @@ class StorefrontService:
                 variant_remaining = self._variant_remaining(
                     variant, window_totals, None
                 )
-                if variant_remaining is not None and quantity > variant_remaining:
+                variant_requested = requested_per_variant[(product.id, variant.id)]
+                if (
+                    variant_remaining is not None
+                    and variant_requested > variant_remaining
+                ):
                     raise ValueError(
                         f"Only {variant_remaining} of "
                         f"'{product.name} — {variant.label}' remain available"
