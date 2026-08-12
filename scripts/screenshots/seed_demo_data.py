@@ -7896,7 +7896,59 @@ class Seeder:
         self._seed_closed_election(elections, minutes or [])
         self._seed_open_election(elections)
         self._seed_runoff_chain(elections)
+        self._seed_saved_ballot_template()
         return elections
+
+    # Named and sized to match the worked example in the elections guide: four
+    # items, so the picker's "4 items · replaces current ballot" line has
+    # something to say beyond "1 item".
+    SAVED_BALLOT_TEMPLATE_NAME = "Annual officer election"
+    SAVED_BALLOT_TEMPLATE_ITEMS = (
+        ("Fire Chief", "operational"),
+        ("Deputy Chief", "operational"),
+        ("Captain", "operational"),
+        ("Secretary", "all"),
+    )
+
+    def _seed_saved_ballot_template(self) -> None:
+        """A reusable ballot snapshot, so the template picker is not empty.
+
+        The picker's "Your saved ballots" section only renders when the
+        organization has at least one — without this the guide's two template
+        screenshots have nothing to photograph but the built-in item grid.
+        """
+        existing = self.api.get("/elections/templates/saved-ballots")
+        rows = existing if isinstance(existing, list) else items(existing, "templates")
+        if any(r.get("name") == self.SAVED_BALLOT_TEMPLATE_NAME for r in rows):
+            return
+        try:
+            self.api.post(
+                "/elections/templates/saved-ballots",
+                {
+                    "name": self.SAVED_BALLOT_TEMPLATE_NAME,
+                    "description": (
+                        "Last year's officer ballot, kept so the questions do "
+                        "not have to be retyped."
+                    ),
+                    "ballot_items": [
+                        {
+                            "id": f"saved-item-{index + 1}",
+                            "type": "officer_election",
+                            "title": position,
+                            "description": f"Vote for {position}.",
+                            "position": position,
+                            "eligible_voter_types": [eligibility],
+                            "vote_type": "candidate_selection",
+                            "voting_method": "simple_majority",
+                        }
+                        for index, (position, eligibility) in enumerate(
+                            self.SAVED_BALLOT_TEMPLATE_ITEMS
+                        )
+                    ],
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"saved ballot template: {exc}")
 
     RUNOFF_ELECTION_TITLE = "Fire Chief Election — 2027 Term"
 

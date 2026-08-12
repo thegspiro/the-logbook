@@ -7337,6 +7337,63 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "14-21-save-ballot-template",
+    doc: "14-elections.md",
+    line: 144,
+    anchor: "The Ballot Builder with the **Save as Template**",
+    alt: "The Save as Template form open in the Ballot Builder — the Template name field, the configuration-only note, and the Save Template / Cancel buttons",
+    route: "/elections",
+    prepare: async (page) => {
+      // A draft election, because Save as Template is hidden on a closed one
+      // and the guide's steps say to build the ballot on a draft.
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => (election.status ?? "") === "draft",
+      )(page);
+      const save = page.getByRole("button", { name: /^Save as Template$/ });
+      await save.waitFor({ timeout: 20_000 });
+      await save.click();
+      const name = page.locator("#saved-ballot-template-name");
+      await name.waitFor({ timeout: 10_000 });
+      await name.fill("Annual officer election");
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> div > h3:text-is('Ballot Items (1)'))",
+  },
+  {
+    id: "14-22-ballot-template-picker",
+    doc: "14-elections.md",
+    line: 159,
+    anchor: 'The template picker showing the "Your saved',
+    alt: 'The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates',
+    route: "/elections",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => (election.status ?? "") === "draft",
+      )(page);
+      const use = page.getByRole("button", { name: /^Use Template$/ });
+      await use.waitFor({ timeout: 20_000 });
+      await use.click();
+      // Clicking the saved template arms the two-step confirm rather than
+      // applying it — which is the state the guide is describing.
+      // Scoped to the popover and taken first: the built-in "Officer
+      // Election" template below also matches a loose name regex.
+      const popover = page.locator("div:has(> h4:text-is('Select a Template'))");
+      const saved = popover
+        .getByRole("button", { name: /Annual officer election/ })
+        .first();
+      await saved.waitFor({ timeout: 10_000 });
+      await saved.click();
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> h4:text-is('Select a Template'))",
+  },
+  {
     id: "14-20-runoff-chain",
     doc: "14-elections.md",
     line: 601,
