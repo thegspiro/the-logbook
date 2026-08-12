@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from app.models.training import EnrollmentStatus
+from app.models.training import EnrollmentStatus, RequirementType
 from app.services.training_program_service import (
     RequirementProgressUpdate,
     TrainingProgramService,
@@ -441,3 +441,96 @@ if __name__ == "__main__":  # pragma: no cover
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestRevertedRequirementPercentage:
+    """A requirement pushed back to in-progress must stop being worth 100%.
+
+    The satisfied branches pin `progress_percentage` to 100. Reverting to
+    in-progress cleared `completed_at` but left the percentage, so the row kept
+    counting as fully done in the rollup — which averages per-requirement
+    percentages — while the completed-*count* correctly excluded it. The seeded
+    demo showed exactly that: "7 of 13 requirements complete" beside 65%, with
+    one officer-verified requirement reading 100% over "0 / 3 steps".
+    """
+
+    @staticmethod
+    def _progress(requirement, *, value=0.0, notes=None):
+        return SimpleNamespace(
+            requirement=requirement,
+            progress_value=value,
+            progress_notes=notes,
+        )
+
+    def test_status_only_requirement_is_worth_nothing_again(self):
+        requirement = SimpleNamespace(
+            requirement_type=RequirementType.SKILLS_EVALUATION,
+            required_hours=None,
+            required_shifts=None,
+            required_calls=None,
+            required_courses=None,
+            checklist_items=[],
+        )
+        assert (
+            TrainingProgramService._derived_percentage(self._progress(requirement))
+            == 0.0
+        )
+
+    def test_numeric_requirement_keeps_the_hours_actually_logged(self):
+        requirement = SimpleNamespace(
+            requirement_type=RequirementType.HOURS,
+            required_hours=8,
+            required_shifts=None,
+            required_calls=None,
+            required_courses=None,
+            checklist_items=[],
+        )
+        assert (
+            TrainingProgramService._derived_percentage(
+                self._progress(requirement, value=6)
+            )
+            == 75.0
+        )
+
+    def test_numeric_requirement_is_capped_at_a_hundred(self):
+        requirement = SimpleNamespace(
+            requirement_type=RequirementType.HOURS,
+            required_hours=8,
+            required_shifts=None,
+            required_calls=None,
+            required_courses=None,
+            checklist_items=[],
+        )
+        assert (
+            TrainingProgramService._derived_percentage(
+                self._progress(requirement, value=99)
+            )
+            == 100.0
+        )
+
+    def test_checklist_keeps_the_steps_already_ticked(self):
+        requirement = SimpleNamespace(
+            requirement_type=RequirementType.CHECKLIST,
+            required_hours=None,
+            required_shifts=None,
+            required_calls=None,
+            required_courses=None,
+            checklist_items=[
+                {"id": "a", "text": "One", "member_visible": True},
+                {"id": "b", "text": "Two", "member_visible": True},
+                {"id": "c", "text": "Three", "member_visible": True},
+                {"id": "d", "text": "Four", "member_visible": False},
+            ],
+        )
+        pct = TrainingProgramService._derived_percentage(
+            self._progress(requirement, notes={"checklist_done": ["a", "b", "c"]})
+        )
+        assert round(pct) == 75
+
+    def test_missing_requirement_does_not_raise(self):
+        assert (
+            TrainingProgramService._derived_percentage(
+                SimpleNamespace(requirement=None, progress_value=5, progress_notes=None)
+            )
+            == 0.0
+        )

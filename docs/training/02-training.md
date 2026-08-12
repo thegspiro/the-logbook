@@ -2148,6 +2148,13 @@ Alex can see her enrollment on the **My Training** dashboard under **Active Prog
 
 ![A member's program enrollment — overall progress, and every requirement grouped by phase with the locked ones marked](./images/02-105-program-enrollment-progress.png)
 
+> **Why the count and the bar disagree.** The header shows two different
+> measures side by side: "7 of 13 requirements complete" counts requirements
+> that are **finished**, while the percentage beside it averages how far along
+> **every** requirement is. A checklist four steps into six lifts the bar
+> without moving the count, so the bar normally runs ahead of the fraction.
+> Both figures are right.
+
 **Edge case — duplicate enrollment:** Later that week, Lt. Park (another officer) attempts to enroll Alex in the same program. The system returns: "Member is already enrolled in this program" and prevents the duplicate. Each member can have only one active enrollment per program.
 
 ### Part 2: Phase 1 — Orientation (March 25 - April 5)

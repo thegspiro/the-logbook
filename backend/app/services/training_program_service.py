@@ -1183,6 +1183,47 @@ class TrainingProgramService:
                 await self._maybe_auto_advance_phase(UUID(str(eid)))
 
     @staticmethod
+    def _derived_percentage(progress: "RequirementProgress") -> float:
+        """What a progress row is worth from its own recorded work.
+
+        Used when a requirement is pushed back to in-progress: the percentage
+        must stop reflecting the satisfied state it just left, but must not
+        throw away work the member actually did — a checklist at four of six
+        steps should read 67%, not zero.
+        """
+        requirement = progress.requirement
+        # Read defensively: this runs on a status change, and the requirement
+        # relationship is not guaranteed to be loaded on every caller's row.
+        # Falling back to nothing-earned is the safe direction on a revert — an
+        # officer has just said the item is not finished.
+        requirement_type = getattr(requirement, "requirement_type", None)
+        if requirement is None or requirement_type is None:
+            return 0.0
+
+        if requirement_type == RequirementType.CHECKLIST:
+            done = (progress.progress_notes or {}).get("checklist_done") or []
+            completed, total = checklist_progress(
+                getattr(requirement, "checklist_items", None), done
+            )
+            return (completed / total * 100) if total else 0.0
+
+        target = {
+            RequirementType.HOURS: getattr(requirement, "required_hours", None),
+            RequirementType.SHIFTS: getattr(requirement, "required_shifts", None),
+            RequirementType.CALLS: getattr(requirement, "required_calls", None),
+            RequirementType.COURSES: (
+                len(requirement.required_courses)
+                if getattr(requirement, "required_courses", None)
+                else None
+            ),
+        }.get(requirement_type)
+        if not target:
+            # Status-based type (skills evaluation, certification, knowledge
+            # test): nothing accrues, so it is worth nothing until marked done.
+            return 0.0
+        return min(100.0, ((progress.progress_value or 0) / target) * 100)
+
+    @staticmethod
     def _checklist_status(completed: int, total: int) -> "RequirementProgressStatus":
         """Status implied by a checklist's tick count."""
         if total and completed >= total:
@@ -2466,7 +2507,14 @@ class TrainingProgramService:
                 if not progress.started_at:
                     progress.started_at = datetime.now(timezone.utc)
                 # Reverting from a completed/verified state — no longer done.
+                # The percentage has to come back with it. The satisfied
+                # branches below pin it to 100, and leaving it there let a
+                # reverted requirement keep counting as fully done in the
+                # enrollment rollup, which averages per-requirement
+                # percentages — so the header read "7 of 13 complete" beside
+                # 65%, the count and the bar disagreeing about the same row.
                 progress.completed_at = None
+                progress.progress_percentage = self._derived_percentage(progress)
             elif status in (
                 RequirementProgressStatus.COMPLETED,
                 RequirementProgressStatus.VERIFIED,
