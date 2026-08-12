@@ -63,6 +63,30 @@ class TestAssertFacilityInOrg:
             await service._assert_facility_in_org(str(uuid4()), org_id)  # no raise
 
 
+class TestDashboardCounts:
+    async def test_counts_are_unpaginated_database_aggregates(
+        self, service, mock_db, org_id
+    ):
+        mock_db.scalar.side_effect = [125, 98, 17, 9]
+
+        result = await service.get_dashboard_counts(org_id)
+
+        assert result == {
+            "total_facilities": 125,
+            "operational_facilities": 98,
+            "overdue_maintenance": 17,
+            "upcoming_inspections": 9,
+        }
+        assert mock_db.scalar.await_count == 4
+
+    async def test_null_database_counts_become_zero(self, service, mock_db, org_id):
+        mock_db.scalar.side_effect = [None, None, None, None]
+
+        result = await service.get_dashboard_counts(org_id)
+
+        assert set(result.values()) == {0}
+
+
 class TestUpdateReparentingRejected:
     """A reassigned parent FK that isn't in-org is rejected before any write."""
 

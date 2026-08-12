@@ -6,6 +6,8 @@
  * these assert on what reaches `onAdd`.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import React, { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -205,5 +207,22 @@ describe('CatalogQuickAdd', () => {
     await user.keyboard('{Enter}');
 
     expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('positions the results list against the viewport, not the input', () => {
+    // The compartment card this bar sits in is `overflow-hidden` so it can clip
+    // its own rounded corners, and the quick-add bar is the *last* element in
+    // it. An absolutely-positioned results list is clipped along with
+    // everything else, so it always ran past the bottom edge of the card: a
+    // user typing three letters saw a sliver of the first result and could not
+    // pick any of them, on the control whose only purpose is picking one.
+    //
+    // Asserted on the class rather than a rendered rect, because jsdom has no
+    // layout — every bounding rect it reports is zero, so a geometric assertion
+    // would pass against the broken version too.
+    const source = readFileSync(join(__dirname, 'CatalogQuickAdd.tsx'), 'utf8');
+    const list = source.slice(source.indexOf('{open && typed.length > 0'));
+    expect(list).toContain('fixed');
+    expect(list).not.toMatch(/className="[^"]*\babsolute\b/);
   });
 });

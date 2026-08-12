@@ -18,6 +18,7 @@ interface Props {
   facility: Facility;
   facilityTypes: FacilityType[];
   facilityStatuses: FacilityStatus[];
+  canManage: boolean;
 }
 
 const NUMERIC_FIELDS = new Set([
@@ -55,7 +56,7 @@ function facilityToEditData(facility: Facility): Record<string, unknown> {
   };
 }
 
-export default function OverviewSection({ facility, facilityTypes, facilityStatuses }: Props) {
+export default function OverviewSection({ facility, facilityTypes, facilityStatuses, canManage }: Props) {
   const tz = useTimezone();
   const { updateFacility } = useFacilitiesStore();
   const [isEditing, setIsEditing] = useState(false);
@@ -106,12 +107,14 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
       <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
         <h2 className="text-theme-text-primary text-sm font-semibold">Facility Details</h2>
         {!isEditing ? (
-          <button
-            onClick={startEditing}
-            className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
-          >
-            <Pencil className="h-3.5 w-3.5" /> Edit
-          </button>
+          canManage ? (
+            <button
+              onClick={startEditing}
+              className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </button>
+          ) : null
         ) : (
           <div className="flex items-center gap-2">
             <button

@@ -53,7 +53,7 @@ import type {
 } from '../../types/training';
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
 import {
   DEFAULT_SKILLS,
   DEFAULT_CALL_TYPE_OPTIONS,
@@ -989,6 +989,18 @@ export const ShiftReportsTab: React.FC = () => {
                 {report.trainee_name ? `${report.trainee_name} — ` : ''}
                 {dateStr}
               </p>
+              {/* Person and date alone told two reports from one day apart by
+                  author, never by which shift they covered. The start time is
+                  what separates a day shift from a night one on the same
+                  apparatus — and it is all there is to go on for a shift with
+                  no apparatus at all, like an event or a detail. */}
+              {(report.shift_label || report.shift_start_time) && (
+                <p className="text-theme-text-muted truncate text-xs">
+                  {[report.shift_label, report.shift_start_time ? formatTime(report.shift_start_time, tz) : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
                   {/* One decimal, like the summary table above. Raw, the same
@@ -1217,7 +1229,7 @@ export const ShiftReportsTab: React.FC = () => {
               <div className="border-theme-surface-border space-y-4 border-t pt-3" onClick={(e) => e.stopPropagation()}>
                 <h4 className="text-theme-text-primary text-sm font-semibold">Complete Draft Report</h4>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Hours on Shift</label>
                     <input
@@ -1314,7 +1326,7 @@ export const ShiftReportsTab: React.FC = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                       Areas of Strength
@@ -1378,7 +1390,7 @@ export const ShiftReportsTab: React.FC = () => {
     <div className="space-y-6">
       {/* View Toggle */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="bg-theme-surface border-theme-surface-border flex flex-1 items-center gap-1 rounded-lg border p-1 sm:flex-none">
+        <div className="bg-theme-surface border-theme-surface-border hscroll flex flex-1 items-center gap-1 rounded-lg border p-1 sm:flex-none">
           <button
             onClick={() => setViewMode('my-reports')}
             className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
@@ -2035,7 +2047,7 @@ export const ShiftReportsTab: React.FC = () => {
               </div>
 
               {/* Submit */}
-              <div className="border-theme-surface-border flex items-center gap-3 border-t pt-2">
+              <div className="border-theme-surface-border flex flex-wrap items-center gap-3 border-t pt-2">
                 <button
                   onClick={() => {
                     void handleBatchSubmit(true);
@@ -2180,7 +2192,7 @@ export const ShiftReportsTab: React.FC = () => {
               {/* Batch review toolbar */}
               {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
                 <div className="bg-theme-surface border-theme-surface-border mb-3 space-y-2 rounded-lg border p-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
                       <input
                         type="checkbox"
@@ -2197,7 +2209,7 @@ export const ShiftReportsTab: React.FC = () => {
                       Select all ({reports.length})
                     </label>
                     {selectedReportIds.size > 0 && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-theme-text-muted text-xs">{selectedReportIds.size} selected</span>
                         {viewMode === 'flagged' && (
                           <button
@@ -2423,7 +2435,7 @@ export const ShiftReportsTab: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2">
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
                   <button
                     onClick={() => {
                       setReviewReportId(null);

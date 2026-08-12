@@ -1183,6 +1183,47 @@ class TrainingProgramService:
                 await self._maybe_auto_advance_phase(UUID(str(eid)))
 
     @staticmethod
+    def _derived_percentage(progress: "RequirementProgress") -> float:
+        """What a progress row is worth from its own recorded work.
+
+        Used when a requirement is pushed back to in-progress: the percentage
+        must stop reflecting the satisfied state it just left, but must not
+        throw away work the member actually did — a checklist at four of six
+        steps should read 67%, not zero.
+        """
+        requirement = progress.requirement
+        # Read defensively: this runs on a status change, and the requirement
+        # relationship is not guaranteed to be loaded on every caller's row.
+        # Falling back to nothing-earned is the safe direction on a revert — an
+        # officer has just said the item is not finished.
+        requirement_type = getattr(requirement, "requirement_type", None)
+        if requirement is None or requirement_type is None:
+            return 0.0
+
+        if requirement_type == RequirementType.CHECKLIST:
+            done = (progress.progress_notes or {}).get("checklist_done") or []
+            completed, total = checklist_progress(
+                getattr(requirement, "checklist_items", None), done
+            )
+            return (completed / total * 100) if total else 0.0
+
+        target = {
+            RequirementType.HOURS: getattr(requirement, "required_hours", None),
+            RequirementType.SHIFTS: getattr(requirement, "required_shifts", None),
+            RequirementType.CALLS: getattr(requirement, "required_calls", None),
+            RequirementType.COURSES: (
+                len(requirement.required_courses)
+                if getattr(requirement, "required_courses", None)
+                else None
+            ),
+        }.get(requirement_type)
+        if not target:
+            # Status-based type (skills evaluation, certification, knowledge
+            # test): nothing accrues, so it is worth nothing until marked done.
+            return 0.0
+        return min(100.0, ((progress.progress_value or 0) / target) * 100)
+
+    @staticmethod
     def _checklist_status(completed: int, total: int) -> "RequirementProgressStatus":
         """Status implied by a checklist's tick count."""
         if total and completed >= total:
@@ -2466,7 +2507,14 @@ class TrainingProgramService:
                 if not progress.started_at:
                     progress.started_at = datetime.now(timezone.utc)
                 # Reverting from a completed/verified state — no longer done.
+                # The percentage has to come back with it. The satisfied
+                # branches below pin it to 100, and leaving it there let a
+                # reverted requirement keep counting as fully done in the
+                # enrollment rollup, which averages per-requirement
+                # percentages — so the header read "7 of 13 complete" beside
+                # 65%, the count and the bar disagreeing about the same row.
                 progress.completed_at = None
+                progress.progress_percentage = self._derived_percentage(progress)
             elif status in (
                 RequirementProgressStatus.COMPLETED,
                 RequirementProgressStatus.VERIFIED,
@@ -3015,8 +3063,9 @@ class TrainingProgramService:
         pre-flight validator and the apply itself so both judge eligibility the
         same way. Returns (row, None) or (None, error_message).
 
-        ``completed_on`` is the training's completion date, checked against the
-        requirement's freshness window when both are present."""
+        ``completed_on`` is the training's completion date. A requirement with a
+        freshness window rejects a missing date because freshness cannot be
+        verified."""
         enrollment_result = await self.db.execute(
             select(ProgramEnrollment)
             .join(TrainingProgram)
@@ -3049,11 +3098,17 @@ class TrainingProgramService:
         # A requirement with a freshness window rejects an old completion even
         # on an explicit officer sign-off: "CPR within the last 180 days" is the
         # point of the requirement, so crediting a three-year-old record would
-        # quietly defeat it. Callers that have no date to check pass None.
-        if completed_on is not None:
-            _, requirement = row
-            cutoff = recency_cutoff(requirement, date.today())
-            if cutoff is not None and completed_on < cutoff:
+        # quietly defeat it. An undated completion must fail closed when a
+        # window is configured because its freshness cannot be verified.
+        _, requirement = row
+        cutoff = recency_cutoff(requirement, date.today())
+        if cutoff is not None:
+            if completed_on is None:
+                return None, (
+                    "That training has no completion date, so it can't be credited "
+                    f"toward this requirement's {requirement.recency_days}-day window."
+                )
+            if completed_on < cutoff:
                 return None, (
                     f"That training was completed on {completed_on.isoformat()}, "
                     f"outside this requirement's {requirement.recency_days}-day "
@@ -3101,10 +3156,10 @@ class TrainingProgramService:
         test) are marked complete. Runs through ``update_requirement_progress`` so
         percentage, auto-completion, rollup, and phase advancement all fire.
 
-        It is, however, gated by the requirement's freshness window when
-        ``completed_on`` is supplied — an officer may waive delivery method, but
-        not the "must be within the last N days" rule that defines the
-        requirement.
+        It is, however, gated by the requirement's freshness window. An officer
+        may waive delivery method, but not the "must be within the last N days"
+        rule that defines the requirement; an undated completion therefore
+        cannot satisfy a freshness window.
 
         Returns ``(applied, error_message)``.
         """

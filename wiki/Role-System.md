@@ -1,5 +1,10 @@
 # Role-Based Access Control (RBAC) System
 
+> **Published copy — not the canonical source.** The maintained original is
+> [`ROLE_SYSTEM_README.md`](https://github.com/thegspiro/the-logbook/blob/main/ROLE_SYSTEM_README.md)
+> in the repository root, and this page may lag behind it. Make content changes
+> there first, then mirror them here.
+
 This document describes the comprehensive Role-Based Access Control system implemented in The Logbook.
 
 ## Overview

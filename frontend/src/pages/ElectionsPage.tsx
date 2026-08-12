@@ -256,6 +256,21 @@ export const ElectionsPage: React.FC = () => {
     return elections.filter((e) => e.status === status).length;
   };
 
+  // The four lifecycle states are always offered so the row is predictable and
+  // matches the progress steps on the detail page. Cancelled is exceptional, so
+  // it appears only once there is one — but it has to appear, or a cancelled
+  // election is reachable through "All" alone. Leaving Nominations out was the
+  // visible bug: the counts did not add up to All, and an election taking
+  // nominations could not be filtered to at all.
+  const statusFilters: string[] = [
+    'all',
+    ElectionStatus.DRAFT,
+    ElectionStatus.NOMINATIONS,
+    ElectionStatus.OPEN,
+    ElectionStatus.CLOSED,
+    ...(getStatusCount(ElectionStatus.CANCELLED) > 0 ? [ElectionStatus.CANCELLED] : []),
+  ];
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -271,7 +286,7 @@ export const ElectionsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <div>
               <h2 className="text-theme-text-primary text-2xl font-bold">Elections</h2>
@@ -335,7 +350,7 @@ export const ElectionsPage: React.FC = () => {
         {canManage && elections.length > 0 && <ElectionSummaryCards elections={elections} />}
 
         <div className="mb-4 flex flex-wrap gap-2">
-          {['all', ElectionStatus.DRAFT, ElectionStatus.OPEN, ElectionStatus.CLOSED].map((status) => {
+          {statusFilters.map((status) => {
             const count = getStatusCount(status);
             return (
               <button

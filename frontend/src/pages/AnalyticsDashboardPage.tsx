@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { analyticsService, type QRCodeMetrics } from '../services/analytics';
 import { useTimezone } from '../hooks/useTimezone';
@@ -18,39 +18,29 @@ const AnalyticsDashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadMetrics = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = eventId
+        ? await analyticsService.getEventMetrics(eventId)
+        : await analyticsService.getOverallMetrics();
+      setMetrics(data);
+      setError(null);
+    } catch {
+      setError('Failed to load analytics data');
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId]);
+
   useEffect(() => {
-    let cancelled = false;
-
-    const loadMetrics = async () => {
-      try {
-        const data = eventId
-          ? await analyticsService.getEventMetrics(eventId)
-          : await analyticsService.getOverallMetrics();
-        if (!cancelled) {
-          setMetrics(data);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setError('Failed to load analytics data');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
     void loadMetrics();
     const interval = setInterval(() => {
-      void loadMetrics();
+      if (!document.hidden) void loadMetrics();
     }, 10000); // Refresh every 10 seconds
 
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [eventId]);
+    return () => clearInterval(interval);
+  }, [loadMetrics]);
 
   const exportData = async () => {
     const dataStr = await analyticsService.exportAnalytics(eventId);
@@ -78,8 +68,7 @@ const AnalyticsDashboardPage: React.FC = () => {
           <p className="mb-4 text-red-700 dark:text-red-400">{error || 'No analytics data available'}</p>
           <button
             onClick={() => {
-              setLoading(true);
-              setError(null);
+              void loadMetrics();
             }}
             className="btn-primary rounded-md text-sm font-medium"
           >
@@ -93,9 +82,9 @@ const AnalyticsDashboardPage: React.FC = () => {
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-6">
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-3xl font-bold">QR Code Analytics</h1>
+          <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">QR Code Analytics</h1>
           <p className="text-theme-text-secondary mt-1">
             {eventId ? 'Event-specific metrics' : 'Platform-wide metrics'}
           </p>
@@ -104,7 +93,7 @@ const AnalyticsDashboardPage: React.FC = () => {
           onClick={() => {
             void exportData();
           }}
-          className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-400"
+          className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover shrink-0 self-start rounded-md border px-4 py-2 text-sm font-medium text-blue-700 sm:self-auto dark:text-blue-400"
         >
           Export Data
         </button>

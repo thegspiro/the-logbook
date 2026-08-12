@@ -27,6 +27,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums';
 import { SortableHeader, type SortDirection } from '../../../components/ux/SortableHeader';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface PipelineTableProps {
   applicants: ApplicantListItem[];
@@ -165,8 +166,23 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       }
     }
 
-    toast.success(`${action.charAt(0).toUpperCase() + action.slice(1)}d ${successCount} of ${ids.length} applicants`);
+    const actionLabel = `${action.charAt(0).toUpperCase() + action.slice(1)}d`;
+    if (successCount > 0) {
+      toast.success(`${actionLabel} ${successCount} of ${ids.length} applicants`);
+    }
+    if (successCount < ids.length) {
+      toast.error(`${ids.length - successCount} applicant action${ids.length - successCount === 1 ? '' : 's'} failed`);
+    }
     setSelected(new Set());
+  };
+
+  const runRowAction = async (action: () => Promise<void>, successMessage: string, failureMessage: string) => {
+    try {
+      await action();
+      toast.success(successMessage);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, failureMessage));
+    }
   };
 
   // Generate page numbers to show
@@ -444,7 +460,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                               <>
                                 <button
                                   onClick={() => {
-                                    void advanceApplicant(applicant.id);
+                                    void runRowAction(
+                                      () => advanceApplicant(applicant.id),
+                                      'Applicant advanced',
+                                      'Failed to advance applicant'
+                                    );
                                     setActionMenuId(null);
                                   }}
                                   className="hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm text-emerald-700 dark:text-emerald-400"
@@ -453,7 +473,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                 </button>
                                 <button
                                   onClick={() => {
-                                    void holdApplicant(applicant.id);
+                                    void runRowAction(
+                                      () => holdApplicant(applicant.id),
+                                      'Applicant put on hold',
+                                      'Failed to put applicant on hold'
+                                    );
                                     setActionMenuId(null);
                                   }}
                                   className="hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm text-amber-700 dark:text-amber-400"
@@ -472,7 +496,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                       </button>
                                       <button
                                         onClick={() => {
-                                          void withdrawApplicant(applicant.id);
+                                          void runRowAction(
+                                            () => withdrawApplicant(applicant.id),
+                                            'Application withdrawn',
+                                            'Failed to withdraw application'
+                                          );
                                           setWithdrawConfirmId(null);
                                           setActionMenuId(null);
                                         }}
@@ -504,7 +532,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                       </button>
                                       <button
                                         onClick={() => {
-                                          void rejectApplicant(applicant.id);
+                                          void runRowAction(
+                                            () => rejectApplicant(applicant.id),
+                                            'Applicant rejected',
+                                            'Failed to reject applicant'
+                                          );
                                           setRejectConfirmId(null);
                                           setActionMenuId(null);
                                         }}

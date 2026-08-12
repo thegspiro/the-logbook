@@ -310,9 +310,9 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* Fiscal Years Section                                               */}
       {/* ================================================================== */}
       <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Calendar className="text-theme-text-secondary h-5 w-5" />
+            <Calendar className="text-theme-text-secondary h-5 w-5 shrink-0" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Fiscal Years</h2>
           </div>
           <button
@@ -388,9 +388,9 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* Budget Categories Section                                          */}
       {/* ================================================================== */}
       <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Tag className="text-theme-text-secondary h-5 w-5" />
+            <Tag className="text-theme-text-secondary h-5 w-5 shrink-0" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Budget Categories</h2>
           </div>
           <button

@@ -95,10 +95,34 @@ CANDIDATE_SEARCH_MAX_RESULTS = 15
 # reader asking why it was voided still needs to see what it said.
 _SCORED_TEST_STATUSES = ("completed", "voided")
 
+# These values determine what an official result credits and who may see it.
+# They are deliberately still part of the request schemas because officers use
+# the same create/update endpoints to make per-test exceptions.
+_OFFICER_CONTROLLED_TEST_FIELDS = {
+    "requirement_id",
+    "result_disclosure",
+    "result_release",
+    "result_viewer_positions",
+}
+
 
 def _format_points(value: float) -> str:
     """Point totals without float noise: 12.0 -> "12", 12.5 -> "12.5"."""
     return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
+
+
+def _email_result_text(result: str | None) -> str:
+    """Return result text safe for interpolation into an HTML email."""
+    return html.escape((result or "incomplete").upper())
+
+
+def _ensure_test_results_emailable(test: SkillTest) -> None:
+    """Reject attempts to email a scorecard before its result is final."""
+    if test.status != SkillTestStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only completed test results can be emailed",
+        )
 
 
 # ============================================
@@ -148,6 +172,21 @@ def _can_manage_tests(user: User) -> bool:
     dependency on routes that now admit practice examiners too.
     """
     return user_has_permission(user, "training.manage")
+
+
+def _guard_official_test_policy_fields(
+    fields: set[str], *, is_practice: bool, user: User
+) -> None:
+    """Keep ordinary examiners from choosing official credit/access policy."""
+    restricted = fields & _OFFICER_CONTROLLED_TEST_FIELDS
+    if restricted and not is_practice and not _can_manage_tests(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Only a training officer can set official test fields: "
+                f"{', '.join(sorted(restricted))}"
+            ),
+        )
 
 
 def _authorize_test_write(test: SkillTest, user: User) -> None:
@@ -1174,6 +1213,21 @@ async def create_test(
     """
     is_officer = _can_manage_tests(current_user)
 
+    # A member may record the scorecard, but only an officer may choose what an
+    # official result credits or override its disclosure policy.  Otherwise a
+    # member-supplied value would become authoritative when an officer validates
+    # the result. Null values are harmless because they retain template policy.
+    supplied_policy_fields = {
+        field
+        for field in _OFFICER_CONTROLLED_TEST_FIELDS
+        if getattr(test_data, field) is not None
+    }
+    _guard_official_test_policy_fields(
+        supplied_policy_fields,
+        is_practice=test_data.is_practice,
+        user=current_user,
+    )
+
     # Verify template exists, is published, and belongs to org
     template_result = await db.execute(
         select(SkillTemplate)
@@ -1434,6 +1488,13 @@ async def update_test(
         )
 
     update_data = test_update.model_dump(exclude_unset=True)
+
+    # Unlike create, an explicit null on update is significant: it can erase an
+    # officer's override and fall back to a broader template/org policy. Check
+    # field presence before processing or writing any values.
+    _guard_official_test_policy_fields(
+        set(update_data), is_practice=test.is_practice, user=current_user
+    )
 
     # Optimistic concurrency. Refuse rather than silently overwrite when the
     # client's copy is stale — two examiners on one test, or an officer editing
@@ -2799,7 +2860,7 @@ async def return_test_for_correction(
 async def email_test_results(
     test_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Email a summary of the test results to the candidate.
@@ -2807,10 +2868,10 @@ async def email_test_results(
     Builds an HTML email with the test scorecard and sends it to the
     candidate's email address. Works for both official and practice tests.
 
-    Officers may email any test's results; a non-officer may only send those of
-    a practice test they ran as examiner.
+    Only training officers may send results. The test must be complete, so this
+    endpoint cannot be used to send draft or attacker-authored result content.
 
-    **Authentication required**
+    **Requires permission: training.manage**
     """
     result = await db.execute(
         select(SkillTest)
@@ -2825,6 +2886,8 @@ async def email_test_results(
         )
 
     _authorize_test_write(test, current_user)
+
+    _ensure_test_results_emailable(test)
 
     # Load template, candidate, examiner
     template_result = await db.execute(
@@ -2859,7 +2922,7 @@ async def email_test_results(
     examiner_name = _format_user_name(examiner) if examiner else "Unknown"
     template_name = template.name if template else "Unknown Template"
     test_type = "Practice" if test.is_practice else "Official"
-    result_text = (test.result or "incomplete").upper()
+    result_text = _email_result_text(test.result)
 
     # Same rule as the API response: the emailed scorecard must reflect the
     # structure the test was taken under, not the template's current state.

@@ -2256,12 +2256,12 @@ DEFAULT_SHIFT_DECLINE_SUBJECT = "Shift Coverage Needed: {{position}} on {{shift_
 DEFAULT_SHIFT_REMINDER_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
     <div class="header" style="background-color: #1d4ed8;">
-        <h1>Start-of-Shift Report</h1>
+        <h1>Start-of-Shift Reminder</h1>
     </div>
     <div class="content">
         <p>Hello {{recipient_name}},</p>
 
-        <p>Your upcoming shift report is below. Please arrive on time and mark
+        <p>Your upcoming shift briefing is below. Please arrive on time and mark
         your arrival when you get to the station.</p>
 
         <div class="details">
@@ -2283,11 +2283,11 @@ DEFAULT_SHIFT_REMINDER_HTML = """<div class="container">
     {{footer_html}}
 </div>"""
 
-DEFAULT_SHIFT_REMINDER_TEXT = """Start-of-Shift Report
+DEFAULT_SHIFT_REMINDER_TEXT = """Start-of-Shift Reminder
 
 Hello {{recipient_name}},
 
-Your upcoming shift report is below. Please arrive on time and mark your
+Your upcoming shift briefing is below. Please arrive on time and mark your
 arrival when you get to the station.
 
 Date: {{shift_date}}
@@ -2301,7 +2301,7 @@ Mark arrival: {{arrival_url}}
 
 {{footer_text}}"""
 
-DEFAULT_SHIFT_REMINDER_SUBJECT = "Shift Report — {{shift_date}} at {{shift_start}}"
+DEFAULT_SHIFT_REMINDER_SUBJECT = "Shift Reminder — {{shift_date}} at {{shift_start}}"
 
 
 def build_items_list_html(

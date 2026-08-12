@@ -13,6 +13,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
+import toast from 'react-hot-toast';
 import {
   Shield,
   FileText,
@@ -95,6 +96,7 @@ const AnnualReportSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [exporting, setExporting] = useState(false);
 
   const loadReport = useCallback(async () => {
     try {
@@ -114,7 +116,10 @@ const AnnualReportSection: React.FC = () => {
   }, [loadReport]);
 
   const handleExport = async () => {
+    if (exporting) return;
+
     try {
+      setExporting(true);
       const blob = await complianceOfficerService.exportAnnualReport(year);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -123,7 +128,9 @@ const AnnualReportSection: React.FC = () => {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      // Silently fail - user will see no download
+      toast.error('Failed to export annual compliance report');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -140,15 +147,15 @@ const AnnualReportSection: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-            <FileText className="h-5 w-5 text-red-500" />
+            <FileText className="h-5 w-5 shrink-0 text-red-500" />
             Annual Compliance Report — {year}
           </h2>
           <p className="text-theme-text-muted mt-1 text-sm">Generated {formatDate(report.generated_at, tz)}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="form-input-sm">
             {[0, 1, 2].map((offset) => {
               const y = new Date().getFullYear() - offset;
@@ -164,9 +171,10 @@ const AnnualReportSection: React.FC = () => {
               void handleExport();
             }}
             className="btn-primary flex items-center gap-2 text-sm"
+            disabled={exporting}
           >
-            <Download className="h-4 w-4" />
-            Export CSV
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {exporting ? 'Exporting…' : 'Export CSV'}
           </button>
         </div>
       </div>
@@ -335,7 +343,7 @@ const AnnualReportSection: React.FC = () => {
 
       {/* Record Completeness */}
       <div className="card p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-theme-text-secondary text-sm font-medium">Record Completeness (NFPA 1401)</h3>
           <span
             className={`rounded px-2 py-1 text-xs font-semibold ${report.record_completeness.nfpa_1401_compliant ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}
@@ -566,12 +574,12 @@ const ISOReadinessSection: React.FC = () => {
       </div>
 
       {/* Overall Score */}
-      <div className="card flex items-center justify-between p-6">
+      <div className="card flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-theme-text-muted text-sm">Overall ISO Readiness</p>
           <p className="text-theme-text-primary text-4xl font-bold">{data.overall_readiness_pct}%</p>
         </div>
-        <div className="text-right">
+        <div className="sm:text-right">
           <p className="text-theme-text-muted text-sm">Est. FSRS training credit</p>
           <p
             className={`text-4xl font-bold ${
@@ -669,7 +677,7 @@ const RecordCompletenessSection: React.FC = () => {
 
       {/* Overall Score */}
       <div className="card p-6">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-theme-text-muted text-sm">{data.total_records} training records evaluated</p>
             <p className="text-theme-text-muted text-sm">
@@ -773,15 +781,15 @@ const AttestationsSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-            <Shield className="h-5 w-5 text-green-500" />
+            <Shield className="h-5 w-5 shrink-0 text-green-500" />
             Compliance Attestations
           </h2>
           <p className="text-theme-text-muted mt-1 text-sm">Formal sign-off records certifying department compliance</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">
+        <button onClick={() => setShowForm(!showForm)} className="btn-primary shrink-0 text-sm">
           {showForm ? 'Cancel' : 'New Attestation'}
         </button>
       </div>

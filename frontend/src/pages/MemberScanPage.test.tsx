@@ -7,6 +7,7 @@ import { MemberScanPage } from './MemberScanPage';
 // Mock html5-qrcode
 const mockStart = vi.fn().mockResolvedValue(undefined);
 const mockStop = vi.fn().mockResolvedValue(undefined);
+const mockClear = vi.fn();
 const mockGetCameras = vi.fn().mockResolvedValue([{ id: 'cam-1', label: 'Front Camera' }]);
 vi.mock('html5-qrcode', async (importOriginal) => {
   const actual = await importOriginal<typeof import('html5-qrcode')>();
@@ -14,7 +15,7 @@ vi.mock('html5-qrcode', async (importOriginal) => {
     ...actual,
     Html5Qrcode: Object.assign(
       vi.fn().mockImplementation(function () {
-        return { start: mockStart, stop: mockStop };
+        return { start: mockStart, stop: mockStop, clear: mockClear };
       }),
       { getCameras: (...args: unknown[]) => mockGetCameras(...args) as unknown }
     ),
@@ -41,6 +42,7 @@ vi.mock('react-router', async () => {
 describe('MemberScanPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStart.mockResolvedValue(undefined);
     mockGetCameras.mockResolvedValue([{ id: 'cam-1', label: 'Front Camera' }]);
   });
 
@@ -95,7 +97,7 @@ describe('MemberScanPage', () => {
     expect(await screen.findByRole('button', { name: /stop scanning/i })).toBeInTheDocument();
   });
 
-  it('should start scanner with camera device ID', async () => {
+  it('should prefer the rear camera even when only a front camera is initially enumerated', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MemberScanPage />);
 
@@ -105,7 +107,12 @@ describe('MemberScanPage', () => {
       expect(mockGetCameras).toHaveBeenCalledWith();
     });
     await waitFor(() => {
-      expect(mockStart).toHaveBeenCalledWith('cam-1', expect.any(Object), expect.any(Function), expect.any(Function));
+      expect(mockStart).toHaveBeenCalledWith(
+        { facingMode: { ideal: 'environment' } },
+        expect.any(Object),
+        expect.any(Function),
+        expect.any(Function)
+      );
     });
   });
 
@@ -118,8 +125,23 @@ describe('MemberScanPage', () => {
     await user.click(screen.getByRole('button', { name: /start scanning/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/No cameras found/i)).toBeInTheDocument();
+      // The user-facing wording, not the thrown message: the point of
+      // `describeCameraError` is that the browser's own text never
+      // reaches the screen.
+      expect(screen.getByText(/No camera was found on this device/i)).toBeInTheDocument();
     });
+  });
+
+  it('cleans up a partially-started scanner when camera startup fails', async () => {
+    mockStart.mockRejectedValueOnce(new DOMException('Camera busy', 'NotReadableError'));
+
+    const user = userEvent.setup();
+    renderWithRouter(<MemberScanPage />);
+    await user.click(screen.getByRole('button', { name: /start scanning/i }));
+
+    expect(await screen.findByText(/in use by another app/i)).toBeInTheDocument();
+    expect(mockStop).toHaveBeenCalledExactlyOnceWith();
+    expect(mockClear).toHaveBeenCalledExactlyOnceWith();
   });
 
   it('falls back to a facingMode:environment constraint when no camera label identifies the rear camera', async () => {

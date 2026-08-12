@@ -27,6 +27,7 @@ import type {
   SectionEntry,
 } from '../types/minutes';
 import type { Event as EventDetail, EventListItem } from '../../../types/event';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -58,6 +59,7 @@ const ACTION_STATUS_BADGES: Record<string, string> = {
 };
 
 export const MinutesDetailPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const { minutesId } = useParams<{ minutesId: string }>();
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
@@ -143,17 +145,24 @@ export const MinutesDetailPage: React.FC = () => {
     }
   }, [minutes?.event_id]);
 
-  // Fetch elections linked to this meeting record
+  // Fetch elections held at the event these minutes record.
+  //
+  // Keyed on the event, not on the minutes id. `Election.meeting_id` is a
+  // `meetings` row; a minutes record is a `meeting_minutes` row. Passing the
+  // minutes id as `meeting_id` compared two different id spaces, so the query
+  // matched nothing and this card could never appear — however many elections
+  // were held at the meeting. The event is the link both sides actually share.
+  const linkedEventId = minutes?.event_id;
   useEffect(() => {
-    if (minutesId) {
+    if (linkedEventId) {
       electionService
-        .getElectionsByMeeting(minutesId)
+        .getElectionsByEvent(linkedEventId)
         .then((elections) => setLinkedElections(elections))
         .catch(() => setLinkedElections([]));
     } else {
       setLinkedElections([]);
     }
-  }, [minutesId]);
+  }, [linkedEventId]);
 
   const isEditable = minutes && (minutes.status === 'draft' || minutes.status === 'rejected');
 
@@ -228,7 +237,16 @@ export const MinutesDetailPage: React.FC = () => {
   };
 
   const handleDeleteSection = async (sectionKey: string) => {
-    if (!minutesId || !minutes || !confirm('Delete this section?')) return;
+    if (!minutesId || !minutes) return;
+    if (
+      !(await confirm({
+        title: 'Delete section',
+        message: 'Delete this section and its content from the minutes?',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     const filtered = minutes.sections.filter((s) => s.key !== sectionKey).map((s, i) => ({ ...s, order: i }));
 
     try {
@@ -323,7 +341,16 @@ export const MinutesDetailPage: React.FC = () => {
   };
 
   const handleDeleteMotion = async (motionId: string) => {
-    if (!minutesId || !confirm('Delete this motion?')) return;
+    if (!minutesId) return;
+    if (
+      !(await confirm({
+        title: 'Delete motion',
+        message: 'Delete this motion from the minutes?',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await minutesService.deleteMotion(minutesId, motionId);
       void fetchMinutes();
@@ -359,7 +386,16 @@ export const MinutesDetailPage: React.FC = () => {
   };
 
   const handleDeleteActionItem = async (itemId: string) => {
-    if (!minutesId || !confirm('Delete this action item?')) return;
+    if (!minutesId) return;
+    if (
+      !(await confirm({
+        title: 'Delete action item',
+        message: 'Delete this action item from the minutes?',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await minutesService.deleteActionItem(minutesId, itemId);
       void fetchMinutes();
@@ -411,7 +447,16 @@ export const MinutesDetailPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!minutesId || !confirm('Delete these draft minutes? This cannot be undone.')) return;
+    if (!minutesId) return;
+    if (
+      !(await confirm({
+        title: 'Delete draft minutes',
+        message: 'Delete these draft minutes? This cannot be undone.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep them',
+      }))
+    )
+      return;
     try {
       await minutesService.deleteMinutes(minutesId);
       toast.success('Minutes deleted');
@@ -505,7 +550,7 @@ export const MinutesDetailPage: React.FC = () => {
               )}
             </div>
             {linkedEvent ? (
-              <div className="mt-2 flex items-center gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-3">
                 <span className="rounded-sm bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                   Business Meeting
                 </span>
@@ -694,7 +739,7 @@ export const MinutesDetailPage: React.FC = () => {
 
           {/* Add Section Form */}
           {showAddSection && (
-            <div className="card-secondary flex items-end gap-3 p-4" role="form" aria-label="Add new section">
+            <div className="card-secondary flex flex-wrap items-end gap-3 p-4" role="form" aria-label="Add new section">
               <div className="flex-1">
                 <label htmlFor="new-section-title" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                   Section Title

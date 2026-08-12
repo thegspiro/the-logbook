@@ -14,6 +14,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { formatTime } from '../utils/dateFormatting';
 import { UserStatus, ElectionStatus } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 interface MeetingAttendanceProps {
   electionId: string;
@@ -23,6 +24,7 @@ interface MeetingAttendanceProps {
 
 export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId, election, onUpdate }) => {
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const [attendees, setAttendees] = useState<Attendee[]>(election.attendees || []);
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,7 +90,15 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
   };
 
   const handleRemove = async (userId: string, name: string) => {
-    if (!confirm(`Remove ${name} from attendance?`)) return;
+    if (
+      !(await confirm({
+        title: 'Remove attendee',
+        message: `Remove ${name} from attendance?`,
+        confirmLabel: 'Remove',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
 
     try {
       await electionService.removeAttendee(electionId, userId);

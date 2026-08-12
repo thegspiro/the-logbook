@@ -76,8 +76,11 @@ from app.services.training_compliance import (
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
 from app.utils.org_scoping import assert_all_in_org
+from app.utils.upload_limits import read_upload_limited
 
 router = APIRouter()
+
+MAX_TRAINING_CSV_BYTES = 10 * 1024 * 1024
 
 
 def _require_self_or_training_officer(current_user: User, user_id: UUID) -> None:
@@ -1607,8 +1610,13 @@ async def parse_historical_import(
 
     # Read and decode CSV
     try:
-        contents = await file.read()
+        contents = await read_upload_limited(file, MAX_TRAINING_CSV_BYTES)
         decoded = contents.decode("utf-8-sig")  # Handle BOM
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="CSV file exceeds the 10MB limit.",
+        )
     except UnicodeDecodeError:
         try:
             decoded = contents.decode("latin-1")
@@ -2624,7 +2632,13 @@ async def import_training_csv(
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a .csv")
 
-    content = await file.read()
+    try:
+        content = await read_upload_limited(file, MAX_TRAINING_CSV_BYTES)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="CSV file exceeds the 10MB limit.",
+        )
     try:
         text = content.decode("utf-8-sig")  # handle BOM from Excel
     except UnicodeDecodeError:

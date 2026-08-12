@@ -1114,6 +1114,8 @@ class MembershipPipelineService:
         completed_by: str,
         notes: Optional[str] = None,
         action_result: Optional[Dict[str, Any]] = None,
+        *,
+        skip_requirements: bool = False,
     ) -> Optional[ProspectiveMember]:
         """Mark a step as completed for a prospect"""
         prospect = await self.get_prospect(prospect_id, organization_id)
@@ -1131,8 +1133,11 @@ class MembershipPipelineService:
         if not step:
             raise ValueError("Step does not belong to this prospect's pipeline")
 
-        # Validate stage-specific requirements before allowing completion
-        await self._validate_step_completion(prospect, step)
+        # Only the dedicated coordinator skip path may bypass a stage gate.
+        # Keeping this server-side avoids accepting a client-controlled
+        # ``skipped`` flag on the ordinary completion endpoint.
+        if not skip_requirements:
+            await self._validate_step_completion(prospect, step)
 
         # Find or create the progress record
         progress = next(
@@ -1140,12 +1145,17 @@ class MembershipPipelineService:
             None,
         )
 
+        completion_status = (
+            StepProgressStatus.SKIPPED
+            if skip_requirements
+            else StepProgressStatus.COMPLETED
+        )
         if not progress:
             progress = ProspectStepProgress(
                 id=generate_uuid(),
                 prospect_id=prospect_id,
                 step_id=step_id,
-                status=StepProgressStatus.COMPLETED,
+                status=completion_status,
                 completed_at=datetime.now(timezone.utc),
                 completed_by=completed_by,
                 notes=notes,
@@ -1153,7 +1163,7 @@ class MembershipPipelineService:
             )
             self.db.add(progress)
         else:
-            progress.status = StepProgressStatus.COMPLETED
+            progress.status = completion_status
             progress.completed_at = datetime.now(timezone.utc)
             progress.completed_by = completed_by
             if notes:
@@ -1161,15 +1171,20 @@ class MembershipPipelineService:
             if action_result:
                 progress.action_result = action_result
 
+        activity_action = "step_skipped" if skip_requirements else "step_completed"
         await self._log_activity(
             prospect_id=prospect_id,
-            action="step_completed",
+            action=activity_action,
             details={"step_id": str(step_id), "notes": notes},
             performed_by=completed_by,
         )
 
         # Notify the prospect that this step is completed, if configured
-        if step.notify_prospect_on_completion and prospect.email:
+        if (
+            not skip_requirements
+            and step.notify_prospect_on_completion
+            and prospect.email
+        ):
             await self._send_step_completion_notification(prospect, step)
 
         # Check if the completed step is the final step and auto-transfer is on
@@ -1181,6 +1196,35 @@ class MembershipPipelineService:
 
         await self.db.commit()
         return await self.get_prospect(prospect_id, organization_id)
+
+    async def skip_current_step(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        skipped_by: str,
+        notes: Optional[str] = None,
+    ) -> Optional[ProspectiveMember]:
+        """Explicitly bypass the current stage while preserving an audit trail."""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+        if not prospect.pipeline or not prospect.current_step_id:
+            raise ValueError("Prospect has no current stage to skip")
+        steps = sorted(prospect.pipeline.steps, key=lambda step: step.sort_order)
+        if steps and str(prospect.current_step_id) == str(steps[-1].id):
+            raise ValueError(
+                "The final stage cannot be skipped; convert or reject instead"
+            )
+
+        return await self.complete_step(
+            prospect_id=prospect_id,
+            organization_id=organization_id,
+            step_id=str(prospect.current_step_id),
+            completed_by=skipped_by,
+            notes=notes,
+            action_result={"skipped": True},
+            skip_requirements=True,
+        )
 
     async def complete_current_step_for_integration_event(
         self,
@@ -1257,7 +1301,14 @@ class MembershipPipelineService:
         advanced_by: str,
         notes: Optional[str] = None,
     ) -> Optional[ProspectiveMember]:
-        """Advance a prospect to the next step in the pipeline"""
+        """Complete the current step and advance a prospect.
+
+        Advancement used to move ``current_step_id`` directly.  That bypassed
+        every stage gate enforced by :meth:`complete_step` (interviews,
+        checklists, approvals, references, and medical screening) and left the
+        departed step marked in progress.  Keep one progression path so the
+        configured workflow and its audit record cannot diverge.
+        """
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect or not prospect.pipeline:
             return None
@@ -1282,29 +1333,19 @@ class MembershipPipelineService:
         if current_idx >= len(sorted_steps) - 1:
             raise ValueError("Prospect is already at the final stage")
 
-        next_step = sorted_steps[current_idx + 1]
-        prospect.current_step_id = next_step.id
-
-        # Mark next step as in_progress
-        next_progress = next(
-            (p for p in prospect.step_progress if str(p.step_id) == str(next_step.id)),
-            None,
+        advanced = await self.complete_step(
+            prospect_id=prospect_id,
+            organization_id=organization_id,
+            step_id=str(sorted_steps[current_idx].id),
+            completed_by=advanced_by,
+            notes=notes,
         )
-        if next_progress:
-            next_progress.status = StepProgressStatus.IN_PROGRESS
-        else:
-            self.db.add(
-                ProspectStepProgress(
-                    id=generate_uuid(),
-                    prospect_id=prospect_id,
-                    step_id=next_step.id,
-                    status=StepProgressStatus.IN_PROGRESS,
-                )
-            )
 
-        # Auto-link event if the new step requires meeting attendance
-        await self._auto_link_event_for_step(prospect, next_step)
-
+        # complete_step records the step-level event ("step_completed");
+        # "prospect_advanced" is the established audit action reports and the
+        # activity feed reconstruct movements from, so an explicit advance
+        # still writes it — only after the gated completion succeeded.
+        next_step = sorted_steps[current_idx + 1]
         await self._log_activity(
             prospect_id=prospect_id,
             action="prospect_advanced",
@@ -1315,15 +1356,8 @@ class MembershipPipelineService:
             },
             performed_by=advanced_by,
         )
-
         await self.db.commit()
-
-        # Send automated email if the new step is an automated_email stage
-        # (or a legacy action step with action_type=send_email)
-        if self._is_email_step(next_step):
-            await self._send_stage_email(prospect, next_step)
-
-        return await self.get_prospect(prospect_id, organization_id)
+        return advanced
 
     # =========================================================================
     # Bulk Actions
@@ -3378,12 +3412,20 @@ class MembershipPipelineService:
             result = await self.db.execute(avg_query)
             avg_days = result.scalar()
 
-        conversion_rate = (transferred_count / total * 100) if total > 0 else 0
+        # Conversion is measured against decided applications. Active, held,
+        # inactive, and voluntarily withdrawn records have not produced a
+        # positive/negative hiring decision and must not depress the rate.
+        decided_count = transferred_count + status_counts.get("rejected", 0)
+        conversion_rate = (
+            transferred_count / decided_count * 100 if decided_count > 0 else 0
+        )
 
         return {
             "pipeline_id": pipeline_id,
             "total_prospects": total,
             "active_count": status_counts.get("active", 0),
+            "on_hold_count": status_counts.get("on_hold", 0),
+            "inactive_count": status_counts.get("inactive", 0),
             "approved_count": status_counts.get("approved", 0),
             "rejected_count": status_counts.get("rejected", 0),
             "withdrawn_count": status_counts.get("withdrawn", 0),
@@ -3956,9 +3998,8 @@ class MembershipPipelineService:
         if the token has expired, or if no match is found.
         Only steps with public_visible=True are included in the timeline.
 
-        On each successful lookup the token is rotated and the new
-        token is included in the response so the caller can update
-        their bookmark.
+        Successful lookups refresh the token's inactivity timestamp. The
+        bearer token itself is never reflected into the response.
         """
         query = (
             select(ProspectiveMember)
@@ -4071,9 +4112,6 @@ class MembershipPipelineService:
             "applied_at": (
                 prospect.created_at.isoformat() if prospect.created_at else None
             ),
-            # Stable token (unchanged across views); included so the
-            # response shape stays consistent for any caller that stores it.
-            "status_token": prospect.status_token,
         }
 
     # =========================================================================

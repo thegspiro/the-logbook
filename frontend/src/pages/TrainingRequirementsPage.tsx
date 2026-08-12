@@ -22,6 +22,7 @@ import {
 import { trainingService, trainingProgramService } from '../services/api';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
+import { isSafeExternalUrl } from '@/utils/safeUrl';
 import { toChecklistItems } from '../utils/checklistItems';
 import type {
   TrainingRequirement,
@@ -32,6 +33,7 @@ import type {
   RegistryInfo,
 } from '../types/training';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type FilterSource = 'all' | 'department' | 'state' | 'national';
 
@@ -42,6 +44,7 @@ type FilterSource = 'all' | 'department' | 'state' | 'national';
  * Supports department, state, and national registry requirements.
  */
 const TrainingRequirementsPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [registries, setRegistries] = useState<RegistryInfo[]>([]);
@@ -92,7 +95,15 @@ const TrainingRequirementsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this requirement? This action cannot be undone.')) return;
+    if (
+      !(await confirm({
+        title: 'Delete requirement',
+        message: 'Permanently delete this requirement? This cannot be undone.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
 
     try {
       await trainingService.deleteRequirement(id);
@@ -214,16 +225,16 @@ const TrainingRequirementsPage: React.FC = () => {
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-              <FileText className="h-8 w-8 text-red-700 dark:text-red-500" aria-hidden="true" />
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+              <FileText className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
               <span>Training Requirements</span>
             </h1>
             <p className="text-theme-text-muted mt-1">Manage department, state, and national training requirements</p>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => {
                 void fetchData();
@@ -455,9 +466,9 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
     <div className="card overflow-hidden">
       {/* Header */}
       <div className="p-6">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1">
-            <div className="mb-2 flex items-center space-x-3">
+            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <h3 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h3>
               {requirement.requirement_type && (
                 <span className="text-theme-text-primary rounded-sm bg-green-700 px-2 py-1 text-xs font-semibold">
@@ -563,7 +574,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="ml-4 flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2 sm:ml-4">
             <button
               onClick={onToggleActive}
               className={`rounded-lg p-2 transition-colors ${
@@ -634,20 +645,22 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                         : 'Department'
                   }
                 />
-                {requirement.registry_name && registryUrlMap[requirement.registry_name] && (
-                  <div className="flex justify-between">
-                    <span className="text-theme-text-muted text-sm">Citation:</span>
-                    <a
-                      href={registryUrlMap[requirement.registry_name]}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center space-x-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
-                    >
-                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                      <span>View source</span>
-                    </a>
-                  </div>
-                )}
+                {requirement.registry_name &&
+                  registryUrlMap[requirement.registry_name] &&
+                  isSafeExternalUrl(registryUrlMap[requirement.registry_name]) && (
+                    <div className="flex justify-between">
+                      <span className="text-theme-text-muted text-sm">Citation:</span>
+                      <a
+                        href={registryUrlMap[requirement.registry_name]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center space-x-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        <span>View source</span>
+                      </a>
+                    </div>
+                  )}
                 <DetailRow label="Training Type" value={requirement.training_type || 'Any'} />
                 {/* Due date type, period and year describe a recurring cycle
                     that a one-time requirement does not have — the backend

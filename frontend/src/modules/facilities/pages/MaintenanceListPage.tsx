@@ -26,8 +26,10 @@ import { useMaintenanceForm } from '../hooks/useMaintenanceForm';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
+import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
 
 export default function MaintenanceListPage() {
+  const { canManage } = useFacilitiesAccess();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tz = useTimezone();
@@ -67,7 +69,7 @@ export default function MaintenanceListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => void navigate('/facilities')}
@@ -83,9 +85,14 @@ export default function MaintenanceListPage() {
             </p>
           </div>
         </div>
-        <button onClick={() => openCreate()} className="btn-primary flex items-center gap-2 py-2.5 text-sm">
-          <Plus className="h-4 w-4" /> New Record
-        </button>
+        {canManage && (
+          <button
+            onClick={() => openCreate()}
+            className="btn-primary flex shrink-0 items-center gap-2 self-start py-2.5 text-sm sm:self-auto"
+          >
+            <Plus className="h-4 w-4" /> New Record
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -172,7 +179,7 @@ export default function MaintenanceListPage() {
                     </span>
                   )}
                 </div>
-                <div className="text-theme-text-muted flex items-center gap-3 text-xs">
+                <div className="text-theme-text-muted flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                   <span>{getFacilityName(record.facilityId)}</span>
                   {record.scheduledDate && (
                     <span className="flex items-center gap-1">
@@ -189,44 +196,46 @@ export default function MaintenanceListPage() {
                   {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
                 </div>
               </div>
-              <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                {!record.isCompleted && (
+              {canManage && (
+                <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  {!record.isCompleted && (
+                    <button
+                      onClick={() => {
+                        void handleComplete(record);
+                      }}
+                      title="Mark completed"
+                      aria-label="Mark completed"
+                      className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-500/10"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => openEdit(record)}
+                    title="Edit"
+                    aria-label="Edit record"
+                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                  >
+                    <Wrench className="h-4 w-4" />
+                  </button>
                   <button
                     onClick={() => {
-                      void handleComplete(record);
+                      void handleDelete(record);
                     }}
-                    title="Mark completed"
-                    aria-label="Mark completed"
-                    className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-500/10"
+                    title="Delete"
+                    aria-label="Delete record"
+                    className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
                   >
-                    <CheckCircle2 className="h-4 w-4" />
+                    <X className="h-4 w-4" />
                   </button>
-                )}
-                <button
-                  onClick={() => openEdit(record)}
-                  title="Edit"
-                  aria-label="Edit record"
-                  className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
-                >
-                  <Wrench className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    void handleDelete(record);
-                  }}
-                  title="Delete"
-                  aria-label="Delete record"
-                  className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {showModal && (
+      {canManage && showModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"
@@ -293,7 +302,7 @@ export default function MaintenanceListPage() {
                   </select>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelCls}>Scheduled Date</label>
                   <input
@@ -313,7 +322,7 @@ export default function MaintenanceListPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelCls}>Performed By</label>
                   <input
@@ -333,7 +342,7 @@ export default function MaintenanceListPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelCls}>Cost ($)</label>
                   <input
@@ -364,7 +373,7 @@ export default function MaintenanceListPage() {
                 />
               </div>
             </div>
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+            <div className="border-theme-surface-border flex flex-wrap items-center justify-end gap-3 border-t p-6">
               <button
                 onClick={() => setShowModal(false)}
                 className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm transition-colors"

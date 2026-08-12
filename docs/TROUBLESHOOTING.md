@@ -8109,6 +8109,32 @@ docker logs -f intranet-backend 2>&1 | grep --line-buffered "ERROR"
 
 The webhook receiver validates the Salesforce organization id, so outbound messages from another org are rejected. The Integrations page carries connection status, last sync timestamp and sync history for per-run detail.
 
+### Problem: A Salesforce service-account connection cannot obtain a token
+
+**Check the endpoint:** `instance_url` must be the org's HTTPS My Domain URL,
+for example `https://yourorg.my.salesforce.com`. Client-credentials tokens are
+requested from that org-specific `/services/oauth2/token` endpoint.
+
+**Check the Connected App:** enable **OAuth 2.0 Client Credentials Flow** and
+select a dedicated **Run As** user in the Connected App policies. The integration
+requires the consumer key and consumer secret, but no refresh token and no Run
+As user password.
+
+**Check least-privilege access:** the Run As user needs **API Enabled**, plus
+read/write access to only the Salesforce objects and fields enabled for sync.
+Authentication can succeed while later describe, query, or record operations
+fail if those permissions are absent.
+
+### Problem: A pull reports a pagination or rate-limit failure
+
+The Salesforce client retries HTTP 429 responses up to three times, honoring
+`Retry-After` when Salesforce supplies it and otherwise using bounded
+exponential backoff. Idempotent reads also retry transient 5xx responses; writes
+are not automatically retried after ambiguous 5xx responses because doing so
+could create duplicates. If any later SOQL page still fails, the entire pull is
+reported as failed rather than applying an incomplete result set. Correct the
+rate-limit or availability issue and run the pull again.
+
 ---
 
 ---
@@ -8373,7 +8399,7 @@ Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare 
 
 ### Problem: A pinned dependency conflicts on install after pulling
 
-**Status (Expected):** The stack moved to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), with fastapi-mail, aiosmtplib, PyJWT, cryptography, pydantic-settings, pypdf, email-validator, schemathesis and pytest pinned to match. Install from `backend/requirements.txt` rather than upgrading individual packages.
+**Status (Expected):** The stack moved to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), with PyJWT, cryptography, pydantic-settings, pypdf, email-validator, schemathesis and pytest pinned to match. Install from `backend/requirements.txt` rather than upgrading individual packages.
 
 **Edge Case:** `pip-audit -r requirements.txt` runs **blocking** in CI with documented ignores; a new advisory fails the build rather than being noticed later.
 
@@ -8660,6 +8686,8 @@ It prints both `.env` lines already filled in, in the exact encoding each consum
 **Edge Case:** The migration-chain guard now asserts a single head. It already caught duplicate ids, dangling parents and multiple roots, but a fork passes all three while still leaving `upgrade head` ambiguous.
 
 **Recurred 2026-08-10 — the third time.** `main` landed `20260810_0003`/`_0004` for email templates while an inventory branch, open at the same time, had numbered its own four migrations from the same `20260810_0002` parent. The branch's migrations were renumbered to `_0005`–`_0008` before merging.
+
+**Recurred 2026-08-11 — the fourth time, and the first to reach `main` itself.** Two pull requests merged within minutes of each other, each adding a migration numbered `20260811_0001` off the same `20260810_0008` parent: `add_optional_equipment_kit_items` and `add_skill_test_return_trail`. Unlike the previous three this was not caught on a branch before merging — it landed on `main`, so every branch that merged `main` afterwards inherited a red build and `alembic upgrade head` was unrunnable for a fresh install. Repaired by keeping the earlier-created file as `20260811_0001` and renumbering the other to **`20260811_0002`** with `down_revision = "20260811_0001"`, relinearizing the chain to a single head. The two migrations touch different tables (`equipment_kit_items` and `skill_tests`), so the order chosen between them is arbitrary and safe.
 
 Worth internalising, because the shape is identical every time: **two revision ids with two files each is not a merge conflict git can see.** Both branches add files git happily keeps, and the collision only surfaces when Alembic tries to build the revision map — at backend startup, not at review. The guard catches it in CI; the habit that avoids it is running `alembic heads` **after merging main into your branch**, not just before writing the migration. A head documented in `docs/ALEMBIC_MIGRATIONS.md` is correct as of the day it was written and is not a substitute for asking.
 

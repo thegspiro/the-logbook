@@ -57,7 +57,14 @@ from app.models.document import (
     DocumentStatus,
     DocumentType,
 )
-from app.models.election import Candidate, Election, ElectionStatus, Vote, VotingToken
+from app.models.election import (
+    Candidate,
+    Election,
+    ElectionStatus,
+    SavedBallotTemplate,
+    Vote,
+    VotingToken,
+)
 from app.models.email_template import EmailAttachment, EmailTemplate, EmailTemplateType
 from app.models.error_log import ErrorLog
 from app.models.event import (

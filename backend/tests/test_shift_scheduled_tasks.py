@@ -968,3 +968,54 @@ class TestActivitiesFlagPersistence:
             await db_session.execute(select(Shift).where(Shift.id == shift_id))
         ).scalar_one()
         assert (refreshed.activities or {}).get("start_reminder_sent") is True
+
+
+class TestShiftReminderSubject:
+    """The pre-shift reminder must not present itself as a shift report.
+
+    The department has a genuinely separate shift-reports feature, with its
+    own notifications ("Shift report flagged for revision") pointing at
+    ``/scheduling?tab=shift-reports``. This notification is the briefing sent
+    inside the lookahead window before a shift starts, and it points at
+    check-in — a member who reads its subject as a request to file a report
+    goes to the wrong screen and thinks they owe paperwork.
+    """
+
+    async def test_reminder_is_titled_a_reminder_not_a_report(
+        self,
+        db_session: AsyncSession,
+    ):
+        org_id = await _insert_org(db_session)
+        user_id = await _insert_user(db_session, org_id=org_id, first_name="Dana")
+        shift_id, _, _ = await _insert_shift(
+            db_session,
+            org_id=org_id,
+            start_offset_minutes=30,
+        )
+        await _insert_assignment(
+            db_session,
+            org_id=org_id,
+            shift_id=shift_id,
+            user_id=user_id,
+        )
+        await db_session.flush()
+
+        await run_shift_reminders(db_session)
+
+        notif = (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.category == "shift_reminder",
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        assert notif is not None
+        assert notif.subject.startswith("Shift Reminder")
+        assert "Shift Report" not in notif.subject
+        # The destination is check-in, which is what makes "report" misleading.
+        assert "/scheduling/checkin" in (notif.action_url or "")

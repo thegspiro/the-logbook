@@ -27,36 +27,37 @@ const DashboardStatCard: React.FC<DashboardStatCardProps> = ({
   ariaLabel,
 }) => {
   const clickableClasses = onClick ? `cursor-pointer ${hoverClass} transition-colors` : '';
-
-  return (
-    <div
-      className={`card p-3 sm:p-5 ${clickableClasses}`}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') onClick();
-            }
-          : undefined
-      }
-      aria-label={ariaLabel}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-theme-text-secondary text-xs font-medium uppercase">{label}</p>
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-2 sm:items-center">
+        <div className="min-w-0">
+          <p className="text-theme-text-secondary text-xs leading-tight font-medium uppercase">{label}</p>
           {loading ? (
             <div className="bg-theme-surface-hover mt-1 h-8 w-14 animate-pulse rounded-sm"></div>
           ) : (
-            <p className={`${valueColor} mt-1 text-2xl font-bold`}>{value}</p>
+            <p className={`${valueColor} mt-1 text-xl font-bold sm:text-2xl`}>{value}</p>
           )}
         </div>
-        <Icon className={`h-8 w-8 ${iconColor}`} aria-hidden="true" />
+        <Icon className={`h-6 w-6 shrink-0 sm:h-8 sm:w-8 ${iconColor}`} aria-hidden="true" />
       </div>
-      <p className="text-theme-text-muted mt-2 text-xs">{description}</p>
-    </div>
+      <p className="text-theme-text-muted sr-only mt-2 text-xs sm:not-sr-only">{description}</p>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={`card w-full p-3 text-left sm:p-5 ${clickableClasses}`}
+        onClick={onClick}
+        aria-label={ariaLabel}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className="card p-3 sm:p-5">{content}</div>;
 };
 
 export default DashboardStatCard;

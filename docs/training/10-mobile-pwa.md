@@ -49,8 +49,10 @@ iOS requires using **Safari** to install PWAs. Other browsers (Chrome, Firefox) 
 5. The name will default to "The Logbook" — you can change it if you wish.
 6. Tap **Add** in the upper right corner.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Safari share sheet on iPhone showing the "Add to Home Screen" option highlighted, with the Logbook URL in the address bar above]_
+> **Corrected 2026-08-12.** The retired placeholder asked for **Safari's own
+> share sheet**. That is iOS system UI, not a screen this application draws,
+> so the screenshot pipeline has nothing to capture — the steps above are the
+> documentation.
 
 The Logbook icon now appears on your home screen. Tapping it opens the app in standalone mode (no Safari toolbar).
 
@@ -66,8 +68,8 @@ The Logbook icon now appears on your home screen. Tapping it opens the app in st
 4. If the banner does not appear, tap the **three-dot menu** (top right) and select **Install app** or **Add to Home screen**.
 5. Confirm by tapping **Install**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of Chrome on Android showing the install banner at the bottom of the screen ("Add The Logbook to Home screen") with an Install button]_
+> **Corrected 2026-08-12.** Same as the iOS step above: Chrome's install
+> banner is browser UI, drawn by Chrome and not by this application.
 
 The Logbook icon appears on your home screen and in your app drawer. It opens in standalone mode.
 
@@ -381,8 +383,11 @@ Camera scanning works on **all modern browsers** — Chrome, Edge, Firefox, and 
 
 On **desktop computers** with only a front-facing webcam, the scanner automatically falls back from the rear camera to the front camera. Hold the barcode or QR code in front of your webcam.
 
-> **Screenshot needed:**
-> _[Screenshot of the InventoryScanModal on a desktop browser showing the webcam feed with a barcode being scanned, the live search dropdown showing matching items, and the batch action buttons at the bottom]_
+> **Corrected 2026-08-12.** A live camera feed cannot be captured here: the
+> screenshot pipeline drives a headless browser with no camera attached, so
+> the scanner renders its no-camera error rather than a viewfinder. What that
+> error looks like _is_ pictured, under
+> [Camera Error Handling](#camera-error-handling).
 
 ### Form Submission
 
@@ -523,8 +528,8 @@ Camera scanning (QR codes, barcodes, member IDs) now works on desktop browsers i
 - Shared scanner infrastructure across all scanning features (inventory, member ID, event check-in)
 - Works in Chrome, Edge, Firefox, and Safari
 
-> **Screenshot needed:**
-> _[Screenshot of the MemberIdScannerModal on a desktop browser showing the webcam feed in the scanner viewport, with a QR code being detected and the member's name appearing in the result area below]_
+> **Corrected 2026-08-12.** Same reason as the inventory scanner above — a
+> headless browser has no camera, so there is no viewfinder to photograph.
 
 > **Edge case:** Desktop browsers require explicit camera permission. If the user denies camera access, the scanner shows a clear error message and the user can fall back to manual text entry.
 
@@ -534,41 +539,55 @@ Camera scanning (QR codes, barcodes, member IDs) now works on desktop browsers i
 
 ### Camera Error Handling
 
-Camera scanning across the app now provides **specific error messages** instead of generic failures:
+Camera scanning across the app tells you **which** camera problem you have,
+because the fix differs:
 
-| Error                        | Message                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------- |
-| Camera permission denied     | "Camera permission denied. Please allow camera access in your browser settings." |
-| No camera available          | "No camera detected on this device."                                             |
-| Camera in use by another app | "Camera is in use by another application."                                       |
+| What went wrong            | What you are told                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Permission blocked         | "Camera access was blocked. Allow camera permission for this site in your browser settings, then try again." |
+| No camera on the device    | "No camera was found on this device. Use a phone or tablet with a camera, or enter the code by hand."        |
+| Camera held by another app | "The camera is in use by another app. Close anything else using it, then try again."                         |
+| Page not served over HTTPS | "Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan."                   |
+
+The distinction that matters is between the first two. Only a blocked
+permission has anything to grant, so a device with no camera is deliberately
+**not** sent to browser settings to look for a switch that will not be there.
 
 Error messages **stay visible** until you dismiss them (no auto-dismiss), giving you time to read and act on the message.
 
-> **Screenshot needed:**
-> _[Screenshot of the MemberScanPage on a mobile device showing a camera error banner: "Camera permission denied. Please allow camera access in your browser settings." with a "Try Again" button and manual entry field below]_
+![Member ID scan on a phone after the camera is refused — the red banner naming the failure, with Start Scanning still offered](./images/10-14-scan-camera-denied.png)
+
+The banner replaces nothing: **Start Scanning** stays where it was, so
+retrying is the same tap it always was, and the "How to use" steps stay on
+screen underneath. There is no separate "Try Again" button and no manual member
+lookup on this page — to find a member without a camera, use the search on
+**Members**.
 
 ### Inventory Scan Modal
 
-The `InventoryScanModal` now uses `getErrorMessage()` for consistent, specific error display. On desktop browsers where the camera fails, the manual barcode/serial number input field is always available as a fallback.
+The inventory scanner reports the same four camera states, and on any browser
+where the camera fails the manual barcode/serial-number input is always
+available as a fallback — so a failed camera slows the job down rather than
+stopping it.
 
 > **Edge case:** On iOS Safari, camera access requires the page to be served over HTTPS. If your department uses HTTP for local network access, camera scanning will not work — use the manual entry fallback.
 
 ### Notification Badges on Mobile
 
-The notification unread count badge is now visible on both mobile and desktop:
+The unread count reaches you on a phone as well as on a desktop, but **not in
+the same place**:
 
-- **Top navigation**: Bell icon with red badge count
-- **Side navigation**: Notifications link with badge count
-- **Smart polling**: Polling pauses when the app/tab is in the background, preserving battery
+- **Desktop side navigation** — the Notifications link carries the badge
+- **Phone** — the count is on the Notifications entry **inside the menu**. The
+  collapsed top bar is the department logo, the department name and the
+  hamburger: no page title, and no bell. Tap the hamburger to see the count
+- **Smart polling** — polling pauses when the app or tab is in the background,
+  preserving battery
 
-> **Screenshot needed:**
-> _[Screenshot of the mobile top navigation bar showing the hamburger menu, page title, and bell icon with a red "3" badge]_
+![The phone menu open, with the unread count on the Notifications entry](./images/10-15-mobile-menu-notifications.png)
 
-On a phone the bell is **inside the menu**, not on the bar. The collapsed top
-bar is the department logo, the department name, and the hamburger — there is
-no page title and no bell on it. Open the menu and the Notifications entry
-carries the red unread count. The placeholder stays open until there is a
-screen matching what it describes.
+This is worth knowing before you go looking: a member told to "watch for the
+red badge" will not find one on a phone until they open the menu.
 
 ---
 
@@ -584,7 +603,9 @@ Sarah taps the event to open the detail page, then taps the **Check In** button.
 
 > **Edge case:** The QR code printout at Door B is water-damaged and unreadable. Sarah taps **Manual Check-In** below the scanner. She enters her membership number (OFD-0047) and taps Submit. The system confirms: "Checked in at 08:04 AM — manual entry."
 
-> **[SCREENSHOT NEEDED]:** _Phone camera view showing the QR scanner overlay pointed at a QR code on a door, with the event name "Q2 Hazmat Refresher" displayed at the top of the scanner screen_
+> **Corrected 2026-08-12.** This asked for a photograph of a phone pointed at
+> a door — a picture of the world, not of a screen. Nothing in the capture
+> pipeline can produce it.
 
 ### Part 2: Equipment Barcode Scan (Mid-Morning)
 
@@ -596,7 +617,12 @@ Sarah taps **Check Out**, selects herself as the borrower (her name is pre-fille
 
 > **Edge case:** The barcode on a second gas monitor is partially obscured by a sticker. The camera scan fails after a few seconds. Sarah taps the manual entry field below the scanner, types `INV-000234` in the search box, and the item is found immediately.
 
-> **[SCREENSHOT NEEDED]:** _Inventory item detail card on mobile showing the MSA Altair 5X with serial number, condition badge, and the "Check Out" button at the bottom of the card_
+![An inventory item's detail page on a phone — the status and condition badges under the name, with the Basic Info and Location cards stacked](./images/10-16-mobile-item-detail.png)
+
+> **Corrected 2026-08-12.** The item detail page has **no Check Out button**.
+> Its actions are Back, Print Barcode and (for a manager) Edit. A checkout is
+> made against a _member_, from **Inventory Admin > Members > Assign** — which
+> is why the walkthrough above has Sarah select herself as the borrower.
 
 ### Part 3: Offline Training Submission (Afternoon — No Signal)
 
@@ -621,7 +647,11 @@ A notification appears: "2 queued items synced successfully." Sarah taps it to v
 
 > **Edge case:** If one of the queued items had failed during sync (for example, if someone else had already submitted an identical training record creating a duplicate conflict), the sync would show an error toast with the specific failure reason: "Training submission failed: A record for this course on this date already exists." The failed item remains in the queue with an error badge. Sarah can tap it to edit and retry, or dismiss it if the duplicate was submitted by someone else on her behalf.
 
-> **[SCREENSHOT NEEDED]:** _Sync status notification on mobile showing "2 queued items synced successfully" with green checkmarks next to "Training submission" and "Event RSVP," displayed as a toast or notification card_
+> **Corrected 2026-08-12.** The sync toast appears only on the transition
+> from offline to online with a populated IndexedDB queue. The capture
+> pipeline drives an online browser against a live API, so the queue is always
+> empty and the toast never fires; producing it would mean scripting a network
+> outage mid-session rather than photographing a screen.
 
 ---
 

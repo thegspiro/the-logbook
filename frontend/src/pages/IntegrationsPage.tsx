@@ -1332,7 +1332,7 @@ const IntegrationsPage: React.FC = () => {
                     </span>
                   ))}
                 </div>
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
                       {integration.integration_type === 'salesforce' && (

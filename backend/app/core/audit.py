@@ -295,9 +295,11 @@ class AuditLogger:
             "errors": [],
         }
 
-        # Verify each log entry. Each row is verified under ITS OWN recorded
-        # algorithm version so pre-upgrade (legacy SHA-256) rows still pass while
-        # new rows are checked with keyed HMAC.
+        # Verify each log entry. Legacy SHA-256 is accepted only through the
+        # externally configured legacy ID boundary. The per-row hash_version is
+        # attacker-writable and therefore cannot itself authorize an unkeyed
+        # hash; without this independent boundary an attacker could rewrite the
+        # whole keyed suffix as v1 and recompute it without the HMAC key.
         #
         # No-downgrade guard: once the chain has produced any keyed (v2) entry,
         # every later entry must also be keyed. Otherwise an attacker with DB
@@ -311,6 +313,23 @@ class AuditLogger:
             calculated_hash = self.calculate_hash(
                 log_data, log.previous_hash, row_version
             )
+
+            if (
+                row_version < _KEYED_MIN_VERSION
+                and log.id > settings.AUDIT_LOG_LEGACY_MAX_ID
+            ):
+                results["verified"] = False
+                results["errors"].append(
+                    {
+                        "log_id": log.id,
+                        "error": (
+                            "Unkeyed hash is not permitted after the trusted "
+                            "legacy audit boundary"
+                        ),
+                        "row_version": row_version,
+                        "legacy_max_id": settings.AUDIT_LOG_LEGACY_MAX_ID,
+                    }
+                )
 
             if row_version < max_version_seen:
                 results["verified"] = False
@@ -445,6 +464,17 @@ class AuditLogger:
         count = 0
         for log in logs:
             row_version = log.hash_version or _LEGACY_HASH_VERSION
+
+            if (
+                row_version < _KEYED_MIN_VERSION
+                and log.id > settings.AUDIT_LOG_LEGACY_MAX_ID
+            ):
+                raise ValueError(
+                    "Refusing to rehash: unkeyed audit entry "
+                    f"{log.id} is after the trusted legacy boundary "
+                    f"({settings.AUDIT_LOG_LEGACY_MAX_ID}). This may be a "
+                    "hash-version downgrade attack."
+                )
 
             if row_version >= _KEYED_MIN_VERSION:
                 # Keyed row: verify against its stored hash, never overwrite it.

@@ -446,9 +446,10 @@ docker compose exec mysql mysqladmin -u root -p status
 
 ### From Unraid to Proxmox
 
-1. Backup The Logbook data on Unraid:
+1. Backup The Logbook data on Unraid (host-side script, from the install
+   directory — `backup.sh` is not shipped inside the backend image):
    ```bash
-   docker compose exec backend /app/scripts/backup.sh
+   cd /mnt/user/appdata/the-logbook && ./scripts/backup.sh
    ```
 
 2. Copy backup and configuration:
@@ -459,9 +460,9 @@ docker compose exec mysql mysqladmin -u root -p status
 
 3. Deploy on Proxmox following this guide
 
-4. Restore the backup:
+4. Restore the backup (host-side; point at the archive you copied over):
    ```bash
-   docker compose exec backend /app/scripts/backup.sh --restore /backups/latest-backup.tar.gz
+   ./scripts/backup.sh --restore /tmp/logbook-backup/logbook_backup_TIMESTAMP.tar.gz
    ```
 
 ### From Another Server to Proxmox

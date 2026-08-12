@@ -264,6 +264,17 @@ class TestJWTTokens:
         assert "iat" in payload
 
     @pytest.mark.unit
+    def test_access_tokens_created_in_same_second_are_unique(self):
+        """Repeated logins must not collide with the session token unique index."""
+        from app.core.security import create_access_token, decode_token
+
+        first = create_access_token({"sub": "user-123"})
+        second = create_access_token({"sub": "user-123"})
+
+        assert first != second
+        assert decode_token(first)["jti"] != decode_token(second)["jti"]
+
+    @pytest.mark.unit
     def test_access_token_custom_expiration(self):
         """Custom expires_delta should be honoured."""
         from app.core.security import create_access_token, decode_token

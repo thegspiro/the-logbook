@@ -860,6 +860,19 @@
   top: calc(4rem + env(safe-area-inset-top));
 }
 
+@utility mobile-navigation-drawer {
+  /* The fixed header already carries department branding on phones. Keep the
+     full navigation below it instead of repeating the logo and letting the
+     bottom bar cover its utility actions. */
+  @media (max-width: 767px) {
+    top: calc(env(safe-area-inset-top) + 4rem);
+    bottom: var(--bottom-nav-height, 0px);
+    height: auto;
+    max-width: min(20rem, 88vw);
+    padding-top: 0;
+  }
+}
+
 /* Theme CSS Custom Properties */
 :root {
   /* Background gradient */
@@ -1382,7 +1395,7 @@ option {
 
 /* Skip to main content link for accessibility */
 .skip-to-main {
-  @apply bg-theme-surface-modal text-theme-text-primary absolute -top-96 left-0 z-50 flex items-center rounded-br-lg px-4 py-2 focus:top-0;
+  @apply bg-theme-surface-modal text-theme-text-primary fixed -top-96 left-1/2 z-[100] flex -translate-x-1/2 items-center rounded-b-lg border border-t-0 border-white/40 px-5 py-3 font-semibold shadow-xl focus:top-0;
   min-height: 44px;
 }
 

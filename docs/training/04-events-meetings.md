@@ -568,14 +568,11 @@ attendance_pct = meetings_attended / eligible_meetings × 100
 
 Where `eligible_meetings = total_meetings − per_meeting_waivers − meetings_during_leave`.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Attendance Dashboard showing a table of members with their attendance percentage, number of meetings attended, meetings on leave, and voting eligibility status]_
-
 **Not yet built:** there is no Attendance Dashboard screen. The calculation
 above is real and the data is served by `GET /meetings/attendance/dashboard`,
 which the frontend even has a client method for — but nothing calls it, so no
 page renders the table. Per-meeting attendance is visible on each meeting's
-own record in the meantime. The placeholder stays open.
+own record in the meantime.
 
 ### Leave of Absence & Meeting Attendance
 
@@ -605,14 +602,23 @@ Each election shows:
 ### Casting Your Vote
 
 1. Click on an active election.
-2. Review the candidates or ballot items.
-3. Make your selections.
-4. Submit your ballot.
+2. Open the **Cast Vote** tab.
+3. Review the candidates for each position and make your selection.
+4. Submit — **one position at a time**. Each position has its own submit button
+   ("Submit Vote for Captain"), and a position you have already voted on is
+   shown as voted rather than offered again.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the voting page showing the election title, ballot items with candidate names and descriptions, radio buttons or checkboxes for selection, and a Submit Ballot button at the bottom]_
+![The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, and the per-position submit button beneath them](./images/04-42-cast-ballot.png)
 
 > **Hint:** Votes are anonymous by default. The system records that you voted but not how you voted. Write-in candidates are supported when enabled by the election creator.
+
+> **Voting in the app covers position races only _(2026-08-12)_.** The Cast Vote
+> tab builds its ballot from the election's positions, so a ballot item that is
+> not a position — a bylaw amendment or a membership approval — does not appear
+> there and cannot be voted on in the app. Those items do appear on the emailed
+> public ballot link, which renders every ballot item. If your ballot mixes the
+> two, send the public link rather than asking members to vote in the app. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#elections--the-in-app-ballot-only-shows-position-races-2026-08-12).
 
 ### Creating Elections (Officers)
 
@@ -1063,8 +1069,11 @@ Events support three check-in window modes that control when QR and manual check
 
 Event notifications now deliver via **in-app notifications** in addition to email. When a coordinator sends a notification from the event detail page (announcement, reminder, follow-up, missed_event, or check_in_confirmation), targeted members receive the notification in their notification bell.
 
-> **Screenshot needed:**
-> _[Screenshot of the notification bell dropdown showing an event notification entry (e.g., "Reminder: Monthly Business Meeting tomorrow at 7 PM") alongside other notification types]_
+> **Corrected 2026-08-12.** There is no bell **dropdown**. The bell is a link
+> straight to **Notifications > Inbox**, carrying an unread-count badge; event
+> notifications arrive in that inbox alongside every other type. The inbox is
+> pictured in
+> [Admin & Reports > Notifications Overhaul](./08-admin-reports.md#notifications-overhaul-2026-03-24).
 
 ## Time Picker Standardization (2026-03-17)
 
@@ -1083,29 +1092,30 @@ The ballot email dispatch system has been significantly hardened:
 3. **Diagnostic logging**: When no recipients are found, detailed logs explain why (no email address, ineligible, already voted)
 4. **Eligibility summary email**: The secretary who dispatched ballots receives a summary listing all skipped voters with actionable reasons
 
-> **Screenshot needed:**
-> _[Screenshot of the election detail page showing the "Send Ballots" button and, after sending, the eligibility summary showing "Sent: 45, Skipped: 3" with expandable reasons for skipped voters]_
+> **Corrected 2026-08-12.** The eligibility summary is an **email** sent to
+> the officer who dispatched the ballots — the wording above says so — not a
+> panel on the election page. Nothing renders "Sent: 45, Skipped: 3" on
+> screen, so there is no screenshot to take of it.
 
 ### Election Report Email
 
-> **Screenshot needed:**
-> _[Screenshot of the election detail page with the "Send Report Email" button visible in the actions area, and the report email preview showing round-by-round results]_
+**Send Report** sits in the **Results & Publishing** panel on the election
+page, under _Email Results Report — send final results to all eligible voters
+by email_. Results can also be exported from the Results tab or folded into the
+pre-meeting package.
 
-**Not yet built.** There is no **Send Report Email** button on the election
-detail page. Results are shared by exporting them from the Results tab, or by
-generating the pre-meeting package. The placeholder stays open.
+> **Corrected 2026-08-12.** This section said the button was "not yet built"
+> and did not exist. It does, on `PublishResultsPanel`, backed by
+> `POST /elections/{id}/send-report`.
 
 ### Upcoming Business Meetings
-
-> **Screenshot needed:**
-> _[Screenshot of the election detail page showing the "Upcoming Business Meetings" section with a list of upcoming meetings and "Link" buttons]_
 
 **Not yet built.** The election detail page has no **Upcoming Business
 Meetings** section and no **Link to Election** control. The link itself is
 real — an election carries `meeting_id` and `event_id`, and an event it is
 linked to shows a **Linked Elections** card (see below) — but it is set when
 the election is created, or through the API, not from a list of candidate
-meetings. Two placeholders stay open.
+meetings.
 
 ### Edge Cases — Elections (2026-03-19)
 
@@ -1285,8 +1295,23 @@ Voter eligibility now correctly uses `User.membership_type` instead of role slug
 - A member with membership_type "active" **is** eligible for operational items regardless of their assigned roles
 - See the [Elections Voter Eligibility](#elections-and-voting) section above for the full eligibility matrix
 
-> **Screenshot needed:**
-> _[Screenshot of the election detail page showing voter eligibility breakdown — listing eligible membership types and the count of members in each type]_
+![The Voter Eligibility Roster: four counts, then every member with the ballot items they qualify for](./images/04-03-election-eligibility.png)
+
+The **Eligibility** tab on an election answers this member by member rather than
+by membership type. Four counts head it — will receive a ballot, ineligible,
+secretary overrides, already voted — and beneath them every member is listed
+with the number of ballot items they qualify for ("3/3"), a tick if they will
+get a ballot, and a **reason** when they will not. Filter chips narrow the list
+to any one of those four states, and the search box takes a membership type as
+well as a name or email, which is the closest thing to a per-type breakdown.
+
+> **The tab is addressable.** `/elections/<id>?tab=eligibility` opens straight
+> onto it, so the roster can be sent to a colleague, and the Back button works
+> after a tab change.
+
+A member's row expands to show which items they are eligible for and why, so a
+disputed exclusion is answerable from this screen without cross-referencing the
+matrix above.
 
 ### Ballot Email Improvements
 
@@ -1294,13 +1319,10 @@ Voter eligibility now correctly uses `User.membership_type` instead of role slug
 - **Eligibility summary email**: The secretary who dispatched ballots receives a summary listing all sent and skipped voters with reasons (no email address, ineligible, already voted)
 - **Election report email**: New "Send Report Email" button emails formatted round-by-round results
 
-> **Screenshot needed:**
-> _[Screenshot of the eligibility summary showing "Sent: 45 ballots, Skipped: 3 voters" with expandable reasons — "John Smith: no email address", "Jane Doe: membership type not eligible"]_
+> **Corrected 2026-08-12.** Same as above: the summary is emailed to the
+> dispatching officer, not shown on the election page.
 
 ### Election Meeting Integration
-
-> **Screenshot needed:**
-> _[Screenshot of the election detail page "Upcoming Business Meetings" section showing a list of upcoming meetings with dates and "Link to Election" buttons]_
 
 **Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings). An election does carry a meeting/event link, and the linked event shows a **Linked Elections** card; what is missing is the section on the election side that lists meetings to link to.
 
@@ -1308,7 +1330,7 @@ Voter eligibility now correctly uses `User.membership_type` instead of role slug
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Ballot emails sent but 0 recipients | Fixed 2026-03-22 — eligibility now uses `membership_type`. Check that members have the correct membership type and email addresses. |
 | Election error messages are generic | Fixed 2026-03-22 — errors now include specific guidance.                                                                            |
-| Can't find report email button      | Look for "Send Report Email" in the election detail page actions area.                                                              |
+| Can't find report email button      | There is no such button. Export results from the Results tab, or send the pre-meeting package.                                      |
 
 ---
 
@@ -1328,8 +1350,17 @@ Event detail pages now display elections that are linked to the event. Each link
 
 Meeting minutes detail pages also display any elections associated with the meeting, using the same card format as event pages.
 
-> **Screenshot needed:**
-> _[Screenshot of a meeting minutes detail page showing a "Linked Elections" section below the minutes content]_
+The card is keyed on the **event** the minutes record, not on the minutes
+record itself — so it appears when the minutes name a meeting event and an
+election points at that same event.
+
+![The Linked Elections card on a minutes record — the election held at that meeting, with its type, position and status](./images/04-35-minutes-linked-elections.png)
+
+> **Fixed 2026-08-12.** This card could not appear at all. The page looked its
+> elections up by passing the minutes id as `meeting_id`, but
+> `Election.meeting_id` holds a `meetings` row id and a minutes record is a
+> `meeting_minutes` row — two different id spaces, so the query matched
+> nothing however many elections were held at the meeting.
 
 ### Importing Event Attendees into Election Ballot
 
@@ -1337,19 +1368,19 @@ Officers can populate an election's ballot recipient list directly from a linked
 
 1. Open the election detail page
 2. Navigate to the **Ballot** tab
-3. Click **Import Attendees** and select the linked event
-4. Checked-in attendees from the event are added to the ballot recipient list
+3. Click **Import Attendees from Meeting** (or **… from Event**)
+4. Checked-in attendees are added to the ballot recipient list
 5. Members already in the ballot list are automatically skipped
 
 This streamlines the workflow for in-meeting elections where only present members should vote.
 
-> **Screenshot needed:**
-> _[Screenshot of the election Ballot tab showing the "Import Attendees" button with a dropdown of linked events, and a success message "12 attendees imported, 3 already in list (skipped)"]_
+> **There is no event picker.** The control is a single button that imports from
+> **the** meeting or event this election is already linked to — it names which
+> one, and it only appears when the election has such a link and is still in
+> **draft**. An election already taking nominations or open for voting does not
+> show it: the recipient list is settled by then.
 
 ### Quick-Link Buttons on Upcoming Meetings
-
-> **Screenshot needed:**
-> _[Screenshot of the Upcoming Meetings section on the election detail page showing meeting cards with "Link to Election" quick-action buttons]_
 
 **Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings) above. There is no Upcoming Meetings list on the election detail page and no quick-link button.
 
@@ -1388,7 +1419,10 @@ GET /api/v1/elections/{id}/verify-receipt?receipt=<receipt_code>
 
 This endpoint is **rate-limited** to prevent brute-force attacks. It returns verification status without revealing vote content.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the vote receipt verification page showing the receipt input field, verify button, and a success/failure status message._
+> **Corrected 2026-08-12.** There is no receipt-verification **page**. The
+> endpoint above is real and rate-limited, but nothing in the frontend calls
+> it — `verifyReceipt` exists in the election service with no consumer — so a
+> member verifies a receipt by requesting that URL directly.
 
 ### Send Report Endpoint
 

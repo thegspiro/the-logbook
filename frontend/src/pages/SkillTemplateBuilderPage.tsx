@@ -754,9 +754,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
             <ArrowLeft className="mr-2 h-5 w-5" />
             Back to Skills Testing
           </Link>
-          <div className="flex items-center justify-between">
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-              <ClipboardCheck className="h-8 w-8 text-red-700" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+              <ClipboardCheck className="h-8 w-8 shrink-0 text-red-700" />
               <span>{isEditing ? 'Edit Template' : 'New Template'}</span>
             </h1>
             <div className="flex gap-2">

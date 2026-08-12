@@ -852,7 +852,7 @@ export const ApparatusFormPage: React.FC = () => {
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-end space-x-4">
+          <div className="flex flex-wrap items-center justify-end gap-4">
             <button
               type="button"
               onClick={() => void navigate('/apparatus')}

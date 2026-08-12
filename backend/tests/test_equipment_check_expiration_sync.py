@@ -152,6 +152,30 @@ class TestComputeCheckStatus:
         )
         assert (failed, overall) == (1, "fail")
 
+    def test_not_applicable_is_complete_without_failing(self, service):
+        items = [{"template_item_id": "ti-1", "status": "not_applicable"}]
+        total, completed, failed, overall = service._compute_check_status(items)
+        assert (total, completed, failed, overall) == (1, 1, 0, "pass")
+
+    def test_out_of_service_is_complete_and_fails_check(self, service):
+        items = [{"template_item_id": "ti-1", "status": "out_of_service"}]
+        total, completed, failed, overall = service._compute_check_status(items)
+        assert (total, completed, failed, overall) == (1, 1, 1, "fail")
+
+
+class TestTrendOutcomeBuckets:
+    def test_new_outcomes_are_not_misreported_as_unchecked(self, service):
+        assert service._trend_bucket_for_status("not_applicable") == (
+            "not_applicable_count"
+        )
+        assert service._trend_bucket_for_status("out_of_service") == "fail_count"
+        assert service._trend_bucket_for_status("not_checked") == "not_checked_count"
+
+    def test_trend_schema_has_one_not_applicable_bucket(self):
+        from app.schemas.equipment_check import ItemTrendEntry
+
+        assert list(ItemTrendEntry.model_fields).count("not_applicable_count") == 1
+
 
 class TestApplyFoundValuesToTemplate:
     def test_expiration_is_not_written_back_to_template(self, service):

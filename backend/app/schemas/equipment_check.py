@@ -291,7 +291,15 @@ class CheckItemResultSubmit(BaseModel):
     compartment_name: str = Field(..., max_length=200)
     item_name: str = Field(..., max_length=200)
     check_type: Optional[str] = Field(None, max_length=30)
-    status: str = Field(..., pattern=r"^(pass|fail|not_checked)$")
+    # "not_applicable" is a real answer, not a fault: a tool legitimately off
+    # the truck used to have to be filed as a failure, and the compliance
+    # reports counted it as one. It counts as answered in
+    # _compute_check_status and never toward the failure count.
+    # "out_of_service" also counts as answered, but does count as a failure —
+    # the item was looked at and found unusable.
+    status: str = Field(
+        ..., pattern=r"^(pass|fail|not_applicable|out_of_service|not_checked)$"
+    )
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
@@ -561,6 +569,9 @@ class ItemTrendEntry(BaseModel):
     pass_count: int = 0
     fail_count: int = 0
     not_checked_count: int = 0
+    # Answered "not on truck". Counted apart from not_checked_count: one is a
+    # crew's answer, the other is nobody having looked.
+    not_applicable_count: int = 0
 
 
 class ItemTrendResponse(BaseModel):

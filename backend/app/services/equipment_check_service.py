@@ -54,6 +54,19 @@ class EquipmentCheckService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @staticmethod
+    def _trend_bucket_for_status(status: str) -> Optional[str]:
+        """Map every stored item outcome to its reporting bucket."""
+        if status == "pass":
+            return "pass_count"
+        if status in ("fail", "out_of_service"):
+            return "fail_count"
+        if status == "not_applicable":
+            return "not_applicable_count"
+        if status == "not_checked":
+            return "not_checked_count"
+        return None
+
     # ------------------------------------------------------------------
     # Template CRUD
     # ------------------------------------------------------------------
@@ -609,7 +622,17 @@ class EquipmentCheckService:
         summaries = []
         for tmpl in templates:
             check = checks.get(tmpl.id)
-            item_count = sum(len(comp.items) for comp in tmpl.compartments)
+            # Headers and free-text rows are captions, not questions: the check
+            # form excludes them from what it asks for, and a submitted check's
+            # total_items excludes them too. Counting them here made an
+            # unstarted checklist advertise more items than it turned out to
+            # have — 0/13 on the card, 12 once you opened it.
+            item_count = sum(
+                1
+                for comp in tmpl.compartments
+                for item in comp.items
+                if item.check_type not in ("header", "text")
+            )
             summaries.append(
                 {
                     "template_id": tmpl.id,
@@ -678,6 +701,12 @@ class EquipmentCheckService:
             item["is_expired"] = bool(expiration and expiration < today)
             if item.get("is_expired"):
                 item["status"] = "fail"
+            # "not_applicable" is the crew answering that the item is not on
+            # this apparatus, so there is no count to be short of. Expiry above
+            # still wins — that verdict comes from the department's own record —
+            # but a shortfall cannot be read off an item nobody is carrying.
+            if item.get("status") == "not_applicable":
+                continue
             req_qty = item.get("required_quantity")
             found_qty = item.get("quantity_found")
             if req_qty is not None and found_qty is not None and found_qty < req_qty:
@@ -685,7 +714,9 @@ class EquipmentCheckService:
 
         total = len(items_data)
         completed = sum(1 for i in items_data if i.get("status") != "not_checked")
-        failed = sum(1 for i in items_data if i.get("status") == "fail")
+        failed = sum(
+            1 for i in items_data if i.get("status") in ("fail", "out_of_service")
+        )
 
         if completed < total:
             overall_status = "incomplete"
@@ -1079,7 +1110,9 @@ class EquipmentCheckService:
             )
         )
         template = result.scalars().first()
-        if not template:
+        # Disabled templates remain available to managers for historical and
+        # editing views, but must not create new operational check records.
+        if not template or not template.is_active:
             raise ValueError("Template not found")
 
         apparatus_id = data.get("apparatus_id") or template.apparatus_id
@@ -1246,6 +1279,10 @@ class EquipmentCheckService:
         for item in all_items:
             if item.is_expired:
                 item.status = "fail"
+            # An item answered "not on truck" has no count to be short of; see
+            # _compute_check_status, which this mirrors.
+            if item.status == "not_applicable":
+                continue
             req_qty = item.required_quantity
             found_qty = item.quantity_found
             if req_qty is not None and found_qty is not None and found_qty < req_qty:
@@ -1253,7 +1290,7 @@ class EquipmentCheckService:
 
         total = len(all_items)
         completed = sum(1 for i in all_items if i.status != "not_checked")
-        failed = sum(1 for i in all_items if i.status == "fail")
+        failed = sum(1 for i in all_items if i.status in ("fail", "out_of_service"))
 
         if completed < total:
             check.overall_status = "incomplete"
@@ -3382,7 +3419,7 @@ class EquipmentCheckService:
             )
             .where(
                 ShiftEquipmentCheck.organization_id == organization_id,
-                ShiftEquipmentCheckItem.status == "fail",
+                ShiftEquipmentCheckItem.status.in_(["fail", "out_of_service"]),
                 ShiftEquipmentCheck.checked_at >= date_from_start,
                 ShiftEquipmentCheck.checked_at <= date_to_end,
             )
@@ -3552,6 +3589,7 @@ class EquipmentCheckService:
             lambda: {
                 "pass_count": 0,
                 "fail_count": 0,
+                "not_applicable_count": 0,
                 "not_checked_count": 0,
             }
         )
@@ -3561,18 +3599,16 @@ class EquipmentCheckService:
             if not check or not check.checked_at:
                 continue
             period_key = check.checked_at.strftime(fmt)
-            if item.status == "pass":
-                buckets[period_key]["pass_count"] += 1
-            elif item.status == "fail":
-                buckets[period_key]["fail_count"] += 1
-            else:
-                buckets[period_key]["not_checked_count"] += 1
+            bucket = self._trend_bucket_for_status(item.status)
+            if bucket:
+                buckets[period_key][bucket] += 1
 
         trends = [
             {
                 "period": k,
                 "pass_count": v["pass_count"],
                 "fail_count": v["fail_count"],
+                "not_applicable_count": v["not_applicable_count"],
                 "not_checked_count": v["not_checked_count"],
             }
             for k, v in sorted(buckets.items())

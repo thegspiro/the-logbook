@@ -70,7 +70,7 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
           )}
           <div>
             <h3 className="text-theme-text-primary font-semibold">{chain.name}</h3>
-            <div className="text-theme-text-secondary mt-0.5 flex items-center gap-2 text-xs">
+            <div className="text-theme-text-secondary mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               <span>{ENTITY_TYPE_LABELS[chain.appliesTo] ?? chain.appliesTo}</span>
               {chain.minAmount != null && (
                 <>
@@ -127,7 +127,7 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
                     {step.stepOrder}
                   </div>
                   <div className="border-theme-surface-border flex-1 rounded border p-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-theme-text-primary text-sm font-medium">{step.name}</span>
                       <span
                         className={`rounded px-1.5 py-0.5 text-xs font-medium ${

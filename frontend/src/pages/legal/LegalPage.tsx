@@ -184,6 +184,7 @@ const LegalPage: React.FC = () => {
     <main
       className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br px-4 pt-[max(3rem,env(safe-area-inset-top))] pb-12 sm:px-6 lg:px-8"
       id="main-content"
+      tabIndex={-1}
     >
       <div className="mx-auto max-w-3xl">
         <nav aria-label="Legal pages">

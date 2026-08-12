@@ -327,12 +327,14 @@ export const inventoryService = {
     itemId: string,
     userId: string,
     quantity: number = 1,
-    issueReason?: string
+    issueReason?: string,
+    overrideAllowance: boolean = false
   ): Promise<ItemIssuance> {
     const response = await api.post<ItemIssuance>(`/inventory/items/${itemId}/issue`, {
       user_id: userId,
       quantity,
       issue_reason: issueReason,
+      override_allowance: overrideAllowance,
     });
     return response.data;
   },

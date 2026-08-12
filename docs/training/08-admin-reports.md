@@ -253,13 +253,19 @@ The **Pipeline Overview** report shows prospect counts per pipeline stage with c
 **Configuring Stage Groups:**
 
 1. Navigate to **Prospective Members > Settings** (`/prospective-members/settings`)
-2. Scroll to the **Report Stage Groups** section
-3. Click **Add Group** to create a grouping (e.g., "Early Stages")
-4. Select which pipeline stages belong to this group (e.g., Application + Interview)
-5. Save
+2. Pick the pipeline, then scroll to the **Report Stage Groups** section
+3. Click **Add Group**. The new group's name is a text field — type it there;
+   there is no separate edit button
+4. Use **+ Add a stage to this group…** to put stages in it. **That dropdown
+   only appears while some stage is still ungrouped**, and it offers only the
+   ungrouped ones, so a stage can never be in two groups at once
+5. **Save**. Nothing is written until you do — adding, renaming and removing
+   all happen locally first
 
-> **Screenshot needed:**
-> _[Screenshot of the ReportStageGroupsEditor showing two configured groups: "Early Stages" containing "Application" and "Interview" stages, and "Final Steps" containing "Background Check" and "Vote" stages. Each group shows the stage count and has edit/delete buttons]_
+Each stage in a group carries its own **Remove**, which returns it to the
+ungrouped pool; the trash icon beside the name removes the whole group.
+
+![The Report Stage Groups editor — three named groups, the stages in each, and the controls that add and remove them](./images/08-72-report-stage-groups.png)
 
 Stage groups with zero prospects are still shown in the report for completeness. Ungrouped stages appear individually.
 
@@ -324,17 +330,37 @@ Connect The Logbook to Salesforce for bidirectional synchronization of members, 
 
 1. Navigate to **Integrations** and find the **Salesforce CRM** card
 2. Click **Connect**
-3. Enter your Salesforce **Instance URL** (e.g., `https://yourorg.salesforce.com`)
+3. Enter your Salesforce **My Domain Instance URL** (e.g., `https://yourorg.my.salesforce.com`)
 4. Enter your Salesforce **Client ID** and **Client Secret** (from a Salesforce Connected App)
-5. The system tests the connection and, on success, saves the integration
+5. Choose one authentication method:
+   - Click **Connect with Salesforce** for interactive authorization; or
+   - For unattended sync, enable **OAuth 2.0 Client Credentials Flow** on the
+     Connected App, select a dedicated least-privilege **Run As** user, and
+     leave the refresh token empty
+6. Run the readiness check and preview before enabling automatic sync
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Integrations page showing the Salesforce CRM card with connection status (Connected/Disconnected), last sync timestamp, and Connect/Disconnect/Sync Now buttons._
+**Field mappings:**
 
-**Configuring field mappings:**
+Mappings are fixed. Member contacts, training records as Tasks, and events all
+map by a built-in scheme; the sync status payload carries a `field_mappings`
+object, but nothing in the application renders or edits it. What you _can_
+choose is the **sync direction** and which **sync types** run, both on the
+connect dialog.
 
-After connecting, configure how Logbook fields map to Salesforce fields. Default mappings cover member contacts, training records as Tasks, and events. You can customize which fields sync and in which direction.
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Salesforce field mapping configuration showing a table with Logbook fields on the left, Salesforce fields on the right, and sync direction dropdowns (Push/Pull/Both)._
+> **Corrected 2026-08-12.** This said "configure how Logbook fields map to
+> Salesforce fields… you can customize which fields sync and in which
+> direction", and its screenshot placeholder asked for a mapping table with
+> per-field direction dropdowns. There is no such screen. Direction is one
+> setting for the whole integration, not one per field.
+>
+> The other retired placeholder here asked for the Salesforce card in a
+> **connected** state with a last-sync timestamp. Salesforce cannot be
+> connected in a demo department at all — `instance_url` has to both match
+> `*.salesforce.com` and resolve in DNS, and an instance host is per-customer.
+> The reasoning, and why seeding a resolvable stand-in would be worse than
+> leaving this unpictured, is in
+> [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md). There is no last-sync
+> timestamp on the card either way.
 
 **Triggering a sync:**
 
@@ -351,9 +377,15 @@ To receive real-time updates from Salesforce:
 
 **Edge Cases:**
 
-- If Salesforce rate limits are hit during a bulk sync, the system pauses and retries with exponential backoff
-- If a member is deleted in Logbook but exists in Salesforce, the behavior depends on your conflict resolution setting
-- OAuth tokens auto-refresh when expired; no manual re-authentication needed
+- Rate-limited requests retry up to three times using Salesforce's
+  `Retry-After` value or bounded exponential backoff
+- A failed later page of a paginated Salesforce query fails the pull rather
+  than applying partial results
+- There is no configurable conflict-resolution policy; `push`, `pull`, or
+  `both` determines which side is allowed to write, and the permitted write
+  that runs last wins
+- Access tokens renew automatically. Client-credentials connections request a
+  new short-lived token without storing the Run As user's password
 
 ---
 
@@ -467,9 +499,6 @@ Scheduled tasks run automatically on a schedule:
 | **Process Scheduled Emails**          | Send pending pipeline automated emails (polls every 60 seconds) _(added 2026-03-13)_ |
 | **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                      |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Scheduled Tasks page showing a list of tasks with name, frequency, last run time, next run time, and enabled toggle switches]_
-
 **Not yet built:** there is no **Administration > Scheduled Tasks** page. The
 tasks above are real and do run — see the in-process runner below — but the
 only way to inspect them is the API: `GET /scheduled/tasks` lists every task
@@ -512,8 +541,11 @@ The Logbook now runs scheduled tasks (shift reminders, notification cleanup, ove
 - Task intervals and enable/disable flags are configured in organization settings
 - Logs appear in the standard backend log output with `[scheduler]` prefix
 
-> **Screenshot needed:**
-> _[Screenshot of the backend container log output showing scheduler task execution lines like "[scheduler] Running shift_reminders... [scheduler] 3 reminders sent"]_
+> **Corrected 2026-08-12.** The screenshot placeholder here asked for the
+> **backend container's log output**. That is a terminal, not a screen this
+> application draws, so there is nothing for the screenshot pipeline to
+> capture. To see these lines, run `docker compose logs -f backend` (or read
+> the process output directly) and filter for the `[scheduler]` prefix.
 
 ### Edge Cases
 
@@ -679,8 +711,12 @@ The following security measures are enforced:
 - **Health endpoint minimized**: `/health` returns only `status` + `ready` (no environment, version, or debug info)
 - **Security headers**: `Referrer-Policy: strict-origin-when-cross-origin`, `X-Permitted-Cross-Domain-Policies: none`
 
-> **Screenshot needed:**
-> _[Screenshot of the security status in the Error Monitor or a dedicated Security Dashboard showing the list of security features with green checkmarks (JWT restriction, file validation, CORS strict, TLS enabled) and any warnings in yellow]_
+> **Corrected 2026-08-12.** There is no Security Dashboard, and the Error
+> Monitor does not show a security-feature checklist — the placeholder here
+> asked for one with green ticks per feature. Nothing in the application
+> reports these settings back to an administrator; the list above is the
+> reference, and each item is verified in the backend test suite rather than
+> on a screen.
 
 > **Edge case:** If your deployment uses a reverse proxy (nginx, Caddy), the `DB_SSL` and `REDIS_SSL` settings refer to the connection between the backend container and the database/Redis container — not the browser-to-server connection. Browser-to-server TLS is handled by the reverse proxy.
 
@@ -991,15 +1027,26 @@ The Medical Screening module tracks health screenings, physicals, drug tests, an
 
 ### Compliance Dashboard
 
-The compliance dashboard shows:
+The **Compliance** tab lists screenings **expiring within 60 days**, soonest
+first — each row naming the member, the requirement, the days remaining and the
+date. Rows inside 30 days are marked in red; the rest are amber. There is no
+separate overdue section: an expired screening sorts to the top of the same
+list, which is where it needs to be read.
 
-- Overall compliance rate by screening type
-- Members with expiring screenings (configurable: 30/60/90 days)
-- Overdue screenings requiring immediate attention
-- Drill-down to individual member compliance details
+Above the tabs, on every tab, sits a count of screenings **expiring within 30
+days** — the shorter horizon, because that is the one worth interrupting
+someone about.
 
-> **Screenshot needed:**
-> _[Screenshot of the ComplianceDashboard showing compliance rate cards for each screening type, a list of expiring screenings with member names and dates, and an overdue screenings alert section]_
+![The medical-screening Compliance tab: the 60-day list, soonest first, under the 30-day count](./images/08-68-compliance-dashboard.png)
+
+> **The tab is addressable.** `/medical-screening?tab=compliance` opens straight
+> onto it, so a link to the compliance list can be sent to a colleague, and the
+> Back button works after a tab change.
+
+Per-screening-type compliance **rates**, and drill-down to an individual
+member's record, are not on this tab. Rates and thresholds are configured under
+**Training → Compliance Configuration** (below); an individual's screenings are
+on the **Records** tab, filtered by member.
 
 ### Edge Cases
 
@@ -1041,8 +1088,27 @@ Profiles allow different compliance standards for different groups:
    - **Threshold overrides** — optionally set different thresholds for this group
 3. Set **priority** — when a member matches multiple profiles, the highest-priority profile applies
 
-> **Screenshot needed:**
-> _[Screenshot of the ComplianceRequirementsConfigPage showing the threshold configuration section at the top, a list of compliance profiles with name, targeted groups, and threshold values, and an "Add Profile" button]_
+![The Profiles tab: each profile with the groups it targets and the requirements it demands](./images/08-70-compliance-profiles.png)
+
+> **Profiles are refused until the thresholds have been saved once.** The tab
+> says so — "Save the compliance thresholds first before creating profiles" —
+> and the trap is that the Thresholds tab _looks_ configured before that save:
+> the numbers it shows are the code's defaults, not a stored row. Open
+> Thresholds, press **Save Configuration**, then come back.
+
+> **Requirements are picked by name, and names repeat.** A department running
+> the same requirement under several programs has several entries with the same
+> name, and the picker shows only the name — so which one a profile got is not
+> recoverable from the screen. Rename the duplicates if that matters to you.
+
+![Compliance requirements configuration: the Thresholds tab, with its status preview and reminder schedule](./images/08-69-compliance-requirements-config.png)
+
+The page carries **four tabs** — Thresholds, Profiles, Auto Reports and Report
+History — so the thresholds and the profile list are separate screens rather
+than one page scrolled. The **Status Preview** strip under the threshold fields
+restates the three bands in the numbers just entered ("Compliant: ≥ 100% · At
+Risk: 75% – 99% · Non-Compliant: < 75%"), which is the quickest way to check a
+change means what was intended before saving it.
 
 ### Automated Reporting
 
@@ -1058,8 +1124,25 @@ Profiles allow different compliance standards for different groups:
 3. Optionally check **Send via email**
 4. The report shows overall compliance rates, per-member status, and trends
 
-> **Screenshot needed:**
-> _[Screenshot of the report generation dialog showing report type selector, send via email checkbox, additional recipients field, and a preview of a generated compliance report with member status table]_
+![Generating a compliance report, and the history it lands in](./images/08-71-compliance-report-history.png)
+
+The form takes a **type**, a **year**, a **month** and an **Email report**
+switch; the additional-recipients field appears once that switch is on.
+Generated reports land in the **Report History** list beneath it, each row
+carrying its period, when it was generated, how long it took, and the headline
+compliance figure.
+
+> **Monthly and annual currently produce the same figures.** A monthly report is
+> generated from the whole year and then labelled with the month — the period
+> label, the stored month and the history row are right, the numbers behind them
+> are the year's. Read a monthly report as a year-to-date one until this is
+> resolved; it is recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+> **0% compliant is not necessarily a fault.** With the compliant threshold at
+> 100% — the default — a member missing one requirement out of the department's
+> whole set counts as non-compliant, so a department that has not tuned its
+> thresholds or built profiles will read 0%. The **At-Risk** band is what
+> separates "nearly there" from "nowhere near".
 
 ---
 
@@ -1119,8 +1202,11 @@ Dark mode and high-contrast mode have been hardened across the application:
 - **Comprehensive dark variants**: Added `dark:` Tailwind variants across 25+ files for icon badges, stat cards, settings UI, form inputs, and table rows
 - **High-contrast support**: Additional high-contrast CSS variants for accessibility compliance
 
-> **Screenshot needed:**
-> _[Screenshot comparing the same page in light mode and dark mode side-by-side, showing a dropdown or overlay with the opaque background correctly rendering in dark mode without content bleeding through]_
+> **Corrected 2026-08-12.** The retired placeholder asked for a **side-by-side
+> composite** of the same page in light and dark mode. That is two screenshots
+> assembled into one image, which the capture pipeline does not do — each shot
+> is one page in one theme. Switch themes with the theme control in the sidebar
+> to compare.
 
 ## UTC Timezone Consistency (2026-03-16)
 
@@ -1243,8 +1329,17 @@ The equipment check template builder received UX improvements:
 - **Save redirect**: Correctly redirects to template list after saving
 - **Input stability**: Fixed inputs losing focus after each keystroke
 
-> **Screenshot needed:**
-> _[Screenshot of the equipment check template builder showing the redesigned layout with a preview panel on the right showing how the check form will appear to members on mobile]_
+**Preview** is a button in the builder's toolbar, and it opens **over** the
+builder rather than beside it: the check form is drawn inside a phone frame,
+because that is what a crew will be holding. Its inputs work, so you can walk
+the form as a member would, and a banner says so — nothing is submitted and no
+check is created. Close it to go back to editing.
+
+![The template builder's Preview — the check form drawn inside a phone frame, as a crew would see it](./images/08-73-template-builder-preview.png)
+
+> **Corrected 2026-08-12.** This described "a preview panel on the right". The
+> preview is a full-screen overlay, not a side panel, and nothing in the
+> builder renders beside the editor.
 
 ## Time Picker Redesign (2026-03-22)
 
@@ -1331,8 +1426,11 @@ This reduces unnecessary API calls and battery drain on mobile devices.
 
 Dark mode appearance is **unchanged** — only light mode received adjustments.
 
-> **Screenshot needed:**
-> _[Screenshot comparison: left shows a status badge with light red text on white background (low contrast, before fix), right shows the same badge with darker red text on white background (high contrast, after fix)]_
+> **Corrected 2026-08-12.** The retired placeholder asked for a **before and
+> after** comparison of the same badge. The "before" is not in the code any
+> more — that is the point of the fix — so it cannot be photographed from a
+> running build, and a composite of two states is not something the capture
+> pipeline produces.
 
 ### Form Accessibility
 
@@ -1512,14 +1610,27 @@ has switches for the contact block and the address block.
 4. Mark one as the department default.
 5. Save.
 
-> **Screenshot needed:**
-> _[Screenshot of the Footers tab showing the three seeded footers in a list with the Internal one marked as default, one expanded to show its lines, the contact/address toggles, and the "N templates use this" count beside each]_
+![The Footers tab: the seeded library, the default marked, and a per-footer usage count](./images/08-64-email-footers-tab.png)
 
 To point a specific template at a specific footer, open that template and choose
-its footer in the editor.
+its footer in the **Closes with** selector. The hint under the control is the
+chosen footer's own description, so the three can be told apart without opening
+the Footers tab.
 
-> **Screenshot needed:**
-> _[Screenshot of the email template editor with the footer selector visible, set to "Public", and the preview pane below showing that footer rendered at the bottom of the message]_
+![The template editor's Closes with selector, set to the Public footer, with that footer's own description under it](./images/08-65-template-footer-selector.png)
+
+> **A template only shows a footer if its body asks for one.** The closing block
+> is delivered as the `{{footer_html}}` variable, so a body that does not contain
+> it renders without a footer no matter what **Closes with** is set to — and the
+> screen gives no sign of that. Most shipped bodies include the variable, but a
+> department that has customised a template, or whose database predates this
+> release, will have bodies that do not: re-seeding never touches a template that
+> already exists by name. If a chosen footer is not appearing, open the body and
+> check for `{{footer_html}}` before looking anywhere else. See
+> `docs/KNOWN_LIMITATIONS.md`.
+
+**Edit and Preview are alternate views of the same panel**, not two halves of one
+screen — choosing a footer and seeing it rendered are two steps, not one.
 
 ### Things worth knowing before you delete one
 
@@ -1555,8 +1666,12 @@ line**:
 | `{{organization_fax}}`                                            | Still expected on official correspondence by some agencies                                                                                                                                  |
 | `{{organization_description}}` `{{organization_type}}`            | Completeness                                                                                                                                                                                |
 
-> **Screenshot needed:**
-> _[Screenshot of the template editor's variable palette expanded on the Organization group, showing the new identifier, tax ID, county and founded-year variables alongside the existing name/phone/address ones]_
+![The Available Variables palette expanded, the organization variables among the rest](./images/08-66-template-variable-palette.png)
+
+The palette is **one flat list per template**, not a set of collapsible groups —
+the organization variables sit among the rest, in the order above. Officer
+signature variables are the exception, and have a panel of their own beneath it
+because they apply to every template rather than to this one.
 
 > **Addresses outside the US keep their last line.** The address composer read
 > every column except country, so a Canadian department's address lost its
@@ -1597,8 +1712,13 @@ They now have real template rows with documented variables and sample data.
 > stylesheet**, so future improvements reach you automatically. Templates whose
 > CSS you _did_ edit are left exactly as they are.
 
-> **Screenshot needed:**
-> _[Screenshot of the email preview pane showing the new white-card-on-grey design — rounded header band, a details table, and the footer — so departments can see what their outgoing mail now looks like]_
+![The rendered preview: the white card on grey, its header band and details table](./images/08-67-email-preview-design.png)
+
+Pictured with **Shift Assignment**, whose body carries `{{footer_html}}` — the
+closing block sits below the details table, off the bottom of this frame. The
+**Sample data** selector above the message swaps in a real member's details, and
+the two small icons beside **Refresh** switch the preview between desktop and
+phone width.
 
 ---
 

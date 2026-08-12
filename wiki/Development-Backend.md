@@ -1,5 +1,10 @@
 # Python Backend Documentation
 
+> **Published copy — not the canonical source.** The maintained original is
+> [`docs/backend/python-backend.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/backend/python-backend.md),
+> and this page may lag behind it. Make content changes there first, then
+> mirror them here.
+
 ## Overview
 
 The backend uses **Python 3.13+ with FastAPI** - a modern, high-performance framework with excellent type safety and automatic API documentation.

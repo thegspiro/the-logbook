@@ -64,6 +64,13 @@ export interface FacilityCreate {
   notes?: string;
 }
 
+export interface FacilityDashboardCounts {
+  totalFacilities: number;
+  operationalFacilities: number;
+  overdueMaintenance: number;
+  upcomingInspections: number;
+}
+
 export interface MaintenanceRecordCreate {
   facility_id: string;
   maintenance_type_id?: string;
@@ -191,14 +198,14 @@ export interface CapitalProject {
   id: string;
   facilityId: string;
   projectType: string;
-  name: string;
+  projectName: string;
   description?: string;
-  status: string;
-  estimatedBudget?: number;
+  projectStatus: string;
+  estimatedCost?: number;
   actualCost?: number;
   startDate?: string;
-  estimatedCompletionDate?: string;
-  actualCompletionDate?: string;
+  estimatedCompletion?: string;
+  actualCompletion?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -206,13 +213,13 @@ export interface CapitalProject {
 export interface CapitalProjectCreate {
   facility_id: string;
   project_type: string;
-  name: string;
+  project_name: string;
   description?: string;
-  status?: string;
-  estimated_budget?: number;
+  project_status?: string;
+  estimated_cost?: number;
   actual_cost?: number;
   start_date?: string;
-  estimated_completion_date?: string;
+  estimated_completion?: string;
 }
 
 export interface InsurancePolicy {
@@ -220,10 +227,10 @@ export interface InsurancePolicy {
   facilityId: string;
   policyType: string;
   policyNumber?: string;
-  provider?: string;
+  carrierName: string;
   coverageAmount?: number;
   deductible?: number;
-  premiumAmount?: number;
+  annualPremium?: number;
   effectiveDate?: string;
   expirationDate?: string;
   createdAt: string;
@@ -234,10 +241,10 @@ export interface InsurancePolicyCreate {
   facility_id: string;
   policy_type: string;
   policy_number?: string;
-  provider?: string;
+  carrier_name: string;
   coverage_amount?: number;
   deductible?: number;
-  premium_amount?: number;
+  annual_premium?: number;
   effective_date?: string;
   expiration_date?: string;
 }
@@ -246,7 +253,7 @@ export interface UtilityAccount {
   id: string;
   facilityId: string;
   utilityType: string;
-  providerName?: string;
+  providerName: string;
   accountNumber?: string;
   meterNumber?: string;
   billingCycle?: string;
@@ -261,7 +268,7 @@ export interface UtilityAccount {
 export interface UtilityAccountCreate {
   facility_id: string;
   utility_type: string;
-  provider_name?: string;
+  provider_name: string;
   account_number?: string;
   meter_number?: string;
   billing_cycle?: string;
@@ -404,9 +411,10 @@ export interface Occupant {
   id: string;
   facilityId: string;
   userId?: string;
-  name?: string;
-  occupantType?: string;
-  startDate?: string;
+  unitName: string;
+  description?: string;
+  contactName?: string;
+  effectiveDate?: string;
   endDate?: string;
   isActive?: boolean;
   createdAt: string;
@@ -415,10 +423,10 @@ export interface Occupant {
 
 export interface OccupantCreate {
   facility_id: string;
-  user_id?: string;
-  name?: string;
-  occupant_type?: string;
-  start_date?: string;
+  unit_name: string;
+  description?: string;
+  contact_name?: string;
+  effective_date?: string;
 }
 
 // ============================================
@@ -465,11 +473,16 @@ export const facilitiesService = {
     facility_type_id?: string;
     status_id?: string;
     is_archived?: boolean;
+    search?: string;
     skip?: number;
     limit?: number;
   }): Promise<Facility[]> {
     const response = await api.get<Facility[]>('/facilities', { params });
     return asArray(response.data);
+  },
+  async getDashboardCounts(): Promise<FacilityDashboardCounts> {
+    const response = await api.get<FacilityDashboardCounts>('/facilities/dashboard-counts');
+    return response.data;
   },
   async getFacility(facilityId: string): Promise<Facility> {
     const response = await api.get<Facility>(`/facilities/${facilityId}`);

@@ -581,7 +581,7 @@ export const EventsPage: React.FC = () => {
               Department events, meetings, training sessions, and more
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {sortedEvents.length > 0 && (
               <button
                 onClick={handleExportCSV}
@@ -1160,7 +1160,7 @@ export const EventsPage: React.FC = () => {
 
       {/* Floating Bulk Action Bar */}
       {selectedEvents.size > 0 && (
-        <div className="bg-theme-surface-modal border-theme-surface-border fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border px-6 py-3 shadow-lg">
+        <div className="bg-theme-surface-modal border-theme-surface-border fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-xl border px-6 py-3 shadow-lg">
           <span className="text-theme-text-primary text-sm font-medium">{selectedEvents.size} selected</span>
           <div className="bg-theme-surface-border h-5 w-px" />
           <button
@@ -1231,7 +1231,7 @@ export const EventsPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <button
                     onClick={handleDownloadTemplate}
                     className="inline-flex items-center gap-1 text-sm text-red-600 hover:underline dark:text-red-400"

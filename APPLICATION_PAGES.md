@@ -229,7 +229,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` |
 | `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` |
 
-> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), a recent activity feed, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. Rooms auto-sync linked Location records for Events and QR check-in. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. Replaces the Locations page when enabled. Locations created through either module are linked via `facility_id` so all event/training location references remain consistent.
+> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
 
 ---
 

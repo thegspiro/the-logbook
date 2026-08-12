@@ -9,10 +9,12 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
 import { useRanks } from '../hooks/useRanks';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const { rankOptions } = useRanks();
   const [isSaving, setIsSaving] = useState(false);
   const [membershipIdPreview, setMembershipIdPreview] = useState<string | null>(null);
@@ -238,9 +240,16 @@ const AddMember: React.FC = () => {
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (Object.values(formData).some((val) => val !== '' && val !== 'active' && val !== 'phone')) {
-      if (confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
+      if (
+        await confirm({
+          title: 'Discard new member?',
+          message: 'All unsaved changes will be lost.',
+          confirmLabel: 'Discard changes',
+          cancelLabel: 'Keep editing',
+        })
+      ) {
         void navigate('/members');
       }
     } else {
@@ -253,9 +262,9 @@ const AddMember: React.FC = () => {
       {/* Header */}
       <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
         <div className="mx-auto max-w-4xl">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center space-x-3">
-              <div className="rounded-lg bg-blue-600 p-2">
+              <div className="shrink-0 rounded-lg bg-blue-600 p-2">
                 <UserPlus className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -264,8 +273,8 @@ const AddMember: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={handleCancel}
-              className="text-theme-text-secondary hover:text-theme-text-primary text-sm transition-colors"
+              onClick={() => void handleCancel()}
+              className="text-theme-text-secondary hover:text-theme-text-primary shrink-0 self-start text-sm transition-colors sm:self-auto"
             >
               ← Back to Members
             </button>
@@ -888,7 +897,7 @@ const AddMember: React.FC = () => {
           <div className="border-theme-surface-border flex items-center justify-between border-t pt-6">
             <button
               type="button"
-              onClick={handleCancel}
+              onClick={() => void handleCancel()}
               disabled={isSaving}
               className="bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary flex items-center space-x-2 rounded-lg px-6 py-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >

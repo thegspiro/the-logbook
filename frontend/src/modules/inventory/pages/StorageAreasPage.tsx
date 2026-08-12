@@ -24,7 +24,7 @@ import {
 import { Link } from 'react-router';
 import { inventoryService, locationsService } from '../../../services/api';
 import type { StorageAreaResponse, StorageAreaCreate, Location, InventoryItem } from '../types';
-import { STORAGE_TYPES, getStatusStyle, getConditionColor } from '../types';
+import { STORAGE_TYPES, getStatusStyle, getStatusLabel, getConditionColor } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
@@ -148,13 +148,11 @@ const ItemsPanel: React.FC<ItemsPanelProps> = ({ areaId, indent }) => {
             </span>
             {item.size && <span className="text-theme-text-muted shrink-0 text-xs">{item.size}</span>}
             <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-xs ${statusStyle}`}>
-              {item.status.replace(/_/g, ' ')}
+              {getStatusLabel(item.status)}
             </span>
             <span className={`shrink-0 text-xs capitalize ${condColor}`}>{item.condition.replace(/_/g, ' ')}</span>
             {item.tracking_type === 'pool' && (
-              <span className="text-theme-text-muted shrink-0 text-xs">
-                qty: {item.quantity - item.quantity_issued}
-              </span>
+              <span className="text-theme-text-muted shrink-0 text-xs">qty: {item.quantity}</span>
             )}
             <ExternalLink className="text-theme-text-muted h-3 w-3 shrink-0 transition-opacity sm:opacity-0 sm:group-hover/item:opacity-100" />
           </Link>
@@ -677,7 +675,7 @@ const StorageAreasPage: React.FC = () => {
               placeholder="Optional description"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="sa-type" className={labelClass}>
                 Storage Type

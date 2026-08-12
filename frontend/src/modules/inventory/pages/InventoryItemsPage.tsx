@@ -66,6 +66,7 @@ import {
   getConditionColor,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 const PAGE_SIZE = 50;
 const SORT_COLS = [
@@ -89,8 +90,11 @@ function qtyLabel(item: InventoryItem): string {
   // manages — the same disagreement the reorder alert had to be taught about.
   if (item.is_lot_stocked) return String(item.lot_stock ?? 0);
   if (item.tracking_type !== 'pool') return '-';
-  const available = item.quantity - item.quantity_issued;
-  return `${available} / ${item.quantity}`;
+  // `quantity` is already the on-hand count — issuing decrements it and a
+  // return adds it back — so the department's total is on-hand *plus* what is
+  // currently out, not the other way round. Subtracting quantity_issued here
+  // counts every issued unit twice and can drive the figure negative.
+  return `${item.quantity} / ${item.quantity + item.quantity_issued}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -316,6 +320,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
 const InventoryItemsPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
 
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -516,7 +521,15 @@ const InventoryItemsPage: React.FC = () => {
   const printLabels = () => void navigate(`/inventory/print-labels?ids=${Array.from(selIds).join(',')}`);
 
   const bulkRetire = async () => {
-    if (!confirm(`Retire ${selIds.size} item(s)? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: 'Retire items',
+        message: `Retire ${selIds.size} item(s)? This cannot be undone.`,
+        confirmLabel: 'Retire',
+        cancelLabel: 'Keep them',
+      }))
+    )
+      return;
     try {
       await Promise.all(Array.from(selIds).map((id) => inventoryService.retireItem(id)));
       toast.success(`${selIds.size} item(s) retired`);

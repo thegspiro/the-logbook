@@ -2146,7 +2146,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <input
               ref={inlineInputRef}
               type="text"
-              className="text-theme-text-primary min-w-0 flex-1 border-b border-blue-400 bg-transparent px-1 text-sm font-medium outline-none"
+              className="text-theme-text-primary focus:ring-theme-focus-ring min-w-0 flex-1 rounded-sm border-b border-blue-400 bg-transparent px-1 text-sm font-medium outline-none focus:ring-2"
               value={inlineEditValue}
               onChange={(e) => setInlineEditValue(e.target.value)}
               onBlur={() => commitInlineEdit(compIdx, itemIdx)}
@@ -2605,7 +2605,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
             <input
               type="text"
-              className="text-theme-text-primary placeholder:text-theme-text-muted min-w-0 flex-1 border-none bg-transparent text-sm font-bold outline-none placeholder:font-normal"
+              className="text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring min-w-0 flex-1 rounded-sm border-none bg-transparent text-sm font-bold outline-none placeholder:font-normal focus:ring-2"
               placeholder="Section heading..."
               value={comp.name}
               onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
@@ -2659,10 +2659,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ref={sortableRef}
         style={sortableStyle}
         {...(sortableAttributes ?? {})}
-        className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border"
+        /* Deliberately not `overflow-hidden`: the quick-add bar is the last
+           thing in the body and its results dropdown is absolutely positioned
+           below it, so a clip here cut the first result in half and hid the
+           rest whatever z-index it carried. Every child sits on the same
+           surface colour as the card, so the rounded corners stay clean
+           without one — the header just rounds its own top corners. */
+        className="border-theme-surface-border bg-theme-surface rounded-lg border"
       >
         {/* Compartment header */}
-        <div className="bg-theme-surface flex items-center gap-1.5 px-2 py-3 sm:gap-2 sm:px-4">
+        <div className="bg-theme-surface flex items-center gap-1.5 rounded-t-lg px-2 py-3 sm:gap-2 sm:px-4">
           <button
             type="button"
             className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
@@ -3264,7 +3270,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   return (
     <div className="pb-16">
       {/* Header */}
-      <div className="mx-auto mb-4 flex max-w-7xl items-center justify-between">
+      <div className="mx-auto mb-4 flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
@@ -3278,7 +3284,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             {isEditing ? `Edit: ${form.name || 'Template'}` : 'New Equipment Check Template'}
           </h1>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
           {isEditing && templateId && (
             <button
               type="button"
@@ -3447,7 +3453,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
                 <button
                   type="button"
@@ -3540,7 +3546,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {stats.totalItems > 0 && (
         <div className="border-theme-surface-border bg-theme-surface/95 pb-safe fixed right-0 bottom-0 left-0 z-40 border-t backdrop-blur-sm">
           <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-1 px-4 py-2 sm:flex-row sm:items-center sm:gap-0">
-            <div className="text-theme-text-muted flex items-center gap-4 text-xs">
+            <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span className="flex items-center gap-1">
                 <Hash className="h-3 w-3" />
                 {stats.compartmentCount} compartment{stats.compartmentCount !== 1 ? 's' : ''}

@@ -35,7 +35,7 @@ export const getFacilitiesRoutes = () => (
       path="/facilities/print-labels"
       element={
         <Suspense fallback={null}>
-          <ProtectedRoute requiredPermission="facilities.view">
+          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
             <FacilityLabelPrintPage />
           </ProtectedRoute>
         </Suspense>
@@ -46,7 +46,9 @@ export const getFacilitiesRoutes = () => (
       path="/facilities/maintenance"
       element={
         <Suspense fallback={null}>
-          <MaintenanceListPage />
+          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
+            <MaintenanceListPage />
+          </ProtectedRoute>
         </Suspense>
       }
     />
@@ -54,7 +56,9 @@ export const getFacilitiesRoutes = () => (
       path="/facilities/inspections"
       element={
         <Suspense fallback={null}>
-          <InspectionsListPage />
+          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
+            <InspectionsListPage />
+          </ProtectedRoute>
         </Suspense>
       }
     />
@@ -63,7 +67,9 @@ export const getFacilitiesRoutes = () => (
       path="/facilities/:id"
       element={
         <Suspense fallback={null}>
-          <FacilityDetailPage />
+          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
+            <FacilityDetailPage />
+          </ProtectedRoute>
         </Suspense>
       }
     />
@@ -72,7 +78,9 @@ export const getFacilitiesRoutes = () => (
       path="/facilities"
       element={
         <Suspense fallback={null}>
-          <FacilitiesDashboard />
+          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
+            <FacilitiesDashboard />
+          </ProtectedRoute>
         </Suspense>
       }
     />

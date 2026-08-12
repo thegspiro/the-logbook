@@ -136,9 +136,9 @@ const ImportInventory: React.FC = () => {
       {/* Header */}
       <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center space-x-3">
-              <div className="rounded-lg bg-blue-600 p-2">
+              <div className="shrink-0 rounded-lg bg-blue-600 p-2">
                 <Upload className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -148,7 +148,7 @@ const ImportInventory: React.FC = () => {
             </div>
             <button
               onClick={() => void navigate('/inventory')}
-              className="text-theme-text-secondary hover:text-theme-text-primary text-sm transition-colors"
+              className="text-theme-text-secondary hover:text-theme-text-primary self-start text-sm transition-colors sm:self-auto"
             >
               &larr; Back to Inventory
             </button>
@@ -367,7 +367,7 @@ const ImportInventory: React.FC = () => {
               </div>
             )}
 
-            <div className="flex items-center justify-center space-x-3">
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 onClick={() => {
                   setFile(null);
