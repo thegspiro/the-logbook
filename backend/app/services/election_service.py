@@ -1822,10 +1822,13 @@ class ElectionService:
         only". A department that votes on paper, which is most volunteer
         departments, never saw a winner declared.
 
-        Each physical ballot carries at most one vote per position, so the
-        largest per-position manual tally is the number of ballots in the box.
-        Summing every manual row instead would multiply the box by the number
-        of positions on the ballot.
+        A physical ballot can select multiple candidates in one position for
+        approval, ranked-choice, and other multi-vote elections. Since paper
+        tallies do not retain ballot-level groupings, use the largest candidate
+        tally as the conservative number of represented paper voters in those
+        elections. Single-choice elections can safely use the largest summed
+        position tally. This cannot incorrectly certify quorum by treating
+        multiple selections on one ballot as multiple voters.
         """
         if election.anonymous_voting:
             identified = {v.voter_hash for v in all_votes if v.voter_hash}
@@ -1833,12 +1836,21 @@ class ElectionService:
             identified = {v.voter_id for v in all_votes if v.voter_id}
 
         manual_by_position: Dict[Optional[str], int] = {}
+        manual_by_candidate: Dict[Tuple[Optional[str], Optional[str]], int] = {}
         for vote in all_votes:
             if getattr(vote, "is_manual", False):
                 manual_by_position[vote.position] = (
                     manual_by_position.get(vote.position, 0) + 1
                 )
-        paper_ballots = max(manual_by_position.values()) if manual_by_position else 0
+                key = (vote.position, vote.candidate_id)
+                manual_by_candidate[key] = manual_by_candidate.get(key, 0) + 1
+        is_single_choice = (
+            getattr(election, "voting_method", "simple_majority")
+            in ("simple_majority", "supermajority")
+            and getattr(election, "max_votes_per_position", 1) == 1
+        )
+        manual_counts = manual_by_position if is_single_choice else manual_by_candidate
+        paper_ballots = max(manual_counts.values()) if manual_counts else 0
 
         return len(identified) + paper_ballots
 

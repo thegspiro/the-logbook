@@ -255,6 +255,11 @@ class SkillTestUpdate(BaseModel):
     # previous last-write-wins behavior; send it to be refused with 409 rather
     # than silently overwriting a concurrent edit.
     expected_version: Optional[int] = None
+    # Set once by the examiner screen when scoring is picked up again on a test
+    # that already had time on the clock. Increments resume_count server-side;
+    # the client cannot set the count directly, so a replayed save cannot
+    # inflate it beyond one per pickup.
+    resumed: Optional[bool] = None
 
 
 class SkillTestCandidateResponse(BaseModel):
@@ -401,6 +406,15 @@ class SkillTestResponse(UTCResponseBase):
     returned_by_name: Optional[str] = None
     return_reason: Optional[str] = None
     return_count: int = 0
+
+    # How many times scoring was picked up again after the screen was left.
+    resume_count: int = 0
+    # Derived: whether the recorded duration is a trustworthy stopwatch reading.
+    # False once a test has been resumed — the clock counts on from the last
+    # save, so time before the interruption is missing and time spent getting
+    # back in is not. Sent rather than left to each client to infer, so the
+    # scorecard, the printed record and the export cannot disagree about it.
+    timing_verified: bool = True
 
     # Validation trail — an official result counts only once a training officer
     # signs it off. Unset while a member-run test awaits review; set in the same

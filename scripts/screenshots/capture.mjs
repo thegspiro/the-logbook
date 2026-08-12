@@ -34,6 +34,12 @@ const REPO_ROOT = resolve(HERE, "..", "..");
 const OUTPUT_DIR = resolve(REPO_ROOT, "docs", "training", "images");
 const BASE_URL = process.env.SCREENSHOT_BASE_URL || "http://localhost:3000";
 
+if (!DEMO_CREDENTIALS.password) {
+  throw new Error(
+    "SCREENSHOT_ADMIN_PASSWORD must be set to the password used during bootstrap",
+  );
+}
+
 const run = promisify(execFile);
 
 /**

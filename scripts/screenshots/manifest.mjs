@@ -39,8 +39,8 @@
  */
 
 export const DEMO_CREDENTIALS = {
-  username: "chief",
-  password: "DemoP@ssw0rd!2026",
+  username: process.env.SCREENSHOT_ADMIN_USERNAME || "chief",
+  password: process.env.SCREENSHOT_ADMIN_PASSWORD,
 };
 
 /**
