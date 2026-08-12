@@ -31,6 +31,12 @@ export default defineConfig({
     versionJsonPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registration lives in src/utils/serviceWorkerUpdate.ts instead of the
+      // plugin's injected registerSW.js, because it must pass
+      // `updateViaCache: 'none'` — otherwise importScripts (push-sw.js) is
+      // fetched through the HTTP cache during SW update checks, and devices
+      // holding a stale long-lived cache entry never pick up changes to it.
+      injectRegister: null,
       includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
       workbox: {
         // Web Push handlers. Kept as a separate plain-JS file so the build can

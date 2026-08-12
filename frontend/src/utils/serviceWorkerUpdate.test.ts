@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { nudgeServiceWorkerUpdate, activateFreshServiceWorker, reloadForNewVersion } from './serviceWorkerUpdate';
+import {
+  nudgeServiceWorkerUpdate,
+  activateFreshServiceWorker,
+  reloadForNewVersion,
+  registerServiceWorker,
+} from './serviceWorkerUpdate';
 
 /**
  * jsdom has no navigator.serviceWorker, so each test that needs one installs
@@ -8,6 +13,7 @@ import { nudgeServiceWorkerUpdate, activateFreshServiceWorker, reloadForNewVersi
  */
 class MockServiceWorkerContainer extends EventTarget {
   getRegistration = vi.fn();
+  register = vi.fn();
 }
 
 interface MockRegistration {
@@ -135,6 +141,53 @@ describe('activateFreshServiceWorker', () => {
     installContainer(registration);
 
     await expect(activateFreshServiceWorker(10_000)).resolves.toBeUndefined();
+  });
+});
+
+describe('registerServiceWorker', () => {
+  afterEach(() => {
+    removeContainer();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('does nothing outside production builds', () => {
+    const container = installContainer(undefined);
+
+    registerServiceWorker(); // import.meta.env.PROD is false under vitest
+
+    expect(container.register).not.toHaveBeenCalled();
+  });
+
+  it('registers /sw.js with updateViaCache none in production', () => {
+    vi.stubEnv('PROD', true);
+    const container = installContainer(undefined);
+    container.register.mockResolvedValue(undefined);
+
+    registerServiceWorker(); // jsdom documents are already 'complete'
+
+    expect(container.register).toHaveBeenCalledExactlyOnceWith('/sw.js', {
+      scope: '/',
+      updateViaCache: 'none',
+    });
+  });
+
+  it('waits for window load when the document is still loading', () => {
+    vi.stubEnv('PROD', true);
+    const container = installContainer(undefined);
+    container.register.mockResolvedValue(undefined);
+    Object.defineProperty(document, 'readyState', { value: 'loading', configurable: true });
+
+    registerServiceWorker();
+    expect(container.register).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event('load'));
+    expect(container.register).toHaveBeenCalledExactlyOnceWith('/sw.js', {
+      scope: '/',
+      updateViaCache: 'none',
+    });
+
+    Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true });
   });
 });
 
