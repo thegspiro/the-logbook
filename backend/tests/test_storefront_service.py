@@ -686,6 +686,17 @@ class TestPayments:
         assert waived.status == StoreOrderStatus.PAID
         # No money moved, so the rollup must not invent revenue.
         assert waived.amount_paid == Decimal("0.00")
+        # A waiver settles the debt without turning it into collected revenue.
+        assert (
+            await service.mark_order_paid(
+                order.id, org.id, str(officer.id), notify_member=False
+            )
+            == waived
+        )
+        bulk = await service.bulk_mark_paid(
+            org.id, [order.id], str(officer.id), notify_members=False
+        )
+        assert bulk == {"updated": 0, "skipped": 1, "errors": []}
         summary = await service.get_window_summary(window.id, org.id)
         assert summary["collected"] == Decimal("0.00")
         assert summary["gross_sales"] == Decimal("45.00")

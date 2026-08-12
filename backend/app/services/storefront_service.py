@@ -1758,11 +1758,12 @@ class StorefrontService:
             actor_id, order.user_id, action="mark paid", record="order"
         )
 
-        balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
-        if balance <= 0:
+        if _is_settled(order):
             # Already settled (or waived) — not an error, just nothing to do,
             # so a bulk run over a mixed selection doesn't fail on it.
             return order
+
+        balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
 
         return await self.record_payment(
             order_id,
@@ -1853,10 +1854,7 @@ class StorefrontService:
                 before = await self.get_order(order_id, organization_id)
                 if before is None:
                     raise ValueError("Order not found")
-                balance = _money(
-                    Decimal(before.total or 0) - Decimal(before.amount_paid or 0)
-                )
-                if balance <= 0:
+                if _is_settled(before):
                     skipped += 1
                     continue
                 await self.mark_order_paid(

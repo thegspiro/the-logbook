@@ -336,6 +336,17 @@ class TestWindowNotices:
 
 
 class TestEveryNoticeIsWellFormed:
+    async def test_waived_order_update_does_not_request_payment(self):
+        service = StorefrontNotificationService(None)
+        order = _order(payment_status=StorePaymentStatus.WAIVED)
+
+        await service.send_order_update(order, "Payment waived.", _settings(), _org())
+
+        body = _last()["html_body"]
+        assert "Payment waived." in body
+        assert "Balance due" not in body
+        assert "Pay with" not in body
+
     async def test_each_one_carries_a_subject_a_body_and_a_text_alternate(self):
         service = StorefrontNotificationService(None)
         org, settings = _org(), _settings()
