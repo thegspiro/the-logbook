@@ -1036,11 +1036,14 @@ class ElectionService:
         if not eligibility.is_eligible:
             return None, eligibility.reason or "You are not eligible to vote"
 
-        # Get election for further checks
+        # Serialize vote validation and insertion for this election. The
+        # method-aware dedup hash permits distinct candidates/ranks, so its
+        # unique constraint cannot enforce per-voter limits by itself.
         result = await self.db.execute(
             select(Election)
             .where(Election.id == str(election_id))
             .where(Election.organization_id == str(organization_id))
+            .with_for_update()
         )
         election = result.scalar_one_or_none()
 
