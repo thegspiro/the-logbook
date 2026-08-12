@@ -7043,6 +7043,40 @@ export const SHOTS = [
     selector: "aside, nav",
   },
   {
+    id: "09-21-my-skill-test-results",
+    doc: "09-skills-testing.md",
+    line: 693,
+    anchor:
+      "Screenshot of the My Training page's \"Skills Tests\" section showing the member's own results",
+    alt: "The member's own skill test results on My Training — official attempts badged PASS or FAIL with their dates, and a practice attempt badged Practice",
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      // The section is collapsed by default, so it has to be opened before
+      // there is anything to photograph.
+      await page
+        .getByRole("button", { name: /Skills Tests/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(1200);
+      // Clipped to the first handful of rows. The demo member carries fifty-odd
+      // identical passes from other seeding, and the whole section runs to
+      // ~3700px — the recent, varied results are all at the top.
+      await page.evaluate(() => {
+        const heading = [...document.querySelectorAll("button")].find((b) =>
+          b.textContent?.includes("Skills Tests"),
+        );
+        const section = heading?.parentElement;
+        if (section instanceof HTMLElement) {
+          section.style.maxHeight = "320px";
+          section.style.overflow = "hidden";
+        }
+      });
+      await page.waitForTimeout(300);
+    },
+    selector: "div:has(> button:has-text('Skills Tests'))",
+  },
+  {
     id: "02-105-program-enrollment-progress",
     doc: "02-training.md",
     line: 2139,

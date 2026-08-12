@@ -690,8 +690,14 @@ What appears there is governed by the department's disclosure settings — see
 [Who Sees a Result](#who-sees-a-result--disclosure-settings-2026-08-08). A result
 the department does not share is simply absent from the list.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the My Training page's "Skills Tests" section showing three rows — two official results with PASS/FAIL badges and dates, one badged "Practice" — each linking to a read-only detail view]_
+Each row carries the template name, the examiner and the date, and its outcome
+on the right — **Passed** or **Failed**. A practice attempt is badged
+**Practice**. A test still waiting on an officer is badged **Awaiting
+validation** and reads **Under review** instead of an outcome: a result scored
+by a peer is not shown to the member until it has been validated, so a member
+may know an attempt happened before they are told how it went.
+
+![The member's own skill test results on My Training — official attempts badged PASS or FAIL with their dates, and a practice attempt badged Practice](./images/09-21-my-skill-test-results.png)
 
 ### A completed scorecard is frozen _(2026-08-08)_
 

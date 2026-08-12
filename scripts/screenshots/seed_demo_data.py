@@ -7085,6 +7085,138 @@ class Seeder:
         )
         return peer.post(f"/training/skills-testing/tests/{test_id}/complete")
 
+    def seed_skill_test_result_mix(
+        self,
+        base_url: str,
+        templates: list[dict],
+        members: list[dict],
+    ) -> dict | None:
+        """Give the demo member a failed official test and a practice one.
+
+        Every seeded skill test passed and none was practice, so the member's
+        Skills Tests list on My Training was 51 identical PASS rows — it could
+        not show what a failure looks like, and the Practice badge existed only
+        in the code. Both states are what the list is *for*: a practice attempt
+        never counts, and a failure is the case a member most needs to find.
+
+        A test fails on a **required** criterion, not on any miss: the existing
+        seeding deliberately drops one non-required criterion and still passes
+        overall, which is why that test cannot be reused for this.
+        """
+        published = [t for t in templates if pick(t, "status") == "published"]
+        candidate = next(
+            (m for m in members if m.get("username") == DEMO_MEMBER_USERNAME), None
+        )
+        examiner = next(
+            (m for m in members if m.get("username") == DEMO_PEER_EXAMINER_USERNAME),
+            None,
+        )
+        if not published or not candidate or not examiner:
+            return None
+
+        existing = items(self.api.get("/training/skills-testing/tests"), "tests")
+        candidate_id = pick(candidate, "id")
+        mine = [t for t in existing if pick(t, "candidate_id") == candidate_id]
+        # Idempotent on the two states, not on a count: a re-run must not keep
+        # adding failures to the member's record.
+        needs_practice = not any(pick(t, "is_practice") for t in mine)
+        needs_failure = not any(
+            pick(t, "result") == "fail" and not pick(t, "is_practice") for t in mine
+        )
+        if not needs_practice and not needs_failure:
+            return None
+
+        peer = self.member_session(
+            base_url, pick(examiner, "id"), DEMO_PEER_EXAMINER_USERNAME
+        )
+        template_id = pick(published[0], "id")
+
+        created = None
+        for is_practice, should_fail, note in (
+            (True, False, "Practice run before the formal attempt."),
+            (False, True, "Missed a required step; rebooked for a retest."),
+        ):
+            if is_practice and not needs_practice:
+                continue
+            if not is_practice and not needs_failure:
+                continue
+            created = self._score_skill_test(
+                peer, template_id, candidate_id, is_practice, should_fail, note
+            )
+        return created
+
+    def _score_skill_test(
+        self,
+        peer: Api,
+        template_id: str,
+        candidate_id: str,
+        is_practice: bool,
+        should_fail: bool,
+        note: str,
+    ) -> dict | None:
+        """Create, score and complete one skill test."""
+        test = peer.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": candidate_id,
+                "is_practice": is_practice,
+                "notes": note,
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        # Scored against the snapshot frozen on the test, not the live template.
+        detail = peer.get(f"/training/skills-testing/tests/{test_id}")
+        sections = detail.get("template_sections") or []
+        failed_one = False
+        section_results = []
+        for si, section in enumerate(sections):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if (
+                    not isinstance(criterion, dict)
+                    or criterion.get("type") == "statement"
+                ):
+                    continue
+                # The first *required* criterion is the one dropped, because a
+                # miss on an optional one leaves the test passing overall.
+                miss = (
+                    should_fail and not failed_one and bool(criterion.get("required"))
+                )
+                if miss:
+                    failed_one = True
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": criterion.get("label", ""),
+                        "passed": not miss,
+                        "score": 0 if miss else criterion.get("max_score", 1),
+                        "notes": "Not demonstrated to standard." if miss else None,
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+
+        peer.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 291 if is_practice else 358,
+            },
+        )
+        return peer.post(f"/training/skills-testing/tests/{test_id}/complete")
+
     def seed_test_viewer(self, members: list[dict]) -> dict | None:
         """One named viewer on one test, so the Viewers panel is not empty.
 
@@ -9436,6 +9568,10 @@ class Seeder:
             ),
         )
         self.step("skills test viewer", lambda: self.seed_test_viewer(members))
+        self.step(
+            "skills test result mix",
+            lambda: self.seed_skill_test_result_mix(self.base_url, templates, members),
+        )
         inventory = self.step("inventory", lambda: self.seed_inventory(stations)) or {}
         self.step(
             "inventory operations",
