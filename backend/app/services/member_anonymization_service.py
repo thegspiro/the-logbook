@@ -25,7 +25,8 @@ docs/COMPLIANCE.md):
 - candidates.photo_url (second copy of the member photo). Candidate names
   are official election records and are retained.
 - The member's original prospective-member record (linked via
-  transferred_user_id): full PII block, notes, interview assessments.
+  transferred_user_id): full PII block, notes, interview assessments,
+  prospect-linked medical results, and the source form submission.
 
 What is deliberately NOT touched:
 - audit_logs — append-only and hash-chained; rewriting them is tampering.
@@ -46,6 +47,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import EventRSVP
+from app.models.forms import FormSubmission
 from app.models.inventory import MemberSizePreferences
 from app.models.medical_screening import ScreeningRecord
 from app.models.meeting import MeetingAttendee
@@ -221,7 +223,10 @@ class MemberAnonymizationService:
         counts["candidate_photos_scrubbed"] = result.rowcount or 0
 
         # --- original applicant record ---------------------------------
-        counts["prospect_records_scrubbed"] = await self._scrub_prospect(user, token)
+        prospect_counts = await self._scrub_prospect(user, token)
+        counts["prospect_records_scrubbed"] = prospect_counts["prospects"]
+        counts["screening_records_scrubbed"] += prospect_counts["screenings"]
+        counts["form_submissions_scrubbed"] = prospect_counts["form_submissions"]
 
         await self.db.flush()
         return {
@@ -230,7 +235,7 @@ class MemberAnonymizationService:
             **counts,
         }
 
-    async def _scrub_prospect(self, user: User, token: str) -> int:
+    async def _scrub_prospect(self, user: User, token: str) -> dict[str, int]:
         """Scrub the applicant-era copy of the member's PII."""
         result = await self.db.execute(
             select(ProspectiveMember).where(
@@ -239,7 +244,41 @@ class MemberAnonymizationService:
             )
         )
         prospects = result.scalars().all()
+        screenings_scrubbed = 0
+        form_submissions_scrubbed = 0
         for prospect in prospects:
+            result = await self.db.execute(
+                update(ScreeningRecord)
+                .where(ScreeningRecord.prospect_id == prospect.id)
+                .values(
+                    result_summary=None,
+                    result_data=None,
+                    notes=None,
+                    provider_name=None,
+                )
+            )
+            screenings_scrubbed += result.rowcount or 0
+
+            if prospect.form_submission_id:
+                result = await self.db.execute(
+                    update(FormSubmission)
+                    .where(
+                        FormSubmission.id == prospect.form_submission_id,
+                        FormSubmission.organization_id == user.organization_id,
+                    )
+                    .values(
+                        data={},
+                        submitter_name=None,
+                        submitter_email=None,
+                        submitted_by=None,
+                        ip_address=None,
+                        user_agent=None,
+                        integration_result=None,
+                    )
+                )
+                form_submissions_scrubbed += result.rowcount or 0
+                prospect.form_submission_id = None
+
             prospect.first_name = "Former"
             prospect.last_name = f"Member-{token[:8]}"
             prospect.email = f"anon-{token}@anonymized.invalid"
@@ -280,4 +319,8 @@ class MemberAnonymizationService:
                     ProspectDocument.prospect_id == prospect.id
                 )
             )
-        return len(prospects)
+        return {
+            "prospects": len(prospects),
+            "screenings": screenings_scrubbed,
+            "form_submissions": form_submissions_scrubbed,
+        }
