@@ -23,20 +23,21 @@ from app.api.prospect_privacy import get_hidden_prospect_ids
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
-from app.services.label_service import LabelService, required_permission_for_module
+from app.services.label_service import LabelService, required_permissions_for_module
 
 router = APIRouter()
 
 
 def _authorize_module(current_user: User, module: str) -> None:
-    """404 for unknown modules, 403 when the caller lacks the module's view
-    permission."""
-    permission = required_permission_for_module(module)
-    if permission is None:
+    """404 for unknown modules, 403 when the caller holds none of the module's
+    accepted permissions (view or manage — OR logic, like module endpoints)."""
+    permissions = required_permissions_for_module(module)
+    if permissions is None:
         raise HTTPException(
             status_code=404, detail=f"Labels are not available for module: {module}"
         )
-    if not _has_permission(permission, _collect_user_permissions(current_user)):
+    user_permissions = _collect_user_permissions(current_user)
+    if not any(_has_permission(p, user_permissions) for p in permissions):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
 
