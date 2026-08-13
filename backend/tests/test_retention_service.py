@@ -130,6 +130,25 @@ class TestRetentionEnforcement:
 
         assert await _count_messages(db_session, org) == 1
 
+    @pytest.mark.parametrize(
+        "malformed_retention",
+        [[], {"message_history": {}}],
+    )
+    async def test_malformed_settings_do_not_stop_enforcement(
+        self, db_session, malformed_retention
+    ):
+        malformed_org = await _make_org(db_session)
+        malformed_org.settings = {"retention": malformed_retention}
+        later_org = await _make_org(db_session)
+        await _make_message(db_session, malformed_org, age_days=120)
+        await _make_message(db_session, later_org, age_days=120)
+
+        result = await RetentionService(db_session).enforce()
+
+        assert await _count_messages(db_session, malformed_org) == 0
+        assert await _count_messages(db_session, later_org) == 0
+        assert result["orgs_processed"] >= 2
+
     async def test_only_class_restricts_scope(self, db_session):
         org = await _make_org(db_session)
         await _make_message(db_session, org, age_days=120)
