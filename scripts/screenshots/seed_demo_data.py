@@ -553,6 +553,23 @@ MEMBERS = [
 # from it silently enrolled nobody the moment the ranks were corrected.
 RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 
+# Members whose `membership_type` is administrative rather than active.
+#
+# Every seeded member used to be `active`, which made the whole
+# administrative/operational distinction invisible: the conversion modal offers
+# "Administrative — Non-operational support role" as one of two choices, and
+# election ballot items can restrict `eligible_voter_types`, but with one
+# membership type on file a restriction either skips nobody or skips everybody.
+# `14-elections.md` documents a send that reports how many were skipped and why,
+# and it could not be photographed at all.
+#
+# Two, and deliberately two nobody photographs: no shot in `manifest.mjs`
+# mentions either name, so giving them a different membership type cannot
+# silently change an image that is already verified. Flipping existing members
+# rather than adding new ones also keeps "Members on file" at 22, which several
+# captured images state outright.
+ADMINISTRATIVE_USERNAMES = {"jwhitfield", "bhollis"}
+
 # Riding positions in the order a crew fills them. Sliced to a shift's minimum
 # staffing, so a four-person engine asks for an officer, a driver and two
 # firefighters while a two-person brush truck asks for an officer and a driver.
@@ -838,6 +855,33 @@ class Seeder:
                         f"/users/{pick(current, 'id')}/profile", {"rank": rank}
                     )
                     current["rank"] = rank
+                # Same reason as the rank repair above: a member created before
+                # ADMINISTRATIVE_USERNAMES existed keeps `active`, and the
+                # seeder never revisits a user it did not create.
+                wanted_type = (
+                    "administrative" if username in ADMINISTRATIVE_USERNAMES else None
+                )
+                if (
+                    wanted_type
+                    and pick(current, "membership_type") != wanted_type
+                    and pick(current, "id")
+                ):
+                    # `/users/{id}/profile` is the wrong route for this and
+                    # says nothing about it: `UserUpdate` has no
+                    # `membership_type` field, so the PATCH is accepted and the
+                    # value dropped. The tier change has its own endpoint,
+                    # which also validates against the configured tiers.
+                    try:
+                        self.api.patch(
+                            f"/users/{pick(current, 'id')}/membership-type",
+                            {
+                                "membership_type": wanted_type,
+                                "reason": ("Moved to non-operational support role."),
+                            },
+                        )
+                        current["membership_type"] = wanted_type
+                    except ApiError as exc:
+                        self.blocked.append(f"membership type: {exc}")
                 continue
             record = self.api.post(
                 "/users",
@@ -850,6 +894,11 @@ class Seeder:
                     "phone": f"(703) 555-{2000 + index:04d}",
                     "mobile": f"(703) 555-{3000 + index:04d}",
                     "rank": rank,
+                    "membership_type": (
+                        "administrative"
+                        if username in ADMINISTRATIVE_USERNAMES
+                        else "active"
+                    ),
                     "hire_date": str(TODAY - timedelta(days=365 * (2 + index % 12))),
                     "address_street": f"{100 + index * 7} Sycamore Lane",
                     "address_city": "Oakville",
@@ -8190,6 +8239,7 @@ class Seeder:
         self._seed_nominations(elections)
         self._seed_closed_election(elections, minutes or [])
         self._seed_open_election(elections)
+        self._seed_restricted_election(elections)
         self._seed_membership_vote_election(elections)
         self._seed_runoff_chain(elections)
         self._seed_saved_ballot_template()
@@ -8456,6 +8506,69 @@ class Seeder:
             )
         except ApiError as exc:
             self.blocked.append(f"membership vote election: {exc}")
+
+    RESTRICTED_ELECTION_TITLE = "Operations Committee Seat — Restricted Ballot"
+
+    def _seed_restricted_election(self, elections: list[dict]) -> None:
+        """An open election whose ballot is closed to administrative members.
+
+        `14-elections.md` documents a send that reports how many ballots went
+        out and names the members it skipped. Producing a *partial* skip needs
+        two membership types on file and an item that admits only one of them —
+        `ADMINISTRATIVE_USERNAMES` supplies the first, this supplies the second.
+        Sending skips exactly those two, with the reason the service generates:
+        "Requires voter type(s): operational; member has: administrative".
+
+        The restriction is set at creation because an open election refuses
+        ballot edits — "Only end_date can be updated while voting is active" —
+        which is correct, since a cast vote references an item id.
+        """
+        if any(pick(e, "title") == self.RESTRICTED_ELECTION_TITLE for e in elections):
+            return
+        try:
+            election = self.api.post(
+                "/elections",
+                {
+                    "title": self.RESTRICTED_ELECTION_TITLE,
+                    "description": (
+                        "Seat on the operations committee. Operational members "
+                        "only; administrative members do not vote on it."
+                    ),
+                    "election_type": "issue",
+                    "ballot_items": [
+                        {
+                            "id": "item-ops-committee",
+                            "type": "general_vote",
+                            "title": "Operations Committee Seat",
+                            "description": (
+                                "Shall the committee seat be filled by "
+                                "appointment for the remainder of the term?"
+                            ),
+                            "vote_type": "approval",
+                            "eligible_voter_types": ["operational"],
+                        }
+                    ],
+                    "start_date": iso(NOW - timedelta(hours=2)),
+                    "end_date": iso(NOW + timedelta(days=4)),
+                    "anonymous_voting": True,
+                    "allow_write_ins": False,
+                    "results_visible_immediately": False,
+                    "voting_method": "simple_majority",
+                    "victory_condition": "majority",
+                    "quorum_type": "none",
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"restricted election: {exc}")
+            return
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+        try:
+            self.api.post(f"/elections/{election_id}/open")
+        except ApiError as exc:
+            self.blocked.append(f"open restricted election: {exc}")
+        elections.append(self.api.get(f"/elections/{election_id}"))
 
     def _seed_open_election(self, elections: list[dict]) -> None:
         """An election actually taking votes, so the member ballot can be shown.
