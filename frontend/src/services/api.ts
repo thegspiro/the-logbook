@@ -198,6 +198,7 @@ export type {
   TrainingSessionCreate,
   ErrorLogRecord,
   ErrorLogStats,
+  ErrorCodeEntry,
   AuditLogEntry,
   AuditLogListResponse,
   AuditLogStats,

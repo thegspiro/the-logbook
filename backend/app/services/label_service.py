@@ -10,8 +10,8 @@ One place to:
   :class:`~app.utils.label_renderer.LabelSpec` objects.
 
 Each module is registered in :data:`MODULE_LABELS` with the builder and the
-view permission required to print it. The actual PDF rendering is shared
-(:mod:`app.utils.label_renderer`).
+permissions accepted to print it (the module's view or manage grant). The
+actual PDF rendering is shared (:mod:`app.utils.label_renderer`).
 """
 
 import copy
@@ -149,13 +149,18 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
     return specs, 0
 
 
-# module -> (view permission required to print, spec builder)
-MODULE_LABELS: Dict[str, Tuple[str, SpecBuilder]] = {
-    "inventory": ("inventory.view", _build_inventory_specs),
-    "apparatus": ("apparatus.view", _build_apparatus_specs),
-    "prospective_members": ("prospective_members.view", _build_prospect_specs),
-    "facilities": ("facilities.view", _build_facility_specs),
-    "membership": ("members.view", _build_member_specs),
+# module -> (permissions accepted to print (any-of), spec builder).
+# `permission_matches` does not treat manage as implying view, so both are
+# listed explicitly — mirroring how module endpoints pair view/manage.
+MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
+    "inventory": (("inventory.view", "inventory.manage"), _build_inventory_specs),
+    "apparatus": (("apparatus.view", "apparatus.manage"), _build_apparatus_specs),
+    "prospective_members": (
+        ("prospective_members.view", "prospective_members.manage"),
+        _build_prospect_specs,
+    ),
+    "facilities": (("facilities.view", "facilities.manage"), _build_facility_specs),
+    "membership": (("members.view", "members.manage"), _build_member_specs),
 }
 
 
@@ -163,7 +168,8 @@ def is_known_label_module(module: str) -> bool:
     return module in MODULE_LABELS
 
 
-def required_permission_for_module(module: str) -> Optional[str]:
+def required_permissions_for_module(module: str) -> Optional[Tuple[str, ...]]:
+    """Permissions accepted (any-of) to use label endpoints for *module*."""
     entry = MODULE_LABELS.get(module)
     return entry[0] if entry else None
 

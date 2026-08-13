@@ -24,6 +24,7 @@ import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { hasAdministrationAccess } from './adminNavigation';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -203,7 +204,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Scan Member ID', path: '/members/scan', anyPermission: ['users.view', 'members.manage'] },
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
               DIV,
-              { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
+              { label: 'Manage Events', path: '/events', permission: 'events.manage' },
               ...(isModuleOn('training')
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
@@ -215,11 +216,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 : []),
               { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
               DIV,
-              ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.view' }] : []),
+              ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.manage' }] : []),
               ...(isModuleOn('integrations')
                 ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }]
                 : []),
-              ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports' }] : []),
+              ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports', permission: 'reports.view' }] : []),
               DIV,
               { label: 'Organization', path: '/settings', permission: 'settings.manage' },
               { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },

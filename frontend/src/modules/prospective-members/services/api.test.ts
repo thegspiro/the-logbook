@@ -38,6 +38,15 @@ function makeStepProgress(
   };
 }
 
+/** step_progress whose nested step carries a specific sort_order. */
+function makeStepProgressAt(
+  sortOrder: number,
+  overrides: Partial<BackendStepProgressResponse> & { id: string; step_id: string; status: StepProgressStatus }
+): BackendStepProgressResponse {
+  const progress = makeStepProgress(overrides);
+  return progress.step ? { ...progress, step: { ...progress.step, sort_order: sortOrder } } : progress;
+}
+
 /** Helper to build a minimal BackendProspectResponse */
 function makeProspectResponse(stepProgress: BackendStepProgressResponse[]): BackendProspectResponse {
   return {
@@ -99,6 +108,51 @@ describe('mapProspectToApplicant', () => {
     const applicant = mapProspectToApplicant(response);
 
     expect(applicant.current_stage_config).toEqual({ required_count: 2 });
+  });
+
+  it('orders stage_history by the step sort_order, not the API order', () => {
+    // The API returns step_progress in whatever order the database hands it
+    // over. The drawer draws stage_history as a left-to-right progress track,
+    // so an unsorted list pictured an applicant's pipeline running out of
+    // order — Background & Medical first, Application Received fourth.
+    const stepProgress = [
+      makeStepProgressAt(3, { id: 'sp-c', step_id: 'step-c', status: StepProgressStatus.IN_PROGRESS }),
+      makeStepProgressAt(1, {
+        id: 'sp-a',
+        step_id: 'step-a',
+        status: StepProgressStatus.COMPLETED,
+        completed_at: '2026-01-02T00:00:00Z',
+      }),
+      makeStepProgressAt(2, {
+        id: 'sp-b',
+        step_id: 'step-b',
+        status: StepProgressStatus.COMPLETED,
+        completed_at: '2026-01-03T00:00:00Z',
+      }),
+    ];
+
+    const result = mapProspectToApplicant(makeProspectResponse(stepProgress));
+
+    expect(result.stage_history.map((entry) => entry.stage_id)).toEqual(['step-a', 'step-b', 'step-c']);
+  });
+
+  it('carries the progress status through, not just the completion stamp', () => {
+    // The drawer ticks a stage and counts it as completed from this field
+    // rather than from completed_at, because a stamp outlives the completion
+    // it recorded — regress used to leave one behind on a stage the applicant
+    // had been moved back onto.
+    const stepProgress = [
+      makeStepProgressAt(0, {
+        id: 'sp-1',
+        step_id: 'step-1',
+        status: StepProgressStatus.IN_PROGRESS,
+        completed_at: '2026-01-02T00:00:00Z',
+      }),
+    ];
+
+    const result = mapProspectToApplicant(makeProspectResponse(stepProgress));
+
+    expect(result.stage_history[0]?.status).toBe(StepProgressStatus.IN_PROGRESS);
   });
 
   it('excludes PENDING steps from stage_history', () => {

@@ -27,6 +27,7 @@ import { useApparatusStore } from '../store/apparatusStore';
 import { StatusBadge } from '../components/StatusBadge';
 import { ApparatusTypeBadge } from '../components/ApparatusTypeBadge';
 import { formatNumber } from '../../../utils/dateFormatting';
+import { useAuthStore } from '../../../stores/authStore';
 
 export const ApparatusListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -35,6 +36,10 @@ export const ApparatusListPage: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [showArchived, setShowArchived] = useState(false);
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canManage = checkPermission('apparatus.manage');
+  const canCreate = canManage || checkPermission('apparatus.create');
+  const canEdit = canManage || checkPermission('apparatus.edit');
 
   const {
     apparatusList,
@@ -67,9 +72,9 @@ export const ApparatusListPage: React.FC = () => {
     // Load initial data
     void fetchTypes();
     void fetchStatuses();
-    void fetchFleetSummary();
+    if (canManage) void fetchFleetSummary();
     void fetchApparatusList(1);
-  }, [navigate, fetchTypes, fetchStatuses, fetchFleetSummary, fetchApparatusList]);
+  }, [navigate, canManage, fetchTypes, fetchStatuses, fetchFleetSummary, fetchApparatusList]);
 
   // Apply filters when they change
   useEffect(() => {
@@ -148,46 +153,48 @@ export const ApparatusListPage: React.FC = () => {
         )}
 
         {/* Fleet Summary Cards */}
-        <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
-          <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Total Fleet</p>
-            <p className="text-theme-text-primary mt-1 text-2xl font-bold">
-              {isLoadingSummary ? '...' : (fleetSummary?.totalApparatus ?? 0)}
-            </p>
+        {canManage && (
+          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+            <div className="card p-4">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Total Fleet</p>
+              <p className="text-theme-text-primary mt-1 text-2xl font-bold">
+                {isLoadingSummary ? '...' : (fleetSummary?.totalApparatus ?? 0)}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">In Service</p>
+              <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">
+                {isLoadingSummary ? '...' : (fleetSummary?.inServiceCount ?? 0)}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Out of Service</p>
+              <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-400">
+                {isLoadingSummary ? '...' : (fleetSummary?.outOfServiceCount ?? 0)}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">In Maintenance</p>
+              <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400">
+                {isLoadingSummary ? '...' : (fleetSummary?.inMaintenanceCount ?? 0)}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Reserve</p>
+              <p className="mt-1 text-2xl font-bold text-blue-700 dark:text-blue-400">
+                {isLoadingSummary ? '...' : (fleetSummary?.reserveCount ?? 0)}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Maint. Due</p>
+              <p className="mt-1 text-2xl font-bold text-orange-700 dark:text-orange-400">
+                {isLoadingSummary
+                  ? '...'
+                  : (fleetSummary?.maintenanceDueSoon ?? 0) + (fleetSummary?.maintenanceOverdue ?? 0)}
+              </p>
+            </div>
           </div>
-          <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">In Service</p>
-            <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">
-              {isLoadingSummary ? '...' : (fleetSummary?.inServiceCount ?? 0)}
-            </p>
-          </div>
-          <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Out of Service</p>
-            <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-400">
-              {isLoadingSummary ? '...' : (fleetSummary?.outOfServiceCount ?? 0)}
-            </p>
-          </div>
-          <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">In Maintenance</p>
-            <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400">
-              {isLoadingSummary ? '...' : (fleetSummary?.inMaintenanceCount ?? 0)}
-            </p>
-          </div>
-          <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Reserve</p>
-            <p className="mt-1 text-2xl font-bold text-blue-700 dark:text-blue-400">
-              {isLoadingSummary ? '...' : (fleetSummary?.reserveCount ?? 0)}
-            </p>
-          </div>
-          <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Maint. Due</p>
-            <p className="mt-1 text-2xl font-bold text-orange-700 dark:text-orange-400">
-              {isLoadingSummary
-                ? '...'
-                : (fleetSummary?.maintenanceDueSoon ?? 0) + (fleetSummary?.maintenanceOverdue ?? 0)}
-            </p>
-          </div>
-        </div>
+        )}
 
         {/* Actions Bar */}
         <div className="card mb-6 p-4">
@@ -222,10 +229,15 @@ export const ApparatusListPage: React.FC = () => {
             </button>
 
             {/* Add Button */}
-            <button onClick={() => void navigate('/apparatus/new')} className="btn-primary flex items-center space-x-2">
-              <Plus className="h-4 w-4" />
-              <span>Add Apparatus</span>
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => void navigate('/apparatus/new')}
+                className="btn-primary flex items-center space-x-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Apparatus</span>
+              </button>
+            )}
           </div>
 
           {/* Expanded Filters */}
@@ -268,17 +280,19 @@ export const ApparatusListPage: React.FC = () => {
               </div>
 
               {/* Show Archived */}
-              <div className="flex items-end">
-                <label className="flex cursor-pointer items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={showArchived}
-                    onChange={(e) => setShowArchived(e.target.checked)}
-                    className="form-checkbox"
-                  />
-                  <span className="text-theme-text-secondary">Show Archived</span>
-                </label>
-              </div>
+              {canManage && (
+                <div className="flex items-end">
+                  <label className="flex cursor-pointer items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={showArchived}
+                      onChange={(e) => setShowArchived(e.target.checked)}
+                      className="form-checkbox"
+                    />
+                    <span className="text-theme-text-secondary">Show Archived</span>
+                  </label>
+                </div>
+              )}
 
               {/* Clear Filters */}
               <div className="flex items-end">
@@ -311,9 +325,11 @@ export const ApparatusListPage: React.FC = () => {
             <p className="text-theme-text-secondary mb-6">
               {searchQuery || filterType || filterStatus
                 ? 'Try adjusting your search or filters'
-                : 'Get started by adding your first piece of apparatus'}
+                : canCreate
+                  ? 'Get started by adding your first piece of apparatus'
+                  : 'No apparatus are currently available'}
             </p>
-            {!searchQuery && !filterType && !filterStatus && (
+            {canCreate && !searchQuery && !filterType && !filterStatus && (
               <button
                 onClick={() => void navigate('/apparatus/new')}
                 className="btn-primary mx-auto flex items-center space-x-2 px-6 py-3"
@@ -469,21 +485,25 @@ export const ApparatusListPage: React.FC = () => {
                               >
                                 <Eye className="h-4 w-4" />
                               </button>
-                              <button
-                                onClick={() => void navigate(`/apparatus/${apparatus.id}/edit`)}
-                                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-                                title="Edit"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
-                                className="hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-yellow-700 transition-colors hover:bg-yellow-500/10 hover:text-yellow-700 sm:inline-flex dark:text-yellow-400 dark:hover:text-yellow-300"
-                                title="View Details"
-                              >
-                                <Wrench className="h-4 w-4" />
-                              </button>
-                              {!apparatus.isArchived && (
+                              {canEdit && (
+                                <button
+                                  onClick={() => void navigate(`/apparatus/${apparatus.id}/edit`)}
+                                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                                  title="Edit"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                              )}
+                              {canManage && (
+                                <button
+                                  onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
+                                  className="hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-yellow-700 transition-colors hover:bg-yellow-500/10 hover:text-yellow-700 sm:inline-flex dark:text-yellow-400 dark:hover:text-yellow-300"
+                                  title="View Details"
+                                >
+                                  <Wrench className="h-4 w-4" />
+                                </button>
+                              )}
+                              {canManage && !apparatus.isArchived && (
                                 <button
                                   onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
                                   className="text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 transition-colors sm:inline-flex"

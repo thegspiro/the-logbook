@@ -34,6 +34,7 @@ from app.api.prospect_privacy import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.membership_pipeline import (
@@ -1402,9 +1403,10 @@ async def add_prospect_document(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty."
         )
     if len(content) > MAX_PROSPECT_DOCUMENT_SIZE:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File too large. Maximum size is 50MB.",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
     # Validate the real content via magic bytes, not the client-supplied type.
@@ -1415,12 +1417,13 @@ async def add_prospect_document(
             f"Prospect document rejected: detected MIME '{detected_mime}' "
             f"(claimed: '{file.content_type}') for file '{file.filename}'"
         )
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 f"File type not allowed. Detected type: {detected_mime}. "
                 "Allowed: PDF, Word, JPEG, PNG, GIF."
             ),
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     # Scope storage by org then prospect (mirrors event-attachments) so each

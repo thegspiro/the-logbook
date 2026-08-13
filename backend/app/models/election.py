@@ -568,6 +568,13 @@ class ManualBallotBatch(Base):
     required_attestations = Column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Physical ballots the batch was tallied from, as attested by the
+    # recording officer. Multi-vote methods (approval, ranked choice) produce
+    # more vote rows than ballots, so without this number the turnout used
+    # for percentage quorums is only a lower-bound estimate reconstructed
+    # from per-candidate tallies. Nullable: pre-existing batches never
+    # recorded it.
+    ballots_cast = Column(Integer, nullable=True)
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

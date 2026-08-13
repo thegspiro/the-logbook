@@ -455,6 +455,10 @@ const SchedulingPage: React.FC = () => {
       setCreateError('Start date is required.');
       return;
     }
+    if (apparatusList.length > 0 && !shiftForm.apparatus_id) {
+      setCreateError('Select the apparatus for this shift.');
+      return;
+    }
 
     setCreating(true);
     setCreateError(null);
@@ -484,7 +488,14 @@ const SchedulingPage: React.FC = () => {
         endDateTime = rolled.toISOString();
       }
 
+      const selectedApparatus = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
+      const apparatusPositions = selectedApparatus?.positions?.map((position) =>
+        typeof position === 'string'
+          ? { position, required: true }
+          : { position: position.position, required: position.required !== false }
+      );
       const templatePositions = resolveTemplatePositions(template.positions);
+      const shiftPositions = apparatusPositions?.length ? apparatusPositions : templatePositions;
 
       await schedulingService.createShift({
         shift_date: shiftForm.startDate,
@@ -494,8 +505,10 @@ const SchedulingPage: React.FC = () => {
         ...(shiftForm.apparatus_id ? { apparatus_id: shiftForm.apparatus_id } : {}),
         ...(shiftForm.shift_officer_id ? { shift_officer_id: shiftForm.shift_officer_id } : {}),
         ...(template.color ? { color: template.color } : {}),
-        ...(templatePositions.length > 0 ? { positions: templatePositions } : {}),
-        ...(template.min_staffing ? { min_staffing: template.min_staffing } : {}),
+        ...(shiftPositions.length > 0 ? { positions: shiftPositions } : {}),
+        ...(selectedApparatus?.min_staffing || template.min_staffing
+          ? { min_staffing: selectedApparatus?.min_staffing || template.min_staffing }
+          : {}),
       });
 
       // Refresh shifts and summary
@@ -1136,6 +1149,10 @@ const SchedulingPage: React.FC = () => {
                             ...prev,
                             shiftTemplate: e.target.value,
                             endDate: computeEndDate(prev.startDate, tmpl),
+                            apparatus_id:
+                              tmpl?.apparatus_id && apparatusList.some((a) => a.id === tmpl.apparatus_id)
+                                ? tmpl.apparatus_id
+                                : prev.apparatus_id,
                           }));
                         }}
                         className="form-input focus:ring-violet-500"
@@ -1336,6 +1353,69 @@ const SchedulingPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Apparatus Selection */}
+                    {apparatusList.length > 0 && (
+                      <div>
+                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                          <span className="flex items-center gap-1.5">
+                            <Truck className="h-4 w-4" /> Apparatus <span aria-hidden="true">*</span>
+                          </span>
+                        </label>
+                        <select
+                          value={shiftForm.apparatus_id}
+                          onChange={(e) =>
+                            setShiftForm({
+                              ...shiftForm,
+                              apparatus_id: e.target.value,
+                            })
+                          }
+                          className="form-input focus:ring-violet-500"
+                          required
+                          aria-required="true"
+                        >
+                          <option value="">Select apparatus...</option>
+                          {apparatusList.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.unit_number} — {a.name}
+                            </option>
+                          ))}
+                        </select>
+                        {(() => {
+                          const selected = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
+                          if (selected?.positions && selected.positions.length > 0) {
+                            return (
+                              <div className="mt-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5">
+                                <p className="mb-1.5 text-xs font-medium text-violet-700 dark:text-violet-400">
+                                  Positions on {selected.unit_number}:
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selected.positions.map((pos, i) => {
+                                    const name = typeof pos === 'string' ? pos : pos.position;
+                                    return (
+                                      <span
+                                        key={i}
+                                        className="rounded-sm bg-violet-500/10 px-2 py-0.5 text-xs text-violet-700 capitalize dark:text-violet-300"
+                                      >
+                                        {name}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          }
+                          if (shiftForm.apparatus_id) {
+                            return (
+                              <p className="text-theme-text-muted mt-1 text-xs">
+                                No positions defined — members can sign up with any position.
+                              </p>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    )}
+
                     {/* Auto-generated shift label preview */}
                     {(() => {
                       const tmpl = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
@@ -1419,67 +1499,6 @@ const SchedulingPage: React.FC = () => {
                               </button>
                             )}
                           </div>
-
-                          {/* Apparatus Selection */}
-                          {apparatusList.length > 0 && (
-                            <div>
-                              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                                <span className="flex items-center gap-1.5">
-                                  <Truck className="h-4 w-4" /> Apparatus
-                                </span>
-                              </label>
-                              <select
-                                value={shiftForm.apparatus_id}
-                                onChange={(e) =>
-                                  setShiftForm({
-                                    ...shiftForm,
-                                    apparatus_id: e.target.value,
-                                  })
-                                }
-                                className="form-input focus:ring-violet-500"
-                              >
-                                <option value="">No specific apparatus</option>
-                                {apparatusList.map((a) => (
-                                  <option key={a.id} value={a.id}>
-                                    {a.unit_number} — {a.name}
-                                  </option>
-                                ))}
-                              </select>
-                              {(() => {
-                                const selected = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
-                                if (selected?.positions && selected.positions.length > 0) {
-                                  return (
-                                    <div className="mt-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5">
-                                      <p className="mb-1.5 text-xs font-medium text-violet-700 dark:text-violet-400">
-                                        Positions on {selected.unit_number}:
-                                      </p>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {selected.positions.map((pos, i) => {
-                                          const name = typeof pos === 'string' ? pos : pos.position;
-                                          return (
-                                            <span
-                                              key={i}
-                                              className="rounded-sm bg-violet-500/10 px-2 py-0.5 text-xs text-violet-700 capitalize dark:text-violet-300"
-                                            >
-                                              {name}
-                                            </span>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                if (shiftForm.apparatus_id) {
-                                  return (
-                                    <p className="text-theme-text-muted mt-1 text-xs">
-                                      No positions defined — members can sign up with any position.
-                                    </p>
-                                  );
-                                }
-                                return null;
-                              })()}
-                            </div>
-                          )}
 
                           {/* Shift Officer Selection */}
                           {membersList.length > 0 && (

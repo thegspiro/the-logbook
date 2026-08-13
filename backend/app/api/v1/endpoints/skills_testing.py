@@ -3112,6 +3112,27 @@ def _csv_bool(value: object) -> str:
     return "Yes" if value else "No"
 
 
+def _csv_points(value: object) -> str:
+    """A signed point movement, or blank when the step moved nothing.
+
+    Blank rather than "0" so an export reader can see at a glance which steps
+    are in the point pool at all — a sheet where most steps are recorded-only
+    would otherwise be a column of zeroes with the real figures buried in it.
+
+    Note the leading "+": a bare "1" in a spreadsheet column that also holds
+    "-1" reads as a magnitude, not a direction. ``SafeCsvWriter`` neutralizes
+    the leading "-" of a negative so Excel cannot read it as a formula.
+    """
+    try:
+        points = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return ""
+    if points == 0:
+        return ""
+    trimmed = f"{points:g}"
+    return f"+{trimmed}" if points > 0 else trimmed
+
+
 def _csv_dt(value: object) -> str:
     """An ISO-8601 UTC stamp, or blank.
 
@@ -3334,6 +3355,7 @@ async def export_tests_csv(
                 "Examiner",
                 "Completed (UTC)",
                 "Test Result",
+                "Timing Verified",
                 "Section #",
                 "Section",
                 "Step #",
@@ -3341,6 +3363,11 @@ async def export_tests_csv(
                 "Type",
                 "Critical",
                 "Outcome",
+                # What the step moved the point total by, signed. A reviewer
+                # reconciling the percentage against the marks needs the
+                # deduction as a figure; "Fail" alone does not say whether it
+                # cost anything.
+                "Points Effect",
                 "Score",
                 "Max Score",
                 "Time (s)",
@@ -3358,6 +3385,12 @@ async def export_tests_csv(
             candidate_name = name_of(t.candidate_id)
             examiner_name = name_of(t.examiner_id)
             completed = _csv_dt(t.completed_at)
+            # Same judgement as the summary export: a resumed test's clock
+            # carried on from the last save, so its recorded seconds are not a
+            # stopwatch reading. The per-step file is the one auditors are
+            # actually handed, and a time_limit step's Time (s) column read as
+            # verified evidence without this.
+            timing_verified = _csv_bool(not (t.resume_count or 0))
             for row in iter_criterion_rows(t, effective):
                 ticked = row["checklist"]
                 writer.writerow(
@@ -3368,6 +3401,7 @@ async def export_tests_csv(
                         examiner_name,
                         completed,
                         t.result or "",
+                        timing_verified,
                         row["section_index"] + 1,
                         row["section_name"],
                         row["criterion_index"] + 1,
@@ -3375,6 +3409,7 @@ async def export_tests_csv(
                         row["type"],
                         _csv_bool(row["critical"]),
                         row["outcome"],
+                        _csv_points(row["points_delta"]),
                         "" if row["score"] is None else row["score"],
                         "" if row["max_score"] is None else row["max_score"],
                         "" if row["time_seconds"] is None else row["time_seconds"],

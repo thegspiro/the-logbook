@@ -69,10 +69,10 @@ FENCE_RE = re.compile(r"^\s*(```|~~~)")
 # lets this script check the sidebar, which is where dead wiki links accumulate.
 WIKI_DIR = "wiki"
 
-# Published by wiki/setup-wiki.sh but not present as a file here: generated at
-# publish time from docs/TROUBLESHOOTING.md, so a link to it is correct even
-# though nothing in wiki/ matches.
-WIKI_GENERATED_PAGES = {"Troubleshooting"}
+# Published by wiki/setup-wiki.sh but not present as files here: generated at
+# publish time from docs/TROUBLESHOOTING.md and docs/ERROR_CODES.md, so links
+# to them are correct even though nothing in wiki/ matches.
+WIKI_GENERATED_PAGES = {"Troubleshooting", "Error-Codes"}
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 # An explicit anchor: <a name="..."> or <a id="...">, which several older docs

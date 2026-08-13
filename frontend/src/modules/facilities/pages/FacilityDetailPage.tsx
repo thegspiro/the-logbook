@@ -32,7 +32,7 @@ import { getVisibleFacilitySections, type FacilitySectionId } from '../facilityD
 export default function FacilityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { canManage, canViewSensitive } = useFacilitiesAccess();
+  const { canManage, canEdit, canViewSensitive } = useFacilitiesAccess();
   const {
     selectedFacility: facility,
     isLoadingDetail,
@@ -220,13 +220,25 @@ export default function FacilityDetailPage() {
           {section === 'systems' && <SystemsSection facilityId={facility.id} canManage={canManage} />}
           {section === 'maintenance' && <MaintenanceSection facilityId={facility.id} canManage={canManage} />}
           {section === 'inspections' && <InspectionsSection facilityId={facility.id} canManage={canManage} />}
-          {section === 'utilities' && <UtilitiesSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'utilities' && (
+            <UtilitiesSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+          )}
           {section === 'contacts' && <ContactsSection facilityId={facility.id} canManage={canManage} />}
-          {section === 'access-keys' && <AccessKeysSection facilityId={facility.id} canManage={canManage} />}
-          {section === 'shutoffs' && <ShutoffsSection facilityId={facility.id} canManage={canManage} />}
-          {section === 'capital-projects' && <CapitalProjectsSection facilityId={facility.id} canManage={canManage} />}
-          {section === 'insurance' && <InsuranceSection facilityId={facility.id} canManage={canManage} />}
-          {section === 'occupants' && <OccupantsSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'access-keys' && (
+            <AccessKeysSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+          )}
+          {section === 'shutoffs' && (
+            <ShutoffsSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+          )}
+          {section === 'capital-projects' && (
+            <CapitalProjectsSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+          )}
+          {section === 'insurance' && (
+            <InsuranceSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+          )}
+          {section === 'occupants' && (
+            <OccupantsSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+          )}
           {section === 'compliance' && <ComplianceSection facilityId={facility.id} canManage={canManage} />}
         </div>
       </div>

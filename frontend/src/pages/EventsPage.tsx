@@ -32,6 +32,7 @@ import {
   AlertCircle,
   BarChart3,
   Zap,
+  Settings,
 } from 'lucide-react';
 import { eventService } from '../services/api';
 import { eventService as eventServiceDirect } from '../services/eventServices';
@@ -575,11 +576,16 @@ export const EventsPage: React.FC = () => {
 
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Events</h1>
-            <p className="text-theme-text-secondary mt-1 text-sm">
-              Department events, meetings, training sessions, and more
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="shrink-0 rounded-lg bg-red-600 p-2">
+              <Calendar className="h-6 w-6 text-white" aria-hidden="true" />
+            </div>
+            <div>
+              <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Events</h1>
+              <p className="text-theme-text-secondary mt-1 text-sm">
+                Department events, meetings, training sessions, and more
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {sortedEvents.length > 0 && (
@@ -618,21 +624,13 @@ export const EventsPage: React.FC = () => {
                   <BarChart3 className="h-4 w-4" aria-hidden="true" />
                   <span className="hidden sm:inline">Analytics</span>
                 </Link>
-                <Link to="/events/admin" className="btn-secondary btn-icon" title="Module Settings">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                  </svg>
+                <Link
+                  to="/events/admin?tab=settings"
+                  className="btn-secondary btn-icon"
+                  title="Module Settings"
+                  aria-label="Event module settings"
+                >
+                  <Settings className="h-5 w-5" aria-hidden="true" />
                 </Link>
                 <div className="relative" ref={quickCreateRef}>
                   <button
@@ -676,7 +674,7 @@ export const EventsPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <Link to="/events/new" className="btn-primary inline-flex items-center gap-2">
+                <Link to="/events/admin?tab=create" className="btn-primary inline-flex items-center gap-2">
                   <Plus className="h-5 w-5" aria-hidden="true" />
                   Create Event
                 </Link>
@@ -907,7 +905,13 @@ export const EventsPage: React.FC = () => {
             }
             actions={
               canManage && !showPastEvents
-                ? [{ label: 'Create Event', onClick: () => (window.location.href = '/events/new'), icon: Plus }]
+                ? [
+                    {
+                      label: 'Create Event',
+                      onClick: () => void navigate('/events/admin?tab=create'),
+                      icon: Plus,
+                    },
+                  ]
                 : undefined
             }
             className="bg-theme-surface-secondary rounded-lg"

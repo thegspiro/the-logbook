@@ -88,6 +88,7 @@ docker compose up -d
 
 ### 🛠️ Troubleshooting
 
+- **[Error Codes](Error-Codes)** - What an on-screen LB-* code means and how to resolve it
 - **[Common Issues](Troubleshooting)** - Solutions to common problems
 - **[Container Diagnostics](Troubleshooting#container--docker-diagnostics)** - Docker container issues
 - **[Frontend Diagnostics](Troubleshooting#frontend--browser-diagnostics)** - Frontend not loading

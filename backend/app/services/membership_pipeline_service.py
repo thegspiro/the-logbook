@@ -11,6 +11,7 @@ import copy
 import re
 import secrets
 import unicodedata
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -48,6 +49,14 @@ from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
+
+
+@dataclass(frozen=True)
+class _ActivityEvent:
+    """A validated activity entry staged with a pipeline state change."""
+
+    action: str
+    details: Optional[Dict[str, Any]] = None
 
 
 class MembershipPipelineService:
@@ -515,6 +524,47 @@ class MembershipPipelineService:
 
         await self.db.flush()
 
+        # is_final_step marks the approval stage whose completion may
+        # auto-transfer the prospect to full membership. It is positional in
+        # intent (templates and the UI flag the last stage), so after a
+        # reorder the flag must follow the new last position — otherwise a
+        # stage still flagged final can sit mid-pipeline and completing it
+        # converts the prospect while later stages remain. Pipelines with no
+        # final stage configured are left as-is: normalization must not
+        # invent an auto-transfer trigger the admin never set up.
+        ordered = await self.db.execute(
+            select(
+                MembershipPipelineStep.id,
+                MembershipPipelineStep.is_final_step,
+            )
+            .where(MembershipPipelineStep.pipeline_id == pipeline_id)
+            .order_by(MembershipPipelineStep.sort_order)
+        )
+        rows = ordered.all()
+        if rows and any(row.is_final_step for row in rows):
+            last_id = rows[-1].id
+            await self.db.execute(
+                update(MembershipPipelineStep)
+                .where(
+                    and_(
+                        MembershipPipelineStep.pipeline_id == pipeline_id,
+                        MembershipPipelineStep.id != last_id,
+                    )
+                )
+                .values(is_final_step=False)
+            )
+            await self.db.execute(
+                update(MembershipPipelineStep)
+                .where(
+                    and_(
+                        MembershipPipelineStep.pipeline_id == pipeline_id,
+                        MembershipPipelineStep.id == last_id,
+                    )
+                )
+                .values(is_final_step=True)
+            )
+            await self.db.flush()
+
         # Re-query steps from the database instead of refreshing individual
         # attributes on existing ORM objects.  In async SQLAlchemy, Core
         # UPDATE statements can leave other column attributes expired, and
@@ -679,7 +729,11 @@ class MembershipPipelineService:
         }
 
     async def get_prospect(
-        self, prospect_id: str, organization_id: str
+        self,
+        prospect_id: str,
+        organization_id: str,
+        *,
+        lock_for_update: bool = False,
     ) -> Optional[ProspectiveMember]:
         """Get a single prospect with full details"""
         query = (
@@ -698,12 +752,22 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.step_progress).selectinload(
                     ProspectStepProgress.step
                 ),
+                # `_validate_step_completion` counts these when the step is an
+                # interview_requirement. It is a lazy backref, so without it the
+                # read happens mid-await and SQLAlchemy raises MissingGreenlet —
+                # surfacing as a 500 from advance/complete rather than anything
+                # the endpoint's ValueError handling can turn into a 4xx.
+                # Interview is the third stage of the default pipeline, so this
+                # blocked advancing anyone past it, including in bulk.
+                selectinload(ProspectiveMember.interviews),
             )
             # Refresh identity-map instances: the prospect's pipeline/steps
             # may already be cached in this session from an earlier call, and
             # advance/complete logic must see the committed collections.
             .execution_options(populate_existing=True)
         )
+        if lock_for_update:
+            query = query.with_for_update()
         result = await self.db.execute(query)
         prospect = result.scalars().first()
         if prospect is not None:
@@ -969,14 +1033,46 @@ class MembershipPipelineService:
     # Step Progression
     # =========================================================================
 
+    @staticmethod
+    def _effective_action_result(
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+        submitted: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Merge the action_result submitted with a completion request over
+        the stored progress row's value.
+
+        The stored row is only ever written by complete_step itself, so a
+        gate that graded the stored value alone rejected every first
+        legitimate completion of a checklist / multi-approval /
+        reference-check stage. Submitted keys win so the caller's payload is
+        what gets graded; stored keys survive so any previously recorded
+        progress is not lost.
+        """
+        progress = next(
+            (p for p in prospect.step_progress if str(p.step_id) == str(step.id)),
+            None,
+        )
+        stored = (
+            progress.action_result
+            if progress and isinstance(progress.action_result, dict)
+            else {}
+        )
+        return {**stored, **(submitted or {})}
+
     async def _validate_step_completion(
         self,
         prospect: ProspectiveMember,
         step: MembershipPipelineStep,
+        action_result: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Validate that stage-specific requirements are met before allowing
         step completion. Raises ValueError if requirements are not satisfied.
+
+        ``action_result`` is the payload submitted with the completion
+        request; gates that read action_result grade it merged over the
+        stored progress row (see _effective_action_result).
         """
         config = step.config or {}
         step_type = step.step_type
@@ -1010,19 +1106,9 @@ class MembershipPipelineService:
             items = config.get("items", [])
             require_all = config.get("require_all", True)
             if require_all and items:
-                progress = next(
-                    (
-                        p
-                        for p in prospect.step_progress
-                        if str(p.step_id) == str(step.id)
-                    ),
-                    None,
-                )
-                completed_items = (
-                    (progress.action_result or {}).get("completed_items", [])
-                    if progress
-                    else []
-                )
+                completed_items = self._effective_action_result(
+                    prospect, step, action_result
+                ).get("completed_items", [])
                 if len(completed_items) < len(items):
                     raise ValueError(
                         f"All {len(items)} checklist items must be "
@@ -1032,19 +1118,9 @@ class MembershipPipelineService:
         elif step_type == PipelineStepType.MULTI_APPROVAL:
             required_approvers = config.get("required_approvers", [])
             if required_approvers:
-                progress = next(
-                    (
-                        p
-                        for p in prospect.step_progress
-                        if str(p.step_id) == str(step.id)
-                    ),
-                    None,
-                )
-                approvals = (
-                    (progress.action_result or {}).get("approvals", [])
-                    if progress
-                    else []
-                )
+                approvals = self._effective_action_result(
+                    prospect, step, action_result
+                ).get("approvals", [])
                 approved_roles = {a.get("role") for a in approvals}
                 missing = [r for r in required_approvers if r not in approved_roles]
                 if missing:
@@ -1056,19 +1132,9 @@ class MembershipPipelineService:
             required_count = config.get("required_count", 1)
             require_all = config.get("require_all_before_advance", True)
             if require_all:
-                progress = next(
-                    (
-                        p
-                        for p in prospect.step_progress
-                        if str(p.step_id) == str(step.id)
-                    ),
-                    None,
-                )
-                references = (
-                    (progress.action_result or {}).get("references", [])
-                    if progress
-                    else []
-                )
+                references = self._effective_action_result(
+                    prospect, step, action_result
+                ).get("references", [])
                 if len(references) < required_count:
                     raise ValueError(
                         f"This step requires at least {required_count} "
@@ -1116,9 +1182,16 @@ class MembershipPipelineService:
         action_result: Optional[Dict[str, Any]] = None,
         *,
         skip_requirements: bool = False,
+        additional_activity: Optional[_ActivityEvent] = None,
     ) -> Optional[ProspectiveMember]:
         """Mark a step as completed for a prospect"""
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        # Serialize progression for this prospect. Without a row lock, two
+        # coordinators can both validate the same current stage and create two
+        # completion/audit records before either transaction observes the
+        # other's transition.
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect:
             return None
 
@@ -1132,12 +1205,14 @@ class MembershipPipelineService:
         )
         if not step:
             raise ValueError("Step does not belong to this prospect's pipeline")
+        if str(prospect.current_step_id) != str(step_id):
+            raise ValueError("Only the prospect's current step can be completed")
 
         # Only the dedicated coordinator skip path may bypass a stage gate.
         # Keeping this server-side avoids accepting a client-controlled
         # ``skipped`` flag on the ordinary completion endpoint.
         if not skip_requirements:
-            await self._validate_step_completion(prospect, step)
+            await self._validate_step_completion(prospect, step, action_result)
 
         # Find or create the progress record
         progress = next(
@@ -1169,7 +1244,16 @@ class MembershipPipelineService:
             if notes:
                 progress.notes = notes
             if action_result:
-                progress.action_result = action_result
+                # Persist the same merged view the gate graded, so stored
+                # incremental progress is not clobbered by a partial payload.
+                # Reassigning a fresh dict (never mutating in place) is what
+                # lets SQLAlchemy detect the JSON column change.
+                stored = (
+                    progress.action_result
+                    if isinstance(progress.action_result, dict)
+                    else {}
+                )
+                progress.action_result = {**stored, **action_result}
 
         activity_action = "step_skipped" if skip_requirements else "step_completed"
         await self._log_activity(
@@ -1187,12 +1271,30 @@ class MembershipPipelineService:
         ):
             await self._send_step_completion_notification(prospect, step)
 
-        # Check if the completed step is the final step and auto-transfer is on
-        if step.is_final_step and prospect.pipeline.auto_transfer_on_approval:
+        # Check if the completed step is the final step and auto-transfer is
+        # on. A skip is a coordinator bypass, not an approval — it must never
+        # convert the prospect to a member, even if a stage flagged
+        # is_final_step ended up mid-pipeline through reordering.
+        if (
+            not skip_requirements
+            and step.is_final_step
+            and prospect.pipeline.auto_transfer_on_approval
+        ):
             await self._do_transfer(prospect, completed_by)
         else:
             # Advance to next step
             await self._advance_current_step(prospect, step_id)
+
+        # Some explicit operations have a domain-level audit event in addition
+        # to the step-level event above.  Stage both before committing so the
+        # state transition can never be persisted without its audit record.
+        if additional_activity:
+            await self._log_activity(
+                prospect_id=prospect_id,
+                action=additional_activity.action,
+                details=additional_activity.details,
+                performed_by=completed_by,
+            )
 
         await self.db.commit()
         return await self.get_prospect(prospect_id, organization_id)
@@ -1333,31 +1435,22 @@ class MembershipPipelineService:
         if current_idx >= len(sorted_steps) - 1:
             raise ValueError("Prospect is already at the final stage")
 
-        advanced = await self.complete_step(
+        next_step = sorted_steps[current_idx + 1]
+        return await self.complete_step(
             prospect_id=prospect_id,
             organization_id=organization_id,
             step_id=str(sorted_steps[current_idx].id),
             completed_by=advanced_by,
             notes=notes,
+            additional_activity=_ActivityEvent(
+                action="prospect_advanced",
+                details={
+                    "to_step_id": str(next_step.id),
+                    "to_step_name": next_step.name,
+                    "notes": notes,
+                },
+            ),
         )
-
-        # complete_step records the step-level event ("step_completed");
-        # "prospect_advanced" is the established audit action reports and the
-        # activity feed reconstruct movements from, so an explicit advance
-        # still writes it — only after the gated completion succeeded.
-        next_step = sorted_steps[current_idx + 1]
-        await self._log_activity(
-            prospect_id=prospect_id,
-            action="prospect_advanced",
-            details={
-                "to_step_id": str(next_step.id),
-                "to_step_name": next_step.name,
-                "notes": notes,
-            },
-            performed_by=advanced_by,
-        )
-        await self.db.commit()
-        return advanced
 
     # =========================================================================
     # Bulk Actions
@@ -1535,7 +1628,11 @@ class MembershipPipelineService:
         notes: Optional[str] = None,
     ) -> Optional[ProspectiveMember]:
         """Move a prospect back to the previous step."""
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        # Regression mutates the same progression state as completion and must
+        # participate in the same per-prospect serialization discipline.
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect or not prospect.pipeline:
             return None
 
@@ -1552,8 +1649,26 @@ class MembershipPipelineService:
         if current_idx <= 0:
             return prospect  # Already at the first step
 
+        current_step = sorted_steps[current_idx]
         prev_step = sorted_steps[current_idx - 1]
         prospect.current_step_id = prev_step.id
+
+        # The step being left has not been reached any more, so put its progress
+        # row back to pending. Leaving it in_progress made an applicant read as
+        # working on a stage they had been pulled back out of, and the drawer's
+        # progress track drew the stage ahead of them as live.
+        current_progress = next(
+            (
+                p
+                for p in prospect.step_progress
+                if str(p.step_id) == str(current_step.id)
+            ),
+            None,
+        )
+        if current_progress:
+            current_progress.status = StepProgressStatus.PENDING
+            current_progress.completed_at = None
+            current_progress.completed_by = None
 
         # Reset the previous step's progress to in_progress
         prev_progress = next(
@@ -1562,6 +1677,13 @@ class MembershipPipelineService:
         )
         if prev_progress:
             prev_progress.status = StepProgressStatus.IN_PROGRESS
+            # Reopening a step un-completes it. Without this the stage the
+            # applicant is *currently sitting on* kept its completion stamp, so
+            # the drawer counted it in "N of 6 stages completed" and drew it
+            # with a green tick — an applicant at stage four reading as four
+            # stages done, and a Back click that visibly changed nothing.
+            prev_progress.completed_at = None
+            prev_progress.completed_by = None
         else:
             self.db.add(
                 ProspectStepProgress(
@@ -3683,9 +3805,15 @@ class MembershipPipelineService:
         doc_result = await self.db.execute(doc_query)
         documents = list(doc_result.scalars().all())
 
-        # Build stage history from completed step progress
+        # Build stage history from completed step progress, in pipeline order —
+        # `step_progress` comes back in whatever order the database hands it
+        # over, which put the stages of an election package's summary in an
+        # arbitrary sequence for the members reading it before a vote.
         stage_history: List[Dict[str, Any]] = []
-        for sp in prospect.step_progress or []:
+        for sp in sorted(
+            prospect.step_progress or [],
+            key=lambda p: (p.step.sort_order if p.step else 0, p.created_at),
+        ):
             if sp.status == StepProgressStatus.COMPLETED and sp.step:
                 stage_history.append(
                     {

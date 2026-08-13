@@ -68,6 +68,7 @@
 
 ### 🛠️ Troubleshooting
 
+- [Error Codes](Error-Codes)
 - [Common Issues](Troubleshooting)
 - [Containers](Troubleshooting#container--docker-diagnostics)
 - [Frontend](Troubleshooting#frontend--browser-diagnostics)

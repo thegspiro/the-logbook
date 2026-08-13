@@ -32,6 +32,17 @@ vi.mock('../../modules/apparatus/services/api', () => ({
 
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
+// The page gates Undo/Swap on equipment_check.manage / inventory.manage.
+// Default to a manager so the action flows stay exercised; individual tests
+// flip the mock to a member view. (vi.clearAllMocks clears calls, not this
+// creation-time implementation.)
+const mockCheckPermission = vi.fn(() => true);
+vi.mock('../../stores/authStore', () => ({
+  useAuthStore: () => ({
+    checkPermission: (...a: unknown[]) => mockCheckPermission(...a),
+  }),
+}));
+
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
@@ -111,6 +122,33 @@ describe('ApparatusInventoryPage', () => {
     renderWithRouter(<ApparatusInventoryPage />);
     await screen.findByRole('option', { name: /E-1/ });
     expect(mockGetApparatusInventory).not.toHaveBeenCalled();
+  });
+
+  it('shows the page navigation actions and confirms the auto-saved inventory', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+
+    expect(screen.getByRole('button', { name: 'Back to Scheduling' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save inventory' })).toBeDisabled();
+    await selectApparatus(user);
+    await user.click(screen.getByRole('button', { name: 'Save inventory' }));
+
+    await waitFor(() => {
+      expect(mockGetApparatusInventory).toHaveBeenCalledTimes(2);
+      expect(mockToastSuccess).toHaveBeenCalledWith('Inventory changes are saved');
+    });
+  });
+
+  it('does not claim changes were saved when the inventory refresh fails', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+    mockGetApparatusInventory.mockRejectedValueOnce(new Error('refresh failed'));
+
+    await user.click(screen.getByRole('button', { name: 'Save inventory' }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('refresh failed'));
+    expect(mockToastSuccess).not.toHaveBeenCalledWith('Inventory changes are saved');
   });
 
   it('loads the selected apparatus and groups items by compartment', async () => {
@@ -398,15 +436,41 @@ describe('ApparatusInventoryPage', () => {
     await user.type(dateField, '2028-03-31');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    // Count, number and date travel together: a changed-out box has a new
-    // date, and sending the count alone would leave the old one asserted.
+    // The untouched lot number is omitted: unchanged metadata stays out of
+    // the payload so a submit-only member's correction is not rejected by
+    // the metadata-change permission gate.
     await waitFor(() => {
       expect(mockUpdateDeployedLot).toHaveBeenCalledWith('ti-1', 'dl-1', {
         quantity: 1,
-        lotNumber: 'LOT-A',
         expirationDate: '2028-03-31',
       });
     });
+  });
+
+  it('hides Undo and disables Swap for members without stock permissions', async () => {
+    mockCheckPermission.mockReturnValue(false);
+    mockGetApparatusInventory.mockResolvedValue(
+      inventory([
+        makeItem({
+          inventoryItemId: 'inv-1',
+          readyStock: 6,
+          restockNeeded: true,
+          restockNote: 'used two',
+          restockReportedByName: 'Dana Reed',
+          readyLots: [{ id: 'lot-1', lotNumber: 'LOT-A', quantity: 6, expirationDate: '2027-03-01' }],
+        }),
+      ])
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    // The restock report stays visible so the crew knows it's standing,
+    // but withdrawing it is a manager's call.
+    expect(screen.getByText('Needs restock')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Undo/ })).not.toBeInTheDocument();
+    const swapButton = screen.getByRole('button', { name: /Swap/ });
+    expect(swapButton).toBeDisabled();
   });
 
   it('offers no swap for an item that is not linked to inventory', async () => {

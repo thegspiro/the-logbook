@@ -105,7 +105,15 @@ class TestSanitizeQueryParams:
         assert sanitize_query_params("page=2&limit=50") == "page=2&limit=50"
 
     @pytest.mark.parametrize(
-        "key", ["token", "password", "api_key", "access_token", "refresh_token"]
+        "key",
+        [
+            "token",
+            "password",
+            "api_key",
+            "access_token",
+            "refresh_token",
+            "display_code",
+        ],
     )
     def test_sensitive_params_are_redacted(self, key):
         result = sanitize_query_params(f"{key}=supersecret&page=1")
@@ -142,6 +150,36 @@ class TestSanitizePath:
     def test_redacts_known_public_token_path_without_route_metadata(self):
         assert sanitize_path("/application-status/emailed-secret") == (
             "/application-status/[REDACTED]"
+        )
+
+    def test_redacts_both_spellings_of_the_event_request_status_route(self):
+        """The frontend page is singular /event-request/..., the API plural
+        /event-requests/... — client reports carry page paths, so a
+        plural-only pattern left the emailed token in the log."""
+        assert sanitize_path("/event-request/status/emailed-secret") == (
+            "/event-request/status/[REDACTED]"
+        )
+        assert sanitize_path(
+            "/api/public/v1/event-requests/status/emailed-secret/cancel"
+        ) == ("/api/public/v1/event-requests/status/[REDACTED]/cancel")
+
+    def test_redacts_kiosk_display_code_path_segment(self):
+        assert sanitize_path("/display/A1B2C3D4/events/evt-1/guest") == (
+            "/display/[REDACTED]/events/evt-1/guest"
+        )
+        assert sanitize_path("/api/public/v1/display/A1B2C3D4") == (
+            "/api/public/v1/display/[REDACTED]"
+        )
+
+    def test_redacts_display_code_route_parameter(self):
+        assert sanitize_path(
+            "/public/v1/display/A1B2C3D4/events/evt-1/guest",
+            {"display_code": "A1B2C3D4", "event_id": "evt-1"},
+        ) == ("/public/v1/display/[REDACTED]/events/evt-1/guest")
+
+    def test_path_merely_ending_in_display_is_untouched(self):
+        assert sanitize_path("/api/v1/locations/loc-1/display") == (
+            "/api/v1/locations/loc-1/display"
         )
 
 

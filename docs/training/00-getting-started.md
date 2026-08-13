@@ -94,11 +94,8 @@ If your administrator has enabled single sign-on, the login page shows **Google*
 > not a substitute for your second factor; you are not signed in until the code
 > is accepted. The challenge expires after 5 minutes — past that, start the
 > sign-in again.
->
-> **[SCREENSHOT NEEDED]:** _The login page showing the two-factor
-> authentication code step immediately after returning from a Google sign-in —
-> the code field and "Use a recovery code" link visible, so a member knows this
-> screen is expected and not an error._
+
+![The login page's two-factor step — the 6-digit code field and the Use a recovery code link](./images/00-23-login-two-factor.png)
 
 > **Troubleshooting:** If your account is not recognized you are returned to the login page with a message such as "No account matches that Google email. Contact your administrator for access." Other messages cover an account from a domain that is not allowed, an account already linked to a different user, or an unverified email address. In every case, contact your administrator.
 
@@ -175,6 +172,7 @@ of their own — Training, Operations and Governance:
 | Menu Item            | Description                                                                                    |
 | -------------------- | ---------------------------------------------------------------------------------------------- |
 | **Dashboard**        | Your home page with quick stats and upcoming items                                             |
+| **Learning Center**  | Short task-based paths through the app — open a task, do it, tick it off                       |
 | **Members**          | Department roster and member profiles                                                          |
 | **Events**           | Upcoming and past department events                                                            |
 | **Documents**        | Shared files, SOPs, and policies                                                               |
@@ -198,17 +196,18 @@ Governance, and so on.
 
 If you have administrative permissions (officers, IT Manager, etc.), you will see an additional **Administration** section below the member links:
 
-| Menu Item                 | Description                                         |
-| ------------------------- | --------------------------------------------------- |
-| **Department Setup**      | Guided checklist for initial configuration          |
-| **Members Admin**         | Prospective members, pipeline, member management    |
-| **Events Admin**          | Create events, view analytics                       |
-| **Training Admin**        | Review submissions, manage requirements, compliance |
-| **Inventory Admin**       | Manage items, view member equipment                 |
-| **Forms**                 | Build and manage custom forms                       |
-| **Integrations**          | Connect to external services                        |
-| **Reports**               | Generate department reports                         |
-| **Organization Settings** | Organization settings, roles, public portal         |
+| Menu Item                   | Description                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| **Department Setup**        | Guided checklist for initial configuration                                                    |
+| **Members** ▾               | Prospective, Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening |
+| **Events Admin**            | Create events, view analytics                                                                 |
+| **Training Admin**          | Review submissions, manage requirements, compliance                                           |
+| **Inventory Admin**         | Manage items, view member equipment                                                           |
+| **Store Admin**             | Storefront products, order windows, and fulfilment                                            |
+| **Admin Hours**             | Review and approve administrative hours                                                       |
+| **Forms & Comms** ▾         | Email Templates, Messages, Forms, Integrations                                                |
+| **Reports**                 | Generate department reports                                                                   |
+| **Organization Settings** ▾ | Organization settings, roles, public portal                                                   |
 
 ![The sidebar scrolled to its Administration section with the admin-only links](./images/00-16-sidebar-admin.png)
 
@@ -228,15 +227,27 @@ Below the member-facing pages and above the Administration section, you will fin
 
 The dashboard is your landing page after login. It provides an at-a-glance view of what matters most:
 
-- **Quick Stats** - Total members, active members, upcoming events, training completion rates
+- **Quick Stats** - Total members, active members, upcoming events, training compliance
 - **Your Hours** - Four cards: **Total Hours** plus the three things it adds up — **Training**, **Standby**, and **Administrative**. Every one of them is **month-to-date**, and each card says what it counts underneath the number
 - **Upcoming Events** - The next few scheduled events
 - **Upcoming Shifts** - Your next assigned shifts
 - **Recent Activity** - Latest actions across the department
 - **Notifications** - Unread alerts and reminders with **Clear All** and individual dismiss (X) buttons. Persistent department messages (set by administrators) cannot be dismissed by regular members and show a "Persistent" badge
-- **Department Messages** - Organization-wide announcements from administrators. Urgent messages are highlighted (and may also reach you by email/text), some ask you to **Acknowledge** them, and persistent messages remain visible until an admin clears them. Your full message history lives on the **Messages** page (megaphone icon)
+- **Department Messages** - Organization-wide announcements you haven't dealt with yet. Urgent messages are highlighted (every message also reaches you by email, urgent ones by text too), some ask you to **Acknowledge** them, and persistent messages remain visible until an admin clears them. Once you've read or acknowledged a message it clears off the card; your full message history lives on the **Messages** page (megaphone icon)
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
+
+> **Training Compliance is all-or-nothing, and that is why it reads 0%**
+> _(2026-08-13)_. The card counts the share of active members who satisfy
+> **every** active training requirement — not the share of requirements met, and
+> nothing to do with the hours figure printed beneath it. A department with 36
+> active requirements will show 0% until somebody clears all 36, even with
+> hundreds of hours logged, and a member short on one requirement counts the
+> same as a member short on all of them.
+>
+> Read it as "how many people are finished", not "how are we doing". For
+> anything finer-grained, use the compliance matrix under **Training Admin**,
+> which reports per-requirement rather than per-member.
 
 > **Hint:** The dashboard is personalized. Officers and administrators see additional summary cards with department-wide metrics. Regular members see their own upcoming items and assignments.
 
@@ -297,7 +308,7 @@ From here you can:
 - **Download your data** — a complete export of everything the system stores about you _(2026-07-31)_
 - View your **assigned roles and permissions**
 
-![Account Settings page with profile, notification preferences, and password sections](./images/00-09-account-settings.png)
+![Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications](./images/00-09-account-settings.png)
 
 > **Privacy note:** Privacy choices and the data export live on the
 > **Security** tab. Nothing under Privacy Choices is required for membership,
@@ -349,7 +360,7 @@ Because Oakville FD requires multi-factor authentication, Jake is redirected to 
 After completing setup, the dashboard loads with personalized widgets:
 
 - **Hours this month** — four figures across the top: total, training, standby and administrative
-- **Department Messages** — anything the department has posted, urgent items first
+- **Department Messages** — what he hasn't read or acknowledged yet, plus any persistent standing notices, pinned items first
 - **Notifications** — the most recent, with an unread count and Clear All
 - **My Upcoming Shifts** — his next five shifts with dates, times, and the officer on each
 - **Open Shifts** — shifts he can sign up for. **Five at a time**, with a line

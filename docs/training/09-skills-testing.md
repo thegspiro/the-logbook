@@ -454,11 +454,11 @@ marked **starts the timer**:
 | **Off** (default) | The read-aloud box alone                        | Read off the clock; nothing starts timing |
 | **On**            | A **"Start clock & read"** button under the box | The examiner's tap starts the clock       |
 
-> **[SCREENSHOT NEEDED]:** _A statement criterion on the scoring screen with
-> "starts the timer" enabled, showing the "Start clock & read" button beneath the
-> read-aloud box, and the same statement after tapping it — the button replaced
-> by the note that the statement falls inside the time limit and the clock is
-> running._
+![A read-aloud statement inside the time limit, with the START CLOCK & READ button beneath it](./images/09-18-statement-starts-clock.png)
+
+After the tap the button is gone, replaced by the line _"This statement is
+inside the time limit. The clock is running."_ — the same criterion, now with
+nothing left to press.
 
 > **It is a button, not an automatic start.** Whether a statement is read on the
 > clock is a property of the sheet; _when_ it is read is not. An examiner opens a

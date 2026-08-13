@@ -52,6 +52,7 @@ import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { hasAdministrationAccess } from './adminNavigation';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -360,8 +361,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             ],
           } as NavItem,
           {
-            label: 'Events Admin',
-            path: '/events/admin',
+            label: 'Manage Events',
+            path: '/events',
             icon: Calendar,
             permission: 'events.manage',
           } as NavItem,
@@ -419,7 +420,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 permission: 'notifications.manage',
               },
               ...(isModuleOn('forms')
-                ? [{ label: 'Forms', path: '/forms', icon: FormInput, permission: 'forms.view' }]
+                ? [{ label: 'Forms', path: '/forms', icon: FormInput, permission: 'forms.manage' }]
                 : []),
               ...(isModuleOn('integrations')
                 ? [
@@ -439,6 +440,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   label: 'Reports',
                   path: '/reports',
                   icon: BarChart3,
+                  permission: 'reports.view',
                 } as NavItem,
               ]
             : []),

@@ -19,7 +19,7 @@ from app.models.notification import (
     MessagePriority,
     MessageTargetType,
 )
-from app.models.user import Role, User
+from app.models.user import Role, User, UserStatus
 
 
 class MessagingService:
@@ -57,7 +57,14 @@ class MessagingService:
         """
         try:
             await self._validate_targeting(
-                organization_id, target_member_ids, target_roles
+                organization_id,
+                target_type,
+                target_member_ids,
+                target_roles,
+                target_statuses,
+            )
+            target_roles, target_statuses, target_member_ids = self._audience_for_type(
+                target_type, target_roles, target_statuses, target_member_ids
             )
             now = datetime.now(timezone.utc)
             effective_scheduled = (
@@ -141,7 +148,9 @@ class MessagingService:
 
         query = (
             query.order_by(
-                desc(DepartmentMessage.is_pinned), desc(DepartmentMessage.created_at)
+                desc(DepartmentMessage.is_pinned),
+                desc(DepartmentMessage.created_at),
+                desc(DepartmentMessage.id),
             )
             .offset(skip)
             .limit(limit)
@@ -192,11 +201,39 @@ class MessagingService:
                         "published",
                     )
 
-            await self._validate_targeting(
-                organization_id,
-                updates.get("target_member_ids"),
-                updates.get("target_roles"),
-            )
+            audience_fields = {
+                "target_type",
+                "target_member_ids",
+                "target_roles",
+                "target_statuses",
+            }
+            if audience_fields.intersection(updates):
+                effective_target_type = updates.get("target_type", message.target_type)
+                effective_member_ids = updates.get(
+                    "target_member_ids", message.target_member_ids
+                )
+                effective_roles = updates.get("target_roles", message.target_roles)
+                effective_statuses = updates.get(
+                    "target_statuses", message.target_statuses
+                )
+                await self._validate_targeting(
+                    organization_id,
+                    effective_target_type,
+                    effective_member_ids,
+                    effective_roles,
+                    effective_statuses,
+                )
+                roles, statuses, member_ids = self._audience_for_type(
+                    effective_target_type,
+                    effective_roles,
+                    effective_statuses,
+                    effective_member_ids,
+                )
+                updates.update(
+                    target_roles=roles,
+                    target_statuses=statuses,
+                    target_member_ids=member_ids,
+                )
 
             allowed_fields = {
                 "title",
@@ -269,10 +306,7 @@ class MessagingService:
         now = datetime.now(timezone.utc)
 
         # First get the user's roles and status
-        user_result = await self.db.execute(
-            select(User).options(selectinload(User.roles)).where(User.id == user_id)
-        )
-        user = user_result.scalar_one_or_none()
+        user = await self._get_targeting_user(organization_id, user_id)
         if not user:
             return []
 
@@ -300,7 +334,9 @@ class MessagingService:
         )
         query = query.order_by(
             desc(DepartmentMessage.is_pinned),
+            desc(DepartmentMessage.is_persistent),
             desc(DepartmentMessage.created_at),
+            desc(DepartmentMessage.id),
         )
 
         result = await self.db.execute(query)
@@ -388,23 +424,26 @@ class MessagingService:
                 }
             )
 
-        # Resolve author names
+        # Paginate before resolving authors so a small preview never loads names
+        # for messages that will not be returned.
+        enriched = enriched[skip : skip + limit]
+
         author_ids = list({m["posted_by"] for m in enriched if m["posted_by"]})
         if author_ids:
             authors_result = await self.db.execute(
                 select(User.id, User.first_name, User.last_name).where(
-                    User.id.in_(author_ids)
+                    User.id.in_(author_ids),
+                    User.organization_id == organization_id,
                 )
             )
             author_map = {
-                row.id: f"{row.first_name or ''} {row.last_name or ''}".strip()
+                row.id: (
+                    f"{row.first_name or ''} {row.last_name or ''}".strip() or "Unknown"
+                )
                 for row in authors_result.all()
             }
             for m in enriched:
                 m["author_name"] = author_map.get(m["posted_by"], "Unknown")
-
-        # Paginate
-        enriched = enriched[skip : skip + limit]
 
         return enriched
 
@@ -419,10 +458,7 @@ class MessagingService:
         """
         now = datetime.now(timezone.utc)
 
-        user_result = await self.db.execute(
-            select(User).options(selectinload(User.roles)).where(User.id == user_id)
-        )
-        user = user_result.scalar_one_or_none()
+        user = await self._get_targeting_user(organization_id, user_id)
         if not user:
             return 0
 
@@ -506,6 +542,20 @@ class MessagingService:
         )
         return role_ids, role_names, status
 
+    async def _get_targeting_user(
+        self, organization_id: str, user_id: str
+    ) -> Optional[User]:
+        """Load the member context used by every visibility calculation."""
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.roles))
+            .where(
+                User.id == user_id,
+                User.organization_id == organization_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
     def _is_targeted(
         self,
         message: DepartmentMessage,
@@ -549,18 +599,32 @@ class MessagingService:
     async def _visible_message_or_none(
         self, message_id: str, user_id: str, organization_id: str
     ) -> Optional[DepartmentMessage]:
-        """Return the message only if it is in the caller's org AND targeted to
-        them. Read/acknowledge records must not be created for messages a user
-        cannot see — otherwise a user could POST acks for another org's message
-        (polluting its stats) or fake an acknowledgment on a message that was
-        never aimed at them (acks are used as compliance evidence)."""
-        message = await self.get_message_by_id(message_id, organization_id)
-        if not message or message.deleted_at is not None:
-            return None
-        user_result = await self.db.execute(
-            select(User).options(selectinload(User.roles)).where(User.id == user_id)
+        """Return a currently live message only when targeted to the caller.
+
+        Read/acknowledge records are compliance evidence, so inactive, expired,
+        scheduled, deleted, cross-org, and untargeted messages all fail closed.
+        """
+        now = datetime.now(timezone.utc)
+        message_result = await self.db.execute(
+            select(DepartmentMessage).where(
+                DepartmentMessage.id == message_id,
+                DepartmentMessage.organization_id == organization_id,
+                DepartmentMessage.is_active.is_(True),
+                DepartmentMessage.deleted_at.is_(None),
+                or_(
+                    DepartmentMessage.expires_at.is_(None),
+                    DepartmentMessage.expires_at > now,
+                ),
+                or_(
+                    DepartmentMessage.scheduled_at.is_(None),
+                    DepartmentMessage.scheduled_at <= now,
+                ),
+            )
         )
-        user = user_result.scalar_one_or_none()
+        message = message_result.scalar_one_or_none()
+        if not message:
+            return None
+        user = await self._get_targeting_user(organization_id, user_id)
         if not user:
             return None
         role_ids, role_names, status = self._user_targeting_context(user)
@@ -605,10 +669,13 @@ class MessagingService:
     ) -> Tuple[bool, Optional[str]]:
         """Acknowledge a message (also marks as read)"""
         try:
-            if not await self._visible_message_or_none(
+            message = await self._visible_message_or_none(
                 message_id, user_id, organization_id
-            ):
+            )
+            if not message:
                 return False, "Message not found"
+            if not message.requires_acknowledgment:
+                return False, "Message does not require acknowledgment"
 
             existing = await self.db.execute(
                 select(DepartmentMessageRead).where(
@@ -640,20 +707,29 @@ class MessagingService:
     async def _validate_targeting(
         self,
         organization_id: str,
+        target_type: str,
         target_member_ids: Optional[List[str]],
         target_roles: Optional[List[str]],
+        target_statuses: Optional[List[str]],
     ) -> None:
-        """MSG-2: reject target member/role ids that aren't in the caller's org.
+        """Reject invalid or empty audiences before persisting a message.
 
         Delivery is already org-safe — ``_targeted_users`` only ever matches
         same-org users, so a foreign id reaches nobody — so this is data hygiene
-        / defense-in-depth: it stops a raw API caller from persisting foreign or
-        garbage ids on a message. Role entries may be a role id or (rename-safe)
-        a role name, matching ``_is_targeted``; only the values actually supplied
-        in this request are checked, so a legacy stored value is never
-        re-validated.
+        / defense-in-depth: it stops a raw API caller from persisting an empty
+        audience, foreign/garbage member or role ids, or invalid member statuses.
+        Role entries may be a role id or (rename-safe) role name, matching
+        ``_is_targeted``. Updates call this only when an audience field changes,
+        so an unrelated edit does not reject a retained legacy role name.
         """
-        if target_member_ids:
+        target = (
+            target_type.value if hasattr(target_type, "value") else str(target_type)
+        )
+        if target == "all":
+            return
+        if target == "members":
+            if not target_member_ids:
+                raise ValueError("At least one target member is required")
             result = await self.db.execute(
                 select(User.id).where(
                     User.organization_id == organization_id,
@@ -665,7 +741,10 @@ class MessagingService:
                 raise ValueError(
                     "One or more target members are not in your organization"
                 )
-        if target_roles:
+            return
+        if target == "roles":
+            if not target_roles:
+                raise ValueError("At least one target role is required")
             result = await self.db.execute(
                 select(Role.id, Role.name).where(
                     Role.organization_id == organization_id
@@ -680,6 +759,32 @@ class MessagingService:
                 raise ValueError(
                     "One or more target roles are not in your organization"
                 )
+            return
+        if target == "statuses":
+            if not target_statuses:
+                raise ValueError("At least one target status is required")
+            valid_statuses = {status.value for status in UserStatus}
+            if any(str(status) not in valid_statuses for status in target_statuses):
+                raise ValueError("One or more target statuses are invalid")
+            return
+        raise ValueError("Invalid message target type")
+
+    @staticmethod
+    def _audience_for_type(
+        target_type: str,
+        target_roles: Optional[List[str]],
+        target_statuses: Optional[List[str]],
+        target_member_ids: Optional[List[str]],
+    ) -> Tuple[Optional[List[str]], Optional[List[str]], Optional[List[str]]]:
+        """Clear audience lists that do not apply to the selected target type."""
+        target = (
+            target_type.value if hasattr(target_type, "value") else str(target_type)
+        )
+        return (
+            target_roles if target == "roles" else None,
+            target_statuses if target == "statuses" else None,
+            target_member_ids if target == "members" else None,
+        )
 
     async def _targeted_users(
         self, message: DepartmentMessage, organization_id: str

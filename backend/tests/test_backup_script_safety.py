@@ -27,8 +27,17 @@ def test_database_password_is_not_passed_on_command_line() -> None:
     assert 'MYSQL_PWD="${DB_PASSWORD}" mysql' in script
 
 
-def test_environment_file_is_loaded_without_xargs_reparsing() -> None:
+def test_environment_file_is_loaded_without_execution() -> None:
+    """The .env file must be READ, never executed.
+
+    ``export $(grep ...)`` re-parses values through word splitting, and
+    ``source .env`` executes the file — an unquoted value with a space
+    (the template's own ``APP_NAME=The Logbook``) runs its second word as a
+    command and, under ``set -e``, kills every backup and restore.
+    """
     script = (ROOT / "scripts" / "backup.sh").read_text(encoding="utf-8")
 
     assert "export $(grep" not in script
-    assert 'source "$(dirname "$0")/../.env"' in script
+    assert "source " not in script.replace("# shellcheck source=", "")
+    assert ". $" not in script
+    assert "env_file_get" in script

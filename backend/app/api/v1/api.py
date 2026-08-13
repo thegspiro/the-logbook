@@ -55,6 +55,7 @@ from app.api.v1.endpoints import (
     salesforce_sync,
     scheduled,
     scheduling,
+    scheduling_module_config,
     security_monitoring,
     shift_completion,
     skills_testing,
@@ -151,6 +152,11 @@ api_router.include_router(documents.router, prefix="/documents", tags=["document
 api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
 api_router.include_router(minutes.router, prefix="/minutes-records", tags=["minutes"])
 api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
+api_router.include_router(
+    scheduling_module_config.router,
+    prefix="/scheduling/shift-settings",
+    tags=["scheduling-module-config"],
+)
 api_router.include_router(
     equipment_check.router,
     prefix="/equipment-checks",

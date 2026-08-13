@@ -118,6 +118,17 @@ export interface ShiftSettings {
   equipmentCheckSettings: EquipmentCheckSettings;
 }
 
+/**
+ * localStorage key for the read-only mirror of the department settings.
+ * The backend (/scheduling/shift-settings) is the source of truth; this key
+ * is only an offline/API-failure fallback and the source for the one-time
+ * migration of pre-backend private copies (see services/shiftSettingsApi.ts).
+ *
+ * This is a PREFIX, not the key itself: the mirror is written per
+ * organization as `scheduling_settings:{orgId}`, so logging into another
+ * department on the same browser cannot be served this one's settings. The
+ * bare, untagged key is only read once, to adopt a pre-backend copy.
+ */
 export const SETTINGS_KEY = 'scheduling_settings';
 
 export const DEFAULT_SETTINGS: ShiftSettings = {

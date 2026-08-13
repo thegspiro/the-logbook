@@ -1517,6 +1517,36 @@ position model to the ballot-item model the public page already uses, including
 its submission shape. Needs an owner decision on whether to converge the two
 ballots or retire one of them. This loop does not make that call.
 
+## Training — The Student View of a Cohort Has No Frontend (2026-08-12)
+
+The API implements it. `GET /training/cohorts/{id}` served to a member on the
+roster returns the class timeline in full and `members: []` — the roster,
+classmates and per-member progress withheld exactly as intended — and
+`GET /training/cohorts/mine` lists the cohorts that member is on. A member who
+is _not_ on the roster gets a 404 rather than confirmation the cohort exists.
+
+None of it is reachable from the application:
+
+- `/training/cohorts/:cohortId` is wrapped in
+  `<ProtectedRoute requiredPermission="training.manage">`, so a member who
+  types the URL gets **Access Denied**, not the reduced view.
+- `getMyCohorts()` exists in `trainingServices.ts` and has **no caller**
+  anywhere in `frontend/src` — nothing fetches a member's own cohorts.
+- Nothing links a member to a cohort. The only navigations to the detail route
+  are from `CohortsPage`, which is itself officer-gated.
+- `CohortDetailPage` has no member branch. Reached with `members: []` it would
+  render a **Roster (0)** tab rather than omitting the tab.
+
+So the access restriction is real and enforced server-side, but the screen the
+restriction was designed for was never built. `docs/training/02-training.md`
+described the member's view as something a member can open today; that
+paragraph has been corrected, and its screenshot placeholder retired.
+
+Finishing it means deciding who may open a cohort page and building the
+member's half of `CohortDetailPage` — a permissions decision plus a feature,
+not a correctness fix. This loop does not widen route guards, so it needs an
+owner.
+
 ## Elections — Saved Ballot Templates Accept Fields They Then Discard (2026-08-12)
 
 `POST /elections/templates/saved-ballots` answers **201** to a ballot item
@@ -1561,6 +1591,112 @@ placeholder is retired until a screen exists to photograph.
 
 Needs an owner decision: whether to build the settings section or drop the
 feature. This loop does not make that call.
+
+## Prospective Members — Two Bulk-Action Bars Render At Once (2026-08-13)
+
+Selecting applicants in **Table** view puts two independent bulk-action bars on
+the screen, stacked, each reading "N selected". They come from different
+components and neither is a superset of the other:
+
+| Bar                                  | Offers                                |
+| ------------------------------------ | ------------------------------------- |
+| `ProspectiveMembersPage.tsx` (upper) | Print Badges, Advance All, Reject All |
+| `PipelineTable.tsx` (lower)          | Advance, Hold, Reject                 |
+
+The two "advance" buttons run different code paths — `handleBulkAdvance` and
+`handleBulkAction('advance')` — and reach the same endpoint, so pressing either
+does the same thing. Hold is only on the lower bar; Print Badges only on the
+upper. A coordinator has no way to tell that from looking at them.
+
+Found while verifying `15-11-table-bulk-actions`, which pictures both bars. The
+guide now describes them as two bars rather than one, because that is what the
+screen does.
+
+Needs an owner decision: which bar survives, and where Hold and Print Badges
+live afterwards. Merging them changes the documented action list, so this loop
+does not make that call.
+
+## Prospective Members — The Progress Track Still Draws Stages Not Yet Reached (2026-08-13)
+
+`regress_prospect` used to leave the stage it vacated marked `in_progress`
+rather than returning it to `pending`. That is fixed, but rows written before
+the fix survive in any long-lived database, and the applicant drawer draws one
+chip per non-pending row — so an applicant can show chips for stages ahead of
+the one they are on.
+
+The display no longer _contradicts_ itself: the current-stage marker and the
+"N of M stages completed" count both read the progress record's own status
+rather than inferring from a `completed_at` stamp, so the ticks and the count
+agree with the Current Stage panel. The only symptom left is extra chips.
+
+Self-healing is partial. `seed_demo_data.py` walks an applicant back to the
+first stage and forward again when it finds an unfinished stage _behind_ them,
+which repairs that class completely. A stale row _ahead_ of an applicant can
+only be reset by vacating it, which means advancing them onto it first — and
+for the election-vote stage that creates an election package, changing data the
+elections guide's screenshots are composed around. Not worth it for a cosmetic
+chip.
+
+Needs an owner decision if it matters in production: a one-off data migration
+that normalises `prospect_step_progress` against each prospect's
+`current_step_id` would clear it in one pass.
+
+## Scheduling — Sign Up Appears On Shifts A Member Cannot Take (2026-08-13)
+
+The Dashboard's Open Shifts panel renders a **Sign Up** button on every open
+shift. Rank eligibility is resolved only when the button is pressed:
+`handleExpandSignup` fetches the member's eligible positions for that shift and
+the expanded card then shows either a position dropdown or the flat message
+"Not eligible for this shift."
+
+So a member with no qualifying position gets an inviting green button and a
+refusal one tap later. Nothing on the card distinguishes the two cases in
+advance, and `openShifts` is not filtered by eligibility before rendering.
+
+`docs/training/03-scheduling.md` had described the opposite — that the button
+"only shows for shifts where the member's rank qualifies". It now describes what
+the screen does, and `03-62-dashboard-signup-positions` pictures the expanded
+dropdown.
+
+Needs an owner decision: pre-fetching eligibility for every visible shift costs
+a request per card, so hiding or disabling the button up front is a real
+trade-off rather than an obvious fix.
+
+## Storefront — The Payments Tab Cannot Be Screenshotted, By Design (2026-08-13)
+
+`store_payment_events` rows are written from one place: the public PayPal
+webhook at `app/api/public/paypal_webhook.py`, which resolves the integration,
+verifies the payload against PayPal's verify-webhook-signature API, and only
+then records the capture. The authenticated storefront API exposes `GET
+/payments`, `POST /payments/{id}/apply` and `POST /payments/{id}/ignore` — read
+and resolve, no create.
+
+That is the right shape for a ledger of what an external provider reported: a
+hand-written row would be a claim about money movement nobody can substantiate.
+It also means a demo department, which has no PayPal account and no verifiable
+signature, has an empty Payments tab and always will.
+
+`docs/training/18-storefront.md` therefore documents the tab in prose and its
+screenshot placeholder is retired, with the reason in the guide so the next
+person does not re-diagnose it. Same shape as the elections public ballot and
+the Salesforce connection recorded elsewhere in this file.
+
+## Messaging — Persistent Notices Can Fall Off the Dashboard Card (2026-08-13)
+
+**✅ Resolved (2026-08-13, owner-directed).** The dashboard "Department
+Messages" card used to load the **10 most recent** inbox messages with
+`include_read` at its default (true), so read non-persistent messages never
+dropped off the card and an **unpinned persistent** notice older than the 10
+most recent messages disappeared from it — against the training guide's "stays
+on the dashboard until leadership takes it down" (MSG2-6,
+[app-review/messaging.md](./app-review/messaging.md)). The card now loads with
+`include_read: false`: it shows only what still needs attention — unread
+messages, unacknowledged ack-required messages, and persistent notices (which
+the backend exempts from that filter). A message a member just clicked is
+marked read in place rather than removed mid-view; it drops off on the next
+load. Persistent notices are ordered ahead of newer non-persistent messages,
+so the card's 10-item preview cannot lose a standing notice behind an ordinary
+pending-message backlog. Pinned notices remain first within the preview.
 
 ## Skills Testing — Offline Support (2026-08-07)
 
