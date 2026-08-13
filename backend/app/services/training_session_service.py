@@ -37,9 +37,11 @@ from app.schemas.training_session import (
     AttendeeApprovalData,
     RecurringTrainingSessionCreate,
     TrainingSessionCreate,
+    TrainingSessionLinkageUpdate,
 )
 from app.services.event_service import EventService
 from app.services.location_service import LocationService
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 
 
@@ -51,7 +53,7 @@ class TrainingSessionService:
 
     async def _validate_linkage_ids(
         self,
-        session_data: TrainingSessionCreate,
+        session_data: "TrainingSessionCreate | TrainingSessionLinkageUpdate",
         organization_id: UUID,
     ) -> Optional[str]:
         """Verify client-supplied linkage FKs belong to the caller's org (XC-1).
@@ -93,12 +95,74 @@ class TrainingSessionService:
             if phase_result.scalar_one_or_none() is None:
                 return "Invalid program phase"
 
-        if session_data.instructor_id and not await is_in_org(
-            self.db, User, session_data.instructor_id, organization_id
+        # getattr: the linkage-update schema carries no instructor_id
+        instructor_id = getattr(session_data, "instructor_id", None)
+        if instructor_id and not await is_in_org(
+            self.db, User, instructor_id, organization_id
         ):
             return "Invalid instructor"
 
         return None
+
+    async def get_session_by_event(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+    ) -> Optional[TrainingSession]:
+        """Fetch the training session attached to an event, org-scoped."""
+        result = await self.db.execute(
+            select(TrainingSession)
+            .where(TrainingSession.event_id == str(event_id))
+            .where(TrainingSession.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def update_session_linkage(
+        self,
+        training_session_id: UUID,
+        updates: TrainingSessionLinkageUpdate,
+        organization_id: UUID,
+    ) -> Tuple[Optional[TrainingSession], Optional[str]]:
+        """Update a session's category/program/phase/requirement links.
+
+        Fields omitted from the payload are untouched; explicit nulls clear
+        the link. Links only steer *future* crediting — records and pipeline
+        progress already written at finalization are not reflowed.
+
+        Returns: (training_session, error_message)
+        """
+        result = await self.db.execute(
+            select(TrainingSession)
+            .where(TrainingSession.id == str(training_session_id))
+            .where(TrainingSession.organization_id == str(organization_id))
+        )
+        training_session = result.scalar_one_or_none()
+        if not training_session:
+            return None, "Training session not found"
+
+        payload = updates.model_dump(exclude_unset=True)
+        if not payload:
+            return training_session, None
+
+        linkage_error = await self._validate_linkage_ids(updates, organization_id)
+        if linkage_error:
+            return None, linkage_error
+
+        # The columns are String(36); UUIDs bound raw match/store nothing
+        # sensible (same mismatch as the course lookup above).
+        payload = {
+            key: str(value) if value is not None else None
+            for key, value in payload.items()
+        }
+
+        try:
+            apply_updates(training_session, payload)
+        except ValueError as e:
+            return None, str(e)
+
+        await self.db.commit()
+        await self.db.refresh(training_session)
+        return training_session, None
 
     async def create_training_session(
         self,
