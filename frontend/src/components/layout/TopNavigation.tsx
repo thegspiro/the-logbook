@@ -194,7 +194,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Scan Member ID', path: '/members/scan', permission: 'members.manage' },
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
               DIV,
-              { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
+              { label: 'Manage Events', path: '/events', permission: 'events.manage' },
               ...(isModuleOn('training')
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
