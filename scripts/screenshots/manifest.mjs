@@ -1027,6 +1027,34 @@ export const SHOTS = [
     selector: "div.card:has(h3:has-text('Open Shifts'))",
   },
   {
+    id: "03-63-offline-banner",
+    doc: "03-scheduling.md",
+    line: 2158,
+    anchor: "The offline banner on the Shift Reports tab",
+    alt: "The Shift Reports tab offline banner — reports will be saved locally and submitted when connectivity returns",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      // A page-level fake rather than `context.setOffline(true)`. The context
+      // is shared by every later shot and nothing in the harness restores it,
+      // so a real offline flag set here would silently break the rest of the
+      // run. `useOnlineStatus` reads `navigator.onLine` and listens for the
+      // window events, both of which can be faked inside this one page — and a
+      // page navigation resets it, so the leak cannot outlive the shot.
+      await page.evaluate(() => {
+        Object.defineProperty(window.navigator, "onLine", {
+          configurable: true,
+          get: () => false,
+        });
+        window.dispatchEvent(new Event("offline"));
+      });
+      const banner = page.getByText(/You're offline\. Reports will be saved/);
+      await banner.waitFor({ timeout: 20_000 });
+      await banner.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "div:has(> svg) >> text=/You're offline\\. Reports will be saved/",
+  },
+  {
     id: "02-90-crew-summary-table",
     doc: "02-training.md",
     line: 2470,

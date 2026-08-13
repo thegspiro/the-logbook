@@ -43,6 +43,39 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### The offline "Queued for sync" badge does not exist either
+
+`03-scheduling.md` asked for an offline banner, a **"Queued for sync" badge on a
+pending report**, and a count. Two of the three are real. Queued reports live in
+IndexedDB and are never listed individually, so there is no per-report badge to
+photograph — what exists is the banner, which carries `(N pending)` once
+something is queued, and a second banner reading "Syncing N queued reports…"
+while the queue drains. Caption corrected to the banner, with the other two
+states described in prose.
+
+**Faked offline in the page, not in the browser context.** `context.setOffline(
+true)` would have been the obvious move and would have broken every shot after
+this one: the context is shared across the run and nothing in the harness
+restores it. `useOnlineStatus` reads `navigator.onLine` and listens for the
+window events, both of which can be overridden inside the one page — and a
+navigation resets it, so the fake cannot outlive its own shot. Confirmed by
+re-capturing `03-61-review-queue-batch` afterwards, which came out unchanged.
+
+### A merge left the database stamped at a revision that no longer exists
+
+Merging the other session's work renumbered two migrations off main's new
+`20260813` revisions, and the demo database was still stamped `20260812_0006`.
+The backend then refused to start at all — correctly: "Refusing destructive
+fresh-database initialization; restore the missing migration or repair the
+revision explicitly."
+
+Both renamed migrations had already run under their old ids, so the schema was
+at head and only the label was stale. `alembic stamp` could not fix it (it
+cannot resolve the current revision to move from); `alembic stamp --purge
+20260813_0007` clears the version row and re-stamps, which is the repair the
+error message is asking for. Worth knowing before anyone reaches for a database
+drop after a migration renumber.
+
 ### The shift-report table guide 02 described does not exist
 
 `02-training.md` asked for "the Shift Reports tab showing the batch of 26
