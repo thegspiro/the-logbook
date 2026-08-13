@@ -41,8 +41,10 @@ describe('SchedulingSettingsPage', () => {
   it('renders the page header once, not stacked with a panel heading', () => {
     renderWithRouter(<SchedulingSettingsPage />);
 
-    expect(screen.getByRole('heading', { name: 'Scheduling Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Shift Scheduling' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Back to scheduling' })).toHaveAttribute('href', '/scheduling');
+    expect(screen.getByText('Settings · Configure department-wide scheduling defaults')).toBeInTheDocument();
   });
 
   it('opens on General and lists the settings sections', () => {
