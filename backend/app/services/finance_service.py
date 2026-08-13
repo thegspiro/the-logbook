@@ -1498,9 +1498,9 @@ class FinanceService:
         er = await self.get_expense_report(er_id, org_id)
         if not er:
             raise ValueError("Expense report not found")
-        # SoD (FIN-4): the person who disburses must not be the requester.
+        # SoD (FIN-4): the person who disburses must not be the submitter.
         assert_different_person(
-            acted_by, er.requested_by, action="mark paid", record="expense report"
+            acted_by, er.submitted_by, action="mark paid", record="expense report"
         )
         if er.status != ExpenseReportStatus.APPROVED:
             raise ValueError("Only approved reports can be marked as paid")
