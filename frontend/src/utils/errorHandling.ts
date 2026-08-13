@@ -140,11 +140,16 @@ export function toAppError(error: unknown): AppError {
 }
 
 /**
- * Gets a user-friendly error message from an unknown error
+ * Gets a user-friendly error message from an unknown error.
+ *
+ * When the backend supplied a support code (every API error response carries
+ * one, e.g. LB-AUTH-002 — see docs/ERROR_CODES.md), it is appended so members
+ * can quote it to IT and IT can look it up on the Error Monitoring page.
  */
 export function getErrorMessage(error: unknown, fallback = 'An error occurred'): string {
   const appError = toAppError(error);
-  return appError.message || fallback;
+  const message = appError.message || fallback;
+  return appError.code ? `${message} (Error code: ${appError.code})` : message;
 }
 
 /**

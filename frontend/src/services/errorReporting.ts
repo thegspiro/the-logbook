@@ -601,6 +601,9 @@ export function reportApiError(error: AxiosError): void {
   if (!classified) return;
 
   markReported(error);
+  // The backend's support code (LB-*), when present, lets an administrator
+  // match this client-side row to the code the member quoted from their toast.
+  const supportCode = (error.response?.data as { code?: unknown } | undefined)?.code;
   reportError({
     errorType: classified.errorType,
     errorMessage: classified.message,
@@ -608,6 +611,7 @@ export function reportApiError(error: AxiosError): void {
       method: (error.config?.method ?? '').toUpperCase(),
       path,
       status: error.response?.status,
+      ...(typeof supportCode === 'string' ? { error_code: supportCode } : {}),
     },
   });
 }

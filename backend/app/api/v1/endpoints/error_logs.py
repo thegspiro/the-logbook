@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_codes import catalog_entries
 from app.core.error_reporting import sanitize_path
 from app.core.security import is_rate_limited
 from app.core.security_middleware import get_client_ip
@@ -173,6 +174,18 @@ async def get_errors(
         ],
         "total": total,
     }
+
+
+@router.get("/codes")
+async def get_error_code_reference(
+    current_user: User = Depends(get_current_user),
+):
+    """The support error-code reference (LB-* codes).
+
+    Static documentation, not log data, so it needs no special permission —
+    any signed-in member helping IT troubleshoot can look a code up.
+    """
+    return {"codes": catalog_entries()}
 
 
 @router.get("/stats")

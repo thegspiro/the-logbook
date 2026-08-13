@@ -181,6 +181,14 @@ export interface ErrorLogStats {
   recent_errors: ErrorLogRecord[];
 }
 
+export interface ErrorCodeEntry {
+  code: string;
+  category: string;
+  title: string;
+  description: string;
+  resolution: string[];
+}
+
 export const errorLogsService = {
   async logError(data: {
     error_type: string;
@@ -205,6 +213,11 @@ export const errorLogsService = {
   async getStats(): Promise<ErrorLogStats> {
     const response = await api.get<ErrorLogStats>('/errors/stats');
     return response.data;
+  },
+
+  async getErrorCodes(): Promise<ErrorCodeEntry[]> {
+    const response = await api.get<{ codes: ErrorCodeEntry[] }>('/errors/codes');
+    return response.data.codes;
   },
 
   async clearErrors(): Promise<void> {

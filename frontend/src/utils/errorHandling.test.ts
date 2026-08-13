@@ -363,6 +363,23 @@ describe('errorHandling', () => {
       expect(getErrorMessage(emptyError)).toBe('An error occurred');
     });
 
+    it('appends the backend support code so members can quote it to IT', () => {
+      const axiosError = {
+        response: {
+          data: { detail: 'Could not validate credentials', code: 'LB-AUTH-002' },
+          status: 401,
+        },
+      };
+      expect(getErrorMessage(axiosError)).toBe('Could not validate credentials (Error code: LB-AUTH-002)');
+    });
+
+    it('appends no code suffix when the response carries none', () => {
+      const axiosError = {
+        response: { data: { detail: 'Not found' }, status: 404 },
+      };
+      expect(getErrorMessage(axiosError)).toBe('Not found');
+    });
+
     it('returns "Request failed" for axios-like error with all empty strings', () => {
       // When detail, message, and statusText are all empty strings,
       // the || chain in toAppError falls through to "Request failed".

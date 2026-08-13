@@ -32,6 +32,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import database_manager, get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import get_rank_default_permissions
 from app.core.security import create_mfa_pending_token, decode_token
 from app.core.security_middleware import (
@@ -535,9 +536,10 @@ async def register(
     """
     # SEC-05: Block registration unless explicitly enabled in settings
     if not settings.REGISTRATION_ENABLED:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Self-registration is disabled. Please contact your administrator to create an account.",
+            error_code=ErrorCode.AUTH_REGISTRATION_DISABLED,
         )
 
     auth_service = AuthService(db)
@@ -617,9 +619,10 @@ async def login(
         )
     except OperationalError as exc:
         logger.error(f"Database connection error during login: {exc}")
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable. Please try again in a few moments.",
+            error_code=ErrorCode.SYS_DB_UNAVAILABLE,
         )
 
     login_ip = get_client_ip(request)
@@ -639,17 +642,19 @@ async def login(
                 await db.commit()
         except Exception:
             logger.debug("brute-force detection failed on login failure")
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=auth_error or "Incorrect username or password",
+            error_code=ErrorCode.AUTH_INVALID_CREDENTIALS,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     # Check if user is active
     if not user.is_active:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive. Please contact an administrator.",
+            error_code=ErrorCode.AUTH_ACCOUNT_INACTIVE,
         )
 
     # Correct password: clear the brute-force counters for this IP/user.
@@ -679,9 +684,10 @@ async def login(
         )
     except OperationalError as exc:
         logger.error(f"Database connection error during token creation: {exc}")
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable. Please try again in a few moments.",
+            error_code=ErrorCode.SYS_DB_UNAVAILABLE,
         )
 
     # SEC: Tokens are transported exclusively via httpOnly cookies.
@@ -719,8 +725,10 @@ async def mfa_login(
     Consumes the short-lived ``mfa_token`` from the password step plus either
     a TOTP ``code`` or a single-use ``recovery_code``, then issues the session.
     """
-    invalid = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired challenge"
+    invalid = CodedHTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired challenge",
+        error_code=ErrorCode.AUTH_MFA_CHALLENGE_EXPIRED,
     )
     try:
         payload = decode_token(data.temp_token)
@@ -772,8 +780,10 @@ async def mfa_login(
                 minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
             )
         await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid verification code"
+        raise CodedHTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid verification code",
+            error_code=ErrorCode.AUTH_MFA_CODE_INVALID,
         )
 
     # Success: record the consumed TOTP step (replay prevention) and clear the
@@ -841,7 +851,11 @@ async def mfa_verify_setup(
     if not current_user.mfa_secret:
         raise HTTPException(status_code=400, detail="Start setup first")
     if not mfa_service.verify_totp(current_user.mfa_secret, data.code):
-        raise HTTPException(status_code=400, detail="Invalid verification code")
+        raise CodedHTTPException(
+            status_code=400,
+            detail="Invalid verification code",
+            error_code=ErrorCode.AUTH_MFA_CODE_INVALID,
+        )
 
     recovery_codes = mfa_service.generate_recovery_codes()
     current_user.mfa_enabled = True
@@ -886,7 +900,11 @@ async def mfa_disable(
     if not current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is not enabled")
     if not mfa_service.verify_totp(current_user.mfa_secret, data.code):
-        raise HTTPException(status_code=400, detail="Invalid verification code")
+        raise CodedHTTPException(
+            status_code=400,
+            detail="Invalid verification code",
+            error_code=ErrorCode.AUTH_MFA_CODE_INVALID,
+        )
 
     current_user.mfa_enabled = False
     current_user.mfa_secret = None
@@ -943,7 +961,11 @@ async def mfa_regenerate_recovery_codes(
     if not current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is not enabled")
     if not mfa_service.verify_totp(current_user.mfa_secret, data.code):
-        raise HTTPException(status_code=400, detail="Invalid verification code")
+        raise CodedHTTPException(
+            status_code=400,
+            detail="Invalid verification code",
+            error_code=ErrorCode.AUTH_MFA_CODE_INVALID,
+        )
 
     recovery_codes = mfa_service.generate_recovery_codes()
     # Store only hashes at rest; the plaintext is shown to the user exactly once.
@@ -1054,9 +1076,10 @@ async def refresh_token(
     # Prefer cookie, fall back to body
     rt = refresh_token_cookie or (token_data.refresh_token if token_data else None)
     if not rt:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No refresh token provided.",
+            error_code=ErrorCode.AUTH_NOT_SIGNED_IN,
         )
 
     auth_service = AuthService(db)
@@ -1067,15 +1090,17 @@ async def refresh_token(
         )
     except OperationalError as exc:
         logger.error(f"Database connection error during token refresh: {exc}")
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable. Please try again in a few moments.",
+            error_code=ErrorCode.SYS_DB_UNAVAILABLE,
         )
 
     if not new_access_token:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your session has expired. Please log in again.",
+            error_code=ErrorCode.AUTH_SESSION_INVALID,
             headers={"WWW-Authenticate": "Bearer"},
         )
 

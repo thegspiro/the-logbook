@@ -21,6 +21,7 @@ from starlette.requests import HTTPConnection
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.config import settings
+from app.core.error_codes import CodedHTTPException, ErrorCode
 
 # ============================================
 # Rate Limiting
@@ -749,17 +750,20 @@ async def verify_csrf_token(request: HTTPConnection) -> None:
         #     client whose header is not auto-sent by browsers and so is not
         #     CSRF-exploitable): nothing to protect — allow.
         if request.cookies.get("access_token"):
-            raise HTTPException(
+            raise CodedHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Missing CSRF token",
+                error_code=ErrorCode.AUTH_CSRF_MISSING,
             )
         return
 
     if not request_token or not CSRFProtection.validate_token(
         request_token, cookie_token
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token"
+        raise CodedHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid CSRF token",
+            error_code=ErrorCode.AUTH_CSRF_INVALID,
         )
 
 
