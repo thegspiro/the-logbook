@@ -740,6 +740,14 @@ class StoreOrderPaymentReport(BaseModel):
     note: Optional[str] = None
 
 
+class StoreOrderPaymentMethodUpdate(BaseModel):
+    """Change how a member plans to pay an unsettled order."""
+
+    model_config = _REQUEST_CONFIG
+
+    payment_method: StorePaymentMethod
+
+
 class StoreOrderMarkPaid(BaseModel):
     """Settle an order's whole remaining balance."""
 
@@ -796,7 +804,11 @@ class StoreOrderMessage(BaseModel):
 
     message: str = Field(..., min_length=1)
     is_member_visible: bool = True
+    # ``notify_member`` remains the master switch for older clients. The two
+    # channel switches let the admin console send either kind independently.
     notify_member: bool = True
+    notify_email: bool = True
+    notify_in_app: bool = True
 
 
 class StoreOrderAdminNotes(BaseModel):

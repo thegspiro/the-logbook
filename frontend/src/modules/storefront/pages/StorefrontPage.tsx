@@ -101,7 +101,7 @@ const ProductCard: React.FC<{
             maxLength={offer.personalizationMaxLength}
             onChange={(e) => setPersonalization(e.target.value)}
             className="form-input"
-            placeholder="e.g. SMITH"
+            placeholder="e.g. J. SMITH"
           />
           <p className="text-theme-text-muted mt-0.5 text-xs">
             {personalization.length}/{offer.personalizationMaxLength} characters
