@@ -98,7 +98,9 @@ export const getFacilitiesRoutes = () => (
       path="/locations/qr-codes"
       element={
         <Suspense fallback={null}>
-          <RoomQRCodesPage />
+          <ProtectedRoute requiredAnyPermission={['locations.manage', 'facilities.manage']}>
+            <RoomQRCodesPage />
+          </ProtectedRoute>
         </Suspense>
       }
     />
