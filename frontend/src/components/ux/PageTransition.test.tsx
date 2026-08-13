@@ -1,5 +1,5 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
 import React, { useEffect, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
@@ -64,6 +64,53 @@ describe('PageTransition accessibility', () => {
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Members'));
     expect(screen.getByRole('status')).not.toHaveTextContent('Page loaded');
+  });
+
+  // Assistive tech that queries the region — rather than waiting for the live
+  // announcement — reads whatever it holds. Holding the previous page's
+  // heading through the watch window told it the user was still on a page they
+  // had already left, for up to five seconds.
+  it('clears the previous page announcement while watching a page that opens on a skeleton', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+
+    const Roster: React.FC = () => {
+      const navigate = useNavigate();
+      return (
+        <div>
+          <h1>Roster</h1>
+          <button type="button" onClick={() => void navigate('/members')}>
+            Go to members
+          </button>
+        </div>
+      );
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/roster']}>
+        <PageTransition>
+          <Routes>
+            <Route path="/roster" element={<Roster />} />
+            <Route path="/members" element={<LateHeading delayMs={50} />} />
+          </Routes>
+        </PageTransition>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Roster'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to members' }));
+
+    // Mid-navigation: the new page is still a skeleton, so nothing is claimed
+    // about it — but the old page is no longer claimed either.
+    expect(screen.getByRole('status')).toHaveTextContent('');
+    expect(screen.getByRole('status')).not.toHaveTextContent('Roster');
+
+    // …and the watch still settles on the heading when it lands: one
+    // announcement per navigation, not permanent silence.
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Members'));
   });
 
   it('falls back to a generic announcement when no heading ever arrives', async () => {

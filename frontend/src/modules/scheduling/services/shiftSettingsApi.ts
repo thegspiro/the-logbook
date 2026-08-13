@@ -7,15 +7,16 @@
  * localStorage, so every admin had a private copy and a new browser saw
  * factory defaults.
  *
- * localStorage (under SETTINGS_KEY) is kept as a read-only mirror of the
- * last-known server value: it is the offline/API-failure fallback and the
- * source for the one-time migration of pre-backend settings — never the
- * primary store.
+ * localStorage (under an org-scoped SETTINGS_KEY) is kept as a read-only
+ * mirror of the last-known server value: it is the offline/API-failure
+ * fallback and the source for the one-time migration of pre-backend settings —
+ * never the primary store.
  *
  * Lives in its own file (not services/api.ts) with its own client from the
  * shared factory, which carries the standard cookie/CSRF/refresh setup.
  */
 
+import { useAuthStore } from '../../../stores/authStore';
 import { createApiClient } from '../../../utils/createApiClient';
 import type { ShiftSettings } from '../types/shiftSettings';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from '../types/shiftSettings';
@@ -28,43 +29,92 @@ export interface ShiftSettingsEnvelope {
   stored: boolean;
 }
 
-// ─── Cache & localStorage mirror ─────────────────────────────────────────────
+// ─── Org-scoped cache & localStorage mirror ──────────────────────────────────
 
-let cachedSettings: ShiftSettings | null = null;
-let loadPromise: Promise<ShiftSettings> | null = null;
+/**
+ * SEC (multi-tenant): every cached copy is stamped with the organization it
+ * was fetched for, in memory and in localStorage alike.
+ *
+ * These settings are department-wide, and on a shared station terminal one
+ * department's admin can log out and another's log in without the SPA ever
+ * reloading. An org-neutral cache then served department A's position names,
+ * staffing minimums and equipment-check rules to department B — silently, with
+ * no request made. Keying on the organization id makes that impossible by
+ * construction: a key mismatch falls through to the built-in defaults, never to
+ * another tenant's data. That is deliberately preferred over clearing the cache
+ * on logout, which leaks the day the hook stops firing (an unclean logout, a
+ * crashed tab) with nothing to show for it.
+ */
+const currentOrgId = (): string | null => useAuthStore.getState().user?.organization_id ?? null;
+
+/** null orgId (nobody signed in yet) is a distinct key, so a value fetched
+ *  before the user resolved can never be handed to a named organization. */
+let cache: { orgId: string | null; settings: ShiftSettings } | null = null;
+let inFlight: { orgId: string | null; promise: Promise<ShiftSettings> } | null = null;
 
 const mergeWithDefaults = (partial: Partial<ShiftSettings>): ShiftSettings => ({
   ...DEFAULT_SETTINGS,
   ...partial,
 });
 
-const readLocalSettings = (): Partial<ShiftSettings> | null => {
+/** The mirror's localStorage key, or null when there is no organization to
+ *  scope it to — in which case nothing is read from or written to the mirror. */
+const mirrorKey = (orgId: string | null): string | null => (orgId ? `${SETTINGS_KEY}:${orgId}` : null);
+
+/**
+ * Adopt the pre-backend, pre-org-scoping key on behalf of one organization.
+ *
+ * That blob carries no tenant, so it is re-filed under the first signed-in
+ * organization that looks for a mirror and the untagged copy is deleted: the
+ * one-time migration still works for the department whose browser this is, and
+ * no second department can ever pick the same blob up.
+ */
+const adoptLegacyMirror = (scopedKey: string): Partial<ShiftSettings> | null => {
   try {
-    const stored = localStorage.getItem(SETTINGS_KEY);
-    return stored ? (JSON.parse(stored) as Partial<ShiftSettings>) : null;
+    const legacy = localStorage.getItem(SETTINGS_KEY);
+    if (!legacy) return null;
+    localStorage.setItem(scopedKey, legacy);
+    localStorage.removeItem(SETTINGS_KEY);
+    return JSON.parse(legacy) as Partial<ShiftSettings>;
   } catch {
     return null;
   }
 };
 
-const mirrorToLocalStorage = (settings: ShiftSettings): void => {
+const readLocalSettings = (orgId: string | null): Partial<ShiftSettings> | null => {
+  const key = mirrorKey(orgId);
+  if (!key) return null;
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    const stored = localStorage.getItem(key);
+    if (stored) return JSON.parse(stored) as Partial<ShiftSettings>;
+  } catch {
+    return null;
+  }
+  return adoptLegacyMirror(key);
+};
+
+const mirrorToLocalStorage = (settings: ShiftSettings, orgId: string | null): void => {
+  const key = mirrorKey(orgId);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(settings));
   } catch {
     // Quota/privacy-mode failures only cost the offline fallback.
   }
 };
 
-const setCache = (settings: ShiftSettings, mirror: boolean): ShiftSettings => {
-  cachedSettings = settings;
-  if (mirror) mirrorToLocalStorage(settings);
+const setCache = (settings: ShiftSettings, orgId: string | null, mirror: boolean): ShiftSettings => {
+  cache = { orgId, settings };
+  if (mirror) mirrorToLocalStorage(settings, orgId);
   return settings;
 };
 
-/** Drop the in-memory cache and single-flight promise (tests / logout). */
+/** Drop the in-memory cache and single-flight promise (tests / logout).
+ *  Defence in depth only — the org-keyed cache above is what actually keeps
+ *  one department's settings away from another. */
 export const resetShiftSettingsCache = (): void => {
-  cachedSettings = null;
-  loadPromise = null;
+  cache = null;
+  inFlight = null;
 };
 
 // ─── API calls ───────────────────────────────────────────────────────────────
@@ -76,19 +126,24 @@ export const shiftSettingsService = {
   },
 
   async saveShiftSettings(settings: ShiftSettings): Promise<ShiftSettings> {
+    const orgId = currentOrgId();
     const response = await api.put<ShiftSettingsEnvelope>('/scheduling/shift-settings', settings);
-    return setCache(mergeWithDefaults(response.data.settings), true);
+    return setCache(mergeWithDefaults(response.data.settings), orgId, true);
   },
 
   async resetShiftSettings(): Promise<ShiftSettings> {
+    const orgId = currentOrgId();
     const response = await api.delete<ShiftSettingsEnvelope>('/scheduling/shift-settings');
     try {
+      const key = mirrorKey(orgId);
+      if (key) localStorage.removeItem(key);
+      // Also drop any un-adopted pre-backend blob, so a reset cannot be undone
+      // by the next load re-migrating settings this department just cleared.
       localStorage.removeItem(SETTINGS_KEY);
     } catch {
       // Losing the stale mirror is harmless; the next load rewrites it.
     }
-    cachedSettings = mergeWithDefaults(response.data.settings);
-    return cachedSettings;
+    return setCache(mergeWithDefaults(response.data.settings), orgId, false);
   },
 };
 
@@ -107,10 +162,11 @@ export const shiftSettingsService = {
  * read fallback, then the built-in defaults.
  */
 export async function loadShiftSettings(options?: { migrateLocal?: boolean }): Promise<ShiftSettings> {
+  const orgId = currentOrgId();
   try {
     const { settings, stored } = await shiftSettingsService.getShiftSettings();
     if (!stored) {
-      const local = readLocalSettings();
+      const local = readLocalSettings(orgId);
       if (local) {
         const merged = mergeWithDefaults(local);
         if (options?.migrateLocal) {
@@ -119,37 +175,44 @@ export async function loadShiftSettings(options?: { migrateLocal?: boolean }): P
           } catch {
             // Backend reachable but the write failed — keep the local copy
             // as the working value; the next explicit Save will persist it.
-            return setCache(merged, false);
+            return setCache(merged, orgId, false);
           }
         }
         // Not migrating (viewer context): the local copy is still the best
         // known value while nothing is stored department-wide.
-        return setCache(merged, false);
+        return setCache(merged, orgId, false);
       }
     }
-    return setCache(mergeWithDefaults(settings), true);
+    return setCache(mergeWithDefaults(settings), orgId, true);
   } catch {
-    const local = readLocalSettings();
-    return setCache(local ? mergeWithDefaults(local) : DEFAULT_SETTINGS, false);
+    const local = readLocalSettings(orgId);
+    return setCache(local ? mergeWithDefaults(local) : DEFAULT_SETTINGS, orgId, false);
   }
 }
 
 /**
- * Kick off (at most one) background load and return its promise. Sync
- * consumers call this fire-and-forget and read via getCachedShiftSettings().
+ * Kick off (at most one per organization) background load and return its
+ * promise. Sync consumers call this fire-and-forget and read via
+ * getCachedShiftSettings(). A second organization signing in on the same tab
+ * gets its own load rather than the first one's resolved promise.
  */
 export function ensureShiftSettingsLoaded(): Promise<ShiftSettings> {
-  loadPromise ??= loadShiftSettings();
-  return loadPromise;
+  const orgId = currentOrgId();
+  if (!inFlight || inFlight.orgId !== orgId) {
+    inFlight = { orgId, promise: loadShiftSettings() };
+  }
+  return inFlight.promise;
 }
 
 /**
  * Synchronous accessor for consumers that cannot await (render-time option
  * lists, click handlers): in-memory cache, then the localStorage mirror,
- * then the built-in defaults.
+ * then the built-in defaults — each step scoped to the signed-in organization,
+ * so a miss degrades to defaults rather than to another department's rules.
  */
 export function getCachedShiftSettings(): ShiftSettings {
-  if (cachedSettings) return cachedSettings;
-  const local = readLocalSettings();
+  const orgId = currentOrgId();
+  if (cache && cache.orgId === orgId) return cache.settings;
+  const local = readLocalSettings(orgId);
   return local ? mergeWithDefaults(local) : DEFAULT_SETTINGS;
 }

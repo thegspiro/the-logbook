@@ -32,10 +32,21 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
   // pushing the fallback further away.
   const watchingPath = useRef<string | null>(null);
   const watchDeadline = useRef(0);
+  // The path this effect last ran for, so a re-render (the effect also depends
+  // on children) is told apart from an actual navigation.
+  const lastPath = useRef<string | null>(null);
 
   useEffect(() => {
     setTransitioning(true);
     setDisplayedChildren(children);
+
+    // Every navigation gets its own announcement, including a return to a page
+    // whose watch was abandoned when the user left it mid-load — otherwise the
+    // settled-path guard below would suppress it and leave the region empty.
+    if (lastPath.current !== location.pathname) {
+      lastPath.current = location.pathname;
+      announcedPath.current = null;
+    }
 
     let observer: MutationObserver | null = null;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -69,6 +80,15 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
       if (watchingPath.current !== location.pathname) {
         watchingPath.current = location.pathname;
         watchDeadline.current = Date.now() + HEADING_WATCH_TIMEOUT_MS;
+        // Clear the previous page's heading for the duration of the watch.
+        // Assistive tech that queries this region rather than waiting for the
+        // live announcement reads whatever it holds, and holding the old
+        // heading told it a page the user has already left is the current one
+        // — for up to the full watch window. Empty is honest; the settle below
+        // fills it in with the late heading or the fallback, so this is still
+        // one announcement per navigation and not the permanent silence the
+        // watcher was added to fix.
+        setAnnouncement('');
       }
       if (contentRef.current) {
         observer = new MutationObserver(() => {

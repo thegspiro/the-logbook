@@ -1111,6 +1111,94 @@ describe('ActiveSkillTestPage', () => {
       expect(mockToastError).not.toHaveBeenCalled();
     });
 
+    // The retry re-sends this screen's scoring against a version the server
+    // will accept. If the concurrent write changed a criterion, that write is
+    // exactly what the retry would flatten — the data loss optimistic
+    // concurrency exists to prevent — so it must not be attempted at all.
+    it('should refuse to retry when the concurrent write changed a score', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockFullyScoredTest;
+      mockUpdateTest.mockRejectedValueOnce({ message: 'conflict', status: 409 });
+      // Another examiner flipped the second step to a fail while this screen
+      // still holds it as a pass.
+      mockGetTest.mockResolvedValue({
+        ...mockFullyScoredTest,
+        version: 9,
+        section_results: [
+          {
+            section_id: 'section-0',
+            section_name: 'Donning',
+            criteria_results: [
+              { criterion_id: 'criterion-0-0', passed: true },
+              { criterion_id: 'criterion-0-1', passed: false },
+            ],
+          },
+        ],
+      });
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+
+      await waitFor(() => expect(mockGetTest).toHaveBeenCalledWith('test-1'));
+      // One write only: the failed transition. No retry carried the stale copy.
+      expect(mockUpdateTest).toHaveBeenCalledTimes(1);
+      expect(await screen.findByText(/Someone else changed this test/)).toBeInTheDocument();
+    });
+
+    // A step scored elsewhere that this screen has never seen would be dropped
+    // just as surely as one that was changed.
+    it('should refuse to retry when the concurrent write added a score', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      mockUpdateTest.mockRejectedValueOnce({ message: 'conflict', status: 409 });
+      mockGetTest.mockResolvedValue({
+        ...mockTestWithSections,
+        version: 9,
+        section_results: [
+          {
+            section_id: 'section-1',
+            section_name: 'Doffing',
+            criteria_results: [{ criterion_id: 'criterion-1-0', passed: true }],
+          },
+        ],
+      });
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+
+      await waitFor(() => expect(mockGetTest).toHaveBeenCalledWith('test-1'));
+      expect(mockUpdateTest).toHaveBeenCalledTimes(1);
+      expect(await screen.findByText(/Someone else changed this test/)).toBeInTheDocument();
+    });
+
+    // The common 409: an officer edited the draft's details, leaving every
+    // recorded result alone. Re-sending the local scoring overwrites nobody,
+    // so the clock still starts.
+    it('should still retry when the concurrent write left every score untouched', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockFullyScoredTest;
+      mockUpdateTest.mockRejectedValueOnce({ message: 'conflict', status: 409 });
+      mockGetTest.mockResolvedValue({
+        ...mockFullyScoredTest,
+        version: 9,
+        notes: 'Rescheduled to Tuesday',
+      });
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'FAIL' }));
+
+      await waitFor(() => expect(mockUpdateTest).toHaveBeenCalledTimes(2));
+      expect(mockUpdateTest).toHaveBeenLastCalledWith(
+        'test-1',
+        expect.objectContaining({
+          status: 'in_progress',
+          expected_version: 9,
+          section_results: mockFullyScoredTest.section_results,
+        })
+      );
+      expect(screen.queryByText(/Someone else changed this test/)).not.toBeInTheDocument();
+    });
+
     it('should give up visibly when the retry conflicts too', async () => {
       const user = userEvent.setup();
       currentMockTest = mockTestWithSections;

@@ -1014,6 +1014,45 @@ function steps(count: number): string {
   return `${count} step${count === 1 ? '' : 's'}`;
 }
 
+/** Two recordings of the same step, compared on everything that is a score. */
+function sameCriterionResult(a: CriterionResult, b: CriterionResult): boolean {
+  return (
+    (a.passed ?? null) === (b.passed ?? null) &&
+    (a.score ?? null) === (b.score ?? null) &&
+    (a.time_seconds ?? null) === (b.time_seconds ?? null) &&
+    (a.notes ?? '') === (b.notes ?? '') &&
+    JSON.stringify(a.checklist_completed ?? []) === JSON.stringify(b.checklist_completed ?? [])
+  );
+}
+
+/**
+ * Does this screen's scoring still contain, unchanged, every result the server
+ * holds?
+ *
+ * The draft→in_progress transition carries local section_results (see
+ * startTimer for why), so after a 409 it may only be re-sent when doing so
+ * cannot flatten whoever wrote in between: every criterion the server has
+ * recorded must be present in the local copy with the same value. A mark this
+ * examiner has just made and not yet saved is an addition on top of the
+ * server's set and is safe; a mark another examiner recorded — or changed — is
+ * not, and there is no version number that makes overwriting it acceptable.
+ */
+function localScoringCoversServer(server: SectionResult[] | undefined, local: SectionResult[] | undefined): boolean {
+  const localResults = new Map<string, CriterionResult>();
+  for (const section of local ?? []) {
+    for (const result of section.criteria_results ?? []) {
+      localResults.set(`${section.section_id}::${result.criterion_id}`, result);
+    }
+  }
+  for (const section of server ?? []) {
+    for (const result of section.criteria_results ?? []) {
+      const mine = localResults.get(`${section.section_id}::${result.criterion_id}`);
+      if (!mine || !sameCriterionResult(mine, result)) return false;
+    }
+  }
+  return true;
+}
+
 // ==================== Main Active Test Page ====================
 
 export const ActiveSkillTestPage: React.FC = () => {
@@ -1235,7 +1274,11 @@ export const ActiveSkillTestPage: React.FC = () => {
    * returns the whole record and the store adopts the response, so a
    * status-only write would echo back the server's older section_results and
    * wipe the criterion the examiner just tapped — which, now, is the very tap
-   * that starts the clock.
+   * that starts the clock. That is safe on the first attempt, which carries the
+   * version this screen loaded; on the 409 retry it is only safe once the
+   * refetched record is checked against the local snapshot (see
+   * localScoringCoversServer), because a fresh version number would otherwise
+   * buy the stale snapshot the right to overwrite the concurrent write.
    *
    * The write is held in transitionRef because it shares the
    * optimistic-concurrency version with every other save. Fired-and-forgotten,
@@ -1275,9 +1318,18 @@ export const ActiveSkillTestPage: React.FC = () => {
         const fresh = await skillsTestingService.getTest(test.id);
         if (fresh.status !== FormStatus.DRAFT) return;
         const latest = useSkillsTestingStore.getState();
+        const localResults = latest.currentTest?.section_results ?? [];
+        // The retry re-sends this screen's scoring against the *fresh* version,
+        // which the server will accept — so it must first be established that
+        // doing so overwrites nothing. If the concurrent write touched any
+        // criterion result, this is the real conflict optimistic concurrency
+        // exists to catch: rethrow the 409 so the banner goes up and the
+        // examiner reloads, rather than quietly replacing their colleague's
+        // marks with a local snapshot that never saw them.
+        if (!localScoringCoversServer(fresh.section_results, localResults)) throw err;
         await updateTest(test.id, {
           status: 'in_progress',
-          section_results: latest.currentTest?.section_results ?? [],
+          section_results: localResults,
           elapsed_seconds: latest.activeTestTimer,
           expected_version: fresh.version,
         });
