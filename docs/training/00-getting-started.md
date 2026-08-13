@@ -196,17 +196,18 @@ Governance, and so on.
 
 If you have administrative permissions (officers, IT Manager, etc.), you will see an additional **Administration** section below the member links:
 
-| Menu Item                 | Description                                         |
-| ------------------------- | --------------------------------------------------- |
-| **Department Setup**      | Guided checklist for initial configuration          |
-| **Members Admin**         | Prospective members, pipeline, member management    |
-| **Events Admin**          | Create events, view analytics                       |
-| **Training Admin**        | Review submissions, manage requirements, compliance |
-| **Inventory Admin**       | Manage items, view member equipment                 |
-| **Forms**                 | Build and manage custom forms                       |
-| **Integrations**          | Connect to external services                        |
-| **Reports**               | Generate department reports                         |
-| **Organization Settings** | Organization settings, roles, public portal         |
+| Menu Item                   | Description                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| **Department Setup**        | Guided checklist for initial configuration                                                    |
+| **Members** ▾               | Prospective, Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening |
+| **Events Admin**            | Create events, view analytics                                                                 |
+| **Training Admin**          | Review submissions, manage requirements, compliance                                           |
+| **Inventory Admin**         | Manage items, view member equipment                                                           |
+| **Store Admin**             | Storefront products, order windows, and fulfilment                                            |
+| **Admin Hours**             | Review and approve administrative hours                                                       |
+| **Forms & Comms** ▾         | Email Templates, Messages, Forms, Integrations                                                |
+| **Reports**                 | Generate department reports                                                                   |
+| **Organization Settings** ▾ | Organization settings, roles, public portal                                                   |
 
 ![The sidebar scrolled to its Administration section with the admin-only links](./images/00-16-sidebar-admin.png)
 
@@ -295,7 +296,7 @@ From here you can:
 - **Download your data** — a complete export of everything the system stores about you _(2026-07-31)_
 - View your **assigned roles and permissions**
 
-![Account Settings page with profile, notification preferences, and password sections](./images/00-09-account-settings.png)
+![Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications](./images/00-09-account-settings.png)
 
 > **Privacy note:** Privacy choices and the data export live on the
 > **Security** tab. Nothing under Privacy Choices is required for membership,

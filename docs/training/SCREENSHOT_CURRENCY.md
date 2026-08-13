@@ -43,7 +43,28 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
-### 00-getting-started — 5 of 11 changed images verified
+### 00-getting-started — 10 of 11 changed images verified
+
+Second tick added five: `00-09-account-settings`, `00-16-sidebar-admin`,
+`00-17-account-settings`, `00-19-change-password`,
+`00-22-notification-card-expanded` — all current. Only
+`00-07-dashboard-panels` is still unopened.
+
+**What `00-16-sidebar-admin` exposed.** The guide's Administration table had
+drifted from the navigation in four ways, checked against `SideNavigation.tsx`
+rather than against the picture: **Store Admin** and **Admin Hours** were
+missing entirely, **Forms** is now **Forms & Comms** with Email Templates,
+Messages, Forms and Integrations under it, and **Integrations** was listed as a
+top-level item when it is nested. Table rewritten.
+
+**What `00-09` and `00-17` exposed.** They are the same picture — `/settings/account`
+and `/account` are aliases for one page. That is fine, but `00-09`'s caption
+promised "profile, notification preferences, and password sections", and those
+are separate **tabs**, not sections of the page shown. Caption corrected in both
+the guide and the manifest. Unlike the `03-15`/`03-32` and `03-02`/`03-08`
+pairs below, this one was not previously recorded.
+
+### 00-getting-started — first tick, 5 of 11 changed images verified
 
 | Image                      | Verdict                                                           |
 | -------------------------- | ----------------------------------------------------------------- |

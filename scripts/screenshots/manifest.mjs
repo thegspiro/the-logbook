@@ -3247,7 +3247,7 @@ export const SHOTS = [
     line: 206,
     anchor:
       "Screenshot of the Account Settings page showing the profile section, notification preferences",
-    alt: "Account Settings page with profile, notification preferences, and password sections",
+    alt: "Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications",
     route: "/settings/account",
     fullPage: true,
   },
