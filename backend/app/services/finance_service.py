@@ -1850,14 +1850,19 @@ class FinanceService:
         await self.db.refresh(dues, ["updated_at"])
         return dues
 
-    async def list_dues_payments(self, dues_id: str, org_id: str) -> list[DuesPayment]:
+    async def list_dues_payments(
+        self, dues_id: str, org_id: str, viewer_user_id: Optional[str] = None
+    ) -> list[DuesPayment]:
         """Return the payment ledger for one member's dues, oldest first."""
+        filters = [
+            MemberDues.id == dues_id,
+            MemberDues.organization_id == org_id,
+        ]
+        if viewer_user_id is not None:
+            filters.append(MemberDues.user_id == viewer_user_id)
         result = await self.db.execute(
             select(MemberDues)
-            .where(
-                MemberDues.id == dues_id,
-                MemberDues.organization_id == org_id,
-            )
+            .where(*filters)
             .options(selectinload(MemberDues.payments))
         )
         dues = result.scalar_one_or_none()
