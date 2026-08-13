@@ -1052,22 +1052,27 @@ async def update_election(
     # PATCH validation must consider the stored half of a partial update.
     # Validating each field in isolation would allow, for example, switching
     # quorum_type to percentage while retaining no value (or a count > 100).
-    effective_quorum_type = update_data.get("quorum_type", election.quorum_type)
-    effective_quorum_value = update_data.get("quorum_value", election.quorum_value)
-    if effective_quorum_type != "none" and effective_quorum_value is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="quorum_value is required when quorum is enabled",
-        )
-    if (
-        effective_quorum_type == "percentage"
-        and effective_quorum_value is not None
-        and effective_quorum_value > 100
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Percentage quorum cannot exceed 100",
-        )
+    # Enforced only when the PATCH touches quorum config: legacy rows can
+    # hold quorum_type != none with a NULL quorum_value, and checking on
+    # every update made such elections uneditable (even a title-only PATCH
+    # was rejected until the caller also repaired the quorum fields).
+    if "quorum_type" in update_data or "quorum_value" in update_data:
+        effective_quorum_type = update_data.get("quorum_type", election.quorum_type)
+        effective_quorum_value = update_data.get("quorum_value", election.quorum_value)
+        if effective_quorum_type != "none" and effective_quorum_value is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="quorum_value is required when quorum is enabled",
+            )
+        if (
+            effective_quorum_type == "percentage"
+            and effective_quorum_value is not None
+            and effective_quorum_value > 100
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Percentage quorum cannot exceed 100",
+            )
 
     for field, value in update_data.items():
         if field in ALLOWED_ELECTION_UPDATE_FIELDS:

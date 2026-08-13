@@ -10,15 +10,35 @@ Covers:
   effective position and books positions_voted by effective position.
 - _count_ballots_cast honors per-ballot-item voting-method overrides when
   deciding whether per-position sums are a safe per-voter count.
+- date-pair validators normalize naive datetimes to UTC so a mixed
+  naive/aware payload is a 422 (ValidationError), not a TypeError → 500.
+- the strict ballot-item id pattern applies to input only; response models
+  still deserialize legacy stored ids (spaces/punctuation) without a 500.
+- the effective-quorum PATCH check runs only when the update touches quorum
+  fields, so legacy rows with quorum_type != none and quorum_value NULL
+  stay editable (title-only PATCH succeeds).
 """
 
 import secrets
+import uuid as uuid_module
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
+import pytest
+from pydantic import ValidationError
+from sqlalchemy import text
+
 from app.models.election import ElectionStatus
+from app.schemas.election import (
+    BallotItem,
+    CloneElectionRequest,
+    ElectionCreate,
+    ElectionResponse,
+    ElectionUpdate,
+    SavedBallotTemplateCreate,
+)
 from app.services.election_service import ElectionService
 
 # ---------------------------------------------------------------------------
@@ -480,3 +500,263 @@ class TestCountBallotsCast:
             )
         )
         assert ElectionService._count_ballots_cast(election, votes) == 11
+
+
+# ===================================================================
+# Finding 5 — mixed naive/aware datetimes must be a 422, not a 500
+# (PRs #1300/#1301)
+# ===================================================================
+
+
+class TestMixedDatetimeFormsAreValidationErrors:
+    """Pydantic v2 accepts both '2026-01-01T00:00:00' and
+    '2026-01-01T00:00:00Z'; comparing the two raises TypeError, which a
+    model_validator does NOT convert to a validation error. The schemas
+    now normalize naive datetimes to UTC before any comparison."""
+
+    NAIVE = datetime(2026, 9, 1, 12, 0, 0)
+    AWARE = datetime(2026, 9, 3, 12, 0, 0, tzinfo=timezone.utc)
+
+    def test_create_with_naive_start_and_aware_end_validates(self):
+        election = ElectionCreate(
+            title="Mixed tz", start_date=self.NAIVE, end_date=self.AWARE
+        )
+        assert election.start_date.tzinfo is not None
+        assert election.end_date.tzinfo is not None
+
+    def test_create_mixed_forms_invalid_order_is_validation_error(self):
+        # end before start, expressed as aware-end + naive-start: must be a
+        # ValidationError (422 at the API boundary), never a bare TypeError.
+        with pytest.raises(ValidationError):
+            ElectionCreate(
+                title="Mixed tz",
+                start_date=self.AWARE,
+                end_date=self.NAIVE - timedelta(days=30),
+            )
+
+    def test_create_normalizes_naive_as_utc(self):
+        election = ElectionCreate(
+            title="Naive",
+            start_date=self.NAIVE,
+            end_date=self.NAIVE + timedelta(days=1),
+        )
+        assert election.start_date == self.NAIVE.replace(tzinfo=timezone.utc)
+
+    def test_update_normalizes_all_datetime_fields(self):
+        update = ElectionUpdate(
+            start_date=self.NAIVE,
+            end_date=self.AWARE,
+            meeting_date=self.NAIVE,
+            nomination_deadline=self.NAIVE,
+        )
+        for field in ("start_date", "end_date", "meeting_date", "nomination_deadline"):
+            assert getattr(update, field).tzinfo is not None, field
+
+    def test_clone_request_mixed_forms_is_validation_error(self):
+        # CloneElectionRequest.validate_dates had the identical comparison bug.
+        with pytest.raises(ValidationError):
+            CloneElectionRequest(
+                title="Clone",
+                start_date=self.AWARE,
+                end_date=self.NAIVE - timedelta(days=30),
+            )
+
+    def test_clone_request_mixed_forms_valid_order_passes(self):
+        clone = CloneElectionRequest(
+            title="Clone", start_date=self.NAIVE, end_date=self.AWARE
+        )
+        assert clone.start_date.tzinfo is not None
+
+
+# ===================================================================
+# Finding 6 — strict ballot-item id pattern is input-only
+# (PRs #1300/#1301)
+# ===================================================================
+
+LEGACY_ITEM = {
+    "id": "Approve 2019 budget (item #1)",  # spaces + punctuation
+    "type": "general_vote",
+    "title": "Approve 2019 budget",
+    "vote_type": "approval",
+}
+
+
+class TestBallotItemIdStrictnessIsInputOnly:
+    def test_response_model_accepts_legacy_id(self):
+        # Stored JSON from pre-pattern rows deserializes through BallotItem
+        # in every response schema; a strict pattern there is a 500 on GET.
+        item = BallotItem.model_validate(LEGACY_ITEM)
+        assert item.id == LEGACY_ITEM["id"]
+
+    def test_response_model_accepts_legacy_supermajority_without_percentage(self):
+        # Same class of bug: the supermajority-requires-percentage rule can
+        # only be demanded of new payloads, not of already-stored items.
+        item = BallotItem.model_validate(
+            {**LEGACY_ITEM, "victory_condition": "supermajority"}
+        )
+        assert item.victory_percentage is None
+
+    def test_election_response_serializes_legacy_ballot_items(self):
+        election = _make_election(
+            ballot_items=[LEGACY_ITEM],
+            email_sent=False,
+            email_sent_at=None,
+            email_recipients=None,
+            meeting_date=None,
+            meeting_id=None,
+            event_id=None,
+        )
+        response = ElectionResponse.model_validate(election)
+        assert response.ballot_items is not None
+        assert response.ballot_items[0].id == LEGACY_ITEM["id"]
+
+    def test_create_rejects_legacy_id(self):
+        with pytest.raises(ValidationError, match="pattern"):
+            ElectionCreate(
+                title="Strict input",
+                start_date=datetime(2026, 9, 1, tzinfo=timezone.utc),
+                end_date=datetime(2026, 9, 2, tzinfo=timezone.utc),
+                ballot_items=[LEGACY_ITEM],
+            )
+
+    def test_update_rejects_legacy_id(self):
+        with pytest.raises(ValidationError, match="pattern"):
+            ElectionUpdate(ballot_items=[LEGACY_ITEM])
+
+    def test_saved_template_rejects_legacy_id(self):
+        with pytest.raises(ValidationError, match="pattern"):
+            SavedBallotTemplateCreate(name="Legacy", ballot_items=[LEGACY_ITEM])
+
+    def test_input_still_requires_supermajority_percentage(self):
+        item = {
+            "id": "budget-2026",
+            "type": "general_vote",
+            "title": "Approve 2026 budget",
+            "vote_type": "approval",
+            "victory_condition": "supermajority",
+        }
+        with pytest.raises(ValidationError, match="victory_percentage"):
+            ElectionUpdate(ballot_items=[item])
+        # With the percentage the same item is accepted.
+        update = ElectionUpdate(ballot_items=[{**item, "victory_percentage": 67}])
+        assert update.ballot_items[0].victory_percentage == 67
+
+
+# ===================================================================
+# Finding 7 — quorum validity check must not brick legacy rows
+# (PR #1301)
+# ===================================================================
+
+
+@pytest.mark.integration
+class TestQuorumCheckOnlyWhenTouched:
+    """Pre-existing rows can hold quorum_type != 'none' with quorum_value
+    NULL. The effective-quorum check on PATCH must only run when the update
+    touches quorum fields — otherwise even a title-only PATCH 400s and the
+    election can never be edited (or repaired) again."""
+
+    @pytest.fixture
+    async def legacy_quorum_election(self, db_session):
+        org_id = str(uuid_module.uuid4())
+        user_id = str(uuid_module.uuid4())
+        election_id = str(uuid_module.uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
+                "VALUES (:id, :name, 'fire_department', :slug, 'UTC')"
+            ),
+            {"id": org_id, "name": "Legacy Quorum FD", "slug": f"lq-{org_id[:8]}"},
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO users "
+                "(id, organization_id, username, first_name, last_name, "
+                "email, password_hash, status) "
+                "VALUES (:id, :org, :un, 'Quinn', 'Quorum', :em, 'hashed', 'active')"
+            ),
+            {
+                "id": user_id,
+                "org": org_id,
+                "un": f"lq-admin-{user_id[:8]}",
+                "em": f"lq-admin-{user_id[:8]}@test.com",
+            },
+        )
+        now = datetime.now(timezone.utc)
+        await db_session.execute(
+            text(
+                "INSERT INTO elections "
+                "(id, organization_id, title, election_type, "
+                "start_date, end_date, status, anonymous_voting, "
+                "allow_write_ins, max_votes_per_position, voting_method, "
+                "victory_condition, voter_anonymity_salt, "
+                "quorum_type, quorum_value, "
+                "created_by, email_sent, results_visible_immediately, "
+                "enable_runoffs, runoff_type, max_runoff_rounds, "
+                "is_runoff, runoff_round, auto_open, created_at, updated_at) "
+                "VALUES (:id, :org, 'Legacy Quorum Election', 'general', "
+                ":start, :end, 'draft', 1, 0, 1, 'simple_majority', "
+                "'most_votes', :salt, "
+                "'percentage', NULL, "  # the legacy shape under test
+                ":creator, 0, 0, 0, 'top_two', 3, 0, 0, 0, NOW(), NOW())"
+            ),
+            {
+                "id": election_id,
+                "org": org_id,
+                "start": now + timedelta(days=1),
+                "end": now + timedelta(days=2),
+                "salt": secrets.token_hex(32),
+                "creator": user_id,
+            },
+        )
+        await db_session.flush()
+        return org_id, user_id, election_id
+
+    async def test_title_only_patch_succeeds_on_legacy_quorum_row(
+        self, db_session, legacy_quorum_election
+    ):
+        from app.api.v1.endpoints.elections import update_election
+
+        org_id, user_id, election_id = legacy_quorum_election
+        response = await update_election(
+            election_id=UUID(election_id),
+            election_update=ElectionUpdate(title="Renamed Legacy Election"),
+            db=db_session,
+            current_user=SimpleNamespace(id=user_id, organization_id=org_id),
+        )
+        assert response.title == "Renamed Legacy Election"
+        # The stored (invalid) quorum config is left alone, not "repaired".
+        assert response.quorum_type == "percentage"
+        assert response.quorum_value is None
+
+    async def test_patch_touching_quorum_still_enforced(
+        self, db_session, legacy_quorum_election
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints.elections import update_election
+
+        org_id, user_id, election_id = legacy_quorum_election
+        with pytest.raises(HTTPException) as exc_info:
+            await update_election(
+                election_id=UUID(election_id),
+                election_update=ElectionUpdate(quorum_type="count"),
+                db=db_session,
+                current_user=SimpleNamespace(id=user_id, organization_id=org_id),
+            )
+        assert exc_info.value.status_code == 400
+        assert "quorum_value" in exc_info.value.detail
+
+    async def test_patch_can_repair_legacy_quorum_row(
+        self, db_session, legacy_quorum_election
+    ):
+        from app.api.v1.endpoints.elections import update_election
+
+        org_id, user_id, election_id = legacy_quorum_election
+        response = await update_election(
+            election_id=UUID(election_id),
+            election_update=ElectionUpdate(quorum_type="percentage", quorum_value=50),
+            db=db_session,
+            current_user=SimpleNamespace(id=user_id, organization_id=org_id),
+        )
+        assert response.quorum_type == "percentage"
+        assert response.quorum_value == 50
