@@ -698,6 +698,14 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.step_progress).selectinload(
                     ProspectStepProgress.step
                 ),
+                # `_validate_step_completion` counts these when the step is an
+                # interview_requirement. It is a lazy backref, so without it the
+                # read happens mid-await and SQLAlchemy raises MissingGreenlet —
+                # surfacing as a 500 from advance/complete rather than anything
+                # the endpoint's ValueError handling can turn into a 4xx.
+                # Interview is the third stage of the default pipeline, so this
+                # blocked advancing anyone past it, including in bulk.
+                selectinload(ProspectiveMember.interviews),
             )
             # Refresh identity-map instances: the prospect's pipeline/steps
             # may already be cached in this session from an earlier call, and

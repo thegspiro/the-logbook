@@ -3051,6 +3051,11 @@ export const SHOTS = [
       await page.waitForTimeout(1800);
     },
     fullPage: true,
+    // The board spreads seven applicants across six stages, so some columns
+    // read "No applicants", and a drawer for an applicant who has uploaded
+    // nothing reads "No documents yet". Both are honest; the populated
+    // check is Total Active.
+    allowEmptyState: true,
   },
   // ── 00 Getting Started ──────────────────────────────────────────────
   {
@@ -5222,6 +5227,11 @@ export const SHOTS = [
       "Screenshot of the Prospective Members main page showing the kanban board view",
     alt: "Prospective members kanban board with a column per pipeline stage",
     route: "/prospective-members",
+    // The board spreads seven applicants across six stages, so some columns
+    // read "No applicants", and a drawer for an applicant who has uploaded
+    // nothing reads "No documents yet". Both are honest; the populated
+    // check is Total Active.
+    allowEmptyState: true,
   },
   {
     id: "15-02-board-truncated",
@@ -7604,6 +7614,11 @@ export const SHOTS = [
         .click({ timeout: 10_000 });
     },
     fullPage: true,
+    // The board spreads seven applicants across six stages, so some columns
+    // read "No applicants", and a drawer for an applicant who has uploaded
+    // nothing reads "No documents yet". Both are honest; the populated
+    // check is Total Active.
+    allowEmptyState: true,
   },
 
   // ── Sixth batch: documents, forms and department messaging ─────────

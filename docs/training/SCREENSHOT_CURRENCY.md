@@ -43,6 +43,41 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### 15-prospective-members — in progress, and it found the advance bug's real cost
+
+`15-01-pipeline-board` and `15-14-applicant-drawer-overview` are populated now
+that the pipeline has stages, and their empty-state flags are the same false
+positive as guide 01's (some columns legitimately read "No applicants";
+a drawer for an applicant with no uploads reads "No documents yet"). Suppressed
+with that reasoning beside the entries.
+
+**`15-09-bulk-action-result` was displaying the 500 verbatim.** Its toast read
+"Skipped 7: Rosa Delgado (**Action failed**); Morgan Tran (Prospect is already
+at the final stage) … and 4 more" — every one of seven applicants refused, four
+of them by the MissingGreenlet crash. So the advance bug was not an edge case:
+it blocked the whole bulk workflow, and this screenshot was documenting it as
+normal behaviour.
+
+Fixed rather than filed. The audit that entry said was needed turned out to be
+one line long: `_validate_step_completion` reads exactly one relationship that
+`get_prospect` did not eager-load, `interviews`. Adding it lets the validator
+actually run, and the endpoint's existing `ValueError` → 409 handling does the
+rest. The toast now reads "This step requires at least 1 interview(s); only 0
+recorded." — a real business-rule answer instead of a crash. A second test
+guards the audit rather than the single relationship, failing if the validator
+ever reads another unloaded one.
+
+Two shots still failing, both about seed data rather than code:
+`15-02-board-truncated` (`locator.waitFor` timeout — the board needs more
+applicants than fit a column) and `15-13-application-status` ("no applicant
+carries a status token").
+
+The board's spread is also lopsided — four in Interview, three in Onboarding,
+three stages empty — because the seeder's advance loop only ran for
+newly-created prospects, and the ones already in the database could not be
+moved while advance was crashing. Now that it returns a proper 409, spreading
+them needs interviews recorded first.
+
 ### 01-membership — images complete, 19 of 19 verified
 
 The last five opened and current: `01-05-add-member-form`,

@@ -1517,29 +1517,6 @@ position model to the ballot-item model the public page already uses, including
 its submission shape. Needs an owner decision on whether to converge the two
 ballots or retire one of them. This loop does not make that call.
 
-## Prospective Members — Advancing Out of an Interview Stage Returns 500 (2026-08-13)
-
-`POST /api/v1/prospective-members/prospects/{id}/advance` answers **500** when
-the prospect's current stage is an `interview_requirement`. It is not a handled
-error: `MembershipPipelineService._validate_step_completion` reads
-`prospect.interviews` — a lazily-loaded relationship — inside async context, and
-SQLAlchemy raises `MissingGreenlet` ("greenlet_spawn has not been called").
-
-The endpoint already maps `ValueError` to a 409 for the legitimate "nowhere to
-advance to" cases, so the surrounding error handling is deliberate; this one
-escapes it entirely and reaches the unhandled-exception handler.
-
-**Interview is the third stage of the default pipeline**, so any department
-using the shipped stage set hits this the first time it tries to move an
-applicant past it. The applicant cannot be advanced through the UI either, since
-the button calls the same endpoint.
-
-The fix is to eager-load `interviews` (and to audit the other relationships
-`_validate_step_completion` touches for the same pattern) rather than to catch
-the error — a lazy load in async context is the defect, not the symptom. Left
-for an owner because it wants a proper audit of that validator's loading
-strategy rather than a one-relationship patch from a documentation pass.
-
 ## Training — The Student View of a Cohort Has No Frontend (2026-08-12)
 
 The API implements it. `GET /training/cohorts/{id}` served to a member on the
