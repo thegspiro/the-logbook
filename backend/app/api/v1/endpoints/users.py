@@ -63,7 +63,6 @@ from app.services.admin_continuity_service import (
 from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.services.user_deletion_service import (
-    describe_blockers,
     find_hard_delete_blockers,
     release_user_references,
 )
@@ -1474,10 +1473,9 @@ async def delete_user(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
-                    "This member owns records that cannot be left without an "
-                    f"owner ({describe_blockers(blockers)}), so they cannot be "
-                    "permanently deleted. Deactivate the member instead, then "
-                    "anonymize them to remove their personal information while "
+                    "This member owns records that must retain an owner, so they "
+                    "cannot be permanently deleted. Deactivate the member instead, "
+                    "then anonymize them to remove their personal information while "
                     "keeping those records intact."
                 ),
             )

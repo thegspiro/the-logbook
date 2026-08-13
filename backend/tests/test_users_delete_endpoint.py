@@ -117,7 +117,9 @@ class TestDeleteUserHard:
             )
 
         assert exc.value.status_code == 409
-        assert "2 purchase requests" in exc.value.detail
+        assert "purchase requests" not in exc.value.detail
+        assert "2" not in exc.value.detail
+        assert "must retain an owner" in exc.value.detail
         assert "anonymize" in exc.value.detail
         db.delete.assert_not_awaited()
 
