@@ -94,12 +94,13 @@ require `facilities.view_sensitive`, `facilities.edit`, or
 maintenance, inspections, emergency contacts, shutoffs, compliance) stay at
 `facilities.view`. The frontend hides the sensitive sidebar sections for
 view-only users via `useFacilitiesAccess().canViewSensitive`.
-`facilities.view_sensitive` is a read-only grant for ranks whose duties
-require facility knowledge without facility write access — the default
-position templates give it to captain (station commander), vice president
-(president's stand-in), and treasurer (utilities/insurance/budgets are
-financial records); chiefs, president, and facilities manager are covered by
-`facilities.manage`. Template changes seed new organizations only — existing
+`facilities.view_sensitive` is a read-only, organization-wide grant for ranks
+whose duties require facility knowledge without facility write access — the
+default position templates give it to vice president (president's stand-in)
+and treasurer (utilities/insurance/budgets are financial records); chiefs,
+president, and facilities manager are covered by `facilities.manage`. The
+station-specific captain rank does not receive organization-wide sensitive
+access by default. Template changes seed new organizations only — existing
 organizations adjust their positions through the role editor. Locked by
 `backend/tests/test_facilities_permissions.py` (route-dependency
 introspection + template contract) and the frontend section-contract test.
