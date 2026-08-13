@@ -219,6 +219,19 @@ def user_has_permission(user: User, permission: str) -> bool:
     return _has_permission(permission, _collect_user_permissions(user))
 
 
+def can_view_officer_training_data(user: User) -> bool:
+    """True if *user* may see officer-only training data.
+
+    Checklist steps flagged ``member_visible: false`` (background checks,
+    reference calls, …) and their sign-off state are reserved for training
+    officers and anyone cleared to view all members' training. Shared here so
+    every training endpoint gates on the same rule.
+    """
+    return user_has_permission(user, "training.view_all") or user_has_permission(
+        user, "training.manage"
+    )
+
+
 class PermissionChecker:
     """
     Dependency class for checking user permissions using OR logic.

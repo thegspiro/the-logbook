@@ -67,6 +67,18 @@ from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org
 from app.utils.phase_prerequisites import find_cycle
 
+# progress_notes keys written only through officer-gated paths: checklist
+# sign-off state and knowledge-test scoring. A member editing their own notes
+# must not be able to replace (wipe) or forge these — see the merge in
+# update_requirement_progress.
+OFFICER_PROGRESS_NOTE_KEYS = (
+    "checklist_done",
+    "test_attempts",
+    "latest_score",
+    "passing_score",
+    "passed",
+)
+
 
 class TrainingProgramService:
     """Service for training program management"""
@@ -2730,9 +2742,22 @@ class TrainingProgramService:
                 progress.status = RequirementProgressStatus.COMPLETED
                 progress.completed_at = datetime.now(timezone.utc)
 
-        # Update notes
+        # Update notes. progress_notes is a whole-dict replacement for officers
+        # and system callers, but a member's update is merged: officer-recorded
+        # keys (checklist sign-offs, test attempts) are carried over from the
+        # stored value so a member note edit can neither wipe nor forge them.
+        # Built as a fresh deep copy so SQLAlchemy sees the JSON column change
+        # (shared nested references would make old == new and skip the UPDATE).
         if updates.progress_notes is not None:
-            progress.progress_notes = updates.progress_notes
+            new_notes = copy.deepcopy(updates.progress_notes)
+            if acting_user_id is not None and not can_manage:
+                stored_notes = progress.progress_notes or {}
+                for key in OFFICER_PROGRESS_NOTE_KEYS:
+                    if key in stored_notes:
+                        new_notes[key] = copy.deepcopy(stored_notes[key])
+                    else:
+                        new_notes.pop(key, None)
+            progress.progress_notes = new_notes
 
         # Update verification
         if verified_by:
