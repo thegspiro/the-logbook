@@ -83,13 +83,14 @@ def test_report_listing_accepts_officer_view_permissions():
     }
 
 
-@pytest.mark.parametrize(
-    "handler_name", ["generate_compliance_report", "email_compliance_report"]
-)
-def test_report_actions_accept_reports_manage(handler_name):
-    # The report tab renders generate/email for everyone who can open the
-    # page; elected officers hold reports.manage without training.manage.
-    assert _permission_names(handler_name) == {
+def test_report_generation_requires_training_manage():
+    # Generating a report returns its full member-level compliance data, so
+    # reports.manage (which only manages saved definitions) is insufficient.
+    assert _permission_names("generate_compliance_report") == {"training.manage"}
+
+
+def test_report_email_accepts_reports_manage():
+    assert _permission_names("email_compliance_report") == {
         "training.manage",
         "reports.manage",
     }

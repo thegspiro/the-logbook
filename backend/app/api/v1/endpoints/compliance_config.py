@@ -185,10 +185,7 @@ async def delete_compliance_profile(
 async def generate_compliance_report(
     data: ComplianceReportGenerate,
     db: AsyncSession = Depends(get_db),
-    # reports.manage: generating/distributing stored compliance reports is a
-    # reports action — elected officers hold reports.manage without
-    # training.manage, and the report tab renders these actions for them.
-    current_user=Depends(require_permission("training.manage", "reports.manage")),
+    current_user=Depends(require_permission("training.manage")),
 ):
     """Generate a new compliance report (monthly or yearly)."""
     async with handle_service_errors("Failed to generate report"):
