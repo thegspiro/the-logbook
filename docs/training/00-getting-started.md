@@ -172,6 +172,7 @@ of their own — Training, Operations and Governance:
 | Menu Item            | Description                                                                                    |
 | -------------------- | ---------------------------------------------------------------------------------------------- |
 | **Dashboard**        | Your home page with quick stats and upcoming items                                             |
+| **Learning Center**  | Short task-based paths through the app — open a task, do it, tick it off                       |
 | **Members**          | Department roster and member profiles                                                          |
 | **Events**           | Upcoming and past department events                                                            |
 | **Documents**        | Shared files, SOPs, and policies                                                               |

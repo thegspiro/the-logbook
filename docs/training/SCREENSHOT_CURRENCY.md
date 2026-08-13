@@ -36,6 +36,44 @@ earlier** and remain stale.
 
 ---
 
+## The 2026-08-13 guide-by-guide re-verification
+
+Every image below was **opened and read against its caption** before being
+committed. Images that changed but were not opened are deliberately left
+uncommitted rather than taken on trust — see the navigation incident below for
+why that rule exists.
+
+### 00-getting-started — 5 of 11 changed images verified
+
+| Image                      | Verdict                                                           |
+| -------------------------- | ----------------------------------------------------------------- |
+| `00-04-dashboard-overview` | current; gained the Learning Center nav item                      |
+| `00-14-confirm-dialog`     | current; in-app dialog with named buttons, as the guide describes |
+| `00-15-sidebar-member`     | current; the new Learning Center row is the whole diff            |
+| `00-18-rsvp-modal`         | current                                                           |
+| `00-20-member-dashboard`   | **was wrong** — see below                                         |
+
+Three images were byte-identical and needed nothing: `00-01-login-page`,
+`00-21-login-sso-options`, `00-23-login-two-factor`.
+
+Still to verify, changed but not yet opened: `00-07-dashboard-panels`,
+`00-09-account-settings`, `00-16-sidebar-admin`, `00-17-account-settings`,
+`00-19-change-password`, `00-22-notification-card-expanded`.
+
+**What `00-20-member-dashboard` exposed.** Its My Training Progress card listed
+two enrollments both labelled the literal word **"Program"**, so a member on two
+pipelines could not tell them apart. `get_member_enrollments` eager-loads the
+programme relationship, but `ProgramEnrollmentResponse` had no field to put it
+in, so it was dropped on the way out and the dashboard's `program?.name` fell
+back to its placeholder every time. The member training print-out showed an em
+dash for the same reason. Fixed by declaring the field the eager-load was
+already paying for.
+
+**What `00-15-sidebar-member` exposed.** The guide's sidebar table had no row
+for **Learning Center**, which now sits second in the nav. Added.
+
+---
+
 ## The 2026-08-13 currency audit — what a full pass found
 
 A full re-capture was run to answer "are the committed images still true?". It

@@ -534,3 +534,77 @@ class TestRevertedRequirementPercentage:
             )
             == 0.0
         )
+
+
+class TestEnrollmentResponseCarriesItsProgram:
+    """The dashboard names each pipeline from the enrollment's nested program.
+
+    `get_member_enrollments` eager-loads the relationship, but the response
+    schema had no field to put it in, so it was dropped on the way out: the
+    dashboard's training card printed the literal word "Program" for every
+    enrollment — two identical rows for a member on two pipelines — and the
+    member training print-out showed an em dash in the same place.
+    """
+
+    def test_program_is_declared_on_the_enrollment_response(self):
+        from app.schemas.training_program import ProgramEnrollmentResponse
+
+        assert "program" in ProgramEnrollmentResponse.model_fields
+
+    def test_a_loaded_program_survives_serialization(self):
+        from datetime import datetime, timezone
+        from uuid import uuid4
+
+        from app.schemas.training_program import ProgramEnrollmentResponse
+
+        now = datetime.now(timezone.utc)
+        program_id = uuid4()
+        body = ProgramEnrollmentResponse.model_validate(
+            {
+                "id": uuid4(),
+                "user_id": uuid4(),
+                "program_id": program_id,
+                "enrolled_at": now,
+                "progress_percentage": 57.7,
+                "status": "active",
+                "deadline_warning_sent": False,
+                "created_at": now,
+                "updated_at": now,
+                "program": {
+                    "id": program_id,
+                    "organization_id": uuid4(),
+                    "name": "Probationary Firefighter Pipeline",
+                    "description": "Phased progression with officer sign-off.",
+                    "active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            }
+        )
+
+        assert body.program is not None
+        assert body.program.name == "Probationary Firefighter Pipeline"
+
+    def test_an_enrollment_without_a_loaded_program_still_validates(self):
+        """Not every caller eager-loads it; the field must stay optional."""
+        from datetime import datetime, timezone
+        from uuid import uuid4
+
+        from app.schemas.training_program import ProgramEnrollmentResponse
+
+        now = datetime.now(timezone.utc)
+        body = ProgramEnrollmentResponse.model_validate(
+            {
+                "id": uuid4(),
+                "user_id": uuid4(),
+                "program_id": uuid4(),
+                "enrolled_at": now,
+                "progress_percentage": 0.0,
+                "status": "active",
+                "deadline_warning_sent": False,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+
+        assert body.program is None
