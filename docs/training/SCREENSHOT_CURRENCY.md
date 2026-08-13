@@ -68,6 +68,29 @@ seeded twice.
 **All three remaining placeholders are now characterised** — none is a mystery,
 each is a bounded piece of demo-data work, and two of them share a fixture.
 
+### The demo department now has two membership types, and `/profile` was never going to give it one
+
+The blocker below is cleared. Bram Hollis and Jonah Whitfield are
+`administrative`; the other twenty stay `active`. Flipping two existing members
+rather than adding two keeps "Members on file" at 22, which several captured
+images state outright, and both were chosen because **no shot in `manifest.mjs`
+mentions either name** — so a different membership type on them cannot silently
+change an image already verified.
+
+**The first attempt looked like it worked and did nothing.** The seeder patched
+`/users/{id}/profile`, which is where its rank repair goes. `UserUpdate` has no
+`membership_type` field, so the request was accepted and the value dropped —
+the same shape as `supporting_statement` being sent top-level on an election
+package. The tier change has its own endpoint,
+`PATCH /users/{id}/membership-type`, which also validates the value against the
+department's configured tiers. Worth the habit: when a write appears to succeed
+and the value does not appear, check the schema on the route rather than the
+column.
+
+That unblocks the shared fixture. Next: an open election whose item restricts
+`eligible_voter_types` to `operational`, which will now skip exactly these two
+with a real reason.
+
 ### The ballot-send shot is blocked on the demo having only one membership type
 
 `14-elections.md:352` needs a send that skips somebody. The skip reason is

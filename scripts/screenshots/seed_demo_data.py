@@ -553,6 +553,23 @@ MEMBERS = [
 # from it silently enrolled nobody the moment the ranks were corrected.
 RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 
+# Members whose `membership_type` is administrative rather than active.
+#
+# Every seeded member used to be `active`, which made the whole
+# administrative/operational distinction invisible: the conversion modal offers
+# "Administrative — Non-operational support role" as one of two choices, and
+# election ballot items can restrict `eligible_voter_types`, but with one
+# membership type on file a restriction either skips nobody or skips everybody.
+# `14-elections.md` documents a send that reports how many were skipped and why,
+# and it could not be photographed at all.
+#
+# Two, and deliberately two nobody photographs: no shot in `manifest.mjs`
+# mentions either name, so giving them a different membership type cannot
+# silently change an image that is already verified. Flipping existing members
+# rather than adding new ones also keeps "Members on file" at 22, which several
+# captured images state outright.
+ADMINISTRATIVE_USERNAMES = {"jwhitfield", "bhollis"}
+
 # Riding positions in the order a crew fills them. Sliced to a shift's minimum
 # staffing, so a four-person engine asks for an officer, a driver and two
 # firefighters while a two-person brush truck asks for an officer and a driver.
@@ -838,6 +855,33 @@ class Seeder:
                         f"/users/{pick(current, 'id')}/profile", {"rank": rank}
                     )
                     current["rank"] = rank
+                # Same reason as the rank repair above: a member created before
+                # ADMINISTRATIVE_USERNAMES existed keeps `active`, and the
+                # seeder never revisits a user it did not create.
+                wanted_type = (
+                    "administrative" if username in ADMINISTRATIVE_USERNAMES else None
+                )
+                if (
+                    wanted_type
+                    and pick(current, "membership_type") != wanted_type
+                    and pick(current, "id")
+                ):
+                    # `/users/{id}/profile` is the wrong route for this and
+                    # says nothing about it: `UserUpdate` has no
+                    # `membership_type` field, so the PATCH is accepted and the
+                    # value dropped. The tier change has its own endpoint,
+                    # which also validates against the configured tiers.
+                    try:
+                        self.api.patch(
+                            f"/users/{pick(current, 'id')}/membership-type",
+                            {
+                                "membership_type": wanted_type,
+                                "reason": ("Moved to non-operational support role."),
+                            },
+                        )
+                        current["membership_type"] = wanted_type
+                    except ApiError as exc:
+                        self.blocked.append(f"membership type: {exc}")
                 continue
             record = self.api.post(
                 "/users",
@@ -850,6 +894,11 @@ class Seeder:
                     "phone": f"(703) 555-{2000 + index:04d}",
                     "mobile": f"(703) 555-{3000 + index:04d}",
                     "rank": rank,
+                    "membership_type": (
+                        "administrative"
+                        if username in ADMINISTRATIVE_USERNAMES
+                        else "active"
+                    ),
                     "hire_date": str(TODAY - timedelta(days=365 * (2 + index % 12))),
                     "address_street": f"{100 + index * 7} Sycamore Lane",
                     "address_city": "Oakville",
