@@ -43,7 +43,28 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
-### 01-membership — 7 of 19 changed images verified
+### 01-membership — 14 of 19 changed images verified
+
+Seven more opened and current: `01-01-member-directory`, `01-11-create-waiver`,
+`01-19-create-waiver`, `01-23-print-member-badges`,
+`01-24-delete-member-modal`, `01-32-duplicate-applicant-warning`,
+`01-33-import-review-rejected-rows`. Each shows what its caption promises —
+notably the delete modal's Deactivate/Permanently Delete split with its
+records-affected counts and type-to-confirm, and the import review's four
+rejected rows with a per-line reason apiece.
+
+**A third legitimate duplicate pair.** `01-11-create-waiver` and
+`01-19-create-waiver` are **byte-identical** — same md5, same
+`/members/admin/waivers` route, two guide locations describing the same form.
+Recorded here alongside `03-15`/`03-32` and `03-02`/`03-08` so a future hash
+sweep does not re-investigate it.
+
+Still to verify: `01-05-add-member-form`, `01-06-import-members`,
+`01-07-admin-member-edit`, `01-08-member-audit-history`,
+`01-36-membership-number-field`. Guide 01's two placeholders are also still
+open.
+
+### 01-membership — earlier tick, 7 of 19 changed images verified
 
 Beyond the three below: `01-02-member-profile` (compliance summary, training,
 contacts, employment — all populated), `01-22-member-lifecycle` (already
