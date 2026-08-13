@@ -126,3 +126,75 @@ class TestPaperBallotsCountAsVoters:
 
     def test_no_votes_is_zero(self):
         assert ElectionService._count_ballots_cast(_election(), []) == 0
+
+
+def _paper_in_batch(position="Chief", candidate_id="candidate-1", batch_id="batch-1"):
+    vote = _paper(position, candidate_id)
+    vote.manual_batch_id = batch_id
+    return vote
+
+
+class TestRecordedPhysicalBallotCounts:
+    """The recorder can attest the physical ballot count for a batch
+    (ManualBallotBatch.ballots_cast); turnout prefers it over the
+    tally-derived estimate, which is only a lower bound for multi-vote
+    methods."""
+
+    def test_recorded_count_replaces_the_approval_estimate(self):
+        # Ten approval ballots split 5/5 across two candidates: the tally
+        # alone proves only five voters; the attested physical count
+        # restores the real ten.
+        election = _election(voting_method="approval")
+        votes = [_paper_in_batch(candidate_id="a") for _ in range(5)] + [
+            _paper_in_batch(candidate_id="b") for _ in range(5)
+        ]
+        assert ElectionService._count_ballots_cast(election, votes) == 5
+        assert (
+            ElectionService._count_ballots_cast(election, votes, {"batch-1": 10}) == 10
+        )
+
+    def test_recorded_counts_combine_via_max_not_sum(self):
+        # Separate batches may tally the SAME physical ballots (e.g. one
+        # batch per position), so recorded counts must never be added.
+        election = _election(voting_method="approval")
+        votes = [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(4)] + [
+            _paper_in_batch("Deputy", "c", batch_id="b2") for _ in range(4)
+        ]
+        assert (
+            ElectionService._count_ballots_cast(election, votes, {"b1": 6, "b2": 5})
+            == 6
+        )
+
+    def test_recorded_count_never_lowers_the_estimate(self):
+        # A recorded count for one batch cannot hide voters another,
+        # unrecorded batch already proves.
+        election = _election(voting_method="approval")
+        votes = [_paper_in_batch(candidate_id="a", batch_id="b1") for _ in range(3)] + [
+            _paper_in_batch(candidate_id="a", batch_id="b2") for _ in range(9)
+        ]
+        assert ElectionService._count_ballots_cast(election, votes, {"b1": 4}) == 12
+
+    def test_counts_for_absent_batches_are_ignored(self):
+        # A voided or unattested batch's votes are filtered out upstream;
+        # its recorded count must not resurrect it.
+        election = _election(voting_method="approval")
+        votes = [_paper_in_batch(candidate_id="a", batch_id="b1") for _ in range(2)]
+        assert (
+            ElectionService._count_ballots_cast(election, votes, {"ghost": 50, "b1": 2})
+            == 2
+        )
+
+    def test_recorded_count_applies_to_single_choice_too(self):
+        # Not every single-choice ballot marks every position, so even here
+        # the attested count can exceed the largest position tally.
+        votes = [_paper_in_batch(candidate_id="a") for _ in range(3)]
+        assert (
+            ElectionService._count_ballots_cast(_election(), votes, {"batch-1": 5}) == 5
+        )
+
+    def test_electronic_voters_still_added_on_top(self):
+        election = _election(voting_method="approval")
+        votes = [_electronic() for _ in range(2)] + [
+            _paper_in_batch(candidate_id="a") for _ in range(3)
+        ]
+        assert ElectionService._count_ballots_cast(election, votes, {"batch-1": 7}) == 9

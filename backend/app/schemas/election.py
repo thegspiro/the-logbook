@@ -620,6 +620,17 @@ class ManualBallotsRequest(BaseModel):
 
     entries: List[ManualBallotEntry] = Field(..., min_length=1, max_length=50)
     notes: Optional[str] = Field(None, max_length=1000)
+    ballots_cast: Optional[int] = Field(
+        None,
+        ge=1,
+        le=2000,
+        description=(
+            "Number of physical ballots this batch was tallied from. "
+            "For approval/ranked-choice tallies the per-candidate counts "
+            "alone only bound turnout from below; recording the physical "
+            "ballot count makes quorum math exact."
+        ),
+    )
     allow_over_count: bool = Field(
         default=False,
         description=(
@@ -667,6 +678,9 @@ class ManualBallotBatchInfo(BaseModel):
     recorded_by_name: Optional[str] = None
     recorded_at: Optional[datetime] = None
     notes: Optional[str] = None
+    # Physical ballots the recorder attested for the batch; None on batches
+    # recorded before the count existed (turnout falls back to the estimate).
+    ballots_cast: Optional[int] = None
     required_attestations: int = 0
     attestations: List[ManualBallotAttestationInfo] = []
     totals: List[ManualBallotBatchTotal] = []

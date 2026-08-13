@@ -1826,13 +1826,21 @@ class ElectionService:
         all_votes = await self._exclude_unattested(
             UUID(str(election.id)), votes_result.scalars().all()
         )
-        voters = self._count_ballots_cast(election, all_votes)
+        voters = self._count_ballots_cast(
+            election,
+            all_votes,
+            await self._recorded_paper_ballot_counts(UUID(str(election.id))),
+        )
         eligible = await self._count_eligible_voters(election, organization_id)
         turnout = (voters / eligible * 100) if eligible > 0 else 0.0
         return len(all_votes), voters, round(turnout, 2)
 
     @staticmethod
-    def _count_ballots_cast(election: Election, all_votes: List[Vote]) -> int:
+    def _count_ballots_cast(
+        election: Election,
+        all_votes: List[Vote],
+        recorded_ballots: Optional[Dict[str, int]] = None,
+    ) -> int:
         """How many voters this election's ballots represent.
 
         Electronic votes are deduplicated by voter: one member voting for
@@ -1855,6 +1863,11 @@ class ElectionService:
         candidates count as five voters), which understates turnout but cannot
         certify a quorum that was never met. Single-choice elections can
         safely use the largest summed position tally.
+
+        When the recording officer attested the physical ballot count for a
+        batch (``recorded_ballots``, keyed by batch id), that exact count is
+        preferred over the estimate — see the inline note for why recorded
+        counts combine via max rather than sum.
         """
         if election.anonymous_voting:
             identified = {v.voter_hash for v in all_votes if v.voter_hash}
@@ -1888,7 +1901,39 @@ class ElectionService:
         manual_counts = manual_by_position if is_single_choice else manual_by_candidate
         paper_ballots = max(manual_counts.values()) if manual_counts else 0
 
+        # Prefer counts the recording officer attested (ManualBallotBatch.
+        # ballots_cast) over the tally-derived estimate. Each recorded count
+        # is exact for its own stack of ballots, but separate batches may
+        # tally the SAME physical ballots (e.g. one batch per position), so
+        # combining via max — never sum — keeps this a provable lower bound,
+        # consistent with how the estimate already treats per-position
+        # stacks. Only batches whose votes are present in all_votes count,
+        # so attestation/void filtering applied upstream carries over.
+        if recorded_ballots:
+            batch_ids = {
+                getattr(vote, "manual_batch_id", None)
+                for vote in all_votes
+                if getattr(vote, "is_manual", False)
+            }
+            recorded = [
+                recorded_ballots[batch_id]
+                for batch_id in batch_ids
+                if batch_id in recorded_ballots
+            ]
+            if recorded:
+                paper_ballots = max([paper_ballots, *recorded])
+
         return len(identified) + paper_ballots
+
+    async def _recorded_paper_ballot_counts(self, election_id: UUID) -> Dict[str, int]:
+        """ballots_cast by batch id, for batches where the officer recorded
+        the physical ballot count (see _count_ballots_cast)."""
+        result = await self.db.execute(
+            select(ManualBallotBatch.id, ManualBallotBatch.ballots_cast)
+            .where(ManualBallotBatch.election_id == str(election_id))
+            .where(ManualBallotBatch.ballots_cast.is_not(None))
+        )
+        return {batch_id: count for batch_id, count in result.all()}
 
     async def _count_eligible_voters(
         self, election: Election, organization_id: UUID
@@ -2063,7 +2108,11 @@ class ElectionService:
         total_eligible = await self._count_eligible_voters(election, organization_id)
 
         # Voters, not votes — and paper ballots count. See _count_ballots_cast.
-        unique_voters = self._count_ballots_cast(election, all_votes)
+        unique_voters = self._count_ballots_cast(
+            election,
+            all_votes,
+            await self._recorded_paper_ballot_counts(UUID(str(election.id))),
+        )
 
         # Calculate turnout
         voter_turnout = (
@@ -2397,7 +2446,11 @@ class ElectionService:
         total_eligible = await self._count_eligible_voters(election, organization_id)
 
         # Voters, not votes — and paper ballots count. See _count_ballots_cast.
-        unique_voters = self._count_ballots_cast(election, all_votes)
+        unique_voters = self._count_ballots_cast(
+            election,
+            all_votes,
+            await self._recorded_paper_ballot_counts(UUID(str(election.id))),
+        )
 
         # Calculate turnout
         voter_turnout = (
@@ -3096,6 +3149,7 @@ class ElectionService:
         entries: List[Dict],
         notes: Optional[str] = None,
         allow_over_count: bool = False,
+        ballots_cast: Optional[int] = None,
     ) -> Tuple[int, Optional[str], Optional[str]]:
         """Record an in-room paper-ballot tally as vote rows.
 
@@ -3146,6 +3200,27 @@ class ElectionService:
             return 0, None, "Ballot counts must be positive"
         if total > 2000:
             return 0, None, "Cannot record more than 2000 paper ballots at once"
+
+        if ballots_cast is not None:
+            # One physical ballot can select a given candidate at most once,
+            # so a per-candidate tally exceeding the attested ballot count is
+            # physically impossible — reject rather than store a count the
+            # turnout math would then trust.
+            per_candidate: Dict[str, int] = {}
+            for entry in entries:
+                cid = str(entry["candidate_id"])
+                per_candidate[cid] = per_candidate.get(cid, 0) + int(
+                    entry.get("count", 0)
+                )
+            largest = max(per_candidate.values())
+            if ballots_cast < largest:
+                return (
+                    0,
+                    None,
+                    f"A candidate in this batch received {largest} votes, "
+                    f"which cannot come from {ballots_cast} physical "
+                    f"ballot(s). Double-check the ballot count.",
+                )
 
         candidate_ids = [str(e["candidate_id"]) for e in entries]
         cand_result = await self.db.execute(
@@ -3222,6 +3297,7 @@ class ElectionService:
             notes=notes,
             status="pending" if required_attestations > 0 else "confirmed",
             required_attestations=required_attestations,
+            ballots_cast=ballots_cast,
             created_at=now,
             confirmed_at=None if required_attestations > 0 else now,
         )
@@ -3478,6 +3554,7 @@ class ElectionService:
                     "recorded_by_name": names.get(b.recorded_by or ""),
                     "recorded_at": b.created_at,
                     "notes": b.notes,
+                    "ballots_cast": b.ballots_cast,
                     "required_attestations": b.required_attestations or 0,
                     "attestations": [
                         {

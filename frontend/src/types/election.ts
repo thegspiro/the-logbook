@@ -611,6 +611,9 @@ export interface ManualBallotBatch {
   recorded_by_name?: string | null;
   recorded_at?: string | null;
   notes?: string | null;
+  // Physical ballots the recorder attested for the batch; null on batches
+  // recorded before the count existed.
+  ballots_cast?: number | null;
   required_attestations: number;
   attestations: ManualBallotAttestation[];
   totals: ManualBallotBatchTotal[];

@@ -480,6 +480,7 @@ export const electionService = {
       entries: Array<{ candidate_id: string; count: number }>;
       notes?: string | undefined;
       allow_over_count?: boolean | undefined;
+      ballots_cast?: number | undefined;
     }
   ): Promise<{
     recorded: number;

@@ -1448,6 +1448,7 @@ async def record_manual_ballots(
         ],
         notes=payload.notes,
         allow_over_count=payload.allow_over_count,
+        ballots_cast=payload.ballots_cast,
     )
     if error:
         status_code = (
