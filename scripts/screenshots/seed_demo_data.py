@@ -8639,6 +8639,52 @@ class Seeder:
         ("Onboarding", "checklist", False, True),
     ]
 
+    def _backfill_pipeline_stages(self, pipeline_id: str | None) -> None:
+        """Give an existing pipeline its stages if it has none.
+
+        The `steps` payload above only runs when the pipeline is *created*, and
+        the guard above that skips creation once a pipeline of the same name
+        exists. A database seeded before that payload was added therefore keeps
+        a stage-less pipeline forever — and a pipeline with no stages has no
+        board columns, so every prospect is unplaceable and four screenshots
+        across guides 01 and 15 picture "No applicants" while seven active
+        prospects sit in the database.
+
+        Idempotent on the state: a pipeline that already has stages is left
+        alone rather than having a second set appended.
+        """
+        if not pipeline_id:
+            return
+        try:
+            existing = items(
+                self.api.get(f"/prospective-members/pipelines/{pipeline_id}/steps"),
+                "steps",
+            )
+        except ApiError as exc:
+            self.blocked.append(f"pipeline stages: read: {exc}")
+            return
+        if existing:
+            return
+
+        for order, (name, step_type, first, final) in enumerate(self.PIPELINE_STAGES):
+            try:
+                self.api.post(
+                    f"/prospective-members/pipelines/{pipeline_id}/steps",
+                    {
+                        "name": name,
+                        "description": f"{name} stage.",
+                        "step_type": step_type,
+                        "is_first_step": first,
+                        "is_final_step": final,
+                        "sort_order": order,
+                        "required": True,
+                        "public_visible": True,
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"pipeline stage {name}: {exc}")
+                return
+
     PROSPECTS = [
         ("Alex", "Rivera", "Saw the station open house"),
         ("Jordan", "Fields", "Family member is a volunteer"),
@@ -8681,6 +8727,7 @@ class Seeder:
                 )
             )
         pipeline_id = pick(pipelines[0], "id") if pipelines else None
+        self._backfill_pipeline_stages(pipeline_id)
 
         prospects = items(
             self.api.get("/prospective-members/prospects?limit=100"), "prospects"

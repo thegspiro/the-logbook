@@ -43,6 +43,38 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### 01-membership — the "No applicants" gap, closed
+
+Three shots (`01-10-prospective-pipeline`, `01-25-applicant-action-bar`,
+`01-26-print-applicant-badges`) pictured an empty board while seven active
+applicants sat in the database. **The pipeline had no stages at all.**
+
+The seeder does send a `steps` payload — but only when it _creates_ the
+pipeline, and the guard above that skips creation once a pipeline of the same
+name exists. A database seeded before that payload was added therefore keeps a
+stage-less pipeline forever, and a pipeline with no stages has no board columns,
+so no applicant can be placed. `_backfill_pipeline_stages` now repairs an
+existing pipeline, idempotent on the state.
+
+All three images are correct now: the board shows Total Active 7 with cards in
+Interview, the bulk bar shows "3 selected" with Print Badges / Advance All /
+Reject All, and the drawer shows Rosa Delgado's stage, linked event, interview
+requirement and full action bar.
+
+The empty-state flag on these three is a **false positive** and is now
+suppressed with a note: a board that spreads seven applicants across six stages
+necessarily leaves columns reading "No applicants", and a drawer for an
+applicant who has uploaded nothing reads "No documents yet". Neither means the
+page is empty — the check is Total Active.
+
+**A 500 found on the way, not yet fixed.** `POST /prospects/{id}/advance` returns
+500 rather than a handled error when the target stage is an
+`interview_requirement`: `_validate_step_completion` reads
+`prospect.interviews`, a lazy relationship, inside async context, and SQLAlchemy
+raises `MissingGreenlet`. The endpoint maps `ValueError` to 409 but nothing
+catches this. Advancing anyone out of the Interview stage — the third stage of
+the default pipeline — hits it. Recorded in KNOWN_LIMITATIONS.
+
 ### 00-getting-started — complete, 11 of 11 changed images verified
 
 Third tick closed it out with `00-07-dashboard-panels`: current, and its

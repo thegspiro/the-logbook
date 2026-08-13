@@ -3305,6 +3305,11 @@ export const SHOTS = [
       "Screenshot of the Kanban board view showing pipeline stages as columns (e.g.,",
     alt: "Prospective members kanban board with pipeline stages as columns",
     route: "/prospective-members",
+    // "No applicants" is the per-column empty text, and a board that spreads
+    // seven applicants across six stages necessarily leaves some columns
+    // empty — that spread is the point of the shot. The board itself is
+    // populated; check the Total Active card, not the column text.
+    allowEmptyState: true,
   },
   {
     // Corrected 2026-08-08. This was captured at /members/admin but described as
@@ -3623,6 +3628,11 @@ export const SHOTS = [
       }
       throw new Error("01-25: no applicant is past the first stage");
     },
+    // The board spreads seven applicants across six stages, so some
+    // columns read "No applicants" — and the drawer reads "No documents
+    // yet" for an applicant who has uploaded none. Both are honest, and
+    // neither means the page is empty; check Total Active.
+    allowEmptyState: true,
   },
   {
     id: "01-26-print-applicant-badges",
@@ -3644,6 +3654,11 @@ export const SHOTS = [
       await page.waitForTimeout(400);
       await page.evaluate(() => window.scrollTo(0, 0));
     },
+    // The board spreads seven applicants across six stages, so some
+    // columns read "No applicants" — and the drawer reads "No documents
+    // yet" for an applicant who has uploaded none. Both are honest, and
+    // neither means the page is empty; check Total Active.
+    allowEmptyState: true,
   },
   {
     id: "01-27-stage-type-picker",
