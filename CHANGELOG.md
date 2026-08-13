@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Messaging: the guides now say what delivery actually does (2026-08-13)
+
+**Changed**
+
+- **The dashboard "Department Messages" card now shows only what still needs
+  your attention** — unread messages, acknowledgment-required messages you
+  haven't acknowledged, and persistent standing notices — instead of the 10
+  most recent messages regardless of read state. Messages you've dealt with
+  clear off the card on your next visit (never mid-read — a message you just
+  opened stays put until then), and already-read messages no longer crowd a
+  persistent notice off the card. Full history remains on the Messages page.
+  Fixes MSG2-6: an unpinned persistent notice — the "SCBA inspection mandatory
+  by March 31" kind — could previously be paged off the dashboard by ten newer
+  messages, read or not. Pinning still keeps a standing notice above any
+  backlog of newer unread messages, and the guides now say so.
+
+**Fixed (documentation — app behavior unchanged)**
+
+- **The department-message delivery matrix was wrong in every guide.** The
+  training guide, the technical doc, the wiki page and two video scripts all
+  said a Normal/Important message stays in-app and only ack-required/urgent
+  messages email. In reality **every department message is emailed to every
+  targeted member at every priority** — the deliberate record-of-notice design
+  (owner rule 2026-08-05: "messages always go to the member's email"), asserted
+  by the delivery tests. An officer following the old guide would post a
+  "Normal" FYI believing it stays in-app and email the whole department. The
+  wiki also wrongly claimed members can opt out of message email under
+  Settings → Notifications — they cannot (SMS yes, email never). All five
+  documents now match the code; urgent messages still add SMS under the same
+  Twilio/consent/preference gates.
+- The technical doc's migration list cited the pre-renumber
+  `20260720_0001_..._deleted_at` filename; corrected to `20260720_0004`.
+- Verified both messaging training screenshots (`07-11-new-message-form`,
+  `07-12-acknowledgment-report`) still match the shipped UI element-for-element,
+  and every other documented behavior (read/ack semantics, scheduling,
+  soft-delete evidence retention, persistent messages, targeting, member
+  controls) against the code — see
+  `docs/app-review/messaging.md` pass 5. One UX gap flagged for an owner call:
+  an unpinned persistent notice can be paged off the dashboard card
+  (`KNOWN_LIMITATIONS.md` → "Persistent Notices Can Fall Off the Dashboard
+  Card").
+
 ### Elections: reusable saved ballots, and the votes that counted when they shouldn't (2026-08-12)
 
 **Added**
@@ -22,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Three design decisions worth knowing:
 
   - **Configuration only, by construction.** A template snapshots ballot
-    *structure* — never candidates, voter rosters, votes, tokens, or
+    _structure_ — never candidates, voter rosters, votes, tokens, or
     attendance. The create schema is `extra="forbid"`, so a payload that tries
     to smuggle any of those in is a 422, not a stored secret.
   - **Names are unique per org, case-insensitively** — uniqueness rides on
@@ -34,13 +76,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     grows a "Save as Template" button and a "Your saved ballots" section in
     the template picker, with two-step confirms on both replace and delete.
 
-- **Ballot definitions are validated on the way in** — create *and* update.
+- **Ballot definitions are validated on the way in** — create _and_ update.
   Item ids must be `^[A-Za-z0-9_-]+$` and unique per ballot; voting methods
   and victory conditions are checked against the known sets;
   `victory_percentage` is required for a supermajority item; voter-type lists
   are de-duplicated and `'all'` cannot be combined with other types; position
   names must be unique case-insensitively. Quorum is cross-validated on update
-  against the *stored* row merged with the patch — and the blanket `le=100`
+  against the _stored_ row merged with the patch — and the blanket `le=100`
   that wrongly capped **count** quorums at 100 is gone (a percentage quorum
   still caps at 100).
 
@@ -78,7 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole validate-then-insert window, serializing voters through one at a time.
 
 - **Every `elections.view` holder could read applicant PII.** The
-  prospective-member *election package* bundles the interview and coordinator
+  prospective-member _election package_ bundles the interview and coordinator
   material the vote is based on — unlike ordinary election data. Both package
   read endpoints dropped `elections.view` from their permission lists (now
   `prospective_members.view` / `prospective_members.manage` /
@@ -108,8 +150,8 @@ Four authentication fixes, each closing a way around a control that existed:
   `POST /auth/mfa/login` issues cookies. Audit: `oauth_mfa_challenge`.
 
 - **A used refresh token is dead immediately.** The 30-second "rotation grace
-  window" — which answered a *previous* refresh token with the session's
-  *current* token pair, to tolerate multi-tab races — was a session-takeover
+  window" — which answered a _previous_ refresh token with the session's
+  _current_ token pair, to tolerate multi-tab races — was a session-takeover
   gift to anyone who stole a token: replay within 30s of the legitimate
   rotation and you own the session, with replay detection suppressed. Removed
   outright. A stale refresh token now revokes **all** of the user's sessions
@@ -145,7 +187,7 @@ Four authentication fixes, each closing a way around a control that existed:
 **Security**
 
 - **`AUDIT_LOG_LEGACY_MAX_ID`** (new setting, default `0`). Which audit rows
-  may verify under the legacy *unkeyed* SHA-256 scheme was decided by each
+  may verify under the legacy _unkeyed_ SHA-256 scheme was decided by each
   row's own `hash_version` column — a column in the same attacker-writable
   table the chain protects. An attacker with SQL write access could rewrite
   the entire keyed suffix, stamp every forged row `hash_version=1`, recompute
@@ -172,7 +214,7 @@ Four authentication fixes, each closing a way around a control that existed:
   could promote a member inside The Logbook. Removed from
   `INBOUND_UPDATABLE_FIELDS`; inbound now writes contact/demographic fields
   only (names, phones, station, address). Outbound is deliberately unchanged —
-  The Logbook still *pushes* rank to `Title`; it just never takes it back.
+  The Logbook still _pushes_ rank to `Title`; it just never takes it back.
   Consequence worth knowing: a Contact whose only difference is `Title` now
   counts as `unchanged`, and previously-overwritten ranks are not repaired.
 
@@ -182,7 +224,7 @@ Four authentication fixes, each closing a way around a control that existed:
   and per-class attendance counts. A non-officer now gets the metadata and
   class timeline only — `members` empty, `member_count` 0, per-class
   `rsvp_count`/`checked_in_count` `null` (withheld, distinguishable from a
-  real zero). The withheld data is never *queried*, so there is no
+  real zero). The withheld data is never _queried_, so there is no
   serialization-layer bypass; `/mine` stopped disclosing roster sizes too. The
   same pass org-scoped every query in the detail path, closing cross-tenant
   reads via colliding ids.
@@ -195,14 +237,14 @@ Four authentication fixes, each closing a way around a control that existed:
   `require_permission("training.manage")`, completed tests only (400
   otherwise), `html.escape` on the result text, and the recipient remains
   derived server-side from the test's own candidate — there is no recipient
-  parameter to abuse. Disclosure is still resolved for the *recipient*, so
+  parameter to abuse. Disclosure is still resolved for the _recipient_, so
   "email results" cannot bypass a department's decision to withhold them.
 
 **Fixed**
 
 - **An undated training record could satisfy a freshness window.** The officer
   apply path's recency check was wrapped in `if completed_on is not None` — so
-  a record with *no* completion date failed **open** against a "within the
+  a record with _no_ completion date failed **open** against a "within the
   last N days" requirement, crediting freshness that was never verified, while
   the read-path evaluator already said no. The apply/approve step now rejects
   it pre-flight with "That training has no completion date, so it can't be
@@ -303,7 +345,7 @@ reading it. This batch:
   queries.
 
 - **A lot number was shown with a different lot's date.** An item's Stock tab
-  paired the legacy scalar `lot_number` (last swap) with the *derived*
+  paired the legacy scalar `lot_number` (last swap) with the _derived_
   soonest expiration across deployed lots — "Lot NLX-2411 · Exp 9/4/2026" when
   NLX-2405 is the box expiring in September. Third of three projections with
   this shape (the supply worklist and apparatus inventory were fixed earlier);
@@ -318,7 +360,7 @@ reading it. This batch:
   was offered as the 25th, and a lot read "Exp 9/3/2026 · 24d left" on 8/11
   (24 days after 8/11 is 9/4; the date and the count disagreed in one
   sentence). Both now use `formatCalendarDate`, which pins UTC round-trip.
-  The blackout case was the dangerous one: the *label* lied while the value
+  The blackout case was the dangerous one: the _label_ lied while the value
   submitted was correct, so an officer ticked a date they had not been shown.
   Same defect class `formatCalendarDate` was added for on 2026-08-10 — and
   `formatDate` is an approved wrapper, so no lint rule flagged it.
