@@ -6,6 +6,7 @@
 
 import React, { Suspense } from 'react';
 import { Route } from 'react-router';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const ReportsPage = lazyWithRetry(() => import('./pages/ReportsPage'));
@@ -16,9 +17,11 @@ export const getReportsRoutes = () => {
       <Route
         path="/reports"
         element={
-          <Suspense fallback={null}>
-            <ReportsPage />
-          </Suspense>
+          <ProtectedRoute requiredPermission="reports.view">
+            <Suspense fallback={null}>
+              <ReportsPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
     </React.Fragment>
