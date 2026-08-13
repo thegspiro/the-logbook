@@ -8119,6 +8119,39 @@ export const SHOTS = [
     fullPage: true,
     allowEmptyState: true,
   },
+  {
+    id: "14-24-ballot-send-skipped",
+    doc: "14-elections.md",
+    line: 352,
+    anchor: "The result of a ballot send",
+    alt: "The banner after a ballot send, naming each member who was skipped and why",
+    route: "/elections",
+    // Sends real ballots, so it changes the election's `email_sent` state and
+    // mints voting tokens. Last in guide 14 by the manifest's own invariant.
+    mutatesSeedData: true,
+    prepare: async (page) => {
+      // The one election whose ballot item restricts eligible_voter_types, so
+      // the send skips the two administrative members rather than nobody.
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => election.title?.startsWith("Operations Committee Seat"),
+      )(page);
+      await clickByName(/^(Send|Resend) Ballot Emails$/)(page);
+      await clickByName(/^Send Ballots$/)(page);
+      // The banner, not the toast: the toast is transient and says "see banner
+      // below", and the banner is the part that names who was skipped.
+      const banner = page.getByText(/member\(s\) skipped when sending ballots/);
+      await banner.waitFor({ timeout: 30_000 });
+      await banner.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    // Viewport rather than a selector: the banner is a plain div with no
+    // stable hook, and the surrounding page is the useful context anyway —
+    // the election it was sent for is named directly above it.
+    fullPage: false,
+  },
 
   // ── Tenth batch: the applicant pipeline ────────────────────────────
   {

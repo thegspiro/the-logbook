@@ -68,6 +68,37 @@ seeded twice.
 **All three remaining placeholders are now characterised** — none is a mystery,
 each is a bounded piece of demo-data work, and two of them share a fixture.
 
+### The skip banner is right; the toast beside it is a demo artifact
+
+The fixture works. `Operations Committee Seat — Restricted Ballot` is open with
+its one item restricted to `operational`, and pressing Send Ballot Emails
+produces exactly the banner the guide describes:
+
+> **2 member(s) skipped when sending ballots** — Jonah Whitfield: membership
+> type not eligible for 1/1 item(s) (requires: operational; member has:
+> administrative). Bram Hollis: same.
+
+**The image is not committed, because the toast above it reads "Ballots sent to
+0 voter(s), 20 failed, 2 skipped".** Email is not configured in this demo, so
+every actual send fails. The skip logic is genuine and the banner is exactly
+what a department would see; the failure count is an artifact of the
+environment, and a reader shown "0 sent, 20 failed" under a caption about
+skipped members would draw the wrong conclusion.
+
+So the shot needs to picture the banner alone. `selector` was tried and the
+banner has no stable hook — a plain div, no test id, no role — so either the
+harness grows a `clip` option, the banner gets a hook, or the capture waits for
+the toast to expire (it is transient; the banner is not) before shooting the
+viewport. The last is the smallest change and probably right: wait out the
+toast, then shoot.
+
+Everything else is committed and working: the seeded election, the
+`mutatesSeedData` flag (the manifest invariant caught the shot in the wrong
+position on the first run and named all eleven shots that would have been
+affected), and the caption rewritten against the two things that actually
+report a send — a transient toast with the counts and a persistent banner with
+the names.
+
 ### The demo department now has two membership types, and `/profile` was never going to give it one
 
 The blocker below is cleared. Bram Hollis and Jonah Whitfield are

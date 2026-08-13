@@ -8239,6 +8239,7 @@ class Seeder:
         self._seed_nominations(elections)
         self._seed_closed_election(elections, minutes or [])
         self._seed_open_election(elections)
+        self._seed_restricted_election(elections)
         self._seed_membership_vote_election(elections)
         self._seed_runoff_chain(elections)
         self._seed_saved_ballot_template()
@@ -8505,6 +8506,69 @@ class Seeder:
             )
         except ApiError as exc:
             self.blocked.append(f"membership vote election: {exc}")
+
+    RESTRICTED_ELECTION_TITLE = "Operations Committee Seat — Restricted Ballot"
+
+    def _seed_restricted_election(self, elections: list[dict]) -> None:
+        """An open election whose ballot is closed to administrative members.
+
+        `14-elections.md` documents a send that reports how many ballots went
+        out and names the members it skipped. Producing a *partial* skip needs
+        two membership types on file and an item that admits only one of them —
+        `ADMINISTRATIVE_USERNAMES` supplies the first, this supplies the second.
+        Sending skips exactly those two, with the reason the service generates:
+        "Requires voter type(s): operational; member has: administrative".
+
+        The restriction is set at creation because an open election refuses
+        ballot edits — "Only end_date can be updated while voting is active" —
+        which is correct, since a cast vote references an item id.
+        """
+        if any(pick(e, "title") == self.RESTRICTED_ELECTION_TITLE for e in elections):
+            return
+        try:
+            election = self.api.post(
+                "/elections",
+                {
+                    "title": self.RESTRICTED_ELECTION_TITLE,
+                    "description": (
+                        "Seat on the operations committee. Operational members "
+                        "only; administrative members do not vote on it."
+                    ),
+                    "election_type": "issue",
+                    "ballot_items": [
+                        {
+                            "id": "item-ops-committee",
+                            "type": "general_vote",
+                            "title": "Operations Committee Seat",
+                            "description": (
+                                "Shall the committee seat be filled by "
+                                "appointment for the remainder of the term?"
+                            ),
+                            "vote_type": "approval",
+                            "eligible_voter_types": ["operational"],
+                        }
+                    ],
+                    "start_date": iso(NOW - timedelta(hours=2)),
+                    "end_date": iso(NOW + timedelta(days=4)),
+                    "anonymous_voting": True,
+                    "allow_write_ins": False,
+                    "results_visible_immediately": False,
+                    "voting_method": "simple_majority",
+                    "victory_condition": "majority",
+                    "quorum_type": "none",
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"restricted election: {exc}")
+            return
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+        try:
+            self.api.post(f"/elections/{election_id}/open")
+        except ApiError as exc:
+            self.blocked.append(f"open restricted election: {exc}")
+        elections.append(self.api.get(f"/elections/{election_id}"))
 
     def _seed_open_election(self, elections: list[dict]) -> None:
         """An election actually taking votes, so the member ballot can be shown.
