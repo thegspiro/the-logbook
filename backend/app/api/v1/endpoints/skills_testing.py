@@ -3334,6 +3334,7 @@ async def export_tests_csv(
                 "Examiner",
                 "Completed (UTC)",
                 "Test Result",
+                "Timing Verified",
                 "Section #",
                 "Section",
                 "Step #",
@@ -3358,6 +3359,12 @@ async def export_tests_csv(
             candidate_name = name_of(t.candidate_id)
             examiner_name = name_of(t.examiner_id)
             completed = _csv_dt(t.completed_at)
+            # Same judgement as the summary export: a resumed test's clock
+            # carried on from the last save, so its recorded seconds are not a
+            # stopwatch reading. The per-step file is the one auditors are
+            # actually handed, and a time_limit step's Time (s) column read as
+            # verified evidence without this.
+            timing_verified = _csv_bool(not (t.resume_count or 0))
             for row in iter_criterion_rows(t, effective):
                 ticked = row["checklist"]
                 writer.writerow(
@@ -3368,6 +3375,7 @@ async def export_tests_csv(
                         examiner_name,
                         completed,
                         t.result or "",
+                        timing_verified,
                         row["section_index"] + 1,
                         row["section_name"],
                         row["criterion_index"] + 1,

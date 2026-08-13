@@ -133,6 +133,17 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const content = children ?? <Outlet />;
 
+  // WCAG 2.4.1: the first tab stop lets keyboard and screen-reader users jump
+  // past the navigation. `.skip-to-main` keeps it off-screen until focused.
+  // The click handler moves real focus: following the hash alone only scrolls,
+  // which is why #main-content carries tabIndex={-1} — it can receive focus
+  // but never joins the tab order itself.
+  const skipLink = (
+    <a href="#main-content" className="skip-to-main" onClick={() => document.getElementById('main-content')?.focus()}>
+      Skip to main content
+    </a>
+  );
+
   const footer = (
     <footer
       className="bg-theme-input-bg/80 border-theme-surface-border mt-auto border-t backdrop-blur-sm"
@@ -161,6 +172,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))',
         }}
       >
+        {skipLink}
         <TopProgressBar />
         <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
         <CommandPalette />
@@ -196,6 +208,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))',
       }}
     >
+      {skipLink}
       <TopProgressBar />
       <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
       <CommandPalette />

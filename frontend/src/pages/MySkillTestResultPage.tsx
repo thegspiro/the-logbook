@@ -231,6 +231,15 @@ export const MySkillTestResultPage: React.FC = () => {
             <p className="text-theme-text-primary font-mono text-sm font-medium">
               {Math.floor(currentTest.elapsed_seconds / 60)}:{String(currentTest.elapsed_seconds % 60).padStart(2, '0')}
             </p>
+            {/* A resumed evaluation's clock carried on from the last save
+                rather than running continuously, so the figure is marked as
+                approximate instead of shown as an ordinary stopwatch reading —
+                the same marking the printed scorecard carries. */}
+            {currentTest.timing_verified === false && (
+              <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                Not verified — the evaluation was resumed after an interruption, so this time is approximate.
+              </p>
+            )}
           </div>
         )}
         {currentTest.completed_at && (

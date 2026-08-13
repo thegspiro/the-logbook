@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
+import { skillsTestingService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useAutoSave } from '../hooks/useAutoSave';
 import { formatDateTime } from '../utils/dateFormatting';
@@ -1058,6 +1059,10 @@ export const ActiveSkillTestPage: React.FC = () => {
   // Nobody presses Save on a screen they are using with gloves on, so the
   // examiner needs to be told, without asking, that their scoring is safe.
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  // A save was refused with 409: someone else wrote to this test in between.
+  // Raised by saveTest and by the draft→in_progress transition below; shown as
+  // the concurrent-edit banner, which also suspends the autosave.
+  const [conflict, setConflict] = useState(false);
 
   // Load the test
   useEffect(() => {
@@ -1231,7 +1236,17 @@ export const ActiveSkillTestPage: React.FC = () => {
    * status-only write would echo back the server's older section_results and
    * wipe the criterion the examiner just tapped — which, now, is the very tap
    * that starts the clock.
+   *
+   * The write is held in transitionRef because it shares the
+   * optimistic-concurrency version with every other save. Fired-and-forgotten,
+   * it raced the autosave on the same expected_version: if the transition lost
+   * the race it 409'd silently and the clock ran locally against a test the
+   * server still held as a draft; if it won, the next autosave carried the
+   * version the transition had just consumed and raised the conflict banner
+   * over a conflict that never happened. saveTest awaits the ref and then reads
+   * the refreshed version from the store, so the two writes are serialized.
    */
+  const transitionRef = useRef<Promise<void> | null>(null);
   const startTimer = useCallback(() => {
     const state = useSkillsTestingStore.getState();
     if (state.activeTestRunning) return;
@@ -1239,17 +1254,52 @@ export const ActiveSkillTestPage: React.FC = () => {
     setActiveTestRunning(true);
 
     const test = state.currentTest;
-    if (test?.status === FormStatus.DRAFT) {
-      void updateTest(test.id, {
-        status: 'in_progress',
-        section_results: test.section_results ?? [],
-        elapsed_seconds: state.activeTestTimer,
-        expected_version: test.version,
-      }).catch(() => {
-        // The clock is already running locally. A failure here surfaces on the
-        // next save or on Complete Test, which report it properly.
+    if (test?.status !== FormStatus.DRAFT || transitionRef.current) return;
+
+    const markInProgress = async (): Promise<void> => {
+      try {
+        await updateTest(test.id, {
+          status: 'in_progress',
+          section_results: test.section_results ?? [],
+          elapsed_seconds: state.activeTestTimer,
+          expected_version: test.version,
+        });
+      } catch (err: unknown) {
+        // A 409 means something wrote between page load and the first tap —
+        // typically an officer edit to the draft's details. Fetch the current
+        // version (via the service, not loadTest: adopting the server copy
+        // into the store would erase the tap that started this clock) and
+        // retry once. If the test is no longer a draft, someone else already
+        // started it and there is nothing left to transition.
+        if (toAppError(err).status !== 409) throw err;
+        const fresh = await skillsTestingService.getTest(test.id);
+        if (fresh.status !== FormStatus.DRAFT) return;
+        const latest = useSkillsTestingStore.getState();
+        await updateTest(test.id, {
+          status: 'in_progress',
+          section_results: latest.currentTest?.section_results ?? [],
+          elapsed_seconds: latest.activeTestTimer,
+          expected_version: fresh.version,
+        });
+      }
+    };
+
+    transitionRef.current = markInProgress()
+      .catch((err: unknown) => {
+        // Not silent: the clock is running locally on a test the server still
+        // holds as a stuck draft, so report it the way a failed save is
+        // reported. A second 409 is a genuine concurrent edit — the conflict
+        // banner already explains that and suspends the autosave.
+        setSaveState('failed');
+        if (toAppError(err).status === 409) {
+          setConflict(true);
+        } else {
+          toast.error(getErrorMessage(err, 'Could not start the test on the server'));
+        }
+      })
+      .finally(() => {
+        transitionRef.current = null;
       });
-    }
   }, [setActiveTestRunning, updateTest]);
 
   const toggleTimer = useCallback(() => {
@@ -1299,17 +1349,23 @@ export const ActiveSkillTestPage: React.FC = () => {
   // working from. The server refuses a stale one with 409 instead of quietly
   // overwriting whoever saved in between — a second examiner on the same test,
   // or an officer editing the scorecard in the admin UI.
-  const [conflict, setConflict] = useState(false);
   const saveTest = useCallback(
     async (updates: SkillTestUpdate) => {
       if (!currentTest) return;
       setSaveState('saving');
       const reportingResume = pendingResumeRef.current;
       try {
+        // A draft→in_progress transition may be in flight; it bumps the
+        // server-side version, so a save racing it would 409 against nothing.
+        // Wait it out, then read the version the store holds now — the
+        // transition's response has refreshed it by the time the ref resolves.
+        if (transitionRef.current) await transitionRef.current;
+        const stored = useSkillsTestingStore.getState().currentTest;
+        const version = stored?.id === currentTest.id ? stored.version : currentTest.version;
         await updateTest(currentTest.id, {
           ...updates,
           ...(reportingResume ? { resumed: true } : {}),
-          expected_version: currentTest.version,
+          expected_version: version,
         });
         if (reportingResume) pendingResumeRef.current = false;
         setSaveState('saved');
@@ -1866,6 +1922,17 @@ export const ActiveSkillTestPage: React.FC = () => {
                   {Math.floor(currentTest.elapsed_seconds / 60)}:
                   {String(currentTest.elapsed_seconds % 60).padStart(2, '0')}
                 </p>
+                {/* A resumed test's clock carried on from the last save, so
+                    this figure is not a stopwatch reading. The officer
+                    validating this result — and anyone reading it later —
+                    must not take it as evidence of a time limit being met.
+                    Same marking as the printed scorecard and the CSV export. */}
+                {currentTest.timing_verified === false && (
+                  <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    Not verified — scoring was resumed, so the clock carried on from the last save rather than running
+                    continuously.
+                  </p>
+                )}
               </div>
             )}
             {currentTest.completed_at && (
@@ -1951,14 +2018,18 @@ export const ActiveSkillTestPage: React.FC = () => {
         <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t px-4">
           {currentTest.is_practice ? (
             <div className="space-y-2">
-              <button
-                onClick={() => void handleEmailResults()}
-                disabled={emailing}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Mail className="h-5 w-5" />
-                {emailing ? 'Sending...' : 'Email Results to Candidate'}
-              </button>
+              {/* Officers only — the email endpoint requires training.manage,
+                  so for a member examiner this button could only ever 403. */}
+              {isOfficer && (
+                <button
+                  onClick={() => void handleEmailResults()}
+                  disabled={emailing}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Mail className="h-5 w-5" />
+                  {emailing ? 'Sending...' : 'Email Results to Candidate'}
+                </button>
+              )}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button
                   onClick={() => void handleRetake()}
