@@ -180,6 +180,74 @@ class TestPipelineManagement:
         assert reordered is not None
         assert [s.name for s in reordered] == ["Step C", "Step B", "Step A"]
 
+    async def test_reorder_moves_final_flag_to_new_last_step(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """is_final_step is the auto-transfer trigger, so after a reorder it
+        must sit on the stage that is actually last — a stale flag left
+        mid-pipeline turned completing that stage into a membership grant."""
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+
+        pipeline = await svc.create_pipeline(
+            organization_id=org_id, name="Final Flag Pipeline"
+        )
+        step_a = await svc.add_step(
+            pipeline.id,
+            org_id,
+            {"name": "Step A", "step_type": "checkbox", "sort_order": 0},
+        )
+        step_b = await svc.add_step(
+            pipeline.id,
+            org_id,
+            {"name": "Step B", "step_type": "checkbox", "sort_order": 1},
+        )
+        step_final = await svc.add_step(
+            pipeline.id,
+            org_id,
+            {
+                "name": "Approved",
+                "step_type": "checkbox",
+                "sort_order": 2,
+                "is_final_step": True,
+            },
+        )
+
+        # Move the flagged stage into the middle of the pipeline.
+        reordered = await svc.reorder_steps(
+            pipeline.id, org_id, [step_a.id, step_final.id, step_b.id]
+        )
+        assert reordered is not None
+        assert [s.name for s in reordered] == ["Step A", "Approved", "Step B"]
+        assert [s.is_final_step for s in reordered] == [False, False, True]
+
+    async def test_reorder_does_not_invent_a_final_flag(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """A pipeline with no approval stage configured must stay that way —
+        normalization must not switch on an auto-transfer trigger the admin
+        never set up."""
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+
+        pipeline = await svc.create_pipeline(
+            organization_id=org_id, name="No Final Flag Pipeline"
+        )
+        step_a = await svc.add_step(
+            pipeline.id,
+            org_id,
+            {"name": "Step A", "step_type": "checkbox", "sort_order": 0},
+        )
+        step_b = await svc.add_step(
+            pipeline.id,
+            org_id,
+            {"name": "Step B", "step_type": "checkbox", "sort_order": 1},
+        )
+
+        reordered = await svc.reorder_steps(pipeline.id, org_id, [step_b.id, step_a.id])
+        assert reordered is not None
+        assert [s.is_final_step for s in reordered] == [False, False]
+
     async def test_list_pipelines(self, db_session: AsyncSession, setup_org_and_admin):
         org_id, _ = setup_org_and_admin
         svc = MembershipPipelineService(db_session)
@@ -632,6 +700,122 @@ class TestProspectProgression:
         )
         assert progress_status == "skipped"
         assert progress.action_result == {"skipped": True}
+
+    async def test_skip_of_a_flagged_stage_never_transfers(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """A stage still carrying is_final_step mid-pipeline (stale data from
+        before reorder normalization) combined with auto-transfer must not
+        turn a coordinator skip into a membership grant."""
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+
+        pipeline = await svc.create_pipeline(
+            organization_id=org_id,
+            name=f"Stale-Final-{_uid()[:8]}",
+            auto_transfer_on_approval=True,
+        )
+        flagged = await svc.add_step(
+            pipeline.id,
+            org_id,
+            {
+                "name": "Mis-flagged Stage",
+                "step_type": "checkbox",
+                "sort_order": 0,
+                "is_final_step": True,
+            },
+        )
+        await svc.add_step(
+            pipeline.id,
+            org_id,
+            {"name": "Real Last Stage", "step_type": "checkbox", "sort_order": 1},
+        )
+
+        prospect = await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "Never",
+                "last_name": "Converted",
+                "email": "never-converted@example.com",
+                "pipeline_id": pipeline.id,
+            },
+            created_by=admin_id,
+        )
+        assert str(prospect.current_step_id) == str(flagged.id)
+
+        skipped = await svc.skip_current_step(
+            prospect.id, org_id, admin_id, notes="Coordinator override"
+        )
+        assert skipped is not None
+        status_val = (
+            skipped.status.value if hasattr(skipped.status, "value") else skipped.status
+        )
+        assert status_val == "active"
+        user_row = await db_session.execute(
+            text("SELECT id FROM users WHERE email = :em OR personal_email = :em"),
+            {"em": "never-converted@example.com"},
+        )
+        assert user_row.fetchone() is None
+
+    async def test_checklist_stage_completes_with_submitted_items(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """A required checklist stage is passable through the ordinary
+        complete-step path when the request carries all configured items —
+        the gate grades the submitted action_result, not just the stored
+        progress row (which nothing ever wrote before completion)."""
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await self._make_pipeline_with_steps(svc, org_id, 2)
+        steps[0].step_type = "checklist"
+        steps[0].config = {
+            "items": [
+                {"id": "background", "label": "Background check"},
+                {"id": "gear", "label": "Gear issued"},
+            ],
+            "require_all": True,
+        }
+        await db_session.commit()
+
+        prospect = await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "Checklist",
+                "last_name": "Finisher",
+                "email": "checklist-finisher@example.com",
+                "pipeline_id": pipeline.id,
+            },
+            created_by=admin_id,
+        )
+
+        with pytest.raises(ValueError, match="checklist items"):
+            await svc.complete_step(
+                prospect_id=prospect.id,
+                organization_id=org_id,
+                step_id=steps[0].id,
+                completed_by=admin_id,
+                action_result={"completed_items": ["background"]},
+            )
+
+        updated = await svc.complete_step(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=steps[0].id,
+            completed_by=admin_id,
+            action_result={"completed_items": ["background", "gear"]},
+        )
+        assert updated is not None
+        assert str(updated.current_step_id) == str(steps[1].id)
+        progress = next(
+            p for p in updated.step_progress if str(p.step_id) == str(steps[0].id)
+        )
+        progress_status = (
+            progress.status.value
+            if hasattr(progress.status, "value")
+            else progress.status
+        )
+        assert progress_status == "completed"
+        assert progress.action_result == {"completed_items": ["background", "gear"]}
 
     async def test_complete_all_steps(
         self, db_session: AsyncSession, setup_org_and_admin

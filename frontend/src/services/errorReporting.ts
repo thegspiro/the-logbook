@@ -202,13 +202,24 @@ export function scrubSensitive(text: string): string {
   return SCRUB_PATTERNS.reduce((scrubbed, [pattern, replacement]) => scrubbed.replace(pattern, replacement), text);
 }
 
-/** Remove bearer-style public workflow tokens embedded in URL paths. */
+/**
+ * Remove bearer-style public workflow tokens embedded in URL paths.
+ *
+ * Page routes are not always spelled like the API routes they call (the
+ * status page is singular /event-request/..., the API plural
+ * /event-requests/...), and both spellings reach here — via `page` and via
+ * `path` — so each pattern must cover both. The /display/ pattern redacts the
+ * kiosk display code, which is the bearer credential for the public guest
+ * check-in flow; it requires a segment after the slash, so paths that merely
+ * end in /display are untouched.
+ */
 export function sanitizePath(path: string): string {
   return path
     .replace(/(\/finance\/approvals\/)[^/?#]+/gi, '$1[REDACTED]')
-    .replace(/(\/event-requests\/status\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/event-requests?\/status\/)[^/?#]+/gi, '$1[REDACTED]')
     .replace(/(\/application-status\/)[^/?#]+/gi, '$1[REDACTED]')
-    .replace(/(\/calendar\/)[^/?#]+(?=\.ics(?:[/\s?#]|$))/gi, '$1[REDACTED]');
+    .replace(/(\/calendar\/)[^/?#]+(?=\.ics(?:[/\s?#]|$))/gi, '$1[REDACTED]')
+    .replace(/(\/display\/)[^/?#]+/gi, '$1[REDACTED]');
 }
 
 // ---------------------------------------------------------------------------
@@ -302,7 +313,9 @@ function flushSuppressionSummary(): void {
       troubleshooting_steps: mapping.troubleshootingSteps,
       context: {
         source: 'frontend',
-        page: window.location.pathname,
+        // Sanitized like every other reported path: a kiosk display tab is
+        // exactly the long-lived page whose pathname carries a credential.
+        page: sanitizePath(window.location.pathname),
         dropped,
         dropped_by_rate_cap: byRateCap,
         dropped_by_queue_overflow: byOverflow,

@@ -22,7 +22,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_permission, user_has_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -108,6 +108,39 @@ from app.services.documents_service import DocumentsService
 from app.services.facilities_service import FacilitiesService
 
 router = APIRouter()
+
+_SENSITIVE_READ_PERMISSIONS = (
+    "facilities.view_sensitive",
+    "facilities.edit",
+    "facilities.manage",
+)
+
+
+def _facility_response_for(facility, current_user: User) -> FacilityResponse:
+    """Serialize a facility, blanking lease/tax fields for baseline viewers.
+
+    ``lease_expiration`` and ``property_tax_id`` are lease/ownership terms —
+    the same class of data as the endpoint families gated on
+    ``facilities.view_sensitive``/``edit``/``manage`` — but they live on the
+    main facility record, which must stay readable with plain
+    ``facilities.view``. Redact the two fields rather than gating the whole
+    endpoint. Building the full response and then clearing fields (instead of
+    a reduced parallel schema) mirrors the users-roster redaction: a column
+    added to the schema later is visible by default and has to be considered
+    here, whereas an allow-list would silently drop it.
+
+    Every handler returning ``FacilityResponse`` goes through this helper —
+    even those currently reachable only with edit/manage — so a future
+    relaxation of a route's permission gate cannot silently reopen the leak.
+    """
+    payload = FacilityResponse.model_validate(facility)
+    if not any(
+        user_has_permission(current_user, permission)
+        for permission in _SENSITIVE_READ_PERMISSIONS
+    ):
+        payload.lease_expiration = None
+        payload.property_tax_id = None
+    return payload
 
 
 # ============================================================================
@@ -500,7 +533,7 @@ async def create_facility(
         organization_id=current_user.organization_id,
     )
 
-    return facility
+    return _facility_response_for(facility, current_user)
 
 
 @router.post(
@@ -535,7 +568,7 @@ async def archive_facility(
             status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
         )
 
-    return facility
+    return _facility_response_for(facility, current_user)
 
 
 @router.post(
@@ -569,7 +602,7 @@ async def restore_facility(
             status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
         )
 
-    return facility
+    return _facility_response_for(facility, current_user)
 
 
 # ============================================================================
@@ -3566,7 +3599,7 @@ async def get_facility(
             status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
         )
 
-    return facility
+    return _facility_response_for(facility, current_user)
 
 
 @router.patch("/{facility_id}", response_model=FacilityResponse, tags=["Facilities"])
@@ -3609,4 +3642,4 @@ async def update_facility(
         organization_id=current_user.organization_id,
     )
 
-    return facility
+    return _facility_response_for(facility, current_user)

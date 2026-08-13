@@ -771,6 +771,58 @@ class TestHardening(TestNominationSetup):
         assert recorded == 3
         assert batch is not None
 
+    async def test_attested_ballot_count_guard_and_override(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """An attested physical count above the eligible roster is rejected.
+
+        The per-position guard passes here — 2 votes for 2 eligible members
+        is plausible — but turnout and quorum trust ``ballots_cast``
+        directly, so an unchecked 100 certifies a quorum out of an empty
+        room.
+        """
+        org_id, user1_id, _ = setup_org_and_users
+        election_id, cid = await self._open_election_with_candidate(
+            db_session, org_id, user1_id
+        )
+        svc = ElectionService(db_session)
+
+        recorded, batch, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 2}],
+            ballots_cast=100,
+        )
+        assert recorded == 0
+        assert batch is None
+        assert "eligible" in err
+
+        # At the roster limit it is plausible, so it goes through untouched.
+        recorded, batch, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 2}],
+            ballots_cast=2,
+        )
+        assert err is None, err
+        assert recorded == 2
+
+        # And the same audited override that clears the per-position guard
+        # clears this one.
+        recorded, batch, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 2}],
+            ballots_cast=100,
+            allow_over_count=True,
+        )
+        assert err is None, err
+        assert recorded == 2
+        assert batch is not None
+
     async def test_void_manual_ballot_batch(
         self, db_session: AsyncSession, setup_org_and_users
     ):

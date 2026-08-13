@@ -34,6 +34,16 @@ INSTALL_DOCKER=true
 FORCE_ARM=false
 INSTALL_DIR="${INSTALL_DIR:-$(pwd)}"
 
+# The production stack is ALWAYS the base file plus the production override.
+# COMPOSE_FILE_LIST is what gets pinned into .env (for the operator's later bare
+# `docker compose ...` commands); COMPOSE_FILE_ARGS is what this script passes
+# on every invocation. The explicit -f flags are the authoritative selection:
+# they override COMPOSE_FILE from the environment/.env, so a preserved .env that
+# predates the pin (or one an operator wrote by hand) can never downgrade this
+# installer to the development-only base file.
+COMPOSE_FILE_LIST="docker-compose.yml:docker-compose.prod.yml"
+COMPOSE_FILE_ARGS=(-f docker-compose.yml -f docker-compose.prod.yml)
+
 # ============================================
 # Helper Functions
 # ============================================
@@ -321,6 +331,44 @@ generate_secrets() {
 }
 
 create_env_file() {
+    # Never clobber (or silently weaken) a config the operator already has:
+    # regenerating would replace live DB passwords and secrets. Keep it, but
+    # warn when it cannot boot under the pinned production override.
+    if [[ -f "$INSTALL_DIR/.env" ]]; then
+        log_warning "Existing .env found — keeping it (delete it and re-run to regenerate)"
+        # A preserved .env may predate the COMPOSE_FILE pin (or have been
+        # hand-written without it). This installer no longer depends on the pin
+        # — it passes -f explicitly — but the management commands printed at the
+        # end (logs/restart/down/update) are bare `docker compose` calls that do,
+        # so append the key when it is ABSENT. Appending only: an existing value
+        # is the operator's own and is never rewritten, and no other line in the
+        # file is touched (secrets and passwords stay exactly as they are).
+        if ! grep -qE '^[[:space:]]*COMPOSE_FILE=' "$INSTALL_DIR/.env"; then
+            cat >> "$INSTALL_DIR/.env" << EOF
+
+# Added by the installer: pin the production override so bare
+# \`docker compose ...\` commands in this directory layer
+# docker-compose.prod.yml on the development base file.
+COMPOSE_FILE=$COMPOSE_FILE_LIST
+EOF
+            log_info "Added COMPOSE_FILE=$COMPOSE_FILE_LIST to your .env"
+        elif ! grep -qE '^[[:space:]]*COMPOSE_FILE=.*docker-compose\.prod\.yml' "$INSTALL_DIR/.env"; then
+            log_warning "Your .env sets COMPOSE_FILE without docker-compose.prod.yml. This"
+            log_warning "installer still deploys the production stack (it passes -f"
+            log_warning "explicitly), but your own bare \`docker compose\` commands will"
+            log_warning "start the development posture (uvicorn --reload, published backend"
+            log_warning "port, docs on). Set COMPOSE_FILE=$COMPOSE_FILE_LIST"
+        fi
+        if ! grep -qE '^[[:space:]]*SECURITY_REQUIRE_TLS=' "$INSTALL_DIR/.env"; then
+            log_warning "Your .env does not set SECURITY_REQUIRE_TLS. docker-compose.prod.yml"
+            log_warning "defaults it to TRUE and the backend will REFUSE TO START, because the"
+            log_warning "bundled MySQL/Redis do not terminate TLS. Either configure TLS"
+            log_warning "(DB_SSL/DB_SSL_CA, REDIS_SSL/REDIS_SSL_CA) or add an explicit"
+            log_warning "SECURITY_REQUIRE_TLS=false for the bundled plaintext services."
+        fi
+        return
+    fi
+
     log_info "Creating .env file with profile: $PROFILE"
 
     generate_secrets
@@ -398,7 +446,22 @@ BACKEND_WORKERS=$BACKEND_WORKERS
 # in this directory (start, update, logs, restart) layers docker-compose.prod.yml
 # on top of the development base file — hardened posture (no --reload, docs off,
 # HTTPS/TLS enforced, backend port unpublished, trusted-proxy IPs set).
-COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+COMPOSE_FILE=$COMPOSE_FILE_LIST
+
+# ============================================
+# TRANSPORT TLS TO DATA SERVICES — EXPLICIT OPT-OUT
+# ============================================
+# The bundled MySQL and Redis containers speak PLAINTEXT on the internal
+# Docker network; they do not terminate TLS. With SECURITY_REQUIRE_TLS unset,
+# docker-compose.prod.yml defaults it to true and the backend REFUSES TO
+# START. This explicit false keeps the bundled stack bootable: database and
+# cache traffic stays on the compose-internal network but is NOT encrypted.
+# If you move MySQL/Redis off-host (or add TLS termination), set
+# DB_SSL=true + DB_SSL_CA and REDIS_SSL=true + REDIS_SSL_CA, then flip
+# SECURITY_REQUIRE_TLS=true to keep it that way.
+SECURITY_REQUIRE_TLS=false
+DB_SSL=false
+REDIS_SSL=false
 
 # ============================================
 # NETWORK
@@ -433,6 +496,10 @@ ENABLE_MAILHOG=false
 EOF
 
     log_success ".env file created"
+    log_warning "SECURITY_REQUIRE_TLS=false written to .env: the bundled MySQL/Redis do"
+    log_warning "not terminate TLS, so DB/cache traffic on the internal Docker network is"
+    log_warning "NOT encrypted. If you use external data services, enable DB_SSL/REDIS_SSL"
+    log_warning "(+ CA certs) and set SECURITY_REQUIRE_TLS=true."
 }
 
 # ============================================
@@ -440,10 +507,11 @@ EOF
 # ============================================
 
 select_compose_file() {
-    # The production override is pinned via COMPOSE_FILE in the generated .env
-    # (see create_env_file), so bare `docker compose` commands run from the
-    # install dir automatically layer docker-compose.prod.yml on the base file.
-    COMPOSE_FILE="docker-compose.yml:docker-compose.prod.yml"
+    # Every `docker compose` call below passes COMPOSE_FILE_ARGS (-f base -f
+    # prod) rather than relying on COMPOSE_FILE from .env: CLI -f flags win over
+    # the environment, so the selection holds even for a preserved .env that
+    # never had the key. The .env pin (see create_env_file) exists only for the
+    # operator's later bare `docker compose ...` commands.
     COMPOSE_PROFILES=""
 
     # Use ARM-optimized images if on ARM
@@ -465,7 +533,7 @@ select_compose_file() {
             ;;
     esac
 
-    log_info "Compose file: $COMPOSE_FILE, Profiles: ${COMPOSE_PROFILES:-none}"
+    log_info "Compose files: ${COMPOSE_FILE_ARGS[*]}, Profiles: ${COMPOSE_PROFILES:-none}"
 }
 
 # ============================================
@@ -489,9 +557,13 @@ start_services() {
 
     cd "$INSTALL_DIR"
 
-    # Build and start
-    docker compose $COMPOSE_PROFILES build
-    docker compose $COMPOSE_PROFILES up -d
+    # Build and start. COMPOSE_PROFILES is an intentionally word-split string of
+    # `--profile x` flags; the compose file selection is an array so paths stay
+    # intact regardless of what .env holds.
+    # shellcheck disable=SC2086
+    docker compose "${COMPOSE_FILE_ARGS[@]}" $COMPOSE_PROFILES build
+    # shellcheck disable=SC2086
+    docker compose "${COMPOSE_FILE_ARGS[@]}" $COMPOSE_PROFILES up -d
 
     log_success "Services started"
 }
@@ -503,7 +575,7 @@ wait_for_services() {
     local attempt=0
 
     while [[ $attempt -lt $max_attempts ]]; do
-        if docker compose exec -T backend curl -s http://localhost:3001/health > /dev/null 2>&1; then
+        if docker compose "${COMPOSE_FILE_ARGS[@]}" exec -T backend curl -s http://localhost:3001/health > /dev/null 2>&1; then
             log_success "Backend is healthy"
             break
         fi
@@ -521,9 +593,9 @@ wait_for_services() {
 run_migrations() {
     log_info "Running database migrations..."
 
-    docker compose exec -T backend alembic upgrade head || {
+    docker compose "${COMPOSE_FILE_ARGS[@]}" exec -T backend alembic upgrade head || {
         log_warning "Migrations may have already run or database is still starting"
-        log_info "You can run manually: docker compose exec backend alembic upgrade head"
+        log_info "You can run manually: docker compose ${COMPOSE_FILE_ARGS[*]} exec backend alembic upgrade head"
     }
 }
 

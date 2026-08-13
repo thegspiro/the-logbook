@@ -350,11 +350,12 @@ describe('EquipmentCheckForm quantity seeding', () => {
     await user.type(dateField, '2028-01-31');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    // The record follows the box the crew is holding, in the same act.
+    // The record follows the box the crew is holding, in the same act. The
+    // untouched lot number is omitted so the metadata-change permission
+    // gate doesn't reject a member's date correction.
     await waitFor(() => {
       expect(mockUpdateDeployedLot).toHaveBeenCalledWith('ti-1', 'dl-1', {
         quantity: 2,
-        lotNumber: 'LOT-A',
         expirationDate: '2028-01-31',
       });
     });

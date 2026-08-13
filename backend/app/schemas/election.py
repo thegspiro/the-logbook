@@ -5,7 +5,7 @@ Request and response schemas for election-related endpoints.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -39,17 +39,40 @@ def _validate_choice(value, valid_set, label):
     return value
 
 
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Treat a naive datetime as UTC (the project-wide wire convention).
+
+    Pydantic v2 accepts both naive and timezone-aware ISO datetimes, but
+    comparing the two forms raises TypeError — which model validators do
+    NOT convert to a validation error, so a mixed create/update payload
+    surfaced as a 500 instead of a 422. Normalizing every incoming
+    datetime here keeps all cross-field date comparisons (in this module
+    and in the update endpoint) well-defined.
+    """
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 # Ballot Item Schemas
 
 
 class BallotItem(BaseModel):
-    """Schema for a ballot item with voter eligibility rules"""
+    """Schema for a ballot item with voter eligibility rules.
+
+    This is the tolerant, shared shape: response models deserialize ballot
+    items stored as JSON on pre-existing election rows through this class,
+    so it must accept whatever was historically persisted. Constraints that
+    only new payloads can be expected to satisfy (the strict ``id`` pattern,
+    supermajority-requires-percentage) live on :class:`BallotItemInput`,
+    the write-path subclass — enforcing them here made GET fail *response*
+    validation (a 500) for legacy rows that predate the rules, with no
+    migration guarding them.
+    """
 
     id: str = Field(
         ...,
         min_length=1,
-        max_length=100,
-        pattern=r"^[A-Za-z0-9_-]+$",
         description="Unique, stable identifier for this ballot item",
     )
     type: str = Field(
@@ -153,6 +176,28 @@ class BallotItem(BaseModel):
             raise ValueError("'all' cannot be combined with other voter types")
         return cleaned
 
+
+class BallotItemInput(BallotItem):
+    """Ballot item as accepted on the write path (create / update / saved
+    templates).
+
+    WHY a subclass: input must stay strict — ballot item ids are persisted
+    verbatim into JSON and referenced by votes, so new ids are limited to a
+    safe character set, and a supermajority override without a percentage
+    is unresolvable at tally time. But legacy rows stored before these
+    rules existed must still round-trip through the response models, so
+    the shared :class:`BallotItem` stays tolerant and the strictness lives
+    only here.
+    """
+
+    id: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Unique, stable identifier for this ballot item",
+    )
+
     @model_validator(mode="after")
     def validate_victory_override(self):
         if (
@@ -190,7 +235,7 @@ class ElectionBase(BaseModel):
         max_length=100,
         description="List of positions to vote for",
     )
-    ballot_items: Optional[List[BallotItem]] = Field(
+    ballot_items: Optional[List[BallotItemInput]] = Field(
         default=None,
         max_length=250,
         description="Structured ballot items with per-item eligibility",
@@ -320,6 +365,14 @@ class ElectionBase(BaseModel):
     def validate_runoff_type(cls, v: str) -> str:
         return _validate_choice(v, VALID_RUNOFF_TYPES, "runoff type")
 
+    @field_validator("meeting_date", "start_date", "end_date", "nomination_deadline")
+    @classmethod
+    def normalize_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # See _as_utc: without this, a payload mixing naive and aware
+        # datetimes makes validate_election_configuration raise TypeError
+        # (a 500) instead of returning a 422.
+        return _as_utc(v)
+
     @field_validator("positions")
     @classmethod
     def validate_positions(cls, values: Optional[List[str]]) -> Optional[List[str]]:
@@ -335,8 +388,8 @@ class ElectionBase(BaseModel):
     @field_validator("ballot_items")
     @classmethod
     def validate_unique_ballot_item_ids(
-        cls, values: Optional[List[BallotItem]]
-    ) -> Optional[List[BallotItem]]:
+        cls, values: Optional[List[BallotItemInput]]
+    ) -> Optional[List[BallotItemInput]]:
         if values is not None:
             ids = [item.id for item in values]
             if len(set(ids)) != len(ids):
@@ -375,7 +428,7 @@ class ElectionUpdate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=50_000)
     election_type: Optional[str] = Field(None, max_length=50)
     positions: Optional[List[str]] = Field(default=None, max_length=100)
-    ballot_items: Optional[List[BallotItem]] = Field(default=None, max_length=250)
+    ballot_items: Optional[List[BallotItemInput]] = Field(default=None, max_length=250)
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
@@ -426,6 +479,13 @@ class ElectionUpdate(BaseModel):
     def validate_runoff_type(cls, v: Optional[str]) -> Optional[str]:
         return _validate_choice(v, VALID_RUNOFF_TYPES, "runoff type")
 
+    @field_validator("meeting_date", "start_date", "end_date", "nomination_deadline")
+    @classmethod
+    def normalize_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # See _as_utc: the update endpoint compares these against each other
+        # and against stored values; a naive/aware mix raised TypeError (500).
+        return _as_utc(v)
+
     @field_validator("positions")
     @classmethod
     def validate_positions(cls, values: Optional[List[str]]) -> Optional[List[str]]:
@@ -441,8 +501,8 @@ class ElectionUpdate(BaseModel):
     @field_validator("ballot_items")
     @classmethod
     def validate_unique_ballot_item_ids(
-        cls, values: Optional[List[BallotItem]]
-    ) -> Optional[List[BallotItem]]:
+        cls, values: Optional[List[BallotItemInput]]
+    ) -> Optional[List[BallotItemInput]]:
         if values is not None:
             ids = [item.id for item in values]
             if len(set(ids)) != len(ids):
@@ -620,11 +680,23 @@ class ManualBallotsRequest(BaseModel):
 
     entries: List[ManualBallotEntry] = Field(..., min_length=1, max_length=50)
     notes: Optional[str] = Field(None, max_length=1000)
+    ballots_cast: Optional[int] = Field(
+        None,
+        ge=1,
+        le=2000,
+        description=(
+            "Number of physical ballots this batch was tallied from. "
+            "For approval/ranked-choice tallies the per-candidate counts "
+            "alone only bound turnout from below; recording the physical "
+            "ballot count makes quorum math exact."
+        ),
+    )
     allow_over_count: bool = Field(
         default=False,
         description=(
-            "Bypass the per-position plausibility check (total ballots vs "
-            "eligible voters). The override is recorded in the audit log."
+            "Bypass the plausibility checks (per-position total ballots and "
+            "the attested physical ballot count, each vs eligible voters). "
+            "The override is recorded in the audit log."
         ),
     )
 
@@ -667,6 +739,9 @@ class ManualBallotBatchInfo(BaseModel):
     recorded_by_name: Optional[str] = None
     recorded_at: Optional[datetime] = None
     notes: Optional[str] = None
+    # Physical ballots the recorder attested for the batch; None on batches
+    # recorded before the count existed (turnout falls back to the estimate).
+    ballots_cast: Optional[int] = None
     required_attestations: int = 0
     attestations: List[ManualBallotAttestationInfo] = []
     totals: List[ManualBallotBatchTotal] = []
@@ -712,6 +787,12 @@ class CloneElectionRequest(BaseModel):
         default=False,
         description="Also copy the source election's accepted candidates",
     )
+
+    @field_validator("start_date", "end_date", "nomination_deadline")
+    @classmethod
+    def normalize_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # See _as_utc: naive/aware mix in validate_dates was TypeError (500).
+        return _as_utc(v)
 
     @model_validator(mode="after")
     def validate_dates(self) -> "CloneElectionRequest":
@@ -1092,7 +1173,7 @@ class SavedBallotTemplateCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2_000)
-    ballot_items: List[BallotItem] = Field(..., min_length=1, max_length=250)
+    ballot_items: List[BallotItemInput] = Field(..., min_length=1, max_length=250)
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("name")
@@ -1105,7 +1186,7 @@ class SavedBallotTemplateCreate(BaseModel):
 
     @field_validator("ballot_items")
     @classmethod
-    def unique_item_ids(cls, values: List[BallotItem]) -> List[BallotItem]:
+    def unique_item_ids(cls, values: List[BallotItemInput]) -> List[BallotItemInput]:
         ids = [item.id for item in values]
         if len(set(ids)) != len(ids):
             raise ValueError("Ballot item IDs must be unique")
