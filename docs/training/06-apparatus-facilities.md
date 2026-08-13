@@ -181,7 +181,9 @@ The Facilities header has a **Print Labels** button that prints a barcode label 
 
 ### Room QR Codes
 
-Every station and room gets a kiosk **display code** when it is created, and its QR code opens the room's public kiosk display (`/display/{code}`) for event check-in. The **Room QR Codes** page (`/locations/qr-codes`) collects every code in one printable directory, grouped by station/facility — print the page, cut out the cards, and post each code in its room. Reach it from the **Room QR Codes** button on the Locations page, the **Room QR Codes** link in a facility's Rooms section, or the command palette (Ctrl/Cmd+K, search "QR").
+Every station and room gets a kiosk **display code** when it is created, and its QR code opens the room's public kiosk display (`/display/{code}`) for event check-in. The **Room QR Codes** page (`/locations/qr-codes`) collects every code in one printable directory, grouped by station/facility — print the page, cut out the cards, and post each code in its room. Reach it from the **Room QR Codes** button on the Locations page, the **Room QR Codes** link in a facility's Rooms section, or the command palette (Ctrl/Cmd+K, search "QR"). Rooms in a facility's Rooms section also have their own QR button to view and copy a single room's code in place.
+
+Each card offers **Download PNG** for embedding a code in your own signage documents. Users with `locations.edit` or `locations.manage` also see **Regenerate**: if a printed code leaks or walks off, regenerating issues a new code and the old `/display/{code}` URL stops working immediately — reprint the posted code and update any kiosk tablets afterward. Regenerations are recorded in the audit log.
 
 ---
 

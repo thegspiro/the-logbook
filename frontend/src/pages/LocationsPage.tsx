@@ -37,30 +37,7 @@ import { locationsService, organizationService } from '../services/api';
 import type { Location, LocationCreate } from '../services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
-/** Copy text to clipboard with fallback for non-HTTPS contexts */
-async function copyToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {
-      // clipboard API failed (e.g. non-secure context) — fall through to fallback
-    }
-  }
-  // Fallback: temporary textarea + execCommand
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.left = '-9999px';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand('copy');
-  } finally {
-    document.body.removeChild(textarea);
-  }
-}
+import { copyToClipboard } from '../utils/clipboard';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
 function groupLocations(locations: Location[]): { stations: Location[]; rooms: Map<string, Location[]> } {

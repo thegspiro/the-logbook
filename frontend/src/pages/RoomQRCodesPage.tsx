@@ -5,49 +5,81 @@
  * station/facility, so admins don't have to hunt through individual room
  * cards to find them. Print-friendly: the global print stylesheet hides
  * navigation, and each card avoids page breaks so the sheet can be cut up
- * and posted in each room.
+ * and posted in each room. Cards can also be downloaded individually as
+ * PNGs for embedding in signage documents.
  *
  * Every location (station or room) gets a `display_code` when it is
  * created; the QR code encodes the public kiosk URL `/display/{code}`.
+ * Admins with locations.edit/manage can rotate a leaked code — the old
+ * URL stops resolving immediately.
  *
  * URL: /locations/qr-codes
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
-import { ArrowLeft, Building2, Copy, Check, DoorOpen, Loader2, Printer, QrCode } from 'lucide-react';
+import {
+  ArrowLeft,
+  Building2,
+  Copy,
+  Check,
+  DoorOpen,
+  Download,
+  Loader2,
+  Printer,
+  QrCode,
+  RefreshCw,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { locationsService } from '../services/api';
 import type { Location } from '../services/api';
 import { groupByStation } from '../utils/locationGrouping';
+import { copyToClipboard } from '../utils/clipboard';
+import { useAuthStore } from '../stores/authStore';
+import { useConfirm } from '../contexts/ConfirmContext';
 
-/** Copy text to clipboard with fallback for non-HTTPS contexts */
-async function copyToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard) {
-    try {
-      await navigator.clipboard.writeText(text);
+/** Rasterize an inline QR SVG to a PNG download (white background for print/signage use). */
+function downloadSvgAsPng(svg: SVGSVGElement, filename: string): void {
+  const xml = new XMLSerializer().serializeToString(svg);
+  const svgUrl = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }));
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(svgUrl);
+    const size = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      toast.error('Failed to generate image');
       return;
-    } catch {
-      // clipboard API failed (e.g. non-secure context) — fall through to fallback
     }
-  }
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.left = '-9999px';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand('copy');
-  } finally {
-    document.body.removeChild(textarea);
-  }
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(img, 0, 0, size, size);
+    const anchor = document.createElement('a');
+    anchor.download = filename;
+    anchor.href = canvas.toDataURL('image/png');
+    anchor.click();
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(svgUrl);
+    toast.error('Failed to generate image');
+  };
+  img.src = svgUrl;
 }
 
-function QRCard({ location }: { location: Location }) {
+function QRCard({
+  location,
+  onRegenerate,
+}: {
+  location: Location;
+  onRegenerate?: ((location: Location) => Promise<void>) | undefined;
+}) {
   const [copied, setCopied] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const qrContainerRef = useRef<HTMLDivElement>(null);
   const kioskUrl = `${window.location.origin}/display/${location.display_code}`;
   const isStation = Boolean(location.address && !location.building && !location.room_number);
 
@@ -59,6 +91,27 @@ function QRCard({ location }: { location: Location }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Failed to copy URL');
+    }
+  };
+
+  const handleDownload = () => {
+    const svg = qrContainerRef.current?.querySelector('svg');
+    if (!svg) return;
+    const slug =
+      location.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'room';
+    downloadSvgAsPng(svg, `qr-${slug}.png`);
+  };
+
+  const handleRegenerate = async () => {
+    if (!onRegenerate) return;
+    setIsRegenerating(true);
+    try {
+      await onRegenerate(location);
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -76,30 +129,56 @@ function QRCard({ location }: { location: Location }) {
         </h3>
       </div>
       {/* bg-white intentional for QR code readability in dark mode */}
-      <div className="rounded-lg bg-white p-2">
+      <div ref={qrContainerRef} className="rounded-lg bg-white p-2">
         <QRCodeSVG value={kioskUrl} size={160} level="H" includeMargin />
       </div>
       <p className="text-theme-text-muted mt-2 font-mono text-[10px] break-all print:text-black">{kioskUrl}</p>
-      <button
-        onClick={() => {
-          void handleCopy();
-        }}
-        className="no-print text-theme-text-muted mt-2 flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
-      >
-        {copied ? (
-          <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
-        ) : (
-          <Copy className="h-3 w-3" aria-hidden="true" />
+      <div className="no-print mt-2 flex flex-wrap items-center justify-center gap-3">
+        <button
+          onClick={() => {
+            void handleCopy();
+          }}
+          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
+        >
+          {copied ? (
+            <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
+          ) : (
+            <Copy className="h-3 w-3" aria-hidden="true" />
+          )}
+          Copy URL
+        </button>
+        <button
+          onClick={handleDownload}
+          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
+        >
+          <Download className="h-3 w-3" aria-hidden="true" />
+          Download PNG
+        </button>
+        {onRegenerate && (
+          <button
+            onClick={() => {
+              void handleRegenerate();
+            }}
+            disabled={isRegenerating}
+            title="Generate a new code — the current QR code stops working"
+            className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-red-500 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${isRegenerating ? 'animate-spin' : ''}`} aria-hidden="true" />
+            Regenerate
+          </button>
         )}
-        Copy URL
-      </button>
+      </div>
     </div>
   );
 }
 
 export default function RoomQRCodesPage() {
+  const { confirm } = useConfirm();
+  const checkPermission = useAuthStore((s) => s.checkPermission);
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const canManage = checkPermission('locations.edit') || checkPermission('locations.manage');
 
   useEffect(() => {
     const load = async () => {
@@ -114,6 +193,25 @@ export default function RoomQRCodesPage() {
     };
     void load();
   }, []);
+
+  const handleRegenerate = async (location: Location) => {
+    if (
+      !(await confirm({
+        title: 'Regenerate QR code',
+        message: `Generate a new code for "${location.name}"? The current QR code and kiosk URL stop working immediately — reprint the posted code and update any kiosk tablets.`,
+        confirmLabel: 'Regenerate',
+        cancelLabel: 'Keep current code',
+      }))
+    )
+      return;
+    try {
+      const updated = await locationsService.regenerateDisplayCode(location.id);
+      setLocations((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+      toast.success('New QR code generated');
+    } catch {
+      toast.error('Failed to regenerate code');
+    }
+  };
 
   const groups = groupByStation(locations);
 
@@ -172,7 +270,11 @@ export default function RoomQRCodesPage() {
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2">
                 {group.locations.map((location) => (
-                  <QRCard key={location.id} location={location} />
+                  <QRCard
+                    key={location.id}
+                    location={location}
+                    onRegenerate={canManage ? handleRegenerate : undefined}
+                  />
                 ))}
               </div>
             </section>
