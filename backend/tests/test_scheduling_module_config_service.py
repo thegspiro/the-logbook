@@ -60,6 +60,7 @@ async def _make_org(db_session, name: str) -> Organization:
     return org
 
 
+@pytest.mark.integration
 class TestDefaults:
     async def test_defaults_returned_when_unset(self, db_session):
         org = await _make_org(db_session, "SMC Defaults FD")
@@ -92,6 +93,7 @@ class TestDefaults:
         assert wire["settings"]["equipmentCheckSettings"]["enabled"] is False
 
 
+@pytest.mark.integration
 class TestUpdate:
     async def test_update_persists_and_reads_back(self, db_session):
         org = await _make_org(db_session, "SMC Update FD")
@@ -175,6 +177,7 @@ class TestUpdate:
         assert row is not None
 
 
+@pytest.mark.integration
 class TestOrgScoping:
     async def test_org_a_settings_never_reach_org_b(self, db_session):
         org_a = await _make_org(db_session, "SMC Org A")
@@ -210,6 +213,7 @@ class TestOrgScoping:
         assert settings_b["default_duration_hours"] == 6
 
 
+@pytest.mark.integration
 class TestReset:
     async def test_reset_when_nothing_stored_is_a_noop(self, db_session):
         org = await _make_org(db_session, "SMC ResetNoop FD")
