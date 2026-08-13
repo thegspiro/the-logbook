@@ -24,10 +24,12 @@ vi.mock('react-router', async () => {
 });
 
 // Mock API services
-const { mockGetMyShifts, mockGetOpenShifts, mockSignupForShift } = vi.hoisted(() => ({
+const { mockGetMyShifts, mockGetOpenShifts, mockSignupForShift, mockGetInbox, mockGetUnreadCount } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
   mockSignupForShift: vi.fn(),
+  mockGetInbox: vi.fn(),
+  mockGetUnreadCount: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -47,7 +49,11 @@ vi.mock('../services/api', () => ({
     getLogs: vi.fn().mockResolvedValue({ logs: [], total: 0 }),
   },
   messagesService: {
-    getInbox: vi.fn().mockResolvedValue([]),
+    getInbox: mockGetInbox,
+    getUnreadCount: mockGetUnreadCount,
+    markAsRead: vi.fn().mockResolvedValue(undefined),
+    acknowledge: vi.fn().mockResolvedValue(undefined),
+    updateMessage: vi.fn().mockResolvedValue({}),
   },
   trainingProgramService: {
     getMyEnrollments: vi.fn().mockResolvedValue({ items: [] }),
@@ -124,6 +130,8 @@ describe('Dashboard', () => {
     mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
     mockGetOpenShifts.mockResolvedValue([]);
     mockSignupForShift.mockResolvedValue({});
+    mockGetInbox.mockResolvedValue([]);
+    mockGetUnreadCount.mockResolvedValue({ unread_count: 0 });
   });
 
   describe('My Upcoming Shifts', () => {
@@ -310,6 +318,68 @@ describe('Dashboard', () => {
       await waitFor(() => {
         expect(mockGetOpenShifts).toHaveBeenCalledTimes(1);
       });
+    });
+  });
+
+  describe('Department Messages', () => {
+    const makeMessage = (overrides: Record<string, unknown> = {}) => ({
+      id: 'msg-1',
+      title: 'Station 2 Bay Doors Out of Service',
+      body: 'Use the rear bay until further notice.',
+      priority: 'normal',
+      target_type: 'all',
+      is_pinned: false,
+      is_persistent: false,
+      requires_acknowledgment: false,
+      posted_by: 'officer-1',
+      author_name: 'Chief Test',
+      created_at: '2026-08-01T12:00:00Z',
+      expires_at: null,
+      is_read: false,
+      read_at: null,
+      is_acknowledged: false,
+      acknowledged_at: null,
+      ...overrides,
+    });
+
+    // MSG2-6: the card must request only pending + persistent messages —
+    // include_read: true would let already-read messages page a persistent
+    // standing notice out of the 10-item window.
+    it('requests only pending and persistent messages for the card', async () => {
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(mockGetInbox).toHaveBeenCalledWith({ include_read: false, limit: 10 });
+      });
+    });
+
+    it('renders pending messages, with the badge on persistent ones', async () => {
+      mockGetInbox.mockResolvedValue([
+        makeMessage(),
+        makeMessage({
+          id: 'msg-2',
+          title: 'SCBA annual inspection mandatory by March 31',
+          is_persistent: true,
+          is_read: true,
+        }),
+      ]);
+      mockGetUnreadCount.mockResolvedValue({ unread_count: 1 });
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
+      expect(screen.getByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
+      expect(screen.getByText('Persistent')).toBeInTheDocument();
+      expect(screen.getByText('1 new')).toBeInTheDocument();
+    });
+
+    it('hides the card entirely when nothing is pending', async () => {
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(mockGetInbox).toHaveBeenCalledTimes(1);
+      });
+      expect(screen.queryByText('Department Messages')).not.toBeInTheDocument();
     });
   });
 });

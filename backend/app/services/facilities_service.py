@@ -2022,7 +2022,9 @@ class FacilitiesService:
         )
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        rooms = list(result.scalars().all())
+        await self._attach_display_codes(rooms, organization_id)
+        return rooms
 
     async def get_room(
         self, room_id: str, organization_id: str
@@ -2033,7 +2035,31 @@ class FacilitiesService:
             .where(FacilityRoom.id == room_id)
             .where(FacilityRoom.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        room = result.scalar_one_or_none()
+        if room:
+            await self._attach_display_codes([room], organization_id)
+        return room
+
+    async def _attach_display_codes(
+        self, rooms: List[FacilityRoom], organization_id: str
+    ) -> None:
+        """Attach each room's linked Location kiosk display code.
+
+        Rooms sync to Location records (see _sync_room_location) which own
+        the public display code. FacilityRoomResponse serializes the
+        transient ``display_code`` attribute set here.
+        """
+        if not rooms:
+            return
+        result = await self.db.execute(
+            select(Location.facility_room_id, Location.display_code).where(
+                Location.facility_room_id.in_([room.id for room in rooms]),
+                Location.organization_id == organization_id,
+            )
+        )
+        codes = {row.facility_room_id: row.display_code for row in result}
+        for room in rooms:
+            room.display_code = codes.get(room.id)
 
     async def create_room(
         self,

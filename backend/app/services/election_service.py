@@ -114,7 +114,11 @@ class ElectionService:
         if not isinstance(features, dict):
             features = {}
         return {
-            key: bool(features.get(key, default))
+            key: (
+                value
+                if isinstance(value := features.get(key, default), bool)
+                else default
+            )
             for key, default in self.FEATURE_DEFAULTS.items()
         }
 

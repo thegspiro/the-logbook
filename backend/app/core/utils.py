@@ -9,10 +9,13 @@ import secrets
 import string
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any, Optional, TypeVar
 
 from fastapi import HTTPException, status
 from loguru import logger
+
+from app.core.error_codes import CodedHTTPException, ErrorCode
 
 # Patterns that suggest internal implementation details leaking
 _UNSAFE_PATTERNS = [
@@ -91,6 +94,7 @@ T = TypeVar("T")
 def ensure_found(
     resource: Optional[T],
     resource_name: str = "Resource",
+    error_code: Optional[ErrorCode] = None,
 ) -> T:
     """Raise 404 if the resource is None, otherwise return it.
 
@@ -103,8 +107,17 @@ def ensure_found(
             await service.get_location(id, org_id),
             "Location",
         )
+
+    Pass ``error_code`` to attach a curated support code; without one the
+    response still carries the automatic LB-API-404 fallback.
     """
     if resource is None:
+        if error_code is not None:
+            raise CodedHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"{resource_name} not found",
+                error_code=error_code,
+            )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"{resource_name} not found",
@@ -136,20 +149,51 @@ async def handle_service_errors(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e, fallback),
+        raise _to_http_exception(
+            e, status.HTTP_400_BAD_REQUEST, safe_error_detail(e, fallback)
         )
     except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=safe_error_detail(e, fallback),
+        raise _to_http_exception(
+            e, status.HTTP_403_FORBIDDEN, safe_error_detail(e, fallback)
         )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail(e, fallback),
         )
+
+
+def _to_http_exception(exc: Exception, status_code: int, detail: str) -> HTTPException:
+    """HTTPException for a service-layer error, keeping any support code.
+
+    A service that raised ``CodedValueError`` (or any exception carrying an
+    ``error_code`` attribute) gets its curated code onto the response; plain
+    exceptions keep the automatic LB-API-<status> fallback.
+    """
+    code = getattr(exc, "error_code", None)
+    if isinstance(code, ErrorCode):
+        return CodedHTTPException(
+            status_code=status_code, detail=detail, error_code=code
+        )
+    return HTTPException(status_code=status_code, detail=detail)
+
+
+def utc_isoformat(dt: Optional[datetime]) -> Optional[str]:
+    """ISO-8601 string with an explicit UTC offset, or None for None.
+
+    MySQL DATETIME columns come back from the driver as *naive* datetimes even
+    when the column is declared ``DateTime(timezone=True)``, and this codebase
+    stores all datetimes as UTC. A naive ``.isoformat()`` therefore emits
+    "2026-08-13T00:15:00" with no offset — which JavaScript's ``new Date()``
+    interprets as *local* time, so the UI shows the UTC wall-clock shifted
+    into the member's zone. Serialize API timestamps through this helper so
+    the browser receives "...+00:00" and can convert to local time correctly.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
 
 
 def generate_uuid() -> str:

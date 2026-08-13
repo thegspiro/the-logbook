@@ -32,6 +32,7 @@ from app.core.utils import safe_error_detail
 from app.models.storefront import (
     StoreOrder,
     StoreOrderWindow,
+    StorePaymentStatus,
     StoreProduct,
     StoreSettings,
 )
@@ -125,6 +126,11 @@ def _order_payload(
     """Shape one order for the API, hiding internal fields from members."""
     total = Decimal(order.total or 0)
     paid = Decimal(order.amount_paid or 0)
+    balance_due = (
+        Decimal("0")
+        if order.payment_status == StorePaymentStatus.WAIVED
+        else max(total - paid, Decimal("0"))
+    )
 
     events = []
     for event in order.events:
@@ -163,7 +169,7 @@ def _order_payload(
         "discount_amount": order.discount_amount,
         "total": order.total,
         "amount_paid": order.amount_paid,
-        "balance_due": max(total - paid, Decimal("0")),
+        "balance_due": balance_due,
         "payment_reference": order.payment_reference,
         "payment_reported_at": order.payment_reported_at,
         "paid_at": order.paid_at,

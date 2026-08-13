@@ -8,12 +8,13 @@ Permission aggregation combines **position permissions** (from the
 (from the ``OPERATIONAL_RANKS`` config keyed by ``User.rank``).
 """
 
-from fastapi import Cookie, Depends, Header, HTTPException, Query, Request, status
+from fastapi import Cookie, Depends, Header, Query, Request, status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import get_rank_default_permissions, permission_matches
 from app.models.user import Organization, User
 from app.services.auth_service import AuthService
@@ -104,9 +105,13 @@ async def get_current_user(
     1. HttpOnly ``access_token`` cookie (preferred — immune to XSS).
     2. ``Authorization: Bearer <token>`` header (API / non-browser clients).
     """
-    credentials_exception = HTTPException(
+    # Two curated codes for the same 401: "no credentials at all" and
+    # "credentials present but rejected" send IT down different paths
+    # (cookie/browser problems vs expired or revoked sessions).
+    credentials_exception = CodedHTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
+        error_code=ErrorCode.AUTH_SESSION_INVALID,
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -127,7 +132,12 @@ async def get_current_user(
 
     if not token:
         logger.debug("Auth rejected: no access_token cookie or Authorization header")
-        raise credentials_exception
+        raise CodedHTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            error_code=ErrorCode.AUTH_NOT_SIGNED_IN,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Validate token and get user
     auth_service = AuthService(db)
@@ -139,9 +149,10 @@ async def get_current_user(
             # Return 503 so the frontend can distinguish this from a real
             # auth failure and avoid logging the user out.
             logger.warning(f"Auth check failed due to transient DB error: {e}")
-            raise HTTPException(
+            raise CodedHTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Service temporarily unavailable",
+                error_code=ErrorCode.SYS_DB_UNAVAILABLE,
                 headers={"Retry-After": "5"},
             )
         raise
@@ -156,9 +167,10 @@ async def get_current_user(
     if getattr(user, "must_change_password", False):
         path = request.url.path.rstrip("/")
         if not any(path.endswith(s) for s in _MUST_CHANGE_PW_ALLOWED_SUFFIXES):
-            raise HTTPException(
+            raise CodedHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Password change required before continuing.",
+                error_code=ErrorCode.AUTH_PASSWORD_CHANGE_REQUIRED,
                 headers={"X-Password-Change-Required": "true"},
             )
 
@@ -173,9 +185,10 @@ async def get_current_user(
         if (org_settings.get("security") or {}).get("mfa_required"):
             path = request.url.path.rstrip("/")
             if not any(path.endswith(s) for s in _MFA_ENROLL_ALLOWED_SUFFIXES):
-                raise HTTPException(
+                raise CodedHTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="MFA enrollment required before continuing.",
+                    error_code=ErrorCode.AUTH_MFA_ENROLLMENT_REQUIRED,
                     headers={"X-MFA-Enrollment-Required": "true"},
                 )
 
@@ -241,8 +254,10 @@ class PermissionChecker:
             if _has_permission(perm, user_permissions):
                 return current_user
 
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+        raise CodedHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+            error_code=ErrorCode.PERM_INSUFFICIENT,
         )
 
 
@@ -269,8 +284,10 @@ class AllPermissionChecker:
             if not _has_permission(p, user_permissions)
         ]
         if missing:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+            raise CodedHTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+                error_code=ErrorCode.PERM_INSUFFICIENT,
             )
 
         return current_user
@@ -295,8 +312,10 @@ async def get_current_active_user(
 ) -> User:
     """Get current active user (not deleted, not suspended)"""
     if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
+        raise CodedHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive",
+            error_code=ErrorCode.AUTH_ACCOUNT_INACTIVE,
         )
     return current_user
 
@@ -312,8 +331,10 @@ async def get_user_organization(
     organization = result.scalar_one_or_none()
 
     if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        raise CodedHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+            error_code=ErrorCode.ORG_NOT_FOUND,
         )
 
     return organization

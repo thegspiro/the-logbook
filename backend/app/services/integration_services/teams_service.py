@@ -35,10 +35,8 @@ async def send_teams_notification(
     # can't defend against DNS-rebinding). Fail closed on an unsafe URL.
     try:
         assert_outbound_url_safe(webhook_url)
-    except ValueError as exc:
-        logger.warning(
-            "Blocked outbound Teams webhook to unsafe URL {}: {}", webhook_url, exc
-        )
+    except ValueError:
+        logger.warning("Blocked outbound Teams webhook: URL failed safety validation")
         return False
 
     payload = {

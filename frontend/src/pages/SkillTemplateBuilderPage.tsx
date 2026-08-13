@@ -25,6 +25,7 @@ import { trainingProgramService, trainingModuleConfigService, roleService } from
 import type { TrainingRequirementEnhanced, TrainingModuleConfig as TMConfig } from '../types/training';
 import type { Role } from '../types/role';
 import { ConfirmDialog } from '../components/ux';
+import { CriterionScoreMode, SCORE_MODE_TYPES } from '../types/skillsTesting';
 import type {
   SkillTemplateSectionCreate,
   SkillCriterionCreate,
@@ -73,6 +74,18 @@ const CRITERION_TYPE_OPTIONS: { value: CriterionType; label: string }[] = [
   { value: 'statement', label: 'Statement' },
 ];
 
+/** The score-effect choices for a step judged by a pass/fail verdict.
+ *
+ *  '' is the stored `undefined` — for a Pass/Fail step it defers to the
+ *  template-wide setting (which is all that existed before per-step modes, and
+ *  is why leaving it alone must keep scoring identically); for the other types
+ *  nothing has ever deferred, so it simply means no effect. */
+const SCORE_MODE_CHOICES = [
+  { value: CriterionScoreMode.NONE, label: 'Recorded only — no effect on the score' },
+  { value: CriterionScoreMode.POINTS, label: 'Worth points — earned by passing' },
+  { value: CriterionScoreMode.DEDUCT, label: 'Deducts points — taken off if failed' },
+];
+
 function createEmptyCriterion(sortOrder: number): LocalCriterion {
   return {
     localId: generateLocalId(),
@@ -100,8 +113,13 @@ const CriterionEditor: React.FC<{
   onChange: (updated: LocalCriterion) => void;
   onRemove: () => void;
   index: number;
-}> = ({ criterion, onChange, onRemove, index }) => {
+  /** The template-wide Pass/Fail setting, so the "template default" choice can
+   *  say what it currently resolves to instead of leaving the author to guess. */
+  scorePassFailCriteria: boolean;
+}> = ({ criterion, onChange, onRemove, index, scorePassFailCriteria }) => {
   const [checklistText, setChecklistText] = useState((criterion.checklist_items ?? []).join('\n'));
+  const takesScoreMode = SCORE_MODE_TYPES.includes(criterion.type);
+  const mode = criterion.score_mode;
 
   return (
     <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
@@ -263,6 +281,86 @@ const CriterionEditor: React.FC<{
             </div>
           )}
 
+          {/* Score effect — how a failure on this step moves the percentage.
+              Deliberately separate from Critical: those are different questions
+              ("what does this cost?" vs "does this end the test?"), and with
+              only the second one available a recorded Fail could sit on a
+              scorecard above a 100%. */}
+          {takesScoreMode && (
+            <div className="lg:col-span-4">
+              <label className="text-theme-text-muted mb-1 block text-xs font-medium">If this step is failed</label>
+              <div className="flex gap-2">
+                <select
+                  value={mode ?? ''}
+                  aria-label={`Score effect for criterion ${index + 1}`}
+                  onChange={(e) => {
+                    const next = e.target.value as CriterionScoreMode | '';
+                    onChange({
+                      ...criterion,
+                      score_mode: next === '' ? undefined : next,
+                      // Drop a stale penalty when the step stops deducting, so
+                      // a number the author can no longer see cannot come back
+                      // into force if they switch the mode again later.
+                      deduction_points: next === CriterionScoreMode.DEDUCT ? criterion.deduction_points : undefined,
+                    });
+                  }}
+                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                >
+                  <option value="">
+                    {criterion.type === 'pass_fail'
+                      ? `Template default (${scorePassFailCriteria ? 'worth points' : 'no effect'})`
+                      : 'Recorded only — no effect on the score'}
+                  </option>
+                  {SCORE_MODE_CHOICES.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                {mode === CriterionScoreMode.POINTS && (
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    aria-label={`Points for criterion ${index + 1}`}
+                    value={criterion.max_score ?? ''}
+                    onChange={(e) =>
+                      onChange({ ...criterion, max_score: e.target.value ? Number(e.target.value) : undefined })
+                    }
+                    placeholder="1"
+                    className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-20 shrink-0 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                )}
+                {mode === CriterionScoreMode.DEDUCT && (
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    aria-label={`Points off for criterion ${index + 1}`}
+                    value={criterion.deduction_points ?? ''}
+                    onChange={(e) =>
+                      onChange({ ...criterion, deduction_points: e.target.value ? Number(e.target.value) : undefined })
+                    }
+                    placeholder="1"
+                    className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-20 shrink-0 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                )}
+              </div>
+              {mode === CriterionScoreMode.POINTS && (
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Adds {criterion.max_score && criterion.max_score > 0 ? criterion.max_score : 1} to the points
+                  available; a fail earns none of them.
+                </p>
+              )}
+              {mode === CriterionScoreMode.DEDUCT && (
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Takes {criterion.deduction_points && criterion.deduction_points > 0 ? criterion.deduction_points : 1}{' '}
+                  off the total, without changing the points available. Not charged if the step is left unscored.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Required toggle */}
           <div className="flex items-end lg:col-span-2">
             <label className="flex cursor-pointer items-center gap-2">
@@ -312,7 +410,8 @@ const SectionEditor: React.FC<{
   onChange: (updated: LocalSection) => void;
   onRemove: () => void;
   index: number;
-}> = ({ section, onChange, onRemove, index }) => {
+  scorePassFailCriteria: boolean;
+}> = ({ section, onChange, onRemove, index, scorePassFailCriteria }) => {
   const addCriterion = () => {
     onChange({
       ...section,
@@ -384,6 +483,7 @@ const SectionEditor: React.FC<{
               onChange={(updated) => updateCriterion(i, updated)}
               onRemove={() => removeCriterion(i)}
               index={i}
+              scorePassFailCriteria={scorePassFailCriteria}
             />
           ))}
 
@@ -541,6 +641,8 @@ export const SkillTemplateBuilderPage: React.FC = () => {
             checklist_items: c.checklist_items,
             statement_text: c.statement_text,
             starts_timer: c.starts_timer ?? false,
+            score_mode: c.score_mode,
+            deduction_points: c.deduction_points,
           })),
         }))
       );
@@ -597,8 +699,33 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       });
     });
 
+    // A deduction is subtracted from a point total; with no point-carrying step
+    // anywhere on the sheet there is no total to subtract from, and the scorer
+    // falls back to averaging per-section percentages — which quietly ignores
+    // every deduction the examiner recorded. Caught here rather than server-side
+    // for the same reason as the max-points rule above: the template PUT resends
+    // every section, so a 422 would block edits to templates saved before the
+    // rule existed with no way to see which step was at fault.
+    const allCriteria = sections.flatMap((s) => s.criteria);
+    const deducting = allCriteria.filter(
+      (c) => SCORE_MODE_TYPES.includes(c.type) && c.score_mode === CriterionScoreMode.DEDUCT
+    );
+    const earnsPoints = allCriteria.some((c) => {
+      if (c.type === 'score') return c.max_score != null && c.max_score > 0;
+      if (!SCORE_MODE_TYPES.includes(c.type)) return false;
+      if (c.score_mode === CriterionScoreMode.POINTS) return true;
+      return c.score_mode == null && c.type === 'pass_fail' && scorePassFailCriteria;
+    });
+    if (deducting.length > 0 && !earnsPoints) {
+      errors.push(
+        `${deducting.length === 1 ? 'A step deducts points' : `${deducting.length} steps deduct points`}, but no step ` +
+          'on this template earns any — there is no total for the deduction to come off. Give at least one step a ' +
+          'point value first.'
+      );
+    }
+
     return errors;
-  }, [name, sections]);
+  }, [name, sections, scorePassFailCriteria]);
 
   const buildPayload = useCallback(() => {
     const parsedTags = tags
@@ -637,6 +764,14 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           time_limit_seconds: c.time_limit_seconds,
           checklist_items: c.checklist_items?.length ? c.checklist_items : undefined,
           statement_text: c.statement_text?.trim() || undefined,
+          // Only sent for the types that honour it, so a step switched from
+          // Pass/Fail to Statement does not carry a mode the scorer ignores —
+          // and does not bring it back into force if it is switched back.
+          score_mode: SCORE_MODE_TYPES.includes(c.type) ? c.score_mode : undefined,
+          deduction_points:
+            SCORE_MODE_TYPES.includes(c.type) && c.score_mode === CriterionScoreMode.DEDUCT
+              ? c.deduction_points
+              : undefined,
           // Only meaningful on a statement, and a stale true left behind by a
           // type change would put a start-clock button on a step that has no
           // statement to read.
@@ -1076,6 +1211,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               onChange={(updated) => updateSection(i, updated)}
               onRemove={() => removeSection(i)}
               index={i}
+              scorePassFailCriteria={scorePassFailCriteria}
             />
           ))}
 

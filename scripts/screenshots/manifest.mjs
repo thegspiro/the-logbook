@@ -236,18 +236,7 @@ export function openFirstFromApi(apiPath, routeFor, listKey, match) {
   };
 }
 
-/**
- * Put the medic unit's stocked inventory on screen.
- *
- * The Apparatus Inventory page opens on "Select an apparatus…", which is an
- * empty state rather than the screen — every shot of it has to pick a rig
- * first. M-3 is the one `seed_supply_tracking` stocks: two lots on the drug
- * bag, gauze and gloves under par, and a restock report from a member.
- *
- * Selected by the option's **value**, not its label. The label is built from
- * two fields ("M-3 — Medic 3"), so matching it as a string breaks the moment
- * either one is edited.
- */
+/** True for an event that has started but not finished. */
 export async function selectMedicApparatus(page) {
   const select = page.locator("#apparatus-select");
   await select.waitFor({ timeout: 20_000 });
@@ -1137,10 +1126,6 @@ export const SHOTS = [
     anchor: "Screenshot of a shift's Crew Board with one position filled",
     alt: "A shift's crew board — one filled position and three open, each with Assign and Sign Up",
     route: "/scheduling",
-    // "No calls logged for this shift" is the Calls/Runs panel further down the
-    // same drawer. This shift is deliberately in the future — that is what
-    // leaves its seats open — and a shift that has not run yet has no calls.
-    allowEmptyState: true,
     prepare: async (page) => {
       // A shift with several slots still open: that is what puts open-position
       // rows on the board and brings up the bulk "Fill All Open" action, which
@@ -1187,10 +1172,6 @@ export const SHOTS = [
       "Screenshot of the Required EVOC Level control on an apparatus edit form",
     alt: "The Required EVOC Level control on an apparatus, set to the level needed to drive it",
     route: "/apparatus",
-    // "No EVOC requirement" is this select's placeholder option. It is in the
-    // DOM — and so in the text the empty-state scan reads — on every apparatus,
-    // including the one picked here precisely because it *has* a level set.
-    allowEmptyState: true,
     prepare: async (page) => {
       // The control is on the apparatus *edit form*, not the detail page, and
       // it renders only once the organization has EVOC levels configured.
@@ -1865,6 +1846,46 @@ export const SHOTS = [
     route: "/events/admin?tab=settings",
     prepare: clickByName(/^Hour Tracking/),
     fullPage: true,
+  },
+  {
+    id: "04-43-create-election",
+    doc: "04-events-meetings.md",
+    line: 649,
+    anchor: "Screenshot of the election creation form showing the title",
+    alt: "The Create New Election dialog — title, description, voting window, and the victory-condition and runoff settings",
+    route: "/elections",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Create Election$/ })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 20_000 });
+      await dialog.getByLabel(/^Title/).fill("Fall 2026 Officer Election");
+      await dialog
+        .getByLabel(/^Description/)
+        .fill(
+          "Annual officer election held at the November business meeting. " +
+            "Polls open at the call to order and close before adjournment.",
+        );
+      // The labelled control is the date half of DateTimeQuarterHour — a
+      // native `type=date` input — so it takes a plain date, not a
+      // datetime-local value. The time is three separate selects beside it.
+      // Filling the start date also reveals the quick-duration row beneath the
+      // end date, which is part of what this shot is for.
+      await dialog.getByLabel(/^Start Date & Time/).fill("2026-11-10");
+      await dialog.getByLabel(/^End Date & Time/).fill("2026-11-10");
+      // Blur so the last field is not left with a focus ring and a selected
+      // date segment, which reads as a half-finished edit.
+      await dialog.getByLabel(/^Title/).click();
+      await page.waitForTimeout(600);
+    },
+    selector: '[role="dialog"]',
+    // "No linked meeting" is the Linked Meeting select's default option, which
+    // is in the DOM on every new election — the field is optional and the
+    // guide's steps do not ask for it to be set.
+    allowEmptyState: true,
+    fullPage: false,
   },
   {
     id: "04-38-rolling-recurrence",
@@ -3948,12 +3969,6 @@ export const SHOTS = [
       "Screenshot of the Expiring on Apparatus page with the three summary pills",
     alt: "Expiring on Apparatus: the summary pills, the 30/60/90 window, and three rows — one expiring, one reported used, one short of par",
     route: "/scheduling/supply/expiring",
-    // "No stock" here is a **badge on a populated row** — the Nozzle position,
-    // which is short and has nothing behind it, and is the one row on this page
-    // that pictures "order it" rather than "swap it". The empty-state check
-    // matches it as a whole short line and holds the shot back; the page is the
-    // opposite of empty, carrying five rows across every filter it offers.
-    allowEmptyState: true,
     fullPage: true,
   },
 
@@ -4064,8 +4079,7 @@ export const SHOTS = [
     id: "05-53-items-grid-lot-stock",
     doc: "05-inventory.md",
     line: 662,
-    anchor:
-      "Screenshot of the inventory items grid with two consumable rows visible",
+    anchor: "Screenshot of the inventory items grid with two consumable rows visible",
     alt: 'Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure',
     // Needs `seed_supply_tracking` to have run: without dated lots on at least
     // one item every row reports the pool figure and the two ledgers cannot be
@@ -4164,96 +4178,6 @@ export const SHOTS = [
       "Screenshot of the Integrations page showing available integrations as cards with logos,",
     alt: "Integrations page showing available integrations and connection status",
     route: "/integrations",
-  },
-
-  {
-    id: "06-22-apparatus-operators-tab",
-    doc: "06-apparatus-facilities.md",
-    line: 672,
-    anchor:
-      "Screenshot of an engine's Operators tab listing three operators by name",
-    alt: "The Operators tab: certified operators by name, with EVOC level and certification dates",
-    route: "/apparatus",
-    prepare: async (page) => {
-      // `?tab=operators` is read on mount, so no click is needed — but the
-      // apparatus id has to be resolved first, and E-1 is the rig the seeder
-      // gives three operators with spread EVOC levels.
-      await openFirstFromApi(
-        "/apparatus",
-        (id) => `/apparatus/${id}?tab=operators`,
-        "apparatus",
-        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
-      )(page);
-      await page
-        .getByRole("button", { name: /Add Operator/i })
-        .first()
-        .waitFor({ timeout: 20_000 });
-      await page.waitForTimeout(800);
-    },
-    fullPage: false,
-  },
-  {
-    id: "06-23-add-operator-member-picker",
-    doc: "06-apparatus-facilities.md",
-    line: 687,
-    anchor:
-      "Screenshot of the Add Operator form with a member chosen from the picker",
-    alt: "The Add Operator form: a member picker, not the free-text UUID box it replaced",
-    route: "/apparatus",
-    // Both selects are native, and an open native popup is drawn by the OS
-    // rather than the page — Playwright cannot photograph it. Showing the two
-    // fields *set* makes the same point the caption does, and better: a real
-    // member name proves the box is a picker over the roster, and an EVOC level
-    // is the combination that used to return a server error.
-    allowEmptyState: true, // "No EVOC level" is the placeholder option, not an empty page
-    prepare: async (page) => {
-      await openFirstFromApi(
-        "/apparatus",
-        (id) => `/apparatus/${id}?tab=operators`,
-        "apparatus",
-        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
-      )(page);
-      const add = page.getByRole("button", { name: /Add Operator/i }).first();
-      await add.waitFor({ timeout: 20_000 });
-      await add.click();
-
-      // Pick by position rather than by name: the roster is seeded and the
-      // first real option is a member either way, whereas naming one couples
-      // this shot to the seeder's name list.
-      const member = page.locator("#operator-member");
-      await member.waitFor({ timeout: 10_000 });
-      // The roster is fetched after the modal mounts, so the select exists for
-      // a moment holding nothing but its placeholder. Waiting on the element
-      // is not waiting on the list.
-      await member
-        .locator("option")
-        .nth(1)
-        .waitFor({ state: "attached", timeout: 20_000 });
-      const memberValue = await member.evaluate(
-        (el) =>
-          Array.from(el.options).find((option) => option.value !== "")?.value ??
-          "",
-      );
-      if (!memberValue) throw new Error("member picker has no members in it");
-      await member.selectOption(memberValue);
-
-      const evoc = page.locator("select").nth(1);
-      const evocValue = await evoc.evaluate(
-        (el) =>
-          Array.from(el.options).find((option) =>
-            /intermediate/i.test(option.text),
-          )?.value ?? "",
-      );
-      if (!evocValue) throw new Error("no Intermediate EVOC level defined");
-      await evoc.selectOption(evocValue);
-
-      await page
-        .getByLabel(/Certified to operate/i)
-        .first()
-        .check();
-      await page.waitForTimeout(800);
-    },
-    fullPage: false,
   },
 
   // ── 08 Administration & Reports ─────────────────────────────────────
@@ -6210,24 +6134,16 @@ export const SHOTS = [
   },
   {
     id: "03-22-equipment-check-builder",
+    // a builder opened on a new template correctly starts with no compartments;
+    // the shot is of the builder layout
+    allowEmptyState: true,
     doc: "03-scheduling.md",
     line: 668,
     anchor:
       "Screenshot of the Equipment Check Template Builder showing the template header (name,",
-    alt: "Equipment check template builder: the template header, its compartments and items, and the catalog-linked count",
-    route: "/scheduling",
-    // An existing template, not `/new`. The shot used to be of the blank
-    // create page — carrying `allowEmptyState` to say so — and the guide text
-    // above it is about compartments, item check types and drag-to-reorder,
-    // none of which a page with "No compartments yet" can show. The toolbar's
-    // linked/unlinked catalog count and the quick-add bar's catalog search,
-    // both added by the supply work, need items on the page to render at all.
-    prepare: openTemplateNamed("Medic 3 Supply Check"),
-    // Viewport, not full page: the builder's toolbar and its summary bar are
-    // both sticky, so a full-page capture paints each of them twice — once
-    // pinned and once where they sit in the document — leaving a duplicated
-    // toolbar across the middle of the image.
-    fullPage: false,
+    alt: "Equipment check template builder with the template header and sections",
+    route: "/scheduling/equipment-check-templates/new",
+    fullPage: true,
   },
   {
     id: "04-04-event-qr-code",
@@ -7297,6 +7213,63 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "14-21-save-ballot-template",
+    doc: "14-elections.md",
+    line: 144,
+    anchor: "The Ballot Builder with the **Save as Template**",
+    alt: "The Save as Template form open in the Ballot Builder — the Template name field, the configuration-only note, and the Save Template / Cancel buttons",
+    route: "/elections",
+    prepare: async (page) => {
+      // A draft election, because Save as Template is hidden on a closed one
+      // and the guide's steps say to build the ballot on a draft.
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => (election.status ?? "") === "draft",
+      )(page);
+      const save = page.getByRole("button", { name: /^Save as Template$/ });
+      await save.waitFor({ timeout: 20_000 });
+      await save.click();
+      const name = page.locator("#saved-ballot-template-name");
+      await name.waitFor({ timeout: 10_000 });
+      await name.fill("Annual officer election");
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> div > h3:text-is('Ballot Items (1)'))",
+  },
+  {
+    id: "14-22-ballot-template-picker",
+    doc: "14-elections.md",
+    line: 159,
+    anchor: 'The template picker showing the "Your saved',
+    alt: 'The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates',
+    route: "/elections",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => (election.status ?? "") === "draft",
+      )(page);
+      const use = page.getByRole("button", { name: /^Use Template$/ });
+      await use.waitFor({ timeout: 20_000 });
+      await use.click();
+      // Clicking the saved template arms the two-step confirm rather than
+      // applying it — which is the state the guide is describing.
+      // Scoped to the popover and taken first: the built-in "Officer
+      // Election" template below also matches a loose name regex.
+      const popover = page.locator("div:has(> h4:text-is('Select a Template'))");
+      const saved = popover
+        .getByRole("button", { name: /Annual officer election/ })
+        .first();
+      await saved.waitFor({ timeout: 10_000 });
+      await saved.click();
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> h4:text-is('Select a Template'))",
+  },
+  {
     id: "14-20-runoff-chain",
     doc: "14-elections.md",
     line: 601,
@@ -7629,6 +7602,95 @@ export const SHOTS = [
       await evoc.selectOption(value);
     },
     fullPage: true,
+  },
+  {
+    id: "06-22-apparatus-operators-tab",
+    doc: "06-apparatus-facilities.md",
+    line: 672,
+    anchor:
+      "Screenshot of an engine's Operators tab listing three operators by name",
+    alt: "The Operators tab: certified operators by name, with EVOC level and certification dates",
+    route: "/apparatus",
+    prepare: async (page) => {
+      // `?tab=operators` is read on mount, so no click is needed — but the
+      // apparatus id has to be resolved first, and E-1 is the rig the seeder
+      // gives three operators with spread EVOC levels.
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}?tab=operators`,
+        "apparatus",
+        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
+      )(page);
+      await page
+        .getByRole("button", { name: /Add Operator/i })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
+  },
+  {
+    id: "06-23-add-operator-member-picker",
+    doc: "06-apparatus-facilities.md",
+    line: 687,
+    anchor:
+      "Screenshot of the Add Operator form with a member chosen from the picker",
+    alt: "The Add Operator form: a member picker, not the free-text UUID box it replaced",
+    route: "/apparatus",
+    // Both selects are native, and an open native popup is drawn by the OS
+    // rather than the page — Playwright cannot photograph it. Showing the two
+    // fields *set* makes the same point the caption does, and better: a real
+    // member name proves the box is a picker over the roster, and an EVOC level
+    // is the combination that used to return a server error.
+    allowEmptyState: true, // "No EVOC level" is the placeholder option, not an empty page
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}?tab=operators`,
+        "apparatus",
+        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
+      )(page);
+      const add = page.getByRole("button", { name: /Add Operator/i }).first();
+      await add.waitFor({ timeout: 20_000 });
+      await add.click();
+
+      // Pick by position rather than by name: the roster is seeded and the
+      // first real option is a member either way, whereas naming one couples
+      // this shot to the seeder's name list.
+      const member = page.locator("#operator-member");
+      await member.waitFor({ timeout: 10_000 });
+      // The roster is fetched after the modal mounts, so the select exists for
+      // a moment holding nothing but its placeholder. Waiting on the element
+      // is not waiting on the list.
+      await member
+        .locator("option")
+        .nth(1)
+        .waitFor({ state: "attached", timeout: 20_000 });
+      const memberValue = await member.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) => option.value !== "")?.value ??
+          "",
+      );
+      if (!memberValue) throw new Error("member picker has no members in it");
+      await member.selectOption(memberValue);
+
+      const evoc = page.locator("select").nth(1);
+      const evocValue = await evoc.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) =>
+            /intermediate/i.test(option.text),
+          )?.value ?? "",
+      );
+      if (!evocValue) throw new Error("no Intermediate EVOC level defined");
+      await evoc.selectOption(evocValue);
+
+      await page
+        .getByLabel(/Certified to operate/i)
+        .first()
+        .check();
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
   },
 
   // ── Eighth batch: personal data rights ─────────────────────────────
@@ -8152,6 +8214,30 @@ export const SHOTS = [
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1_200);
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-60-report-used-sheet",
+    doc: "03-scheduling.md",
+    line: 880,
+    anchor:
+      'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
+    alt: "The report-used sheet: quantity stepper, optional note, and the position's current count",
+    auth: "member",
+    route: "/scheduling/apparatus-inventory",
+    viewport: "mobile",
+    prepare: async (page) => {
+      await selectMedicApparatus(page);
+      // "Flag" on a counted position, "Used" on one with no target — the same
+      // report by either name, so match both rather than assuming which the
+      // seeder produced for the first row.
+      const trigger = page
+        .getByRole("button", { name: /^(Flag|Used)$/ })
+        .first();
+      await trigger.waitFor({ timeout: 20_000 });
+      await trigger.click();
+      await page.waitForTimeout(900);
     },
     fullPage: false,
   },

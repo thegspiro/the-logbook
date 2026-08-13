@@ -99,3 +99,19 @@ async def test_missing_template_is_a_404_and_writes_no_audit_entry(monkeypatch):
 
     assert exc.value.status_code == 404
     assert audit.await_count == 0
+
+
+@pytest.mark.parametrize("handler", ["delete_compartment", "delete_item"])
+def test_child_deletes_still_log_against_the_parent(handler):
+    """Compartment and item deletes log against the *parent* template, which
+    survives them — that write is correct and must not be removed alongside
+    the template-level one. Asserted against the source because these handlers
+    hit the database directly and the guard is about the write existing at
+    all, not its arguments."""
+    from inspect import getsource
+
+    body = getsource(getattr(ec, handler))
+    assert "log_template_change" in body, (
+        f"{handler} logs against the parent template, which survives — "
+        "that write is correct and must not be removed"
+    )

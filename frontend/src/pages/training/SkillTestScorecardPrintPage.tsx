@@ -114,6 +114,22 @@ const RecordedMark: React.FC<{ criterion: SkillCriterion; result: CriterionResul
   );
 };
 
+/** What a failed step cost, printed beside the verdict.
+ *
+ *  A printed scorecard is the copy that goes in the training file and gets
+ *  handed to the candidate, so it has to answer the question the screen version
+ *  answers: a "FAIL" with no figure beside it is what made a deduction
+ *  invisible in the first place. Rendered from the criterion because the score
+ *  breakdown reports deductions per section, not per step. */
+const DeductionMark: React.FC<{ criterion: SkillCriterion; result: CriterionResult | undefined }> = ({
+  criterion,
+  result,
+}) => {
+  if (result?.passed !== false || criterion.score_mode !== 'deduct') return null;
+  const points = criterion.deduction_points && criterion.deduction_points > 0 ? criterion.deduction_points : 1;
+  return <span style={{ fontSize: '8.5pt', color: '#b00', whiteSpace: 'nowrap' }}> &minus;{points}</span>;
+};
+
 const SkillTestScorecardPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const testId = searchParams.get('id') || '';
@@ -262,6 +278,14 @@ const SkillTestScorecardPrintPage: React.FC = () => {
                   {test.elapsed_seconds != null
                     ? `${Math.floor(test.elapsed_seconds / 60)}m ${test.elapsed_seconds % 60}s`
                     : '—'}
+                  {/* A resumed test's clock carried on from the last save, so
+                      the figure is not a stopwatch reading. Marked rather than
+                      corrected: there is no honest way to reconstruct what the
+                      stopwatch would have shown, and a corrected-looking number
+                      is worse than one openly uncertain. */}
+                  {test.timing_verified === false && (
+                    <span style={{ color: '#b00', fontSize: '8pt' }}> — not verified</span>
+                  )}
                 </td>
               </tr>
               <tr>
@@ -280,6 +304,23 @@ const SkillTestScorecardPrintPage: React.FC = () => {
               </tr>
             </tbody>
           </table>
+
+          {test.timing_verified === false && (
+            <div
+              style={{
+                border: '1pt solid #333',
+                padding: '5pt 8pt',
+                marginBottom: '10pt',
+                fontSize: '9pt',
+                background: '#fafafa',
+              }}
+            >
+              <strong>Timing not verified.</strong> Scoring was picked up again after the screen was left
+              {test.resume_count && test.resume_count > 1 ? ` (${test.resume_count} times)` : ''}, so the clock carried
+              on from the last save rather than running continuously. Treat the elapsed time as approximate — and, on a
+              timed evolution, as not evidence of the time limit being met.
+            </div>
+          )}
 
           {/* The arithmetic, section by section. Printed from the server's own
               breakdown rather than recomputed, so the working on paper is the
@@ -364,6 +405,7 @@ const SkillTestScorecardPrintPage: React.FC = () => {
                         </td>
                         <td style={{ ...cellStyle, textAlign: 'center' }}>
                           <RecordedMark criterion={criterion} result={result} />
+                          <DeductionMark criterion={criterion} result={result} />
                         </td>
                         {/* Blank under `scores` disclosure — the API strips
                             examiner notes for a candidate at that level, and

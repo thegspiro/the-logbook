@@ -290,6 +290,26 @@ class LocationService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def regenerate_display_code(
+        self, location_id: UUID, organization_id: str
+    ) -> Optional[Location]:
+        """Rotate a location's public display code.
+
+        The display code gates unauthenticated kiosk access at
+        /display/{code}, so a leaked or walked-off printed code must be
+        invalidatable. The old code stops resolving immediately; any
+        posted QR codes and kiosk tablets must be updated to the new URL.
+        """
+        location = await self.get_location(location_id, organization_id)
+        if not location:
+            return None
+
+        location.display_code = await self._generate_unique_display_code()
+        await self.db.commit()
+        await self.db.refresh(location)
+
+        return location
+
     async def get_location_by_display_code(
         self, display_code: str
     ) -> Optional[Location]:

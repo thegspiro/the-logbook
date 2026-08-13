@@ -1498,9 +1498,9 @@ class FinanceService:
         er = await self.get_expense_report(er_id, org_id)
         if not er:
             raise ValueError("Expense report not found")
-        # SoD (FIN-4): the person who disburses must not be the requester.
+        # SoD (FIN-4): the person who disburses must not be the submitter.
         assert_different_person(
-            acted_by, er.requested_by, action="mark paid", record="expense report"
+            acted_by, er.submitted_by, action="mark paid", record="expense report"
         )
         if er.status != ExpenseReportStatus.APPROVED:
             raise ValueError("Only approved reports can be marked as paid")
@@ -1851,19 +1851,15 @@ class FinanceService:
         return dues
 
     async def list_dues_payments(
-        self,
-        dues_id: str,
-        org_id: str,
-        restrict_to_user: Optional[str] = None,
+        self, dues_id: str, org_id: str, viewer_user_id: Optional[str] = None
     ) -> list[DuesPayment]:
         """Return the payment ledger for one member's dues, oldest first."""
         filters = [
             MemberDues.id == dues_id,
             MemberDues.organization_id == org_id,
         ]
-        if restrict_to_user is not None:
-            filters.append(MemberDues.user_id == restrict_to_user)
-
+        if viewer_user_id is not None:
+            filters.append(MemberDues.user_id == viewer_user_id)
         result = await self.db.execute(
             select(MemberDues)
             .where(*filters)
@@ -1907,7 +1903,7 @@ class FinanceService:
         dues_id: str,
         org_id: str,
         reason: str,
-    ) -> tuple[MemberDues, Optional[str]]:
+    ) -> MemberDues:
         """Reverse a waiver, returning the record to what its ledger says.
 
         Recording a payment against waived dues is refused, so without this
@@ -1915,11 +1911,10 @@ class FinanceService:
         and the only other dues endpoint is the waive itself. A department that
         waived by mistake and then received the money had no in-app remedy.
 
-        Returns the record together with the waive reason being erased, so the
-        caller can put it in the audit event. The reason is cleared rather than
-        kept, because a waive_reason left on an un-waived record is exactly the
-        self-contradictory row FIN-6 was about — the tamper-evident audit log is
-        where that history belongs.
+        The free-text waive reason is erased rather than retained on an
+        un-waived record or copied into the immutable audit log. Waiver reasons
+        may contain sensitive personal information and must remain eligible for
+        the application's privacy scrubbing guarantees.
         """
         result = await self.db.execute(
             select(MemberDues)
@@ -1938,7 +1933,6 @@ class FinanceService:
                 "These dues are not waived, so there is nothing to reverse."
             )
 
-        prior_reason = dues.waive_reason
         dues.waived_by = None
         dues.waived_at = None
         dues.waive_reason = None
@@ -1949,7 +1943,7 @@ class FinanceService:
 
         await self.db.flush()
         await self.db.refresh(dues, ["updated_at"])
-        return dues, prior_reason
+        return dues
 
     async def get_dues_summary(
         self, org_id: str, schedule_id: Optional[str] = None

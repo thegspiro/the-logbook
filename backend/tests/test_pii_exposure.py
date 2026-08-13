@@ -17,6 +17,7 @@ from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from app.api.v1.endpoints.users import (
     _clear_hidden_contact_fields,
@@ -298,6 +299,44 @@ class TestProfileContactRedaction:
         assert payload.username == "jsmith"
 
 
+def _db_returning(user: User) -> MagicMock:
+    db = MagicMock()
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=user)
+    db.execute = AsyncMock(return_value=result)
+    return db
+
+
+def _caller(*, user_id: str, org_id: str, permissions: list[str]) -> MagicMock:
+    caller = MagicMock()
+    caller.id = user_id
+    caller.username = "caller"
+    caller.organization_id = org_id
+    # Permissions are aggregated from `positions`, not `roles` — see
+    # `_collect_user_permissions`. `rank` must be falsy or the rank-default
+    # lookup runs against a MagicMock.
+    position = MagicMock()
+    position.permissions = permissions
+    caller.positions = [position]
+    caller.rank = None
+    return caller
+
+
+async def _call_endpoint(subject: User, caller: MagicMock) -> UserProfileResponse:
+    with (
+        patch("app.api.v1.endpoints.users.log_audit_event", new=AsyncMock()),
+        patch(
+            "app.api.v1.endpoints.users._load_contact_visibility",
+            new=AsyncMock(return_value={}),
+        ),
+    ):
+        return await get_user_with_roles(
+            user_id=uuid.UUID(subject.id),
+            db=_db_returning(subject),
+            current_user=caller,
+        )
+
+
 class TestProfileEndpointAppliesRedaction:
     """The helper being correct is not the property that broke.
 
@@ -306,52 +345,15 @@ class TestProfileEndpointAppliesRedaction:
     client actually reads.
     """
 
-    @staticmethod
-    def _db_returning(user: User) -> MagicMock:
-        db = MagicMock()
-        result = MagicMock()
-        result.scalar_one_or_none = MagicMock(return_value=user)
-        db.execute = AsyncMock(return_value=result)
-        return db
-
-    @staticmethod
-    def _caller(*, user_id: str, org_id: str, permissions: list[str]) -> MagicMock:
-        caller = MagicMock()
-        caller.id = user_id
-        caller.username = "caller"
-        caller.organization_id = org_id
-        # Permissions are aggregated from `positions`, not `roles` — see
-        # `_collect_user_permissions`. `rank` must be falsy or the rank-default
-        # lookup runs against a MagicMock.
-        position = MagicMock()
-        position.permissions = permissions
-        caller.positions = [position]
-        caller.rank = None
-        return caller
-
-    async def _call(self, subject: User, caller: MagicMock) -> UserProfileResponse:
-        with (
-            patch("app.api.v1.endpoints.users.log_audit_event", new=AsyncMock()),
-            patch(
-                "app.api.v1.endpoints.users._load_contact_visibility",
-                new=AsyncMock(return_value={}),
-            ),
-        ):
-            return await get_user_with_roles(
-                user_id=uuid.UUID(subject.id),
-                db=self._db_returning(subject),
-                current_user=caller,
-            )
-
     async def test_plain_viewer_gets_a_redacted_profile(self):
         subject = _member()
-        caller = self._caller(
+        caller = _caller(
             user_id=str(uuid.uuid4()),
             org_id=subject.organization_id,
             permissions=["users.view"],
         )
 
-        result = await self._call(subject, caller)
+        result = await _call_endpoint(subject, caller)
 
         assert result.address_street is None
         assert result.personal_email is None
@@ -361,52 +363,52 @@ class TestProfileEndpointAppliesRedaction:
 
     async def test_members_manager_gets_the_full_profile(self):
         subject = _member()
-        caller = self._caller(
+        caller = _caller(
             user_id=str(uuid.uuid4()),
             org_id=subject.organization_id,
             permissions=["members.manage"],
         )
 
-        result = await self._call(subject, caller)
+        result = await _call_endpoint(subject, caller)
 
         assert result.address_street == "12 Ladder Lane"
         assert result.personal_email == "jsmith@example.org"
 
     async def test_plain_viewer_gets_no_dob_or_emergency_contacts(self):
         subject = _member()
-        caller = self._caller(
+        caller = _caller(
             user_id=str(uuid.uuid4()),
             org_id=subject.organization_id,
             permissions=["users.view"],
         )
 
-        result = await self._call(subject, caller)
+        result = await _call_endpoint(subject, caller)
 
         assert result.date_of_birth is None
         assert result.emergency_contacts == []
 
     async def test_leadership_sees_dob_and_emergency_contacts(self):
         subject = _member()
-        caller = self._caller(
+        caller = _caller(
             user_id=str(uuid.uuid4()),
             org_id=subject.organization_id,
             permissions=["members.manage"],
         )
 
-        result = await self._call(subject, caller)
+        result = await _call_endpoint(subject, caller)
 
         assert result.date_of_birth == date(1988, 4, 12)
         assert result.emergency_contacts[0].phone == "555-0177"
 
     async def test_members_see_their_own_dob_and_emergency_contacts(self):
         subject = _member()
-        caller = self._caller(
+        caller = _caller(
             user_id=subject.id,
             org_id=subject.organization_id,
             permissions=["users.view"],
         )
 
-        result = await self._call(subject, caller)
+        result = await _call_endpoint(subject, caller)
 
         assert result.date_of_birth == date(1988, 4, 12)
         assert len(result.emergency_contacts) == 1
@@ -416,14 +418,78 @@ class TestProfileEndpointAppliesRedaction:
         # and writes the fields back on save. Redacting for self would blank a
         # member's own address and phone on their next save.
         subject = _member()
-        caller = self._caller(
+        caller = _caller(
             user_id=subject.id,
             org_id=subject.organization_id,
             permissions=["users.view"],
         )
 
-        result = await self._call(subject, caller)
+        result = await _call_endpoint(subject, caller)
 
         assert result.address_street == "12 Ladder Lane"
         assert result.phone == "555-0100"
         assert result.personal_email == "jsmith@example.org"
+
+
+class TestProfileEndpointAccessControl:
+    """Self-access to `GET /users/{id}/with-roles` needs no permission grant.
+
+    The default Member position carries neither `users.view` nor
+    `members.manage`, yet MemberIdCardPage, MemberProfilePage and
+    UserSettingsPage all load the caller's own record through this endpoint —
+    gating it entirely behind those permissions 403'd every ordinary member
+    off their own ID card. Viewing anyone else still requires a grant.
+    """
+
+    async def test_member_without_grants_reads_their_own_record(self):
+        subject = _member()
+        caller = _caller(
+            user_id=subject.id,
+            org_id=subject.organization_id,
+            permissions=[],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.username == "jsmith"
+        # Self-access is also exempt from redaction, per the tests above.
+        assert result.phone == "555-0100"
+
+    async def test_member_without_grants_cannot_read_someone_else(self):
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=[],
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await _call_endpoint(subject, caller)
+
+        assert exc.value.status_code == 403
+
+    async def test_users_view_still_reads_other_records(self):
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["users.view"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.username == "jsmith"
+
+    async def test_wildcard_grant_satisfies_the_gate(self):
+        # `users.*` must satisfy `users.view` — the gate goes through
+        # `_has_permission`, which is wildcard-aware.
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["users.*"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.username == "jsmith"

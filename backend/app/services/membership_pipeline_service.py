@@ -11,6 +11,7 @@ import copy
 import re
 import secrets
 import unicodedata
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -48,6 +49,14 @@ from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
+
+
+@dataclass(frozen=True)
+class _ActivityEvent:
+    """A validated activity entry staged with a pipeline state change."""
+
+    action: str
+    details: Optional[Dict[str, Any]] = None
 
 
 class MembershipPipelineService:
@@ -679,7 +688,11 @@ class MembershipPipelineService:
         }
 
     async def get_prospect(
-        self, prospect_id: str, organization_id: str
+        self,
+        prospect_id: str,
+        organization_id: str,
+        *,
+        lock_for_update: bool = False,
     ) -> Optional[ProspectiveMember]:
         """Get a single prospect with full details"""
         query = (
@@ -704,6 +717,8 @@ class MembershipPipelineService:
             # advance/complete logic must see the committed collections.
             .execution_options(populate_existing=True)
         )
+        if lock_for_update:
+            query = query.with_for_update()
         result = await self.db.execute(query)
         prospect = result.scalars().first()
         if prospect is not None:
@@ -1116,9 +1131,16 @@ class MembershipPipelineService:
         action_result: Optional[Dict[str, Any]] = None,
         *,
         skip_requirements: bool = False,
+        additional_activity: Optional[_ActivityEvent] = None,
     ) -> Optional[ProspectiveMember]:
         """Mark a step as completed for a prospect"""
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        # Serialize progression for this prospect. Without a row lock, two
+        # coordinators can both validate the same current stage and create two
+        # completion/audit records before either transaction observes the
+        # other's transition.
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect:
             return None
 
@@ -1132,6 +1154,8 @@ class MembershipPipelineService:
         )
         if not step:
             raise ValueError("Step does not belong to this prospect's pipeline")
+        if str(prospect.current_step_id) != str(step_id):
+            raise ValueError("Only the prospect's current step can be completed")
 
         # Only the dedicated coordinator skip path may bypass a stage gate.
         # Keeping this server-side avoids accepting a client-controlled
@@ -1193,6 +1217,17 @@ class MembershipPipelineService:
         else:
             # Advance to next step
             await self._advance_current_step(prospect, step_id)
+
+        # Some explicit operations have a domain-level audit event in addition
+        # to the step-level event above.  Stage both before committing so the
+        # state transition can never be persisted without its audit record.
+        if additional_activity:
+            await self._log_activity(
+                prospect_id=prospect_id,
+                action=additional_activity.action,
+                details=additional_activity.details,
+                performed_by=completed_by,
+            )
 
         await self.db.commit()
         return await self.get_prospect(prospect_id, organization_id)
@@ -1333,31 +1368,22 @@ class MembershipPipelineService:
         if current_idx >= len(sorted_steps) - 1:
             raise ValueError("Prospect is already at the final stage")
 
-        advanced = await self.complete_step(
+        next_step = sorted_steps[current_idx + 1]
+        return await self.complete_step(
             prospect_id=prospect_id,
             organization_id=organization_id,
             step_id=str(sorted_steps[current_idx].id),
             completed_by=advanced_by,
             notes=notes,
+            additional_activity=_ActivityEvent(
+                action="prospect_advanced",
+                details={
+                    "to_step_id": str(next_step.id),
+                    "to_step_name": next_step.name,
+                    "notes": notes,
+                },
+            ),
         )
-
-        # complete_step records the step-level event ("step_completed");
-        # "prospect_advanced" is the established audit action reports and the
-        # activity feed reconstruct movements from, so an explicit advance
-        # still writes it — only after the gated completion succeeded.
-        next_step = sorted_steps[current_idx + 1]
-        await self._log_activity(
-            prospect_id=prospect_id,
-            action="prospect_advanced",
-            details={
-                "to_step_id": str(next_step.id),
-                "to_step_name": next_step.name,
-                "notes": notes,
-            },
-            performed_by=advanced_by,
-        )
-        await self.db.commit()
-        return advanced
 
     # =========================================================================
     # Bulk Actions
@@ -1535,7 +1561,11 @@ class MembershipPipelineService:
         notes: Optional[str] = None,
     ) -> Optional[ProspectiveMember]:
         """Move a prospect back to the previous step."""
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        # Regression mutates the same progression state as completion and must
+        # participate in the same per-prospect serialization discipline.
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect or not prospect.pipeline:
             return None
 

@@ -1,6 +1,6 @@
 # Training materials review and screenshot plan
 
-**Review date:** 2026-08-11  
+**Review date:** 2026-08-11
 **Scope:** the training index, all 19 numbered training guides, the screenshot
 status/currency reports, and the automated screenshot workflow.
 

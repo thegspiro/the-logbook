@@ -261,9 +261,10 @@ async def review_submission(
             override_training_type=review.override_training_type,
         )
 
-        # Target already validated above, so this applies cleanly.
+        # Re-check the result of the actual apply: the target can change after
+        # the pre-flight validation (for example, if an enrollment is removed).
         if wants_apply:
-            await program_service.apply_training_to_requirement(
+            applied, apply_error = await program_service.apply_training_to_requirement(
                 user_id=submission.submitted_by,
                 organization_id=current_user.organization_id,
                 program_id=review.apply_to_program_id,
@@ -273,6 +274,10 @@ async def review_submission(
                 source_id=str(submission_id),
                 completed_on=submission.completion_date,
             )
+            if not applied:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=apply_error
+                )
             await log_audit_event(
                 db=db,
                 event_type="training_submission_applied_to_requirement",

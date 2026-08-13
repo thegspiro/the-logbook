@@ -12,14 +12,12 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, Request
-from fastapi.exception_handlers import (
-    http_exception_handler as _default_http_exception_handler,
-)
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.utils import is_body_allowed_for_status_code
 from loguru import logger
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -40,6 +38,7 @@ from app.api.v1.api import api_router
 from app.core.cache import cache_manager
 from app.core.config import settings
 from app.core.database import database_manager
+from app.core.error_codes import ErrorCode, resolve_error_code
 from app.core.error_reporting import build_error_type, persist_error_log
 from app.core.logging import setup_logging, setup_sentry
 
@@ -1812,7 +1811,30 @@ app = FastAPI(
 
 # Attach rate limiter to application
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+def _rate_limit_handler_with_code(request: Request, exc: RateLimitExceeded):
+    """slowapi's stock handler, plus the support code and a `detail` body.
+
+    The stock handler answers with ``{"error": ...}``, which the frontend's
+    `toAppError()` does not read — members saw a bare status text. Using
+    ``detail`` matches every other error response, and ``code`` gives IT a
+    stable reference (LB-SYS-003).
+    """
+    response = JSONResponse(
+        {
+            "detail": f"Rate limit exceeded: {exc.detail}",
+            "code": ErrorCode.SYS_RATE_LIMITED.value,
+        },
+        status_code=429,
+    )
+    view_rate_limit = getattr(request.state, "view_rate_limit", None)
+    if view_rate_limit is not None:
+        response = request.app.state.limiter._inject_headers(response, view_rate_limit)
+    return response
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler_with_code)
 
 
 # Custom validation error handler — returns user-friendly messages
@@ -1867,7 +1889,7 @@ async def _validation_error_handler(request: Request, exc: RequestValidationErro
 
     return _JSONResponse(
         status_code=422,
-        content={"detail": errors},
+        content={"detail": errors, "code": ErrorCode.VALIDATION_FAILED.value},
     )
 
 
@@ -1934,7 +1956,16 @@ def _custom_openapi() -> dict:
                 "title": "Detail",
                 "type": "array",
                 "items": {"$ref": "#/components/schemas/ValidationError"},
-            }
+            },
+            "code": {
+                "title": "Code",
+                "type": "string",
+                "description": (
+                    "Stable support code (see docs/ERROR_CODES.md and "
+                    "GET /api/v1/errors/codes). Every error response "
+                    "carries one; validation failures are LB-VAL-001."
+                ),
+            },
         },
     }
 
@@ -2070,7 +2101,17 @@ async def http_exception_handler_with_logging(
             f"{request.url.path}: {detail}"
         )
 
-    return await _default_http_exception_handler(request, exc)
+    # Same behavior as FastAPI's default handler, plus the support `code`
+    # field (a curated CodedHTTPException code, else LB-API-<status>) so
+    # every error a member can quote to IT is identifiable.
+    headers = getattr(exc, "headers", None)
+    if not is_body_allowed_for_status_code(exc.status_code):
+        return Response(status_code=exc.status_code, headers=headers)
+    return JSONResponse(
+        {"detail": exc.detail, "code": resolve_error_code(exc)},
+        status_code=exc.status_code,
+        headers=headers,
+    )
 
 
 @app.exception_handler(Exception)
@@ -2096,7 +2137,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error"},
+        content={
+            "detail": "Internal server error",
+            "code": ErrorCode.SYS_INTERNAL_ERROR.value,
+        },
     )
 
 

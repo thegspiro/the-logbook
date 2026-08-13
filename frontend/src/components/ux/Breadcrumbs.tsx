@@ -165,13 +165,18 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
 
   if (crumbs.length <= 1) return null;
 
+  // Crumb links grow to the 44px touch minimum below md — a bare text link is
+  // ~20px tall and the Home icon 16px square, both under it. Grown with
+  // min-width/min-height rather than the padding + negative-margin trick
+  // form-checkbox uses: crumbs sit a few pixels apart, so padded hit areas
+  // would overlap and a tap near a chevron would open the neighbouring crumb.
   return (
     <nav aria-label="Breadcrumb" className={`mb-4 ${className}`}>
       <ol className="flex flex-wrap items-center gap-1 text-sm">
         <li className="flex items-center">
           <Link
             to="/dashboard"
-            className="text-theme-text-muted hover:text-theme-text-primary transition-all duration-150 hover:scale-110"
+            className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center transition-all duration-150 hover:scale-110 max-md:min-h-[44px] max-md:min-w-[44px]"
             aria-label="Home"
           >
             <Home className="h-4 w-4" />
@@ -183,7 +188,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
             {crumb.path ? (
               <Link
                 to={crumb.path}
-                className="text-theme-text-muted hover:text-theme-text-primary underline-offset-2 transition-colors duration-150 hover:underline"
+                className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center underline-offset-2 transition-colors duration-150 hover:underline max-md:min-h-[44px] max-md:min-w-[44px]"
               >
                 {crumb.label}
               </Link>

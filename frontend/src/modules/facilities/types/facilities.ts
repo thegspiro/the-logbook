@@ -179,6 +179,8 @@ export interface Room {
   description?: string;
   equipment?: string;
   isActive?: boolean;
+  /** Kiosk display code of the room's linked Location record (for /display/{code} QR URLs) */
+  displayCode?: string;
   createdAt: string;
   updatedAt: string;
 }

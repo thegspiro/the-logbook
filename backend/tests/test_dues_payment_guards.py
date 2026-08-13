@@ -28,6 +28,7 @@ import pytest
 
 from app.api.v1.endpoints import finance as finance_ep
 from app.models.finance import DuesPayment, DuesStatus, MemberDues
+from app.schemas.finance import MemberDuesUnwaive
 from app.services.finance_service import FinanceService, _apply_payment_totals
 
 pytestmark = [pytest.mark.unit]
@@ -228,39 +229,33 @@ class TestIdempotency:
 
 
 class TestPaymentLedgerAccess:
-    @staticmethod
-    def _capturing_service():
-        captured = {}
+    async def test_viewer_is_scoped_to_their_own_dues(self):
+        dues = _dues([_payment("40.00")])
+        service = _service_for(dues)
+        viewer_id = str(uuid.uuid4())
 
-        async def _execute(statement):
-            captured["statement"] = statement
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = None
-            return result
+        await service.list_dues_payments(dues.id, ORG_ID, viewer_user_id=viewer_id)
 
-        db = MagicMock()
-        db.execute = AsyncMock(side_effect=_execute)
-        return FinanceService(db), captured
+        query = str(service.db.execute.await_args.args[0])
+        assert "AND member_dues.user_id =" in query
 
-    async def test_service_scopes_ledger_lookup_to_requested_user(self):
-        service, captured = self._capturing_service()
+    async def test_manager_can_read_any_members_ledger(self):
+        dues = _dues([_payment("40.00")])
+        service = _service_for(dues)
 
-        with pytest.raises(ValueError, match="not found"):
-            await service.list_dues_payments(
-                "dues-1", ORG_ID, restrict_to_user="member-1"
-            )
+        payments = await service.list_dues_payments(dues.id, ORG_ID)
 
-        assert "member_dues.user_id" in str(captured["statement"].whereclause)
+        query = str(service.db.execute.await_args.args[0])
+        assert "AND member_dues.user_id =" not in query
+        assert payments == list(dues.payments)
 
-    async def test_service_allows_unscoped_manager_lookup(self):
-        service, captured = self._capturing_service()
-
-        with pytest.raises(ValueError, match="not found"):
-            await service.list_dues_payments("dues-1", ORG_ID)
-
-        assert "member_dues.user_id" not in str(captured["statement"].whereclause)
-
-    async def test_endpoint_self_scopes_non_manager(self):
+    # The two above pin the service's own filtering. These pin the endpoint
+    # that decides WHICH scope to ask for: the service can only be as safe as
+    # the caller that hands it a viewer id, so a regression there (dropping
+    # the permission check, or passing the wrong id) would otherwise reach
+    # production with the service tests still green. Salvaged from PR #1371,
+    # whose implementation half landed independently as #1369.
+    async def test_endpoint_self_scopes_a_non_manager(self):
         service = MagicMock()
         service.list_dues_payments = AsyncMock(return_value=[])
         user = SimpleNamespace(id="member-1", organization_id=ORG_ID)
@@ -272,10 +267,10 @@ class TestPaymentLedgerAccess:
             await finance_ep.list_dues_payments("dues-1", MagicMock(), user)
 
         service.list_dues_payments.assert_awaited_once_with(
-            "dues-1", ORG_ID, restrict_to_user="member-1"
+            "dues-1", ORG_ID, viewer_user_id="member-1"
         )
 
-    async def test_endpoint_does_not_self_scope_manager(self):
+    async def test_endpoint_leaves_a_manager_unscoped(self):
         service = MagicMock()
         service.list_dues_payments = AsyncMock(return_value=[])
         user = SimpleNamespace(id="manager-1", organization_id=ORG_ID)
@@ -287,7 +282,7 @@ class TestPaymentLedgerAccess:
             await finance_ep.list_dues_payments("dues-1", MagicMock(), user)
 
         service.list_dues_payments.assert_awaited_once_with(
-            "dues-1", ORG_ID, restrict_to_user=None
+            "dues-1", ORG_ID, viewer_user_id=None
         )
 
 
@@ -303,11 +298,10 @@ class TestUnwaive:
         )
         service = _service_for(dues)
 
-        result, prior_reason = await service.unwaive_dues(
+        result = await service.unwaive_dues(
             dues.id, ORG_ID, reason="Member paid after all"
         )
 
-        assert prior_reason == "Hardship — approved by the board"
         # 40 of 100 was already on the ledger, so it lands on PARTIAL — not
         # PENDING, and not the PAID the old code would have produced.
         assert result.status == DuesStatus.PARTIAL
@@ -323,9 +317,7 @@ class TestUnwaive:
         )
         service = _service_for(dues)
 
-        result, _ = await service.unwaive_dues(
-            dues.id, ORG_ID, reason="Entered in error"
-        )
+        result = await service.unwaive_dues(dues.id, ORG_ID, reason="Entered in error")
 
         assert result.status == DuesStatus.PENDING
         assert result.amount_paid == Decimal("0.00")
@@ -351,6 +343,32 @@ class TestUnwaive:
         assert dues.status == DuesStatus.PAID
         assert dues.amount_paid == Decimal("100.00")
         assert len(dues.payments) == 1
+
+    async def test_audit_event_excludes_free_text_reasons(self, monkeypatch):
+        from app.api.v1.endpoints import finance as endpoint
+
+        dues = _dues(status=DuesStatus.PENDING)
+        service = MagicMock()
+        service.unwaive_dues = AsyncMock(return_value=dues)
+        audit = AsyncMock()
+        monkeypatch.setattr(endpoint, "FinanceService", lambda _db: service)
+        monkeypatch.setattr(endpoint, "log_audit_event", audit)
+        user = SimpleNamespace(
+            id=uuid.uuid4(), organization_id=uuid.uuid4(), username="treasurer"
+        )
+
+        await endpoint.unwaive_dues(
+            dues.id,
+            MemberDuesUnwaive(reason="Private medical hardship was resolved"),
+            db=MagicMock(),
+            current_user=user,
+        )
+
+        event_data = audit.await_args.kwargs["event_data"]
+        assert event_data == {
+            "dues_id": dues.id,
+            "restored_status": DuesStatus.PENDING.value,
+        }
 
 
 class TestTotalsAreDerived:

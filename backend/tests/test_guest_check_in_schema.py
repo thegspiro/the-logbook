@@ -14,7 +14,7 @@ than only in the DB-backed contract suite that found it.
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.event import GuestCheckInRequest
+from app.schemas.event import NAME_HAS_CONTENT, GuestCheckInRequest
 
 
 def _request(**overrides):
@@ -68,6 +68,8 @@ class TestPublishedSchema:
 
         for field in ("first_name", "last_name"):
             # Without this the declared contract is looser than the real one,
-            # which is exactly what the contract suite flags.
-            assert props[field].get("pattern") == r"\S", field
+            # which is exactly what the contract suite flags. The spelling of
+            # the rule is owned by NAME_HAS_CONTENT in the schema module —
+            # this asserts the schema publishes it, not how it is written.
+            assert props[field].get("pattern") == NAME_HAS_CONTENT, field
             assert props[field]["maxLength"] == 100, field

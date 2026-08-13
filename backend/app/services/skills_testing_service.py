@@ -138,36 +138,98 @@ def _find_criterion_result(
     return None
 
 
+# How a criterion judged by its ``passed`` flag touches the percentage. Stored
+# on the criterion itself (``score_mode``), inside the template's ``sections``
+# JSON, so adding it needed no migration.
+#
+# The three modes exist because departments disagree about what a missed step
+# is worth, and the two settings that existed before could only express the
+# extremes: a step was either critical (one slip fails the whole evaluation) or
+# free (a recorded "Fail" moved the percentage by nothing at all, so a
+# scorecard could show a failed question above a 100%). Severity is orthogonal
+# to the critical flag — a step can deduct points *and* be critical.
+SCORE_MODE_NONE = "none"
+SCORE_MODE_POINTS = "points"
+SCORE_MODE_DEDUCT = "deduct"
+SCORE_MODES = (SCORE_MODE_NONE, SCORE_MODE_POINTS, SCORE_MODE_DEDUCT)
+
+# Types whose result is a pass/fail judgement, and which may therefore carry a
+# score_mode. ``score`` is excluded because it already carries points by
+# definition, and ``statement`` because it is read aloud rather than judged.
+SCORABLE_MODE_TYPES = ("pass_fail", "checklist", "time_limit")
+
+# What an unweighted step is worth, in either direction — one point, as on a
+# paper skill sheet.
+DEFAULT_CRITERION_WEIGHT = 1.0
+
+
+def _criterion_score_mode(criterion: dict[str, Any], score_pass_fail: bool) -> str:
+    """How this criterion affects the percentage: not at all, earns, or deducts.
+
+    ``score`` criteria have always carried points and continue to. For the
+    pass/fail-judged types the mode is read off the criterion, and an *unset*
+    mode falls back to the template-wide ``score_pass_fail_criteria`` toggle,
+    which is the only control that existed before and governed pass/fail steps
+    alone. That fallback is what keeps every template written under the old
+    model scoring exactly as it did.
+    """
+    ctype = criterion.get("type")
+    if ctype == "score":
+        return SCORE_MODE_POINTS
+    if ctype not in SCORABLE_MODE_TYPES:
+        return SCORE_MODE_NONE
+
+    mode = criterion.get("score_mode")
+    if mode in SCORE_MODES:
+        return str(mode)
+
+    if ctype == "pass_fail" and score_pass_fail:
+        return SCORE_MODE_POINTS
+    return SCORE_MODE_NONE
+
+
 def _criterion_point_value(
     criterion: dict[str, Any], score_pass_fail: bool
 ) -> float | None:
     """What this criterion is worth toward the percentage, or None if unscored.
 
-    ``score`` criteria have always carried points. Pass/fail criteria carry them
-    only when the template opts in: a department that writes its knowledge
-    questions as pass/fail steps expects a wrong answer to cost something, but
-    turning that on by default would change the meaning of every percentage
-    already on record.
+    Only ``points``-mode criteria have a value here: a ``deduct``-mode step is
+    never *earned*, so it must not enlarge the denominator — a candidate who
+    performs it correctly should read the same percentage as one testing on a
+    sheet that does not list it. Its cost is :func:`_criterion_deduction`.
 
-    Checklist and time-limit criteria stay out of the point pool deliberately.
-    A checklist is partially completable and would need its own earned-fraction
-    rule, and a time limit is a gate on the evolution rather than a measure of
-    how well it was performed — both are better expressed as critical criteria.
+    A ``score`` criterion is worth its ``max_score``. Anything else in points
+    mode is worth its ``max_score`` when the author weighted it, and one point
+    otherwise.
     """
-    ctype = criterion.get("type")
-    if ctype == "score":
-        max_score = criterion.get("max_score")
+    if _criterion_score_mode(criterion, score_pass_fail) != SCORE_MODE_POINTS:
+        return None
+
+    max_score = criterion.get("max_score")
+    if criterion.get("type") == "score":
         if max_score is None or max_score <= 0:
             return None
         return float(max_score)
-    if ctype == "pass_fail" and score_pass_fail:
-        # An author may weight a question by giving it a max_score; a plain
-        # pass/fail step is worth one point, as on a paper skill sheet.
-        max_score = criterion.get("max_score")
-        if max_score is not None and max_score > 0:
-            return float(max_score)
-        return 1.0
-    return None
+    if max_score is not None and max_score > 0:
+        return float(max_score)
+    return DEFAULT_CRITERION_WEIGHT
+
+
+def _criterion_deduction(criterion: dict[str, Any], score_pass_fail: bool) -> float:
+    """Points this criterion takes off the total when it is failed.
+
+    Zero unless the author put the step in ``deduct`` mode. Deliberately not
+    charged for a step left unscored: a deduction is a recorded judgement about
+    what the candidate did, and an examiner who never marked the step made no
+    such judgement. (A blank *critical* step is a different matter and is
+    already reported as a critical failure.)
+    """
+    if _criterion_score_mode(criterion, score_pass_fail) != SCORE_MODE_DEDUCT:
+        return 0.0
+    points = criterion.get("deduction_points")
+    if points is not None and points > 0:
+        return float(points)
+    return DEFAULT_CRITERION_WEIGHT
 
 
 def _criterion_outcome(criterion: dict[str, Any], result: dict[str, Any] | None) -> str:
@@ -221,8 +283,10 @@ def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str,
 
     total_earned = 0.0
     total_available = 0.0
+    total_deducted = 0.0
     sections: list[dict[str, Any]] = []
     critical_failures: list[dict[str, Any]] = []
+    deductions: list[dict[str, Any]] = []
 
     for section_idx, section in enumerate(template_sections):
         if not isinstance(section, dict):
@@ -232,6 +296,7 @@ def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str,
 
         earned = 0.0
         available = 0.0
+        deducted = 0.0
         tally = {"passed": 0, "failed": 0, "not_scored": 0, "statements": 0}
 
         for ci, criterion in enumerate(criteria):
@@ -255,6 +320,22 @@ def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str,
             elif outcome in tally:
                 tally[outcome] += 1
 
+            # Charged on a recorded failure only, which is why this reads the
+            # outcome rather than the raw flag: it is the same judgement the
+            # scorecard prints beside the step, so a reader can always point at
+            # the "Fail" that produced the deduction.
+            if outcome == "failed":
+                penalty = _criterion_deduction(criterion, score_pass_fail)
+                if penalty > 0:
+                    deducted += penalty
+                    deductions.append(
+                        {
+                            "section_name": section.get("name"),
+                            "criterion_label": criterion.get("label"),
+                            "points": penalty,
+                        }
+                    )
+
             # A required criterion left blank scores exactly like a failed one,
             # so it is reported as a reason for the outcome rather than left to
             # look like a harmless omission.
@@ -274,6 +355,7 @@ def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str,
 
         total_earned += earned
         total_available += available
+        total_deducted += deducted
         sections.append(
             {
                 # Positional identity, the same scheme section results and the
@@ -282,16 +364,24 @@ def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str,
                 # with the template's own (non-dict entries are skipped here).
                 "section_id": f"section-{section_idx}",
                 "section_name": section.get("name"),
-                "counts_toward_score": available > 0,
+                # A section holding nothing but deduct-mode steps earns no
+                # points and still moves the percentage, so "counted" cannot be
+                # read off the point pool alone.
+                "counts_toward_score": available > 0 or deducted > 0,
                 "earned": earned if available > 0 else None,
                 "available": available if available > 0 else None,
+                "deducted": deducted,
                 **tally,
             }
         )
 
     if total_available > 0:
         method = "points"
-        percentage: float | None = round((total_earned / total_available) * 100, 1)
+        # Clamped at zero: enough deductions can drive the net total negative,
+        # and a negative percentage is not a mark anyone can act on. The
+        # deductions are reported in full alongside, so the clamp hides nothing.
+        net_earned = max(total_earned - total_deducted, 0.0)
+        percentage: float | None = round((net_earned / total_available) * 100, 1)
     else:
         # Templates built entirely from pass/fail, checklist or timed steps
         # carry no point pool. Older clients wrote a per-section percentage;
@@ -318,8 +408,17 @@ def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str,
     return {
         "method": method,
         "score_pass_fail_criteria": score_pass_fail,
+        # Gross points earned, before deductions. Kept gross so a scorecard can
+        # show the subtraction as its own line rather than presenting a reduced
+        # total the reader cannot reconcile against the marks above it.
         "earned": total_earned,
         "available": total_available,
+        "deducted": total_deducted,
+        "deductions": deductions,
+        # True when deductions were recorded against a sheet with no point pool
+        # for them to come off — the template is misconfigured, and the number
+        # would otherwise silently ignore judgements the examiner did record.
+        "deductions_unapplied": bool(total_deducted > 0 and total_available <= 0),
         "percentage": percentage,
         "passing_percentage": passing_percentage,
         "meets_threshold": meets_threshold,
@@ -346,12 +445,15 @@ def iter_criterion_rows(test: SkillTest, template: Any):
 
     Each row is a dict with ``section_index``, ``section_name``,
     ``criterion_index``, ``label``, ``type``, ``critical``, ``outcome`` (the
-    same vocabulary ``_criterion_outcome`` uses), and whichever of ``score`` /
-    ``max_score`` / ``time_seconds`` / ``checklist`` carries the evidence for
-    that type, plus the examiner's ``notes``.
+    same vocabulary ``_criterion_outcome`` uses), ``score_mode`` and
+    ``points_delta`` (what the step actually moved the total by, negative for a
+    deduction), and whichever of ``score`` / ``max_score`` / ``time_seconds`` /
+    ``checklist`` carries the evidence for that type, plus the examiner's
+    ``notes``.
     """
     section_results = getattr(test, "section_results", None) or []
     template_sections = getattr(template, "sections", None) or []
+    score_pass_fail = bool(getattr(template, "score_pass_fail_criteria", False))
 
     for section_idx, section in enumerate(template_sections):
         if not isinstance(section, dict):
@@ -364,6 +466,18 @@ def iter_criterion_rows(test: SkillTest, template: Any):
             cr_result = _find_criterion_result(sr_match, section_idx, ci, criterion)
             recorded = cr_result or {}
             checklist = recorded.get("checklist_completed")
+            outcome = _criterion_outcome(criterion, cr_result)
+
+            mode = _criterion_score_mode(criterion, score_pass_fail)
+            points_delta = 0.0
+            if mode == SCORE_MODE_POINTS:
+                if criterion.get("type") == "score":
+                    points_delta = float(recorded.get("score") or 0)
+                elif recorded.get("passed") is True:
+                    worth = _criterion_point_value(criterion, score_pass_fail)
+                    points_delta = worth or 0.0
+            elif mode == SCORE_MODE_DEDUCT and outcome == "failed":
+                points_delta = -_criterion_deduction(criterion, score_pass_fail)
 
             yield {
                 "section_index": section_idx,
@@ -372,7 +486,12 @@ def iter_criterion_rows(test: SkillTest, template: Any):
                 "label": criterion.get("label") or f"Criterion {ci + 1}",
                 "type": criterion.get("type") or "pass_fail",
                 "critical": bool(criterion.get("required", False)),
-                "outcome": _criterion_outcome(criterion, cr_result),
+                "outcome": outcome,
+                "score_mode": mode,
+                # Signed: what this step moved the point total by. An export
+                # reader reconciling a percentage against the marks needs the
+                # deduction as a number, not as an inference from the mode.
+                "points_delta": points_delta,
                 "score": recorded.get("score"),
                 "max_score": criterion.get("max_score"),
                 "time_seconds": recorded.get("time_seconds"),
@@ -1020,6 +1139,13 @@ async def notify_candidate_result_voided(
     would disclose by implication the evaluation the policy withheld.
     """
     if getattr(test, "is_practice", False):
+        return False
+
+    # The endpoint calls this after changing the status to ``voided``. Preserve
+    # the validation gate that applied immediately before that transition: an
+    # unvalidated official result was only a pending placeholder, so even its
+    # withdrawal (and reason) must remain undisclosed.
+    if getattr(test, "validated_at", None) is None:
         return False
 
     view = candidate_result_view(test, template, org_config)
