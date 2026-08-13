@@ -215,9 +215,9 @@ Requires `events.manage` permission. Tab-based admin interface.
 | URL                   | Page                 | Permission    |
 | --------------------- | -------------------- | ------------- |
 | `/locations`          | Locations Management | Authenticated |
-| `/locations/qr-codes` | Room QR Codes        | Authenticated |
+| `/locations/qr-codes` | Check-In QR Codes    | Authenticated |
 
-> Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Room QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes).
+> Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
 
 ---
 

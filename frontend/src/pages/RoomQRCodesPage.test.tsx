@@ -4,11 +4,22 @@ import userEvent from '@testing-library/user-event';
 
 const mockGetLocations = vi.fn();
 const mockRegenerateDisplayCode = vi.fn();
+const mockGetEnabledModules = vi.fn();
+const mockGetApparatusList = vi.fn();
 
 vi.mock('../services/api', () => ({
   locationsService: {
     getLocations: (...args: unknown[]) => mockGetLocations(...args) as unknown,
     regenerateDisplayCode: (...args: unknown[]) => mockRegenerateDisplayCode(...args) as unknown,
+  },
+  organizationService: {
+    getEnabledModules: (...args: unknown[]) => mockGetEnabledModules(...args) as unknown,
+  },
+}));
+
+vi.mock('../modules/apparatus/services/api', () => ({
+  apparatusService: {
+    getApparatusList: (...args: unknown[]) => mockGetApparatusList(...args) as unknown,
   },
 }));
 
@@ -85,11 +96,27 @@ describe('groupByStation', () => {
   });
 });
 
+const mockApparatus = {
+  items: [
+    { id: 'app-1', unitNumber: 'E-3', name: 'Engine 3' },
+    { id: 'app-2', unitNumber: 'T-1', name: null },
+  ],
+  total: 2,
+  page: 1,
+  pageSize: 100,
+  totalPages: 1,
+};
+
 describe('RoomQRCodesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAuthStore.setState({ user: null });
     mockGetLocations.mockResolvedValue(mockLocations);
+    // Configurable module list including scheduling — apparatus section eligible
+    mockGetEnabledModules.mockResolvedValue({
+      enabled_modules: ['members', 'events', 'documents', 'roles', 'settings', 'scheduling'],
+    });
+    mockGetApparatusList.mockResolvedValue(mockApparatus);
   });
 
   it('renders grouped QR cards for every location with a display code', async () => {
@@ -109,8 +136,50 @@ describe('RoomQRCodesPage', () => {
     expect(screen.queryByText('Supply Closet')).not.toBeInTheDocument();
     // Kiosk URLs are shown for copying/verification
     expect(screen.getByText(`${window.location.origin}/display/ROOM1CODE`)).toBeInTheDocument();
-    // Every card offers a PNG download
-    expect(screen.getAllByRole('button', { name: /Download PNG/ })).toHaveLength(4);
+    // Every card offers a PNG download (4 locations + 2 apparatus)
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Download PNG/ })).toHaveLength(6);
+    });
+  });
+
+  it('renders apparatus shift check-in codes when scheduling is enabled', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 2, name: 'Apparatus Shift Check-In' })).toBeInTheDocument();
+    });
+    expect(screen.getByText('E-3 — Engine 3')).toBeInTheDocument();
+    expect(screen.getByText('T-1')).toBeInTheDocument();
+    expect(screen.getByText(`${window.location.origin}/scheduling/checkin?apparatus=app-1`)).toBeInTheDocument();
+    // Permanent codes — no regenerate action on apparatus cards even for admins
+    useAuthStore.setState({ user: { permissions: ['locations.manage'] } as never });
+    expect(mockGetApparatusList).toHaveBeenCalledWith({ page: 1, pageSize: 100 });
+  });
+
+  it('hides the apparatus section when the scheduling module is off', async () => {
+    mockGetEnabledModules.mockResolvedValue({
+      enabled_modules: ['members', 'events', 'documents', 'roles', 'settings', 'facilities'],
+    });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 2, name: 'Station 1' })).toBeInTheDocument();
+    });
+    // The modules hook is permissive while loading, so the section may flash;
+    // once the module list resolves without scheduling it must be gone.
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { level: 2, name: 'Apparatus Shift Check-In' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides the apparatus section when the apparatus list is not accessible', async () => {
+    mockGetApparatusList.mockRejectedValue(new Error('403'));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 2, name: 'Station 1' })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { level: 2, name: 'Apparatus Shift Check-In' })).not.toBeInTheDocument();
   });
 
   it('filters cards by search query', async () => {
@@ -121,16 +190,24 @@ describe('RoomQRCodesPage', () => {
       expect(screen.getByText('Annex Hall')).toBeInTheDocument();
     });
 
-    await user.type(screen.getByRole('textbox', { name: 'Search rooms...' }), 'training');
+    await user.type(screen.getByRole('textbox', { name: 'Search rooms or apparatus...' }), 'training');
 
     expect(screen.getByText('Training Room #101')).toBeInTheDocument();
     expect(screen.queryByText('Annex Hall')).not.toBeInTheDocument();
     expect(screen.queryByText('Meeting Room')).not.toBeInTheDocument();
+    expect(screen.queryByText('E-3 — Engine 3')).not.toBeInTheDocument();
 
-    await user.clear(screen.getByRole('textbox', { name: 'Search rooms...' }));
-    await user.type(screen.getByRole('textbox', { name: 'Search rooms...' }), 'zzz-no-match');
+    await user.clear(screen.getByRole('textbox', { name: 'Search rooms or apparatus...' }));
+    await user.type(screen.getByRole('textbox', { name: 'Search rooms or apparatus...' }), 'engine');
 
-    expect(screen.getByText('No rooms match your search')).toBeInTheDocument();
+    // Apparatus are searchable by unit number and name
+    expect(screen.getByText('E-3 — Engine 3')).toBeInTheDocument();
+    expect(screen.queryByText('Training Room #101')).not.toBeInTheDocument();
+
+    await user.clear(screen.getByRole('textbox', { name: 'Search rooms or apparatus...' }));
+    await user.type(screen.getByRole('textbox', { name: 'Search rooms or apparatus...' }), 'zzz-no-match');
+
+    expect(screen.getByText('Nothing matches your search')).toBeInTheDocument();
     // Not the "no codes yet" empty state — codes exist, the search just excluded them
     expect(screen.queryByText('No QR codes yet')).not.toBeInTheDocument();
   });
@@ -142,6 +219,9 @@ describe('RoomQRCodesPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Annex Hall')).toBeInTheDocument();
     });
+    await waitFor(() => {
+      expect(screen.getByText('E-3 — Engine 3')).toBeInTheDocument();
+    });
     // Grid mode groups by station; signs mode is a flat list with a per-sign scan hint
     expect(screen.getByRole('heading', { level: 2, name: 'Station 1' })).toBeInTheDocument();
     expect(screen.queryByText(/Scan to check in/)).not.toBeInTheDocument();
@@ -149,13 +229,15 @@ describe('RoomQRCodesPage', () => {
     await user.click(screen.getByRole('button', { name: /Room signs/ }));
 
     expect(screen.queryByRole('heading', { level: 2, name: 'Station 1' })).not.toBeInTheDocument();
-    // One sign per location with a code (4 in the fixture)
-    expect(screen.getAllByText(/Scan to check in/)).toHaveLength(4);
+    // One sign per code: 4 locations + 2 apparatus in the fixtures
+    expect(screen.getAllByText(/Scan to check in/)).toHaveLength(6);
     expect(screen.getByText('Annex Hall')).toBeInTheDocument();
+    expect(screen.getByText('E-3 — Engine 3')).toBeInTheDocument();
   });
 
   it('shows an empty state when no locations have display codes', async () => {
     mockGetLocations.mockResolvedValue([]);
+    mockGetApparatusList.mockResolvedValue({ ...mockApparatus, items: [], total: 0, totalPages: 1 });
     renderPage();
 
     await waitFor(() => {

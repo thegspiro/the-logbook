@@ -108,11 +108,11 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'room-qr-codes',
-    label: 'Room QR Codes',
+    label: 'Check-In QR Codes',
     path: '/locations/qr-codes',
     icon: QrCode,
     section: 'Navigation',
-    keywords: ['qr', 'kiosk', 'display', 'check-in', 'checkin', 'print', 'rooms'],
+    keywords: ['qr', 'kiosk', 'display', 'check-in', 'checkin', 'print', 'rooms', 'apparatus', 'shift'],
   },
   {
     id: 'documents',

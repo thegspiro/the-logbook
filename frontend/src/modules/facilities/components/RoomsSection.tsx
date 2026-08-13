@@ -168,7 +168,7 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
             to="/locations/qr-codes"
             className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors"
           >
-            <QrCode className="h-3.5 w-3.5" aria-hidden="true" /> Room QR Codes
+            <QrCode className="h-3.5 w-3.5" aria-hidden="true" /> Check-In QR Codes
           </Link>
           {canManage && (
             <button
