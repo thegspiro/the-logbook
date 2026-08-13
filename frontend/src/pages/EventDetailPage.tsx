@@ -45,6 +45,7 @@ import EventOverrideAttendanceModal from '../components/event-detail/EventOverri
 import EventEndConfirmModal from '../components/event-detail/EventEndConfirmModal';
 import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfirmModal';
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
+import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 
 /**
  * `custom_fields` keys that are not custom fields.
@@ -1218,6 +1219,12 @@ export const EventDetailPage: React.FC = () => {
                     ))}
                 </div>
               </div>
+            )}
+
+            {/* Requirement/program links for the attached training session.
+                Renders nothing when the event has no training session. */}
+            {event.event_type === EventTypeEnum.TRAINING && (
+              <TrainingSessionLinkageCard eventId={event.id} canManage={canManage} />
             )}
 
             {/* Attachments */}
