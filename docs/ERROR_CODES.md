@@ -79,6 +79,42 @@ fails if this document misses a curated code).
 | LB-SYS-002 | Database temporarily unreachable (restart/failover/outage).  | Wait and retry; if persistent, check the MySQL service is running and reachable from the backend.                    |
 | LB-SYS-003 | Rate limit exceeded.                                         | Wait a minute. Shared-IP stations can trip IP-based limits together — note the time and affected users if it recurs. |
 
+## Events & check-in (LB-EVT)
+
+| Code       | Meaning                                                                                                                                        | What to do                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| LB-EVT-001 | Kiosk/QR sign-in link doesn't match an event accepting sign-ins (deliberately identical for "doesn't exist", "wrong room", and "not enabled"). | Confirm the QR/kiosk code belongs to the room the event is held in, and that the event has guest sign-in enabled. |
+| LB-EVT-002 | Check-in window closed — opens shortly before the event and closes when it ends.                                                               | Verify the current time against the event schedule; an event manager can record attendance manually.              |
+| LB-EVT-003 | Event hit its per-day public sign-in ceiling (flood protection, not event capacity).                                                           | Record remaining attendees manually; raise `GUEST_CHECK_IN_DAILY_LIMIT` if a large event hits this routinely.     |
+| LB-EVT-004 | Kiosk display code doesn't match any configured display (mistyped, or regenerated after deletion).                                             | Re-open the display from Locations → Displays and update the kiosk bookmark/QR.                                   |
+
+## File uploads (LB-UPLD)
+
+| Code        | Meaning                                                                                     | What to do                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| LB-UPLD-001 | File exceeds the size limit for this upload type (limit stated in the message).             | Compress/resize the file, or split archives into parts.                                |
+| LB-UPLD-002 | File type not accepted — checked by content, so renaming the extension doesn't help.        | Convert to one of the listed types; re-export if the file may be corrupted.            |
+| LB-UPLD-003 | Server-side upload inspection temporarily unavailable; upload refused rather than unvetted. | Retry in a few minutes; if persistent, check backend logs for the libmagic dependency. |
+
+## Onboarding (LB-ONBD)
+
+| Code        | Meaning                                                                        | What to do                                                              |
+| ----------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| LB-ONBD-001 | First-run onboarding opened on a system that is already set up (it runs once). | Use the normal login page; settings live under Organization Settings.   |
+| LB-ONBD-002 | Onboarding wizard session missing/invalid/idle past 30 minutes.                | Refresh the page — a new session starts and saved progress is retained. |
+
+## Messaging (LB-MSG)
+
+| Code       | Meaning                                                                 | What to do                                                                                                         |
+| ---------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| LB-MSG-001 | The delivery channel (email/SMS/push) is not configured on this server. | Configure the channel (`EMAIL_ENABLED` / `TWILIO_ENABLED` / `PUSH_ENABLED` + credentials — see .env.example.full). |
+
+## Integrations (LB-INT)
+
+| Code       | Meaning                                                  | What to do                                                        |
+| ---------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| LB-INT-001 | A third-party integration has no credentials configured. | Add the integration's API credentials under Admin → Integrations. |
+
 ## Automatic fallback (LB-API-\<status\>)
 
 Any error without a curated code gets `LB-API-<HTTP status>`:
@@ -103,6 +139,10 @@ Other statuses follow the same pattern (`LB-API-410`, `LB-API-507`, …).
 - Raise `CodedHTTPException` (from `app.core.error_codes`) with an
   `error_code=` wherever a condition deserves a curated code; plain
   `HTTPException` continues to work and gets the fallback code.
+- In the **service layer**, raise `CodedValueError(message, error_code=...)`
+  instead of a bare `ValueError` when the condition deserves a curated code —
+  `handle_service_errors()` carries the code onto the 400/403 response.
+  `ensure_found(...)` also accepts an optional `error_code=`.
 - The `code` reaches the frontend on `AppError.code`
   (`utils/errorHandling.ts`); `getErrorMessage()` appends it to displayed
   messages automatically.

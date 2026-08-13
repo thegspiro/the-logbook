@@ -62,6 +62,27 @@ class ErrorCode(str, Enum):
     SYS_DB_UNAVAILABLE = "LB-SYS-002"
     SYS_RATE_LIMITED = "LB-SYS-003"
 
+    # --- Events & check-in ---------------------------------------------
+    EVT_SIGNIN_UNAVAILABLE = "LB-EVT-001"
+    EVT_CHECKIN_WINDOW_CLOSED = "LB-EVT-002"
+    EVT_SIGNIN_DAILY_LIMIT = "LB-EVT-003"
+    EVT_DISPLAY_NOT_FOUND = "LB-EVT-004"
+
+    # --- File uploads ---------------------------------------------------
+    UPLD_TOO_LARGE = "LB-UPLD-001"
+    UPLD_TYPE_NOT_ALLOWED = "LB-UPLD-002"
+    UPLD_VALIDATION_UNAVAILABLE = "LB-UPLD-003"
+
+    # --- Onboarding ------------------------------------------------------
+    ONBD_ALREADY_COMPLETED = "LB-ONBD-001"
+    ONBD_SESSION_INVALID = "LB-ONBD-002"
+
+    # --- Messaging (email / SMS / push) ----------------------------------
+    MSG_NOT_CONFIGURED = "LB-MSG-001"
+
+    # --- Integrations ----------------------------------------------------
+    INT_NOT_CONFIGURED = "LB-INT-001"
+
 
 @dataclass(frozen=True)
 class ErrorCodeInfo:
@@ -280,6 +301,146 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "if this happens routinely.",
         ),
     ),
+    ErrorCode.EVT_SIGNIN_UNAVAILABLE: ErrorCodeInfo(
+        title="Event sign-in not available",
+        description=(
+            "The kiosk/QR sign-in link could not be matched to an event "
+            "that accepts sign-ins — the event doesn't exist, isn't held "
+            "at that display's location, or doesn't have guest sign-in "
+            "enabled. All of these answer identically on purpose, so the "
+            "public endpoint can't be used to probe which events exist."
+        ),
+        resolution=(
+            "Confirm the kiosk/QR code belongs to the room the event is "
+            "actually held in.",
+            "Check the event has guest sign-in enabled and hasn't been "
+            "deleted or moved.",
+        ),
+    ),
+    ErrorCode.EVT_CHECKIN_WINDOW_CLOSED: ErrorCodeInfo(
+        title="Check-in window closed",
+        description=(
+            "The event exists, but check-in is not open right now — it "
+            "opens shortly before the event starts and closes when the "
+            "event ends. The message states which side was missed."
+        ),
+        resolution=(
+            "Verify the current time against the event's schedule.",
+            "If the event ran long or started early, an event manager can "
+            "record the attendance manually.",
+        ),
+    ),
+    ErrorCode.EVT_SIGNIN_DAILY_LIMIT: ErrorCodeInfo(
+        title="Event sign-in daily limit reached",
+        description=(
+            "This event hit its per-day ceiling on public sign-ins — a "
+            "flood-protection cap, not a capacity setting on the event."
+        ),
+        resolution=(
+            "Record remaining attendees manually from the event page.",
+            "If a genuinely large event hits this routinely, raise "
+            "GUEST_CHECK_IN_DAILY_LIMIT.",
+        ),
+    ),
+    ErrorCode.EVT_DISPLAY_NOT_FOUND: ErrorCodeInfo(
+        title="Kiosk display not found",
+        description=(
+            "The public display/kiosk code in the URL does not match any "
+            "configured display — mistyped, or the display was deleted "
+            "and its code regenerated."
+        ),
+        resolution=(
+            "Re-open the display from Locations → Displays to get its "
+            "current link/QR code and update the kiosk bookmark.",
+        ),
+    ),
+    ErrorCode.UPLD_TOO_LARGE: ErrorCodeInfo(
+        title="File too large",
+        description=(
+            "The uploaded file exceeds the size limit for this upload "
+            "type; the message states the limit."
+        ),
+        resolution=(
+            "Compress or resize the file (photos and PDFs usually "
+            "shrink well) and retry.",
+            "For document archives, split the upload into parts.",
+        ),
+    ),
+    ErrorCode.UPLD_TYPE_NOT_ALLOWED: ErrorCodeInfo(
+        title="File type not allowed",
+        description=(
+            "The file's type (checked by content, not just extension) is "
+            "not accepted for this upload. A renamed file keeps its real "
+            "type and is still rejected."
+        ),
+        resolution=(
+            "Convert the file to one of the types the message lists and " "retry.",
+            "If the file looks like the right type, it may be corrupted — "
+            "re-export it from the source application.",
+        ),
+    ),
+    ErrorCode.UPLD_VALIDATION_UNAVAILABLE: ErrorCodeInfo(
+        title="Upload validation unavailable",
+        description=(
+            "The server-side file inspection used to vet uploads is "
+            "temporarily unavailable, so the upload was refused rather "
+            "than accepted unchecked."
+        ),
+        resolution=(
+            "Retry in a few minutes.",
+            "If it persists, check the backend logs — the file-type "
+            "inspection dependency (libmagic) may be missing or failing.",
+        ),
+    ),
+    ErrorCode.ONBD_ALREADY_COMPLETED: ErrorCodeInfo(
+        title="Onboarding already completed",
+        description=(
+            "Someone opened the first-run onboarding flow on a system "
+            "that has already been set up. Onboarding runs once; the "
+            "endpoints lock afterwards."
+        ),
+        resolution=(
+            "Use the normal login page — the system is already set up.",
+            "Settings changed since setup are managed under Organization "
+            "Settings, not by re-running onboarding.",
+        ),
+    ),
+    ErrorCode.ONBD_SESSION_INVALID: ErrorCodeInfo(
+        title="Onboarding session invalid or expired",
+        description=(
+            "The onboarding wizard's session is missing, invalid, or "
+            "idle past its 30-minute limit. Saved progress is retained."
+        ),
+        resolution=(
+            "Refresh the page to start a new session and continue from "
+            "the saved step.",
+        ),
+    ),
+    ErrorCode.MSG_NOT_CONFIGURED: ErrorCodeInfo(
+        title="Messaging service not configured",
+        description=(
+            "The requested delivery channel (email, SMS, or push "
+            "notifications) is not configured on this server, so nothing "
+            "could be sent."
+        ),
+        resolution=(
+            "Enable and configure the channel in the deployment "
+            "environment (EMAIL_ENABLED / TWILIO_ENABLED / PUSH_ENABLED "
+            "plus their credentials — see .env.example.full).",
+        ),
+    ),
+    ErrorCode.INT_NOT_CONFIGURED: ErrorCodeInfo(
+        title="Integration not configured",
+        description=(
+            "The requested third-party integration (e.g. Cal.com, "
+            "Salesforce) has no credentials configured, so the sync or "
+            "lookup could not run."
+        ),
+        resolution=(
+            "Add the integration's API credentials under Admin → "
+            "Integrations (or the deployment environment) and retry.",
+        ),
+    ),
 }
 
 
@@ -393,6 +554,22 @@ class CodedHTTPException(HTTPException):
         headers: Optional[dict[str, str]] = None,
     ) -> None:
         super().__init__(status_code=status_code, detail=detail, headers=headers)
+        self.error_code = error_code
+
+
+class CodedValueError(ValueError):
+    """ValueError carrying a curated support code.
+
+    Service-layer business rules raise ValueError and let the endpoint layer
+    convert it to a 400 (``handle_service_errors`` / ``safe_error_detail``).
+    Raising this subclass instead attaches a curated code without the service
+    knowing anything about HTTP — the shared conversion in
+    ``handle_service_errors`` reads ``error_code`` and carries it onto the
+    response.
+    """
+
+    def __init__(self, message: str, *, error_code: ErrorCode) -> None:
+        super().__init__(message)
         self.error_code = error_code
 
 

@@ -10,17 +10,20 @@ exceptions.
 import re
 from pathlib import Path
 
+import pytest
 from fastapi import HTTPException
 
 from app.core.error_codes import (
     ERROR_CODE_CATALOG,
     FALLBACK_STATUS_INFO,
     CodedHTTPException,
+    CodedValueError,
     ErrorCode,
     catalog_entries,
     fallback_error_code,
     resolve_error_code,
 )
+from app.core.utils import ensure_found, handle_service_errors
 
 DOCS_PATH = Path(__file__).resolve().parents[2] / "docs" / "ERROR_CODES.md"
 
@@ -88,6 +91,51 @@ class TestResolution:
         assert exc.headers == {"WWW-Authenticate": "Bearer"}
         assert exc.status_code == 401
         assert exc.detail == "x"
+
+
+class TestServiceLayerCodes:
+    """CodedValueError lets services attach codes without knowing HTTP."""
+
+    def test_coded_value_error_resolves_to_its_code(self):
+        exc = CodedValueError("too big", error_code=ErrorCode.UPLD_TOO_LARGE)
+        assert isinstance(exc, ValueError)
+        assert str(exc) == "too big"
+        assert resolve_error_code(exc) == "LB-UPLD-001"
+
+    async def test_handle_service_errors_carries_the_code(self):
+        async def service_call():
+            async with handle_service_errors():
+                raise CodedValueError(
+                    "File too large.", error_code=ErrorCode.UPLD_TOO_LARGE
+                )
+
+        with pytest.raises(CodedHTTPException) as exc_info:
+            await service_call()
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.error_code is ErrorCode.UPLD_TOO_LARGE
+        assert exc_info.value.detail == "File too large."
+
+    async def test_handle_service_errors_plain_value_error_stays_uncoded(self):
+        async def service_call():
+            async with handle_service_errors():
+                raise ValueError("Nope.")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await service_call()
+        assert not isinstance(exc_info.value, CodedHTTPException)
+        assert resolve_error_code(exc_info.value) == "LB-API-400"
+
+    def test_ensure_found_accepts_a_code(self):
+        with pytest.raises(CodedHTTPException) as exc_info:
+            ensure_found(None, "Event", error_code=ErrorCode.EVT_SIGNIN_UNAVAILABLE)
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.error_code is ErrorCode.EVT_SIGNIN_UNAVAILABLE
+
+    def test_ensure_found_without_code_stays_uncoded(self):
+        with pytest.raises(HTTPException) as exc_info:
+            ensure_found(None, "Event")
+        assert not isinstance(exc_info.value, CodedHTTPException)
+        assert ensure_found("row", "Event") == "row"
 
 
 class TestReferenceEndpointData:

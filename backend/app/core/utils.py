@@ -14,6 +14,8 @@ from typing import Any, Optional, TypeVar
 from fastapi import HTTPException, status
 from loguru import logger
 
+from app.core.error_codes import CodedHTTPException, ErrorCode
+
 # Patterns that suggest internal implementation details leaking
 _UNSAFE_PATTERNS = [
     re.compile(r"Traceback \(most recent call last\)", re.IGNORECASE),
@@ -91,6 +93,7 @@ T = TypeVar("T")
 def ensure_found(
     resource: Optional[T],
     resource_name: str = "Resource",
+    error_code: Optional[ErrorCode] = None,
 ) -> T:
     """Raise 404 if the resource is None, otherwise return it.
 
@@ -103,8 +106,17 @@ def ensure_found(
             await service.get_location(id, org_id),
             "Location",
         )
+
+    Pass ``error_code`` to attach a curated support code; without one the
+    response still carries the automatic LB-API-404 fallback.
     """
     if resource is None:
+        if error_code is not None:
+            raise CodedHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"{resource_name} not found",
+                error_code=error_code,
+            )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"{resource_name} not found",
@@ -136,20 +148,33 @@ async def handle_service_errors(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e, fallback),
+        raise _to_http_exception(
+            e, status.HTTP_400_BAD_REQUEST, safe_error_detail(e, fallback)
         )
     except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=safe_error_detail(e, fallback),
+        raise _to_http_exception(
+            e, status.HTTP_403_FORBIDDEN, safe_error_detail(e, fallback)
         )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail(e, fallback),
         )
+
+
+def _to_http_exception(exc: Exception, status_code: int, detail: str) -> HTTPException:
+    """HTTPException for a service-layer error, keeping any support code.
+
+    A service that raised ``CodedValueError`` (or any exception carrying an
+    ``error_code`` attribute) gets its curated code onto the response; plain
+    exceptions keep the automatic LB-API-<status> fallback.
+    """
+    code = getattr(exc, "error_code", None)
+    if isinstance(code, ErrorCode):
+        return CodedHTTPException(
+            status_code=status_code, detail=detail, error_code=code
+        )
+    return HTTPException(status_code=status_code, detail=detail)
 
 
 def generate_uuid() -> str:
