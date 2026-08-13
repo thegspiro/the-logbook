@@ -35,6 +35,8 @@ interface SubNavItem {
   label: string;
   path: string;
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
   isDivider?: boolean;
 }
 
@@ -42,6 +44,8 @@ interface NavItem {
   label: string;
   path: string;
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
   subItems?: SubNavItem[];
   isSectionLabel?: boolean;
 }
@@ -94,6 +98,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const ThemeIcon = themeIcon;
 
   const hasAnyAdminPermission =
+    // users.view alone opens the Admin menu: the member ID scanner lives here,
+    // and validating a scanned card only needs users.view (see /members/scan).
+    checkPermission('users.view') ||
     checkPermission('members.manage') ||
     checkPermission('prospective_members.manage') ||
     checkPermission('events.manage') ||
@@ -191,7 +198,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   ]
                 : []),
               { label: 'Member Management', path: '/members/admin', permission: 'members.manage' },
-              { label: 'Scan Member ID', path: '/members/scan', permission: 'members.manage' },
+              // Scanning resolves a card to a member profile, which the
+              // backend serves to users.view or members.manage holders.
+              { label: 'Scan Member ID', path: '/members/scan', anyPermission: ['users.view', 'members.manage'] },
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
               DIV,
               { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
@@ -312,7 +321,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
             {navItems.map((item) => {
               // Filter sub-items by permission (strip dividers whose neighbours are all hidden)
               const visibleSubItems = item.subItems?.filter(
-                (sub) => sub.isDivider || !sub.permission || checkPermission(sub.permission)
+                (sub) =>
+                  sub.isDivider ||
+                  ((!sub.permission || checkPermission(sub.permission)) &&
+                    (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p))))
               );
 
               // Strip leading, trailing, and consecutive dividers
@@ -324,6 +336,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
               // Skip top-level permission-gated items
               if (item.permission && !checkPermission(item.permission)) return null;
+              if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return null;
 
               // Skip parent groups where all sub-items are hidden
               const realSubItems = cleanedSubItems?.filter((s) => !s.isDivider);
@@ -529,7 +542,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               {navItems.map((item) => {
                 // Filter sub-items by permission
                 const visibleSubItems = item.subItems?.filter(
-                  (sub) => sub.isDivider || !sub.permission || checkPermission(sub.permission)
+                  (sub) =>
+                    sub.isDivider ||
+                    ((!sub.permission || checkPermission(sub.permission)) &&
+                      (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p))))
                 );
 
                 const cleanedSubItems = visibleSubItems?.filter((sub, i, arr) => {
@@ -540,6 +556,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
                 // Skip top-level permission-gated items
                 if (item.permission && !checkPermission(item.permission)) return null;
+                if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return null;
 
                 // Skip parent groups where all sub-items are hidden
                 const realSubItems = cleanedSubItems?.filter((s) => !s.isDivider);

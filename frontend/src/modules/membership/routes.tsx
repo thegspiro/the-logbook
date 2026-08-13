@@ -65,7 +65,11 @@ export const getMembershipRoutes = () => {
         path="/members/scan"
         element={
           <Suspense fallback={null}>
-            <MemberScanPage />
+            {/* Matches the backend gate on the profile/roster lookups the
+                scanner performs — without one of these, every scan would 403. */}
+            <ProtectedRoute requiredAnyPermission={['users.view', 'members.manage']}>
+              <MemberScanPage />
+            </ProtectedRoute>
           </Suspense>
         }
       />
