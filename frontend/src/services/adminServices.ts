@@ -88,6 +88,20 @@ export interface TrainingSessionResponse {
   created_by?: string;
 }
 
+/**
+ * Partial update of a session's requirement/program links.
+ *
+ * An update payload, so the three states are distinct on the wire: omit the
+ * key to leave a link alone, send `null` to clear it, send an id to set it.
+ * `undefined` is not one of them — use `null` to clear (CLAUDE.md pitfall #1).
+ */
+export interface TrainingSessionLinkageUpdate {
+  category_id?: string | null;
+  program_id?: string | null;
+  phase_id?: string | null;
+  requirement_id?: string | null;
+}
+
 export interface TrainingSessionCreate {
   title: string;
   description?: string | undefined;
