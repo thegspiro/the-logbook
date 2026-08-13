@@ -11,9 +11,11 @@
  * discovered by the next morning's check — which is precisely the window in
  * which a truck runs a call short.
  *
- * Here a member reports an item used the moment they use it, and swaps fresh
- * stock into the bracket if any is on the shelf. Both actions are crew work,
- * not officer work, so both sit behind the default member permission.
+ * Here a member reports an item used the moment they use it — that is crew
+ * work and sits behind the default member permission. Swapping stock onto the
+ * truck and withdrawing a restock report rewrite the supply record, so the
+ * server keeps them manage-gated and this page only offers them to callers
+ * who hold that permission.
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -33,6 +35,7 @@ import {
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { apparatusService } from '../../modules/apparatus/services/api';
+import { useAuthStore } from '../../stores/authStore';
 import type {
   ApparatusInventory,
   ApparatusInventoryItem,
@@ -51,6 +54,11 @@ const FLEET_PAGE_SIZE = 100;
 
 const ApparatusInventoryPage: React.FC = () => {
   const tz = useTimezone();
+  const { checkPermission } = useAuthStore();
+  // Swapping stock and withdrawing a restock report are manage-gated on the
+  // server (they rewrite the supply record); offering them to a submit-only
+  // member would end every tap in a 403.
+  const canManageStock = checkPermission('equipment_check.manage') || checkPermission('inventory.manage');
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('apparatus') ?? '';
 
@@ -322,14 +330,20 @@ const ApparatusInventoryPage: React.FC = () => {
               </div>
             )}
             {item.restockNeeded ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void clearRestock(item)}
-                className="text-theme-text-muted hover:text-theme-text-secondary mobile-touch-target flex items-center gap-1 text-xs font-medium disabled:opacity-50"
-              >
-                <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> Undo
-              </button>
+              // Withdrawing a report (DELETE .../used) is manage-gated on the
+              // server: it erases a shortfall claim without restocking. A
+              // member who reported in error asks the supply officer; the
+              // "Reported by" line below already says who filed it.
+              canManageStock ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void clearRestock(item)}
+                  className="text-theme-text-muted hover:text-theme-text-secondary mobile-touch-target flex items-center gap-1 text-xs font-medium disabled:opacity-50"
+                >
+                  <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> Undo
+                </button>
+              ) : null
             ) : (
               <button
                 type="button"
@@ -344,10 +358,13 @@ const ApparatusInventoryPage: React.FC = () => {
                 {item.targetQuantity != null ? 'Flag' : 'Used'}
               </button>
             )}
+            {/* Disabled (not hidden) without a manage permission: the swap
+                endpoint is manage-gated, and the tooltip says who records it
+                instead of letting the tap end in a 403. */}
             {item.inventoryItemId && (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || !canManageStock}
                 onClick={() => {
                   setSwapTarget(item);
                   // Default to the shortfall: filling the gap is what the
@@ -355,7 +372,8 @@ const ApparatusInventoryPage: React.FC = () => {
                   const short = (item.targetQuantity ?? 1) - (item.quantityOnTruck ?? item.targetQuantity ?? 0);
                   setSwapQuantity(Math.max(1, short));
                 }}
-                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                title={canManageStock ? undefined : 'Swaps from stock are recorded by an officer or supply manager'}
+                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Repeat className="h-3.5 w-3.5" aria-hidden="true" /> Swap
               </button>

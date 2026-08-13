@@ -34,12 +34,15 @@ def service(mock_db):
 class TestUpdateTemplateApparatusValidation:
     async def test_foreign_apparatus_rejected(self, service, mock_db):
         template = MagicMock()
-        with patch.object(
-            service, "get_template", new_callable=AsyncMock, return_value=template
-        ), patch(
-            "app.services.equipment_check_service.is_in_org",
-            new_callable=AsyncMock,
-            return_value=False,
+        with (
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=template
+            ),
+            patch(
+                "app.services.equipment_check_service.is_in_org",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
         ):
             with pytest.raises(ValueError, match="Invalid apparatus"):
                 await service.update_template(
@@ -50,13 +53,16 @@ class TestUpdateTemplateApparatusValidation:
 
     async def test_in_org_apparatus_passes(self, service, mock_db):
         template = MagicMock()
-        with patch.object(
-            service, "get_template", new_callable=AsyncMock, return_value=template
-        ), patch(
-            "app.services.equipment_check_service.is_in_org",
-            new_callable=AsyncMock,
-            return_value=True,
-        ) as mock_in_org:
+        with (
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=template
+            ),
+            patch(
+                "app.services.equipment_check_service.is_in_org",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_in_org,
+        ):
             await service.update_template(
                 "tmpl-1", "org-1", {"apparatus_id": "own-apparatus"}
             )
@@ -65,12 +71,15 @@ class TestUpdateTemplateApparatusValidation:
 
     async def test_no_apparatus_change_skips_validation(self, service, mock_db):
         template = MagicMock()
-        with patch.object(
-            service, "get_template", new_callable=AsyncMock, return_value=template
-        ), patch(
-            "app.services.equipment_check_service.is_in_org",
-            new_callable=AsyncMock,
-        ) as mock_in_org:
+        with (
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=template
+            ),
+            patch(
+                "app.services.equipment_check_service.is_in_org",
+                new_callable=AsyncMock,
+            ) as mock_in_org,
+        ):
             await service.update_template("tmpl-1", "org-1", {"name": "Engine 1 AM"})
         mock_in_org.assert_not_awaited()
         mock_db.commit.assert_awaited_once()
@@ -78,12 +87,15 @@ class TestUpdateTemplateApparatusValidation:
     async def test_clearing_apparatus_skips_validation(self, service, mock_db):
         # apparatus_id=None clears it (a generic template) — not a foreign-id case.
         template = MagicMock()
-        with patch.object(
-            service, "get_template", new_callable=AsyncMock, return_value=template
-        ), patch(
-            "app.services.equipment_check_service.is_in_org",
-            new_callable=AsyncMock,
-        ) as mock_in_org:
+        with (
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=template
+            ),
+            patch(
+                "app.services.equipment_check_service.is_in_org",
+                new_callable=AsyncMock,
+            ) as mock_in_org,
+        ):
             await service.update_template("tmpl-1", "org-1", {"apparatus_id": None})
         mock_in_org.assert_not_awaited()
         mock_db.commit.assert_awaited_once()
@@ -178,10 +190,13 @@ class TestUpdateItemCompartmentValidation:
     compartment -> template."""
 
     async def test_foreign_compartment_rejected(self, service, mock_db):
-        with patch.object(
-            service, "_get_item", new_callable=AsyncMock, return_value=MagicMock()
-        ), patch.object(
-            service, "_get_compartment", new_callable=AsyncMock, return_value=None
+        with (
+            patch.object(
+                service, "_get_item", new_callable=AsyncMock, return_value=MagicMock()
+            ),
+            patch.object(
+                service, "_get_compartment", new_callable=AsyncMock, return_value=None
+            ),
         ):
             with pytest.raises(ValueError, match="Invalid compartment"):
                 await service.update_item(
@@ -190,14 +205,17 @@ class TestUpdateItemCompartmentValidation:
         mock_db.commit.assert_not_awaited()
 
     async def test_in_org_compartment_passes(self, service, mock_db):
-        with patch.object(
-            service, "_get_item", new_callable=AsyncMock, return_value=MagicMock()
-        ), patch.object(
-            service,
-            "_get_compartment",
-            new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ) as mock_get_comp:
+        with (
+            patch.object(
+                service, "_get_item", new_callable=AsyncMock, return_value=MagicMock()
+            ),
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ) as mock_get_comp,
+        ):
             await service.update_item(
                 "item-1", "org-1", {"compartment_id": "own-compartment"}
             )
@@ -205,11 +223,14 @@ class TestUpdateItemCompartmentValidation:
         mock_db.commit.assert_awaited_once()
 
     async def test_no_compartment_change_skips_validation(self, service, mock_db):
-        with patch.object(
-            service, "_get_item", new_callable=AsyncMock, return_value=MagicMock()
-        ), patch.object(
-            service, "_get_compartment", new_callable=AsyncMock
-        ) as mock_get_comp:
+        with (
+            patch.object(
+                service, "_get_item", new_callable=AsyncMock, return_value=MagicMock()
+            ),
+            patch.object(
+                service, "_get_compartment", new_callable=AsyncMock
+            ) as mock_get_comp,
+        ):
             await service.update_item("item-1", "org-1", {"name": "SCBA cylinder"})
         mock_get_comp.assert_not_awaited()
         mock_db.commit.assert_awaited_once()
@@ -220,15 +241,18 @@ class TestItemFkValidation:
     equipment_id must be validated in-org on add_item / update_item."""
 
     async def test_add_item_rejects_foreign_inventory_item(self, service, mock_db):
-        with patch.object(
-            service,
-            "_get_compartment",
-            new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch(
-            "app.services.equipment_check_service.is_in_org",
-            new_callable=AsyncMock,
-            return_value=False,
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch(
+                "app.services.equipment_check_service.is_in_org",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
         ):
             with pytest.raises(ValueError, match="Invalid inventory item"):
                 await service.add_item(
@@ -237,15 +261,18 @@ class TestItemFkValidation:
         mock_db.commit.assert_not_awaited()
 
     async def test_add_item_rejects_foreign_equipment(self, service, mock_db):
-        with patch.object(
-            service,
-            "_get_compartment",
-            new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch(
-            "app.services.equipment_check_service.is_in_org",
-            new_callable=AsyncMock,
-            return_value=False,
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch(
+                "app.services.equipment_check_service.is_in_org",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
         ):
             with pytest.raises(ValueError, match="Invalid equipment"):
                 await service.add_item(
@@ -254,12 +281,15 @@ class TestItemFkValidation:
         mock_db.commit.assert_not_awaited()
 
     async def test_update_item_rejects_foreign_inventory_item(self, service, mock_db):
-        with patch.object(
-            service, "_get_item", new_callable=AsyncMock, return_value=MagicMock()
-        ), patch(
-            "app.services.equipment_check_service.is_in_org",
-            new_callable=AsyncMock,
-            return_value=False,
+        with (
+            patch.object(
+                service, "_get_item", new_callable=AsyncMock, return_value=MagicMock()
+            ),
+            patch(
+                "app.services.equipment_check_service.is_in_org",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
         ):
             with pytest.raises(ValueError, match="Invalid inventory item"):
                 await service.update_item(
@@ -285,6 +315,153 @@ class TestCompartmentParentValidation:
                     "comp-1", "org-1", {"parent_compartment_id": "foreign-comp"}
                 )
         mock_db.commit.assert_not_awaited()
+
+
+class TestSubmitCheckResumeOverride:
+    """submit_check delegates a resume to complete_incomplete_check; the manage
+    override has to survive the hand-off or a manager finishing another
+    member's incomplete check hits the ownership guard's "Check not found"."""
+
+    @staticmethod
+    def _wire(mock_db, *, incomplete_owner="member-1"):
+        shift = MagicMock(id="shift-1", shift_officer_id=None, apparatus_id=None)
+        shift_result = MagicMock()
+        shift_result.scalars.return_value.first.return_value = shift
+        incomplete = MagicMock(
+            id="chk-1", overall_status="incomplete", checked_by=incomplete_owner
+        )
+        existing_result = MagicMock()
+        existing_result.scalars.return_value.first.return_value = incomplete
+        mock_db.execute = AsyncMock(side_effect=[shift_result, existing_result])
+        return shift
+
+    async def test_manage_override_is_forwarded_on_resume(self, service, mock_db):
+        self._wire(mock_db)
+        with (
+            patch.object(
+                service,
+                "_resolve_templates",
+                AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
+            ),
+            patch.object(
+                service,
+                "complete_incomplete_check",
+                AsyncMock(return_value=MagicMock()),
+            ) as complete,
+        ):
+            await service.submit_check(
+                shift_id="shift-1",
+                organization_id="org-1",
+                checked_by="manager-9",
+                data={"template_id": "tmpl-1", "items": [{"status": "pass"}]},
+                allow_manage=True,
+            )
+        assert complete.await_args.kwargs["allow_any"] is True
+
+    async def test_member_resume_keeps_the_ownership_guard(self, service, mock_db):
+        shift = MagicMock(id="shift-1", shift_officer_id=None, apparatus_id=None)
+        shift_result = MagicMock()
+        shift_result.scalars.return_value.first.return_value = shift
+        assignment_result = MagicMock()
+        assignment_result.scalars.return_value.first.return_value = MagicMock(
+            position=None
+        )
+        incomplete = MagicMock(id="chk-1", overall_status="incomplete")
+        existing_result = MagicMock()
+        existing_result.scalars.return_value.first.return_value = incomplete
+        mock_db.execute = AsyncMock(
+            side_effect=[shift_result, assignment_result, existing_result]
+        )
+        with (
+            patch.object(
+                service,
+                "_resolve_templates",
+                AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
+            ),
+            patch.object(
+                service,
+                "complete_incomplete_check",
+                AsyncMock(return_value=MagicMock()),
+            ) as complete,
+        ):
+            await service.submit_check(
+                shift_id="shift-1",
+                organization_id="org-1",
+                checked_by="member-1",
+                data={"template_id": "tmpl-1", "items": [{"status": "pass"}]},
+                allow_manage=False,
+            )
+        assert complete.await_args.kwargs["allow_any"] is False
+
+
+class TestFailureAlertDetails:
+    """A check failed entirely by out-of-service items must not alert with an
+    empty item list: out_of_service counts toward failed_items, so it belongs
+    in the failure details, labeled as out of service."""
+
+    async def test_out_of_service_items_reach_the_alert(self, service, mock_db):
+        shift = MagicMock(id="shift-1", shift_officer_id=None, apparatus_id=None)
+        shift_result = MagicMock()
+        shift_result.scalars.return_value.first.return_value = shift
+        existing_result = MagicMock()
+        existing_result.scalars.return_value.first.return_value = None
+        mock_db.execute = AsyncMock(side_effect=[shift_result, existing_result])
+        mock_db.add = MagicMock()
+
+        with (
+            patch.object(
+                service,
+                "_resolve_templates",
+                AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
+            ),
+            patch.object(
+                service, "_load_template_items_map", AsyncMock(return_value={})
+            ),
+            patch.object(service, "_create_check_items", AsyncMock(return_value=[])),
+            patch.object(service, "_update_apparatus_deficiency", AsyncMock()),
+            patch.object(
+                service, "_send_check_failure_notification", AsyncMock()
+            ) as notify,
+            patch.object(service, "get_check", AsyncMock(return_value=MagicMock())),
+            patch(
+                "app.services.equipment_check_service.resolve_apparatus_ref",
+                AsyncMock(return_value=MagicMock(full_id=None)),
+            ),
+        ):
+            await service.submit_check(
+                shift_id="shift-1",
+                organization_id="org-1",
+                checked_by="u-1",
+                data={
+                    "template_id": "tmpl-1",
+                    "items": [
+                        {
+                            "item_name": "Suction unit",
+                            "compartment_name": "Cab",
+                            "check_type": "functional",
+                            "status": "out_of_service",
+                        },
+                        {
+                            "item_name": "O2 bottle",
+                            "compartment_name": "Cab",
+                            "check_type": "pass_fail",
+                            "status": "pass",
+                        },
+                    ],
+                },
+                allow_manage=True,
+            )
+
+        kwargs = notify.await_args.kwargs
+        assert kwargs["failed_count"] == 1
+        assert kwargs["warning_items"] == [
+            {
+                "name": "Suction unit",
+                "compartment": "Cab",
+                "check_type": "functional",
+                "out_of_service": True,
+            }
+        ]
 
 
 class TestShiftCheckStatusItemCount:
