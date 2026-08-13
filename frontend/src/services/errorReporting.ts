@@ -34,6 +34,7 @@
 
 import type { AxiosError } from 'axios';
 import { getErrorMapping } from './errorCatalog';
+import { requestAction } from '../utils/errorContext';
 
 /** Posted directly rather than through `errorLogsService` — see above. */
 const ERROR_LOG_ENDPOINT = '/api/v1/errors/log';
@@ -617,11 +618,13 @@ export function reportApiError(error: AxiosError): void {
   // The backend's support code (LB-*), when present, lets an administrator
   // match this client-side row to the code the member quoted from their toast.
   const supportCode = (error.response?.data as { code?: unknown } | undefined)?.code;
+  const method = (error.config?.method ?? '').toUpperCase();
   reportError({
     errorType: classified.errorType,
     errorMessage: classified.message,
     context: {
-      method: (error.config?.method ?? '').toUpperCase(),
+      method,
+      action: requestAction(method, path),
       path,
       status: error.response?.status,
       ...(typeof supportCode === 'string' ? { error_code: supportCode } : {}),
