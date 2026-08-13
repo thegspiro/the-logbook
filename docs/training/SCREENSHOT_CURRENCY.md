@@ -43,6 +43,94 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### The shift-report table guide 02 described does not exist
+
+`02-training.md` asked for "the Shift Reports tab showing the batch of 26
+reports filed for the Q2 drill, with columns for trainee name, apparatus, hours
+(all showing 4), skills observed count, and approval status".
+
+Three things were wrong with that. The tab is under **Scheduling**, not
+Training — the same screen guide 03 already photographs. There is no per-drill
+table of individual reports: the tab rolls them up **per crew member**. And the
+columns are Crew member, Reports, Hours, Calls and Avg Rating — not one of the
+five named.
+
+Caption rewritten against the table that exists, with a note saying plainly that
+the old columns do not, and `02-90-crew-summary-table` captured against it.
+Verified: ten crew members, one report each, hours from 8.0 to 12.0, calls and
+ratings per row.
+
+### Groundwork on the last five: what each one actually needs
+
+No images this pass — both candidates examined turned out to need seed work
+larger than a tick, and guessing at it would have produced a picture that did
+not match its caption. Written down so the next pass starts from the answer.
+
+**`14-elections.md:352` — the ballot send confirmation.** The caption's "42
+ballots sent, 3 skipped" is not what the screen says. `EmailBallotResponse`
+carries `recipients_count`, `failed_count`, `skipped_count` and
+`skipped_details`, and `ElectionDetailPage` renders a toast reading "Ballots
+sent to N voter(s), M skipped (see banner below)" plus a **persistent banner**
+listing each skipped member and reason. The caption should be rewritten against
+those two, not the invented numbers.
+
+Producing a skip needs an eligibility mismatch — the reasons are "No eligible
+ballot items — role type and attendance did not match any item requirements" and
+"Not eligible for any position … membership type does not match any position's
+voter-type rules". So the seed needs an **open** election whose items restrict
+`eligible_voter_types`, with members on file who fall outside it. Sending is a
+real mutation, so the shot must be flagged `mutatesSeedData` and will be forced
+last in guide 14 by the manifest's own invariant.
+
+**`01-membership.md:1282` — the training program phases.** The caption asks for
+Phase 1 (Complete, 4/4), Phase 2 (In Progress, 0/6), Phase 3 (Locked, 1/3
+pre-credited), Phase 4 (Locked, 0/2) and a 25% bar — numbers from the guide's
+worked example, not from any screen. The three seeded programs have two or three
+phases each and **zero requirements in any phase**, so no progress fraction can
+render at all. Filling this means seeding a four-phase program with 4/6/3/2
+requirements and an enrolment part-way through it, or narrowing the caption to
+what a program detail can show. The former is a day's demo data; the latter
+should be a deliberate choice, not a silent one.
+
+### A membership vote nothing could picture, and a field that silently discarded writes
+
+`14-elections.md:843` wanted a membership approval ballot item. None existed
+anywhere: every seeded ballot was position races and a bylaw amendment, and Sam
+Okafor's election package was still `draft`, so the item type the whole
+prospective-member pipeline exists to produce had never reached a ballot.
+
+**The item had to go on a draft election, and that is correct.** An open
+election refuses ballot edits — "Only end_date can be updated while voting is
+active" — because a cast vote references an item id. So the seeder now creates a
+draft _Membership Vote — August Business Meeting_ carrying the item, which is
+also the order the guide's own workflow describes: package marked ready,
+secretary adds it, then the election opens.
+
+**The election detail page does not render Approve/Deny; the ballot preview
+does.** `BallotPreviewModal` draws the item title, its description, and the
+Approve / Deny / Abstain options; `ElectionDetailPage` only lists items and
+offers **Preview Ballot**. The placeholder was retargeted at the preview, and
+the prose corrected — it had promised "Approve/Deny" and the screen offers
+Abstain too.
+
+**`supporting_statement` is not a column.** It lives inside `package_config`,
+and the API accepts a top-level `supporting_statement` on the package endpoint
+while storing nothing. Two seeder runs "filled in" that field and the box stayed
+empty, which is why `15-08-election-package` had always pictured an empty
+Supporting Statement — the one part of a package that decides a membership vote.
+Now nested correctly, and backfilled for a package that already exists, so the
+panel and the ballot item quote the same words from one shared constant.
+
+**Third time this session for the same trap.** The seeder skips a record that
+already exists by name — templates, elections, packages — so anything added to a
+blueprint afterwards never reaches a long-lived demo database. Each case has
+needed its own backfill. Worth a general answer rather than a fourth one.
+
+Verified: `14-23-membership-ballot-item` shows "Membership Approval — Sam
+Okafor" with the coordinator's statement and Approve / Deny / Abstain, under the
+BALLOT PREVIEW banner. `15-08-election-package` re-checked with the statement now
+filled.
+
 ### The storefront Payments tab is unphotographable, and that is the correct design
 
 `store_payment_events` rows are written from exactly one place — the public

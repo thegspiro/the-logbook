@@ -1027,6 +1027,25 @@ export const SHOTS = [
     selector: "div.card:has(h3:has-text('Open Shifts'))",
   },
   {
+    id: "02-90-crew-summary-table",
+    doc: "02-training.md",
+    line: 2470,
+    anchor: "The Crew summary table on",
+    alt: "The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      // Guide 02's worked example calls this "the Shift Reports tab", and the
+      // tab lives under Scheduling rather than Training — the same screen
+      // guide 03 photographs, shown here for its per-crew roll-up rather than
+      // its Review Queue.
+      const table = page.locator("table:has(th:text-is('Crew member'))").first();
+      await table.waitFor({ timeout: 20_000 });
+      await table.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    selector: "div:has(> div > table:has(th:text-is('Crew member')))",
+  },
+  {
     id: "03-61-review-queue-batch",
     doc: "03-scheduling.md",
     line: 1144,
@@ -7310,6 +7329,37 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     fullPage: true,
+  },
+  {
+    id: "14-23-membership-ballot-item",
+    doc: "14-elections.md",
+    line: 843,
+    anchor: "Screenshot of the ballot preview showing a membership approval",
+    alt: "The ballot preview's membership approval item — the applicant named in the title, the coordinator's supporting statement, and the Approve and Deny options",
+    route: "/elections",
+    prepare: async (page) => {
+      // Matched on `election_type`, not a title. The obvious filter — an
+      // election carrying a membership_approval ballot item — cannot be used
+      // here: the list endpoint returns no `ballot_items` at all, only the
+      // detail does. `general` is the only seeded election that is neither a
+      // position race nor an issue vote, which is exactly what a membership
+      // approval is.
+      //
+      // The preview is the one screen that renders Approve/Deny for such an
+      // item; the in-app ballot draws position races only (see
+      // KNOWN_LIMITATIONS).
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => election.election_type === "general",
+      )(page);
+      await clickByName(/^Preview Ballot$/)(page);
+      const approve = page.getByText("Approve", { exact: true }).first();
+      await approve.waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div[role='dialog']",
   },
   {
     id: "14-21-save-ballot-template",

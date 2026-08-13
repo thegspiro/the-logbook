@@ -2467,7 +2467,13 @@ When all reports are submitted and approved, the system generates training recor
 | Total Hours Logged | 104                                            |
 | Linked Course      | Structural Firefighting Operations             |
 
-> **[SCREENSHOT NEEDED]:** _The Shift Reports tab showing the batch of 26 reports filed for the Q2 drill, with columns for trainee name, apparatus, hours (all showing 4), skills observed count, and approval status._
+![The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating](./images/02-90-crew-summary-table.png)
+
+The reports do not get their own per-drill table. **Scheduling > Shift Reports**
+rolls them up per crew member — Crew member, Reports, Hours, Calls, and the
+average rating — with the individual reports reachable from the **Review Queue**
+alongside it. (This section previously described columns for apparatus, skills
+observed and approval status; that table does not exist.)
 
 **Edge case — early departure:** FF Patel had to leave the drill after Rotation 2 due to a family emergency, completing only 2 of the 4 hours. The Ladder 1 officer adjusts Patel's report to show 2 hours instead of 4. The system credits Patel with 2 hours toward the "Structural Firefighting" training requirement rather than the full 4. Patel's compliance status reflects the partial credit.
 
