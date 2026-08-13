@@ -3,7 +3,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { DoorOpen, Plus, Trash2, Loader2, Pencil, Save } from 'lucide-react';
+import { Link } from 'react-router';
+import { DoorOpen, Plus, Trash2, Loader2, Pencil, QrCode, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { RoomCreate } from '../../../services/facilitiesServices';
@@ -144,17 +145,27 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
     <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
       <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
         <h2 className="text-theme-text-primary text-sm font-semibold">Rooms {!isLoading && `(${rooms.length})`}</h2>
-        {canManage && (
-          <button
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+        <div className="flex items-center gap-1">
+          {/* Rooms sync to Locations with kiosk display codes — the QR
+              directory is where those codes can be viewed and printed */}
+          <Link
+            to="/locations/qr-codes"
+            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors"
           >
-            <Plus className="h-3.5 w-3.5" /> Add Room
-          </button>
-        )}
+            <QrCode className="h-3.5 w-3.5" aria-hidden="true" /> Room QR Codes
+          </Link>
+          {canManage && (
+            <button
+              onClick={() => {
+                resetForm();
+                setShowForm(true);
+              }}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Room
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-5">
