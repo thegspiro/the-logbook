@@ -15,12 +15,12 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from types import SimpleNamespace
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy import update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1051,6 +1051,25 @@ class ElectionService:
 
         Returns: (Vote object, error message)
         """
+        # Serialize vote validation and insertion for this election. The
+        # method-aware dedup hash permits distinct candidates/ranks, so its
+        # unique constraint cannot enforce per-voter limits by itself. The
+        # lock is taken BEFORE the eligibility/duplicate reads: under MySQL
+        # REPEATABLE READ a plain SELECT reads the transaction's snapshot,
+        # so reads issued before the lock could never observe a competing
+        # voter's commit even after the lock was granted — two concurrent
+        # submissions both passed the duplicate check.
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        election = result.scalar_one_or_none()
+
+        if not election:
+            return None, "Election not found"
+
         # Check eligibility. This gate is authoritative: check_voter_eligibility
         # enforces election status, the open/close window, restricted
         # eligible-voter lists, membership-tier/attendance rules, and — because
@@ -1064,20 +1083,6 @@ class ElectionService:
         )
         if not eligibility.is_eligible:
             return None, eligibility.reason or "You are not eligible to vote"
-
-        # Serialize vote validation and insertion for this election. The
-        # method-aware dedup hash permits distinct candidates/ranks, so its
-        # unique constraint cannot enforce per-voter limits by itself.
-        result = await self.db.execute(
-            select(Election)
-            .where(Election.id == str(election_id))
-            .where(Election.organization_id == str(organization_id))
-            .with_for_update()
-        )
-        election = result.scalar_one_or_none()
-
-        if not election:
-            return None, "Election not found"
 
         # Validate vote_rank matches voting method
         if election.voting_method == "ranked_choice" and vote_rank is None:
@@ -1107,8 +1112,13 @@ class ElectionService:
         # Method-aware duplicate and limit checks. Approval voting records one
         # vote per approved candidate and ranked choice one vote per rank, so
         # a blanket "already voted for this position" rule would reject every
-        # legitimate second vote (module-audit ELEC-3).
-        existing_votes = await self._get_user_votes(user_id, election_id, election)
+        # legitimate second vote (module-audit ELEC-3). This must be a locking
+        # read: the transaction's snapshot may predate the election lock (the
+        # auth dependency reads first), and a snapshot read here would miss a
+        # competing voter's just-committed rows.
+        existing_votes = await self._get_user_votes(
+            user_id, election_id, election, for_update=True
+        )
         position_votes = [v for v in existing_votes if v.position == position]
 
         if election.voting_method == "ranked_choice":
@@ -1261,27 +1271,42 @@ class ElectionService:
         return vote, None
 
     async def _get_user_votes(
-        self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
+        self,
+        user_id: UUID,
+        election_id: UUID,
+        election: Optional[Election] = None,
+        for_update: bool = False,
     ) -> List[Vote]:
-        """Get all active (non-deleted) votes by a user in an election (handles anonymous voting)"""
+        """Get all active (non-deleted) votes by a user in an election (handles anonymous voting).
+
+        ``for_update`` makes this a locking read. Under MySQL REPEATABLE READ
+        a plain SELECT reads the transaction's snapshot, which can predate a
+        competing voter's commit even when the caller already holds the
+        election row lock — duplicate-vote checks need committed current
+        rows, not the snapshot. Callers must hold the election lock first so
+        lock ordering stays election → votes.
+        """
         # For anonymous elections, lookup by voter_hash since voter_id is NULL
         if election and election.anonymous_voting:
             voter_hash = self._generate_voter_hash(
                 user_id, election_id, election.voter_anonymity_salt or ""
             )
-            result = await self.db.execute(
+            query = (
                 select(Vote)
                 .where(Vote.election_id == str(election_id))
                 .where(Vote.voter_hash == voter_hash)
                 .where(Vote.deleted_at.is_(None))
             )
         else:
-            result = await self.db.execute(
+            query = (
                 select(Vote)
                 .where(Vote.election_id == str(election_id))
                 .where(Vote.voter_id == str(user_id))
                 .where(Vote.deleted_at.is_(None))
             )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalars().all()
 
     def _generate_voter_hash(
@@ -1805,13 +1830,21 @@ class ElectionService:
         all_votes = await self._exclude_unattested(
             UUID(str(election.id)), votes_result.scalars().all()
         )
-        voters = self._count_ballots_cast(election, all_votes)
+        voters = self._count_ballots_cast(
+            election,
+            all_votes,
+            await self._recorded_paper_ballot_counts(UUID(str(election.id))),
+        )
         eligible = await self._count_eligible_voters(election, organization_id)
         turnout = (voters / eligible * 100) if eligible > 0 else 0.0
         return len(all_votes), voters, round(turnout, 2)
 
     @staticmethod
-    def _count_ballots_cast(election: Election, all_votes: List[Vote]) -> int:
+    def _count_ballots_cast(
+        election: Election,
+        all_votes: List[Vote],
+        recorded_ballots: Optional[Dict[str, int]] = None,
+    ) -> int:
         """How many voters this election's ballots represent.
 
         Electronic votes are deduplicated by voter: one member voting for
@@ -1830,9 +1863,15 @@ class ElectionService:
         approval, ranked-choice, and other multi-vote elections. Since paper
         tallies do not retain ballot-level groupings, use the largest candidate
         tally as the conservative number of represented paper voters in those
-        elections. Single-choice elections can safely use the largest summed
-        position tally. This cannot incorrectly certify quorum by treating
-        multiple selections on one ballot as multiple voters.
+        elections — a lower bound (ten approval ballots split 5/5 across two
+        candidates count as five voters), which understates turnout but cannot
+        certify a quorum that was never met. Single-choice elections can
+        safely use the largest summed position tally.
+
+        When the recording officer attested the physical ballot count for a
+        batch (``recorded_ballots``, keyed by batch id), that exact count is
+        preferred over the estimate — see the inline note for how counts from
+        several batches combine.
         """
         if election.anonymous_voting:
             identified = {v.voter_hash for v in all_votes if v.voter_hash}
@@ -1848,15 +1887,78 @@ class ElectionService:
                 )
                 key = (vote.position, vote.candidate_id)
                 manual_by_candidate[key] = manual_by_candidate.get(key, 0) + 1
+        # Multi-vote is a property of the ballot, not just the election row:
+        # ballot items may override the election-level voting method (the
+        # same resolution submit_token_ballot applies when accepting votes).
+        # If ANY item is effectively multi-vote, position sums would count
+        # one paper ballot once per selection, so only the per-candidate
+        # tally is a safe per-voter bound.
+        election_method = getattr(election, "voting_method", "simple_majority")
+        effective_methods = {election_method}
+        for item in getattr(election, "ballot_items", None) or []:
+            if isinstance(item, dict):
+                effective_methods.add(item.get("voting_method") or election_method)
         is_single_choice = (
-            getattr(election, "voting_method", "simple_majority")
-            in ("simple_majority", "supermajority")
+            effective_methods.issubset({"simple_majority", "supermajority"})
             and getattr(election, "max_votes_per_position", 1) == 1
         )
         manual_counts = manual_by_position if is_single_choice else manual_by_candidate
         paper_ballots = max(manual_counts.values()) if manual_counts else 0
 
+        # Prefer counts the recording officer attested (ManualBallotBatch.
+        # ballots_cast) over the tally-derived estimate. Each recorded count
+        # is exact for its own stack, but two batches may or may not be the
+        # same physical ballots, so they combine per position:
+        #
+        #   sum ballots_cast over the batches that recorded votes for a
+        #   position, then take the max across positions.
+        #
+        # A physical ballot marks any GIVEN position at most once, so two
+        # batches that both hold votes for the same position cannot be the
+        # same ballots — their attested counts add. Batches covering
+        # disjoint positions may well be one stack recorded position by
+        # position (a ballot can mark several positions), so across
+        # positions only the max is provable. Both halves are therefore
+        # lower bounds, and so is the result — it can understate a genuinely
+        # split box but can never certify a quorum that was not met.
+        #
+        # Votes with no position share the None bucket, exactly as the
+        # estimate above buckets them, so an unpositioned batch is compared
+        # against its peers rather than silently merged into every position.
+        # Only batches whose votes are present in all_votes count, so
+        # attestation/void filtering applied upstream carries over, and a
+        # batch with no attested count contributes nothing rather than a
+        # zero that would drag the total under the estimate.
+        if recorded_ballots:
+            positions_by_batch: Dict[str, Set[Optional[str]]] = {}
+            for vote in all_votes:
+                if not getattr(vote, "is_manual", False):
+                    continue
+                batch_id = getattr(vote, "manual_batch_id", None)
+                if batch_id in recorded_ballots:
+                    positions_by_batch.setdefault(batch_id, set()).add(vote.position)
+
+            recorded_by_position: Dict[Optional[str], int] = {}
+            for batch_id, positions in positions_by_batch.items():
+                for position in positions:
+                    recorded_by_position[position] = (
+                        recorded_by_position.get(position, 0)
+                        + recorded_ballots[batch_id]
+                    )
+            if recorded_by_position:
+                paper_ballots = max(paper_ballots, max(recorded_by_position.values()))
+
         return len(identified) + paper_ballots
+
+    async def _recorded_paper_ballot_counts(self, election_id: UUID) -> Dict[str, int]:
+        """ballots_cast by batch id, for batches where the officer recorded
+        the physical ballot count (see _count_ballots_cast)."""
+        result = await self.db.execute(
+            select(ManualBallotBatch.id, ManualBallotBatch.ballots_cast)
+            .where(ManualBallotBatch.election_id == str(election_id))
+            .where(ManualBallotBatch.ballots_cast.is_not(None))
+        )
+        return {batch_id: count for batch_id, count in result.all()}
 
     async def _count_eligible_voters(
         self, election: Election, organization_id: UUID
@@ -2031,7 +2133,11 @@ class ElectionService:
         total_eligible = await self._count_eligible_voters(election, organization_id)
 
         # Voters, not votes — and paper ballots count. See _count_ballots_cast.
-        unique_voters = self._count_ballots_cast(election, all_votes)
+        unique_voters = self._count_ballots_cast(
+            election,
+            all_votes,
+            await self._recorded_paper_ballot_counts(UUID(str(election.id))),
+        )
 
         # Calculate turnout
         voter_turnout = (
@@ -2365,7 +2471,11 @@ class ElectionService:
         total_eligible = await self._count_eligible_voters(election, organization_id)
 
         # Voters, not votes — and paper ballots count. See _count_ballots_cast.
-        unique_voters = self._count_ballots_cast(election, all_votes)
+        unique_voters = self._count_ballots_cast(
+            election,
+            all_votes,
+            await self._recorded_paper_ballot_counts(UUID(str(election.id))),
+        )
 
         # Calculate turnout
         voter_turnout = (
@@ -3064,6 +3174,7 @@ class ElectionService:
         entries: List[Dict],
         notes: Optional[str] = None,
         allow_over_count: bool = False,
+        ballots_cast: Optional[int] = None,
     ) -> Tuple[int, Optional[str], Optional[str]]:
         """Record an in-room paper-ballot tally as vote rows.
 
@@ -3074,9 +3185,12 @@ class ElectionService:
         integrity verification covers the full ballot box.
 
         Sanity guard: a batch that would push any position's total ballots
-        past what the eligible-voter count can produce is rejected — a typo
-        like 40-for-4 must be a conscious override (``allow_over_count``,
-        which is audited), never a silent success.
+        past what the eligible-voter count can produce is rejected, and so is
+        an attested physical count (``ballots_cast``) above that same
+        eligible-voter count — a typo like 40-for-4 must be a conscious
+        override (``allow_over_count``, which is audited), never a silent
+        success. The attested count is the one turnout and quorum trust
+        directly, so an implausible one certifies a quorum out of nothing.
 
         Every vote in the batch shares a ``manual_batch_id`` so a mis-keyed
         batch can be voided in one action (void_manual_ballot_batch).
@@ -3115,6 +3229,27 @@ class ElectionService:
         if total > 2000:
             return 0, None, "Cannot record more than 2000 paper ballots at once"
 
+        if ballots_cast is not None:
+            # One physical ballot can select a given candidate at most once,
+            # so a per-candidate tally exceeding the attested ballot count is
+            # physically impossible — reject rather than store a count the
+            # turnout math would then trust.
+            per_candidate: Dict[str, int] = {}
+            for entry in entries:
+                cid = str(entry["candidate_id"])
+                per_candidate[cid] = per_candidate.get(cid, 0) + int(
+                    entry.get("count", 0)
+                )
+            largest = max(per_candidate.values())
+            if ballots_cast < largest:
+                return (
+                    0,
+                    None,
+                    f"A candidate in this batch received {largest} votes, "
+                    f"which cannot come from {ballots_cast} physical "
+                    f"ballot(s). Double-check the ballot count.",
+                )
+
         candidate_ids = [str(e["candidate_id"]) for e in entries]
         cand_result = await self.db.execute(
             select(Candidate)
@@ -3137,43 +3272,62 @@ class ElectionService:
                         cand.position, 0
                     ) + int(entry.get("count", 0))
 
-            if new_by_position:
+            if new_by_position or ballots_cast is not None:
                 eligible_count = await self._count_eligible_voters(
                     election, organization_id
                 )
-                existing_rows = await self.db.execute(
-                    select(Vote.position, func.count(Vote.id))
-                    .where(Vote.election_id == str(election_id))
-                    .where(Vote.deleted_at.is_(None))
-                    .where(Vote.is_test.is_(False))
-                    .where(Vote.position.in_(list(new_by_position.keys())))
-                    .group_by(Vote.position)
-                )
-                existing_by_position = dict(existing_rows.all())
 
-                for pos, new_count in new_by_position.items():
-                    if election.voting_method == "approval":
-                        cand_count_result = await self.db.execute(
-                            select(func.count(Candidate.id))
-                            .where(Candidate.election_id == str(election_id))
-                            .where(Candidate.position == pos)
-                            .where(Candidate.accepted.is_(True))
-                        )
-                        multiplier = max(cand_count_result.scalar() or 1, 1)
-                    else:
-                        multiplier = max(election.max_votes_per_position or 1, 1)
-                    cap = eligible_count * multiplier
-                    projected = existing_by_position.get(pos, 0) + new_count
-                    if cap and projected > cap:
-                        return (
-                            0,
-                            None,
-                            f"This batch would put {pos} at {projected} ballots, "
-                            f"but only {eligible_count} member(s) are eligible "
-                            f"(cap {cap}). Double-check the counts, or re-submit "
-                            f"with the over-count override if the tally is "
-                            f"correct.",
-                        )
+                # One eligible member can hand in one physical ballot, so the
+                # attested count has no multiplier — unlike a position tally,
+                # which a multi-vote ballot legitimately inflates.
+                if (
+                    ballots_cast is not None
+                    and eligible_count
+                    and ballots_cast > eligible_count
+                ):
+                    return (
+                        0,
+                        None,
+                        f"This batch attests {ballots_cast} physical ballot(s), "
+                        f"but only {eligible_count} member(s) are eligible. "
+                        f"Double-check the ballot count, or re-submit with the "
+                        f"over-count override if the tally is correct.",
+                    )
+
+                if new_by_position:
+                    existing_rows = await self.db.execute(
+                        select(Vote.position, func.count(Vote.id))
+                        .where(Vote.election_id == str(election_id))
+                        .where(Vote.deleted_at.is_(None))
+                        .where(Vote.is_test.is_(False))
+                        .where(Vote.position.in_(list(new_by_position.keys())))
+                        .group_by(Vote.position)
+                    )
+                    existing_by_position = dict(existing_rows.all())
+
+                    for pos, new_count in new_by_position.items():
+                        if election.voting_method == "approval":
+                            cand_count_result = await self.db.execute(
+                                select(func.count(Candidate.id))
+                                .where(Candidate.election_id == str(election_id))
+                                .where(Candidate.position == pos)
+                                .where(Candidate.accepted.is_(True))
+                            )
+                            multiplier = max(cand_count_result.scalar() or 1, 1)
+                        else:
+                            multiplier = max(election.max_votes_per_position or 1, 1)
+                        cap = eligible_count * multiplier
+                        projected = existing_by_position.get(pos, 0) + new_count
+                        if cap and projected > cap:
+                            return (
+                                0,
+                                None,
+                                f"This batch would put {pos} at {projected} "
+                                f"ballots, but only {eligible_count} member(s) "
+                                f"are eligible (cap {cap}). Double-check the "
+                                f"counts, or re-submit with the over-count "
+                                f"override if the tally is correct.",
+                            )
 
         batch_id = str(uuid4())
         now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -3190,6 +3344,7 @@ class ElectionService:
             notes=notes,
             status="pending" if required_attestations > 0 else "confirmed",
             required_attestations=required_attestations,
+            ballots_cast=ballots_cast,
             created_at=now,
             confirmed_at=None if required_attestations > 0 else now,
         )
@@ -3446,6 +3601,7 @@ class ElectionService:
                     "recorded_by_name": names.get(b.recorded_by or ""),
                     "recorded_at": b.created_at,
                     "notes": b.notes,
+                    "ballots_cast": b.ballots_cast,
                     "required_attestations": b.required_attestations or 0,
                     "attestations": [
                         {
@@ -3553,6 +3709,18 @@ class ElectionService:
         if not source:
             return None, "Election not found"
 
+        # Ballot items may carry a prospect_package_id (added when an
+        # applicant's election package is put on the ballot). That link is
+        # state, not configuration: _sync_package_statuses follows it when an
+        # election closes, so a copied id would let the clone's votes
+        # overwrite the ORIGINAL applicant package's elected/not_elected
+        # status. Strip it from every cloned item.
+        cloned_ballot_items = copy.deepcopy(source.ballot_items)
+        if cloned_ballot_items:
+            for item in cloned_ballot_items:
+                if isinstance(item, dict):
+                    item.pop("prospect_package_id", None)
+
         clone = Election(
             id=str(uuid4()),
             organization_id=str(organization_id),
@@ -3562,10 +3730,10 @@ class ElectionService:
             description=source.description,
             election_type=source.election_type,
             positions=copy.deepcopy(source.positions),
-            # Ballot items are the core of a reusable ballot.  Copy the JSON
-            # structure deeply so a later edit to the clone cannot mutate a
-            # mutable source value held by the ORM session.
-            ballot_items=copy.deepcopy(source.ballot_items),
+            # Ballot items are the core of a reusable ballot.  Copied deeply
+            # (so a later edit to the clone cannot mutate a mutable source
+            # value held by the ORM session) with stateful keys stripped above.
+            ballot_items=cloned_ballot_items,
             position_eligibility=copy.deepcopy(source.position_eligibility),
             start_date=start_date,
             end_date=end_date,
@@ -6820,17 +6988,33 @@ Best regards,
         # to a no-op filter and any prior vote (for any position) would block.
         # Match is_test so a manager's test ballot never consumes their real
         # vote slot — mirroring the `test:` namespace in the dedup hash.
+        # Votes stored before position normalization have position IS NULL
+        # (with NULL-based dedup hashes), so a same-position filter alone
+        # would let a token that voted pre-deploy cast a second counted vote.
+        # Handled at read time — no migration: a NULL-position vote for a
+        # candidate running for the effective position counts as a vote for
+        # that position.
+        if effective_position:
+            position_filter = or_(
+                Vote.position == effective_position,
+                and_(
+                    Vote.position.is_(None),
+                    Vote.candidate_id.in_(
+                        select(Candidate.id)
+                        .where(Candidate.election_id == election.id)
+                        .where(Candidate.position == effective_position)
+                    ),
+                ),
+            )
+        else:
+            position_filter = Vote.position.is_(None)
         existing_votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election.id)
             .where(Vote.voter_hash == voting_token.voter_hash)
             .where(Vote.is_test == voting_token.is_test)
             .where(Vote.deleted_at.is_(None))
-            .where(
-                Vote.position == effective_position
-                if effective_position
-                else Vote.position.is_(None)
-            )
+            .where(position_filter)
         )
         position_votes = existing_votes_result.scalars().all()
 
@@ -6905,10 +7089,14 @@ Best regards,
         # Update election chain pointer
         election.last_chain_hash = vote.chain_hash
 
-        # Track which positions have been voted on via this token
+        # Track which positions have been voted on via this token. Use the
+        # effective position (falls back to candidate.position), not the raw
+        # submitted one — an omitted position field would otherwise never
+        # mark the token as having voted for it, leaving the token reusable
+        # for that position and never completing (used=True) below.
         positions_voted = copy.deepcopy(voting_token.positions_voted or [])
-        if position and position not in positions_voted:
-            positions_voted.append(position)
+        if effective_position and effective_position not in positions_voted:
+            positions_voted.append(effective_position)
             voting_token.positions_voted = positions_voted
 
         # Mark token as fully used only when all positions are voted
@@ -7126,16 +7314,33 @@ Best regards,
             # Check if already voted for this position (prevents double-voting
             # within the ballot). Match is_test so a test ballot never blocks
             # the same member's real ballot — mirroring the dedup-hash
-            # namespace (`test:` prefix).
+            # namespace (`test:` prefix). Votes stored before position
+            # normalization have position IS NULL, so a same-position filter
+            # alone would let a token that voted pre-deploy vote again —
+            # treat a NULL-position vote for a candidate of this position as
+            # a vote on this item (read-time handling, no migration).
             existing_check = await self.db.execute(
                 select(Vote)
                 .where(Vote.election_id == election.id)
                 .where(Vote.voter_hash == voting_token.voter_hash)
                 .where(Vote.is_test == voting_token.is_test)
-                .where(Vote.position == position)
+                .where(
+                    or_(
+                        Vote.position == position,
+                        and_(
+                            Vote.position.is_(None),
+                            Vote.candidate_id.in_(
+                                select(Candidate.id)
+                                .where(Candidate.election_id == election.id)
+                                .where(Candidate.position == position)
+                            ),
+                        ),
+                    )
+                )
                 .where(Vote.deleted_at.is_(None))
+                .limit(1)
             )
-            if existing_check.scalar_one_or_none():
+            if existing_check.scalars().first():
                 return (
                     None,
                     f"You have already voted on: {ballot_item.get('title', ballot_item_id)}",

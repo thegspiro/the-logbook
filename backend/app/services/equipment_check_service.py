@@ -100,12 +100,20 @@ class EquipmentCheckService:
         template_id: str,
         organization_id: str,
         visible_positions: Optional[set[str]] = None,
+        submitter_user_id: Optional[str] = None,
     ) -> Optional[EquipmentCheckTemplate]:
         """Get a template with all compartments and items.
 
         ``visible_positions`` restricts submit-only users to active templates
         that are either general or assigned to one of their shift positions.
         ``None`` preserves unrestricted access for template administrators.
+
+        ``submitter_user_id`` lets a restricted caller through anyway when they
+        own an incomplete check against this template: deactivating a template
+        (or reassigning its positions) after a member saved a part-finished
+        check would otherwise 404 the form they need to finish it, stranding
+        the check as incomplete forever. Completion stays possible; *starting*
+        a new check on an inactive template is still refused elsewhere.
         """
         result = await self.db.execute(
             select(EquipmentCheckTemplate)
@@ -123,7 +131,13 @@ class EquipmentCheckService:
         if template is not None and not self._template_visible_to_submitter(
             template, visible_positions
         ):
-            return None
+            if not (
+                submitter_user_id
+                and await self._owns_incomplete_check(
+                    submitter_user_id, template_id, organization_id
+                )
+            ):
+                return None
         if template is not None:
             items = [i for c in template.compartments for i in c.items]
             await self._attach_unit_labels(organization_id, items)
@@ -212,10 +226,41 @@ class EquipmentCheckService:
             not assigned_positions or bool(assigned_positions & visible_positions)
         )
 
+    async def _owns_incomplete_check(
+        self, user_id: str, template_id: str, organization_id: str
+    ) -> bool:
+        """Whether this user has a part-finished check against this template.
+
+        Incomplete checks reference the template via
+        ``ShiftEquipmentCheck.template_id``; ownership is ``checked_by``. Used
+        to keep the check form loadable for a resume even after the template
+        fell out of the caller's normal visibility (see ``get_template``).
+        """
+        result = await self.db.execute(
+            select(ShiftEquipmentCheck.id)
+            .where(
+                ShiftEquipmentCheck.template_id == template_id,
+                ShiftEquipmentCheck.organization_id == organization_id,
+                ShiftEquipmentCheck.checked_by == user_id,
+                ShiftEquipmentCheck.overall_status == "incomplete",
+            )
+            .limit(1)
+        )
+        return result.scalars().first() is not None
+
     async def get_user_check_positions(
         self, user_id: str, organization_id: str
     ) -> set[str]:
-        """Return shift positions the user may perform equipment checks as."""
+        """Return shift positions the user may perform equipment checks as.
+
+        Mirrors the submit guard in ``submit_check``: only ASSIGNED/CONFIRMED
+        assignments can submit, so only they grant template visibility — a
+        declined or cancelled seat must not keep a member's view of that
+        position's checklists open indefinitely. Deliberately no shift-date
+        filter, again matching the submit guard: an end-of-shift check is
+        legitimately submitted after the shift's date has passed, and narrowing
+        visibility below submittability would 404 the template mid-flow.
+        """
         result = await self.db.execute(
             select(ShiftAssignment.position)
             .join(Shift, Shift.id == ShiftAssignment.shift_id)
@@ -223,6 +268,9 @@ class EquipmentCheckService:
                 ShiftAssignment.user_id == user_id,
                 Shift.organization_id == organization_id,
                 ShiftAssignment.position.is_not(None),
+                ShiftAssignment.assignment_status.in_(
+                    [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
+                ),
             )
             .distinct()
         )
@@ -672,8 +720,27 @@ class EquipmentCheckService:
         submitter cannot use it to clear an expired equipment record.
         """
         if tmpl_item is not None:
-            return tmpl_item.expiration_date if tmpl_item.has_expiration else None
-        return item_data.get("expiration_date")
+            resolved = tmpl_item.expiration_date if tmpl_item.has_expiration else None
+        else:
+            resolved = item_data.get("expiration_date")
+
+        # Trust the observation only in the conservative direction: a crew
+        # reading an already-past date off the unit means the thing on the
+        # truck is expired regardless of what the record promises, so the check
+        # must fail exactly as if the record itself were expired. The record is
+        # NOT updated here — the observed date lives on the check result and
+        # the swap flow remains the only writer of the template's date. A
+        # *later* observed date still never clears the record's verdict, and an
+        # item the record does not track (no resolved date) stays untracked.
+        observed = item_data.get("expiration_found")
+        if (
+            observed
+            and resolved is not None
+            and observed < resolved
+            and observed < date.today()
+        ):
+            return observed
+        return resolved
 
     @classmethod
     def _compute_check_status(
@@ -968,6 +1035,11 @@ class EquipmentCheckService:
             existing_check = existing_result.scalars().first()
             if existing_check:
                 if existing_check.overall_status == "incomplete":
+                    # Forward the manage override: a manager finishing another
+                    # member's incomplete check enters through this path too,
+                    # and without allow_any the ownership guard below reports
+                    # "Check not found" for a check the manager is explicitly
+                    # allowed to complete.
                     return await self.complete_incomplete_check(
                         check_id=existing_check.id,
                         organization_id=organization_id,
@@ -977,6 +1049,7 @@ class EquipmentCheckService:
                             "notes": data.get("notes"),
                             "signature_data": data.get("signature_data"),
                         },
+                        allow_any=allow_manage,
                     )
                 raise ValueError(
                     "A check for this template has already "
@@ -1049,16 +1122,20 @@ class EquipmentCheckService:
             shift.apparatus_id, organization_id, overall_status
         )
 
-        # Collect failed item details for notifications
+        # Collect failed item details for notifications. Out-of-service items
+        # count toward failed_items/overall_status (see _compute_check_status),
+        # so they must appear in the alert too — a check failed entirely by
+        # out-of-service gear otherwise notified with an empty item list.
         critical_items: List[Dict[str, Any]] = []
         warning_items: List[Dict[str, Any]] = []
         for item_data in items_data:
-            if item_data.get("status") != "fail":
+            if item_data.get("status") not in ("fail", "out_of_service"):
                 continue
             detail = {
                 "name": item_data.get("item_name", "Unknown"),
                 "compartment": item_data.get("compartment_name", ""),
                 "check_type": item_data.get("check_type"),
+                "out_of_service": item_data.get("status") == "out_of_service",
             }
             found = item_data.get("quantity_found")
             expected = item_data.get("required_quantity")
@@ -1357,7 +1434,10 @@ class EquipmentCheckService:
         organization_id: str,
     ) -> List[Dict[str, Any]]:
         """Get pending + recently completed checklists for a user."""
-        # Get user's active shift assignments with shift data
+        # Get user's active shift assignments with shift data. Same status
+        # filter as the submit guard in submit_check: a declined/cancelled
+        # assignment can't submit a check, so listing its checklists here
+        # advertises work whose "Start Check" is guaranteed a 403.
         result = await self.db.execute(
             select(ShiftAssignment, Shift)
             .join(Shift, Shift.id == ShiftAssignment.shift_id)
@@ -1365,6 +1445,9 @@ class EquipmentCheckService:
                 ShiftAssignment.user_id == user_id,
                 Shift.organization_id == organization_id,
                 Shift.shift_date >= date.today(),
+                ShiftAssignment.assignment_status.in_(
+                    [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
+                ),
             )
             .order_by(Shift.shift_date)
         )
@@ -2158,6 +2241,7 @@ class EquipmentCheckService:
         organization_id: str,
         user: User,
         updates: Dict[str, Any],
+        allow_metadata_change: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """Correct one lot aboard so the record matches what is in the bag.
 
@@ -2170,6 +2254,13 @@ class EquipmentCheckService:
         Zero quantity removes the lot. A lot counted down to nothing is not a
         lot the truck carries, and an empty row would keep contributing its
         date to the position's soonest-expiry reading forever.
+
+        ``allow_metadata_change=False`` (a submit-only caller) still permits
+        quantity edits and lot removal; it only refuses a ``lot_number`` /
+        ``expiration_date`` value that actually *differs* from what the row
+        holds. Keying the refusal off the payload merely containing those keys
+        broke every quantity-only save from the check form, which round-trips
+        the metadata it was shown.
         """
         quantity = updates.get("quantity")
         if quantity is None or quantity < 0:
@@ -2187,6 +2278,21 @@ class EquipmentCheckService:
         )
         if target is None:
             return None
+
+        # Metadata is only applied on the quantity > 0 path below, so removal
+        # (quantity == 0) never needs the elevated permission.
+        if not allow_metadata_change and quantity > 0:
+            if "lot_number" in updates:
+                submitted_lot = (updates["lot_number"] or "").strip() or None
+                if submitted_lot != target.lot_number:
+                    raise PermissionError(
+                        "Changing a lot number requires a manage permission"
+                    )
+            if "expiration_date" in updates:
+                if updates["expiration_date"] != target.expiration_date:
+                    raise PermissionError(
+                        "Changing a lot expiration requires a manage permission"
+                    )
 
         before = {
             "quantity": target.quantity,
@@ -3113,10 +3219,14 @@ class EquipmentCheckService:
                 f"on {shift_date_str}."
             )
 
-            # Build per-item detail lines for the message
+            # Build per-item detail lines for the message. An out-of-service
+            # item is labeled as such: it is aboard but unusable, which is a
+            # different corrective action from a failed or missing one.
             item_lines: list[str] = []
             for ci in critical_items or []:
                 line = f"[CRITICAL] {ci['name']}"
+                if ci.get("out_of_service"):
+                    line += " (out of service)"
                 if "expected" in ci and "found" in ci:
                     line += f" — expected {ci['expected']}, found {ci['found']}"
                 if "critical_minimum" in ci:
@@ -3124,6 +3234,8 @@ class EquipmentCheckService:
                 item_lines.append(line)
             for wi in warning_items or []:
                 line = wi["name"]
+                if wi.get("out_of_service"):
+                    line += " (out of service)"
                 if "expected" in wi and "found" in wi:
                     line += f" — expected {wi['expected']}, found {wi['found']}"
                 item_lines.append(line)
@@ -3186,10 +3298,13 @@ class EquipmentCheckService:
                                     qty_info += (
                                         f" (Critical min: " f"{ci['critical_minimum']})"
                                     )
+                            ci_name = ci["name"] + (
+                                " (out of service)" if ci.get("out_of_service") else ""
+                            )
                             item_rows_html += (
                                 "<tr style='background:#fef2f2'>"
                                 f"<td style='padding:4px 8px'>"
-                                f"<strong>{ci['name']}</strong>"
+                                f"<strong>{ci_name}</strong>"
                                 "</td>"
                                 f"<td style='padding:4px 8px;"
                                 f"color:#dc2626'>CRITICAL</td>"
@@ -3203,12 +3318,17 @@ class EquipmentCheckService:
                                     f"Expected: {wi['expected']}, "
                                     f"Found: {wi['found']}"
                                 )
+                            status_label = (
+                                "Out of service"
+                                if wi.get("out_of_service")
+                                else "Failed"
+                            )
                             item_rows_html += (
                                 "<tr>"
                                 f"<td style='padding:4px 8px'>"
                                 f"{wi['name']}</td>"
                                 f"<td style='padding:4px 8px;"
-                                f"color:#d97706'>Failed</td>"
+                                f"color:#d97706'>{status_label}</td>"
                                 f"<td style='padding:4px 8px'>"
                                 f"{qty_info}</td></tr>"
                             )

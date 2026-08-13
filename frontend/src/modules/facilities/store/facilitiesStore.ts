@@ -20,6 +20,7 @@ import type {
 } from '../types';
 import type { EmergencyContact, FacilityCreate } from '../../../services/facilitiesServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { getTodayLocalDate, toLocalDateString } from '../../../utils/dateFormatting';
 
 interface DashboardStats {
   totalFacilities: number;
@@ -131,15 +132,19 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
         facilitiesService.getDashboardCounts(),
       ]);
 
-      const now = new Date();
-      const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
       const overdueMaintenanceRecords = maintenance.filter((r) => r.isOverdue && !r.isCompleted);
 
+      // Compare calendar dates, not instants: the backend count treats
+      // next_inspection_date >= today as upcoming, so an inspection dated
+      // today must appear in this preview all day — parsing the date-only
+      // string into a Date and comparing against `new Date()` dropped it
+      // for most of the day (count and preview disagreed).
+      const todayStr = getTodayLocalDate();
+      const cutoffStr = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
       const upcomingInspections = inspections.filter((i) => {
         if (!i.nextInspectionDate) return false;
-        const nextDate = new Date(i.nextInspectionDate);
-        return nextDate <= thirtyDaysFromNow && nextDate >= now;
+        const dateStr = i.nextInspectionDate.slice(0, 10);
+        return dateStr >= todayStr && dateStr <= cutoffStr;
       });
 
       // Recent activity: last 5 completed maintenance records

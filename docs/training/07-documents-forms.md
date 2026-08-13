@@ -343,9 +343,10 @@ department or a targeted group. There are two surfaces:
 ### How members receive a message
 
 Every targeted member gets the message in the app (the dashboard card, the
-`/messages` inbox, and a bell notification) **and by email** — email is the
-department's record that they were notified, so it goes out for every message
-at every priority. The dashboard card shows what still needs your attention:
+`/messages` inbox, and a bell notification) **and by email** — email goes out
+for every message at every priority, though it is best-effort rather than a
+guaranteed record of notice (see the caveats below). The dashboard card shows
+what still needs your attention:
 unread messages, acknowledgment-required messages you haven't acknowledged,
 and persistent notices. Once you resolve a message it clears off the card on
 your next visit; the full history stays on the **Messages** page. Urgent
@@ -361,12 +362,28 @@ messages are additionally **escalated** to SMS:
 The email is _not_ suppressed by a
 member's email preference or by consent (a member can never opt out of being
 informed of a department notice); important/urgent messages carry an
-`[IMPORTANT]`/`[URGENT]` subject prefix. **SMS** is different: it is only sent
+`[IMPORTANT]`/`[URGENT]` subject prefix.
+
+**Email is attempted, not guaranteed.** Three conditions can stop it, none of
+which is reported back to the author:
+
+- **No address on file.** Members without an email address are skipped.
+- **Hourly cap.** A department sends at most 30 message emails per hour; once
+  that cap is reached, later messages in the same hour are posted in-app but
+  their email goes out to nobody.
+- **Delivery failures.** Provider errors are logged, not surfaced in the UI.
+
+Treat the in-app inbox and the acknowledgment report — not the email — as the
+record that a member was notified. For anything time-critical, use **Require
+acknowledgment** and check the report rather than assuming the email landed.
+
+**SMS** is different: it is only sent
 when the department has SMS (Twilio) configured, the member has a mobile number
 on file, the member has granted **express SMS consent** (US TCPA rules — a member
 who was never asked counts as _not_ consented), **and** their text-message
-preference is on. A member who turns off or never grants SMS still receives the
-email. The author of a message is not notified about their own post.
+preference is on. A member who turns off or never grants SMS is still included
+in the email escalation, subject to the caveats above. The author of a message
+is not notified about their own post.
 
 ### Requiring acknowledgment
 

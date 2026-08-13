@@ -263,13 +263,16 @@ async def _send_property_return_email(
                 html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
                 text_body = rendered_text
 
-            await email_svc.send_email(
-                to_emails=to_emails,
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
-                cc_emails=cc_emails if cc_emails else None,
-            )
+        # Outbound delivery may block for the SMTP timeout. Do it only after
+        # the generator has committed and closed the database session so slow
+        # mail infrastructure cannot exhaust the connection pool.
+        await email_svc.send_email(
+            to_emails=to_emails,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            cc_emails=cc_emails if cc_emails else None,
+        )
     except Exception as e:
         logger.error(f"Failed to send property return email to {member_email}: {e}")
 

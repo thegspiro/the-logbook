@@ -42,12 +42,19 @@ The Unraid stack runs with `ENVIRONMENT=production`, which enforces a startup
 security gate (strong secrets required, `DEBUG=false`, **API docs (`/docs`)
 off** — enabling them blocks boot, and `SECURITY_ENFORCE_HTTPS=true`) — and
 marks auth cookies `Secure`, which browsers refuse to send over plain
-`http://`. The setup script therefore configures a **LAN-trial posture**
-(`COOKIE_SECURE=false`) so logins work over plain HTTP on a trusted LAN.
-Before real use, front the app with an HTTPS reverse proxy (Swag, Nginx Proxy
-Manager), point `ALLOWED_ORIGINS` at your `https://` origin, and delete the
-`COOKIE_SECURE` line from `.env`. Leave `TRUSTED_PROXY_IPS` empty unless you
-actually add a proxy. Details:
+`http://`. The setup script therefore **requires the public HTTPS URL of a
+reverse proxy** (Swag, Nginx Proxy Manager) before it writes `.env`; there is
+no plain-HTTP install mode. The **update path validates an existing `.env`
+too**: a config with an `http://` origin or secure cookies disabled triggers
+the same HTTPS migration prompt (set `ALLOW_INSECURE_HTTP=yes` to
+explicitly — and temporarily — keep a plaintext LAN trial; for such a trial,
+uncommenting `COOKIE_SECURE=false` in `.env` is what makes logins work over
+plain HTTP, and it must be removed again once the proxy is live). Note the
+compose still **publishes ports `7880`/`7881` in plaintext on all host
+interfaces** so the proxy can reach them — once HTTPS works, set
+`BIND_ADDRESS` in `.env` (e.g. `127.0.0.1`) to stop LAN clients bypassing the
+proxy. Leave `TRUSTED_PROXY_IPS` empty unless you actually add a proxy.
+Details:
 [HTTPS with Reverse Proxy](../docs/deployment/unraid.md#https-with-reverse-proxy)
 and [Security Hardening](./UNRAID-INSTALLATION.md#security-hardening).
 

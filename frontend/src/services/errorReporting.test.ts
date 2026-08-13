@@ -401,14 +401,26 @@ describe('reportApiError', () => {
 describe('sanitizePath', () => {
   it.each([
     ['/event-requests/status/request-secret/cancel', '/event-requests/status/[REDACTED]/cancel'],
+    // The page route is singular while the API route is plural; both carry
+    // the same emailed token and both reach the error log as paths.
+    ['/event-request/status/request-secret', '/event-request/status/[REDACTED]'],
     ['/application-status/application-secret', '/application-status/[REDACTED]'],
     ['/calendar/feed-secret.ics', '/calendar/[REDACTED].ics'],
+    // Kiosk display codes are the credential for public guest check-in.
+    ['/display/A1B2C3D4', '/display/[REDACTED]'],
+    ['/display/A1B2C3D4/events/evt-1/guest', '/display/[REDACTED]/events/evt-1/guest'],
+    [
+      '/api/public/v1/display/A1B2C3D4/events/evt-1/guest-check-in',
+      '/api/public/v1/display/[REDACTED]/events/evt-1/guest-check-in',
+    ],
   ])('redacts tokenized path %s', (path, expected) => {
     expect(sanitizePath(path)).toBe(expected);
   });
 
   it('leaves ordinary resource paths intact', () => {
     expect(sanitizePath('/api/v1/events/42')).toBe('/api/v1/events/42');
+    // Ends at /display with no code segment following it.
+    expect(sanitizePath('/api/v1/locations/loc-1/display')).toBe('/api/v1/locations/loc-1/display');
   });
 });
 

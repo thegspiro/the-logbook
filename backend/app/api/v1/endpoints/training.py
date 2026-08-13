@@ -27,6 +27,7 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import (
     _collect_user_permissions,
     _has_permission,
+    can_view_officer_training_data,
     get_current_user,
     require_permission,
 )
@@ -97,6 +98,23 @@ def _require_self_or_training_officer(current_user: User, user_id: UUID) -> None
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Not authorized to view this member's training data",
+    )
+
+
+def _member_requirement_response(requirement) -> TrainingRequirementResponse:
+    """Return a requirement without checklist steps reserved for officers.
+
+    Mirrors the sanitization in training_programs.py: steps flagged
+    ``member_visible: false`` (background checks, reference calls, …) must not
+    reach members through this route either.
+    """
+    response = TrainingRequirementResponse.model_validate(requirement)
+    return response.model_copy(
+        update={
+            "checklist_items": [
+                item for item in (response.checklist_items or []) if item.member_visible
+            ]
+        }
     )
 
 
@@ -919,7 +937,11 @@ async def list_requirements(
     query = query.order_by(TrainingRequirement.due_date)
 
     result = await db.execute(query)
-    return result.scalars().all()
+    requirements = result.scalars().all()
+
+    if can_view_officer_training_data(current_user):
+        return requirements
+    return [_member_requirement_response(requirement) for requirement in requirements]
 
 
 @router.post(

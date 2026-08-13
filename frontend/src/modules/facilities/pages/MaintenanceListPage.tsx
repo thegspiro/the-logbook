@@ -29,7 +29,9 @@ import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
 
 export default function MaintenanceListPage() {
-  const { canManage } = useFacilitiesAccess();
+  // Create/edit/complete accept facilities.maintenance or facilities.edit on
+  // the backend; delete is manage-only.
+  const { canManage, canMaintenance } = useFacilitiesAccess();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tz = useTimezone();
@@ -85,7 +87,7 @@ export default function MaintenanceListPage() {
             </p>
           </div>
         </div>
-        {canManage && (
+        {canMaintenance && (
           <button
             onClick={() => openCreate()}
             className="btn-primary flex shrink-0 items-center gap-2 self-start py-2.5 text-sm sm:self-auto"
@@ -196,7 +198,7 @@ export default function MaintenanceListPage() {
                   {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
                 </div>
               </div>
-              {canManage && (
+              {canMaintenance && (
                 <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                   {!record.isCompleted && (
                     <button
@@ -218,16 +220,18 @@ export default function MaintenanceListPage() {
                   >
                     <Wrench className="h-4 w-4" />
                   </button>
-                  <button
-                    onClick={() => {
-                      void handleDelete(record);
-                    }}
-                    title="Delete"
-                    aria-label="Delete record"
-                    className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  {canManage && (
+                    <button
+                      onClick={() => {
+                        void handleDelete(record);
+                      }}
+                      title="Delete"
+                      aria-label="Delete record"
+                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -235,7 +239,7 @@ export default function MaintenanceListPage() {
         </div>
       )}
 
-      {canManage && showModal && (
+      {canMaintenance && showModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"

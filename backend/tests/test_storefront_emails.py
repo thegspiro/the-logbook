@@ -287,6 +287,30 @@ class TestWindowNotices:
         ]
         assert all(not message.get("bcc_emails") for message in _FakeEmailService.sent)
 
+    async def test_a_vendor_notice_never_discloses_another_customer(self):
+        """The vendor path is addressed per recipient, like the announcement.
+
+        Both go through _send, but only the announcement had a disclosure
+        test — so a change that put the vendor notice back on one shared
+        message (BCC, or several addresses in To) would have shipped green.
+        Salvaged from PR #1378, whose implementation half landed as #1372.
+        """
+        service = StorefrontNotificationService(None)
+        recipients = ["alice@example.org", "bob@example.org", "zoe@example.org"]
+
+        await service.send_vendor_order_placed(
+            _window(vendor_name="Acme Apparel"),
+            _settings(),
+            recipients,
+            _org(),
+        )
+
+        assert len(_FakeEmailService.sent) == len(recipients)
+        assert [message["to_emails"] for message in _FakeEmailService.sent] == [
+            [recipient] for recipient in recipients
+        ]
+        assert all(not message.get("bcc_emails") for message in _FakeEmailService.sent)
+
     async def test_an_opening_states_the_deadline_and_the_extra_message(self):
         service = StorefrontNotificationService(None)
         await service.send_window_opened(
