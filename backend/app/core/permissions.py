@@ -974,10 +974,6 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             APPARATUS_EDIT.name,
             APPARATUS_MAINTENANCE.name,
             FACILITIES_MAINTENANCE.name,
-            # Station commanders need the restricted facility data for their
-            # station — door/alarm codes, utilities — without facility-record
-            # write access.
-            FACILITIES_VIEW_SENSITIVE.name,
         ],
     },
     "lieutenant": {
