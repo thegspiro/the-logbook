@@ -259,7 +259,7 @@ async def create_role(
         return role
 
 
-@router.get("/{role_id}", response_model=RoleResponse)
+@router.get("/{role_id:uuid}", response_model=RoleResponse)
 async def get_role(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -283,7 +283,7 @@ async def get_role(
     return role
 
 
-@router.patch("/{role_id}", response_model=RoleResponse)
+@router.patch("/{role_id:uuid}", response_model=RoleResponse)
 async def update_role(
     role_id: UUID,
     role_update: RoleUpdate,
@@ -358,7 +358,7 @@ async def update_role(
         return role
 
 
-@router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{role_id:uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -417,7 +417,9 @@ async def delete_role(
 
 
 @router.post(
-    "/{role_id}/clone", response_model=RoleResponse, status_code=status.HTTP_201_CREATED
+    "/{role_id:uuid}/clone",
+    response_model=RoleResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 async def clone_role(
     role_id: UUID,
@@ -488,7 +490,7 @@ async def clone_role(
         )
 
 
-@router.get("/{role_id}/users", response_model=RoleUsersResponse)
+@router.get("/{role_id:uuid}/users", response_model=RoleUsersResponse)
 async def get_role_users(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),

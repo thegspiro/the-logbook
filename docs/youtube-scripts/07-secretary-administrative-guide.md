@@ -371,9 +371,9 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 > "Under Communications → Messages, you can send announcements to the entire
 > membership or to specific roles, statuses, or individual members. Compose a
 > message, pick the audience, and set a priority. Every targeted member gets it
-> in-app; mark it Important or Urgent and it also goes out by email — Urgent
-> messages even send a text, so a time-sensitive callout reaches people who
-> aren't logged in."
+> in-app and by email — that email is the department's record they were
+> notified — and Urgent messages even send a text, so a time-sensitive callout
+> reaches people who aren't logged in."
 
 **[SCREEN: Show composing a message with the audience selector and priority]**
 

@@ -14,6 +14,10 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 **Start here if you're experiencing issues:**
 
+0. **[ERROR_CODES.md](./ERROR_CODES.md)** — **member quoted an error code?**
+   - Every error shown in the app carries a support code like `LB-AUTH-002`
+   - Look the code up here (or in-app: Admin → Error Monitoring → Error Code Reference) for what it means and how to resolve it
+
 1. **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** ⭐ **START HERE**
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, database, and member management issues

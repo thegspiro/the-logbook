@@ -67,6 +67,7 @@ from app.models.storefront import (
     StoreOrder,
     StoreOrderWindow,
     StorePaymentMethod,
+    StorePaymentStatus,
     StoreSettings,
 )
 from app.models.user import Organization, User, UserStatus
@@ -90,6 +91,16 @@ _HEADER_BLUE = ACCENT_BLUE
 _HEADER_GREEN = ACCENT_GREEN
 _HEADER_AMBER = ACCENT_AMBER
 _HEADER_RED = ACCENT_RED
+
+
+def _balance_due(order: StoreOrder) -> Decimal:
+    """Return the collectible balance; a waiver settles without collecting."""
+    if order.payment_status == StorePaymentStatus.WAIVED:
+        return Decimal("0")
+    return max(
+        Decimal(order.total or 0) - Decimal(order.amount_paid or 0), Decimal("0")
+    )
+
 
 _METHOD_LABELS = {
     StorePaymentMethod.VENMO: "Venmo",
@@ -262,7 +273,7 @@ class StorefrontNotificationService:
         the member is reading this on a phone that may or may not have the app
         they chose, and the money only has to arrive.
         """
-        balance = Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+        balance = _balance_due(order)
         if balance <= 0 or not settings:
             return ""
 
@@ -335,7 +346,7 @@ class StorefrontNotificationService:
         ``email_templates_storefront``) because the template system has no
         loops: an item table cannot be expressed in ``{{variable}}`` syntax.
         """
-        balance = Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+        balance = _balance_due(order)
         store_name = (settings.store_name if settings else None) or "Department Store"
         return {
             "order_number": order.order_number or "",
@@ -473,17 +484,19 @@ class StorefrontNotificationService:
         try:
             email_service = EmailService(organization=organization)
             if bcc:
-                # EmailService builds a separate message for every To address.
-                # Passing the other members as BCC would put the first member's
-                # address in every message's visible To header.
-                success, _ = await email_service.send_email(
-                    to_emails=addresses,
-                    subject=subject,
-                    html_body=html_body,
-                    text_body=text_body,
-                    db=self.db,
-                    template_type=template_type,
-                )
+                # Send store-wide announcements individually: BCC hides its
+                # recipients, but the address in To remains visible to them.
+                success = 0
+                for address in addresses:
+                    sent, _ = await email_service.send_email(
+                        to_emails=[address],
+                        subject=subject,
+                        html_body=html_body,
+                        text_body=text_body,
+                        db=self.db,
+                        template_type=template_type,
+                    )
+                    success += sent
             else:
                 success, _ = await email_service.send_email(
                     to_emails=addresses,
@@ -620,7 +633,7 @@ class StorefrontNotificationService:
             + ".</p>"
             f'<p style="white-space:pre-line;">{_html.escape(message)}</p>'
         )
-        balance = Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+        balance = _balance_due(order)
         if balance > 0:
             body += self._payment_block(order, settings, currency)
 
@@ -669,7 +682,7 @@ class StorefrontNotificationService:
             return 0
         org = organization or await self._get_organization(order.organization_id)
         currency = (settings.currency if settings else None) or "USD"
-        balance = Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+        balance = _balance_due(order)
 
         body = (
             f"<p>Your order <strong>{_html.escape(order.order_number)}</strong> "
@@ -705,7 +718,7 @@ class StorefrontNotificationService:
             return 0
         org = organization or await self._get_organization(order.organization_id)
         currency = (settings.currency if settings else None) or "USD"
-        balance = Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+        balance = _balance_due(order)
 
         method_label = _METHOD_LABELS.get(order.payment_method or "", "")
         summary = (

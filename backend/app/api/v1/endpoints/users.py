@@ -35,6 +35,7 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_MEMBER
 from app.core.database import database_manager, get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import get_rank_default_permissions
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
@@ -63,7 +64,6 @@ from app.services.admin_continuity_service import (
 from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.services.user_deletion_service import (
-    describe_blockers,
     find_hard_delete_blockers,
     release_user_references,
 )
@@ -1066,13 +1066,14 @@ async def remove_role_from_user(
 async def get_user_with_roles(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.view", "members.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get a specific user with their assigned roles and notification preferences
 
-    This endpoint is for the member profile page.
-    Users can view any member's profile, but can only see notification preferences for their own profile.
+    This endpoint is for the member profile page and digital ID card.
+    Users can always view their own record; viewing another member's record
+    requires `users.view` or `members.manage` permission.
 
     Contact information is redacted against the organization's
     `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
@@ -1083,6 +1084,22 @@ async def get_user_with_roles(
 
     **Authentication required**
     """
+    user_permissions = _collect_user_permissions(current_user)
+    is_self = str(current_user.id) == str(user_id)
+
+    # Self-access needs no permission grant: MemberIdCardPage, MemberProfilePage
+    # and UserSettingsPage all load the caller's own record through here, and
+    # the default Member position carries neither users.view nor members.manage.
+    # The redaction below already treats the subject as exempt on the same
+    # is_self basis, so this gate and that exemption stay in agreement.
+    if not is_self and not (
+        _has_permission("users.view", user_permissions)
+        or _has_permission("members.manage", user_permissions)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+        )
+
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
@@ -1097,10 +1114,7 @@ async def get_user_with_roles(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    is_admin = _has_permission(
-        "members.manage", _collect_user_permissions(current_user)
-    )
-    is_self = str(current_user.id) == str(user_id)
+    is_admin = _has_permission("members.manage", user_permissions)
     # Leadership reading someone else's record is the access worth being able
     # to reconstruct later: it is the only path that discloses another member's
     # date of birth and their family's names and phone numbers. Recorded on the
@@ -1474,10 +1488,9 @@ async def delete_user(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
-                    "This member owns records that cannot be left without an "
-                    f"owner ({describe_blockers(blockers)}), so they cannot be "
-                    "permanently deleted. Deactivate the member instead, then "
-                    "anonymize them to remove their personal information while "
+                    "This member owns records that must retain an owner, so they "
+                    "cannot be permanently deleted. Deactivate the member instead, "
+                    "then anonymize them to remove their personal information while "
                     "keeping those records intact."
                 ),
             )
@@ -1870,9 +1883,10 @@ async def upload_photo(
     MAX_SIZE = 5 * 1024 * 1024
     contents = await file.read()
     if len(contents) > MAX_SIZE:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File size must be under 5MB",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
     # MIME type validation using file content (not just extension)
@@ -1893,9 +1907,10 @@ async def upload_photo(
             detected_mime = "unknown"
 
     if detected_mime not in ALLOWED_MIME_TYPES:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid file type. Allowed: JPEG, PNG, WebP. Detected: {detected_mime}",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     # Optimize image: resize, strip EXIF, convert to WebP (smaller files)

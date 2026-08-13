@@ -877,7 +877,7 @@ export const ElectionsPage: React.FC = () => {
                           victory_threshold: undefined,
                         });
                       }}
-                      className="form-input mt-1 text-white shadow-xs"
+                      className="form-input mt-1 shadow-xs"
                     >
                       <option value="simple_majority|most_votes">Most Votes Wins (Plurality)</option>
                       <option value="simple_majority|majority">Majority Required (&gt;50%)</option>

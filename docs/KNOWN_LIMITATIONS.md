@@ -34,13 +34,13 @@ here.
 
 ## Authentication & Security
 
-| Item                                                               | Status                            | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **CSRF "no csrf cookie → allow" branch**                           | ✅ Resolved (verified 2026-08-07) | The branch was tightened and this row had not been updated. `verify_csrf_token` now splits the no-cookie case: a request carrying an `access_token` cookie but no `csrf_token` is **rejected** (403 "Missing CSRF token") as anomalous, and only a request with no session cookie at all — unauthenticated, or a Bearer client whose header browsers never auto-send and which is therefore not CSRF-exploitable — is allowed through. `SameSite=Strict` remains the primary defense. (`security_middleware.py`.) |
-| **Two logins by the same user in the same second fail with a 500** | ✅ Resolved (verified 2026-08-12) | `create_access_token` includes a random 128-bit `jti`, so otherwise identical logins no longer collide with the unique `sessions.token` index. `test_access_tokens_created_in_same_second_are_unique` now pins both distinct encoded tokens and distinct decoded IDs.                                                                                                                                                                                                                                             |
-| **`is_rate_limited` window write-before-check**                    | ✅ Resolved (verified 2026-08-12) | The implementation cleans the window, checks `len(requests) >= max_requests`, rejects and locks the first request over the allowance, and records only allowed requests afterward. The existing `test_exceeding_limit_triggers_lockout` pins five allowed requests and rejection of the sixth, so there is no write-before-check or off-by-one defect.                                                                                                                                                            |
-| **OAuth login does not check organization `active`**               | Open (MED — found 2026-08-12)     | The 2026-08-12 fix made **password** login join on `organizations.active IS TRUE` (both the canonical-org resolution and the cross-org fallback), so members of a deactivated org can no longer log in with a password. The **OAuth** path was not covered: `oauth_service.py` scopes to the earliest-created org with no `active` filter and rejects only inactive *users* (`error=inactive`). A member of a deactivated org whose account is OAuth-linked can still sign in with Google/Microsoft. Also true of both paths: deactivating an org does not revoke existing sessions — they simply expire. (`app/services/oauth_service.py:50`.)                                                                                                                                                                                                                                          |
-| **`REFRESH_ROTATION_GRACE_SECONDS` is inert**                      | Open (LOW — cleanup, 2026-08-12)  | The refresh-token rotation grace window was removed (a stale token now revokes all sessions as replay — see CHANGELOG 2026-08-12), but the setting (`config.py:140`, default `30`, with a now-stale comment) and the `user_sessions.previous_refresh_token` column (`user.py:714`, indexed) remain. Nothing reads either; the column is actively nulled on each rotation. Remove the setting, the column, and its index in a follow-up migration rather than leaving a knob that gates nothing.                                                                                                                                                                                                                                                                                                                                                                                           |
+| Item                                                               | Status                            | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CSRF "no csrf cookie → allow" branch**                           | ✅ Resolved (verified 2026-08-07) | The branch was tightened and this row had not been updated. `verify_csrf_token` now splits the no-cookie case: a request carrying an `access_token` cookie but no `csrf_token` is **rejected** (403 "Missing CSRF token") as anomalous, and only a request with no session cookie at all — unauthenticated, or a Bearer client whose header browsers never auto-send and which is therefore not CSRF-exploitable — is allowed through. `SameSite=Strict` remains the primary defense. (`security_middleware.py`.)                                                                                                                               |
+| **Two logins by the same user in the same second fail with a 500** | ✅ Resolved (verified 2026-08-12) | `create_access_token` includes a random 128-bit `jti`, so otherwise identical logins no longer collide with the unique `sessions.token` index. `test_access_tokens_created_in_same_second_are_unique` now pins both distinct encoded tokens and distinct decoded IDs.                                                                                                                                                                                                                                                                                                                                                                           |
+| **`is_rate_limited` window write-before-check**                    | ✅ Resolved (verified 2026-08-12) | The implementation cleans the window, checks `len(requests) >= max_requests`, rejects and locks the first request over the allowance, and records only allowed requests afterward. The existing `test_exceeding_limit_triggers_lockout` pins five allowed requests and rejection of the sixth, so there is no write-before-check or off-by-one defect.                                                                                                                                                                                                                                                                                          |
+| **OAuth login does not check organization `active`**               | Open (MED — found 2026-08-12)     | The 2026-08-12 fix made **password** login join on `organizations.active IS TRUE` (both the canonical-org resolution and the cross-org fallback), so members of a deactivated org can no longer log in with a password. The **OAuth** path was not covered: `oauth_service.py` scopes to the earliest-created org with no `active` filter and rejects only inactive _users_ (`error=inactive`). A member of a deactivated org whose account is OAuth-linked can still sign in with Google/Microsoft. Also true of both paths: deactivating an org does not revoke existing sessions — they simply expire. (`app/services/oauth_service.py:50`.) |
+| **`REFRESH_ROTATION_GRACE_SECONDS` is inert**                      | Open (LOW — cleanup, 2026-08-12)  | The refresh-token rotation grace window was removed (a stale token now revokes all sessions as replay — see CHANGELOG 2026-08-12), but the setting (`config.py:140`, default `30`, with a now-stale comment) and the `user_sessions.previous_refresh_token` column (`user.py:714`, indexed) remain. Nothing reads either; the column is actively nulled on each rotation. Remove the setting, the column, and its index in a follow-up migration rather than leaving a knob that gates nothing.                                                                                                                                                 |
 
 ## Dependencies
 
@@ -1517,6 +1517,27 @@ position model to the ballot-item model the public page already uses, including
 its submission shape. Needs an owner decision on whether to converge the two
 ballots or retire one of them. This loop does not make that call.
 
+## Elections — Saved Ballot Templates Accept Fields They Then Discard (2026-08-12)
+
+`POST /elections/templates/saved-ballots` answers **201** to a ballot item
+carrying a `candidates` array, and stores the item without it. The safety
+guarantee holds — no candidate, voter, vote or token data can reach a template,
+because `BallotItem` has no field to hold one — but the caller is told the write
+succeeded in full.
+
+The asymmetry is that `SavedBallotTemplateCreate` sets
+`ConfigDict(extra="forbid")`, so a stray key at the _template_ level is
+rejected with a 422, while a stray key one level down inside `ballot_items` is
+silently dropped. Two adjacent parts of the same request body answer the same
+mistake differently.
+
+The obvious fix — `extra="forbid"` on `BallotItem` — is not this loop's to make:
+`BallotItem` is shared with election creation and update, so tightening it
+rejects requests that are accepted today, from clients this repository does not
+contain. That is a compatibility decision with an owner, not a correctness fix.
+Nothing is at risk in the meantime; the failure mode is a misleading 201, not a
+leak.
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.
@@ -1540,6 +1561,23 @@ placeholder is retired until a screen exists to photograph.
 
 Needs an owner decision: whether to build the settings section or drop the
 feature. This loop does not make that call.
+
+## Messaging — Persistent Notices Can Fall Off the Dashboard Card (2026-08-13)
+
+**✅ Resolved (2026-08-13, owner-directed).** The dashboard "Department
+Messages" card used to load the **10 most recent** inbox messages with
+`include_read` at its default (true), so read non-persistent messages never
+dropped off the card and an **unpinned persistent** notice older than the 10
+most recent messages disappeared from it — against the training guide's "stays
+on the dashboard until leadership takes it down" (MSG2-6,
+[app-review/messaging.md](./app-review/messaging.md)). The card now loads with
+`include_read: false`: it shows only what still needs attention — unread
+messages, unacknowledged ack-required messages, and persistent notices (which
+the backend exempts from that filter). A message a member just clicked is
+marked read in place rather than removed mid-view; it drops off on the next
+load. Persistent notices are ordered ahead of newer non-persistent messages,
+so the card's 10-item preview cannot lose a standing notice behind an ordinary
+pending-message backlog. Pinned notices remain first within the preview.
 
 ## Skills Testing — Offline Support (2026-08-07)
 

@@ -212,11 +212,12 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ## Locations (when Facilities module is off)
 
-| URL          | Page                 | Permission    |
-| ------------ | -------------------- | ------------- |
-| `/locations` | Locations Management | Authenticated |
+| URL                   | Page                 | Permission    |
+| --------------------- | -------------------- | ------------- |
+| `/locations`          | Locations Management | Authenticated |
+| `/locations/qr-codes` | Check-In QR Codes    | Authenticated |
 
-> Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in.
+> Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
 
 ---
 
@@ -229,7 +230,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` |
 | `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` |
 
-> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
+> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only grant; the default position templates give it to Captain, Vice President, and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
 
 ---
 

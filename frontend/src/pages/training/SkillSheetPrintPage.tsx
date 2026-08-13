@@ -140,6 +140,23 @@ const CriterionRow: React.FC<{ criterion: SkillCriterion; index: number }> = ({ 
       {/* Critical steps decide the outcome on their own when the template
           requires all of them, so they have to be unmissable on paper. */}
       {criterion.required && <span style={{ color: '#b00', fontWeight: 700, fontSize: '8pt' }}> ★ CRITICAL</span>}
+      {/* What a miss costs, on the paper sheet the examiner marks up. Without
+          it the person with the clipboard cannot weigh a step they are about
+          to fail, and the figure only reappears once the marks are transcribed. */}
+      {criterion.score_mode === 'deduct' && (
+        <span style={{ color: '#b00', fontWeight: 600, fontSize: '8pt' }}>
+          {' '}
+          (&minus;{criterion.deduction_points && criterion.deduction_points > 0 ? criterion.deduction_points : 1} if
+          failed)
+        </span>
+      )}
+      {criterion.score_mode === 'points' && (
+        <span style={{ color: '#555', fontSize: '8pt' }}>
+          {' '}
+          ({criterion.max_score && criterion.max_score > 0 ? criterion.max_score : 1} pt
+          {(criterion.max_score ?? 1) === 1 ? '' : 's'})
+        </span>
+      )}
       {criterion.description && (
         <div style={{ color: '#555', fontSize: '8pt', marginTop: '2pt' }}>{criterion.description}</div>
       )}

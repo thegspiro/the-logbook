@@ -7,6 +7,7 @@
  *   /facilities/maintenance  — Cross-facility maintenance records
  *   /facilities/inspections  — Cross-facility inspections
  *   /locations               — Lightweight locations list (when Facilities module is off)
+ *   /locations/qr-codes      — Printable directory of all room kiosk QR codes
  *   /apparatus-basic         — Lightweight apparatus view (when Apparatus module is off)
  *
  * Public routes (no auth):
@@ -24,6 +25,7 @@ const FacilityDetailPage = lazyWithRetry(() => import('./pages/FacilityDetailPag
 const MaintenanceListPage = lazyWithRetry(() => import('./pages/MaintenanceListPage'));
 const InspectionsListPage = lazyWithRetry(() => import('./pages/InspectionsListPage'));
 const LocationsPage = lazyWithRetry(() => import('../../pages/LocationsPage'));
+const RoomQRCodesPage = lazyWithRetry(() => import('../../pages/RoomQRCodesPage'));
 const ApparatusBasicPage = lazyWithRetry(() => import('../../pages/ApparatusBasicPage'));
 const LocationKioskPage = lazyWithRetry(() => import('../../pages/LocationKioskPage'));
 const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPage'));
@@ -89,6 +91,14 @@ export const getFacilitiesRoutes = () => (
       element={
         <Suspense fallback={null}>
           <LocationsPage />
+        </Suspense>
+      }
+    />
+    <Route
+      path="/locations/qr-codes"
+      element={
+        <Suspense fallback={null}>
+          <RoomQRCodesPage />
         </Suspense>
       }
     />

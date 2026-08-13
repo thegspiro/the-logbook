@@ -270,8 +270,8 @@ class TestPaymentNotices:
 
 
 class TestWindowNotices:
-    async def test_an_announcement_never_discloses_the_membership_list(self):
-        """Store-wide notices become individual messages, not a visible roster."""
+    async def test_an_announcement_never_discloses_another_member(self):
+        """Each store-wide notice is addressed only to its recipient."""
         service = StorefrontNotificationService(None)
         recipients = [f"member{i}@example.org" for i in range(5)]
         await service.send_window_opened(
@@ -281,13 +281,23 @@ class TestWindowNotices:
             recipients=recipients,
         )
 
-        message = _last()
-        assert message["to_emails"] == recipients
-        assert not message.get("bcc_emails")
+        assert len(_FakeEmailService.sent) == len(recipients)
+        assert [message["to_emails"] for message in _FakeEmailService.sent] == [
+            [recipient] for recipient in recipients
+        ]
+        assert all(not message.get("bcc_emails") for message in _FakeEmailService.sent)
 
-    async def test_vendor_notice_never_discloses_another_customers_address(self):
+    async def test_a_vendor_notice_never_discloses_another_customer(self):
+        """The vendor path is addressed per recipient, like the announcement.
+
+        Both go through _send, but only the announcement had a disclosure
+        test — so a change that put the vendor notice back on one shared
+        message (BCC, or several addresses in To) would have shipped green.
+        Salvaged from PR #1378, whose implementation half landed as #1372.
+        """
         service = StorefrontNotificationService(None)
         recipients = ["alice@example.org", "bob@example.org", "zoe@example.org"]
+
         await service.send_vendor_order_placed(
             _window(vendor_name="Acme Apparel"),
             _settings(),
@@ -295,9 +305,11 @@ class TestWindowNotices:
             _org(),
         )
 
-        message = _last()
-        assert message["to_emails"] == recipients
-        assert not message.get("bcc_emails")
+        assert len(_FakeEmailService.sent) == len(recipients)
+        assert [message["to_emails"] for message in _FakeEmailService.sent] == [
+            [recipient] for recipient in recipients
+        ]
+        assert all(not message.get("bcc_emails") for message in _FakeEmailService.sent)
 
     async def test_an_opening_states_the_deadline_and_the_extra_message(self):
         service = StorefrontNotificationService(None)
@@ -350,6 +362,17 @@ class TestWindowNotices:
 
 
 class TestEveryNoticeIsWellFormed:
+    async def test_waived_order_update_does_not_request_payment(self):
+        service = StorefrontNotificationService(None)
+        order = _order(payment_status=StorePaymentStatus.WAIVED)
+
+        await service.send_order_update(order, "Payment waived.", _settings(), _org())
+
+        body = _last()["html_body"]
+        assert "Payment waived." in body
+        assert "Balance due" not in body
+        assert "Pay with" not in body
+
     async def test_each_one_carries_a_subject_a_body_and_a_text_alternate(self):
         service = StorefrontNotificationService(None)
         org, settings = _org(), _settings()

@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
+from app.services.skills_testing_service import SCORE_MODES
 
 # ============================================
 # Criterion & Section Schemas (template structure)
@@ -21,6 +22,10 @@ from app.schemas.base import UTCResponseBase
 # branch, so a template built with (say) "checkbox" looks plausible in the
 # builder and then contributes zero points to every percentage it appears in.
 CRITERION_TYPES = ("pass_fail", "score", "checklist", "time_limit", "statement")
+
+# Re-exported from the scoring service so the wire contract and the arithmetic
+# can never drift apart on what a mode is called.
+CRITERION_SCORE_MODES = SCORE_MODES
 
 
 class SkillCriterionSchema(BaseModel):
@@ -36,6 +41,26 @@ class SkillCriterionSchema(BaseModel):
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     checklist_items: Optional[List[str]] = None
     statement_text: Optional[str] = None
+    # How a pass/fail-judged step touches the overall percentage:
+    #   "none"   — recorded only; the mark appears on the scorecard and moves
+    #              no number. What every such step did before this existed.
+    #   "points" — worth max_score (or 1) points, earned by passing.
+    #   "deduct" — costs deduction_points (or 1) off the total when failed.
+    #
+    # Null means "unset", which is not the same as "none": an unset pass/fail
+    # step still follows the template-wide score_pass_fail_criteria toggle, so
+    # templates written before per-step modes keep scoring identically.
+    #
+    # Ignored on score criteria (already point-carrying) and on statements
+    # (read aloud, never judged) rather than rejected — an author toggling a
+    # criterion's type should not have a save fail over a field that stopped
+    # applying.
+    score_mode: Optional[str] = None
+    # Points taken off the total when a deduct-mode step is failed. Separate
+    # from max_score deliberately: "maximum score" reads as the most a step can
+    # earn, and a penalty is never earned, so overloading it would leave a
+    # number whose meaning changed silently when the author switched modes.
+    deduction_points: Optional[float] = Field(None, gt=0)
     # Statements only. Whether reading this one aloud is inside the timed
     # evolution. Sheets differ: an opening statement that briefs the candidate
     # before they are in position is read off the clock, while a mid-evolution
@@ -52,6 +77,20 @@ class SkillCriterionSchema(BaseModel):
             raise ValueError(
                 f"Unknown criterion type '{v}'. Expected one of: "
                 + ", ".join(CRITERION_TYPES)
+            )
+        return v
+
+    @field_validator("score_mode")
+    @classmethod
+    def validate_score_mode(cls, v: Optional[str]) -> Optional[str]:
+        # An unrecognised mode is rejected rather than ignored: the scorer
+        # treats anything it does not know as "no effect", so a typo would
+        # otherwise save cleanly and quietly score nothing — the same shape of
+        # failure as an unknown criterion type.
+        if v is not None and v not in CRITERION_SCORE_MODES:
+            raise ValueError(
+                f"Unknown score mode '{v}'. Expected one of: "
+                + ", ".join(CRITERION_SCORE_MODES)
             )
         return v
 
@@ -255,6 +294,11 @@ class SkillTestUpdate(BaseModel):
     # previous last-write-wins behavior; send it to be refused with 409 rather
     # than silently overwriting a concurrent edit.
     expected_version: Optional[int] = None
+    # Set once by the examiner screen when scoring is picked up again on a test
+    # that already had time on the clock. Increments resume_count server-side;
+    # the client cannot set the count directly, so a replayed save cannot
+    # inflate it beyond one per pickup.
+    resumed: Optional[bool] = None
 
 
 class SkillTestCandidateResponse(BaseModel):
@@ -401,6 +445,15 @@ class SkillTestResponse(UTCResponseBase):
     returned_by_name: Optional[str] = None
     return_reason: Optional[str] = None
     return_count: int = 0
+
+    # How many times scoring was picked up again after the screen was left.
+    resume_count: int = 0
+    # Derived: whether the recorded duration is a trustworthy stopwatch reading.
+    # False once a test has been resumed — the clock counts on from the last
+    # save, so time before the interruption is missing and time spent getting
+    # back in is not. Sent rather than left to each client to infer, so the
+    # scorecard, the printed record and the export cannot disagree about it.
+    timing_verified: bool = True
 
     # Validation trail — an official result counts only once a training officer
     # signs it off. Unset while a member-run test awaits review; set in the same

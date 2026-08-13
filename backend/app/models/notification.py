@@ -291,7 +291,7 @@ class DepartmentMessage(Base):
     )
     target_roles = Column(
         JSON, nullable=True
-    )  # Array of role names when target_type == 'roles'
+    )  # Array of role ids; legacy role-name entries remain supported
     target_statuses = Column(
         JSON, nullable=True
     )  # Array of status values when target_type == 'statuses'

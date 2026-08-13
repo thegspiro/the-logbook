@@ -13,6 +13,7 @@ happened when it had not:
 """
 
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import text
@@ -126,6 +127,22 @@ class TestAdvanceRejectsNoOps:
         after = await _count_activity(db_session, p.id, "prospect_advanced")
 
         assert before == after == 1
+
+    async def test_advance_commits_transition_and_audit_atomically(
+        self, db_session: AsyncSession, org_and_admin, monkeypatch
+    ):
+        """The movement and its domain audit event share one transaction."""
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id, count=2)
+        p = await _prospect(svc, org_id, pipeline.id)
+        commit = AsyncMock(wraps=db_session.commit)
+        monkeypatch.setattr(db_session, "commit", commit)
+
+        await svc.advance_prospect(p.id, org_id, admin_id)
+
+        commit.assert_awaited_once()
+        assert await _count_activity(db_session, p.id, "prospect_advanced") == 1
 
 
 async def _count_activity(db_session, prospect_id, action):
