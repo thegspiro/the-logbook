@@ -43,6 +43,36 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### 15-prospective-members — the two "failures" are not the same kind of thing
+
+**`15-02-board-truncated` is skipped by design, not broken.** It needs a
+pipeline past the board's 200-card ceiling, which the ordinary seed
+deliberately does not create — the manifest says so beside the entry and points
+at `seed_demo_data.py --bulk-prospects`. Nothing to fix; it is capturable on
+demand.
+
+**`15-13-application-status` cannot be captured the way it is written.** Its
+prepare step reads the applicant's `status_token` from the prospect detail
+response, and the comment beside it still says "the token is only on the
+prospect _detail_ response — the list omits it". That stopped being true: a
+security fix removed `status_token` from responses entirely, because it is the
+credential behind the public application-status page and was leaking into the
+kanban board. The tokens exist — all seven applicants have one in the database —
+but nothing over the API will hand one out, and it should not.
+
+So the shot needs a different route to a status URL (minted server-side by the
+seeder and passed to the capture, the way `10-11-public-form-dark` resolves its
+slug), or it needs retiring. Not decided here; recorded so the next tick does
+not re-diagnose it.
+
+**The board spread is improved but still not even.** `_spread_prospects_across_stages`
+now advances applicants who are behind their target stage, recording a real
+interview where the stage demands one rather than skipping it — a skip is a
+different thing and shows on the applicant's progress track. That took the board
+from two occupied stages to four. It cannot pull anyone _back_, so the first two
+stages stay empty until either more applicants are seeded or the existing ones
+are regressed.
+
 ### 15-prospective-members — in progress, and it found the advance bug's real cost
 
 `15-01-pipeline-board` and `15-14-applicant-drawer-overview` are populated now

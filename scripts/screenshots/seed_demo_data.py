@@ -8685,6 +8685,75 @@ class Seeder:
                 self.blocked.append(f"pipeline stage {name}: {exc}")
                 return
 
+    def _spread_prospects_across_stages(self, pipeline_id: str | None) -> None:
+        """Move applicants forward so the board shows a pipeline, not a pile.
+
+        The advance loop beside `PROSPECTS` only runs for applicants this seed
+        *creates*; ones already on file stay where they are. On a database that
+        gained its stages late, that left every applicant bunched into one or
+        two columns, and `15-02-board-truncated` — which needs a column with
+        more applicants than fit — could not be captured at all.
+
+        Advancing out of an `interview_requirement` stage legitimately refuses
+        until an interview exists (409, "requires at least 1 interview(s)"), so
+        this records one rather than skipping the stage: a skip is a different
+        thing that shows on the applicant's progress track, and would misreport
+        how these applicants got where they are.
+
+        Idempotent on the state — it only moves applicants that are behind the
+        position their index calls for, so a re-run is a no-op.
+        """
+        if not pipeline_id:
+            return
+        steps = items(
+            self.api.get(f"/prospective-members/pipelines/{pipeline_id}/steps"),
+            "steps",
+        )
+        if not steps:
+            return
+        order = [pick(s, "id") for s in steps]
+
+        prospects = items(
+            self.api.get("/prospective-members/prospects?limit=100"), "prospects"
+        )
+        for index, prospect in enumerate(prospects):
+            prospect_id = pick(prospect, "id")
+            if not prospect_id:
+                continue
+            # One applicant per stage, wrapping — a spread the board can show.
+            target = index % len(order)
+            try:
+                current = order.index(pick(prospect, "current_step_id"))
+            except ValueError:
+                current = 0
+            for _ in range(target - current):
+                try:
+                    self.api.post(
+                        f"/prospective-members/prospects/{prospect_id}/advance"
+                    )
+                except ApiError as exc:
+                    if "interview" not in str(exc).lower():
+                        self.blocked.append(f"spread applicant: {exc}")
+                        break
+                    try:
+                        self.api.post(
+                            f"/prospective-members/prospects/{prospect_id}/interviews",
+                            {
+                                "recommendation": "recommend",
+                                "interviewer_role": "Membership Coordinator",
+                                "notes": (
+                                    "Panel interview; candidate answered "
+                                    "scenario questions well."
+                                ),
+                            },
+                        )
+                        self.api.post(
+                            f"/prospective-members/prospects/{prospect_id}/advance"
+                        )
+                    except ApiError as inner:
+                        self.blocked.append(f"spread applicant: {inner}")
+                        break
+
     PROSPECTS = [
         ("Alex", "Rivera", "Saw the station open house"),
         ("Jordan", "Fields", "Family member is a volunteer"),
@@ -8779,6 +8848,7 @@ class Seeder:
                 self.api.post(
                     f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
                 )
+        self._spread_prospects_across_stages(pipeline_id)
         self._enable_public_status(pipelines)
         self._seed_report_stage_groups(pipelines)
         self._seed_election_packages(prospects)
