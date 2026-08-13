@@ -534,3 +534,153 @@ class TestRevertedRequirementPercentage:
             )
             == 0.0
         )
+
+
+class TestEnrollmentResponseCarriesItsProgram:
+    """The dashboard names each pipeline from the enrollment's nested program.
+
+    `get_member_enrollments` eager-loads the relationship, but the response
+    schema had no field to put it in, so it was dropped on the way out: the
+    dashboard's training card printed the literal word "Program" for every
+    enrollment — two identical rows for a member on two pipelines — and the
+    member training print-out showed an em dash in the same place.
+    """
+
+    def test_program_is_declared_on_the_enrollment_response(self):
+        from app.schemas.training_program import ProgramEnrollmentResponse
+
+        assert "program" in ProgramEnrollmentResponse.model_fields
+
+    def test_a_loaded_program_survives_serialization(self):
+        from datetime import datetime, timezone
+        from uuid import uuid4
+
+        from app.schemas.training_program import ProgramEnrollmentResponse
+
+        now = datetime.now(timezone.utc)
+        program_id = uuid4()
+        body = ProgramEnrollmentResponse.model_validate(
+            {
+                "id": uuid4(),
+                "user_id": uuid4(),
+                "program_id": program_id,
+                "enrolled_at": now,
+                "progress_percentage": 57.7,
+                "status": "active",
+                "deadline_warning_sent": False,
+                "created_at": now,
+                "updated_at": now,
+                "program": {
+                    "id": program_id,
+                    "organization_id": uuid4(),
+                    "name": "Probationary Firefighter Pipeline",
+                    "description": "Phased progression with officer sign-off.",
+                    "active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            }
+        )
+
+        assert body.program is not None
+        assert body.program.name == "Probationary Firefighter Pipeline"
+
+    def test_an_enrollment_without_a_loaded_program_still_validates(self):
+        """Not every caller eager-loads it; the field must stay optional."""
+        from datetime import datetime, timezone
+        from uuid import uuid4
+
+        from app.schemas.training_program import ProgramEnrollmentResponse
+
+        now = datetime.now(timezone.utc)
+        body = ProgramEnrollmentResponse.model_validate(
+            {
+                "id": uuid4(),
+                "user_id": uuid4(),
+                "program_id": uuid4(),
+                "enrolled_at": now,
+                "progress_percentage": 0.0,
+                "status": "active",
+                "deadline_warning_sent": False,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+
+        assert body.program is None
+
+
+class TestEnrollmentQueriesLoadTheNestedProgramme:
+    """Every query whose rows reach ProgramEnrollmentResponse must load it.
+
+    Declaring `program` on that response made it a serialization-time read, so
+    a query that does not eager-load it lazy-loads mid-await and the endpoint
+    answers 500 (MissingGreenlet) rather than anything a caller can act on.
+    `get_program_enrollments` was exactly that, and 500'd the program detail
+    view's Enrollments tab.
+    """
+
+    def test_every_enrollment_query_selects_the_program_relationship(self):
+        import inspect as _inspect
+        import re
+
+        from app.services.training_program_service import TrainingProgramService
+
+        # Methods that return ProgramEnrollment rows to the API layer.
+        returning = [
+            "get_member_enrollments",
+            "get_program_enrollments",
+            "get_enrollment_by_id",
+        ]
+        for name in returning:
+            source = _inspect.getsource(getattr(TrainingProgramService, name))
+            assert re.search(
+                r"selectinload\(\s*ProgramEnrollment\.program\s*\)", source
+            ), (
+                f"{name} returns enrollments that are serialized with the nested "
+                "programme; without selectinload(ProgramEnrollment.program) it "
+                "lazy-loads mid-await and the endpoint answers 500"
+            )
+
+    def test_every_mutation_path_loads_the_programme_before_returning(self):
+        """Writes return the enrollment too, and their queries do not eager-load.
+
+        Each of these fetches the row plainly (or creates it) and then commits;
+        `Session.refresh()` does not load a relationship that was never loaded,
+        so the nested programme has to be filled in explicitly before the row
+        reaches ProgramEnrollmentResponse. Withdrawal was the reported case —
+        it committed the withdrawal and then answered 500.
+        """
+        import inspect as _inspect
+
+        from app.services.training_program_service import TrainingProgramService
+
+        mutating = [
+            "enroll_member",
+            "reset_enrollment_progress",
+            "withdraw_enrollment",
+            "reopen_enrollment",
+            "advance_enrollment_phase",
+        ]
+        for name in mutating:
+            source = _inspect.getsource(getattr(TrainingProgramService, name))
+            assert "_ensure_program_loaded" in source, (
+                f"{name} returns an enrollment that is serialized with the "
+                "nested programme; without _ensure_program_loaded it lazy-loads "
+                "after the commit and the caller gets a 500 for a write that "
+                "actually succeeded"
+            )
+
+    def test_the_loader_is_a_no_op_for_a_non_orm_stand_in(self):
+        """Unit tests pass mocks through these methods; they must not blow up."""
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+
+        from app.services.training_program_service import TrainingProgramService
+
+        db = SimpleNamespace(refresh=AsyncMock())
+        service = TrainingProgramService(db)
+        import asyncio
+
+        asyncio.run(service._ensure_program_loaded(SimpleNamespace(id="x")))
+        db.refresh.assert_not_awaited()

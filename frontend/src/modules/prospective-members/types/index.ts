@@ -388,6 +388,13 @@ export interface StageHistoryEntry {
   stage_id: string;
   stage_name: string;
   stage_type: StageType;
+  /**
+   * The progress record's own status. Carried through rather than inferred
+   * from `completed_at`: a stamp can outlive the completion it recorded, and
+   * the progress track was drawing green ticks for stages an applicant had
+   * been moved back out of.
+   */
+  status: StepProgressStatus;
   entered_at: string;
   completed_at?: string | undefined;
   completed_by?: string | undefined;

@@ -14,7 +14,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -2159,6 +2161,7 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
 
         # Send enrollment notification
         try:
@@ -2303,6 +2306,26 @@ class TrainingProgramService:
         )
         return results
 
+    async def _ensure_program_loaded(self, enrollment: ProgramEnrollment) -> None:
+        """Load ``enrollment.program`` before the row is handed to the API.
+
+        ProgramEnrollmentResponse carries the nested programme, so Pydantic
+        reads the relationship during FastAPI's response validation — after the
+        endpoint's last await. Left unloaded, that read is an implicit lazy load
+        outside greenlet_spawn: the mutation has already committed and the
+        caller still gets a 500 (MissingGreenlet). ``Session.refresh(obj)``
+        does not cover it — refreshing the row leaves an unloaded relationship
+        unloaded — so every mutation path that returns an enrollment calls this.
+
+        Reads are a no-op: an already-loaded relationship costs no query, and a
+        non-ORM stand-in (unit tests mock the session) is not inspectable and is
+        left alone.
+        """
+        state = sa_inspect(enrollment, raiseerr=False)
+        if state is None or "program" not in state.unloaded:
+            return
+        await self.db.refresh(enrollment, ["program"])
+
     async def get_member_enrollments(
         self,
         user_id: UUID,
@@ -2354,6 +2377,11 @@ class TrainingProgramService:
         query = (
             select(ProgramEnrollment, User)
             .join(User, ProgramEnrollment.user_id == User.id)
+            # ProgramEnrollmentResponse carries the nested programme, so
+            # serializing without this lazy-loads it mid-await and the endpoint
+            # answers 500 (MissingGreenlet). Every method whose result reaches
+            # that model has to load it.
+            .options(selectinload(ProgramEnrollment.program))
             .where(ProgramEnrollment.program_id == str(program_id))
         )
 
@@ -3403,6 +3431,7 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
         await self._safe_notify_recert_reset(enrollment, program)
         return enrollment, None
 
@@ -3438,6 +3467,7 @@ class TrainingProgramService:
 
         # Idempotent: already withdrawn is not an error.
         if enrollment.status == EnrollmentStatus.WITHDRAWN:
+            await self._ensure_program_loaded(enrollment)
             return enrollment, None
 
         enrollment.status = EnrollmentStatus.WITHDRAWN
@@ -3447,6 +3477,7 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
         return enrollment, None
 
     async def auto_reset_if_due(self, enrollment: ProgramEnrollment) -> bool:
@@ -3575,6 +3606,7 @@ class TrainingProgramService:
         # to wait for the next progress edit to be marked complete.
         await self._recalculate_enrollment_progress(UUID(str(enrollment.id)))
         await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
         return enrollment, None
 
     async def run_due_recert_resets(
@@ -4030,6 +4062,7 @@ class TrainingProgramService:
         )
         await self.db.commit()
         enrollment.current_phase_id = next_phase.id
+        await self._ensure_program_loaded(enrollment)
 
         await self._notify_phase_for_enrollment(enrollment, program, next_phase.name)
 

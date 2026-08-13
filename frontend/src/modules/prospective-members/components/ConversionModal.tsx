@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Applicant, TargetMembershipType, EmergencyContact } from '../types';
+import { StepProgressStatus } from '../types';
 import { applicantService } from '../services/api';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -83,7 +84,10 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
 
   if (!isOpen || !applicant) return null;
 
-  const completedStages = applicant.stage_history.filter((s) => s.completed_at).length;
+  // Counted from the record's status rather than a `completed_at` stamp,
+  // which can outlive the completion it recorded — see the drawer's
+  // progress track for the same fix.
+  const completedStages = applicant.stage_history.filter((s) => s.status === StepProgressStatus.COMPLETED).length;
   const totalStages = applicant.total_stages;
 
   const handleConvert = async () => {
