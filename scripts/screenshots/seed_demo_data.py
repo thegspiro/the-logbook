@@ -6461,6 +6461,29 @@ class Seeder:
                 continue
             self.api.patch(f"{path}/{record_id}", {"maintenance_type_id": target})
 
+    def _hydrated_templates(self, templates: list[dict]) -> list[dict]:
+        """Re-fetch each template so its `sections` are actually present.
+
+        The list endpoint returns `section_count` and `criteria_count` and no
+        `sections` at all. Both passes below walk `template["sections"]`, so
+        handed the list response they iterate nothing and report success —
+        `_repair_criterion_types` had been a silent no-op since it was written,
+        which is why the "checkbox" criteria it exists to rewrite were still on
+        file. Fetch the detail first, or neither pass does anything.
+        """
+        hydrated = []
+        for template in templates:
+            template_id = pick(template, "id")
+            if not template_id:
+                continue
+            try:
+                hydrated.append(
+                    self.api.get(f"/training/skills-testing/templates/{template_id}")
+                )
+            except ApiError as exc:
+                self.blocked.append(f"hydrate skill template: {exc}")
+        return hydrated
+
     def _repair_criterion_types(self, templates: list[dict]) -> None:
         """Rewrite criteria this seeder stored under a type the scorer ignores.
 
@@ -6491,11 +6514,59 @@ class Seeder:
                     {"sections": sections},
                 )
 
+    def _backfill_missing_criteria(self, templates: list[dict], blueprint) -> None:
+        """Add criteria the blueprint has gained since a template was created.
+
+        `seed_skills_testing` skips a template that already exists by name, so
+        anything added to the blueprint afterwards never reaches a demo database
+        seeded before the change. That is how the sheets ended up with **no
+        statement criteria at all** while the blueprint declared two, leaving
+        `09-skills-testing.md`'s read-aloud placeholder with nothing to
+        photograph.
+
+        Matches on the criterion's label within its section, and appends what is
+        missing. It never edits or removes an existing criterion — a sheet an
+        examiner has already scored against keeps the steps it was scored with.
+        """
+        by_name = {t.get("name"): t for t in templates}
+        for name, _category, sections in blueprint:
+            template = by_name.get(name)
+            if not template:
+                continue
+            template_id = pick(template, "id")
+            live_sections = pick(template, "sections") or []
+            if not template_id or not isinstance(live_sections, list):
+                continue
+
+            wanted = {section_name: entries for section_name, entries in sections}
+            appended = False
+            for live_section in live_sections:
+                if not isinstance(live_section, dict):
+                    continue
+                entries = wanted.get(live_section.get("name"))
+                if not entries:
+                    continue
+                criteria = live_section.setdefault("criteria", [])
+                have = {c.get("label") for c in criteria if isinstance(c, dict)}
+                for order, entry in enumerate(entries):
+                    payload = criterion_payload(entry, order)
+                    if payload["label"] in have:
+                        continue
+                    payload["sort_order"] = len(criteria)
+                    criteria.append(payload)
+                    appended = True
+
+            if appended:
+                self.api.put(
+                    f"/training/skills-testing/templates/{template_id}",
+                    {"sections": live_sections},
+                )
+
     def seed_skills_testing(self) -> list[dict]:
         templates = items(
             self.api.get("/training/skills-testing/templates"), "templates"
         )
-        self._repair_criterion_types(templates)
+        self._repair_criterion_types(self._hydrated_templates(templates))
         names = {t.get("name") for t in templates}
         blueprint = [
             (
@@ -6589,6 +6660,25 @@ class Seeder:
                         "Hose Advance",
                         [
                             {
+                                # The counterpart to the briefing above, and the
+                                # reason `starts_timer` exists: this one is read
+                                # mid-evolution, so the examiner's tap on
+                                # "Start clock & read" is what puts it inside
+                                # the time limit.
+                                "label": (
+                                    "Examiner reads the change of conditions "
+                                    "once the candidate is on the line."
+                                ),
+                                "type": "statement",
+                                "statement_text": (
+                                    "Conditions have changed — you have heavy "
+                                    "smoke to the floor and heat banking down "
+                                    "the stairwell."
+                                ),
+                                "starts_timer": True,
+                                "required": False,
+                            },
+                            {
                                 "label": "Selects and stretches the correct line",
                                 "type": "score",
                                 "max_score": 10,
@@ -6674,6 +6764,8 @@ class Seeder:
                 f"/training/skills-testing/templates/{pick(template, 'id')}/publish"
             )
             templates.append(template)
+
+        self._backfill_missing_criteria(self._hydrated_templates(templates), blueprint)
         return templates
 
     # -- training records --------------------------------------------
@@ -7180,6 +7272,33 @@ class Seeder:
         )
         return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
 
+    def _snapshot_is_current(self, test: dict, template: dict) -> bool:
+        """Does a test's snapshotted sheet still hold every criterion the
+        template does?
+
+        Compared by criterion label per section, which is what the backfill
+        matches on. Extra criteria in the snapshot are fine — a template can
+        lose a step without invalidating a test already scored against it.
+        """
+        detail = self.api.get(f"/training/skills-testing/tests/{pick(test, 'id')}")
+        snapshot = {
+            section.get("name"): {
+                criterion.get("label") for criterion in section.get("criteria") or []
+            }
+            for section in detail.get("template_sections") or []
+        }
+        live = self.api.get(
+            f"/training/skills-testing/templates/{pick(template, 'id')}"
+        )
+        for section in live.get("sections") or []:
+            have = snapshot.get(section.get("name"))
+            if have is None:
+                return False
+            for criterion in section.get("criteria") or []:
+                if criterion.get("label") not in have:
+                    return False
+        return True
+
     def seed_in_progress_test(
         self, templates: list[dict], members: list[dict]
     ) -> dict | None:
@@ -7204,7 +7323,23 @@ class Seeder:
                 pick(test, "template_id", "templateId") == template_id
                 and pick(test, "status") == "in_progress"
             ):
-                return test
+                # A test snapshots the sheet it started with — deliberately, so
+                # a candidate is scored against what they were shown. That also
+                # means a test left over from before the template gained a
+                # criterion never shows it, and the screenshot of that criterion
+                # cannot be taken. Cancel a stale one and let a fresh test be
+                # made below; nobody is mid-evaluation in a demo database.
+                if self._snapshot_is_current(test, scored_template):
+                    return test
+                try:
+                    self.api.post(
+                        f"/training/skills-testing/tests/{pick(test, 'id')}/cancel",
+                        {"reason": "Superseded by an updated skill sheet."},
+                    )
+                except ApiError as exc:
+                    self.blocked.append(f"cancel stale in-progress test: {exc}")
+                    return test
+                break
 
         examiner_id = next(
             (

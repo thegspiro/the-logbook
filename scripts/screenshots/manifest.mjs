@@ -1010,6 +1010,34 @@ export const SHOTS = [
     selector: "div.card:has(h3:has-text('My Upcoming Shifts'))",
   },
   {
+    id: "03-62-dashboard-signup-positions",
+    doc: "03-scheduling.md",
+    line: 790,
+    anchor: "Screenshot of the Dashboard's Open Shifts section",
+    alt: "An open shift expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for",
+    auth: "member",
+    route: "/dashboard",
+    prepare: async (page) => {
+      // The eligibility check happens on press, not on render — every open
+      // shift shows Sign Up regardless of rank — so the dropdown this pictures
+      // only exists after the card is expanded.
+      const panel = page
+        .locator("div.card:has(h3:has-text('Open Shifts'))")
+        .first();
+      await panel.waitFor({ timeout: 20_000 });
+      await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await panel
+        .getByRole("button", { name: /sign up/i })
+        .first()
+        .click({ timeout: 10_000 });
+      // The positions come from a request fired by the click; waiting on the
+      // select rather than a fixed delay keeps the shot off the spinner.
+      await panel.locator("select").first().waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div.card:has(h3:has-text('Open Shifts'))",
+  },
+  {
     id: "03-61-review-queue-batch",
     doc: "03-scheduling.md",
     line: 1144,
@@ -8429,6 +8457,44 @@ export const SHOTS = [
         .waitFor({ timeout: 20_000 });
     },
     selector: "div[role='dialog'], div.fixed.inset-0 > div",
+  },
+  {
+    id: "09-18-statement-starts-clock",
+    doc: "09-skills-testing.md",
+    line: 457,
+    anchor: "A statement criterion on the scoring screen with",
+    alt: "A read-aloud statement inside the time limit, with the START CLOCK & READ button beneath it",
+    route: "/training/skills-testing",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/skills-testing/tests?limit=50",
+        (id) => `/training/skills-testing/test/${id}/active`,
+        "tests",
+        (test) => test.status === "in_progress",
+      )(page);
+      // The timed statement lives in Hose Advance, not the opening section —
+      // the briefing there is read *off* the clock and so has no button, which
+      // is the distinction this shot exists to draw.
+      // The section chips are numbered, so their visible text is "2" — the
+      // section name is only in the accessible name, which is what this matches.
+      await page
+        .getByRole("button", { name: /Hose Advance:/i })
+        .first()
+        .click({ timeout: 15_000 });
+      // The button only exists while the clock is stopped — once it is running
+      // the criterion shows the note instead, which is the state *after* the
+      // tap this shot is about. Opening an in-progress test resumes the timer,
+      // so pause it first.
+      const pause = page.getByRole("button", { name: "Pause timer" });
+      if (await pause.isVisible().catch(() => false)) {
+        await pause.click({ timeout: 10_000 });
+      }
+      const button = page.getByRole("button", { name: /START CLOCK/i }).first();
+      await button.waitFor({ timeout: 20_000 });
+      await button.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
   },
   {
     id: "09-17-scoring-criteria-mix",

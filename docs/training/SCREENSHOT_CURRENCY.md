@@ -43,6 +43,61 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### A repair pass that had never repaired anything
+
+`09-skills-testing.md`'s read-aloud placeholder wanted a statement criterion
+with the clock button. The seeder's blueprint declared a statement criterion,
+and the database held **none** — because `seed_skills_testing` skips a template
+that already exists by name, and the `_repair_criterion_types` pass written to
+cover exactly that case walks `template["sections"]` on the **list** response,
+which returns `section_count` and `criteria_count` and no sections at all.
+
+So the pass iterated an empty list, found nothing to fix, and reported success.
+It had been a no-op since it was written — which means the `"checkbox"`
+criteria it exists to rewrite were still on file the whole time. Both passes now
+hydrate each template from its detail endpoint first, and a new
+`_backfill_missing_criteria` adds criteria the blueprint has gained since a
+template was created, matching on label within section and never editing or
+removing an existing one.
+
+**A test snapshots the sheet it started with**, deliberately, so a candidate is
+scored against what they were shown. That also meant the seeded in-progress test
+could never show a criterion added afterwards. The seeder now compares the
+snapshot against the live template and cancels a stale in-progress test so a
+fresh one is made — safe in a demo database, where nobody is mid-evaluation.
+
+`09-18-statement-starts-clock` verified: the read-aloud box, the START CLOCK &
+READ button beneath it, and the line explaining that this statement is read
+inside the time limit. The button only exists while the clock is stopped —
+opening an in-progress test resumes the timer, so the shot pauses it first.
+
+The placeholder had asked for two states in one image. Narrowed to the button;
+the state after the tap is now described in prose beside it, since one image
+cannot be both.
+
+**Worth an owner's attention:** the demo database holds **50 completed skills
+tests for one member** on one template, one per seeder run. Nothing pictures
+them and nothing breaks, but the seeder is appending rather than topping up.
+
+### The Sign Up button was documented as doing a check it does not do
+
+`03-scheduling.md` asked for a screenshot contrasting an open shift with a
+**Sign Up** button against one without, "because the member's rank doesn't
+qualify". No such contrast exists to photograph: `Dashboard.tsx` renders the
+button on every open shift and only fetches eligibility when it is pressed —
+the expanded card then shows either a position dropdown or "Not eligible for
+this shift."
+
+Verified against the demo member: `nbelhaj` holds the `firefighter` rank, the
+shift has three open positions (officer, driver, firefighter), and the dropdown
+offers **Firefighter alone**. The filtering is real; it just happens a tap later
+than the guide claimed.
+
+Prose corrected, the rough edge written up in `KNOWN_LIMITATIONS.md`, and
+`03-62-dashboard-signup-positions` now pictures the expanded card — the
+dropdown the caption is about, with the unconditional Sign Up buttons on the
+cards below it visible in the same frame.
+
 ### The applicant progress track was drawn in the wrong order, and Back never undid an advance
 
 Opening `15-05-applicant-actions` to check its action bar caught two product

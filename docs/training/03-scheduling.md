@@ -779,12 +779,19 @@ which positions are open to everyone regardless of rank.
 
 **How it affects shift signup:**
 
-- The Dashboard's open shifts section only shows the **Sign Up** button for shifts where the member's rank qualifies for at least one open position
-- When clicking Sign Up, only eligible positions appear in the dropdown
+- Every open shift on the Dashboard offers a **Sign Up** button. Eligibility is
+  checked when you press it, not before — the card gives no advance warning
+- Pressing **Sign Up** expands the card into a position dropdown holding **only
+  the positions your rank qualifies for**
+- If your rank qualifies for none of the open positions, the expanded card says
+  **"Not eligible for this shift."** instead of a dropdown
 - Ranks with no `eligible_positions` defined default to all positions being eligible (backward-compatible)
 
-> **Screenshot needed:**
-> _[Screenshot of the Dashboard "Open Shifts" section showing shift cards — one with a "Sign Up" button (member is eligible) and one without (member's rank doesn't qualify for remaining open positions)]_
+![An open shift expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for](./images/03-62-dashboard-signup-positions.png)
+
+> **The button is not a promise.** It appears on every shift, so a member can
+> press Sign Up and be told they are not eligible. This is a known rough edge —
+> see [Known Limitations](../KNOWN_LIMITATIONS.md).
 
 ### Scheduling Admin Pages
 
