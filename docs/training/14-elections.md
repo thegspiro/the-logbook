@@ -349,7 +349,7 @@ When you click **Send Ballots**, the system:
 3. Sends an email with a link to the public ballot page (`/ballot#token=...` — the token rides in the URL fragment, which browsers never send to any server, so the credential stays out of access logs; the page also removes it from the address bar once loaded)
 4. Reports how many ballots were sent and which members were skipped (with reasons)
 
-> **[SCREENSHOT NEEDED]:** _The result of a ballot send — the banner naming each member who was skipped and why._
+![The banner after a ballot send, naming each member who was skipped and why](./images/14-24-ballot-send-skipped.png)
 
 Two things report the result. A **toast** gives the counts — "Ballots sent to N
 voter(s)", plus "M failed" and "M skipped (see banner below)" when either
