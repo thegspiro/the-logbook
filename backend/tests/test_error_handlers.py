@@ -69,12 +69,16 @@ class TestHttpExceptionHandler:
         assert response.status_code == status_code
 
     async def test_response_body_is_unchanged(self, request_stub, captured_logs):
-        """Logging must not alter what the client receives."""
+        """Logging must not alter what the client receives — the detail is
+        passed through verbatim, plus the automatic LB-API-<status> code."""
         exc = StarletteHTTPException(status_code=404, detail="Event not found")
 
         response = await main.http_exception_handler_with_logging(request_stub, exc)
 
-        assert json.loads(response.body) == {"detail": "Event not found"}
+        assert json.loads(response.body) == {
+            "detail": "Event not found",
+            "code": "LB-API-404",
+        }
 
 
 class TestUnhandledExceptionHandler:
@@ -98,4 +102,7 @@ class TestUnhandledExceptionHandler:
             request_stub, ValueError("SELECT * FROM users")
         )
 
-        assert json.loads(response.body) == {"detail": "Internal server error"}
+        assert json.loads(response.body) == {
+            "detail": "Internal server error",
+            "code": "LB-SYS-001",
+        }

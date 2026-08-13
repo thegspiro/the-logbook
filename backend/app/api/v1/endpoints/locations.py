@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
@@ -220,6 +221,48 @@ async def delete_location(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Location not found"
         )
+
+
+@router.post("/{location_id}/regenerate-display-code", response_model=LocationResponse)
+async def regenerate_display_code(
+    location_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("locations.edit", "locations.manage")
+    ),
+):
+    """
+    Regenerate a location's public kiosk display code
+
+    Invalidates the current code immediately — posted QR codes and kiosk
+    tablets pointing at the old /display/{code} URL stop working. Use when
+    a printed code has leaked or gone missing.
+
+    **Authentication required**
+    **Permissions required:** locations.edit or locations.manage
+    """
+    service = LocationService(db)
+
+    async with handle_service_errors("Failed to regenerate display code"):
+        location = await service.regenerate_display_code(
+            location_id=location_id,
+            organization_id=current_user.organization_id,
+        )
+
+    location = ensure_found(location, "Location")
+
+    # Rotating the code revokes public access via the old URL — audit it
+    await log_audit_event(
+        db=db,
+        event_type="location_display_code_regenerated",
+        event_category="administration",
+        severity="warning",
+        event_data={"location_id": str(location_id), "location_name": location.name},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _location_to_response(location)
 
 
 # ============================================

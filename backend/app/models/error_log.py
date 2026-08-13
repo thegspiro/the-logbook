@@ -4,6 +4,8 @@ Error Log Database Models
 SQLAlchemy models for persistent error tracking.
 """
 
+from datetime import datetime, timezone
+
 from sqlalchemy import JSON, Column, DateTime, Index, String, Text
 from sqlalchemy.sql import func
 
@@ -25,7 +27,15 @@ class ErrorLog(Base):
     context = Column(JSON, default=dict)
     user_id = Column(String(36), nullable=True)
     event_id = Column(String(36), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # App-side default writes UTC regardless of the MySQL session time zone;
+    # server_default stays as a fallback for rows inserted outside the ORM.
+    # (MySQL's NOW() follows the container's TZ setting, so relying on it
+    # alone would store local time on deployments that override TZ.)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+    )
 
     __table_args__ = (
         Index("ix_error_logs_org_type", "organization_id", "error_type"),

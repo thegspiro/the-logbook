@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router';
 import {
   MapPin,
   Plus,
@@ -36,30 +37,7 @@ import { locationsService, organizationService } from '../services/api';
 import type { Location, LocationCreate } from '../services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
-/** Copy text to clipboard with fallback for non-HTTPS contexts */
-async function copyToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {
-      // clipboard API failed (e.g. non-secure context) — fall through to fallback
-    }
-  }
-  // Fallback: temporary textarea + execCommand
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.left = '-9999px';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand('copy');
-  } finally {
-    document.body.removeChild(textarea);
-  }
-}
+import { copyToClipboard } from '../utils/clipboard';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
 function groupLocations(locations: Location[]): { stations: Location[]; rooms: Map<string, Location[]> } {
@@ -869,7 +847,9 @@ function RoomCard({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+        <div className="flex items-center gap-0.5">
+          {/* QR toggle stays visible at all times — it was nearly undiscoverable
+              when it only appeared on hover with the edit/delete actions */}
           {kioskUrl && (
             <button
               onClick={() => setShowQR((prev) => !prev)}
@@ -880,20 +860,22 @@ function RoomCard({
               <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           )}
-          <button
-            onClick={() => onEdit(room)}
-            aria-label="Edit room"
-            className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1 transition-colors"
-          >
-            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-          <button
-            onClick={() => onDelete(room)}
-            aria-label="Delete room"
-            className="text-theme-text-muted rounded-sm p-1 transition-colors hover:text-red-500"
-          >
-            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          <div className="flex items-center gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+            <button
+              onClick={() => onEdit(room)}
+              aria-label="Edit room"
+              className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1 transition-colors"
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button
+              onClick={() => onDelete(room)}
+              aria-label="Delete room"
+              className="text-theme-text-muted rounded-sm p-1 transition-colors hover:text-red-500"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
       {kioskUrl && (
@@ -1300,14 +1282,19 @@ export default function LocationsPage() {
               : 'Manage station addresses and room names for events, forms, and QR check-in'}
           </p>
         </div>
-        {(!isSingleStation || stations.length === 0) && (
-          <button
-            onClick={openCreateStation}
-            className="btn-primary flex shrink-0 items-center gap-2 self-start py-2.5 sm:self-auto"
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+          <Link
+            to="/locations/qr-codes"
+            className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors max-md:min-h-11"
           >
-            <Plus className="h-4 w-4" /> {isSingleStation ? 'Set Up Location' : 'Add Station'}
-          </button>
-        )}
+            <QrCode className="h-4 w-4" aria-hidden="true" /> Check-In QR Codes
+          </Link>
+          {(!isSingleStation || stations.length === 0) && (
+            <button onClick={openCreateStation} className="btn-primary flex items-center gap-2 py-2.5">
+              <Plus className="h-4 w-4" /> {isSingleStation ? 'Set Up Location' : 'Add Station'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Info Banner */}

@@ -9,8 +9,8 @@
  * - Member status badge
  *
  * Accessible at /members/:userId/id-card. Any authenticated user can view
- * their own card; viewing another member's card requires members.view or
- * members.manage permission.
+ * their own card; viewing another member's card requires users.view or
+ * members.manage permission (enforced by GET /users/:id/with-roles).
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
