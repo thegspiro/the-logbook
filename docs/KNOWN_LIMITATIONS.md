@@ -1575,9 +1575,9 @@ on the dashboard until leadership takes it down" (MSG2-6,
 messages, unacknowledged ack-required messages, and persistent notices (which
 the backend exempts from that filter). A message a member just clicked is
 marked read in place rather than removed mid-view; it drops off on the next
-load. Residual edge: 10+ simultaneously **pending** newer messages can still
-page an unpinned persistent notice off the card — pinning keeps it on top,
-and the guides now say so.
+load. Persistent notices are ordered ahead of newer non-persistent messages,
+so the card's 10-item preview cannot lose a standing notice behind an ordinary
+pending-message backlog. Pinned notices remain first within the preview.
 
 ## Skills Testing — Offline Support (2026-08-07)
 

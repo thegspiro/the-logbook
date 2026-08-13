@@ -20,8 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   persistent notice off the card. Full history remains on the Messages page.
   Fixes MSG2-6: an unpinned persistent notice — the "SCBA inspection mandatory
   by March 31" kind — could previously be paged off the dashboard by ten newer
-  messages, read or not. Pinning still keeps a standing notice above any
-  backlog of newer unread messages, and the guides now say so.
+  messages, read or not. Persistent notices are now ordered ahead of newer
+  non-persistent messages before the 10-item preview is selected; pinning still
+  keeps the most important standing notices first. Inbox pagination now has a
+  deterministic tie-breaker, and its user metadata lookups are organization-
+  scoped as defense in depth. Targeted messages now reject empty audiences and
+  invalid member-status values instead of accepting notices that can never be
+  delivered. Author lookups run only for the selected page, and the API now
+  rejects acknowledgment attempts for messages that do not request one. Read
+  and acknowledgment writes also fail closed for inactive, expired, deleted,
+  or not-yet-published messages, and validation ignores stale audience fields
+  that are irrelevant to the selected target type. New and audience-edited
+  messages also clear those irrelevant lists instead of retaining ambiguous
+  targeting data.
 
 **Fixed (documentation — app behavior unchanged)**
 
