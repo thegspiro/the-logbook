@@ -323,6 +323,83 @@ class TestLimits:
         with pytest.raises(ValueError, match="remain available"):
             await service.create_order(org.id, member, payload)
 
+    async def test_variant_stock_spans_personalized_lines(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session,
+            org,
+            requires_variant=True,
+            personalization_enabled=True,
+        )
+        variant = StoreProductVariant(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            product_id=product.id,
+            label="Large",
+            stock_quantity=1,
+        )
+        db_session.add(variant)
+        await db_session.flush()
+        await _make_open_window(db_session, org)
+
+        payload = {
+            "items": [
+                {
+                    "product_id": product.id,
+                    "variant_id": variant.id,
+                    "quantity": 1,
+                    "personalization_text": "SMITH",
+                },
+                {
+                    "product_id": product.id,
+                    "variant_id": variant.id,
+                    "quantity": 1,
+                    "personalization_text": "JONES",
+                },
+            ],
+            "fulfillment_method": "pickup",
+        }
+
+        with pytest.raises(ValueError, match="Only 1 .* Large.* remain available"):
+            await service.create_order(org.id, member, payload)
+
+    async def test_variant_stock_accepts_uppercase_product_id(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, requires_variant=True)
+        variant = StoreProductVariant(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            product_id=product.id,
+            label="Large",
+            stock_quantity=2,
+        )
+        db_session.add(variant)
+        await db_session.flush()
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(
+            org.id,
+            member,
+            {
+                "items": [
+                    {
+                        "product_id": product.id.upper(),
+                        "variant_id": variant.id,
+                        "quantity": 1,
+                    }
+                ],
+                "fulfillment_method": "pickup",
+            },
+        )
+
+        assert order.items[0].product_id == product.id
+
 
 # ======================================================================
 # Personalization
@@ -686,9 +763,31 @@ class TestPayments:
         assert waived.status == StoreOrderStatus.PAID
         # No money moved, so the rollup must not invent revenue.
         assert waived.amount_paid == Decimal("0.00")
+        # A waiver settles the debt without turning it into collected revenue.
+        assert (
+            await service.mark_order_paid(
+                order.id, org.id, str(officer.id), notify_member=False
+            )
+            == waived
+        )
+        bulk = await service.bulk_mark_paid(
+            org.id, [order.id], str(officer.id), notify_members=False
+        )
+        assert bulk == {"updated": 0, "skipped": 1, "errors": []}
+        with pytest.raises(ValueError, match="waived order"):
+            await service.record_payment(
+                order.id,
+                org.id,
+                Decimal("5.00"),
+                str(officer.id),
+                notify_member=False,
+            )
+        settings = await service.get_settings(org.id)
+        assert service.build_payment_instructions(waived, settings) is None
         summary = await service.get_window_summary(window.id, org.id)
         assert summary["collected"] == Decimal("0.00")
         assert summary["gross_sales"] == Decimal("45.00")
+        assert summary["outstanding"] == Decimal("0.00")
 
     async def test_bulk_mark_paid_settles_a_selection(self, db_session):
         org = await _make_org(db_session)

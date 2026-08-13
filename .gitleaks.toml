@@ -12,6 +12,9 @@ useDefault = true
 
 [allowlist]
 description = "Documentation examples and test fixtures"
+# Require both a fixture path and a known placeholder value. Without this,
+# Gitleaks' default OR behavior would exempt every secret found in these paths.
+condition = "AND"
 paths = [
   '''docs/.*''',
   '''wiki/.*''',

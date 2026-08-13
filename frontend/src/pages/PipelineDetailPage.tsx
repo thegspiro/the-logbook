@@ -1497,9 +1497,13 @@ const PipelineDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Matches TrainingProgramsPage: members without training.manage cannot
+            open /training/admin, so the Admin crumb only renders for users who
+            can actually follow it. */}
         <Breadcrumbs
           items={[
             { label: 'Training', path: '/training' },
+            ...(canManage ? [{ label: 'Admin', path: '/training/admin' }] : []),
             { label: 'Programs', path: '/training/programs' },
             { label: program.name },
           ]}

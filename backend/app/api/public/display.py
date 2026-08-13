@@ -29,6 +29,7 @@ from sqlalchemy.orm import selectinload
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.security_middleware import (
     daily_cap_exceeded,
     get_client_ip,
@@ -63,9 +64,10 @@ async def _rate_limit_display(request: Request) -> None:
         key=f"pub_display:{client_ip}", max_requests=60, window_seconds=60
     )
     if is_limited:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many requests. Please try again later.",
+            error_code=ErrorCode.SYS_RATE_LIMITED,
         )
 
 
@@ -83,18 +85,20 @@ async def _rate_limit_guest_check_in(request: Request) -> None:
         lockout_seconds=600,
     )
     if is_limited:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many sign-in attempts. Please try again in a few minutes.",
+            error_code=ErrorCode.SYS_RATE_LIMITED,
         )
 
 
 def _validate_display_code(display_code: str) -> None:
     """Reject malformed display codes before they reach the database."""
     if not DISPLAY_CODE_PATTERN.fullmatch(display_code):
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Display not found",
+            error_code=ErrorCode.EVT_DISPLAY_NOT_FOUND,
         )
 
 
@@ -111,9 +115,10 @@ async def _resolve_guest_event(
     Every failure answers the same 404 so the endpoint cannot be used to probe
     which event ids exist or which have guest check-in enabled.
     """
-    not_found = HTTPException(
+    not_found = CodedHTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Sign-in is not available for this event.",
+        error_code=ErrorCode.EVT_SIGNIN_UNAVAILABLE,
     )
 
     _validate_display_code(display_code)
@@ -170,9 +175,10 @@ async def get_public_location_display(
     # Look up location by display code
     location = await service.get_location_by_display_code(display_code)
     if not location:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Display not found",
+            error_code=ErrorCode.EVT_DISPLAY_NOT_FOUND,
         )
 
     # Get events currently in check-in window
@@ -314,18 +320,20 @@ async def guest_check_in(
     if await daily_cap_exceeded(
         f"guest_checkin:{event.id}", settings.GUEST_CHECK_IN_DAILY_LIMIT
     ):
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="This event is not accepting further sign-ins today.",
+            error_code=ErrorCode.EVT_SIGNIN_DAILY_LIMIT,
         )
 
     is_open, closed_reason = GuestCheckInService.check_in_window_state(
         event, datetime.now(timezone.utc)
     )
     if not is_open:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=closed_reason or "Check-in is not available for this event.",
+            error_code=ErrorCode.EVT_CHECKIN_WINDOW_CLOSED,
         )
 
     service = GuestCheckInService(db)

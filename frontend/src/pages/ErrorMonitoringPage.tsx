@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
+import { Collapsible } from '../components/ux';
+import { errorLogsService, type ErrorCodeEntry } from '../services/api';
 import { errorTracker, type ErrorLog } from '../services/errorTracking';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
@@ -39,6 +41,8 @@ const ErrorMonitoringPage: React.FC = () => {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [errorCodes, setErrorCodes] = useState<ErrorCodeEntry[]>([]);
+  const [codeSearch, setCodeSearch] = useState('');
 
   const loadErrors = useCallback(async () => {
     try {
@@ -63,6 +67,12 @@ const ErrorMonitoringPage: React.FC = () => {
     }, 10000);
     return () => clearInterval(interval);
   }, [loadErrors]);
+
+  useEffect(() => {
+    // Static reference data — fetched once; the section simply doesn't render
+    // if it can't be loaded.
+    errorLogsService.getErrorCodes().then(setErrorCodes, () => setErrorCodes([]));
+  }, []);
 
   const exportErrors = async () => {
     try {
@@ -291,6 +301,7 @@ const ErrorMonitoringPage: React.FC = () => {
                         <span className="font-mono text-xs">
                           {(error.context.method as string | undefined) ?? ''} {error.context.path as string}
                           {error.context.status ? ` → ${error.context.status as number}` : ''}
+                          {typeof error.context.error_code === 'string' ? ` [${error.context.error_code}]` : ''}
                         </span>
                       ) : (
                         <>
@@ -319,6 +330,85 @@ const ErrorMonitoringPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Error Code Reference — what each LB-* support code means and how to
+          resolve it, so IT can look up the code a member quotes from a toast */}
+      {errorCodes.length > 0 && (
+        <div className="mt-6">
+          <Collapsible
+            title={`Error Code Reference (${errorCodes.length} codes)`}
+            className="bg-theme-surface shadow-md"
+          >
+            <div className="space-y-4 p-4">
+              <p className="text-theme-text-secondary text-sm">
+                Every error shown to a member carries a code like <span className="font-mono">LB-AUTH-002</span>. Ask
+                the member for the code and look it up here. Codes in the <span className="font-mono">LB-API-*</span>{' '}
+                family embed the HTTP status of a failure that has no more specific code.
+              </p>
+              <input
+                type="search"
+                value={codeSearch}
+                onChange={(e) => setCodeSearch(e.target.value)}
+                placeholder="Search by code or description…"
+                className="form-input max-w-sm"
+                aria-label="Search error codes"
+              />
+              <div className="overflow-x-auto">
+                <table className="divide-theme-surface-border min-w-full divide-y">
+                  <thead>
+                    <tr>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Code
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Meaning
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        How to resolve
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-theme-surface-border divide-y">
+                    {errorCodes
+                      .filter((entry) => {
+                        const query = codeSearch.trim().toLowerCase();
+                        if (!query) return true;
+                        return [entry.code, entry.title, entry.description].some((text) =>
+                          text.toLowerCase().includes(query)
+                        );
+                      })
+                      .map((entry) => (
+                        <tr key={entry.code} className="align-top">
+                          <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">{entry.code}</td>
+                          <td className="max-w-md px-4 py-3 text-sm">
+                            <div className="text-theme-text-primary font-medium">{entry.title}</div>
+                            <div className="text-theme-text-secondary mt-1 text-xs">{entry.description}</div>
+                          </td>
+                          <td className="max-w-md px-4 py-3">
+                            <ul className="text-theme-text-secondary list-disc space-y-1 pl-4 text-xs">
+                              {entry.resolution.map((step) => (
+                                <li key={step}>{step}</li>
+                              ))}
+                            </ul>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Collapsible>
+        </div>
+      )}
 
       {/* Recent Errors Preview */}
       {stats && stats.recentErrors.length > 0 && filter === 'all' && (

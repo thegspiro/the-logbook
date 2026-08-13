@@ -17,6 +17,20 @@ from app.services.membership_pipeline_service import MembershipPipelineService
 pytestmark = [pytest.mark.integration]
 
 
+def test_step_progress_model_preserves_database_uniqueness():
+    """Declarative/test schemas must match the migration's unique index."""
+    from app.models.membership_pipeline import ProspectStepProgress
+
+    index = next(
+        index
+        for index in ProspectStepProgress.__table__.indexes
+        if index.name == "idx_step_progress_prospect_step"
+    )
+
+    assert index.unique
+    assert [column.name for column in index.columns] == ["prospect_id", "step_id"]
+
+
 def _uid() -> str:
     return str(uuid.uuid4())
 
@@ -493,6 +507,34 @@ class TestProspectProgression:
             else first_progress.status
         )
         assert status_val == "completed"
+
+    async def test_cannot_complete_a_non_current_step(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await self._make_pipeline_with_steps(svc, org_id, 2)
+        prospect = await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "Out",
+                "last_name": "Of Order",
+                "email": "out-of-order@example.com",
+                "pipeline_id": pipeline.id,
+            },
+            created_by=admin_id,
+        )
+
+        with pytest.raises(ValueError, match="current step"):
+            await svc.complete_step(
+                prospect_id=prospect.id,
+                organization_id=org_id,
+                step_id=steps[1].id,
+                completed_by=admin_id,
+            )
+
+        await db_session.refresh(prospect)
+        assert str(prospect.current_step_id) == str(steps[0].id)
 
     async def test_advance_prospect(
         self, db_session: AsyncSession, setup_org_and_admin

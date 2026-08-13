@@ -3771,6 +3771,20 @@ class Seeder:
                         f"{pick(lot, 'lot_number', 'lotNumber')}"
                     )
 
+    def _leave_one_short(self, positions: dict[str, str]) -> None:
+        """Record 18 of 24 gauze.
+
+        Two screens need a truck that is short. The supply worklist needs a row
+        that is under par rather than merely expiring, and **Set All to Par**
+        needs something whose count it would raise — its warning is suppressed
+        on a compartment already full, so a fully stocked demo department cannot
+        picture the guard at all.
+        """
+        item_id = positions.get("Gauze 4x4 Sterile")
+        if not item_id:
+            return
+        self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 18})
+
     def _report_one_used(self, positions: dict[str, str], apparatus_id: str) -> None:
         """Raise a restock report as an ordinary member, not as the chief.
 

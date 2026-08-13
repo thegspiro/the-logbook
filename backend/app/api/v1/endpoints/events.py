@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import generate_uuid, safe_error_detail
 from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
 from app.models.notification import NotificationChannel
@@ -2272,16 +2273,19 @@ async def upload_event_attachment(
     # Validate file extension
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     # Read and validate size
     content = await file.read()
     if len(content) > MAX_ATTACHMENT_SIZE:
-        raise HTTPException(
-            status_code=400, detail="File too large. Maximum size is 25MB."
+        raise CodedHTTPException(
+            status_code=400,
+            detail="File too large. Maximum size is 25MB.",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
     # SEC: Validate actual file content via magic bytes, not just extension
@@ -2289,18 +2293,20 @@ async def upload_event_attachment(
         detected_mime = detect_mime_type(content)
     except RuntimeError:
         logger.error("Event attachment validation unavailable: libmagic missing")
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Attachment validation is temporarily unavailable.",
+            error_code=ErrorCode.UPLD_VALIDATION_UNAVAILABLE,
         )
     if detected_mime not in ALLOWED_ATTACHMENT_MIME_TYPES:
         logger.warning(
             f"Event attachment rejected: detected MIME '{detected_mime}' "
             f"(claimed: '{file.content_type}') for file '{file.filename}'"
         )
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail=f"File content type '{detected_mime}' not allowed.",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     # Save file
@@ -2915,16 +2921,18 @@ async def import_events_csv(
     location, description, is_mandatory.
     """
     if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail="File must be a CSV (.csv) file",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:  # 5 MB limit
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail="File size must be under 5 MB",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
     try:

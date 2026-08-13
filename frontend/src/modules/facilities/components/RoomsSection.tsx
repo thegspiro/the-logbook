@@ -3,8 +3,11 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { DoorOpen, Plus, Trash2, Loader2, Pencil, Save } from 'lucide-react';
+import { Link } from 'react-router';
+import { Check, Copy, DoorOpen, Plus, Trash2, Loader2, Pencil, QrCode, Save } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
+import { copyToClipboard } from '../../../utils/clipboard';
 import { facilitiesService } from '../../../services/api';
 import type { RoomCreate } from '../../../services/facilitiesServices';
 import type { Room } from '../types';
@@ -22,6 +25,8 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
   const { confirm } = useConfirm();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [qrRoomId, setQrRoomId] = useState<string | null>(null);
+  const [copiedRoomId, setCopiedRoomId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -121,6 +126,18 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
     }
   };
 
+  const handleCopyKioskUrl = async (room: Room) => {
+    const kioskUrl = `${window.location.origin}/display/${room.displayCode}`;
+    try {
+      await copyToClipboard(kioskUrl);
+      setCopiedRoomId(room.id);
+      toast.success('Kiosk URL copied');
+      setTimeout(() => setCopiedRoomId(null), 2000);
+    } catch {
+      toast.error('Failed to copy URL');
+    }
+  };
+
   const handleDelete = async (room: Room) => {
     if (
       !(await confirm({
@@ -144,17 +161,27 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
     <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
       <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
         <h2 className="text-theme-text-primary text-sm font-semibold">Rooms {!isLoading && `(${rooms.length})`}</h2>
-        {canManage && (
-          <button
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+        <div className="flex items-center gap-1">
+          {/* Rooms sync to Locations with kiosk display codes — the QR
+              directory is where those codes can be viewed and printed */}
+          <Link
+            to="/locations/qr-codes"
+            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors max-md:min-h-11"
           >
-            <Plus className="h-3.5 w-3.5" /> Add Room
-          </button>
-        )}
+            <QrCode className="h-3.5 w-3.5" aria-hidden="true" /> Check-In QR Codes
+          </Link>
+          {canManage && (
+            <button
+              onClick={() => {
+                resetForm();
+                setShowForm(true);
+              }}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Room
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-5">
@@ -284,51 +311,92 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
         ) : (
           <div className="space-y-2">
             {rooms.map((room) => (
-              <div
-                key={room.id}
-                className="bg-theme-surface-hover/30 group flex items-center justify-between rounded-lg p-3"
-              >
-                <div className="flex items-center gap-3">
-                  <DoorOpen className="text-theme-text-muted h-4 w-4" />
-                  <div>
-                    <p className="text-theme-text-primary text-sm font-medium">
-                      {room.name}
-                      {room.roomNumber ? ` (#${room.roomNumber})` : ''}
-                    </p>
-                    <div className="text-theme-text-muted flex items-center gap-2 text-xs">
-                      <span>{enumLabel(room.roomType)}</span>
-                      {room.floor != null && <span>Floor {room.floor}</span>}
-                      {room.capacity != null && <span>Cap: {room.capacity}</span>}
-                      {room.squareFootage != null && <span>{formatNumber(room.squareFootage)} sq ft</span>}
-                      {room.zoneClassification && room.zoneClassification !== 'unclassified' && (
-                        <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                            ZONE_CLASSIFICATION_COLORS[room.zoneClassification] || ''
-                          }`}
-                        >
-                          {enumLabel(room.zoneClassification)} Zone
-                        </span>
-                      )}
+              <div key={room.id} className="bg-theme-surface-hover/30 rounded-lg p-3">
+                <div className="group flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <DoorOpen className="text-theme-text-muted h-4 w-4" />
+                    <div>
+                      <p className="text-theme-text-primary text-sm font-medium">
+                        {room.name}
+                        {room.roomNumber ? ` (#${room.roomNumber})` : ''}
+                      </p>
+                      <div className="text-theme-text-muted flex items-center gap-2 text-xs">
+                        <span>{enumLabel(room.roomType)}</span>
+                        {room.floor != null && <span>Floor {room.floor}</span>}
+                        {room.capacity != null && <span>Cap: {room.capacity}</span>}
+                        {room.squareFootage != null && <span>{formatNumber(room.squareFootage)} sq ft</span>}
+                        {room.zoneClassification && room.zoneClassification !== 'unclassified' && (
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                              ZONE_CLASSIFICATION_COLORS[room.zoneClassification] || ''
+                            }`}
+                          >
+                            {enumLabel(room.zoneClassification)} Zone
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <div className="flex items-center gap-1">
+                    {/* An inactive room's linked Location is inactive too, and the
+                        public display lookup refuses inactive locations — a QR
+                        for it would scan to "Display not found" */}
+                    {room.displayCode && room.isActive !== false && (
+                      <button
+                        onClick={() => setQrRoomId((prev) => (prev === room.id ? null : room.id))}
+                        className="text-theme-text-muted inline-flex items-center justify-center rounded-lg p-1.5 transition-colors hover:text-blue-500 max-md:min-h-11 max-md:min-w-11"
+                        aria-label={`Toggle QR code for ${room.name}`}
+                        title="Show check-in QR code"
+                      >
+                        <QrCode className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {canManage && (
+                      <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                        <button
+                          onClick={() => openEdit(room)}
+                          className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                          aria-label={`Edit room ${room.name}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            void handleDelete(room);
+                          }}
+                          className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                          aria-label={`Delete room ${room.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {canManage && (
-                  <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                    <button
-                      onClick={() => openEdit(room)}
-                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
-                      aria-label={`Edit room ${room.name}`}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
+                {qrRoomId === room.id && room.displayCode && room.isActive !== false && (
+                  <div className="border-theme-surface-border mt-3 flex flex-col items-center gap-2 rounded-lg border bg-white p-3">
+                    {/* bg-white intentional for QR code readability */}
+                    <QRCodeSVG
+                      value={`${window.location.origin}/display/${room.displayCode}`}
+                      size={140}
+                      level="H"
+                      includeMargin
+                    />
+                    <p className="text-center font-mono text-[10px] break-all text-gray-600">
+                      {`${window.location.origin}/display/${room.displayCode}`}
+                    </p>
                     <button
                       onClick={() => {
-                        void handleDelete(room);
+                        void handleCopyKioskUrl(room);
                       }}
-                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                      aria-label={`Delete room ${room.name}`}
+                      className="flex items-center gap-1.5 text-xs text-gray-600 transition-colors hover:text-blue-500 max-md:min-h-11"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      {copiedRoomId === room.id ? (
+                        <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
+                      ) : (
+                        <Copy className="h-3 w-3" aria-hidden="true" />
+                      )}
+                      Copy kiosk URL
                     </button>
                   </div>
                 )}

@@ -9,6 +9,7 @@ implementation of those rules would drift the moment one side was fixed, so
 these tests pin the shared one.
 """
 
+import copy
 import io
 from types import SimpleNamespace
 
@@ -261,3 +262,83 @@ def test_export_cells_are_neutralized_against_formula_injection():
 def test_falls_back_when_a_test_has_no_usable_structure(snapshot_sections):
     template = _template(sections=snapshot_sections or [])
     assert list(iter_criterion_rows(_test(FULL_RESULTS), template)) == []
+
+
+def _rows_by_label(test, template):
+    return {r["label"]: r for r in iter_criterion_rows(test, template)}
+
+
+class TestPointsDelta:
+    """What each step actually moved the point total by.
+
+    An export reader reconciling a percentage against the marks needs the
+    figure, not an inference: "Fail" alone does not say whether the step cost
+    anything, which is the whole gap the per-step score modes close.
+    """
+
+    def test_a_scored_step_reports_the_points_it_earned(self):
+        rows = _rows_by_label(_test(FULL_RESULTS), _template())
+
+        assert rows["Seal quality"]["points_delta"] == 4.0
+        assert rows["Seal quality"]["score_mode"] == "points"
+
+    def test_recorded_only_steps_move_nothing(self):
+        rows = _rows_by_label(_test(FULL_RESULTS), _template())
+
+        assert rows["Checks cylinder"]["points_delta"] == 0.0
+        assert rows["Checks cylinder"]["score_mode"] == "none"
+        assert rows["Brief"]["score_mode"] == "none"
+
+    def test_a_failed_deduct_step_reports_a_negative(self):
+        sections = copy.deepcopy(SECTIONS)
+        sections[1]["criteria"][1]["score_mode"] = "deduct"
+        sections[1]["criteria"][1]["deduction_points"] = 2
+
+        rows = _rows_by_label(_test(FULL_RESULTS), _template(sections=sections))
+
+        assert rows["PPE"]["points_delta"] == -2.0
+        assert rows["PPE"]["outcome"] == "failed"
+
+    def test_a_passed_deduct_step_reports_nothing(self):
+        sections = copy.deepcopy(SECTIONS)
+        sections[1]["criteria"][0]["score_mode"] = "deduct"
+
+        rows = _rows_by_label(_test(FULL_RESULTS), _template(sections=sections))
+
+        assert rows["In time"]["points_delta"] == 0.0
+
+    def test_a_points_mode_step_reports_what_passing_earned(self):
+        sections = copy.deepcopy(SECTIONS)
+        sections[0]["criteria"][1]["score_mode"] = "points"
+        sections[0]["criteria"][1]["max_score"] = 3
+
+        rows = _rows_by_label(_test(FULL_RESULTS), _template(sections=sections))
+
+        assert rows["Checks cylinder"]["points_delta"] == 3.0
+
+    def test_the_template_wide_setting_still_drives_unset_steps(self):
+        """The cylinder check carries no mode of its own, so it follows the
+        toggle that was the only control before per-step modes existed."""
+        rows = _rows_by_label(
+            _test(FULL_RESULTS), _template(score_pass_fail_criteria=True)
+        )
+
+        assert rows["Checks cylinder"]["points_delta"] == 1.0
+        assert rows["Checks cylinder"]["score_mode"] == "points"
+
+    def test_rows_agree_with_the_breakdown_they_are_exported_beside(self):
+        """The two describe the same test, so their deductions must add up to
+        the same figure — a second implementation would drift on first repair."""
+        sections = copy.deepcopy(SECTIONS)
+        sections[1]["criteria"][1]["score_mode"] = "deduct"
+        sections[1]["criteria"][1]["deduction_points"] = 2
+        template = _template(sections=sections)
+        test = _test(FULL_RESULTS)
+
+        from_rows = sum(
+            -r["points_delta"]
+            for r in iter_criterion_rows(test, template)
+            if r["points_delta"] < 0
+        )
+
+        assert from_rows == build_score_breakdown(test, template)["deducted"]

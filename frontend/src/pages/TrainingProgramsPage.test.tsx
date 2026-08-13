@@ -45,6 +45,7 @@ vi.mock('../utils/errorHandling', () => ({
   getErrorMessage: (err: unknown) => (err instanceof Error ? err.message : String(err)),
 }));
 
+let mockHasPermission = false;
 vi.mock('../stores/authStore', () => ({
   useAuthStore: vi.fn((selector) => {
     const state = {
@@ -55,6 +56,7 @@ vi.mock('../stores/authStore', () => ({
         role: { slug: 'member' },
         permissions: [],
       },
+      checkPermission: () => mockHasPermission,
     };
     if (typeof selector === 'function') {
       return (selector as (s: typeof state) => unknown)(state);
@@ -71,6 +73,7 @@ vi.mock('react-hot-toast', () => ({
 describe('TrainingProgramsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockHasPermission = false;
     mockGetPrograms.mockResolvedValue([
       {
         id: 'prog-1',
@@ -117,6 +120,25 @@ describe('TrainingProgramsPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Training Programs');
     });
+  });
+
+  it('shows an Admin breadcrumb back to the training admin hub for training managers', async () => {
+    mockHasPermission = true;
+    renderWithRouter(<TrainingProgramsPage />);
+
+    const nav = await screen.findByRole('navigation', { name: /breadcrumb/i });
+    const adminLink = within(nav).getByRole('link', { name: 'Admin' });
+    expect(adminLink).toHaveAttribute('href', '/training/admin');
+    expect(within(nav).getByRole('link', { name: 'Training' })).toHaveAttribute('href', '/training');
+    expect(within(nav).getByText('Programs')).toBeInTheDocument();
+  });
+
+  it('omits the Admin breadcrumb for members without training.manage', async () => {
+    renderWithRouter(<TrainingProgramsPage />);
+
+    const nav = await screen.findByRole('navigation', { name: /breadcrumb/i });
+    expect(within(nav).queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Training' })).toHaveAttribute('href', '/training');
   });
 
   it('loads programs on mount', async () => {

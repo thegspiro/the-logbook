@@ -970,6 +970,10 @@ class FacilityRoomResponse(FacilityRoomBase):
     updated_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # Kiosk display code of the linked Location record (rooms sync to
+    # Locations for Events/QR check-in). Attached by the service layer —
+    # not a column on FacilityRoom itself.
+    display_code: Optional[str] = None
     model_config = _response_config
 
 

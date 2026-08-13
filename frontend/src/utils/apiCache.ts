@@ -61,7 +61,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/records', // individual training records (scores, certs) — member PHI-adjacent
   '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
   '/facilities/emergency-contacts', // emergency contact PII
-  '/messages', // private member-to-member messages (list + thread; no trailing slash covers GET /messages)
+  '/messages', // department messages: targeted announcements + per-member inbox/read state (no trailing slash covers GET /messages)
   '/admin-hours/', // individual work hours and clock-in records
   '/prospective-members/', // applicant PII (name, contact, documents)
   '/scheduling/', // member shift assignments and availability

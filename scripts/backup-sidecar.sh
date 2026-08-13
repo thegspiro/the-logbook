@@ -159,5 +159,11 @@ fi
 echo "[backup] sidecar started; daily at $BACKUP_TIME, retention ${RETENTION_DAYS}d, verify every $VERIFY_EVERY run(s)"
 while true; do
     sleep "$(seconds_until "$BACKUP_TIME")"
-    run_backup || echo "[backup] !!! BACKUP RUN FAILED — investigate now" >&2
+    # Run asynchronously so the function itself is not evaluated as part of
+    # the conditional below (which would disable errexit inside the function).
+    run_backup &
+    backup_pid=$!
+    if ! wait "$backup_pid"; then
+        echo "[backup] !!! BACKUP RUN FAILED — investigate now" >&2
+    fi
 done

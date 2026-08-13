@@ -114,6 +114,22 @@ const RecordedMark: React.FC<{ criterion: SkillCriterion; result: CriterionResul
   );
 };
 
+/** What a failed step cost, printed beside the verdict.
+ *
+ *  A printed scorecard is the copy that goes in the training file and gets
+ *  handed to the candidate, so it has to answer the question the screen version
+ *  answers: a "FAIL" with no figure beside it is what made a deduction
+ *  invisible in the first place. Rendered from the criterion because the score
+ *  breakdown reports deductions per section, not per step. */
+const DeductionMark: React.FC<{ criterion: SkillCriterion; result: CriterionResult | undefined }> = ({
+  criterion,
+  result,
+}) => {
+  if (result?.passed !== false || criterion.score_mode !== 'deduct') return null;
+  const points = criterion.deduction_points && criterion.deduction_points > 0 ? criterion.deduction_points : 1;
+  return <span style={{ fontSize: '8.5pt', color: '#b00', whiteSpace: 'nowrap' }}> &minus;{points}</span>;
+};
+
 const SkillTestScorecardPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const testId = searchParams.get('id') || '';
@@ -389,6 +405,7 @@ const SkillTestScorecardPrintPage: React.FC = () => {
                         </td>
                         <td style={{ ...cellStyle, textAlign: 'center' }}>
                           <RecordedMark criterion={criterion} result={result} />
+                          <DeductionMark criterion={criterion} result={result} />
                         </td>
                         {/* Blank under `scores` disclosure — the API strips
                             examiner notes for a candidate at that level, and

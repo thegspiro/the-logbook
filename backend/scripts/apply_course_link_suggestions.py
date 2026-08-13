@@ -409,6 +409,23 @@ async def _restore(db, path) -> int:
 
         # New list object, same reasoning as in _apply().
         req.required_courses = list(change["before"])
+
+        await log_audit_event(
+            db=db,
+            event_type="training_requirement_courses_relink_restored",
+            event_category="training",
+            severity="info",
+            event_data={
+                "requirement_id": str(req.id),
+                "requirement_name": req.name,
+                "before": current,
+                "after": list(change["before"]),
+                "applied_by": "scripts/apply_course_link_suggestions.py",
+                "action": "requirement_courses_relink_restored",
+            },
+            organization_id=str(req.organization_id),
+        )
+
         restored += 1
         print(f"  RESTORE  {change['requirement_name']}")
 

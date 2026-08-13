@@ -179,6 +179,12 @@ The Facilities header has a **Print Labels** button that prints a barcode label 
 
 ![Facility label print page previewing station barcode labels](./images/06-08-facility-label-print.png)
 
+### Check-In QR Codes
+
+Every station and room gets a kiosk **display code** when it is created, and its QR code opens the room's public kiosk display (`/display/{code}`) for event check-in. The **Check-In QR Codes** page (`/locations/qr-codes`) collects every code in one printable directory, grouped by station/facility, with a search box for large departments. When the Scheduling module is enabled it also lists each apparatus's **shift check-in code** — a permanent QR encoding `/scheduling/checkin?apparatus={id}` that resolves the apparatus's active shift at scan time, so one printed card on the dashboard covers every shift. Two print layouts: **Cut-out cards** (a compact sheet — print, cut out, and post each code) and **Room signs** (one full-page sign per code, sized for posting on a door or dashboard). Reach the page from the **Check-In QR Codes** button on the Locations page, the matching link in a facility's Rooms section, or the command palette (Ctrl/Cmd+K, search "QR"). Rooms in a facility's Rooms section also have their own QR button to view and copy a single room's code in place, and an individual apparatus card is still available from any shift's detail panel.
+
+Each card offers **Download PNG** for embedding a code in your own signage documents. Users with `locations.edit` or `locations.manage` also see **Regenerate**: if a printed code leaks or walks off, regenerating issues a new code and the old `/display/{code}` URL stops working immediately — reprint the posted code and update any kiosk tablets afterward. Regenerations are recorded in the audit log.
+
 ---
 
 ## Facility Details

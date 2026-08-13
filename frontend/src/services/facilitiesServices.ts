@@ -967,6 +967,12 @@ export const locationsService = {
   async deleteLocation(locationId: string): Promise<void> {
     await api.delete(`/locations/${locationId}`);
   },
+
+  /** Rotate a location's kiosk display code — the old /display/{code} URL stops working immediately */
+  async regenerateDisplayCode(locationId: string): Promise<Location> {
+    const response = await api.post<Location>(`/locations/${locationId}/regenerate-display-code`);
+    return response.data;
+  },
 };
 
 // ============================================

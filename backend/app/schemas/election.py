@@ -1382,10 +1382,10 @@ class ElectionSettingsResponse(BaseModel):
     proxy_voting_enabled: Optional[bool] = False
     max_proxies_per_person: Optional[int] = 1
     # Per-department feature toggles (all default ON)
-    nominations_enabled: Optional[bool] = True
-    paper_ballots_enabled: Optional[bool] = True
-    reminders_enabled: Optional[bool] = True
-    auto_open_enabled: Optional[bool] = True
+    nominations_enabled: bool = True
+    paper_ballots_enabled: bool = True
+    reminders_enabled: bool = True
+    auto_open_enabled: bool = True
     # Officers (other than the recorder) who must attest a paper-ballot
     # batch before its votes count. 0 disables attestation.
     paper_ballot_attestations_required: Optional[int] = 2

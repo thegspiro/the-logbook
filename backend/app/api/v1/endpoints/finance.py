@@ -1314,8 +1314,13 @@ async def list_dues_payments(
     """
     service = FinanceService(db)
     try:
+        viewer_user_id = None
+        if not user_has_permission(current_user, "finance.manage"):
+            viewer_user_id = str(current_user.id)
         return await service.list_dues_payments(
-            dues_id, str(current_user.organization_id)
+            dues_id,
+            str(current_user.organization_id),
+            viewer_user_id=viewer_user_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=safe_error_detail(e))
@@ -1359,12 +1364,11 @@ async def unwaive_dues(
     """
     service = FinanceService(db)
     try:
-        dues, prior_reason = await service.unwaive_dues(
+        dues = await service.unwaive_dues(
             dues_id,
             str(current_user.organization_id),
             data.reason,
         )
-        # The erased waiver survives here and nowhere else.
         await log_audit_event(
             db=db,
             event_type="finance.dues_waiver_reversed",
@@ -1372,8 +1376,6 @@ async def unwaive_dues(
             severity="warning",
             event_data={
                 "dues_id": dues_id,
-                "reason": data.reason,
-                "reversed_waive_reason": prior_reason,
                 "restored_status": dues.status.value,
             },
             user_id=str(current_user.id),

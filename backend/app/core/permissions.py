@@ -1250,6 +1250,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SETTINGS_VIEW.name,
             TRAINING_VIEW.name,
             COMPLIANCE_VIEW.name,
+            # Elected officers set the department's member requirements
+            # (compliance profiles, required admin hours), not just read them.
+            COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,
             INVENTORY_VIEW.name,
             STOREFRONT_VIEW.name,
@@ -1330,6 +1333,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
             COMPLIANCE_VIEW.name,
+            # Secretary keeps the department's compliance records, including
+            # the required-hours rules members are graded against.
+            COMPLIANCE_MANAGE.name,
             TRAINING_VIEW.name,
             ELECTIONS_VIEW.name,
             ELECTIONS_MANAGE.name,

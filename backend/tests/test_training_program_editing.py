@@ -126,6 +126,31 @@ class TestDeleteProgram:
         assert db.stmt_types().count("Delete") == 7
         db.commit.assert_awaited_once()
 
+    async def test_preserves_requirements_the_program_does_not_own(self):
+        db = RecordingSession(
+            [
+                _rows([]),  # enrollment ids
+                _rows([]),  # no owned requirement links
+                MagicMock(),  # delete ProgramEnrollment
+                MagicMock(),  # delete ProgramMilestone
+                MagicMock(),  # delete ProgramRequirement
+                MagicMock(),  # delete ProgramPhase
+                MagicMock(),  # delete TrainingProgram
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc.get_program_by_id = AsyncMock(return_value=SimpleNamespace(id="p"))
+
+        ok, error = await svc.delete_training_program(uuid4(), uuid4())
+
+        assert ok is True
+        assert error is None
+        assert "program_requirements.owns_requirement IS true" in str(db.statements[1])
+        # Enrollment, milestone, link, phase, and program only; the department's
+        # non-owned TrainingRequirement is not considered for deletion.
+        assert db.stmt_types().count("Delete") == 5
+        db.commit.assert_awaited_once()
+
 
 class TestUpdatePhase:
     async def test_missing_returns_error(self):

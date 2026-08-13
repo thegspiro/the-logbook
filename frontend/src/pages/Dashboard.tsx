@@ -280,8 +280,13 @@ const Dashboard: React.FC = () => {
       // The badge uses the dedicated unread-count endpoint (which counts
       // across ALL messages and treats ack-required messages as pending until
       // acknowledged) rather than the length of this capped 10-item preview.
+      // include_read: false keeps the card to what still needs attention —
+      // resolved messages drop off on the next load, and already-read messages
+      // can't page a persistent standing notice out of the 10-item window
+      // (the backend exempts persistent messages from this filter, so they
+      // stay until an admin clears them). Full history lives on /messages.
       const [data, unread] = await Promise.all([
-        messagesService.getInbox({ limit: 10 }),
+        messagesService.getInbox({ include_read: false, limit: 10 }),
         messagesService.getUnreadCount(),
       ]);
       setDeptMessages(data);
@@ -296,6 +301,9 @@ const Dashboard: React.FC = () => {
   const markMessageRead = async (msgId: string) => {
     try {
       await messagesService.markAsRead(msgId);
+      // Deliberately marked in place rather than removed: yanking the card the
+      // member just clicked would pull the text out from under them. The
+      // include_read: false load drops it on the next dashboard visit.
       // A message that requires acknowledgment stays "pending" until it is
       // acknowledged, so reading it must not drop the unread count.
       const msg = deptMessages.find((m) => m.id === msgId);
