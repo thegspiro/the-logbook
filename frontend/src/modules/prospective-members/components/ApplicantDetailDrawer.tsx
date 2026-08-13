@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Applicant, StageHistoryEntry } from '../types';
+import { StepProgressStatus } from '../types';
 import { isSafeUrl, getInitials } from '../utils';
 import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
@@ -791,8 +792,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">Progress</h3>
                   <div className="flex items-center gap-1 overflow-x-auto pb-1">
                     {applicant.stage_history.map((entry, idx) => {
-                      const isComplete = !!entry.completed_at;
-                      const isCurrent = idx === applicant.stage_history.length - 1 && !isComplete;
+                      // Both derived from facts the record states rather than
+                      // inferred: a `completed_at` stamp can outlive the
+                      // completion it recorded, and "the last entry" is only
+                      // the current stage while the history is exactly the
+                      // visited prefix. Together they drew a track that
+                      // contradicted the Current Stage panel directly above it.
+                      const isComplete = entry.status === StepProgressStatus.COMPLETED;
+                      const isCurrent = entry.stage_id === applicant.current_stage_id;
                       const StageIcon = STAGE_TYPE_ICONS[entry.stage_type] ?? Circle;
                       return (
                         <React.Fragment key={entry.id}>
@@ -832,8 +839,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                   {/* Time in pipeline summary */}
                   <p className="text-theme-text-muted mt-2 text-xs">
-                    {applicant.stage_history.filter((e) => e.completed_at).length} of {applicant.total_stages} stages
-                    completed &middot; In pipeline since {formatDate(applicant.created_at, tz)}
+                    {applicant.stage_history.filter((e) => e.status === StepProgressStatus.COMPLETED).length} of{' '}
+                    {applicant.total_stages} stages completed &middot; In pipeline since{' '}
+                    {formatDate(applicant.created_at, tz)}
                   </p>
                 </div>
               )}

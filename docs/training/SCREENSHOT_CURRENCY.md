@@ -43,6 +43,105 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### The applicant progress track was drawn in the wrong order, and Back never undid an advance
+
+Opening `15-05-applicant-actions` to check its action bar caught two product
+defects behind it, neither of them about screenshots.
+
+**1. The progress track was drawn in whatever order the database returned.**
+`step_progress` has no `ORDER BY`, and `mapProspectToApplicant` mapped it
+straight through into `stage_history`, which the drawer draws as a
+left-to-right progress track. For Jordan Fields the API returned sort orders
+3, 0, 4, 5, 1, 2 — so the picture showed him finishing Background & Medical
+before Application Received. The public application-status page already sorts
+by `sort_order` and carries a comment explaining why; the drawer and the
+election-package snapshot never got the same treatment. All three now sort.
+
+**2. `regress_prospect` moved the pointer and nothing else.** It set the
+previous step back to `in_progress` but left its `completed_at` stamp, and left
+the step being vacated `in_progress` forever. The drawer counts stamps for
+"N of 6 stages completed" and draws a green tick per stamp, so an applicant
+sent **Back** to stage two still read as having completed it, with stage three
+still drawn as live underneath — a Back click that visibly changed nothing.
+Both are now cleared, and the test asserts the round trip: regress clears the
+stamp, and advancing again puts one back.
+
+**The demo database still carries the residue, and the images show it.** Six of
+seven seeded applicants have `step_progress` rows that disagree with their
+current stage — stages behind the pointer left `in_progress`, stages ahead of
+it holding completion stamps — all written by the buggy regress before it was
+fixed. It cannot recur, but it does not self-heal: the only API routes that
+touch these rows are advance and regress, and normalising a stage _ahead_ of an
+applicant requires advancing them onto it first, which for the vote stage
+creates an election package and would change guide 14's images too.
+
+So `15-05-applicant-actions` is committed with its ordering fixed and its
+counter still reading "4 of 6 stages completed" for an applicant on stage four.
+**That number is wrong and is known to be wrong.** Clearing it needs a decision
+this loop should not take on its own — rebuilding the demo database from
+`bootstrap_demo.py` would produce clean rows by construction, and would also
+invalidate every one of the 415 images verified against the current one.
+
+### 15-09-convert-modal, and prose describing three fields that do not exist
+
+Re-pointed off `openApplicantDrawer("Riley Bishop")` — with the spread restored
+Riley is no longer on the final stage, so the Convert button was not there to
+click — and onto `openApplicantAtStage("Onboarding")`, the property the caption
+is actually about. `15-05` was re-pointed the same way, at
+`Background & Medical`, because both stage-movement buttons only render for an
+applicant with somewhere to go in each direction.
+
+`openApplicantDrawer` had no call sites left after that and is deleted.
+
+Opening the result showed the guide listing **Membership ID** ("auto-generated
+or manual entry") and **Roles** ("initial role assignments") among the modal's
+fields. Neither exists in `ConversionModal.tsx`. It also described one screen
+where there are two steps, and missed Middle Name, Hire Date, Emergency Contact
+and Notes. Rewritten against the component.
+
+### The same wrong inference in three components, and an email running through a phone number
+
+`15-07-interview-form` pictured a panel headed "Current Stage: Application
+Received" with **Application Received ticked as completed** two lines below it.
+The applicant drawer had already been fixed for this; the interview page's
+Pipeline Progress and the conversion modal's "Completed N of M stages" were
+doing the same thing — deciding a stage was finished from the presence of a
+`completed_at` timestamp. All three now read the progress record's own status,
+which is the field that actually says so.
+
+The same shot also had the applicant's email running straight through the phone
+number in the next grid column. A flex child does not shrink below its content,
+so any address longer than half the card overlapped its neighbour. `min-w-0` on
+the row and `break-all` on the address; the icon no longer shrinks either.
+
+### Two bulk-action bars, and a duplicate image pair
+
+`15-11-table-bulk-actions` shows **two** bulk-action bars stacked, both reading
+"3 selected", offering different sets of buttons from two different components.
+The guide said "an action bar appears" and listed the buttons as
+"**Advance** / **Advance All**" as though they were alternate labels. They are
+two bars. The guide now says so, and the duplication is written up in
+`KNOWN_LIMITATIONS.md` — which bar survives is a design decision, not one for
+this loop.
+
+`15-01-pipeline-board` and `15-04-kanban-board` are byte-identical: the kanban
+board is the default view, and both captions genuinely describe it. A third
+legitimate duplicate pair alongside the two already recorded below; no hash
+sweep needs to re-investigate it.
+
+### The destructive shot had drifted, and now the manifest refuses to let it
+
+`15-09-bulk-action-result` runs a real bulk advance, and the comment beside it
+says that is why it sits last among the 15-\* shots. It was fourth. Every shot
+below it that finds its applicant by stage was matching against a board this
+had already advanced — which is what `15-05-applicant-actions` was timing out
+on, fifteen seconds of locator failure with nothing pointing at the cause.
+
+Moved back to last, and the manifest now **throws at import** if a shot flagged
+`mutatesSeedData` has any shot of the same guide after it. A comment did not
+survive one unrelated edit; the invariant now fails loudly at the top of a
+capture run instead of silently four shots later.
+
 ### 15-08-election-package was pointing at the wrong applicant, twice over
 
 Its caption promises "an applicant at the vote", and the election-package

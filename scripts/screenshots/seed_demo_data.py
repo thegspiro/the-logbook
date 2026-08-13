@@ -914,8 +914,7 @@ class Seeder:
         # It has to be /users/with-roles specifically; the plain /users list
         # does not carry mfa_enabled.
         enrolled = any(
-            pick(row, "username") == TWO_FACTOR_USERNAME
-            and pick(row, "mfa_enabled")
+            pick(row, "username") == TWO_FACTOR_USERNAME and pick(row, "mfa_enabled")
             for row in items(self.api.get("/users/with-roles"), "users")
         )
         if enrolled:
@@ -8685,6 +8684,61 @@ class Seeder:
                 self.blocked.append(f"pipeline stage {name}: {exc}")
                 return
 
+    def _has_unfinished_stage_behind(
+        self, prospect_id: str, order: list[str | None]
+    ) -> bool:
+        """Does this applicant have a stage behind them that never completed?
+
+        Repair detection, not seeding. `regress_prospect` used to move the
+        pointer and nothing else — it left the vacated stage `in_progress` and
+        left a `completed_at` stamp on the stage it returned to. The service is
+        fixed, but a demo database that has been through a few capture runs
+        still holds the rows, and the applicant drawer draws them: a green tick
+        missing from a stage the applicant plainly finished, and "N of 6 stages
+        completed" short by one.
+
+        The rows are only reachable through advance and regress, so the repair
+        is to walk the applicant back to the first stage and forward again —
+        which is what the caller does when this returns True.
+        """
+        detail = self.api.get(f"/prospective-members/prospects/{prospect_id}")
+        current_step_id = pick(detail, "current_step_id")
+        try:
+            current = order.index(current_step_id)
+        except ValueError:
+            return False
+
+        for progress in detail.get("step_progress") or []:
+            try:
+                position = order.index(pick(progress, "step_id"))
+            except ValueError:
+                continue
+            if position < current and progress.get("status") not in (
+                "completed",
+                "skipped",
+            ):
+                return True
+        return False
+
+    def _rewind_to_first_stage(
+        self, prospect_id: str, order: list[str | None], current: int
+    ) -> int:
+        """Regress an applicant to the first stage; return where they ended up.
+
+        Each regress now clears the stamp on the stage it reopens and puts the
+        stage it vacates back to pending, so walking to the bottom leaves every
+        row consistent. The caller then advances forward to the target stage,
+        which re-completes each one properly on the way.
+        """
+        for _ in range(current):
+            try:
+                self.api.post(f"/prospective-members/prospects/{prospect_id}/regress")
+            except ApiError as exc:
+                self.blocked.append(f"rewind applicant: {exc}")
+                break
+            current -= 1
+        return current
+
     def _spread_prospects_across_stages(self, pipeline_id: str | None) -> None:
         """Move applicants forward so the board shows a pipeline, not a pile.
 
@@ -8726,6 +8780,9 @@ class Seeder:
                 current = order.index(pick(prospect, "current_step_id"))
             except ValueError:
                 current = 0
+
+            if self._has_unfinished_stage_behind(prospect_id, order):
+                current = self._rewind_to_first_stage(prospect_id, order, current)
 
             # Move *back* as well as forward. `15-09-bulk-action-result` runs a
             # real bulk advance during capture, and the manifest assumes a

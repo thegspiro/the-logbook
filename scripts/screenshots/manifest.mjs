@@ -608,17 +608,6 @@ export function openIntegrationConnect(providerName) {
   };
 }
 
-export function openApplicantDrawer(name) {
-  return async (page) => {
-    await clickByName(/^table$/i)(page);
-    await page
-      .getByText(name, { exact: true })
-      .first()
-      .click({ timeout: 10_000 });
-    await page.waitForTimeout(600);
-  };
-}
-
 /**
  * Open the drawer of whichever applicant is currently at `stage`.
  *
@@ -5273,38 +5262,6 @@ export const SHOTS = [
     },
   },
   {
-    id: "15-09-bulk-action-result",
-    doc: "15-prospective-members.md",
-    line: 495,
-    anchor: "The pair of notifications after a bulk advance that",
-    alt: "Bulk advance reporting how many moved and naming the applicants it skipped",
-    route: "/prospective-members",
-    // Runs a real bulk advance, so it *changes the seeded data* — which is why
-    // it sits last among the 15-* shots. Re-running the seeder restores a mixed
-    // page (it tops the pipeline up and re-parks two applicants at the final
-    // stage), so the shot is repeatable; it is just not idempotent on its own.
-    //
-    // The partial failure is the point. Page one is deliberately mixed: most
-    // rows are at intake and a few are at the final stage, where advancing is
-    // refused. Selecting the page produces both toasts — the count that moved,
-    // and the named applicants that could not.
-    prepare: async (page) => {
-      await clickByName("Table")(page);
-      const selectAll = page.locator("thead th:first-child button");
-      await selectAll.waitFor({ state: "visible", timeout: 15_000 });
-      await selectAll.click();
-      await clickByName("Advance All")(page);
-      // Both toasts, not just the first: the success one renders immediately
-      // and the skipped one follows the response, so waiting on either alone
-      // races the capture.
-      await page
-        .getByText(/Skipped \d+:/)
-        .first()
-        .waitFor({ state: "visible", timeout: 30_000 });
-      await page.waitForTimeout(600);
-    },
-  },
-  {
     id: "08-73-template-builder-preview",
     doc: "08-admin-reports.md",
     line: 1308,
@@ -8182,7 +8139,11 @@ export const SHOTS = [
       "Screenshot of the applicant detail drawer showing the action buttons",
     alt: "Applicant drawer action bar with the stage-movement buttons",
     route: "/prospective-members",
-    prepare: openApplicantDrawer("Sam Okafor"),
+    // Both stage-movement buttons only render for an applicant who has
+    // somewhere to go in each direction, so this needs a mid-pipeline stage —
+    // matched by stage rather than by name so a re-spread cannot land it on
+    // somebody at either end with half the action bar missing.
+    prepare: openApplicantAtStage("Background & Medical"),
     fullPage: true,
     allowEmptyState: true,
   },
@@ -8208,12 +8169,14 @@ export const SHOTS = [
     line: 389,
     anchor:
       "Screenshot of the Convert to Member modal showing membership type selector",
-    alt: "Convert to member modal with membership type, ID and rank fields",
+    alt: "Step 2 of the Convert to Member modal — membership type, rank, station and hire date",
     route: "/prospective-members",
     prepare: async (page) => {
       // Conversion is not its own button: Advance on the *last* stage opens
-      // the modal. Riley Bishop sits on Onboarding, the final stage.
-      await openApplicantDrawer("Riley Bishop")(page);
+      // the modal, so this shot needs whoever is sitting on Onboarding —
+      // match on that stage rather than on a name, since the seeder spreads
+      // applicants across stages and who lands on the last one moves.
+      await openApplicantAtStage("Onboarding")(page);
       await clickByName(/convert/i)(page);
       // The modal opens on step 1 of 2 (Review Applicant); the membership
       // type, ID, rank and start date the placeholder names are on step 2.
@@ -8221,6 +8184,43 @@ export const SHOTS = [
     },
     fullPage: false,
     allowEmptyState: true,
+  },
+  {
+    id: "15-09-bulk-action-result",
+    doc: "15-prospective-members.md",
+    line: 495,
+    anchor: "The pair of notifications after a bulk advance that",
+    alt: "Bulk advance reporting how many moved and naming the applicants it skipped",
+    route: "/prospective-members",
+    // Runs a real bulk advance, so it *changes the seeded data* — every
+    // applicant on page one moves a stage on. It must therefore stay the LAST
+    // 15-* entry: the shots above it match applicants by the stage they sit on
+    // (`openApplicantAtStage`), and a run of this one empties whichever stages
+    // those shots were waiting for. It had drifted up to fourth, and
+    // 15-05-applicant-actions timed out looking for a Background & Medical
+    // applicant this had already advanced past. Re-running the seeder puts the
+    // spread back, so the shot is repeatable; it is just not idempotent, and
+    // nothing that depends on the spread may run after it.
+    //
+    // The partial failure is the point: the applicant on the final stage has
+    // nowhere to advance to, so selecting the page produces both toasts — the
+    // count that moved, and the named applicants that could not.
+    mutatesSeedData: true,
+    prepare: async (page) => {
+      await clickByName("Table")(page);
+      const selectAll = page.locator("thead th:first-child button");
+      await selectAll.waitFor({ state: "visible", timeout: 15_000 });
+      await selectAll.click();
+      await clickByName("Advance All")(page);
+      // Both toasts, not just the first: the success one renders immediately
+      // and the skipped one follows the response, so waiting on either alone
+      // races the capture.
+      await page
+        .getByText(/Skipped \d+:/)
+        .first()
+        .waitFor({ state: "visible", timeout: 30_000 });
+      await page.waitForTimeout(600);
+    },
   },
   // 15-13-application-status has no entry, on purpose.
   //
@@ -9093,3 +9093,29 @@ export const SHOTS = [
     fullPage: false,
   },
 ];
+
+/**
+ * A shot flagged `mutatesSeedData` leaves the database changed for everything
+ * captured after it, so it has to be the last shot of its guide.
+ *
+ * Enforced here rather than trusted to a comment because the failure is silent
+ * in the worst way: 15-09-bulk-action-result drifted to fourth among the 15-*
+ * entries during an unrelated edit, advanced every applicant a stage on, and
+ * the shots below it — which find their applicant by the stage they sit on —
+ * either timed out or would have pictured the wrong person under a caption
+ * about the right one. Import time is the right place to catch it; by capture
+ * time the evidence is a 15-second locator timeout with no hint of the cause.
+ */
+for (const [index, shot] of SHOTS.entries()) {
+  if (!shot.mutatesSeedData) continue;
+  const laterInSameDoc = SHOTS.slice(index + 1).filter(
+    (later) => later.doc === shot.doc,
+  );
+  if (laterInSameDoc.length > 0) {
+    throw new Error(
+      `${shot.id} mutates the seeded data, so it must be the last shot of ` +
+        `${shot.doc}; these still follow it: ` +
+        laterInSameDoc.map((later) => later.id).join(", "),
+    );
+  }
+}

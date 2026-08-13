@@ -389,14 +389,22 @@ See [Elections & Voting > Prospective Member Election Packages](./14-elections.m
 When an applicant has completed all pipeline stages:
 
 1. Click **Convert to Member** in the applicant detail view
-2. The conversion modal appears:
-   - **Membership Type** — Pre-filled from applicant's desired type
-   - **Membership ID** — Auto-generated or manual entry
-   - **Rank** — Starting rank (Probationary for regular members)
-   - **Station** — Assigned station
-   - **Roles** — Initial role assignments
-   - **Send Welcome Email** — Toggle for welcome notification
-3. Confirm conversion
+2. **Step 1 — Review Applicant** summarises what is on file (name, email,
+   phone, target membership type and role) so you can check it before an
+   account is created. Click **Continue** to go on.
+3. **Step 2 — Set Up Account** collects the details of the new member record:
+   - **Membership Type** — Pre-filled from the applicant's desired type.
+     Choosing **Regular Member** starts the member as probationary
+   - **Rank** — Starting rank, entered free-text (e.g. Firefighter)
+   - **Station** — Assigned station, entered free-text
+   - **Middle Name** — Optional; the first and last name come from the
+     application
+   - **Hire Date** — Defaults to today
+   - **Emergency Contact** — Optional name, relationship and phone
+   - **Send welcome email with login credentials** — On by default
+   - **Notes** — Optional note recorded against the conversion
+4. Click **Convert to Member** to confirm. The conversion creates the member
+   account and marks the applicant converted; it cannot be undone.
 
 ### What Happens on Conversion
 
@@ -407,7 +415,7 @@ When an applicant has completed all pipeline stages:
 - The `converted_to_member_id` field links to the new user
 - Activity log records the conversion with timestamp
 
-![Convert to member modal with membership type, ID and rank fields](./images/15-09-convert-modal.png)
+![Step 2 of the Convert to Member modal — membership type, rank, station and hire date](./images/15-09-convert-modal.png)
 
 ### Edge Cases
 
@@ -487,12 +495,14 @@ Select multiple applicants on the pipeline dashboard to perform bulk actions:
 
 1. Check the boxes next to applicant names — in **Table** view, the checkbox in
    the header row selects everything on the current page
-2. An action bar appears with the available actions:
-   - **Advance** / **Advance All** — Move all selected to the next stage
-   - **Hold** — Put all selected on hold
-   - **Reject** / **Reject All** — Reject all selected, with a reason
-   - **Print Badges** — Open the label sheet for the selected applicants
-   - On the **Inactive Applications** tab the same bar offers **Reactivate**
+2. **Two action bars appear**, one above the other, and they offer different
+   actions. This is a known rough edge, not a difference in meaning — the
+   buttons that share a name do the same thing:
+   - The upper bar: **Print Badges** (opens the label sheet for the selected
+     applicants), **Advance All**, **Reject All** (with a reason)
+   - The lower bar: **Advance**, **Hold** (puts all selected on hold),
+     **Reject** (with a reason)
+   - On the **Inactive Applications** tab the bar offers **Reactivate**
 3. Confirm the bulk action
 
 > **There is no bulk delete.** Applicants are withdrawn, rejected or purged by

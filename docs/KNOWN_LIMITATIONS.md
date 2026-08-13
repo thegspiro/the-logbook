@@ -1592,6 +1592,55 @@ placeholder is retired until a screen exists to photograph.
 Needs an owner decision: whether to build the settings section or drop the
 feature. This loop does not make that call.
 
+## Prospective Members — Two Bulk-Action Bars Render At Once (2026-08-13)
+
+Selecting applicants in **Table** view puts two independent bulk-action bars on
+the screen, stacked, each reading "N selected". They come from different
+components and neither is a superset of the other:
+
+| Bar                                  | Offers                                |
+| ------------------------------------ | ------------------------------------- |
+| `ProspectiveMembersPage.tsx` (upper) | Print Badges, Advance All, Reject All |
+| `PipelineTable.tsx` (lower)          | Advance, Hold, Reject                 |
+
+The two "advance" buttons run different code paths — `handleBulkAdvance` and
+`handleBulkAction('advance')` — and reach the same endpoint, so pressing either
+does the same thing. Hold is only on the lower bar; Print Badges only on the
+upper. A coordinator has no way to tell that from looking at them.
+
+Found while verifying `15-11-table-bulk-actions`, which pictures both bars. The
+guide now describes them as two bars rather than one, because that is what the
+screen does.
+
+Needs an owner decision: which bar survives, and where Hold and Print Badges
+live afterwards. Merging them changes the documented action list, so this loop
+does not make that call.
+
+## Prospective Members — The Progress Track Still Draws Stages Not Yet Reached (2026-08-13)
+
+`regress_prospect` used to leave the stage it vacated marked `in_progress`
+rather than returning it to `pending`. That is fixed, but rows written before
+the fix survive in any long-lived database, and the applicant drawer draws one
+chip per non-pending row — so an applicant can show chips for stages ahead of
+the one they are on.
+
+The display no longer _contradicts_ itself: the current-stage marker and the
+"N of M stages completed" count both read the progress record's own status
+rather than inferring from a `completed_at` stamp, so the ticks and the count
+agree with the Current Stage panel. The only symptom left is extra chips.
+
+Self-healing is partial. `seed_demo_data.py` walks an applicant back to the
+first stage and forward again when it finds an unfinished stage _behind_ them,
+which repairs that class completely. A stale row _ahead_ of an applicant can
+only be reset by vacating it, which means advancing them onto it first — and
+for the election-vote stage that creates an election package, changing data the
+elections guide's screenshots are composed around. Not worth it for a cosmetic
+chip.
+
+Needs an owner decision if it matters in production: a one-off data migration
+that normalises `prospect_step_progress` against each prospect's
+`current_step_id` would clear it in one pass.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked
