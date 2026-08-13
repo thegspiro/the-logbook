@@ -427,6 +427,7 @@ class Apparatus(Base):
 
     # Staffing
     min_staffing = Column(Integer, default=1, nullable=False, server_default="1")
+    crew_positions = Column(JSON, nullable=True)
 
     # EVOC level required to drive this apparatus
     required_evoc_level_id = Column(
