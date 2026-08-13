@@ -1315,7 +1315,13 @@ async def list_dues_payments(
     service = FinanceService(db)
     try:
         return await service.list_dues_payments(
-            dues_id, str(current_user.organization_id)
+            dues_id,
+            str(current_user.organization_id),
+            restrict_to_user=(
+                None
+                if user_has_permission(current_user, "finance.manage")
+                else str(current_user.id)
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=safe_error_detail(e))

@@ -21,10 +21,12 @@ they run without a database and stay in CI's unit job.
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.api.v1.endpoints import finance as finance_ep
 from app.models.finance import DuesPayment, DuesStatus, MemberDues
 from app.services.finance_service import FinanceService, _apply_payment_totals
 
@@ -223,6 +225,70 @@ class TestIdempotency:
 
         assert len(dues.payments) == 2
         assert dues.amount_paid == Decimal("40.00")
+
+
+class TestPaymentLedgerAccess:
+    @staticmethod
+    def _capturing_service():
+        captured = {}
+
+        async def _execute(statement):
+            captured["statement"] = statement
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = None
+            return result
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=_execute)
+        return FinanceService(db), captured
+
+    async def test_service_scopes_ledger_lookup_to_requested_user(self):
+        service, captured = self._capturing_service()
+
+        with pytest.raises(ValueError, match="not found"):
+            await service.list_dues_payments(
+                "dues-1", ORG_ID, restrict_to_user="member-1"
+            )
+
+        assert "member_dues.user_id" in str(captured["statement"].whereclause)
+
+    async def test_service_allows_unscoped_manager_lookup(self):
+        service, captured = self._capturing_service()
+
+        with pytest.raises(ValueError, match="not found"):
+            await service.list_dues_payments("dues-1", ORG_ID)
+
+        assert "member_dues.user_id" not in str(captured["statement"].whereclause)
+
+    async def test_endpoint_self_scopes_non_manager(self):
+        service = MagicMock()
+        service.list_dues_payments = AsyncMock(return_value=[])
+        user = SimpleNamespace(id="member-1", organization_id=ORG_ID)
+
+        with (
+            patch.object(finance_ep, "FinanceService", return_value=service),
+            patch.object(finance_ep, "user_has_permission", return_value=False),
+        ):
+            await finance_ep.list_dues_payments("dues-1", MagicMock(), user)
+
+        service.list_dues_payments.assert_awaited_once_with(
+            "dues-1", ORG_ID, restrict_to_user="member-1"
+        )
+
+    async def test_endpoint_does_not_self_scope_manager(self):
+        service = MagicMock()
+        service.list_dues_payments = AsyncMock(return_value=[])
+        user = SimpleNamespace(id="manager-1", organization_id=ORG_ID)
+
+        with (
+            patch.object(finance_ep, "FinanceService", return_value=service),
+            patch.object(finance_ep, "user_has_permission", return_value=True),
+        ):
+            await finance_ep.list_dues_payments("dues-1", MagicMock(), user)
+
+        service.list_dues_payments.assert_awaited_once_with(
+            "dues-1", ORG_ID, restrict_to_user=None
+        )
 
 
 class TestUnwaive:
