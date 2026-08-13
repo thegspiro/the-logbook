@@ -840,7 +840,12 @@ When a prospective member reaches the **Election Vote** stage of their pipeline,
 4. Members vote to approve or deny
 5. Results flow back: package status → `elected` or `not_elected`
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the election detail page showing a membership approval ballot item with an applicant's name, supporting statement, and Approve/Deny voting options._
+![The ballot preview's membership approval item — the applicant named in the title, the coordinator's supporting statement, and the Approve and Deny options](./images/14-23-membership-ballot-item.png)
+
+The election detail page lists the item; **Preview Ballot** is what shows it as a
+voter will see it — Approve, Deny, and **Abstain (Do not vote on this item)**,
+which every approval item carries. The options are inert in the preview: it is a
+rendering of the ballot, not a ballot.
 
 See [Membership Management > Prospective Members](./01-membership.md#prospective-members-pipeline) for the full pipeline workflow.
 

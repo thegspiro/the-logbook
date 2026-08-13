@@ -18,9 +18,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
+import struct
+import time as time_module
 import sys
 import urllib.error
 import urllib.request
@@ -122,6 +127,32 @@ GUEST_EMAIL = "rosa.delgado@example.com"
 # non-empty. `rduarte` is a firefighter, which does not.
 DEMO_PEER_EXAMINER_USERNAME = "rduarte"
 
+# The one member enrolled in TOTP, so the login page's authentication-code step
+# and the members admin page's Reset MFA action have something to picture.
+#
+# Enrolling an account has a cost the rest of this file has to respect: once
+# MFA is on, `login_as` no longer yields a session — it stops at the code step,
+# and every call the returned Api makes answers 401. Several steps below sign
+# in as *every* non-administrator member, so the account cannot be one they
+# reach. `password_login_members` is the filter they all go through; adding the
+# 2FA member to any bare `members` loop that logs in will break that step.
+#
+# It must also not be DEMO_ADMIN_USERNAME, DEMO_MEMBER_USERNAME or
+# DEMO_PEER_EXAMINER_USERNAME — each of those is signed into by name elsewhere.
+# `_assert_two_factor_account_is_unused` checks that at seed time.
+TWO_FACTOR_USERNAME = "whalloway"
+
+
+def password_login_members(members: list[dict]) -> list[dict]:
+    """Members a step may sign in as with a password.
+
+    Excludes the administrator (who has their own credentials) and the TOTP
+    account (whose password sign-in stops at the code step).
+    """
+    excluded = {DEMO_ADMIN_USERNAME, TWO_FACTOR_USERNAME}
+    return [m for m in members if m.get("username") not in excluded]
+
+
 # Ranks whose default permissions include training.manage. Mirrors
 # app/core/permissions.py's rank defaults; kept here as a literal because the
 # seeder talks to the API over HTTP and does not import the backend.
@@ -133,6 +164,16 @@ OFFICER_RANKS = frozenset(
 # seeder can find it: it is the only template that can produce a scorecard with
 # per-section point totals and a percentage.
 SCORED_TEMPLATE_NAME = "Handline Advance — Weighted Evaluation"
+
+# The statement the membership coordinator writes for the ballot. Shared so the
+# election package panel and the ballot item that carries it to voters say the
+# same thing — the guide's whole point about a package being what the ballot is
+# built from.
+SUPPORTING_STATEMENT = (
+    "Completed all six pipeline stages with no skipped steps. Two interview "
+    "panels recommended approval; background and medical returned clear. Has "
+    "attended eleven drills as a guest since March."
+)
 
 # The candidate on the one failed test. Not the demo member, whose passed test
 # the scorecard screenshots are built around.
@@ -177,6 +218,25 @@ NOW = datetime.now(timezone.utc)
 
 def iso(dt: datetime) -> str:
     return dt.replace(microsecond=0).isoformat()
+
+
+def totp_now(secret: str, digits: int = 6, period: int = 30) -> str:
+    """The current TOTP code for a base32 *secret* (RFC 6238, SHA-1).
+
+    Hand-rolled rather than imported: this script is stdlib-only so the README's
+    plain `python scripts/screenshots/seed_demo_data.py` works without the
+    backend's virtualenv, and pyotp — which the backend does depend on — is not
+    installed system-wide.
+    """
+    # Base32 secrets are conventionally unpadded; b32decode insists on padding.
+    padded = secret.upper() + "=" * (-len(secret) % 8)
+    key = base64.b32decode(padded)
+    counter = int(time_module.time()) // period
+    digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    # Dynamic truncation: the low nibble of the last byte picks the offset.
+    offset = digest[-1] & 0x0F
+    code = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    return str(code % (10**digits)).zfill(digits)
 
 
 class ApiError(RuntimeError):
@@ -812,7 +872,90 @@ class Seeder:
             )
             created.append(record)
         self._fill_in_the_administrator(created)
+        self._enable_two_factor_for_one_member(created)
         return created
+
+    # Accounts something else signs into by name. Enrolling any of them in TOTP
+    # breaks that caller, because a password sign-in on an MFA account stops at
+    # the code step and returns no session.
+    PASSWORD_LOGIN_ACCOUNTS = frozenset(
+        {
+            DEMO_ADMIN_USERNAME,
+            DEMO_MEMBER_USERNAME,
+            DEMO_PEER_EXAMINER_USERNAME,
+        }
+    )
+
+    def _assert_two_factor_account_is_unused(self) -> None:
+        """Fail loudly if the TOTP account is one somebody signs into.
+
+        The first choice here was DEMO_PEER_EXAMINER_USERNAME, picked after
+        checking only the two accounts *captures* sign in as. The seeder signs
+        in as far more than that, and the result was three steps failing with
+        401s a long way from the cause.
+        """
+        if TWO_FACTOR_USERNAME in self.PASSWORD_LOGIN_ACCOUNTS:
+            raise SystemExit(
+                f"TWO_FACTOR_USERNAME is {TWO_FACTOR_USERNAME!r}, which is also "
+                "signed into by password elsewhere in this file. Enrolling it "
+                "in TOTP breaks that caller — choose an account no step signs "
+                "in as."
+            )
+
+    def _enable_two_factor_for_one_member(self, members: list[dict]) -> None:
+        """Enrol one member in TOTP.
+
+        With nobody enrolled, two things cannot be pictured: the login page's
+        authentication-code step, and the **Reset MFA** action on the members
+        admin page, which only renders for a user who has it on.
+        """
+        self._assert_two_factor_account_is_unused()
+        target = next(
+            (m for m in members if pick(m, "username") == TWO_FACTOR_USERNAME),
+            None,
+        )
+        user_id = pick(target or {}, "id")
+        if not user_id:
+            return
+
+        # Read the flag as the administrator, not through the member's own
+        # /auth/mfa/status: once MFA is on, a password sign-in stops short of a
+        # session and every call it makes answers 401 — so the check that is
+        # supposed to make this step idempotent is the first thing that breaks.
+        # It has to be /users/with-roles specifically; the plain /users list
+        # does not carry mfa_enabled.
+        enrolled = any(
+            pick(row, "username") == TWO_FACTOR_USERNAME and pick(row, "mfa_enabled")
+            for row in items(self.api.get("/users/with-roles"), "users")
+        )
+        if enrolled:
+            return
+
+        # `member_session`, not a bare `login_as`: `POST /users` flags every
+        # account it creates must_change_password, and `/auth/mfa/setup` is not
+        # one of the paths that gate exempts
+        # (`_MUST_CHANGE_PW_ALLOWED_SUFFIXES` in `app/api/dependencies.py`). A
+        # bare sign-in therefore succeeds and the enrolment request that
+        # follows answers 403, leaving nobody enrolled and
+        # `00-23-login-two-factor` timing out on a code step that never
+        # appears. Clearing the flag re-sets the same DEMO_MEMBER_PASSWORD, so
+        # the credentials the manifest signs in with are unchanged.
+        try:
+            session = self.member_session(self.base_url, user_id, TWO_FACTOR_USERNAME)
+        except ApiError as exc:
+            self.blocked.append(f"two-factor: sign in as member: {exc}")
+            return
+
+        try:
+            secret = session.post("/auth/mfa/setup")["secret"]
+            # Enrolment is only complete once a real code is verified — there
+            # is no endpoint that flips the flag directly, by design.
+            session.post(
+                "/auth/mfa/verify-setup",
+                {"code": totp_now(secret)},
+            )
+        except ApiError as exc:
+            self.blocked.append(f"two-factor: enrol {TWO_FACTOR_USERNAME}: {exc}")
 
     def _fill_in_the_administrator(self, members: list[dict]) -> None:
         """Give the demo administrator the contact details everyone else has.
@@ -5323,7 +5466,7 @@ class Seeder:
         # Acknowledging is a first-person action — there is no "acknowledge on
         # behalf of" route — so each member signs in, exactly as they do for
         # RSVPs. Two thirds of the roster, leaving the rest outstanding.
-        signers = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME]
+        signers = password_login_members(members)
         for member in signers[: (len(signers) * 2) // 3]:
             username = member.get("username")
             if not username:
@@ -6351,6 +6494,29 @@ class Seeder:
                 continue
             self.api.patch(f"{path}/{record_id}", {"maintenance_type_id": target})
 
+    def _hydrated_templates(self, templates: list[dict]) -> list[dict]:
+        """Re-fetch each template so its `sections` are actually present.
+
+        The list endpoint returns `section_count` and `criteria_count` and no
+        `sections` at all. Both passes below walk `template["sections"]`, so
+        handed the list response they iterate nothing and report success —
+        `_repair_criterion_types` had been a silent no-op since it was written,
+        which is why the "checkbox" criteria it exists to rewrite were still on
+        file. Fetch the detail first, or neither pass does anything.
+        """
+        hydrated = []
+        for template in templates:
+            template_id = pick(template, "id")
+            if not template_id:
+                continue
+            try:
+                hydrated.append(
+                    self.api.get(f"/training/skills-testing/templates/{template_id}")
+                )
+            except ApiError as exc:
+                self.blocked.append(f"hydrate skill template: {exc}")
+        return hydrated
+
     def _repair_criterion_types(self, templates: list[dict]) -> None:
         """Rewrite criteria this seeder stored under a type the scorer ignores.
 
@@ -6381,11 +6547,59 @@ class Seeder:
                     {"sections": sections},
                 )
 
+    def _backfill_missing_criteria(self, templates: list[dict], blueprint) -> None:
+        """Add criteria the blueprint has gained since a template was created.
+
+        `seed_skills_testing` skips a template that already exists by name, so
+        anything added to the blueprint afterwards never reaches a demo database
+        seeded before the change. That is how the sheets ended up with **no
+        statement criteria at all** while the blueprint declared two, leaving
+        `09-skills-testing.md`'s read-aloud placeholder with nothing to
+        photograph.
+
+        Matches on the criterion's label within its section, and appends what is
+        missing. It never edits or removes an existing criterion — a sheet an
+        examiner has already scored against keeps the steps it was scored with.
+        """
+        by_name = {t.get("name"): t for t in templates}
+        for name, _category, sections in blueprint:
+            template = by_name.get(name)
+            if not template:
+                continue
+            template_id = pick(template, "id")
+            live_sections = pick(template, "sections") or []
+            if not template_id or not isinstance(live_sections, list):
+                continue
+
+            wanted = {section_name: entries for section_name, entries in sections}
+            appended = False
+            for live_section in live_sections:
+                if not isinstance(live_section, dict):
+                    continue
+                entries = wanted.get(live_section.get("name"))
+                if not entries:
+                    continue
+                criteria = live_section.setdefault("criteria", [])
+                have = {c.get("label") for c in criteria if isinstance(c, dict)}
+                for order, entry in enumerate(entries):
+                    payload = criterion_payload(entry, order)
+                    if payload["label"] in have:
+                        continue
+                    payload["sort_order"] = len(criteria)
+                    criteria.append(payload)
+                    appended = True
+
+            if appended:
+                self.api.put(
+                    f"/training/skills-testing/templates/{template_id}",
+                    {"sections": live_sections},
+                )
+
     def seed_skills_testing(self) -> list[dict]:
         templates = items(
             self.api.get("/training/skills-testing/templates"), "templates"
         )
-        self._repair_criterion_types(templates)
+        self._repair_criterion_types(self._hydrated_templates(templates))
         names = {t.get("name") for t in templates}
         blueprint = [
             (
@@ -6479,6 +6693,25 @@ class Seeder:
                         "Hose Advance",
                         [
                             {
+                                # The counterpart to the briefing above, and the
+                                # reason `starts_timer` exists: this one is read
+                                # mid-evolution, so the examiner's tap on
+                                # "Start clock & read" is what puts it inside
+                                # the time limit.
+                                "label": (
+                                    "Examiner reads the change of conditions "
+                                    "once the candidate is on the line."
+                                ),
+                                "type": "statement",
+                                "statement_text": (
+                                    "Conditions have changed — you have heavy "
+                                    "smoke to the floor and heat banking down "
+                                    "the stairwell."
+                                ),
+                                "starts_timer": True,
+                                "required": False,
+                            },
+                            {
                                 "label": "Selects and stretches the correct line",
                                 "type": "score",
                                 "max_score": 10,
@@ -6564,6 +6797,8 @@ class Seeder:
                 f"/training/skills-testing/templates/{pick(template, 'id')}/publish"
             )
             templates.append(template)
+
+        self._backfill_missing_criteria(self._hydrated_templates(templates), blueprint)
         return templates
 
     # -- training records --------------------------------------------
@@ -6729,10 +6964,10 @@ class Seeder:
         if not event_ids:
             return
 
-        for member_index, member in enumerate(members):
+        for member_index, member in enumerate(password_login_members(members)):
             user_id = pick(member, "id")
             username = member.get("username")
-            if not user_id or username == DEMO_ADMIN_USERNAME:
+            if not user_id:
                 continue
 
             member_api = self.member_session(base_url, user_id, username)
@@ -7070,6 +7305,33 @@ class Seeder:
         )
         return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
 
+    def _snapshot_is_current(self, test: dict, template: dict) -> bool:
+        """Does a test's snapshotted sheet still hold every criterion the
+        template does?
+
+        Compared by criterion label per section, which is what the backfill
+        matches on. Extra criteria in the snapshot are fine — a template can
+        lose a step without invalidating a test already scored against it.
+        """
+        detail = self.api.get(f"/training/skills-testing/tests/{pick(test, 'id')}")
+        snapshot = {
+            section.get("name"): {
+                criterion.get("label") for criterion in section.get("criteria") or []
+            }
+            for section in detail.get("template_sections") or []
+        }
+        live = self.api.get(
+            f"/training/skills-testing/templates/{pick(template, 'id')}"
+        )
+        for section in live.get("sections") or []:
+            have = snapshot.get(section.get("name"))
+            if have is None:
+                return False
+            for criterion in section.get("criteria") or []:
+                if criterion.get("label") not in have:
+                    return False
+        return True
+
     def seed_in_progress_test(
         self, templates: list[dict], members: list[dict]
     ) -> dict | None:
@@ -7094,7 +7356,23 @@ class Seeder:
                 pick(test, "template_id", "templateId") == template_id
                 and pick(test, "status") == "in_progress"
             ):
-                return test
+                # A test snapshots the sheet it started with — deliberately, so
+                # a candidate is scored against what they were shown. That also
+                # means a test left over from before the template gained a
+                # criterion never shows it, and the screenshot of that criterion
+                # cannot be taken. Cancel a stale one and let a fresh test be
+                # made below; nobody is mid-evaluation in a demo database.
+                if self._snapshot_is_current(test, scored_template):
+                    return test
+                try:
+                    self.api.post(
+                        f"/training/skills-testing/tests/{pick(test, 'id')}/cancel",
+                        {"reason": "Superseded by an updated skill sheet."},
+                    )
+                except ApiError as exc:
+                    self.blocked.append(f"cancel stale in-progress test: {exc}")
+                    return test
+                break
 
         examiner_id = next(
             (
@@ -7486,6 +7764,7 @@ class Seeder:
                 for m in members
                 if pick(m, "id") not in excluded
                 and m.get("username") != DEMO_ADMIN_USERNAME
+                and m.get("username") != TWO_FACTOR_USERNAME
             ),
             None,
         )
@@ -7701,9 +7980,7 @@ class Seeder:
         """
         rounds = 4
         submitters: list[Api] = []
-        for member in [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME][
-            :rounds
-        ]:
+        for member in password_login_members(members)[:rounds]:
             member_api = Api(base_url)
             try:
                 member_api.login_as(member["username"], DEMO_MEMBER_PASSWORD)
@@ -7913,6 +8190,7 @@ class Seeder:
         self._seed_nominations(elections)
         self._seed_closed_election(elections, minutes or [])
         self._seed_open_election(elections)
+        self._seed_membership_vote_election(elections)
         self._seed_runoff_chain(elections)
         self._seed_saved_ballot_template()
         return elections
@@ -8128,6 +8406,56 @@ class Seeder:
             "Rescue technician and lead instructor for vehicle extrication.",
         ),
     ]
+
+    MEMBERSHIP_ELECTION_TITLE = "Membership Vote — August Business Meeting"
+
+    def _seed_membership_vote_election(self, elections: list[dict]) -> None:
+        """A draft election carrying an applicant's membership approval.
+
+        Every other seeded ballot is position races and a bylaw amendment, so
+        the item type the prospective-member pipeline exists to produce could
+        not be pictured at all — and `14-elections.md` documents it.
+
+        Draft on purpose. An open election refuses ballot edits outright
+        ("Only end_date can be updated while voting is active"), which is right
+        — a cast vote references an item id — but it also means the item has to
+        be in place before voting starts, exactly as the guide's workflow says:
+        the coordinator marks the package ready, the secretary adds it to the
+        election, and only then does the election open.
+        """
+        if any(pick(e, "title") == self.MEMBERSHIP_ELECTION_TITLE for e in elections):
+            return
+        try:
+            self.api.post(
+                "/elections",
+                {
+                    "title": self.MEMBERSHIP_ELECTION_TITLE,
+                    "description": (
+                        "Membership approval carried to the floor at the "
+                        "August business meeting."
+                    ),
+                    "election_type": "general",
+                    "ballot_items": [
+                        {
+                            "id": "item-membership-okafor",
+                            "type": "membership_approval",
+                            "title": "Membership Approval — Sam Okafor",
+                            "description": SUPPORTING_STATEMENT,
+                            "vote_type": "approval",
+                        }
+                    ],
+                    "start_date": iso(NOW + timedelta(days=2)),
+                    "end_date": iso(NOW + timedelta(days=9)),
+                    "anonymous_voting": True,
+                    "allow_write_ins": False,
+                    "results_visible_immediately": False,
+                    "voting_method": "simple_majority",
+                    "victory_condition": "majority",
+                    "quorum_type": "none",
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"membership vote election: {exc}")
 
     def _seed_open_election(self, elections: list[dict]) -> None:
         """An election actually taking votes, so the member ballot can be shown.
@@ -8529,6 +8857,204 @@ class Seeder:
         ("Onboarding", "checklist", False, True),
     ]
 
+    def _backfill_pipeline_stages(self, pipeline_id: str | None) -> None:
+        """Give an existing pipeline its stages if it has none.
+
+        The `steps` payload above only runs when the pipeline is *created*, and
+        the guard above that skips creation once a pipeline of the same name
+        exists. A database seeded before that payload was added therefore keeps
+        a stage-less pipeline forever — and a pipeline with no stages has no
+        board columns, so every prospect is unplaceable and four screenshots
+        across guides 01 and 15 picture "No applicants" while seven active
+        prospects sit in the database.
+
+        Idempotent on the state: a pipeline that already has stages is left
+        alone rather than having a second set appended.
+        """
+        if not pipeline_id:
+            return
+        try:
+            existing = items(
+                self.api.get(f"/prospective-members/pipelines/{pipeline_id}/steps"),
+                "steps",
+            )
+        except ApiError as exc:
+            self.blocked.append(f"pipeline stages: read: {exc}")
+            return
+        if existing:
+            return
+
+        for order, (name, step_type, first, final) in enumerate(self.PIPELINE_STAGES):
+            try:
+                self.api.post(
+                    f"/prospective-members/pipelines/{pipeline_id}/steps",
+                    {
+                        "name": name,
+                        "description": f"{name} stage.",
+                        "step_type": step_type,
+                        "is_first_step": first,
+                        "is_final_step": final,
+                        "sort_order": order,
+                        "required": True,
+                        "public_visible": True,
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"pipeline stage {name}: {exc}")
+                return
+
+    def _has_unfinished_stage_behind(
+        self, prospect_id: str, order: list[str | None]
+    ) -> bool:
+        """Does this applicant have a stage behind them that never completed?
+
+        Repair detection, not seeding. `regress_prospect` used to move the
+        pointer and nothing else — it left the vacated stage `in_progress` and
+        left a `completed_at` stamp on the stage it returned to. The service is
+        fixed, but a demo database that has been through a few capture runs
+        still holds the rows, and the applicant drawer draws them: a green tick
+        missing from a stage the applicant plainly finished, and "N of 6 stages
+        completed" short by one.
+
+        The rows are only reachable through advance and regress, so the repair
+        is to walk the applicant back to the first stage and forward again —
+        which is what the caller does when this returns True.
+        """
+        detail = self.api.get(f"/prospective-members/prospects/{prospect_id}")
+        current_step_id = pick(detail, "current_step_id")
+        try:
+            current = order.index(current_step_id)
+        except ValueError:
+            return False
+
+        for progress in detail.get("step_progress") or []:
+            try:
+                position = order.index(pick(progress, "step_id"))
+            except ValueError:
+                continue
+            if position < current and progress.get("status") not in (
+                "completed",
+                "skipped",
+            ):
+                return True
+        return False
+
+    def _rewind_to_first_stage(
+        self, prospect_id: str, order: list[str | None], current: int
+    ) -> int:
+        """Regress an applicant to the first stage; return where they ended up.
+
+        Each regress now clears the stamp on the stage it reopens and puts the
+        stage it vacates back to pending, so walking to the bottom leaves every
+        row consistent. The caller then advances forward to the target stage,
+        which re-completes each one properly on the way.
+        """
+        for _ in range(current):
+            try:
+                self.api.post(f"/prospective-members/prospects/{prospect_id}/regress")
+            except ApiError as exc:
+                self.blocked.append(f"rewind applicant: {exc}")
+                break
+            current -= 1
+        return current
+
+    def _spread_prospects_across_stages(self, pipeline_id: str | None) -> None:
+        """Move applicants forward so the board shows a pipeline, not a pile.
+
+        The advance loop beside `PROSPECTS` only runs for applicants this seed
+        *creates*; ones already on file stay where they are. On a database that
+        gained its stages late, that left every applicant bunched into one or
+        two columns, and `15-02-board-truncated` — which needs a column with
+        more applicants than fit — could not be captured at all.
+
+        Advancing out of an `interview_requirement` stage legitimately refuses
+        until an interview exists (409, "requires at least 1 interview(s)"), so
+        this records one rather than skipping the stage: a skip is a different
+        thing that shows on the applicant's progress track, and would misreport
+        how these applicants got where they are.
+
+        Idempotent on the state — it only moves applicants that are behind the
+        position their index calls for, so a re-run is a no-op.
+        """
+        if not pipeline_id:
+            return
+        steps = items(
+            self.api.get(f"/prospective-members/pipelines/{pipeline_id}/steps"),
+            "steps",
+        )
+        if not steps:
+            return
+        order = [pick(s, "id") for s in steps]
+
+        # Filtered to this pipeline. `order` holds only the selected pipeline's
+        # step ids, so an applicant from another pipeline never matches it,
+        # reads as index zero, and is then walked forward through *its own*
+        # unrelated stages — recording interviews and undoing whatever scenario
+        # seeded it there.
+        prospects = items(
+            self.api.get(
+                f"/prospective-members/prospects?pipeline_id={pipeline_id}&limit=100"
+            ),
+            "prospects",
+        )
+        for index, prospect in enumerate(prospects):
+            prospect_id = pick(prospect, "id")
+            if not prospect_id:
+                continue
+            # One applicant per stage, wrapping — a spread the board can show.
+            target = index % len(order)
+            try:
+                current = order.index(pick(prospect, "current_step_id"))
+            except ValueError:
+                current = 0
+
+            if self._has_unfinished_stage_behind(prospect_id, order):
+                current = self._rewind_to_first_stage(prospect_id, order, current)
+
+            # Move *back* as well as forward. `15-09-bulk-action-result` runs a
+            # real bulk advance during capture, and the manifest assumes a
+            # re-seed restores the mixed page it needs — which only holds if
+            # this can undo that. Advancing alone left every applicant parked at
+            # the final stage after one capture run, permanently, and
+            # `15-08-election-package` then pictured an applicant past the vote
+            # under a caption about being at it.
+            for _ in range(current - target):
+                try:
+                    self.api.post(
+                        f"/prospective-members/prospects/{prospect_id}/regress"
+                    )
+                except ApiError as exc:
+                    self.blocked.append(f"regress applicant: {exc}")
+                    break
+
+            for _ in range(target - current):
+                try:
+                    self.api.post(
+                        f"/prospective-members/prospects/{prospect_id}/advance"
+                    )
+                except ApiError as exc:
+                    if "interview" not in str(exc).lower():
+                        self.blocked.append(f"spread applicant: {exc}")
+                        break
+                    try:
+                        self.api.post(
+                            f"/prospective-members/prospects/{prospect_id}/interviews",
+                            {
+                                "recommendation": "recommend",
+                                "interviewer_role": "Membership Coordinator",
+                                "notes": (
+                                    "Panel interview; candidate answered "
+                                    "scenario questions well."
+                                ),
+                            },
+                        )
+                        self.api.post(
+                            f"/prospective-members/prospects/{prospect_id}/advance"
+                        )
+                    except ApiError as inner:
+                        self.blocked.append(f"spread applicant: {inner}")
+                        break
+
     PROSPECTS = [
         ("Alex", "Rivera", "Saw the station open house"),
         ("Jordan", "Fields", "Family member is a volunteer"),
@@ -8571,6 +9097,7 @@ class Seeder:
                 )
             )
         pipeline_id = pick(pipelines[0], "id") if pipelines else None
+        self._backfill_pipeline_stages(pipeline_id)
 
         prospects = items(
             self.api.get("/prospective-members/prospects?limit=100"), "prospects"
@@ -8622,6 +9149,7 @@ class Seeder:
                 self.api.post(
                     f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
                 )
+        self._spread_prospects_across_stages(pipeline_id)
         self._enable_public_status(pipelines)
         self._seed_report_stage_groups(pipelines)
         self._seed_election_packages(prospects)
@@ -8805,9 +9333,25 @@ class Seeder:
             if str(pick(step, "step_type") or "").lower() != "election_vote":
                 continue
             try:
-                self.api.get(
+                package = self.api.get(
                     f"/prospective-members/prospects/{prospect_id}/election-package"
                 )
+                # A package created before this seeder filled the statement in
+                # keeps its empty box, and the ballot item built from it then
+                # quotes a statement the package does not hold. Top it up
+                # rather than skipping — the create path below never runs for a
+                # prospect who already has a package.
+                config = dict(pick(package, "package_config") or {})
+                if not str(config.get("supporting_statement") or "").strip():
+                    config["supporting_statement"] = SUPPORTING_STATEMENT
+                    try:
+                        self.api.put(
+                            f"/prospective-members/prospects/{prospect_id}"
+                            "/election-package",
+                            {"package_config": config},
+                        )
+                    except ApiError as exc:
+                        self.blocked.append(f"election package statement: {exc}")
                 continue
             except ApiError as exc:
                 if exc.code != 404:
@@ -8821,6 +9365,14 @@ class Seeder:
                             "Application, interview notes and background check "
                             "attached for the membership vote."
                         ),
+                        # The statement voters actually read on the ballot.
+                        # It lives inside `package_config`, not as a column —
+                        # sent top-level the API accepts the request and stores
+                        # nothing, which is how this box stayed empty through
+                        # two seeder runs that thought they had filled it.
+                        "package_config": {
+                            "supporting_statement": SUPPORTING_STATEMENT
+                        },
                     },
                 )
             except ApiError as exc:

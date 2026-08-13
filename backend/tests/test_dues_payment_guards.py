@@ -22,10 +22,11 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.api.v1.endpoints import finance as finance_ep
 from app.models.finance import DuesPayment, DuesStatus, MemberDues
 from app.schemas.finance import MemberDuesUnwaive
 from app.services.finance_service import FinanceService, _apply_payment_totals
@@ -247,6 +248,42 @@ class TestPaymentLedgerAccess:
         query = str(service.db.execute.await_args.args[0])
         assert "AND member_dues.user_id =" not in query
         assert payments == list(dues.payments)
+
+    # The two above pin the service's own filtering. These pin the endpoint
+    # that decides WHICH scope to ask for: the service can only be as safe as
+    # the caller that hands it a viewer id, so a regression there (dropping
+    # the permission check, or passing the wrong id) would otherwise reach
+    # production with the service tests still green. Salvaged from PR #1371,
+    # whose implementation half landed independently as #1369.
+    async def test_endpoint_self_scopes_a_non_manager(self):
+        service = MagicMock()
+        service.list_dues_payments = AsyncMock(return_value=[])
+        user = SimpleNamespace(id="member-1", organization_id=ORG_ID)
+
+        with (
+            patch.object(finance_ep, "FinanceService", return_value=service),
+            patch.object(finance_ep, "user_has_permission", return_value=False),
+        ):
+            await finance_ep.list_dues_payments("dues-1", MagicMock(), user)
+
+        service.list_dues_payments.assert_awaited_once_with(
+            "dues-1", ORG_ID, viewer_user_id="member-1"
+        )
+
+    async def test_endpoint_leaves_a_manager_unscoped(self):
+        service = MagicMock()
+        service.list_dues_payments = AsyncMock(return_value=[])
+        user = SimpleNamespace(id="manager-1", organization_id=ORG_ID)
+
+        with (
+            patch.object(finance_ep, "FinanceService", return_value=service),
+            patch.object(finance_ep, "user_has_permission", return_value=True),
+        ):
+            await finance_ep.list_dues_payments("dues-1", MagicMock(), user)
+
+        service.list_dues_payments.assert_awaited_once_with(
+            "dues-1", ORG_ID, viewer_user_id=None
+        )
 
 
 class TestUnwaive:

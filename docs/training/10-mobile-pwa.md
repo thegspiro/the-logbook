@@ -136,11 +136,8 @@ button, within thumb reach. Tap **More** to open the full navigation drawer.
 > edge the drawer comes from. This is the same header on every signed-in page,
 > so if you built the muscle memory for the top-right corner, that is what
 > moved. Sign-in and public pages have no such header and are unchanged.
->
-> **[SCREENSHOT NEEDED]:** _Re-shoot of the phone header showing the ☰ button
-> at the left edge with the department name beside it — every existing
-> phone-width capture that includes the top bar shows the old right-edge
-> placement (see SCREENSHOT_CURRENCY.md)._
+
+![Phone header with the menu button at the left edge and the department name beside it](./images/10-13-mobile-header-menu.png)
 
 ### Everything Is Thumb-Sized Now _(2026-08-08)_
 

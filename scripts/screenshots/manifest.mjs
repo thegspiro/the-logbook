@@ -63,6 +63,24 @@ export const DEMO_MEMBER_CREDENTIALS = {
 };
 
 /**
+ * The one account enrolled in TOTP, used to photograph the login page's
+ * authentication-code step.
+ *
+ * Signing in as this account deliberately does *not* complete: it stops at the
+ * code step, which is the shot. Never give it to `auth:` — it cannot produce a
+ * session.
+ *
+ * Must match TWO_FACTOR_USERNAME in seed_demo_data.py. It was hard-coded here
+ * once and drifted the moment the seeder moved the enrolment to a different
+ * member, which failed as a bare capture timeout with nothing pointing at the
+ * cause.
+ */
+export const DEMO_TWO_FACTOR_CREDENTIALS = {
+  username: "whalloway",
+  password: "DemoMember!2026",
+};
+
+/**
  * Click a control by its visible label.
  *
  * Matches buttons, tabs and links, because which of the three a given tab strip
@@ -579,13 +597,21 @@ export function openIntegrationConnect(providerName) {
   };
 }
 
-export function openApplicantDrawer(name) {
+/**
+ * Open the drawer of whichever applicant is currently at `stage`.
+ *
+ * Naming the applicant instead ties the shot to one seeding order: the
+ * election-package section renders only on an election_vote stage, and it was
+ * hard-coded to "Morgan Tran", so the moment the seeder spread applicants
+ * differently the shot pictured someone at Interview under a caption about the
+ * vote. The table's Current Stage column is the fact worth matching on.
+ */
+export function openApplicantAtStage(stage) {
   return async (page) => {
     await clickByName(/^table$/i)(page);
-    await page
-      .getByText(name, { exact: true })
-      .first()
-      .click({ timeout: 10_000 });
+    const row = page.locator("tbody tr").filter({ hasText: stage }).first();
+    await row.waitFor({ timeout: 15_000 });
+    await row.click({ timeout: 10_000 });
     await page.waitForTimeout(600);
   };
 }
@@ -971,6 +997,53 @@ export const SHOTS = [
     // that panel in half the frame, and it is a column of near-identical
     // skills-test notices that reads as the subject of the shot.
     selector: "div.card:has(h3:has-text('My Upcoming Shifts'))",
+  },
+  {
+    id: "03-62-dashboard-signup-positions",
+    doc: "03-scheduling.md",
+    line: 790,
+    anchor: "Screenshot of the Dashboard's Open Shifts section",
+    alt: "An open shift expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for",
+    auth: "member",
+    route: "/dashboard",
+    prepare: async (page) => {
+      // The eligibility check happens on press, not on render — every open
+      // shift shows Sign Up regardless of rank — so the dropdown this pictures
+      // only exists after the card is expanded.
+      const panel = page
+        .locator("div.card:has(h3:has-text('Open Shifts'))")
+        .first();
+      await panel.waitFor({ timeout: 20_000 });
+      await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await panel
+        .getByRole("button", { name: /sign up/i })
+        .first()
+        .click({ timeout: 10_000 });
+      // The positions come from a request fired by the click; waiting on the
+      // select rather than a fixed delay keeps the shot off the spinner.
+      await panel.locator("select").first().waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div.card:has(h3:has-text('Open Shifts'))",
+  },
+  {
+    id: "02-90-crew-summary-table",
+    doc: "02-training.md",
+    line: 2470,
+    anchor: "The Crew summary table on",
+    alt: "The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      // Guide 02's worked example calls this "the Shift Reports tab", and the
+      // tab lives under Scheduling rather than Training — the same screen
+      // guide 03 photographs, shown here for its per-crew roll-up rather than
+      // its Review Queue.
+      const table = page.locator("table:has(th:text-is('Crew member'))").first();
+      await table.waitFor({ timeout: 20_000 });
+      await table.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    selector: "div:has(> div > table:has(th:text-is('Crew member')))",
   },
   {
     id: "03-61-review-queue-batch",
@@ -3014,6 +3087,11 @@ export const SHOTS = [
       await page.waitForTimeout(1800);
     },
     fullPage: true,
+    // The board spreads seven applicants across six stages, so some columns
+    // read "No applicants", and a drawer for an applicant who has uploaded
+    // nothing reads "No documents yet". Both are honest; the populated
+    // check is Total Active.
+    allowEmptyState: true,
   },
   // ── 00 Getting Started ──────────────────────────────────────────────
   {
@@ -3025,6 +3103,38 @@ export const SHOTS = [
     alt: "The Logbook login page with username and password fields",
     route: "/login",
     auth: "anonymous",
+  },
+  {
+    id: "00-23-login-two-factor",
+    doc: "00-getting-started.md",
+    line: 98,
+    anchor: "The login page showing the two-factor",
+    alt: "The login page's two-factor step — the 6-digit code field and the Use a recovery code link",
+    route: "/login",
+    auth: "anonymous",
+    prepare: async (page) => {
+      // The code step is one render branch keyed on `mfaRequired`, reached the
+      // same way whether the first factor was a password or a returning OAuth
+      // sign-in — so a password sign-in as the enrolled demo member puts the
+      // page in exactly the state the guide is describing. `signIn` cannot be
+      // reused: it waits to leave /login, which is precisely what a 2FA
+      // account does not do.
+      await page
+        .getByLabel(/username|email/i)
+        .first()
+        .fill(DEMO_TWO_FACTOR_CREDENTIALS.username);
+      await page
+        .getByLabel(/password/i)
+        .first()
+        .fill(DEMO_TWO_FACTOR_CREDENTIALS.password);
+      await page
+        .getByRole("button", { name: /sign in|log ?in/i })
+        .first()
+        .click();
+      const code = page.locator("#mfa-code");
+      await code.waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
   },
   {
     id: "00-21-login-sso-options",
@@ -3178,7 +3288,7 @@ export const SHOTS = [
     line: 206,
     anchor:
       "Screenshot of the Account Settings page showing the profile section, notification preferences",
-    alt: "Account Settings page with profile, notification preferences, and password sections",
+    alt: "Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications",
     route: "/settings/account",
     fullPage: true,
   },
@@ -3236,6 +3346,11 @@ export const SHOTS = [
       "Screenshot of the Kanban board view showing pipeline stages as columns (e.g.,",
     alt: "Prospective members kanban board with pipeline stages as columns",
     route: "/prospective-members",
+    // "No applicants" is the per-column empty text, and a board that spreads
+    // seven applicants across six stages necessarily leaves some columns
+    // empty — that spread is the point of the shot. The board itself is
+    // populated; check the Total Active card, not the column text.
+    allowEmptyState: true,
   },
   {
     // Corrected 2026-08-08. This was captured at /members/admin but described as
@@ -3322,6 +3437,10 @@ export const SHOTS = [
     // The drawer itself, from its header down: taller than the viewport, so
     // the element rather than the screen.
     selector: "div.drawer-panel",
+    // "No checklist data recorded yet" is the Checklist Progress section for
+    // an applicant whose onboarding checklist has not been started. The shot
+    // is about the final stage and its Convert action, both of which render.
+    allowEmptyState: true,
   },
   {
     id: "01-34-desired-membership-type",
@@ -3554,6 +3673,11 @@ export const SHOTS = [
       }
       throw new Error("01-25: no applicant is past the first stage");
     },
+    // The board spreads seven applicants across six stages, so some
+    // columns read "No applicants" — and the drawer reads "No documents
+    // yet" for an applicant who has uploaded none. Both are honest, and
+    // neither means the page is empty; check Total Active.
+    allowEmptyState: true,
   },
   {
     id: "01-26-print-applicant-badges",
@@ -3575,6 +3699,11 @@ export const SHOTS = [
       await page.waitForTimeout(400);
       await page.evaluate(() => window.scrollTo(0, 0));
     },
+    // The board spreads seven applicants across six stages, so some
+    // columns read "No applicants" — and the drawer reads "No documents
+    // yet" for an applicant who has uploaded none. Both are honest, and
+    // neither means the page is empty; check Total Active.
+    allowEmptyState: true,
   },
   {
     id: "01-27-stage-type-picker",
@@ -3731,6 +3860,9 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       await page.waitForTimeout(800);
     },
+    // "No EVOC level" is this select's placeholder option — in the DOM on
+    // every operator, including this one, which has Level 1 selected.
+    allowEmptyState: true,
   },
 
   // ── 02 Training ─────────────────────────────────────────────────────
@@ -4727,6 +4859,19 @@ export const SHOTS = [
     },
   },
   {
+    id: "10-13-mobile-header-menu",
+    doc: "10-mobile-pwa.md",
+    line: 140,
+    anchor: "Re-shoot of the phone header showing the ☰ button",
+    alt: "Phone header with the menu button at the left edge and the department name beside it",
+    route: "/dashboard",
+    viewport: "mobile",
+    // Clipped to the header: the placeholder is about where one button sits,
+    // and a whole-phone shot buries it above a screen of dashboard.
+    selector: 'header[role="banner"].md\\:hidden',
+    allowEmptyState: true,
+  },
+  {
     id: "10-12-mobile-bottom-nav",
     doc: "10-mobile-pwa.md",
     line: 127,
@@ -5021,6 +5166,11 @@ export const SHOTS = [
       "Screenshot of the Prospective Members main page showing the kanban board view",
     alt: "Prospective members kanban board with a column per pipeline stage",
     route: "/prospective-members",
+    // The board spreads seven applicants across six stages, so some columns
+    // read "No applicants", and a drawer for an applicant who has uploaded
+    // nothing reads "No documents yet". Both are honest; the populated
+    // check is Total Active.
+    allowEmptyState: true,
   },
   {
     id: "15-02-board-truncated",
@@ -5040,38 +5190,6 @@ export const SHOTS = [
         .filter({ hasText: /Showing \d+ of \d+ applicants/ });
       await notice.first().waitFor({ state: "visible", timeout: 20_000 });
       await page.waitForTimeout(400);
-    },
-  },
-  {
-    id: "15-09-bulk-action-result",
-    doc: "15-prospective-members.md",
-    line: 495,
-    anchor: "The pair of notifications after a bulk advance that",
-    alt: "Bulk advance reporting how many moved and naming the applicants it skipped",
-    route: "/prospective-members",
-    // Runs a real bulk advance, so it *changes the seeded data* — which is why
-    // it sits last among the 15-* shots. Re-running the seeder restores a mixed
-    // page (it tops the pipeline up and re-parks two applicants at the final
-    // stage), so the shot is repeatable; it is just not idempotent on its own.
-    //
-    // The partial failure is the point. Page one is deliberately mixed: most
-    // rows are at intake and a few are at the final stage, where advancing is
-    // refused. Selecting the page produces both toasts — the count that moved,
-    // and the named applicants that could not.
-    prepare: async (page) => {
-      await clickByName("Table")(page);
-      const selectAll = page.locator("thead th:first-child button");
-      await selectAll.waitFor({ state: "visible", timeout: 15_000 });
-      await selectAll.click();
-      await clickByName("Advance All")(page);
-      // Both toasts, not just the first: the success one renders immediately
-      // and the skipped one follows the response, so waiting on either alone
-      // races the capture.
-      await page
-        .getByText(/Skipped \d+:/)
-        .first()
-        .waitFor({ state: "visible", timeout: 30_000 });
-      await page.waitForTimeout(600);
     },
   },
   {
@@ -7213,6 +7331,37 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "14-23-membership-ballot-item",
+    doc: "14-elections.md",
+    line: 843,
+    anchor: "Screenshot of the ballot preview showing a membership approval",
+    alt: "The ballot preview's membership approval item — the applicant named in the title, the coordinator's supporting statement, and the Approve and Deny options",
+    route: "/elections",
+    prepare: async (page) => {
+      // Matched on `election_type`, not a title. The obvious filter — an
+      // election carrying a membership_approval ballot item — cannot be used
+      // here: the list endpoint returns no `ballot_items` at all, only the
+      // detail does. `general` is the only seeded election that is neither a
+      // position race nor an issue vote, which is exactly what a membership
+      // approval is.
+      //
+      // The preview is the one screen that renders Approve/Deny for such an
+      // item; the in-app ballot draws position races only (see
+      // KNOWN_LIMITATIONS).
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => election.election_type === "general",
+      )(page);
+      await clickByName(/^Preview Ballot$/)(page);
+      const approve = page.getByText("Approve", { exact: true }).first();
+      await approve.waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div[role='dialog']",
+  },
+  {
     id: "14-21-save-ballot-template",
     doc: "14-elections.md",
     line: 144,
@@ -7395,6 +7544,11 @@ export const SHOTS = [
         .click({ timeout: 10_000 });
     },
     fullPage: true,
+    // The board spreads seven applicants across six stages, so some columns
+    // read "No applicants", and a drawer for an applicant who has uploaded
+    // nothing reads "No documents yet". Both are honest; the populated
+    // check is Total Active.
+    allowEmptyState: true,
   },
 
   // ── Sixth batch: documents, forms and department messaging ─────────
@@ -8028,7 +8182,11 @@ export const SHOTS = [
       "Screenshot of the applicant detail drawer showing the action buttons",
     alt: "Applicant drawer action bar with the stage-movement buttons",
     route: "/prospective-members",
-    prepare: openApplicantDrawer("Sam Okafor"),
+    // Both stage-movement buttons only render for an applicant who has
+    // somewhere to go in each direction, so this needs a mid-pipeline stage —
+    // matched by stage rather than by name so a re-spread cannot land it on
+    // somebody at either end with half the action bar missing.
+    prepare: openApplicantAtStage("Background & Medical"),
     fullPage: true,
     allowEmptyState: true,
   },
@@ -8041,8 +8199,10 @@ export const SHOTS = [
     alt: "Election package section showing the package status for an applicant at the vote",
     route: "/prospective-members",
     // The section renders only for an applicant on an election_vote stage —
-    // "Membership Vote" in the seeded pipeline.
-    prepare: openApplicantDrawer("Morgan Tran"),
+    // "Membership Vote" in the seeded pipeline. Matched on the stage rather
+    // than a name, so a different seeding spread cannot silently point this at
+    // somebody who is not at the vote.
+    prepare: openApplicantAtStage("Membership Vote"),
     fullPage: true,
     allowEmptyState: true,
   },
@@ -8052,12 +8212,14 @@ export const SHOTS = [
     line: 389,
     anchor:
       "Screenshot of the Convert to Member modal showing membership type selector",
-    alt: "Convert to member modal with membership type, ID and rank fields",
+    alt: "Step 2 of the Convert to Member modal — membership type, rank, station and hire date",
     route: "/prospective-members",
     prepare: async (page) => {
       // Conversion is not its own button: Advance on the *last* stage opens
-      // the modal. Riley Bishop sits on Onboarding, the final stage.
-      await openApplicantDrawer("Riley Bishop")(page);
+      // the modal, so this shot needs whoever is sitting on Onboarding —
+      // match on that stage rather than on a name, since the seeder spreads
+      // applicants across stages and who lands on the last one moves.
+      await openApplicantAtStage("Onboarding")(page);
       await clickByName(/convert/i)(page);
       // The modal opens on step 1 of 2 (Review Applicant); the membership
       // type, ID, rank and start date the placeholder names are on step 2.
@@ -8067,44 +8229,57 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
-    id: "15-13-application-status",
+    id: "15-09-bulk-action-result",
     doc: "15-prospective-members.md",
-    line: 575,
-    anchor:
-      "Screenshot of the public application status page showing the applicant name",
-    alt: "Public application status page showing an applicant's progress through the pipeline",
+    line: 495,
+    anchor: "The pair of notifications after a bulk advance that",
+    alt: "Bulk advance reporting how many moved and naming the applicants it skipped",
     route: "/prospective-members",
+    // Runs a real bulk advance, so it *changes the seeded data* — every
+    // applicant on page one moves a stage on. It must therefore stay the LAST
+    // 15-* entry: the shots above it match applicants by the stage they sit on
+    // (`openApplicantAtStage`), and a run of this one empties whichever stages
+    // those shots were waiting for. It had drifted up to fourth, and
+    // 15-05-applicant-actions timed out looking for a Background & Medical
+    // applicant this had already advanced past. Re-running the seeder puts the
+    // spread back, so the shot is repeatable; it is just not idempotent, and
+    // nothing that depends on the spread may run after it.
+    //
+    // The partial failure is the point: the applicant on the final stage has
+    // nowhere to advance to, so selecting the page produces both toasts — the
+    // count that moved, and the named applicants that could not.
+    mutatesSeedData: true,
     prepare: async (page) => {
-      // The status link is addressed by a per-applicant token, and the token
-      // is only on the prospect *detail* response — the list omits it.
-      const token = await page.evaluate(async () => {
-        const list = await fetch(
-          "/api/v1/prospective-members/prospects?limit=20",
-          { credentials: "include" },
-        );
-        if (!list.ok) return "";
-        const body = await list.json();
-        for (const row of body.items || []) {
-          const detail = await fetch(
-            `/api/v1/prospective-members/prospects/${row.id}`,
-            { credentials: "include" },
-          );
-          if (!detail.ok) continue;
-          const record = await detail.json();
-          if (record.status_token) return record.status_token;
-        }
-        return "";
-      });
-      if (!token) throw new Error("no applicant carries a status token");
-      await page.goto(
-        new URL(`/application-status/${token}`, page.url()).toString(),
-        {
-          waitUntil: "domcontentloaded",
-        },
-      );
+      await clickByName("Table")(page);
+      const selectAll = page.locator("thead th:first-child button");
+      await selectAll.waitFor({ state: "visible", timeout: 15_000 });
+      await selectAll.click();
+      await clickByName("Advance All")(page);
+      // Both toasts, not just the first: the success one renders immediately
+      // and the skipped one follows the response, so waiting on either alone
+      // races the capture.
+      await page
+        .getByText(/Skipped \d+:/)
+        .first()
+        .waitFor({ state: "visible", timeout: 30_000 });
+      await page.waitForTimeout(600);
     },
-    fullPage: true,
   },
+  // 15-13-application-status has no entry, on purpose.
+  //
+  // The public application-status page is addressed by a per-applicant
+  // `status_token`. This shot used to read that token from the prospect detail
+  // response; a security fix then removed the field from every response,
+  // because it is the credential behind that page and was leaking into the
+  // kanban board as well. The tokens still exist — every applicant has one —
+  // but no supported interface hands one out: it reaches the applicant only in
+  // the email the system sends them, and this environment runs no mail catcher.
+  //
+  // The committed `15-13-application-status.png` predates that fix and remains
+  // a true picture of the page, so the guide keeps it. It simply cannot be
+  // refreshed from here, and an entry that fails on every run is noise rather
+  // than a finding. Restoring it means giving the seeder a way to surface a
+  // status URL, or reading it out of a mail catcher the way an applicant would.
   {
     id: "09-04-template-builder",
     doc: "09-skills-testing.md",
@@ -8321,6 +8496,44 @@ export const SHOTS = [
         .waitFor({ timeout: 20_000 });
     },
     selector: "div[role='dialog'], div.fixed.inset-0 > div",
+  },
+  {
+    id: "09-18-statement-starts-clock",
+    doc: "09-skills-testing.md",
+    line: 457,
+    anchor: "A statement criterion on the scoring screen with",
+    alt: "A read-aloud statement inside the time limit, with the START CLOCK & READ button beneath it",
+    route: "/training/skills-testing",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/skills-testing/tests?limit=50",
+        (id) => `/training/skills-testing/test/${id}/active`,
+        "tests",
+        (test) => test.status === "in_progress",
+      )(page);
+      // The timed statement lives in Hose Advance, not the opening section —
+      // the briefing there is read *off* the clock and so has no button, which
+      // is the distinction this shot exists to draw.
+      // The section chips are numbered, so their visible text is "2" — the
+      // section name is only in the accessible name, which is what this matches.
+      await page
+        .getByRole("button", { name: /Hose Advance:/i })
+        .first()
+        .click({ timeout: 15_000 });
+      // The button only exists while the clock is stopped — once it is running
+      // the criterion shows the note instead, which is the state *after* the
+      // tap this shot is about. Opening an in-progress test resumes the timer,
+      // so pause it first.
+      const pause = page.getByRole("button", { name: "Pause timer" });
+      if (await pause.isVisible().catch(() => false)) {
+        await pause.click({ timeout: 10_000 });
+      }
+      const button = page.getByRole("button", { name: /START CLOCK/i }).first();
+      await button.waitFor({ timeout: 20_000 });
+      await button.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
   },
   {
     id: "09-17-scoring-criteria-mix",
@@ -8985,3 +9198,29 @@ export const SHOTS = [
     fullPage: false,
   },
 ];
+
+/**
+ * A shot flagged `mutatesSeedData` leaves the database changed for everything
+ * captured after it, so it has to be the last shot of its guide.
+ *
+ * Enforced here rather than trusted to a comment because the failure is silent
+ * in the worst way: 15-09-bulk-action-result drifted to fourth among the 15-*
+ * entries during an unrelated edit, advanced every applicant a stage on, and
+ * the shots below it — which find their applicant by the stage they sit on —
+ * either timed out or would have pictured the wrong person under a caption
+ * about the right one. Import time is the right place to catch it; by capture
+ * time the evidence is a 15-second locator timeout with no hint of the cause.
+ */
+for (const [index, shot] of SHOTS.entries()) {
+  if (!shot.mutatesSeedData) continue;
+  const laterInSameDoc = SHOTS.slice(index + 1).filter(
+    (later) => later.doc === shot.doc,
+  );
+  if (laterInSameDoc.length > 0) {
+    throw new Error(
+      `${shot.id} mutates the seeded data, so it must be the last shot of ` +
+        `${shot.doc}; these still follow it: ` +
+        laterInSameDoc.map((later) => later.id).join(", "),
+    );
+  }
+}

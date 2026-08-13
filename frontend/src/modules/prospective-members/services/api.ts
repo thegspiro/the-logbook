@@ -316,8 +316,16 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
   // When a prospect is created, the backend initializes progress records for ALL
   // pipeline steps — first step as IN_PROGRESS, the rest as PENDING. We filter out
   // PENDING steps so the stage history only shows stages the prospect has entered.
+  //
+  // Sorted by the step's own sort_order, not left in the order the API
+  // returned: `step_progress` comes back in whatever order the database hands
+  // it over, and the drawer draws these as a left-to-right progress track. An
+  // applicant at Background & Medical had that stage drawn first and
+  // Application Received fourth, which reads as a pipeline run out of order.
   const stageHistory: StageHistoryEntry[] = (data.step_progress || [])
     .filter((sp: BackendStepProgressResponse) => sp.status !== StepProgressStatus.PENDING)
+    .slice()
+    .sort((a, b) => (a.step?.sort_order ?? 0) - (b.step?.sort_order ?? 0))
     .map((sp: BackendStepProgressResponse) => {
       const stageType = sp.step?.step_type
         ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
@@ -344,6 +352,7 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
         stage_id: sp.step_id,
         stage_name: sp.step?.name ?? '',
         stage_type: stageType,
+        status: sp.status,
         entered_at: sp.created_at,
         completed_at: sp.completed_at || undefined,
         completed_by: sp.completed_by || undefined,

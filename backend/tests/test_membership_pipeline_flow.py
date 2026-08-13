@@ -575,6 +575,87 @@ class TestProspectProgression:
         )
         assert departed_status == "completed"
 
+    async def test_regress_reopens_the_previous_stage_and_clears_completion(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """Moving an applicant Back has to undo the advance, not just the pointer.
+
+        The regression: regress reset the previous step to in_progress but left
+        its completed_at stamp, and left the step being vacated in_progress. The
+        drawer counts completed stamps for "N of M stages completed" and draws a
+        green tick per stamp, so an applicant pulled back to stage two still
+        read as having finished it, with stage three drawn as live underneath.
+        """
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+
+        pipeline, steps = await self._make_pipeline_with_steps(svc, org_id, 3)
+
+        prospect = await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "Regress",
+                "last_name": "Test",
+                "email": "regress@example.com",
+                "pipeline_id": pipeline.id,
+            },
+            created_by=admin_id,
+        )
+        await svc.advance_prospect(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            advanced_by=admin_id,
+        )
+
+        regressed = await svc.regress_prospect(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            regressed_by=admin_id,
+        )
+
+        assert regressed is not None
+        assert str(regressed.current_step_id) == str(steps[0].id)
+
+        def progress_for(step):
+            record = next(
+                p for p in regressed.step_progress if str(p.step_id) == str(step.id)
+            )
+            status = (
+                record.status.value
+                if hasattr(record.status, "value")
+                else record.status
+            )
+            return status, record.completed_at
+
+        reopened_status, reopened_completed_at = progress_for(steps[0])
+        assert reopened_status == "in_progress"
+        assert reopened_completed_at is None
+
+        vacated_status, vacated_completed_at = progress_for(steps[1])
+        assert vacated_status == "pending"
+        assert vacated_completed_at is None
+
+        # Going forward again has to re-complete the stage the applicant was
+        # sent back to. Clearing the stamp on regress is only half of it — if
+        # the second advance does not put one back, the applicant's progress
+        # track is permanently short a completed stage.
+        readvanced = await svc.advance_prospect(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            advanced_by=admin_id,
+        )
+        assert readvanced is not None
+        recompleted = next(
+            p for p in readvanced.step_progress if str(p.step_id) == str(steps[0].id)
+        )
+        recompleted_status = (
+            recompleted.status.value
+            if hasattr(recompleted.status, "value")
+            else recompleted.status
+        )
+        assert recompleted_status == "completed"
+        assert recompleted.completed_at is not None
+
     async def test_skip_bypasses_only_the_current_stage(
         self, db_session: AsyncSession, setup_org_and_admin
     ):

@@ -9,8 +9,8 @@ now attest the number of physical ballots in the batch; the turnout
 calculation prefers it over the estimate. Nullable: batches recorded
 before this column exists simply keep the estimate.
 
-Revision ID: 20260813_0004
-Revises: 20260813_0003
+Revision ID: 20260813_0009
+Revises: 20260813_0008
 Create Date: 2026-08-13 00:02:00.000000
 """
 
@@ -18,8 +18,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260813_0004"
-down_revision = "20260813_0003"
+revision = "20260813_0009"
+down_revision = "20260813_0008"
 branch_labels = None
 depends_on = None
 

@@ -525,3 +525,52 @@ class TestSkipNeverTransfers:
             )
         mock_transfer.assert_awaited_once()
         mock_advance.assert_not_awaited()
+
+
+class TestGetProspectEagerLoadsWhatValidationReads:
+    """`_validate_step_completion` must not trigger a lazy load.
+
+    It counts `prospect.interviews` when the step is an interview_requirement.
+    That is a lazy backref, so reading it mid-await raised MissingGreenlet and
+    surfaced as a 500 from advance/complete — past the endpoint's ValueError
+    handling, which turns real business-rule failures into a 409. Interview is
+    the third stage of the default pipeline, so it blocked advancing anyone out
+    of it, one at a time or in bulk.
+    """
+
+    def test_interviews_is_in_the_eager_load_list(self):
+        import inspect as _inspect
+
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+        )
+
+        source = _inspect.getsource(MembershipPipelineService.get_prospect)
+
+        assert "selectinload(ProspectiveMember.interviews)" in source, (
+            "get_prospect must eager-load interviews; _validate_step_completion "
+            "reads it and a lazy load there raises MissingGreenlet"
+        )
+
+    def test_validation_reads_no_other_unloaded_relationship(self):
+        """Guard the audit, not just the one relationship that bit us."""
+        import inspect as _inspect
+        import re
+
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+        )
+
+        validator = _inspect.getsource(
+            MembershipPipelineService._validate_step_completion
+        )
+        loaded = _inspect.getsource(MembershipPipelineService.get_prospect)
+
+        # Relationship reads look like getattr(prospect, "name", ...) or
+        # prospect.name — collect both and check each is eager-loaded.
+        touched = set(re.findall(r'getattr\(\s*prospect,\s*"([a-z_]+)"', validator))
+        for name in touched:
+            assert f"ProspectiveMember.{name}" in loaded, (
+                f"_validate_step_completion reads prospect.{name} but "
+                "get_prospect does not eager-load it"
+            )

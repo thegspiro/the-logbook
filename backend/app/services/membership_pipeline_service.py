@@ -752,6 +752,14 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.step_progress).selectinload(
                     ProspectStepProgress.step
                 ),
+                # `_validate_step_completion` counts these when the step is an
+                # interview_requirement. It is a lazy backref, so without it the
+                # read happens mid-await and SQLAlchemy raises MissingGreenlet —
+                # surfacing as a 500 from advance/complete rather than anything
+                # the endpoint's ValueError handling can turn into a 4xx.
+                # Interview is the third stage of the default pipeline, so this
+                # blocked advancing anyone past it, including in bulk.
+                selectinload(ProspectiveMember.interviews),
             )
             # Refresh identity-map instances: the prospect's pipeline/steps
             # may already be cached in this session from an earlier call, and
@@ -1641,8 +1649,26 @@ class MembershipPipelineService:
         if current_idx <= 0:
             return prospect  # Already at the first step
 
+        current_step = sorted_steps[current_idx]
         prev_step = sorted_steps[current_idx - 1]
         prospect.current_step_id = prev_step.id
+
+        # The step being left has not been reached any more, so put its progress
+        # row back to pending. Leaving it in_progress made an applicant read as
+        # working on a stage they had been pulled back out of, and the drawer's
+        # progress track drew the stage ahead of them as live.
+        current_progress = next(
+            (
+                p
+                for p in prospect.step_progress
+                if str(p.step_id) == str(current_step.id)
+            ),
+            None,
+        )
+        if current_progress:
+            current_progress.status = StepProgressStatus.PENDING
+            current_progress.completed_at = None
+            current_progress.completed_by = None
 
         # Reset the previous step's progress to in_progress
         prev_progress = next(
@@ -1651,6 +1677,13 @@ class MembershipPipelineService:
         )
         if prev_progress:
             prev_progress.status = StepProgressStatus.IN_PROGRESS
+            # Reopening a step un-completes it. Without this the stage the
+            # applicant is *currently sitting on* kept its completion stamp, so
+            # the drawer counted it in "N of 6 stages completed" and drew it
+            # with a green tick — an applicant at stage four reading as four
+            # stages done, and a Back click that visibly changed nothing.
+            prev_progress.completed_at = None
+            prev_progress.completed_by = None
         else:
             self.db.add(
                 ProspectStepProgress(
@@ -3772,9 +3805,15 @@ class MembershipPipelineService:
         doc_result = await self.db.execute(doc_query)
         documents = list(doc_result.scalars().all())
 
-        # Build stage history from completed step progress
+        # Build stage history from completed step progress, in pipeline order —
+        # `step_progress` comes back in whatever order the database hands it
+        # over, which put the stages of an election package's summary in an
+        # arbitrary sequence for the members reading it before a vote.
         stage_history: List[Dict[str, Any]] = []
-        for sp in prospect.step_progress or []:
+        for sp in sorted(
+            prospect.step_progress or [],
+            key=lambda p: (p.step.sort_order if p.step else 0, p.created_at),
+        ):
             if sp.status == StepProgressStatus.COMPLETED and sp.step:
                 stage_history.append(
                     {
