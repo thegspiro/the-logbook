@@ -180,7 +180,7 @@ function QRCard({
           onClick={() => {
             void handleCopy();
           }}
-          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
+          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500 max-md:min-h-11"
         >
           {copied ? (
             <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
@@ -191,7 +191,7 @@ function QRCard({
         </button>
         <button
           onClick={handleDownload}
-          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
+          className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500 max-md:min-h-11"
         >
           <Download className="h-3 w-3" aria-hidden="true" />
           Download PNG
@@ -203,7 +203,7 @@ function QRCard({
             }}
             disabled={isRegenerating}
             title="Generate a new code — the current QR code stops working"
-            className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-red-500 disabled:opacity-50"
+            className="text-theme-text-muted flex items-center gap-1.5 text-xs transition-colors hover:text-red-500 disabled:opacity-50 max-md:min-h-11"
           >
             <RefreshCw className={`h-3 w-3 ${isRegenerating ? 'animate-spin' : ''}`} aria-hidden="true" />
             Regenerate
@@ -244,32 +244,53 @@ export default function RoomQRCodesPage() {
   const { isModuleOn } = useEnabledModules();
   const [locations, setLocations] = useState<Location[]>([]);
   const [apparatus, setApparatus] = useState<ApparatusListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLocationsLoading, setIsLocationsLoading] = useState(true);
+  const [isApparatusLoading, setIsApparatusLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [layout, setLayout] = useState<'grid' | 'signs'>('grid');
 
   const canManage = checkPermission('locations.edit') || checkPermission('locations.manage');
   const schedulingOn = isModuleOn('scheduling');
 
+  // Both loads gate the page: rendering (and Print All) on locations alone
+  // would let an admin print a directory missing every apparatus code.
+  const isLoading = isLocationsLoading || isApparatusLoading;
+
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await locationsService.getLocations({ is_active: true });
+        // The endpoint paginates (default limit 100); a directory that
+        // silently stopped at 100 rooms would print as if it were complete.
+        const data: Location[] = [];
+        const limit = 100;
+        let skip = 0;
+        let batch: Location[];
+        do {
+          batch = await locationsService.getLocations({ is_active: true, skip, limit });
+          data.push(...batch);
+          skip += limit;
+        } while (batch.length === limit);
         setLocations(data);
       } catch {
         toast.error('Failed to load locations');
       } finally {
-        setIsLoading(false);
+        setIsLocationsLoading(false);
       }
     };
     void load();
   }, []);
 
   useEffect(() => {
+    // The modules hook is permissive while loading, so this effect can start a
+    // fetch that must not land after the module resolves to off — the cancel
+    // flag keeps a slow response from repopulating a cleared section.
+    let cancelled = false;
     if (!schedulingOn) {
       setApparatus([]);
-      return;
+      setIsApparatusLoading(false);
+      return undefined;
     }
+    setIsApparatusLoading(true);
     const load = async () => {
       try {
         const items: ApparatusListItem[] = [];
@@ -280,14 +301,19 @@ export default function RoomQRCodesPage() {
           items.push(...result.items);
           totalPages = result.totalPages;
           page += 1;
-        } while (page <= totalPages);
-        setApparatus(items);
+        } while (page <= totalPages && !cancelled);
+        if (!cancelled) setApparatus(items);
       } catch {
         // No apparatus.view permission (or module data unavailable) — hide the section
-        setApparatus([]);
+        if (!cancelled) setApparatus([]);
+      } finally {
+        if (!cancelled) setIsApparatusLoading(false);
       }
     };
     void load();
+    return () => {
+      cancelled = true;
+    };
   }, [schedulingOn]);
 
   const handleRegenerate = async (location: Location) => {
@@ -332,7 +358,7 @@ export default function RoomQRCodesPage() {
       <div className="no-print">
         <Link
           to="/locations"
-          className="text-theme-text-muted hover:text-theme-text-primary mb-2 inline-flex items-center gap-1.5 text-sm transition-colors"
+          className="text-theme-text-muted hover:text-theme-text-primary mb-2 inline-flex items-center gap-1.5 text-sm transition-colors max-md:min-h-11"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Locations
         </Link>
@@ -374,7 +400,7 @@ export default function RoomQRCodesPage() {
             <button
               onClick={() => setLayout('grid')}
               aria-pressed={layout === 'grid'}
-              className={`flex items-center gap-1.5 px-3 py-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-2 transition-colors max-md:min-h-11 ${
                 layout === 'grid'
                   ? 'bg-theme-surface-hover text-theme-text-primary font-medium'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -385,7 +411,7 @@ export default function RoomQRCodesPage() {
             <button
               onClick={() => setLayout('signs')}
               aria-pressed={layout === 'signs'}
-              className={`border-theme-surface-border flex items-center gap-1.5 border-l px-3 py-2 transition-colors ${
+              className={`border-theme-surface-border flex items-center gap-1.5 border-l px-3 py-2 transition-colors max-md:min-h-11 ${
                 layout === 'signs'
                   ? 'bg-theme-surface-hover text-theme-text-primary font-medium'
                   : 'text-theme-text-muted hover:text-theme-text-primary'

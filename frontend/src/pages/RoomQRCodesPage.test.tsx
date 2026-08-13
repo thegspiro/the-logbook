@@ -127,7 +127,7 @@ describe('RoomQRCodesPage', () => {
       expect(screen.getByRole('heading', { level: 2, name: 'Station 1' })).toBeInTheDocument();
     });
 
-    expect(mockGetLocations).toHaveBeenCalledWith({ is_active: true });
+    expect(mockGetLocations).toHaveBeenCalledWith({ is_active: true, skip: 0, limit: 100 });
     expect(screen.getByText('Training Room #101')).toBeInTheDocument();
     expect(screen.getByText('Meeting Room')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Other Locations' })).toBeInTheDocument();
@@ -140,6 +140,28 @@ describe('RoomQRCodesPage', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('button', { name: /Download PNG/ })).toHaveLength(6);
     });
+  });
+
+  it('pages through locations beyond the first 100', async () => {
+    const fullPage = Array.from({ length: 100 }, (_, i) => ({
+      ...baseLocation,
+      id: `loc-${i}`,
+      name: `Room ${i}`,
+      building: 'Station 1',
+      display_code: `CODE${i}`,
+    }));
+    mockGetLocations
+      .mockResolvedValueOnce(fullPage)
+      .mockResolvedValueOnce([
+        { ...baseLocation, id: 'loc-last', name: 'Last Room', building: 'Station 1', display_code: 'LASTCODE' },
+      ]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Last Room')).toBeInTheDocument();
+    });
+    expect(mockGetLocations).toHaveBeenCalledTimes(2);
+    expect(mockGetLocations).toHaveBeenLastCalledWith({ is_active: true, skip: 100, limit: 100 });
   });
 
   it('renders apparatus shift check-in codes when scheduling is enabled', async () => {

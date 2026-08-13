@@ -166,7 +166,7 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
               directory is where those codes can be viewed and printed */}
           <Link
             to="/locations/qr-codes"
-            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors max-md:min-h-11"
           >
             <QrCode className="h-3.5 w-3.5" aria-hidden="true" /> Check-In QR Codes
           </Link>
@@ -338,10 +338,13 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    {room.displayCode && (
+                    {/* An inactive room's linked Location is inactive too, and the
+                        public display lookup refuses inactive locations — a QR
+                        for it would scan to "Display not found" */}
+                    {room.displayCode && room.isActive !== false && (
                       <button
                         onClick={() => setQrRoomId((prev) => (prev === room.id ? null : room.id))}
-                        className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:text-blue-500"
+                        className="text-theme-text-muted inline-flex items-center justify-center rounded-lg p-1.5 transition-colors hover:text-blue-500 max-md:min-h-11 max-md:min-w-11"
                         aria-label={`Toggle QR code for ${room.name}`}
                         title="Show check-in QR code"
                       >
@@ -370,7 +373,7 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
                     )}
                   </div>
                 </div>
-                {qrRoomId === room.id && room.displayCode && (
+                {qrRoomId === room.id && room.displayCode && room.isActive !== false && (
                   <div className="border-theme-surface-border mt-3 flex flex-col items-center gap-2 rounded-lg border bg-white p-3">
                     {/* bg-white intentional for QR code readability */}
                     <QRCodeSVG
@@ -386,7 +389,7 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
                       onClick={() => {
                         void handleCopyKioskUrl(room);
                       }}
-                      className="flex items-center gap-1.5 text-xs text-gray-600 transition-colors hover:text-blue-500"
+                      className="flex items-center gap-1.5 text-xs text-gray-600 transition-colors hover:text-blue-500 max-md:min-h-11"
                     >
                       {copiedRoomId === room.id ? (
                         <Check className="h-3 w-3 text-green-500" aria-hidden="true" />

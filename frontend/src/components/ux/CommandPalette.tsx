@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { useEnabledModules } from '../../hooks/useEnabledModules';
 
 interface CommandItem {
   id: string;
@@ -37,6 +38,14 @@ interface CommandItem {
   section: string;
   keywords?: string[];
   permission?: string;
+  /**
+   * Hide this command when the named module is explicitly enabled — for
+   * fallback pages that a module supersedes (e.g. /locations when the
+   * Facilities module owns location management). Only applies once the org's
+   * module config has loaded; unconfigured orgs see everything, matching the
+   * navigation's behavior.
+   */
+  hideWhenModuleOn?: string;
 }
 
 const COMMANDS: CommandItem[] = [
@@ -105,6 +114,7 @@ const COMMANDS: CommandItem[] = [
     icon: MapPin,
     section: 'Navigation',
     keywords: ['stations', 'rooms', 'buildings', 'addresses'],
+    hideWhenModuleOn: 'facilities',
   },
   {
     id: 'room-qr-codes',
@@ -196,10 +206,16 @@ export const CommandPalette: React.FC = () => {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
+  const { enabledModules } = useEnabledModules();
 
-  // Filter commands by permissions and search query
+  // Filter commands by permissions, module supersession, and search query
   const filteredCommands = useMemo(() => {
-    const accessible = COMMANDS.filter((cmd) => !cmd.permission || checkPermission(cmd.permission));
+    const accessible = COMMANDS.filter(
+      (cmd) =>
+        (!cmd.permission || checkPermission(cmd.permission)) &&
+        // enabledModules is null while loading/unconfigured — hide nothing then
+        !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn))
+    );
 
     if (!query.trim()) return accessible;
 
@@ -211,7 +227,7 @@ export const CommandPalette: React.FC = () => {
         cmd.keywords?.some((kw) => kw.includes(q)) ||
         cmd.section.toLowerCase().includes(q)
     );
-  }, [query, checkPermission]);
+  }, [query, checkPermission, enabledModules]);
 
   // Group by section
   const sections = useMemo(() => {
