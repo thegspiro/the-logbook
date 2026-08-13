@@ -19,15 +19,17 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   AlertTriangle,
+  ArrowLeft,
   ChevronRight,
   Clock,
   Loader2,
   PackageCheck,
   PackageX,
   Repeat,
+  Save,
   Truck,
   Undo2,
   X,
@@ -53,6 +55,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 const FLEET_PAGE_SIZE = 100;
 
 const ApparatusInventoryPage: React.FC = () => {
+  const navigate = useNavigate();
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
   // Swapping stock and withdrawing a restock report are manage-gated on the
@@ -65,6 +68,7 @@ const ApparatusInventoryPage: React.FC = () => {
   const [fleet, setFleet] = useState<ApparatusListItem[]>([]);
   const [inventory, setInventory] = useState<ApparatusInventory | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [usedTarget, setUsedTarget] = useState<ApparatusInventoryItem | null>(null);
   const [swapTarget, setSwapTarget] = useState<ApparatusInventoryItem | null>(null);
@@ -92,17 +96,19 @@ const ApparatusInventoryPage: React.FC = () => {
     })();
   }, []);
 
-  const load = useCallback(async (apparatusId: string) => {
+  const load = useCallback(async (apparatusId: string): Promise<boolean> => {
     if (!apparatusId) {
       setInventory(null);
-      return;
+      return false;
     }
     setLoading(true);
     try {
       setInventory(await schedulingService.getApparatusInventory(apparatusId));
+      return true;
     } catch (err: unknown) {
       setInventory(null);
       toast.error(getErrorMessage(err, 'Failed to load apparatus inventory'));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -115,6 +121,14 @@ const ApparatusInventoryPage: React.FC = () => {
   const selectApparatus = (id: string) => {
     // Mirrored into the URL so a crew can bookmark their own rig.
     setSearchParams(id ? { apparatus: id } : {}, { replace: true });
+  };
+
+  const confirmSaved = async () => {
+    if (!selectedId) return;
+    setSaving(true);
+    const refreshed = await load(selectedId);
+    if (refreshed) toast.success('Inventory changes are saved');
+    setSaving(false);
   };
 
   const items = useMemo(() => inventory?.compartments.flatMap((c) => c.items) ?? [], [inventory]);
@@ -386,14 +400,41 @@ const ApparatusInventoryPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <Truck className="h-6 w-6" aria-hidden="true" />
-          Apparatus Inventory
-        </h1>
-        <p className="text-theme-text-muted mt-1 text-sm">
-          Record what you used when you use it, and put fresh stock in the bracket. No check required.
-        </p>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-2">
+          <button
+            type="button"
+            onClick={() => void navigate('/scheduling')}
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover mt-0.5 shrink-0 rounded-lg p-1.5 transition-colors"
+            aria-label="Back to Scheduling"
+            title="Back to Scheduling"
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <div>
+            <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
+              <Truck className="h-6 w-6" aria-hidden="true" />
+              Apparatus Inventory
+            </h1>
+            <p className="text-theme-text-muted mt-1 text-sm">
+              Record what you used when you use it, and put fresh stock in the bracket. No check required.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => void confirmSaved()}
+          disabled={!selectedId || loading || saving || busyItemId !== null || lotsBusy}
+          aria-label="Save inventory"
+          className="btn-primary inline-flex shrink-0 items-center gap-2 self-end px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Save className="h-4 w-4" aria-hidden="true" />
+          )}
+          {saving ? 'Saving…' : 'Save'}
+        </button>
       </div>
 
       <div className="mb-4">

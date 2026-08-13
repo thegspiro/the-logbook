@@ -124,6 +124,33 @@ describe('ApparatusInventoryPage', () => {
     expect(mockGetApparatusInventory).not.toHaveBeenCalled();
   });
 
+  it('shows the page navigation actions and confirms the auto-saved inventory', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+
+    expect(screen.getByRole('button', { name: 'Back to Scheduling' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save inventory' })).toBeDisabled();
+    await selectApparatus(user);
+    await user.click(screen.getByRole('button', { name: 'Save inventory' }));
+
+    await waitFor(() => {
+      expect(mockGetApparatusInventory).toHaveBeenCalledTimes(2);
+      expect(mockToastSuccess).toHaveBeenCalledWith('Inventory changes are saved');
+    });
+  });
+
+  it('does not claim changes were saved when the inventory refresh fails', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+    mockGetApparatusInventory.mockRejectedValueOnce(new Error('refresh failed'));
+
+    await user.click(screen.getByRole('button', { name: 'Save inventory' }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('refresh failed'));
+    expect(mockToastSuccess).not.toHaveBeenCalledWith('Inventory changes are saved');
+  });
+
   it('loads the selected apparatus and groups items by compartment', async () => {
     const user = userEvent.setup();
     renderWithRouter(<ApparatusInventoryPage />);
