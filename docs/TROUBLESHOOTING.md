@@ -1152,7 +1152,7 @@ Ask the member for the code instead of a screenshot, then look it up:
 
 - **In the app:** Admin → Error Monitoring → _Error Code Reference_ (searchable)
 - **[docs/ERROR_CODES.md](./ERROR_CODES.md)** — published on the wiki as the
-  [Error-Codes](Error-Codes) page
+  [Error-Codes](https://github.com/thegspiro/the-logbook/wiki/Error-Codes) page
 
 Codes in the `LB-API-*` family embed the HTTP status of a failure that has no
 more specific code (`LB-API-404` = not found, `LB-API-500` = server error).
