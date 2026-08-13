@@ -280,13 +280,12 @@ class Settings(BaseSettings):
     # boot, but only as a WARNING, so a HIPAA deployment can and does run that
     # way indefinitely — a warning nobody reads is not a control.
     #
-    # It stays opt-in and defaults to False because promoting it unconditionally
-    # would refuse to boot every existing deployment that terminates TLS
-    # elsewhere (a private VPC, a service mesh, a sidecar) or that simply has
-    # not configured it yet. Turning it on is the deployment owner's call.
+    # It defaults to True so production and staging fail closed. Deployments
+    # whose trusted topology provides equivalent transport protection may make
+    # the risk acceptance explicit by setting it to False.
     #
     # Set True once DB_SSL/REDIS_SSL are configured, to keep them that way.
-    SECURITY_REQUIRE_TLS: bool = False
+    SECURITY_REQUIRE_TLS: bool = True
     # SEC: Break-glass gate for the audit-chain rehash tool. Rehash rewrites the
     # single, cross-organization audit hash chain, so it must not be reachable by
     # an ordinary org admin who merely holds `audit.export`. It stays disabled

@@ -236,14 +236,12 @@ organization's settings (`enabled_modules`), configured inside the app
 | `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` | Gate for runtime country block/unblock via the API (`POST`/`DELETE /api/v1/ip-security/blocked-countries`). Off by default because the blocklist is a platform-edge control affecting every tenant — set it at deploy time via `BLOCKED_COUNTRIES`, or enable this to manage it at runtime _(2026-07)_                                                                                                                                                                                | `false`               |
 | `AUDIT_ALLOW_CHAIN_REHASH`            | Break-glass gate for the audit-log rehash recovery operation, which rewrites the single cross-organization audit hash chain. Kept off so an ordinary admin cannot trigger it; a server operator enables it only for a one-time legacy-hash repair _(2026-07)_                                                                                                                                                                                                                         | `false`               |
 | `AUDIT_LOG_LEGACY_MAX_ID`             | Highest `audit_logs.id` allowed to use the pre-HMAC, unkeyed hash format. This is a **security boundary kept in trusted config, never derived from the audit table** — the per-row `hash_version` column is attacker-writable and cannot authorize an unkeyed hash. New installations leave it at `0`; an upgraded installation sets it **once** to the last row that existed before the HMAC upgrade. See [Audit Logging](Security-Audit-Logging#legacy-hash-boundary-is-pinned-in-config-2026-08-12) _(2026-08-12)_ | `0`                   |
-| `SECURITY_REQUIRE_TLS`                | Promote **absent** `DB_SSL`/`REDIS_SSL` in production/staging from a boot **warning** to a **CRITICAL** finding, which the application refuses to start on. Without it, PHI, sessions and cached queries can cross the network in cleartext and nothing blocks the deployment _(2026-08-07)_                                                                                                                                                                                          | `false` (app); **`true` in `docker-compose.prod.yml`** _(2026-08-12)_ |
+| `SECURITY_REQUIRE_TLS`                | Promote **absent** `DB_SSL`/`REDIS_SSL` in production/staging from a boot **warning** to a **CRITICAL** finding, which the application refuses to start on. Without it, PHI, sessions and cached queries can cross the network in cleartext and nothing blocks the deployment _(2026-08-12)_                                                                                                                                                                                          | **`true`** |
 
-> **Turn `SECURITY_REQUIRE_TLS` on unless something else terminates TLS**
-> _(2026-08-07)_. It defaults to `false` **only** so that upgrading cannot refuse
-> to boot an existing deployment that terminates TLS elsewhere — a private VPC, a
-> service mesh, a sidecar proxy. If your database and Redis traffic crosses any
-> network the application does not control, this should be `true`. The decision is
-> the deployment owner's, which is exactly why it is not made for you.
+> **`SECURITY_REQUIRE_TLS` fails closed by default** _(2026-08-12)_. Set it to
+> `false` only when a trusted private network, service mesh, or sidecar provides
+> equivalent transport protection. That explicit override records the deployment
+> owner's risk decision instead of silently permitting cleartext transport.
 >
 > **The production compose file now fails closed** _(2026-08-12)_:
 > `docker-compose.prod.yml` defaults `SECURITY_REQUIRE_TLS` to **`true`**. If you
