@@ -3,6 +3,15 @@ Facilities API Endpoints
 
 Endpoints for facility/building management including CRUD operations,
 maintenance tracking, building systems, inspections, photos, and documents.
+
+Read-permission tiers: operational data (facilities, rooms, systems,
+maintenance, inspections, contacts, shutoffs, compliance, photos, documents)
+is readable with ``facilities.view`` — the baseline member grant. Sensitive
+data (access keys/codes, utility accounts and readings, capital projects,
+insurance policies, occupants) requires ``facilities.edit`` or
+``facilities.manage``: door/alarm codes, account numbers, budgets, and lease
+terms must not be exposed to every member just because the module is visible
+to them. Keep new endpoints on the correct side of this line.
 """
 
 from datetime import date
@@ -1568,14 +1577,14 @@ async def list_facility_utility_accounts(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     List facility utility accounts
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     accounts = await service.list_utility_accounts(
@@ -1633,14 +1642,14 @@ async def get_facility_utility_account(
     account_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     Get a specific facility utility account
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     account = await service.get_utility_account(
@@ -1747,14 +1756,14 @@ async def list_facility_utility_readings(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     List utility readings for a specific account
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     readings = await service.list_utility_readings(
@@ -1902,14 +1911,14 @@ async def list_facility_access_keys(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     List facility access keys
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     keys = await service.list_access_keys(
@@ -1968,14 +1977,14 @@ async def get_facility_access_key(
     key_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     Get a specific facility access key
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     key = await service.get_access_key(
@@ -2604,14 +2613,14 @@ async def list_facility_capital_projects(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     List facility capital projects
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     projects = await service.list_capital_projects(
@@ -2669,14 +2678,14 @@ async def get_facility_capital_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     Get a specific facility capital project
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     project = await service.get_capital_project(
@@ -2781,14 +2790,14 @@ async def list_facility_insurance_policies(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     List facility insurance policies
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     policies = await service.list_insurance_policies(
@@ -2846,14 +2855,14 @@ async def get_facility_insurance_policy(
     policy_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     Get a specific facility insurance policy
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     policy = await service.get_insurance_policy(
@@ -2955,14 +2964,14 @@ async def list_facility_occupants(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     List facility occupants
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     occupants = await service.list_occupants(
@@ -3019,14 +3028,14 @@ async def get_facility_occupant(
     occupant_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission("facilities.edit", "facilities.manage")
     ),
 ):
     """
     Get a specific facility occupant
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.edit or facilities.manage
     """
     service = FacilitiesService(db)
     occupant = await service.get_occupant(

@@ -7,6 +7,7 @@ frontend `modules/facilities`.
 layer + endpoint auth coverage).
 
 ## Verified good ✅
+
 - **Auth coverage:** all 95 endpoints carry `require_permission(...)` — 0
   unauthenticated routes, no bare `get_current_user` (every route is
   permission-gated with sensible `.view`/`.manage` scoping).
@@ -25,19 +26,24 @@ layer + endpoint auth coverage).
 ## Findings
 
 ### FAC-1 — cleanup — dead no-op "attachment conversion" blocks — ✅ FIXED
+
 Eight create/update methods (maintenance, inspection, capital-project,
 insurance-policy × create+update) contained:
+
 ```python
 # Convert attachment models to dicts for JSON storage
 if dump.get("attachments"):
     dump["attachments"] = [a if isinstance(a, dict) else a for a in dump["attachments"]]
 ```
+
 Both branches of `a if isinstance(a, dict) else a` return `a` unchanged, and
 `model_dump()` already produces dicts — so the block is an unconditional no-op
 with a misleading comment. Removed all 8 (behavior-preserving; verified compile
-+ flake8 clean).
+
+- flake8 clean).
 
 ### FAC-2 — LOW correctness/robustness — `maintenance_type_id` NOT NULL vs schema-optional — ✅ FIXED
+
 `FacilityMaintenance.maintenance_type_id` is `nullable=False`, but
 `FacilityMaintenanceCreate` declares it `Optional[str] = None`, and
 `create_maintenance_record` only validated it "if provided." A caller omitting
@@ -48,7 +54,9 @@ path unchanged (the column has always required a value, so no existing row could
 have been created without one). The Update schema stays optional (correct).
 
 ### FAC-3 — LOW — Create/update paths don't validate referenced FK ids are in-org (XC-1 class) — ✅ FIXED (app-review B4, 2026-08-06)
+
 Client-supplied FK ids stored without an in-org check:
+
 - `create_photo` / `create_document` — `facility_id` stored with no `get_facility`
   ownership check (every other child-create verifies the facility).
 - `create_maintenance_record` — `system_id` stored unverified (facility +
@@ -64,13 +72,32 @@ a cross-tenant read. **Status:** flagged (XC-1) — best closed by the shared
 `assert_in_org` helper rather than per-method patches.
 
 ### FAC-4 — LOW (unused capability) — `list_facilities` search not exposed
+
 The service's `list_facilities` supports a `search` argument (with correct LIKE
 escaping), but the `GET /facilities` endpoint never accepts/forwards a `search`
 query param — the search branch is unreachable from the API. Not a bug; a
 wired-but-unexposed feature. **Status:** flagged (adding the query param is a
 small API addition, left for deliberate feature work rather than auto-applied).
 
+### FAC-5 — HIGH access control — sensitive facility data readable with baseline `facilities.view` — ✅ FIXED (2026-08-13)
+
+The default **member** position holds `facilities.view`, and once FAC-P1
+exposed the extended detail sections (2026-08-11), every member could read
+access keys (including door/alarm codes and combinations in
+`key_identifier`), utility account numbers, insurance policies, capital
+project budgets, and occupant/lease records — all of whose list/get endpoints
+were gated `view OR manage`.
+**Fix:** reads for the five sensitive families (access keys, utility
+accounts + readings, capital projects, insurance policies, occupants) now
+require `facilities.edit` or `facilities.manage`; operational/safety sections
+(rooms, systems, maintenance, inspections, emergency contacts, shutoffs,
+compliance) stay at `facilities.view`. The frontend hides the sensitive
+sidebar sections for view-only users via `useFacilitiesAccess().canViewSensitive`.
+Locked by `backend/tests/test_facilities_permissions.py` (route-dependency
+introspection) and the frontend section-contract test.
+
 ## Notes
+
 - No wrong-attribute bugs. `_sync_room_location` was verified against
   `app/models/location.py` — all referenced fields exist.
 
