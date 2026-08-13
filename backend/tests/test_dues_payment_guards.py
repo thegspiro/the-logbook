@@ -227,6 +227,28 @@ class TestIdempotency:
         assert dues.amount_paid == Decimal("40.00")
 
 
+class TestPaymentLedgerAccess:
+    async def test_viewer_is_scoped_to_their_own_dues(self):
+        dues = _dues([_payment("40.00")])
+        service = _service_for(dues)
+        viewer_id = str(uuid.uuid4())
+
+        await service.list_dues_payments(dues.id, ORG_ID, viewer_user_id=viewer_id)
+
+        query = str(service.db.execute.await_args.args[0])
+        assert "AND member_dues.user_id =" in query
+
+    async def test_manager_can_read_any_members_ledger(self):
+        dues = _dues([_payment("40.00")])
+        service = _service_for(dues)
+
+        payments = await service.list_dues_payments(dues.id, ORG_ID)
+
+        query = str(service.db.execute.await_args.args[0])
+        assert "AND member_dues.user_id =" not in query
+        assert payments == list(dues.payments)
+
+
 class TestUnwaive:
     """The way back out of WAIVED, which payments deliberately no longer are."""
 
