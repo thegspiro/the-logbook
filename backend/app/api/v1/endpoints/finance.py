@@ -1359,12 +1359,11 @@ async def unwaive_dues(
     """
     service = FinanceService(db)
     try:
-        dues, prior_reason = await service.unwaive_dues(
+        dues = await service.unwaive_dues(
             dues_id,
             str(current_user.organization_id),
             data.reason,
         )
-        # The erased waiver survives here and nowhere else.
         await log_audit_event(
             db=db,
             event_type="finance.dues_waiver_reversed",
@@ -1372,8 +1371,6 @@ async def unwaive_dues(
             severity="warning",
             event_data={
                 "dues_id": dues_id,
-                "reason": data.reason,
-                "reversed_waive_reason": prior_reason,
                 "restored_status": dues.status.value,
             },
             user_id=str(current_user.id),

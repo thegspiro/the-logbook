@@ -1898,7 +1898,7 @@ class FinanceService:
         dues_id: str,
         org_id: str,
         reason: str,
-    ) -> tuple[MemberDues, Optional[str]]:
+    ) -> MemberDues:
         """Reverse a waiver, returning the record to what its ledger says.
 
         Recording a payment against waived dues is refused, so without this
@@ -1906,11 +1906,10 @@ class FinanceService:
         and the only other dues endpoint is the waive itself. A department that
         waived by mistake and then received the money had no in-app remedy.
 
-        Returns the record together with the waive reason being erased, so the
-        caller can put it in the audit event. The reason is cleared rather than
-        kept, because a waive_reason left on an un-waived record is exactly the
-        self-contradictory row FIN-6 was about — the tamper-evident audit log is
-        where that history belongs.
+        The free-text waive reason is erased rather than retained on an
+        un-waived record or copied into the immutable audit log. Waiver reasons
+        may contain sensitive personal information and must remain eligible for
+        the application's privacy scrubbing guarantees.
         """
         result = await self.db.execute(
             select(MemberDues)
@@ -1929,7 +1928,6 @@ class FinanceService:
                 "These dues are not waived, so there is nothing to reverse."
             )
 
-        prior_reason = dues.waive_reason
         dues.waived_by = None
         dues.waived_at = None
         dues.waive_reason = None
@@ -1940,7 +1938,7 @@ class FinanceService:
 
         await self.db.flush()
         await self.db.refresh(dues, ["updated_at"])
-        return dues, prior_reason
+        return dues
 
     async def get_dues_summary(
         self, org_id: str, schedule_id: Optional[str] = None
