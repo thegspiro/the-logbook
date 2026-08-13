@@ -1828,6 +1828,42 @@ async def save_session_organization(
         )
 
 
+def _merge_default_permissions(
+    permission_list: list[str],
+    submitted: dict[str, RolePermission],
+    default_perms: list[str],
+) -> list[str]:
+    """Merge a system position's default permissions into a rebuilt list.
+
+    The onboarding position editor models exactly two checkboxes per module
+    (view/manage), so a rebuilt permission list contains only ``module.view``,
+    ``module.manage``, and ``module.*``. Two classes of default permission
+    cannot be re-submitted through it and must be carried over from
+    DEFAULT_POSITIONS or a customized position silently loses them at save:
+
+    1. Whole modules the frontend registry doesn't cover (audit, organization,
+       users, locations, meetings, ...) — keep all their defaults.
+    2. Sub-permissions within a submitted module (facilities.view_sensitive,
+       members.assign_positions, equipment_check.submit, ...) — keep them
+       while the module retains any access. An admin who unchecked the module
+       entirely revoked it, so its sub-permissions drop too; a module saved
+       with manage already carries the ``module.*`` wildcard, which covers
+       every sub-permission without cluttering the list.
+    """
+    merged = list(permission_list)
+    for perm in default_perms:
+        if "." not in perm:
+            continue
+        module_prefix, _, action = perm.partition(".")
+        if module_prefix not in submitted:
+            merged.append(perm)
+        elif action not in ("view", "manage", "*"):
+            module_perms = submitted[module_prefix]
+            if module_perms.view and not module_perms.manage:
+                merged.append(perm)
+    return merged
+
+
 @router.post("/session/roles", response_model=RolesSetupResponse)
 async def save_session_roles(
     request: Request, data: RolesSetupRequest, db: AsyncSession = Depends(get_db)
@@ -1943,17 +1979,9 @@ async def save_session_roles(
             if "*" in default_perms:
                 permission_list = ["*"]
             else:
-                # The frontend module registry doesn't cover every backend
-                # permission module (e.g. audit, organization, users,
-                # locations, meetings).  Preserve the default permissions
-                # for any modules the frontend submission doesn't include,
-                # so roles like Chief keep audit.view, users.create, etc.
-                submitted_modules = set(role_data.permissions.keys())
-                for perm in default_perms:
-                    if "." in perm:
-                        module_prefix = perm.split(".")[0]
-                        if module_prefix not in submitted_modules:
-                            permission_list.append(perm)
+                permission_list = _merge_default_permissions(
+                    permission_list, role_data.permissions, default_perms
+                )
 
             existing_role.permissions = permission_list
             existing_role.priority = role_data.priority

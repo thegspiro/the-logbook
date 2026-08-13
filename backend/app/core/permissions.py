@@ -847,6 +847,12 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             FACILITIES_DELETE.name,
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
+            # facilities.manage already implies the sensitive read on the
+            # endpoints, but the rank grant ceiling compares permission names
+            # literally (exact/wildcard only) — without the explicit grant a
+            # chief gets a 403 promoting a member to captain, whose defaults
+            # include facilities.view_sensitive.
+            FACILITIES_VIEW_SENSITIVE.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
             ADMIN_ACCESS.name,
@@ -897,6 +903,9 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             FACILITIES_DELETE.name,
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
+            # Explicit so the rank grant ceiling lets this rank assign
+            # captain — see the note on fire_chief.
+            FACILITIES_VIEW_SENSITIVE.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
         ],
@@ -940,6 +949,9 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             FACILITIES_EDIT.name,
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
+            # Explicit so the rank grant ceiling lets this rank assign
+            # captain — see the note on fire_chief.
+            FACILITIES_VIEW_SENSITIVE.name,
             NOTIFICATIONS_MANAGE.name,
         ],
     },
