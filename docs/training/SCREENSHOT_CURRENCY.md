@@ -36,6 +36,81 @@ earlier** and remain stale.
 
 ---
 
+## The 2026-08-13 currency audit — what a full pass found
+
+A full re-capture was run to answer "are the committed images still true?". It
+did not get as far as answering that, because it first exposed three things
+that made every previous full pass untrustworthy. All three are fixed; the
+re-capture itself is being redone guide by guide, verifying each image before
+committing it.
+
+### The harness was rendering the wrong navigation
+
+`08-62-topnav-bell-badge` switches the app to the top navigation bar by writing
+`navigationLayout` to `localStorage`, to photograph a bar that is not the
+default. It never put it back, and `capture.mjs` reuses one page for every shot
+of a given auth mode — so **every admin-authenticated shot captured after it
+rendered with the top bar instead of the default left sidebar.**
+
+Silent, and dependent on manifest order, which is why it had never shown up: a
+narrow `--only` run does not reach 08-62 before the rest, and only a full pass
+does. It surfaced as 46 images having grown by _exactly_ 65px — too uniform to
+be content, and it turned out to be the sidebar-to-top-bar swap.
+
+Fixed by clearing the key before every shot, so ordering cannot matter. 187
+images had already been committed from the contaminated pass; that commit was
+reverted.
+
+**Lesson for this file: a byte diff is not verification.** The contaminated
+images were all "changed", and every one of them looked plausible on its own.
+What gave it away was the _shape_ of the change being identical across
+unrelated guides.
+
+### Two seeding problems that read as capture failures
+
+Captures against stale or half-seeded data fail as bare `locator.click`
+timeouts that name nothing. Both of these cost an hour before being traced:
+
+- `GET /training/module-config/config` answered **500** for the demo
+  organization, which aborted the shift-report seed step, which left the shift
+  report shots with nothing to click. Fixed — see the 2026-08-12 entry in
+  KNOWN_LIMITATIONS' sibling commit history.
+- The TOTP account added for the two-factor login shot was `rduarte`, which is
+  `DEMO_PEER_EXAMINER_USERNAME`. Several seed steps sign in as it, and a
+  password sign-in on an MFA account returns no session, so three steps failed
+  with 401s. Moved to an account nothing signs in as, with an assertion that
+  fails at seed time if it is ever pointed at a login identity again.
+
+**Always re-run `seed_demo_data.py` after a container restart, and require it
+to finish with no failures before trusting a capture.**
+
+### Genuine capture failures still outstanding
+
+Seven shots failed for their own reasons rather than as fallout. (A long tail
+of `Target page, context or browser has been closed` in the same log is not
+real — that is the run being stopped.)
+
+| Shot                          | Failure                          |
+| ----------------------------- | -------------------------------- |
+| `03-56-bulk-confirm-shifts`   | `locator.waitFor` timeout        |
+| `03-58-assign-member-form`    | `locator.click` timeout          |
+| `02-88-member-checklist-view` | `scrollIntoViewIfNeeded` timeout |
+| `02-89-officer-only-steps`    | `scrollIntoViewIfNeeded` timeout |
+| `08-55-audit-medical`         | `selectOption` timeout           |
+| `15-02-board-truncated`       | `locator.waitFor` timeout        |
+| `15-09-bulk-action-result`    | `locator.waitFor` timeout        |
+
+### A seed gap: the prospect pipeline is empty
+
+Four shots across guides 01 and 15 flagged **"No applicants"** —
+`01-10-prospective-pipeline`, `01-25-applicant-action-bar`,
+`01-26-print-applicant-badges`, `15-14-applicant-drawer-overview`. Earlier in
+the same session `15-14` flagged the much narrower "No documents yet", so the
+pipeline had applicants then and does not now. Whatever seeds prospects is
+either not running or not surviving. Not yet diagnosed.
+
+---
+
 ## Images invalidated by the 2026-08-11 → 08-12 changes
 
 **Flagged 2026-08-12, not yet re-captured.** Two UI changes landed after the
@@ -50,15 +125,15 @@ right; it was previously at the far right. The component renders the top bar
 of **every authenticated page on a phone**, so every phone-width capture that
 includes the top bar now shows an outdated header:
 
-| Image | Why it's in frame |
-| --- | --- |
-| `10-04-mobile-dashboard` | fullPage, header at top |
-| `10-05-mobile-inventory` | header at top |
-| `10-06-mobile-inventory-admin` | fullPage, header at top |
-| `10-10-mobile-minimum-text` | header at top |
-| `10-15-mobile-menu-notifications` | shot *of* the open menu — the button itself is the subject |
-| `10-14-scan-camera-denied` | viewport-anchored, header at top |
-| `03-48-settings-phone`, `03-73-flat-check-form-header`, `03-95-apparatus-inventory` | top-anchored phone shots |
+| Image                                                                               | Why it's in frame                                          |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `10-04-mobile-dashboard`                                                            | fullPage, header at top                                    |
+| `10-05-mobile-inventory`                                                            | header at top                                              |
+| `10-06-mobile-inventory-admin`                                                      | fullPage, header at top                                    |
+| `10-10-mobile-minimum-text`                                                         | header at top                                              |
+| `10-15-mobile-menu-notifications`                                                   | shot _of_ the open menu — the button itself is the subject |
+| `10-14-scan-camera-denied`                                                          | viewport-anchored, header at top                           |
+| `03-48-settings-phone`, `03-73-flat-check-form-header`, `03-95-apparatus-inventory` | top-anchored phone shots                                   |
 
 **Not invalidated, recorded so nobody re-checks:** `10-12-mobile-bottom-nav`
 (clipped to the bottom nav element), `03-71-set-all-to-par-confirm` (dialog
@@ -74,7 +149,7 @@ The training guide's new header note carries a matching
 `14-04-ballot-configuration` pictures the Ballot Builder, which now shows
 **Save as Template** beside its actions whenever the ballot has items (and the
 template picker gained a "Your saved ballots" section). The whole guide-14 set
-was already listed under *Not re-captured* as cosmetically stale; `14-04` is
+was already listed under _Not re-captured_ as cosmetically stale; `14-04` is
 now **structurally** stale, and two new placeholders in
 `14-elections.md` (the save form, the saved-ballots picker) have never been
 shot. Note for the harness: the saved-templates picker needs a seeded saved
@@ -87,7 +162,7 @@ template — `seed_demo_data.py` does not create one yet.
   captures to invalidate: the Member Training Status page (gained its page
   gutter) has no shot in the manifest, and no facility detail page is shot at
   phone width.
-- **The confirm-dialog sweep** replaced *native* browser dialogs, which
+- **The confirm-dialog sweep** replaced _native_ browser dialogs, which
   Playwright could never photograph anyway; `00-14-confirm-dialog` pictures
   the in-app dialog, which is the surviving pattern.
 - **`02-104-cohort-preview-step`** was captured in the same commit that fixed
