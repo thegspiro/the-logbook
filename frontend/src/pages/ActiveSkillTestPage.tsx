@@ -52,7 +52,7 @@ import { SkillTestOfficerActions } from '../components/training/SkillTestOfficer
 import { ScoreBreakdownPanel } from '../components/training/ScoreBreakdownPanel';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { getErrorMessage, toAppError } from '../utils/errorHandling';
-import { computeSectionTally } from '../utils/skillTestTallies';
+import { computeSectionTally, deductionValue } from '../utils/skillTestTallies';
 import type { SectionTally } from '../utils/skillTestTallies';
 import type {
   SkillCriterion,
@@ -732,9 +732,15 @@ const SectionView: React.FC<{
 const CriterionResultDisplay: React.FC<{
   criterion: SkillCriterion;
   result: CriterionResult | undefined;
-}> = ({ criterion, result }) => {
+  /** The template-wide Pass/Fail setting, which an unset per-step mode defers
+   *  to — needed to tell a step that costs nothing from one that costs a point. */
+  scorePassFailCriteria?: boolean | undefined;
+}> = ({ criterion, result, scorePassFailCriteria }) => {
   const passed = result?.passed;
   const isCritical = criterion.required;
+  // What this step took off the total. Shown beside the verdict because "Fail"
+  // alone is exactly what left a failed step looking free on a 100% scorecard.
+  const deducted = passed === false ? deductionValue(criterion, scorePassFailCriteria ?? false) : 0;
 
   const statusBadge = () => {
     if (criterion.type === 'statement') {
@@ -819,7 +825,14 @@ const CriterionResultDisplay: React.FC<{
         )}
         {result?.notes && <p className="text-theme-text-muted mt-1 text-xs italic">&ldquo;{result.notes}&rdquo;</p>}
       </div>
-      {statusBadge()}
+      <div className="flex shrink-0 items-center gap-2">
+        {deducted > 0 && (
+          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+            &minus;{deducted} pt{deducted === 1 ? '' : 's'}
+          </span>
+        )}
+        {statusBadge()}
+      </div>
     </div>
   );
 };
@@ -832,10 +845,15 @@ const CriterionResultDisplay: React.FC<{
  */
 const SectionTallyBadges: React.FC<{ tally: SectionTally }> = ({ tally }) => (
   <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
-    {tally.countsTowardScore && (
+    {tally.available != null && (
       <span className="text-theme-text-primary font-bold">
         {tally.earned}/{tally.available} pts
       </span>
+    )}
+    {/* Stands alone rather than being folded into the points figure: a section
+        can hold nothing but deduct steps, earning nothing and still costing. */}
+    {tally.deducted > 0 && (
+      <span className="font-bold text-red-600 dark:text-red-400">&minus;{tally.deducted} pts</span>
     )}
     {tally.passed > 0 && <span className="font-medium text-green-600">{tally.passed} passed</span>}
     {tally.failed > 0 && <span className="font-medium text-red-600">{tally.failed} failed</span>}
@@ -862,6 +880,7 @@ function tallyFromBreakdown(section: ScoreBreakdownSection): SectionTally {
   return {
     earned: section.earned ?? null,
     available: section.available ?? null,
+    deducted: section.deducted ?? 0,
     countsTowardScore: section.counts_toward_score,
     passed: section.passed,
     failed: section.failed,
@@ -896,7 +915,14 @@ const ReviewSection: React.FC<{
       <div className="divide-theme-surface-border divide-y px-4">
         {section.criteria.map((criterion) => {
           const result = criteriaResults.find((r) => r.criterion_id === criterion.id);
-          return <CriterionResultDisplay key={criterion.id} criterion={criterion} result={result} />;
+          return (
+            <CriterionResultDisplay
+              key={criterion.id}
+              criterion={criterion}
+              result={result}
+              scorePassFailCriteria={scorePassFailCriteria}
+            />
+          );
         })}
       </div>
 
@@ -952,7 +978,14 @@ export const ReadOnlySectionView: React.FC<{
           const result = actualCriteria.find(
             (r) => r.criterion_id === criterion.id || r.criterion_label === criterion.label
           );
-          return <CriterionResultDisplay key={criterion.id} criterion={criterion} result={result} />;
+          return (
+            <CriterionResultDisplay
+              key={criterion.id}
+              criterion={criterion}
+              result={result}
+              scorePassFailCriteria={scorePassFailCriteria}
+            />
+          );
         })}
       </div>
 
