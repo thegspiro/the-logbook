@@ -155,6 +155,29 @@ setup_environment() {
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             print_info "Keeping existing .env file"
+            # The deployment below is safe either way — it passes -f for both
+            # compose files explicitly — but the management commands the
+            # operator runs afterwards (logs/restart/down/update) are bare
+            # `docker compose` calls that read COMPOSE_FILE from .env. A
+            # preserved .env may predate that pin, so append it when ABSENT.
+            # Append-only: an existing value is the operator's and is never
+            # rewritten, and no other line (secrets included) is touched.
+            if ! grep -qE '^[[:space:]]*COMPOSE_FILE=' "$SCRIPT_DIR/.env"; then
+                cat >> "$SCRIPT_DIR/.env" <<'EOF'
+
+# Added by the installer: pin the production override so bare
+# `docker compose ...` commands in this directory layer
+# docker-compose.prod.yml on the development base file.
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+EOF
+                print_info "Added COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml to .env"
+            elif ! grep -qE '^[[:space:]]*COMPOSE_FILE=.*docker-compose\.prod\.yml' "$SCRIPT_DIR/.env"; then
+                print_warning "Your .env sets COMPOSE_FILE without docker-compose.prod.yml."
+                print_warning "This installer still deploys the production stack (it passes -f"
+                print_warning "explicitly), but your own bare \`docker compose\` commands will"
+                print_warning "start the development posture (uvicorn --reload, published"
+                print_warning "backend port, docs on)."
+            fi
             # Never modify a config the operator already customized — but do
             # tell them when it cannot boot: docker-compose.prod.yml defaults
             # SECURITY_REQUIRE_TLS to true, and the backend refuses to start

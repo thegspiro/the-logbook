@@ -20,7 +20,7 @@ Two grant rules, applied idempotently:
 
 Positions whose grants already cover the permission ("*",
 "facilities.*", or the permission itself) are left untouched. Downgrade
-removes the permission wherever it is present.
+is a documented no-op — see downgrade().
 
 Revision ID: 20260813_0001
 Revises: 20260812_0004
@@ -87,16 +87,19 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
-    if "positions" not in sa.inspect(bind).get_table_names():
-        return
-    rows = bind.execute(sa.text("SELECT id, permissions FROM positions")).fetchall()
-    for row in rows:
-        perms = _load_permissions(row.permissions)
-        if _PERMISSION not in perms:
-            continue
-        perms.remove(_PERMISSION)
-        bind.execute(
-            sa.text("UPDATE positions SET permissions = :perms WHERE id = :id"),
-            {"perms": json.dumps(perms), "id": row.id},
-        )
+    # No-op, deliberately. This revision changes no schema — it only ADDS a
+    # permission string to some positions.permissions lists — so nothing has
+    # to be undone to restore the prior structure.
+    #
+    # Removing the permission is not safe: this migration records nothing
+    # about which rows it touched, so a grant here is indistinguishable from
+    # one that predates the upgrade (which the upgrade skipped on purpose) or
+    # one an administrator granted afterwards through the position editor.
+    # A blanket DELETE of facilities.view_sensitive would therefore revoke
+    # tenant-managed facility access that this migration never created —
+    # silently, and only noticed when someone loses data they should see.
+    #
+    # Erring toward leaving a READ grant in place is the conservative side:
+    # the permission is read-only (writes still require facilities.edit /
+    # facilities.manage), and re-running the upgrade is idempotent.
+    pass
