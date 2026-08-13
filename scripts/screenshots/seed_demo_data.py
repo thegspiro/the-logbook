@@ -8726,6 +8726,23 @@ class Seeder:
                 current = order.index(pick(prospect, "current_step_id"))
             except ValueError:
                 current = 0
+
+            # Move *back* as well as forward. `15-09-bulk-action-result` runs a
+            # real bulk advance during capture, and the manifest assumes a
+            # re-seed restores the mixed page it needs — which only holds if
+            # this can undo that. Advancing alone left every applicant parked at
+            # the final stage after one capture run, permanently, and
+            # `15-08-election-package` then pictured an applicant past the vote
+            # under a caption about being at it.
+            for _ in range(current - target):
+                try:
+                    self.api.post(
+                        f"/prospective-members/prospects/{prospect_id}/regress"
+                    )
+                except ApiError as exc:
+                    self.blocked.append(f"regress applicant: {exc}")
+                    break
+
             for _ in range(target - current):
                 try:
                     self.api.post(

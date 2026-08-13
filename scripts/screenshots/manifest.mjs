@@ -619,6 +619,25 @@ export function openApplicantDrawer(name) {
   };
 }
 
+/**
+ * Open the drawer of whichever applicant is currently at `stage`.
+ *
+ * Naming the applicant instead ties the shot to one seeding order: the
+ * election-package section renders only on an election_vote stage, and it was
+ * hard-coded to "Morgan Tran", so the moment the seeder spread applicants
+ * differently the shot pictured someone at Interview under a caption about the
+ * vote. The table's Current Stage column is the fact worth matching on.
+ */
+export function openApplicantAtStage(stage) {
+  return async (page) => {
+    await clickByName(/^table$/i)(page);
+    const row = page.locator("tbody tr").filter({ hasText: stage }).first();
+    await row.waitFor({ timeout: 15_000 });
+    await row.click({ timeout: 10_000 });
+    await page.waitForTimeout(600);
+  };
+}
+
 export function openPipelineSettings() {
   return async (page) => {
     await page
@@ -8176,8 +8195,10 @@ export const SHOTS = [
     alt: "Election package section showing the package status for an applicant at the vote",
     route: "/prospective-members",
     // The section renders only for an applicant on an election_vote stage —
-    // "Membership Vote" in the seeded pipeline.
-    prepare: openApplicantDrawer("Morgan Tran"),
+    // "Membership Vote" in the seeded pipeline. Matched on the stage rather
+    // than a name, so a different seeding spread cannot silently point this at
+    // somebody who is not at the vote.
+    prepare: openApplicantAtStage("Membership Vote"),
     fullPage: true,
     allowEmptyState: true,
   },

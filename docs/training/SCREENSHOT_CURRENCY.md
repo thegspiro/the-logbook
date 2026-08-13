@@ -43,6 +43,30 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### 15-08-election-package was pointing at the wrong applicant, twice over
+
+Its caption promises "an applicant at the vote", and the election-package
+section only renders on an `election_vote` stage. Two separate things stopped
+that being true, and the first hid the second:
+
+1. **The seeder could not restore the spread.** `_spread_prospects_across_stages`
+   only moved applicants _forward_, so once `15-09-bulk-action-result`'s real
+   bulk advance had run, every applicant was parked at the final stage —
+   permanently, across re-seeds. The manifest assumes a re-seed restores the
+   mixed page; that only holds if the spread can move applicants back, which it
+   now does via `/regress`. The board goes back to one applicant per stage.
+2. **The shot named its applicant.** `openApplicantDrawer("Morgan Tran")` tied
+   it to one seeding order. With the spread restored, Morgan Tran is at
+   Interview. A new `openApplicantAtStage("Membership Vote")` matches the
+   table's Current Stage column instead, so a different spread cannot silently
+   point the shot at somebody who is not at the vote.
+
+Verified: the drawer now shows Sam Okafor at Membership Vote with the ELECTION
+PACKAGE section — status, name, membership type, coordinator notes and
+supporting statement — over a board spread across all six stages.
+
+`15-12-pipeline-stats` also verified: the four stat cards, Total Active 7.
+
 ### A regression I introduced, and the capture-order trap that exposed it
 
 **I broke an endpoint two ticks earlier and only found it now.** Declaring
