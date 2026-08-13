@@ -9,7 +9,7 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Training Requirements** — Hours, courses, certifications, shifts, calls, skills evaluations, checklists, and knowledge tests with annual/quarterly/monthly/rolling frequencies. Requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary) or apply to all members. _(2026-07-08)_ The create form collects the matching quantity field per type and blocks requirements that would apply to nobody
 - **Requirement Templates** — _(2026-07-08)_ Ten built-in templates for common standards (NFPA 1001/1500, NREMT recertification, CPR/BLS, OSHA hazmat/bloodborne pathogens/respiratory protection, HIPAA awareness, NIMS/ICS courses, new-member onboarding checklist). Selecting a template pre-fills the create form for review; standards-based templates carry source attribution with the standard or CFR citation as registry code
 - **Course-Library Requirement Links** — _(2026-08-07)_ Course and certification requirements pick from the department's course catalog (`CourseLibraryPicker`, shared by the create-pipeline wizard, the pipeline requirement modal, and the department requirements page) rather than taking free text. This also **fixed a class of requirement that could never be completed**: the department requirements page collected `required_courses` as typed course _names_, while every evaluator compares against a record's `course_id`. Certification requirements gain the link as an _additional_ exact match on top of the existing name/`training_type`/registry-code heuristics. Every write path validates the ids against the caller's org via `assert_all_in_org`, reporting only "invalid" so it cannot be used to probe another tenant (XC-1). Changing a requirement's type away from courses/certification clears the links
-- **Requirement Freshness Window** — _(2026-08-07)_ `recency_days` demands that the completion itself be recent ("CPR taken within the last 180 days"), off by default. Distinct from `rolling_period_months`: that sets a recurring **obligation**, this is a validity window on an **individual record**, so a department's one-time requirement and a recruit pipeline's 180-day one can point at the same course and disagree about the same record. It narrows the record pool _before_ the frequency window in every evaluator, so it can only remove records. It also gates the officer apply-training-record path (an explicit sign-off that bypasses `allows_external_credit` by design, but must not bypass this), rejects a record with no completion date, and is in the update path's clearable set so the setting is not one-way
+- **Requirement Freshness Window** — _(2026-08-07)_ `recency_days` demands that the completion itself be recent ("CPR taken within the last 180 days"), off by default. Distinct from `rolling_period_months`: that sets a recurring **obligation**, this is a validity window on an **individual record**, so a department's one-time requirement and a recruit pipeline's 180-day one can point at the same course and disagree about the same record. It narrows the record pool _before_ the frequency window in every evaluator, so it can only remove records. It also gates the officer apply-training-record path (an explicit sign-off that bypasses `allows_external_credit` by design, but must not bypass this), rejects a record with no completion date — _(fixed 2026-08-12)_ the apply path previously failed **open** for undated records, crediting them against a freshness window that was never verified; it now fails closed with "That training has no completion date, so it can't be credited toward this requirement's N-day window", matching the read-path evaluator — and is in the update path's clearable set so the setting is not one-way
 - **Training Programs** — Structured multi-phase curricula (Flexible, Sequential, Phase-based) with milestone tracking
 - **Pipeline Recert Cycle** — _(2026-07-15)_ Training pipelines can reset an enrolled member's accumulated progress for a new certification cycle. Officers reset a single requirement or a whole enrollment manually; a pipeline can also carry a stored recurring deadline (cycle length in months plus an optional fixed anchor date, e.g. NREMT's March 30) that auto-resets each enrollment when it passes — applied lazily on progress load and via a daily 5 AM scheduled sweep (`recert_resets`, also exposed as the `recert/run-due` endpoint)
 - **Self-Service Withdrawal** — _(2026-07-16)_ A member can leave a program from their progression view (e.g. after downgrading from Paramedic to EMT); officers can withdraw anyone. Soft withdrawal keeps the record but removes it from the active dashboard and its warnings, and the member can be re-enrolled later
@@ -194,6 +194,21 @@ POST   /api/v1/training/sessions/approve/{token}           # Submit approval by 
 One scheduled run of a multi-class course. Every route is `training.manage`
 except `GET /{cohort_id}` and `/mine`, which a roster member may read for their
 own cohort.
+
+**A roster member's read is peer-safe** *(2026-08-12)*. The detail endpoint
+previously returned the full officer payload to any student on the roster:
+every classmate's name, email, roster status, withdrawal timestamp, officer
+notes, program progress percentage, and per-class attendance counts. A
+non-officer (no `training.manage` / `training.view_all`) now receives the
+cohort metadata and class timeline only — `members` is empty, `member_count`
+reads `0`, and per-class `rsvp_count` / `checked_in_count` are `null`
+(withheld, distinguishable from a genuine zero). The withheld data is never
+*queried*, not filtered after the fact, so there is no serialization-layer
+bypass. `/mine` likewise stopped disclosing roster sizes. Officers see
+everything, org-scoped; a non-member still gets a 404 rather than
+confirmation the cohort exists. The same pass org-scoped every query in the
+detail path (classes, roster joins, RSVP aggregates), closing cross-tenant
+reads via colliding ids.
 
 ```
 POST   /api/v1/training/cohorts/preview                    # Compute the dates a cohort would get — creates nothing

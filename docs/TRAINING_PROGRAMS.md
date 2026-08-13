@@ -919,6 +919,19 @@ before anything is committed.
 
 > **Edge case — a record with no completion date fails the check** rather than
 > slipping through, because the window cannot be verified against it.
+>
+> _(Fixed 2026-08-12.)_ The apply path did not actually enforce this until now:
+> its recency check was wrapped in `if completed_on is not None`, so an undated
+> record **failed open** and credited against a windowed requirement with no
+> freshness ever verified — contradicting the read-path evaluator
+> (`is_recent_enough`), which already treated a dateless record as not fresh.
+> The officer now gets a 400 at the approve/apply step: _"That training has no
+> completion date, so it can't be credited toward this requirement's N-day
+> window."_ Nothing is mutated — the submission is not approved-but-unapplied.
+> Scope to keep in mind: the rejection happens at the **officer apply step**,
+> only against requirements that set `recency_days`; member submission itself
+> is unaffected, requirements without a window still accept undated records,
+> and undated records credited before the fix are not backed out.
 
 > **The window can be lifted again.** `recency_days` is in the update path's
 > clearable set; without that the shared update loop would read "unset" as "leave

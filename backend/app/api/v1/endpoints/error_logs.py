@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_reporting import sanitize_path
 from app.core.security import is_rate_limited
 from app.core.security_middleware import get_client_ip
 from app.models.error_log import ErrorLog
@@ -52,6 +53,10 @@ class ErrorLogCreate(BaseModel):
     @field_validator("context")
     @classmethod
     def validate_context_size(cls, v: dict[str, Any]) -> dict[str, Any]:
+        v = dict(v)
+        for key in ("path", "page"):
+            if isinstance(v.get(key), str):
+                v[key] = sanitize_path(v[key])
         if len(json.dumps(v)) > MAX_CONTEXT_SIZE:
             raise ValueError(f"context must be less than {MAX_CONTEXT_SIZE} bytes")
         return v

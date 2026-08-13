@@ -237,6 +237,22 @@ status, credit hours, instructor, how many members are signed up, and an
 
 The **Roster** tab lists each member with their progress through the pipeline, a link to their full progression, and a **Remove** action.
 
+> **What a student sees is different** _(2026-08-12)_. A member on the roster
+> can open their own cohort (also via **My Training**), but they get the
+> schedule only: the class timeline with dates, times and statuses. They do
+> **not** see the roster, classmates' names or emails, anyone's progress
+> percentage, who withdrew, officer notes, or per-class attendance counts —
+> those render only for officers (`training.manage` / `training.view_all`).
+> Previously a student's view included all of it; if your recruits could see
+> each other's progress before, that was this, and it is closed. A member who
+> is *not* on the roster gets "Cohort not found" rather than confirmation the
+> cohort exists.
+>
+> **[SCREENSHOT NEEDED]:** _A cohort detail page as a roster **member** sees
+> it — class timeline populated, no Roster tab / member list, attendance
+> counts absent — captioned against the officer view pictured below so the
+> difference is the subject of the shot._
+
 > **Reschedule** and **Cancel class** are the two icon buttons at the right of
 > each row. **Create missing events** only appears while some class has no
 > event — on a healthy cohort it is absent, which is the state pictured below.
@@ -695,7 +711,14 @@ as satisfied forever — which is exactly what a recruit school needs to reject.
   anything is saved. That path deliberately bypasses the external-credit flag,
   but not this.
 - **A record with no completion date fails the check**, rather than slipping
-  through — the window cannot be verified against it.
+  through — the window cannot be verified against it. _(Fixed 2026-08-12: this
+  used to fail open on the apply path — an undated record credited against a
+  windowed requirement with no freshness ever verified. You now get a clear
+  message at the approve step: "That training has no completion date, so it
+  can't be credited toward this requirement's N-day window." Nothing is saved,
+  so there is no approved-but-unapplied half-state. If you hit this, ask the
+  member to resubmit with the completion date, or enter the date yourself
+  before applying.)_
 - **The window can be removed again** by clearing the field; it is not a one-way
   setting.
 

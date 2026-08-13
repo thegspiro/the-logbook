@@ -16,10 +16,7 @@ function versionJsonPlugin(): Plugin {
     apply: 'build',
     closeBundle() {
       const outDir = path.resolve(__dirname, 'dist');
-      fs.writeFileSync(
-        path.join(outDir, 'version.json'),
-        JSON.stringify({ buildId: BUILD_ID }) + '\n',
-      );
+      fs.writeFileSync(path.join(outDir, 'version.json'), JSON.stringify({ buildId: BUILD_ID }) + '\n');
     },
   };
 }
@@ -34,12 +31,20 @@ export default defineConfig({
     versionJsonPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registration lives in src/utils/serviceWorkerUpdate.ts instead of the
+      // plugin's injected registerSW.js, because it must pass
+      // `updateViaCache: 'none'` — otherwise importScripts (push-sw.js) is
+      // fetched through the HTTP cache during SW update checks, and devices
+      // holding a stale long-lived cache entry never pick up changes to it.
+      injectRegister: null,
       includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
       workbox: {
         // Web Push handlers. Kept as a separate plain-JS file so the build can
         // stay on generateSW — moving to injectManifest just to register two
         // event listeners would mean hand-maintaining everything below.
-        importScripts: ['/push-sw.js'],
+        // The build id in the URL also invalidates push-worker imports that an
+        // existing installation cached before no-store headers were deployed.
+        importScripts: [`/push-sw.js?v=${BUILD_ID}`],
         // Precache the app SHELL only, not all ~275 route chunks.
         //
         // Precaching everything made installing the PWA a ~6.1MB download, most
@@ -100,8 +105,7 @@ export default defineConfig({
         id: '/',
         name: 'The Logbook',
         short_name: 'Logbook',
-        description:
-          'Volunteer Fire Department Intranet - Secure & Built with HIPAA Requirements in Mind',
+        description: 'Volunteer Fire Department Intranet - Secure & Built with HIPAA Requirements in Mind',
         // Without an explicit start_url the spec defaults to the URL the app
         // was installed from — so a member who installed while viewing
         // /events/abc123 would get an app that always reopens that event.
@@ -233,11 +237,7 @@ export default defineConfig({
             // pages. Keep them out of the shared 'vendor' chunk — which is
             // reachable from the eager login graph via axios — so they are
             // downloaded only when a page that renders them actually loads.
-            if (
-              id.includes('html5-qrcode') ||
-              id.includes('jsbarcode') ||
-              id.includes('qrcode.react')
-            ) {
+            if (id.includes('html5-qrcode') || id.includes('jsbarcode') || id.includes('qrcode.react')) {
               return 'vendor-scanner';
             }
             // Drag-and-drop is only used by kanban/builder pages.
@@ -256,11 +256,7 @@ export default defineConfig({
             //   vendor-react → vendor → vendor-react
             // causing "Cannot read properties of undefined (reading
             // 'useLayoutEffect')" at runtime.
-            if (
-              id.includes('/react/') ||
-              id.includes('/react-dom/') ||
-              id.includes('scheduler')
-            ) {
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('scheduler')) {
               return 'vendor-react';
             }
             return 'vendor';

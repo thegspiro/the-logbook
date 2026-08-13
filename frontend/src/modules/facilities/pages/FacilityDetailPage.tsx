@@ -27,12 +27,12 @@ import {
   ShutoffsSection,
   UtilitiesSection,
 } from '../components/ExtendedFacilitySections';
-import { FACILITY_DETAIL_SECTIONS, type FacilitySectionId } from '../facilityDetailSections';
+import { getVisibleFacilitySections, type FacilitySectionId } from '../facilityDetailSections';
 
 export default function FacilityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { canManage } = useFacilitiesAccess();
+  const { canManage, canViewSensitive } = useFacilitiesAccess();
   const {
     selectedFacility: facility,
     isLoadingDetail,
@@ -46,6 +46,11 @@ export default function FacilityDetailPage() {
   } = useFacilitiesStore();
 
   const [activeSection, setActiveSection] = useState<FacilitySectionId>('overview');
+  const visibleSections = getVisibleFacilitySections(canViewSensitive);
+  // Fall back to the overview if the active section is not permitted — the
+  // sidebar never offers a hidden section, but a permission downgrade
+  // mid-session must not leave a restricted section rendered.
+  const section = visibleSections.some((s) => s.id === activeSection) ? activeSection : 'overview';
 
   useEffect(() => {
     if (id) {
@@ -180,13 +185,13 @@ export default function FacilityDetailPage() {
         {/* Sidebar Navigation */}
         <nav className="w-full shrink-0 sm:w-56" aria-label="Facility sections">
           <div className="bg-theme-surface-modal border-theme-surface-border sticky top-6 rounded-xl border p-2">
-            {FACILITY_DETAIL_SECTIONS.map((section) => {
-              const Icon = section.icon;
-              const isActive = activeSection === section.id;
+            {visibleSections.map((navSection) => {
+              const Icon = navSection.icon;
+              const isActive = section === navSection.id;
               return (
                 <button
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
+                  key={navSection.id}
+                  onClick={() => setActiveSection(navSection.id)}
                   className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-red-500/10 text-red-700 dark:text-red-400'
@@ -194,7 +199,7 @@ export default function FacilityDetailPage() {
                   }`}
                 >
                   <Icon className="h-4 w-4" />
-                  {section.label}
+                  {navSection.label}
                 </button>
               );
             })}
@@ -203,7 +208,7 @@ export default function FacilityDetailPage() {
 
         {/* Content Area */}
         <div className="min-w-0 flex-1">
-          {activeSection === 'overview' && (
+          {section === 'overview' && (
             <OverviewSection
               facility={facility}
               facilityTypes={facilityTypes}
@@ -211,20 +216,18 @@ export default function FacilityDetailPage() {
               canManage={canManage}
             />
           )}
-          {activeSection === 'rooms' && <RoomsSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'systems' && <SystemsSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'maintenance' && <MaintenanceSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'inspections' && <InspectionsSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'utilities' && <UtilitiesSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'contacts' && <ContactsSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'access-keys' && <AccessKeysSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'shutoffs' && <ShutoffsSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'capital-projects' && (
-            <CapitalProjectsSection facilityId={facility.id} canManage={canManage} />
-          )}
-          {activeSection === 'insurance' && <InsuranceSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'occupants' && <OccupantsSection facilityId={facility.id} canManage={canManage} />}
-          {activeSection === 'compliance' && <ComplianceSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'rooms' && <RoomsSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'systems' && <SystemsSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'maintenance' && <MaintenanceSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'inspections' && <InspectionsSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'utilities' && <UtilitiesSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'contacts' && <ContactsSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'access-keys' && <AccessKeysSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'shutoffs' && <ShutoffsSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'capital-projects' && <CapitalProjectsSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'insurance' && <InsuranceSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'occupants' && <OccupantsSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'compliance' && <ComplianceSection facilityId={facility.id} canManage={canManage} />}
         </div>
       </div>
     </div>

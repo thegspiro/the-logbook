@@ -196,10 +196,15 @@ Logbook members, subject to these rules:
 - **Never delete.** A Salesforce Contact deletion is logged and ignored; it
   does not remove or deactivate a member.
 - **Bounded field set.** Only contact/demographic fields are written
-  (`first_name`, `last_name`, `phone`, `mobile`, `rank`, `station`, and the
-  `address_*` fields). Identity (`email`, membership number), the member
-  `status` state machine, and date fields are intentionally **not** overwritten
-  from Salesforce.
+  (`first_name`, `last_name`, `phone`, `mobile`, `station`, and the
+  `address_*` fields). Authorization and identity fields — **`rank`** *(removed
+  from the inbound whitelist 2026-08-12)*, `email`, membership number — the
+  member `status` state machine, and date fields are intentionally **not**
+  overwritten from Salesforce. Rank is authorization-adjacent: anyone who could
+  edit a Contact's `Title` in Salesforce (or forge a webhook payload) could
+  previously promote a member inside The Logbook. Outbound is unchanged — The
+  Logbook remains authoritative and still **pushes** rank to the Contact
+  `Title`; it just never takes it back in.
 - **No blanking.** An empty inbound value never clears an existing Logbook
   value.
 - **Respects sync direction.** Inbound changes are applied only when the org's
@@ -234,6 +239,7 @@ form) to have the background scheduler sync the org automatically.
 | Salesforce API rate limit exceeded during sync                   | Sync pauses, retries with exponential backoff, logs partial progress                                                                                |
 | Webhook received for unmapped Salesforce object                  | Event logged and skipped; no error returned to Salesforce                                                                                           |
 | Inbound Contact matches no existing member                       | Counted as `unmatched` and skipped — never auto-creates a member                                                                                    |
+| Salesforce `Title` differs from the member's Logbook rank        | Ignored inbound — rank never syncs Salesforce → Logbook. The two may diverge permanently until the next outbound push re-asserts the Logbook value; a contact whose only difference is `Title` counts as `unchanged`, not `updated` |
 | Salesforce Contact deleted                                       | Logged and ignored — never deletes or deactivates the Logbook member                                                                                |
 | Inbound value is empty                                           | Skipped — an empty Salesforce value never blanks an existing Logbook field                                                                          |
 | Salesforce field mapping references nonexistent field            | Mapping validation on save rejects invalid field references                                                                                         |

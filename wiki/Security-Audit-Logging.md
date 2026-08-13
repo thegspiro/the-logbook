@@ -101,6 +101,28 @@ single, cross-organization chain, it is now gated:
   `409` and refuses to overwrite it — a keyed mismatch is a genuine integrity
   signal (tamper or bug), not something to launder into a valid chain.
 
+### Legacy Hash Boundary Is Pinned in Config *(2026-08-12)*
+
+Which rows are *allowed* to use the legacy unkeyed SHA-256 scheme is no longer
+decided by the row's own `hash_version` column — that column lives in the same
+attacker-writable table the chain protects, so an attacker with SQL write
+access could rewrite the entire keyed suffix, mark every forged row as
+version 1, and recompute a "valid" chain **without the HMAC key**. The
+no-downgrade guard didn't stop this because it derived its high-water mark
+from the same column.
+
+The trust boundary now lives in application configuration, outside the audit
+database: **`AUDIT_LOG_LEGACY_MAX_ID`** (default `0`).
+
+- **New installations leave it at `0`** — no row may verify unkeyed, ever.
+- **Upgraded installations set it once**, to the last `audit_logs.id` that
+  existed immediately before the HMAC upgrade. Rows at or below it verify
+  under legacy SHA-256; any unkeyed row *above* it fails verification with
+  "Unkeyed hash is not permitted after the trusted legacy audit boundary".
+- **Rehash fails closed** on the same rule: an unkeyed row past the boundary
+  aborts `POST /security/audit-log/rehash` with a "hash-version downgrade
+  attack" error rather than laundering it into the chain.
+
 ### Audit Log Export — `session_id` Redaction *(2026-07)*
 
 `GET /api/v1/security/audit-log/export` is scoped to the caller's organization

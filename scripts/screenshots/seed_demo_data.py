@@ -31,7 +31,11 @@ from time import monotonic, sleep
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from bootstrap_demo import DEMO_ADMIN_PASSWORD, DEMO_ADMIN_USERNAME
+from bootstrap_demo import (
+    DEMO_ADMIN_USERNAME,
+    admin_password,
+    require_safe_base_url,
+)
 
 
 class Throttle:
@@ -314,7 +318,7 @@ class Api:
         )
 
     def login(self) -> None:
-        self.login_as(DEMO_ADMIN_USERNAME, DEMO_ADMIN_PASSWORD)
+        self.login_as(DEMO_ADMIN_USERNAME, admin_password())
 
     def login_as(self, username: str, password: str) -> None:
         self.call("POST", "/auth/login", {"username": username, "password": password})
@@ -7896,7 +7900,59 @@ class Seeder:
         self._seed_closed_election(elections, minutes or [])
         self._seed_open_election(elections)
         self._seed_runoff_chain(elections)
+        self._seed_saved_ballot_template()
         return elections
+
+    # Named and sized to match the worked example in the elections guide: four
+    # items, so the picker's "4 items · replaces current ballot" line has
+    # something to say beyond "1 item".
+    SAVED_BALLOT_TEMPLATE_NAME = "Annual officer election"
+    SAVED_BALLOT_TEMPLATE_ITEMS = (
+        ("Fire Chief", "operational"),
+        ("Deputy Chief", "operational"),
+        ("Captain", "operational"),
+        ("Secretary", "all"),
+    )
+
+    def _seed_saved_ballot_template(self) -> None:
+        """A reusable ballot snapshot, so the template picker is not empty.
+
+        The picker's "Your saved ballots" section only renders when the
+        organization has at least one — without this the guide's two template
+        screenshots have nothing to photograph but the built-in item grid.
+        """
+        existing = self.api.get("/elections/templates/saved-ballots")
+        rows = existing if isinstance(existing, list) else items(existing, "templates")
+        if any(r.get("name") == self.SAVED_BALLOT_TEMPLATE_NAME for r in rows):
+            return
+        try:
+            self.api.post(
+                "/elections/templates/saved-ballots",
+                {
+                    "name": self.SAVED_BALLOT_TEMPLATE_NAME,
+                    "description": (
+                        "Last year's officer ballot, kept so the questions do "
+                        "not have to be retyped."
+                    ),
+                    "ballot_items": [
+                        {
+                            "id": f"saved-item-{index + 1}",
+                            "type": "officer_election",
+                            "title": position,
+                            "description": f"Vote for {position}.",
+                            "position": position,
+                            "eligible_voter_types": [eligibility],
+                            "vote_type": "candidate_selection",
+                            "voting_method": "simple_majority",
+                        }
+                        for index, (position, eligibility) in enumerate(
+                            self.SAVED_BALLOT_TEMPLATE_ITEMS
+                        )
+                    ],
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"saved ballot template: {exc}")
 
     RUNOFF_ELECTION_TITLE = "Fire Chief Election — 2027 Term"
 
@@ -9868,6 +9924,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:3001")
     parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="allow an explicitly chosen non-loopback demo backend",
+    )
+    parser.add_argument(
         "--bulk-prospects",
         nargs="?",
         type=int,
@@ -9885,6 +9946,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    require_safe_base_url(args.base_url, args.allow_remote)
     api = Api(args.base_url)
     api.login()
     return Seeder(api, args.base_url, bulk_prospects=args.bulk_prospects).run()

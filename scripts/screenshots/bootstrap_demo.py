@@ -19,15 +19,42 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
+import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEMO_ORG = "Oakville Fire Department"
-DEMO_ADMIN_USERNAME = "chief"
-DEMO_ADMIN_PASSWORD = "DemoP@ssw0rd!2026"
+DEMO_ADMIN_USERNAME = os.environ.get("SCREENSHOT_ADMIN_USERNAME", "chief")
 DEMO_ADMIN_EMAIL = "chief@oakvillefd.example.org"
+
+
+def admin_password() -> str:
+    password = os.environ.get("SCREENSHOT_ADMIN_PASSWORD")
+    if not password:
+        raise SystemExit(
+            "SCREENSHOT_ADMIN_PASSWORD must be set to a unique demo password"
+        )
+    return password
+
+
+def require_safe_base_url(base_url: str, allow_remote: bool = False) -> None:
+    """Refuse to provision credentials on a network-reachable host by accident."""
+    hostname = urllib.parse.urlparse(base_url).hostname
+    try:
+        is_loopback = hostname == "localhost" or (
+            hostname is not None and ipaddress.ip_address(hostname).is_loopback
+        )
+    except ValueError:
+        is_loopback = False
+    if not is_loopback and not allow_remote:
+        raise SystemExit(
+            f"Refusing non-loopback base URL {base_url!r}; "
+            "pass --allow-remote only for an intentionally isolated demo"
+        )
 
 
 class Client:
@@ -54,7 +81,9 @@ class Client:
         return json.loads(body) if body else {}
 
 
-def bootstrap(base_url: str) -> None:
+def bootstrap(base_url: str, allow_remote: bool = False) -> None:
+    require_safe_base_url(base_url, allow_remote)
+    password = admin_password()
     client = Client(base_url)
 
     status = client.request("GET", "/onboarding/status")
@@ -102,8 +131,8 @@ def bootstrap(base_url: str) -> None:
         {
             "username": DEMO_ADMIN_USERNAME,
             "email": DEMO_ADMIN_EMAIL,
-            "password": DEMO_ADMIN_PASSWORD,
-            "password_confirm": DEMO_ADMIN_PASSWORD,
+            "password": password,
+            "password_confirm": password,
             "first_name": "Dana",
             "last_name": "Ruiz",
             "membership_number": "001",
@@ -128,8 +157,13 @@ def bootstrap(base_url: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:3001")
+    parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="allow an explicitly chosen non-loopback demo backend",
+    )
     args = parser.parse_args()
-    bootstrap(args.base_url)
+    bootstrap(args.base_url, args.allow_remote)
     return 0
 
 

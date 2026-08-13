@@ -107,13 +107,12 @@ ENCRYPTION_SALT=<paste generated value>
 MYSQL_ROOT_PASSWORD=<strong password>
 DB_PASSWORD=<strong password>
 REDIS_PASSWORD=<strong password>
-ALLOWED_ORIGINS=http://YOUR-UNRAID-IP:7880
+# The public HTTPS URL of your reverse proxy (see "HTTPS with Reverse
+# Proxy" below). Production marks auth cookies Secure, and browsers refuse
+# to send Secure cookies over plain http:// — so logins only work through
+# the HTTPS origin named here.
+ALLOWED_ORIGINS=https://logbook.example.com
 TZ=America/New_York  # Your timezone
-
-# Only for a LAN trial without HTTPS: allow cookie auth over plain http://.
-# Without this, production marks auth cookies Secure and logins over plain
-# HTTP fail. Remove once an HTTPS reverse proxy is in front (see below).
-COOKIE_SECURE=false
 ```
 
 Create directories and start:
@@ -133,7 +132,9 @@ docker compose up -d
 
 Once the containers are running, open your browser:
 
-- **Frontend:** `http://YOUR-UNRAID-IP:7880`
+- **Frontend:** your public HTTPS URL (e.g. `https://logbook.example.com`) —
+  browser access must go through the reverse proxy; logins over the plain-HTTP
+  port fail because auth cookies are marked `Secure`
 - **Health Check:** `http://YOUR-UNRAID-IP:7881/health`
 - **API Docs:** `http://YOUR-UNRAID-IP:7881/docs` — **off by default** (the
   production security gate blocks startup with docs enabled). Set
@@ -208,13 +209,12 @@ SMTP_FROM_EMAIL=noreply@yourdomain.com
 >    and browsers refuse to send `Secure` cookies over plain `http://` — so
 >    without HTTPS, **logins fail silently** even on a booted stack.
 >
-> The setup script configures a **LAN-trial posture** by default:
-> `SECURITY_ENFORCE_HTTPS=true` (passes the gate) plus `COOKIE_SECURE=false`
-> (allows cookie auth over plain HTTP on a trusted LAN). Before real use,
-> front the app with one of the proxies below, point `ALLOWED_ORIGINS` at your
-> `https://` origin, and **delete the `COOKIE_SECURE` line from `.env`** —
-> session cookies over cleartext HTTP are readable by anyone on the network
-> path. Two related settings: **API docs (`/docs`) are OFF by default**
+> The setup script therefore **requires the public HTTPS URL of a reverse
+> proxy** before it will generate `.env`, writes it into `ALLOWED_ORIGINS`,
+> and never disables secure cookies — there is no plain-HTTP trial mode,
+> because session cookies over cleartext HTTP are readable by anyone on the
+> network path. Set the proxy up first (either option below), then run the
+> installer. Two related settings: **API docs (`/docs`) are OFF by default**
 > (enabling them blocks boot), and **leave `TRUSTED_PROXY_IPS` empty** unless
 > you actually add a proxy — the compose publishes the backend port directly,
 > so the connecting peer is the real client, and setting it otherwise lets

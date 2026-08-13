@@ -1110,7 +1110,9 @@ class EquipmentCheckService:
             )
         )
         template = result.scalars().first()
-        if not template:
+        # Disabled templates remain available to managers for historical and
+        # editing views, but must not create new operational check records.
+        if not template or not template.is_active:
             raise ValueError("Template not found")
 
         apparatus_id = data.get("apparatus_id") or template.apparatus_id
