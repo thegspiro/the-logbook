@@ -1356,7 +1356,7 @@ class StorefrontService:
         stable order because two carts holding the same pair of products in
         opposite orders would otherwise deadlock.
         """
-        ordered_ids = sorted({str(pid) for pid in product_ids if pid})
+        ordered_ids = sorted({str(pid).lower() for pid in product_ids if pid})
         if not ordered_ids:
             return
         await self.db.execute(
