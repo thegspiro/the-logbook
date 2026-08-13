@@ -6,8 +6,8 @@ browser localStorage, so every admin had a private copy and a new browser
 saw factory defaults. This table gives them one org-scoped home, mirroring
 training_module_configs (one row per organization).
 
-Revision ID: 20260813_0003
-Revises: 20260813_0002
+Revision ID: 20260813_0005
+Revises: 20260813_0004
 Create Date: 2026-08-13 00:03:00.000000
 """
 
@@ -15,8 +15,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260813_0003"
-down_revision = "20260813_0002"
+revision = "20260813_0005"
+down_revision = "20260813_0004"
 branch_labels = None
 depends_on = None
 

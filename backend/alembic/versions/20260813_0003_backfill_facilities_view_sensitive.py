@@ -22,8 +22,8 @@ Positions whose grants already cover the permission ("*",
 "facilities.*", or the permission itself) are left untouched. Downgrade
 is a documented no-op — see downgrade().
 
-Revision ID: 20260813_0001
-Revises: 20260812_0004
+Revision ID: 20260813_0003
+Revises: 20260813_0002
 Create Date: 2026-08-13 00:01:00.000000
 """
 
@@ -33,8 +33,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260813_0001"
-down_revision = "20260812_0004"
+revision = "20260813_0003"
+down_revision = "20260813_0002"
 branch_labels = None
 depends_on = None
 
