@@ -20,7 +20,7 @@ from fastapi.routing import APIRoute
 
 from app.api.dependencies import PermissionChecker
 from app.api.v1.endpoints.facilities import router
-from app.core.permissions import DEFAULT_POSITIONS
+from app.core.permissions import DEFAULT_POSITIONS, get_permissions_by_category
 
 SENSITIVE_PREFIXES = (
     "/access-keys",
@@ -135,6 +135,17 @@ def test_default_positions_grant_sensitive_read_to_facility_ranks():
         "facilities.edit",
         "facilities.manage",
     }
+
+
+def test_view_sensitive_is_offered_by_the_role_editor_catalog():
+    """The role editor at /settings/roles builds its checkboxes from
+    ``GET /roles/permissions/by-category``, which serves this catalog — if
+    the permission drops out of it, existing organizations lose their only
+    way to grant the sensitive read to additional positions."""
+    facilities_perms = {
+        p.name for p in get_permissions_by_category().get("facilities", [])
+    }
+    assert "facilities.view_sensitive" in facilities_perms
 
 
 def test_operational_reads_stay_available_to_facilities_view():
