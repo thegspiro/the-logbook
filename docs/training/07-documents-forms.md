@@ -343,20 +343,21 @@ department or a targeted group. There are two surfaces:
 ### How members receive a message
 
 Every targeted member gets the message in the app (the dashboard card, the
-`/messages` inbox, and a bell notification). Higher priorities are **escalated**
-to the channels members actually watch when they're not in the app:
+`/messages` inbox, and a bell notification) **and by email** — email is the
+department's record that they were notified, so it goes out for every message
+at every priority. Urgent messages are additionally **escalated** to SMS:
 
 | Priority / flag         | In-app (bell, inbox, dashboard) | Email | SMS |
 | ----------------------- | :-----------------------------: | :---: | :-: |
-| Normal                  |               ✅                |   —   |  —  |
-| Important               |               ✅                |   —   |  —  |
+| Normal                  |               ✅                |  ✅   |  —  |
+| Important               |               ✅                |  ✅   |  —  |
 | Requires acknowledgment |               ✅                |  ✅   |  —  |
 | Urgent                  |               ✅                |  ✅   | ✅  |
 
-When a message escalates, **email is always sent** to targeted members — it is
-the department's record that they were notified, so it is _not_ suppressed by a
+The email is _not_ suppressed by a
 member's email preference or by consent (a member can never opt out of being
-informed of an important/urgent notice). **SMS** is different: it is only sent
+informed of a department notice); important/urgent messages carry an
+`[IMPORTANT]`/`[URGENT]` subject prefix. **SMS** is different: it is only sent
 when the department has SMS (Twilio) configured, the member has a mobile number
 on file, the member has granted **express SMS consent** (US TCPA rules — a member
 who was never asked counts as _not_ consented), **and** their text-message
@@ -420,8 +421,8 @@ Lt. Smith to schedule").
 Members manage how they're reached under **Settings → Notifications**:
 
 - **Email Notifications** — governs the department's **reminder and alert**
-  emails (event reminders, low-stock alerts, etc.). Note that important/urgent
-  **department-message escalations are always emailed** regardless of this toggle,
+  emails (event reminders, low-stock alerts, etc.). Note that
+  **department messages are always emailed** regardless of this toggle,
   because that email is the official record that the member was notified.
 - **Urgent Text Messages** — receive an SMS for urgent messages. Requires a mobile
   number on file, the department to have SMS (Twilio) enabled, **and** the

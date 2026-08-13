@@ -16,17 +16,17 @@ areas were never in its rotation. They carry the most unknown risk, so they run
 first. Storefront alone is ~11k lines of payment-handling code that has never
 been through a review pass.
 
-| # | Feature | Code | Prefix | Status |
-|---|---------|------|--------|--------|
-| A1 | Storefront & payments | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF | ⬜ |
-| A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ⬜ |
-| A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ⬜ |
-| A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ⬜ |
-| A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ⬜ |
-| A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ⬜ |
-| A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ⬜ |
-| A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ⬜ |
-| A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | ⬜ |
+| #   | Feature                        | Code                                                                                                                                                                                                                                                                      | Prefix | Status |
+| --- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
+| A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ⬜     |
+| A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ⬜     |
+| A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ⬜     |
+| A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ⬜     |
+| A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
+| A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
+| A7  | Dashboard & action items       | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`                                                                                                                | DASH   | ⬜     |
+| A8  | Locations & kiosk              | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx`                                                                                                                                                                   | LOC    | ⬜     |
+| A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L)                                                                                                                       | OPS    | ⬜     |
 
 ## Tier B — second pass over the audited 27
 
@@ -37,35 +37,35 @@ opportunities. Re-verify the security findings that were left open, but do not
 re-derive the ones already fixed — read the module-audit file first and start
 from its open list.
 
-| # | Feature | Prefix | Status |
-|---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ⬜ |
-| B2 | apparatus | AP2 | ⬜ |
-| B3 | inventory | INV2 | ⬜ |
-| B4 | facilities | FAC2 | ⬜ |
-| B5 | elections | ELEC2 | ⬜ |
-| B6 | meetings & minutes | MM2 | ⬜ |
-| B7 | equipment-check | EC2 | ⬜ |
-| B8 | documents | DOC2 | ⬜ |
-| B9 | membership pipeline | MP2 | ⬜ |
-| B10 | messaging & communications | MSG2 | ⬜ |
-| B11 | notifications | NOTIF2 | ⬜ |
-| B12 | integrations | INT2 | ⬜ |
-| B13 | forms | FORM2 | ⬜ |
-| B14 | grants & fundraising | GF2 | ⬜ |
-| B15 | admin-hours | AH2 | ⬜ |
-| B16 | reports & analytics | RPT2 | ⬜ |
-| B17 | events | EV2 | ⬜ |
-| B18 | training | TR2 | ⬜ |
-| B19 | scheduling | SCH2 | ⬜ |
-| B20 | finance | FIN2 | ⬜ |
-| B21 | orgs, roles & users | ORU2 | ⬜ |
-| B22 | compliance & skills | CS2 | ⬜ |
-| B23 | security, audit & IP | SEC2 | ⬜ |
-| B24 | core infra | CI2 | ⬜ |
-| B25 | onboarding | ONB2 | ⬜ |
-| B26 | public-portal | PP2 | ⬜ |
-| B27 | frontend shared | FE2 | ⬜ |
+| #   | Feature                    | Prefix | Status |
+| --- | -------------------------- | ------ | ------ |
+| B1  | medical-screening          | MS2    | ⬜     |
+| B2  | apparatus                  | AP2    | ⬜     |
+| B3  | inventory                  | INV2   | ⬜     |
+| B4  | facilities                 | FAC2   | ⬜     |
+| B5  | elections                  | ELEC2  | ⬜     |
+| B6  | meetings & minutes         | MM2    | ⬜     |
+| B7  | equipment-check            | EC2    | ⬜     |
+| B8  | documents                  | DOC2   | ⬜     |
+| B9  | membership pipeline        | MP2    | ⬜     |
+| B10 | messaging & communications | MSG2   | ✅     |
+| B11 | notifications              | NOTIF2 | ⬜     |
+| B12 | integrations               | INT2   | ⬜     |
+| B13 | forms                      | FORM2  | ⬜     |
+| B14 | grants & fundraising       | GF2    | ⬜     |
+| B15 | admin-hours                | AH2    | ⬜     |
+| B16 | reports & analytics        | RPT2   | ⬜     |
+| B17 | events                     | EV2    | ⬜     |
+| B18 | training                   | TR2    | ⬜     |
+| B19 | scheduling                 | SCH2   | ⬜     |
+| B20 | finance                    | FIN2   | ⬜     |
+| B21 | orgs, roles & users        | ORU2   | ⬜     |
+| B22 | compliance & skills        | CS2    | ⬜     |
+| B23 | security, audit & IP       | SEC2   | ⬜     |
+| B24 | core infra                 | CI2    | ⬜     |
+| B25 | onboarding                 | ONB2   | ⬜     |
+| B26 | public-portal              | PP2    | ⬜     |
+| B27 | frontend shared            | FE2    | ⬜     |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -81,16 +81,16 @@ future-dev), starting from the fixes the first pass already landed.
 
 Established before the first iteration, so any later failure is attributable:
 
-| Check | Result |
-|-------|--------|
-| `frontend && npx tsc --noEmit` | ✅ 0 errors |
-| `backend && flake8 app/ tests/` | ✅ 0 violations |
-| `backend && black --check app/ tests/` | ✅ 501 files unchanged |
-| `frontend && npx eslint .` | ✅ 0 errors |
-| `isort --check-only` | ⚠️ isort not installed in the review sandbox |
-| DB-backed `pytest` | ⚠️ cannot run — no MySQL, no Docker daemon. Non-DB tests do run. See CHECKLIST.md → *Known sandbox limitations* |
-| Full backend suite | ✅ 2498 passed, 0 failed (648 DB-fixture errors) — was 2494 passed / **4 failed** before the Alembic duplicate-revision fix |
-| Full frontend suite | ✅ 2207 passed (159 files) |
+| Check                                  | Result                                                                                                                      |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `frontend && npx tsc --noEmit`         | ✅ 0 errors                                                                                                                 |
+| `backend && flake8 app/ tests/`        | ✅ 0 violations                                                                                                             |
+| `backend && black --check app/ tests/` | ✅ 501 files unchanged                                                                                                      |
+| `frontend && npx eslint .`             | ✅ 0 errors                                                                                                                 |
+| `isort --check-only`                   | ⚠️ isort not installed in the review sandbox                                                                                |
+| DB-backed `pytest`                     | ⚠️ cannot run — no MySQL, no Docker daemon. Non-DB tests do run. See CHECKLIST.md → _Known sandbox limitations_             |
+| Full backend suite                     | ✅ 2498 passed, 0 failed (648 DB-fixture errors) — was 2494 passed / **4 failed** before the Alembic duplicate-revision fix |
+| Full frontend suite                    | ✅ 2207 passed (159 files)                                                                                                  |
 
 ---
 
@@ -133,30 +133,30 @@ Established before the first iteration, so any later failure is attributable:
   so this pass re-verified a sample of its fixes rather than re-deriving them
   (M1 forced-Secure cookies, M2 refresh grace window, M3 dummy-verify on all
   three enumeration branches incl. the subtle locked-account one, H3 TOTP replay
-  + lockout, H5 `get_client_ip`) — **all intact and matching their claims** —
-  and applied the broader lens. Verified: 25/25 endpoints correctly gated (the
-  10 public ones are public by necessity), every credential-guessing path rate
-  limited, reset tokens SHA-256 hashed at rest, no dead endpoints, no TODOs.
-  **2 fixes applied:** AUTH-1 (MED: six sites recorded `request.client.host` —
-  the *proxy's* IP behind the production nginx — into session rows and
-  login/password-reset audit events, so the session list and reset forensics
-  carried one identical internal IP for every user; the tell was that
-  `mfa_login` already used `get_client_ip` for the same parameter while `login`
-  computed it for rate limiting and then didn't use it), AUTH-3 (LOW: the
-  `log_audit_event` docstring example taught the same wrong pattern — the likely
-  origin of the class). **1 flagged:** AUTH-2 (MED: `ConsentService.has_consent`
-  has **zero callers** — members can refuse photo use, public-roster listing and
-  SMS, the choice is stored and audit-logged, and nothing checks it; the
-  `SMS_NOTIFICATIONS` case cites TCPA, which carries statutory damages per
-  message. Not auto-fixed: "never asked" counts as refused, so wiring it in as
-  documented would immediately stop SMS to every existing member — needs a
-  backfill decision).
-  **New cross-cutting pattern AXC-1** with 28 sites still open across 7 files —
-  see [CROSS-CUTTING.md](./CROSS-CUTTING.md). The elections instance is **HIGH**:
-  per-vote IPs feed the ballot fraud detection documented in
-  `BALLOT_FORENSICS_GUIDE.md`, so behind the proxy `unique_ip_count` collapses to
-  1 and every election permanently trips the suspicious-IP threshold.
-  See auth-session.md. Next: A3 scheduled tasks & cron.
+  - lockout, H5 `get_client_ip`) — **all intact and matching their claims** —
+    and applied the broader lens. Verified: 25/25 endpoints correctly gated (the
+    10 public ones are public by necessity), every credential-guessing path rate
+    limited, reset tokens SHA-256 hashed at rest, no dead endpoints, no TODOs.
+    **2 fixes applied:** AUTH-1 (MED: six sites recorded `request.client.host` —
+    the _proxy's_ IP behind the production nginx — into session rows and
+    login/password-reset audit events, so the session list and reset forensics
+    carried one identical internal IP for every user; the tell was that
+    `mfa_login` already used `get_client_ip` for the same parameter while `login`
+    computed it for rate limiting and then didn't use it), AUTH-3 (LOW: the
+    `log_audit_event` docstring example taught the same wrong pattern — the likely
+    origin of the class). **1 flagged:** AUTH-2 (MED: `ConsentService.has_consent`
+    has **zero callers** — members can refuse photo use, public-roster listing and
+    SMS, the choice is stored and audit-logged, and nothing checks it; the
+    `SMS_NOTIFICATIONS` case cites TCPA, which carries statutory damages per
+    message. Not auto-fixed: "never asked" counts as refused, so wiring it in as
+    documented would immediately stop SMS to every existing member — needs a
+    backfill decision).
+    **New cross-cutting pattern AXC-1** with 28 sites still open across 7 files —
+    see [CROSS-CUTTING.md](./CROSS-CUTTING.md). The elections instance is **HIGH**:
+    per-vote IPs feed the ballot fraud detection documented in
+    `BALLOT_FORENSICS_GUIDE.md`, so behind the proxy `unique_ip_count` collapses to
+    1 and every election permanently trips the suspicious-IP threshold.
+    See auth-session.md. Next: A3 scheduled tasks & cron.
 - **Owner-directed follow-up (2026-08-05)** — two decisions taken on the A2
   findings, both implemented:
   - **AXC-1 swept.** The remaining **33** sites (the earlier "28" was an
@@ -169,8 +169,8 @@ Established before the first iteration, so any later failure is attributable:
     still live on the public surface). Remaining decision: historical rows still
     hold proxy IPs; recommend noting the cutover in `BALLOT_FORENSICS_GUIDE.md`
     rather than rewriting hash-chained audit history.
-  - **AUTH-2 resolved.** The owner's rule — *messages always go to the member's
-    email* — removed the backfill blocker, since consent can now suppress a text
+  - **AUTH-2 resolved.** The owner's rule — _messages always go to the member's
+    email_ — removed the backfill blocker, since consent can now suppress a text
     without suppressing the notice. SMS is gated on consent in both send paths
     (the second, an inventory low-stock alert in `scheduled_tasks.py`, was found
     by grepping every `SMSService` caller); email is unconditional and no longer
@@ -197,7 +197,7 @@ Established before the first iteration, so any later failure is attributable:
   **3 fixes applied:** CRON-1 (MED: `_for_each_org` rolls back a failed org's
   work and says why — but **8 runners re-implement that loop inline and none
   rolled back**, so after a failed flush the shared session was poisoned and
-  every *later* org in the run failed too; self-concealing, because it reports
+  every _later_ org in the run failed too; self-concealing, because it reports
   as "many orgs broken" rather than "one org poisoned the session"), CRON-2
   (LOW/latent: all 9 org queries ignored `Organization.active`; nothing sets it
   False today so the filter is a provable no-op now and correct once an
@@ -207,7 +207,7 @@ Established before the first iteration, so any later failure is attributable:
   Owner — deliberately left, since sanitizing would destroy the operator's only
   debugging signal; wants a correlation id instead).
   **3 structural tests added**, each verified to actually fail when its
-  invariant is broken. Both CRON-1 and CRON-2 existed *only* in the inline
+  invariant is broken. Both CRON-1 and CRON-2 existed _only_ in the inline
   copies — the shared helper was correct — so the root cause is the
   duplication; consolidating the 8 copies is recorded as future work.
   Backend **2501 passed, 0 failed**. See scheduled-tasks.md. Next: A4 email
@@ -225,7 +225,7 @@ Established before the first iteration, so any later failure is attributable:
   bodies were run through the HTML escaper, so `Falls Church Fire & Rescue`
   mailed as `Falls Church Fire &amp; Rescue` and `O'Brien` as `O&#x27;Brien` —
   in the subject line and throughout text/plain; the subject also reached the
-  wrapper pre-escaped and was escaped a *second* time into `<title>`. Fixed with
+  wrapper pre-escaped and was escaped a _second_ time into `<title>`. Fixed with
   an `escape_html` flag applied only to the two non-markup destinations; the
   HTML path and its XSS boundary are untouched, verified against an
   `onerror=` payload, and the subject is safe unescaped because `_sanitize_header`
@@ -256,7 +256,7 @@ Established before the first iteration, so any later failure is attributable:
   across a transition; frontend avoids Pitfall #1 and the banned date APIs; 96
   tests, all passing without a DB; documented before review.
   **1 fix applied:** CC-1 (LOW defence-in-depth: the catalog-course outer join
-  had no org predicate — the MM-1 shape, and it *does* project into the response
+  had no org predicate — the MM-1 shape, and it _does_ project into the response
   as `class_course_name`. Predicate moved onto the JOIN so an out-of-org row
   yields NULL rather than another department's catalog entry). **1 flagged:**
   CC-2 (MED: `location_id` is a fully-built, validated, double-booking-checked
@@ -285,7 +285,7 @@ Established before the first iteration, so any later failure is attributable:
   **1 fix applied:** LIFE-1 (LOW: the clearance total — a member's chargeable
   liability for unreturned gear — was accumulated through `float` while the same
   file already summed correctly with `Decimal` 350 lines later; aligned to the
-  file's own pattern). **1 flagged:** LIFE-2 (the per-unit float *division* is
+  file's own pattern). **1 flagged:** LIFE-2 (the per-unit float _division_ is
   bounded to ±1 cent by rounding, but converting it would shift figures members
   may already have been charged — belongs with the FIN-7 float→Decimal refactor,
   not a drive-by). 1 NIT (LIFE-3, null timestamps never retention-eligible —
@@ -309,7 +309,7 @@ Established before the first iteration, so any later failure is attributable:
   rows. Fixed by extracting `minutes_visibility_filter` mirroring
   `MinuteService`'s `restricted` branch, keyed on the same existing permission —
   no new permission, no frontend change. **One judgment call for the owner:** it
-  carves out items *assigned to the caller* so `assigned_to_me` still shows a
+  carves out items _assigned to the caller_ so `assigned_to_me` still shows a
   member their own tasks; drop that branch if executive items should be
   invisible even to their assignee — it is one line and one test.)
   **1 flagged:** DASH-2 (LOW: `GET /dashboard/stats` returns three hardcoded
@@ -347,7 +347,7 @@ Established before the first iteration, so any later failure is attributable:
   **1 flagged:** LOC-3 (the authenticated display endpoint has **zero callers** —
   a second implementation of the same capability that had already drifted, which
   is how LOC-1 happened. Delete-or-wire-up is an API-surface decision; it is now
-  *correct* dead code rather than wrong dead code. Second instance of this shape
+  _correct_ dead code rather than wrong dead code. Second instance of this shape
   in two iterations, after DASH-2.)
   **2 tests added.** LOC-2's extra query broke three existing display tests whose
   `db` stub was a bare `MagicMock`; the stub was **extended**, not loosened, and
@@ -355,7 +355,7 @@ Established before the first iteration, so any later failure is attributable:
   passed**. See locations-kiosk.md. Next: A9 platform ops & data lifecycle
   (last of Tier A).
 - **A9 platform ops & data lifecycle ✅ — Tier A complete.** These four services
-  are the *implementations* of controls the module-audit deferred (FIN-4, AH-4,
+  are the _implementations_ of controls the module-audit deferred (FIN-4, AH-4,
   CS-8, TR-5, ORU-7), so the job was to verify they're correctly and completely
   wired and reconcile the tracking docs with the code. **Verified good:** the
   shared `assert_different_person` guard is well-built (no-ops on missing ids,
@@ -428,12 +428,12 @@ Established before the first iteration, so any later failure is attributable:
   `prospective_members.view` user — a sensitive allowlist now logs
   `{"changed": True}`, keeping who/when/what-field without the PII value; the
   non-sensitive fields keep full old→new), MP-7 (LOW disclosure/UX: `POST
-  /prospects` returned the archived match's `name`/`email`/**`user_id`** +
+/prospects` returned the archived match's `name`/`email`/**`user_id`** +
   `reactivate_url` in the 409 body while the sibling `/check-existing`
   deliberately strips to `status`+`match_type`. The kicker: the frontend never
   read the structured fields **and** the dict `detail` mis-rendered as
   `[object Object]` — so returning a plain-string message dropped the `user_id`
-  leak *and* fixed the broken toast in one change). **1 flagged:** whether the
+  leak _and_ fixed the broken toast in one change). **1 flagged:** whether the
   409 message should name the archived member at all (same disclosure
   `/check-existing` avoids — a product call), recorded in `KNOWN_LIMITATIONS.md`.
   Gate: flake8/black clean on both files; `test_membership_pipeline_flow` +
@@ -487,7 +487,7 @@ Established before the first iteration, so any later failure is attributable:
   `schema_cls(**config).model_dump()`, re-emitting every field at its default,
   which connect/update then merged over the stored config — so a partial PATCH
   silently reset omitted fields to defaults. A Salesforce `match_strategy`
-  reverting from `email_lastname` to `email` — which *adopts* pre-existing
+  reverting from `email_lastname` to `email` — which _adopts_ pre-existing
   Contacts — is a real regression; and empty secret-named defaults leaked into
   public config. Fixed with `model_dump(exclude_unset=True)`: only supplied keys
   emitted, omitted keys keep their stored value via the merge; verified safe
@@ -609,8 +609,8 @@ Established before the first iteration, so any later failure is attributable:
   foreign user credited hours on this org's shift); now validated via
   `_user_in_org`. Also validated `apparatus_id` in-org on create/update shift
   (DiD — was backstopped). **Two phantom findings ruled out by verification:** the
-  manual `hours` value is *already* bounded at the schema (`Field(gt=0, le=48)`),
-  and the service's ~15 `str(e)` returns are *not* a live leak because every
+  manual `hours` value is _already_ bounded at the schema (`Field(gt=0, le=48)`),
+  and the service's ~15 `str(e)` returns are _not_ a live leak because every
   endpoint wraps them in `_safe_detail → safe_error_detail` (contrast
   NOTIF-2/FORM-7 where the raw string reached the client). `station_id` is an
   unwired placeholder; `template_id` isn't a Shift field. **1 flagged:** SCH-5
@@ -636,7 +636,7 @@ Established before the first iteration, so any later failure is attributable:
 - **B21 orgs, roles & users ✅.** The privilege-management surface; ORU-1–6, ORU-8,
   ORU-9 already fixed and re-confirmed. **1 fix applied:** ORU-7a (MED privilege
   sabotage: `_enforce_permission_grant_ceiling` on `update_role` only validated
-  the *new* permission list and early-returns on `[]`, so a privileged-but-not-`*`
+  the _new_ permission list and early-returns on `[]`, so a privileged-but-not-`*`
   caller — e.g. a Fire Chief — could set the `*` System Owner role's permissions to
   `[]` or downgrade it to their subset, gutting the tenant's wildcard admin. New
   `_enforce_role_edit_ceiling` requires the caller's ceiling to cover the role's
@@ -709,7 +709,7 @@ Established before the first iteration, so any later failure is attributable:
 - **B26 public-portal ✅ (clean-module verification).** The unauthenticated surface
   is well-hardened — PP-1–5 fixed, PP-7 mostly; re-confirmed auth/tenant-isolation/
   data-minimization/rate-limit-fail-closed. **No new code-level finding.** Added
-  nuance to PP-6's deferred app-status-token-hashing: the token is *re-read* to
+  nuance to PP-6's deferred app-status-token-hashing: the token is _re-read_ to
   rebuild the status-check URL (emails + the status response), so it can't be
   hash-only — hashing at rest needs a two-column design (`status_token_hash` for
   lookup + the token encrypted for re-display) + backfill. Confirms the
@@ -724,16 +724,16 @@ Established before the first iteration, so any later failure is attributable:
   correctness lens. **Verified good:** no stored-XSS in the shared render helpers
   (`simpleMarkdown` uses `React.createElement` + scheme-allowlisted links;
   `LinkifiedText` emits text nodes + `https?://`-only hrefs — the two
-  `dangerouslySetInnerHTML` grep hits are comments saying they *don't* use it); the
+  `dangerouslySetInnerHTML` grep hits are comments saying they _don't_ use it); the
   HIPAA `UNCACHEABLE_PREFIXES` list (57 entries) is thorough and rationale-commented;
   auth plumbing matches the documented model (`withCredentials` + CSRF double-submit
-  + shared-`refreshPromise` refresh; only `has_session` in localStorage). **1 fix
-  applied:** FE-1 (LOW/MED: `toAppError` — used by every store/async handler —
-  rendered a structured **object** `detail` as `[object Object]` in toasts because it
-  only handled string + 422-array details; added an object-detail branch extracting
-  `detail.message`. Generalizes the one-off MP-7 repair to the whole class). **2
-  frontend regression tests added**; `errorHandling.test.ts` 34 passed; tsc + eslint
-  clean. See frontend-shared.md.
+  - shared-`refreshPromise` refresh; only `has_session` in localStorage). **1 fix
+    applied:** FE-1 (LOW/MED: `toAppError` — used by every store/async handler —
+    rendered a structured **object** `detail` as `[object Object]` in toasts because it
+    only handled string + 422-array details; added an object-detail branch extracting
+    `detail.message`. Generalizes the one-off MP-7 repair to the whole class). **2
+    frontend regression tests added**; `errorHandling.test.ts` 34 passed; tsc + eslint
+    clean. See frontend-shared.md.
 
 ---
 
@@ -795,7 +795,7 @@ re-run unless directed).
   took the flagged INV-4 XC-1 sweep through the B1/B2 lens: which FK sites are
   projected into a response (real leak) vs dangling-only? **1 fix applied:** INV2-1
   (MED cross-tenant PII leak): `assign_item_to_user`/`checkout_item`/`issue_from_pool`
-  (and `issue_kit_to_member` via delegation) org-validated the *item* but stored a
+  (and `issue_kit_to_member` via delegation) org-validated the _item_ but stored a
   client `user_id` unchecked — and while the item response only exposes the id
   (pass 1's check), the assignment/checkout/issuance/**charge** listings format the
   member **name** from the record's eager-loaded `user` (`_format_user_name` at
@@ -804,7 +804,7 @@ re-run unless directed).
   `assert_in_org` to fit the `(None, "message")` return contract). **2 flagged:**
   INV-4 remainder narrowed to the dangling-FK-only set (category/location/storage
   ids — verified not projected by name, integrity-only), and INV2-2 (~55 `# noqa:
-  E712` suppressions — suppressed/clean, a 55-line sweep deferred to its own commit
+E712` suppressions — suppressed/clean, a 55-line sweep deferred to its own commit
   to avoid swamping the security fix). **5 tests added** (`TestMemberOrgValidation`);
   65/65 inventory-service tests pass (existing ones use a single `return_value`
   mock so the added lookup returns truthy and they're unaffected). Gate:
@@ -851,7 +851,7 @@ re-run unless directed).
   executive-session read restriction — across **every** minutes reader, not just
   the four surfaces it already covers. **1 fix applied:** MM2-1 (MED, the DASH-1
   shape in another module): `DocumentService.publish_minutes` (`POST
-  /minutes/{id}/publish`, `minutes.manage`) rendered the full minutes body into a
+/minutes/{id}/publish`, `minutes.manage`) rendered the full minutes body into a
   Document in the shared meeting-minutes folder, checking `status == APPROVED` but
   **not** `meeting_type` — and every documents read gates on the far broader
   `documents.view`, so publishing an approved **executive** session exposed its
@@ -888,7 +888,7 @@ re-run unless directed).
   Next: B8 documents.
 - **B8 documents ✅ (pass 2).** Re-verified pass-1 (DOC-1/2/3/6). Pass 1 had noted
   `uploader_name`/`folder_name` on `DocumentResponse` as "never populated" and
-  framed the fix as *remove or populate*; the B1/MS2-4 lens resolves it — the
+  framed the fix as _remove or populate_; the B1/MS2-4 lens resolves it — the
   frontend renders it, so populate. **1 fix applied:** DOC2-1 (LOW→MED live UI
   defect): `get_documents`/`get_document_by_id` return the raw ORM row, so
   `uploader_name` always serialized null and `DocumentsPage.tsx:423`'s "Uploaded
@@ -903,7 +903,7 @@ re-run unless directed).
   through Tier B pass 2.
 - **BXC cross-cutting sweep (2026-08-06, at the owner's direction, in place of B9).**
   After B1–B8 kept surfacing the same two root causes, ran a targeted
-  cross-cutting sweep across the *remaining* modules for both at once (like the
+  cross-cutting sweep across the _remaining_ modules for both at once (like the
   AXC-1 IP sweep): **BXC-1** — blind `setattr`-over-`model_dump` update loops that
   reassign a client FK without re-validating it in-org (classified read-leak /
   cross-org-write / dangling); **BXC-2** — response schemas declaring `*_name`
@@ -973,7 +973,7 @@ re-run unless directed).
   flake8/black/tsc clean. See notifications.md → Pass 2. Next: B12 integrations.
 - **B12 integrations ✅ (pass 2, against freshly-merged main) — no code change.**
   After the merge, re-verified standing fixes (INT-1 send-time SSRF guard intact on
-  all 5 senders — and *more robust* than B11's push fix, since it re-resolves to a
+  all 5 senders — and _more robust_ than B11's push fix, since it re-resolves to a
   public IP at send, closing DNS rebinding; INT-4 converged with main's parallel
   `918e0b3`; update-bypass clean via config `exclude_unset` merge; no MS2-4). Then
   reviewed the **new PayPal integration** main merged (`paypal_service.py`, public
@@ -1015,7 +1015,7 @@ re-run unless directed).
   same shape completing a compliance task: `task.task_type.value` on a plain str;
   `_status_value`), **GF-12** (LOW XC-1 — `update_compliance_task` stored a client
   `assigned_to` via blind setattr with no in-org check; added `assert_in_org(User,
-  allow_none=True)` matching the application path). Lenses 2/3/4/5 clean (every
+allow_none=True)` matching the application path). Lenses 2/3/4/5 clean (every
   sub-resource resolves through an org-scoped GrantApplication join; `*_name` are
   real columns). GF-7/8/9 stay flagged. **3 regression tests** added; 23 passed.
   flake8/black clean. Two user-visible 500→success fixes in CHANGELOG. See
@@ -1050,7 +1050,7 @@ re-run unless directed).
   EV-7 None-coercion). The six-lens sweep found **3 fixes:** **EV-9** (MED: the
   `end_event` endpoint called `log_audit_event` with the wrong signature —
   `action=`/`resource_type=` instead of the required `event_type`/`event_category`/
-  `severity`/`event_data` — → TypeError → 500 on *every* end-event, after the event
+  `severity`/`event_data` — → TypeError → 500 on _every_ end-event, after the event
   had already committed its end + bulk-checkout; rewrote to the canonical shape used
   by every sibling audit call), **EV-10** (LOW-MED public leak: `get_public_calendar`
   and the public-portal events query omitted the `is_draft` filter, so unpublished
@@ -1074,7 +1074,7 @@ re-run unless directed).
   category-hours breakdown looked up `TrainingCategory.in_(cat_ids)` with no org
   filter and projected name/code/registry_code, while a record's `category_id` was
   never validated in-org on create/update — an org-A officer could set a record's
-  category to an org-B UUID and read that category back; fixed the leak *and* the
+  category to an org-B UUID and read that category back; fixed the leak _and_ the
   root cause — org-scoped the lookup + validate `category_id` in-org on
   create_record/update_record), **TR-8** (MED-LOW: `generate_individual_pdf` fetched
   the member with no org filter and rendered their name into the PDF title while the
@@ -1090,14 +1090,14 @@ re-run unless directed).
   modules through pass 2.
 - **B21 orgs, roles & users ✅ (pass 2).** Re-verified ORU-7a/7b. The
   privilege-escalation lens found a **CRITICAL** — ORU-7d: effective permissions are
-  the union of a member's positions *and* their operational rank
+  the union of a member's positions _and_ their operational rank
   (`_collect_user_permissions` adds `get_rank_default_permissions(user.rank)`), but
   while every role grant is ceiling-checked, **rank had no ceiling** and a rank
   change is gated only on `members.manage`. The `fire_chief` rank carries
   `settings.manage`/`security.manage`/`positions.manage_permissions`, which the
   default secretary lacks — so a secretary could `POST /users` a member at
   `rank="fire_chief"` with a chosen password (only `role_ids` were ceiling-checked,
-  not `rank`) and log in as near-superadmin, or `PATCH .../profile` their *own* rank
+  not `rank`) and log in as near-superadmin, or `PATCH .../profile` their _own_ rank
   to fire_chief and gain those perms instantly. Fixed with a new
   `_enforce_rank_grant_ceiling` (mirrors the role ceiling — a rank's permissions
   must be ⊆ the caller's; wildcards honored; 403 + CRITICAL security alert), wired
@@ -1136,7 +1136,7 @@ re-run unless directed).
   CS-10 (MED SoD: `create_test` blocks examiner==candidate, but the scoring
   mutations `update_test`/`complete_test` authorize only via `_authorize_test_write`,
   which short-circuits on `training.manage` and never checked actor≠candidate — so
-  an officer-candidate could score & complete their *own* official test and
+  an officer-candidate could score & complete their _own_ official test and
   self-credit the linked requirement. Added a candidate≠actor block before the
   officer short-circuit, non-practice only; the two callers are exactly the
   credit-granting mutations), CS-11 (LOW correctness: `generate_annual_report`
@@ -1155,7 +1155,7 @@ re-run unless directed).
   tenancy with a `user_id IN (SELECT users.id WHERE org=…)` subquery under a **false
   comment** that "AuditLog has no organization_id column" — it does, and the
   canonical `audit_logs.py` filters on it. The subquery dropped org-stamped system
-  rows (NULL user_id) and resolved membership from the user's *current* org rather
+  rows (NULL user_id) and resolved membership from the user's _current_ org rather
   than the row's write-time stamp, so a reassigned user could surface their old
   org's audit rows. Switched both to the canonical `AuditLog.organization_id` filter;
   removed the false comment). Narrow practical exposure (cross-org reassignment isn't
@@ -1257,10 +1257,10 @@ The rotation wraps from B27 back to A1. Same discipline as Tier B pass 2.
 - **A3 scheduled tasks & cron ✅ (pass 2).** Re-verified pass-1 (39/39 runner parity,
   Pitfall-#12 dedup, the 8 CRON-1 runners roll back). The sweep found the **CRON-1 fix
   was incomplete** — **6 fixes:** CRON-5 (MED: 3 more org-loops could poison the shared
-  session — `run_shift_auto_checkout` *deferred* its commit so a late org's rollback
+  session — `run_shift_auto_checkout` _deferred_ its commit so a late org's rollback
   discarded every earlier org's checkouts; `run_compliance_auto_reports` +
   `run_officer_directory_sync` had no per-org commit/rollback; `cert_alert_service.
-  run_daily_cert_alerts` no rollback — all now commit-per-org + rollback), CRON-2b
+run_daily_cert_alerts` no rollback — all now commit-per-org + rollback), CRON-2b
   (LOW: run_daily_cert_alerts didn't filter `Organization.active`), CRON-6 (LOW-MED
   money: overdue-property reminder totalled chargeable value as float → Decimal; plus
   a ZoneInfo fallback guard in the unguarded `_to_local`). **Flagged:** naive
@@ -1309,8 +1309,8 @@ The rotation wraps from B27 back to A1. Same discipline as Tier B pass 2.
   fold restricted items (integers only), display nits. **3 DB-free regression tests.**
   flake8/black clean. Security fix in CHANGELOG. See dashboard.md → Pass 2. Next: A8.
 - **A8 locations & kiosk ✅ (pass 2).** Re-verified pass-1 (6/6 gated, LOC-1/2, no PP-1).
-  **1 fix — LOC-4** (MED: LOC-1 fixed the display *rendering* to use the canonical
-  `_get_check_in_window`, but the *selection* query still used a hardcoded 1h lead — a
+  **1 fix — LOC-4** (MED: LOC-1 fixed the display _rendering_ to use the canonical
+  `_get_check_in_window`, but the _selection_ query still used a hardcoded 1h lead — a
   superset — so the kiosk showed an active check-in QR for STRICT/early-FLEXIBLE events
   up to an hour early, then rejected the scan. Kept a generous SQL prefilter, then
   narrow in Python to the canonical per-event window; swept an E712). Flagged (folded
@@ -1449,7 +1449,7 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
 - **B6 meetings & minutes ✅ (pass 3).** Re-verified MM-4/MM2-1/MM-3-frontend hold.
   **Fixed MM2-2** (LOW/MED latent-500, the B1 class): `meeting_type` was free `str`
   on six request schemas but maps to a strict MySQL ENUM — `create_minutes` inserts
-  it raw, so a bad value 500'd. The care point: `meeting_type` maps to *two* enums
+  it raw, so a bad value 500'd. The care point: `meeting_type` maps to _two_ enums
   (MeetingType for meetings; MinutesMeetingType — which includes `executive` — for
   minutes/templates), so a naive shared validator would have rejected `executive`
   and broken the restricted-minutes path. Added per-model `@field_validator`s
@@ -1666,7 +1666,7 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   CHANGELOG. See core-infra.md → Pass 3. Next: B25 onboarding.
 
 - **B25 onboarding ✅ (pass 3).** Re-verified ONB-3/ONB-9 (completion guard `if
-  status.is_completed: raise` + second-org/second-owner replay guards) and ONB-8
+status.is_completed: raise` + second-org/second-owner replay guards) and ONB-8
   (`/status` minimal post-completion body) hold. **Latent-500 lens N/A** — no
   dedicated onboarding schema module; the flow reuses the validated user/role/org
   schemas. **Swept ONB2-1** — 2 boolean-column E712 (`OnboardingStatus.is_completed`)
@@ -1841,7 +1841,7 @@ Next feature: **B1 medical-screening**.
   subscribe) is now caught where it matters: `_send_one` calls the shared
   `assert_outbound_url_safe` immediately before `webpush` (re-resolves, fails closed
   on a private IP), and `send_to_user` skips a now-non-public endpoint. Running the
-  guard at *send* time — not subscribe time — sidesteps the test-harness collision
+  guard at _send_ time — not subscribe time — sidesteps the test-harness collision
   pass 3 flagged; it's gated to production/staging so the loopback wire-format tests
   (development env) still dispatch, and the subscribe-time IP-literal/localhost guard
   still runs everywhere. 4 DB-free tests. See notifications.md → Pass 4.
@@ -1858,10 +1858,10 @@ Next feature: **B1 medical-screening**.
   found no new cross-org write gap: FORM-1/2 integration writes covered,
   `field_mappings` validated against the form's own fields, submit-path integration
   FKs `_entity_in_org`-checked. The only finding is the already-flagged BXC-1
-  `condition_field_id` residual — a *soft* reference (no DB FK), no org column,
+  `condition_field_id` residual — a _soft_ reference (no DB FK), no org column,
   never dereferenced server-side (drives client-side conditional visibility only),
   so a foreign value is a dangling reference, not cross-org reach. Left flagged: the
-  worthwhile hardening is a *same-form* validation (correctness, not security), but
+  worthwhile hardening is a _same-form_ validation (correctness, not security), but
   its builder semantics (self-referential fields created in the same call, server-gen
   ids) want a DB-backed pass, not a rotation-tick guess. See forms.md → Pass 4.
 
@@ -1899,12 +1899,12 @@ Next feature: **B1 medical-screening**.
   write via assert_in_org → 400). (2) `create_template`/`update_template` stored
   `default_location_id` unvalidated (dangling-only, not projected); fixed with a
   shared `_assert_template_location_in_org` + the module-standard `except ValueError
-  →400` on both template endpoints (previously absent — latent-500). 6 tests. See
+→400` on both template endpoints (previously absent — latent-500). 6 tests. See
   events.md → Pass 4.
 
 - **B18 training ✅ (pass 4) — TR-6: external-credential decrypt now fails closed.**
   `ExternalTrainingSyncService._decrypt_field` caught `except Exception: return
-  value`, so a genuine GCM auth failure (InvalidTag — tampered/wrong-key) handed the
+value`, so a genuine GCM auth failure (InvalidTag — tampered/wrong-key) handed the
   raw stored value to the external LMS as a live credential. Narrowed the catch to
   `except InvalidToken` (the legacy-plaintext case) so InvalidTag propagates and
   fails closed — the same posture as the MS-1 EncryptedText type. 4 tests. The LOW
@@ -1975,6 +1975,7 @@ re-audit** (via sub-agents) of the largest write-surface modules to catch anythi
 the incremental passes missed. Headline outcomes:
 
 **Substantive fixes (10 modules):**
+
 - **B1** MS-1 — PHI encrypted at rest (new `EncryptedJSON` type + Alembic migration).
 - **B3** INV-4 — the deferred ~13-method inventory FK org-scoping sweep.
 - **B6** MM2-3 — the two genuinely-unsafe meeting/action-item `status` validators.
@@ -2039,4 +2040,37 @@ for every change, gate green. Next feature: **B1 medical-screening**.
 
 ### Pass 5 log
 
-(pending)
+- **B10 messaging & communications ✅ (2026-08-13, owner-requested, taken out of
+  rotation order).** The owner asked for a review of department messaging —
+  "make sure everything works as described and matches the screenshots" — so
+  this pass ran the docs/screenshots-accuracy lens rather than re-deriving the
+  four security passes. **Both training screenshots verified element-for-element
+  against the shipped UI** (compose form incl. the Post→Schedule button swap and
+  helper text; acknowledgment report incl. the owes-first sort and state
+  labels), and every documented behavior traced to code: routes/permissions,
+  read-vs-acknowledge pending semantics, scheduling (15-min publish task,
+  clear-before-deliver, no re-schedule of published), soft-delete evidence
+  retention, persistent semantics, rename-safe role targeting, SMS
+  consent/preference/Twilio gates, author exclusion, fail-open per-org rate
+  limits, cache exclusion. **1 MED doc-accuracy fix (MSG2-2):** the delivery
+  matrix in _five_ documents (technical doc, training guide, wiki, two YouTube
+  scripts) still described the pre-AUTH-2 design — "Normal/Important don't
+  email" — while the code deliberately emails **every** message as the
+  record-of-notice channel (owner rule 2026-08-05, tests assert it); the wiki
+  even claimed an email opt-out that doesn't exist. An officer following the
+  guide would post a "Normal" FYI believing it stays in-app and email the whole
+  department. All five corrected to match the code, plus the stale escalation
+  comment in `endpoints/messages.py`. **3 small fixes:** MSG2-3 (the last
+  messaging `# noqa: E712` — in `run_publish_scheduled_messages`, missed because
+  it lives in `scheduled_tasks.py`), MSG2-4 (`apiCache.ts` mislabeled
+  `/messages` as "member-to-member" messaging, which the app doesn't have),
+  MSG2-5 (migration list cited the pre-renumber `20260720_0001` deleted_at
+  filename). **1 flagged (MSG2-6, owner call):** the dashboard card loads the 10
+  newest inbox messages with `include_read` defaulting true, so an unpinned
+  persistent notice can be paged off the card — against the guide's "stays until
+  leadership takes it down"; the backend filter exemption for a
+  `include_read:false` dashboard already exists. Mirrored to KNOWN_LIMITATIONS;
+  workaround is pinning. Gate: flake8 0 · black clean · tsc 0 · eslint 0 ·
+  messaging backend tests 57 passed · frontend touched-area tests 187 passed
+  (13 files) · `test_push_service.py` collection error is the sandbox's
+  unbuildable optional `pywebpush` dep, pre-existing. See messaging.md → Pass 5.
