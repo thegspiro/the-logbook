@@ -3396,6 +3396,10 @@ export const SHOTS = [
     // The drawer itself, from its header down: taller than the viewport, so
     // the element rather than the screen.
     selector: "div.drawer-panel",
+    // "No checklist data recorded yet" is the Checklist Progress section for
+    // an applicant whose onboarding checklist has not been started. The shot
+    // is about the final stage and its Convert action, both of which render.
+    allowEmptyState: true,
   },
   {
     id: "01-34-desired-membership-type",
@@ -3815,6 +3819,9 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       await page.waitForTimeout(800);
     },
+    // "No EVOC level" is this select's placeholder option — in the DOM on
+    // every operator, including this one, which has Level 1 selected.
+    allowEmptyState: true,
   },
 
   // ── 02 Training ─────────────────────────────────────────────────────

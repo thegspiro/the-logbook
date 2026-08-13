@@ -43,6 +43,35 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### 01-membership — 7 of 19 changed images verified
+
+Beyond the three below: `01-02-member-profile` (compliance summary, training,
+contacts, employment — all populated), `01-22-member-lifecycle` (already
+re-captioned by an earlier pass as the Members Admin hub, and matches),
+`01-30-evoc-operator-modal` and `01-35-applicant-drawer-final-stage`.
+
+Both of the last two were flagged as empty states and both are **false
+positives**, now suppressed with the reasoning recorded beside the entry:
+
+- `01-30` — "No EVOC level" is the select's placeholder option, present in the
+  DOM on every operator including this one, which has Level 1 selected and its
+  certification and licence dates filled.
+- `01-35` — "No checklist data recorded yet" is the Checklist Progress section
+  for an applicant whose onboarding checklist has not been started. The shot is
+  about reaching the **final** stage and the **Convert** action it unlocks, and
+  both render, along with two uploaded documents.
+
+Still to verify, changed but not yet opened: `01-01-member-directory`,
+`01-05-add-member-form`, `01-06-import-members`, `01-07-admin-member-edit`,
+`01-08-member-audit-history`, `01-11-create-waiver`, `01-19-create-waiver`,
+`01-23-print-member-badges`, `01-24-delete-member-modal`,
+`01-32-duplicate-applicant-warning`, `01-33-import-review-rejected-rows`,
+`01-36-membership-number-field`. Guide 01's two placeholders are also still
+open.
+
+`01-11` and `01-19` are a duplicate pair — both resize 920→938 identically —
+and should be checked together when they are opened.
+
 ### 01-membership — the "No applicants" gap, closed
 
 Three shots (`01-10-prospective-pipeline`, `01-25-applicant-action-bar`,
