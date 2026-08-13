@@ -106,21 +106,36 @@ the file was renumbered to `20260720_0004` (and re-parented after
 `0003_scheduled_at`) in the 2026-08-05 duplicate-revision fix. List corrected to
 match `ALEMBIC_MIGRATIONS.md` and the tree.
 
-### MSG2-6 — LOW (UX) — persistent messages can fall off the dashboard card — 🚩 FLAGGED
+### MSG2-6 — LOW (UX) — persistent messages can fall off the dashboard card — ✅ FIXED (2026-08-13, owner-directed)
 
-`Dashboard.tsx` loads the card with `getInbox({ limit: 10 })`, leaving
+`Dashboard.tsx` loaded the card with `getInbox({ limit: 10 })`, leaving
 `include_read` at its backend default (true). Consequences: (a) read
-non-persistent messages never drop off the card, so the "persistent = stays
-visible" contrast the guide describes is only observable on `/messages` with
+non-persistent messages never dropped off the card, so the "persistent = stays
+visible" contrast the guide describes was only observable on `/messages` with
 "Show read" unchecked; (b) an **unpinned persistent** notice older than the 10
-most recent messages disappears from the card entirely — contradicting the
-guide's "stays on the dashboard until leadership takes it down". The backend
-already exempts persistent messages from the `include_read=false` filter
-(`get_inbox`'s `resolved`/`is_persistent` branch exists for exactly this), so
-passing `include_read: false` from the dashboard would show pending + persistent
-messages only — but that visibly changes every member's dashboard, so it is a
-product call, not a drive-by. Mirrored to `KNOWN_LIMITATIONS.md`. Workaround
-today: pin standing notices (pinned sort first and cannot be paged off).
+most recent messages disappeared from the card entirely — contradicting the
+guide's "stays on the dashboard until leadership takes it down".
+
+**Fix (owner-directed after the pass-5 report):** the card now loads with
+`include_read: false`, so it shows only what still needs attention — unread
+messages, unacknowledged ack-required messages, and persistent notices (the
+backend's `resolved`/`is_persistent` branch in `get_inbox` exempts persistent
+messages from this filter, and existed for exactly this caller). Two deliberate
+details: a message the member just clicked is marked read **in place** rather
+than removed — yanking the text out from under the reader would be worse than
+the extra render — and it drops off on the next load; and the ack-required
+pending semantics are unchanged (read-but-unacked messages stay on the card).
+**3 Dashboard tests added**: the exact `{ include_read: false, limit: 10 }`
+call shape (fails against the old call), pending + persistent rendering with
+the badge and unread count, and the card hiding when nothing is pending — the
+`messagesService` test mock was **extended** (`getUnreadCount`, `markAsRead`,
+`acknowledge`, `updateMessage`), not weakened. Guides updated
+(`07-documents-forms.md`, `00-getting-started.md` — which had also claimed
+"urgent items first" for a card sorted pinned-then-newest) to describe the
+needs-attention card and the pin recommendation. Residual edge, documented
+rather than hidden: 10+ simultaneously **pending** newer messages can still
+page an unpinned persistent notice off the card; pinning keeps it on top.
+`KNOWN_LIMITATIONS.md` entry marked resolved.
 
 ### Completion gate (pass 5)
 

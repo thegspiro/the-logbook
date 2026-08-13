@@ -41,8 +41,9 @@ _rules_ and the member notification inbox are covered under
 | Email Templates             | `/communications/email-templates`             | Admins      | `settings.manage`                                                                           |
 | ↳ **Footers** tab           | `/communications/email-templates?tab=footers` | Admins      | `settings.manage` **or** `organization.update_settings` _(2026-08-10; linkable 2026-08-11)_ |
 
-Members also see recent messages on the **dashboard** "Department Messages" card
-and in the notification **bell**.
+Members also see messages needing their attention (unread, unacknowledged, or
+persistent) on the **dashboard** "Department Messages" card and in the
+notification **bell**.
 
 ## API Endpoints
 

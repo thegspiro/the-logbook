@@ -2074,3 +2074,18 @@ for every change, gate green. Next feature: **B1 medical-screening**.
   messaging backend tests 57 passed · frontend touched-area tests 187 passed
   (13 files) · `test_push_service.py` collection error is the sandbox's
   unbuildable optional `pywebpush` dep, pre-existing. See messaging.md → Pass 5.
+- **MSG2-6 closed (2026-08-13, owner-directed follow-up).** The owner took the
+  flagged option: the dashboard card now loads `getInbox({ include_read:
+false, limit: 10 })`, showing only pending + persistent messages — resolved
+  messages drop off on the next load (never mid-read; the just-clicked message
+  is marked in place), and read messages can no longer page a persistent
+  standing notice off the card. The backend filter exemption already existed
+  for exactly this caller, so the change is one call-shape + state-handling
+  comments. **3 Dashboard tests added** (exact call shape — fails against the
+  old call — pending/persistent rendering + badge + unread count, card hidden
+  when nothing pending); the test's `messagesService` mock extended, not
+  weakened. Guides updated to the needs-attention semantics (incl.
+  `00-getting-started.md`'s wrong "urgent items first" sort claim);
+  KNOWN_LIMITATIONS entry marked resolved with the documented residual edge
+  (10+ simultaneously _pending_ newer messages; pinning wins). Gate: tsc 0 ·
+  eslint 0 · Dashboard tests 16 passed (was 13).

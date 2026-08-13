@@ -1564,17 +1564,20 @@ feature. This loop does not make that call.
 
 ## Messaging — Persistent Notices Can Fall Off the Dashboard Card (2026-08-13)
 
-The dashboard "Department Messages" card loads the **10 most recent** inbox
-messages with `include_read` at its default (true). Two consequences (MSG2-6,
-[app-review/messaging.md](./app-review/messaging.md)): read non-persistent
-messages never drop off the card, and an **unpinned persistent** notice older
-than the 10 most recent messages disappears from the card — against the training
-guide's "stays on the dashboard until leadership takes it down". The backend
-already exempts persistent messages from the `include_read=false` filter, so the
-dashboard passing `include_read: false` would show pending + persistent messages
-only — but that visibly changes every member's dashboard, so it needs an owner
-call. Workaround: **pin** standing notices (pinned messages sort first and
-cannot be paged off the card).
+**✅ Resolved (2026-08-13, owner-directed).** The dashboard "Department
+Messages" card used to load the **10 most recent** inbox messages with
+`include_read` at its default (true), so read non-persistent messages never
+dropped off the card and an **unpinned persistent** notice older than the 10
+most recent messages disappeared from it — against the training guide's "stays
+on the dashboard until leadership takes it down" (MSG2-6,
+[app-review/messaging.md](./app-review/messaging.md)). The card now loads with
+`include_read: false`: it shows only what still needs attention — unread
+messages, unacknowledged ack-required messages, and persistent notices (which
+the backend exempts from that filter). A message a member just clicked is
+marked read in place rather than removed mid-view; it drops off on the next
+load. Residual edge: 10+ simultaneously **pending** newer messages can still
+page an unpinned persistent notice off the card — pinning keeps it on top,
+and the guides now say so.
 
 ## Skills Testing — Offline Support (2026-08-07)
 

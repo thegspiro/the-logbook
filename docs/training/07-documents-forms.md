@@ -345,7 +345,11 @@ department or a targeted group. There are two surfaces:
 Every targeted member gets the message in the app (the dashboard card, the
 `/messages` inbox, and a bell notification) **and by email** — email is the
 department's record that they were notified, so it goes out for every message
-at every priority. Urgent messages are additionally **escalated** to SMS:
+at every priority. The dashboard card shows what still needs your attention:
+unread messages, acknowledgment-required messages you haven't acknowledged,
+and persistent notices. Once you resolve a message it clears off the card on
+your next visit; the full history stays on the **Messages** page. Urgent
+messages are additionally **escalated** to SMS:
 
 | Priority / flag         | In-app (bell, inbox, dashboard) | Email | SMS |
 | ----------------------- | :-----------------------------: | :---: | :-: |
@@ -409,7 +413,9 @@ When the **Persistent** toggle is enabled:
 
 - The message shows a **"Persistent"** badge on the dashboard.
 - It stays on the dashboard/inbox for targeted members regardless of read state
-  — it does not drop off once read.
+  — it does not drop off once read, and messages you've already read never
+  crowd it off the dashboard card. (Pin a standing notice to also keep it above
+  any backlog of newer unread messages.)
 - Only users with `notifications.manage` see a **"Clear"** button to remove it.
 
 This is useful for standing notices that should remain visible until leadership

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Messaging: the guides now say what delivery actually does (2026-08-13)
 
+**Changed**
+
+- **The dashboard "Department Messages" card now shows only what still needs
+  your attention** — unread messages, acknowledgment-required messages you
+  haven't acknowledged, and persistent standing notices — instead of the 10
+  most recent messages regardless of read state. Messages you've dealt with
+  clear off the card on your next visit (never mid-read — a message you just
+  opened stays put until then), and already-read messages no longer crowd a
+  persistent notice off the card. Full history remains on the Messages page.
+  Fixes MSG2-6: an unpinned persistent notice — the "SCBA inspection mandatory
+  by March 31" kind — could previously be paged off the dashboard by ten newer
+  messages, read or not. Pinning still keeps a standing notice above any
+  backlog of newer unread messages, and the guides now say so.
+
 **Fixed (documentation — app behavior unchanged)**
 
 - **The department-message delivery matrix was wrong in every guide.** The
