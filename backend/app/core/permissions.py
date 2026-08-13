@@ -402,6 +402,15 @@ APPARATUS_MANAGE = Permission(
 FACILITIES_VIEW = Permission(
     "facilities.view", "View facilities and buildings", PermissionCategory.FACILITIES
 )
+# Read-only access to the restricted facility families (access keys/codes,
+# utility accounts, capital-project budgets, insurance, occupants) for
+# ranks that need facility knowledge without facility write access.
+FACILITIES_VIEW_SENSITIVE = Permission(
+    "facilities.view_sensitive",
+    "View sensitive facility data (access codes, utility accounts, "
+    "insurance, budgets, occupants)",
+    PermissionCategory.FACILITIES,
+)
 FACILITIES_CREATE = Permission(
     "facilities.create", "Create new facility records", PermissionCategory.FACILITIES
 )
@@ -596,6 +605,7 @@ ALL_PERMISSIONS: list[Permission] = [
     APPARATUS_MANAGE,
     # Facilities
     FACILITIES_VIEW,
+    FACILITIES_VIEW_SENSITIVE,
     FACILITIES_CREATE,
     FACILITIES_EDIT,
     FACILITIES_DELETE,
@@ -952,6 +962,10 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             APPARATUS_EDIT.name,
             APPARATUS_MAINTENANCE.name,
             FACILITIES_MAINTENANCE.name,
+            # Station commanders need the restricted facility data for their
+            # station — door/alarm codes, utilities — without facility-record
+            # write access.
+            FACILITIES_VIEW_SENSITIVE.name,
         ],
     },
     "lieutenant": {
@@ -1242,6 +1256,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
+            # Stands in for the president (who holds facilities.manage), so
+            # the restricted facility data stays readable during a handoff.
+            FACILITIES_VIEW_SENSITIVE.name,
             ANALYTICS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
@@ -1265,6 +1282,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             FUNDRAISING_MANAGE.name,
             FINANCE_VIEW.name,
             FINANCE_MANAGE.name,
+            # Utility accounts, insurance policies, and capital-project
+            # budgets are financial records the treasurer must read without
+            # holding facility write access.
+            FACILITIES_VIEW.name,
+            FACILITIES_VIEW_SENSITIVE.name,
             MEETINGS_VIEW.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
