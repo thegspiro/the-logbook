@@ -179,6 +179,10 @@ The Facilities header has a **Print Labels** button that prints a barcode label 
 
 ![Facility label print page previewing station barcode labels](./images/06-08-facility-label-print.png)
 
+### Room QR Codes
+
+Every station and room gets a kiosk **display code** when it is created, and its QR code opens the room's public kiosk display (`/display/{code}`) for event check-in. The **Room QR Codes** page (`/locations/qr-codes`) collects every code in one printable directory, grouped by station/facility — print the page, cut out the cards, and post each code in its room. Reach it from the **Room QR Codes** button on the Locations page, the **Room QR Codes** link in a facility's Rooms section, or the command palette (Ctrl/Cmd+K, search "QR").
+
 ---
 
 ## Facility Details
