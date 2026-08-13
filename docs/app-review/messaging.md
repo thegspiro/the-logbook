@@ -132,9 +132,19 @@ the badge and unread count, and the card hiding when nothing is pending — the
 `acknowledge`, `updateMessage`), not weakened. Guides updated
 (`07-documents-forms.md`, `00-getting-started.md` — which had also claimed
 "urgent items first" for a card sorted pinned-then-newest) to describe the
-needs-attention card and the pin recommendation. Residual edge, documented
-rather than hidden: 10+ simultaneously **pending** newer messages can still
-page an unpinned persistent notice off the card; pinning keeps it on top.
+needs-attention card and the pin recommendation. A follow-up review improvement
+orders persistent messages ahead of newer non-persistent messages before the
+10-item slice, so an ordinary pending-message backlog cannot page a standing
+notice off the card. It also adds an id tie-breaker for stable pagination and
+org-scopes the inbox user and author lookups as defense in depth. The follow-up
+also rejects empty or invalid targeted audiences, centralizes org-scoped member
+context loading across inbox/count/read/ack flows, and resolves author names
+only after slicing the requested page. Acknowledgment writes are now limited to
+messages that actually require acknowledgment, preserving report semantics;
+both read and acknowledgment writes also require the message to be currently
+live. Audience validation considers only the selected target type, so stale
+irrelevant fields cannot block a legitimate target-type change; create and
+audience-update paths normalize those unused lists back to `null`.
 `KNOWN_LIMITATIONS.md` entry marked resolved.
 
 ### Completion gate (pass 5)
