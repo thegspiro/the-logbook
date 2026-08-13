@@ -67,7 +67,7 @@ export const EventCreatePage: React.FC = () => {
 
   useEffect(() => {
     void eventService
-      .getEvents({ end_after: new Date().toISOString() })
+      .getEvents({ end_after: new Date().toISOString(), limit: 500 })
       .then((data) => {
         setUserEvents(
           data.map((e) => ({
@@ -75,6 +75,7 @@ export const EventCreatePage: React.FC = () => {
             title: e.title,
             start_datetime: e.start_datetime,
             end_datetime: e.end_datetime,
+            event_type: e.event_type,
           }))
         );
       })

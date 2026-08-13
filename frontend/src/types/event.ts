@@ -29,6 +29,7 @@ export interface Event {
 
   allow_guests: boolean;
   send_reminders: boolean;
+  reminder_target: 'going' | 'all' | 'none';
   reminder_schedule: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
@@ -103,6 +104,7 @@ export interface EventCreate {
 
   allow_guests?: boolean | undefined;
   send_reminders?: boolean | undefined;
+  reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
   check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
   check_in_minutes_before?: number | undefined;
@@ -133,6 +135,7 @@ export interface EventUpdate {
 
   allow_guests?: boolean | undefined;
   send_reminders?: boolean | undefined;
+  reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
   check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
   check_in_minutes_before?: number | undefined;

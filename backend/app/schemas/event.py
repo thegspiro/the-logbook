@@ -180,6 +180,7 @@ class EventBase(BaseModel):
     is_mandatory: bool = Field(default=False)
     allow_guests: bool = Field(default=False)
     send_reminders: bool = Field(default=True)
+    reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(
         default=[24],
         description=(
@@ -191,7 +192,7 @@ class EventBase(BaseModel):
         default="flexible", description="Check-in window type: flexible, strict, window"
     )
     check_in_minutes_before: Optional[int] = Field(
-        default=30, description="Minutes before event start to allow check-in"
+        default=60, description="Minutes before event start to allow check-in"
     )
     check_in_minutes_after: Optional[int] = Field(
         default=15, description="For 'window' type: minutes after event start"
@@ -273,6 +274,7 @@ class EventUpdate(BaseModel):
     is_mandatory: Optional[bool] = None
     allow_guests: Optional[bool] = None
     send_reminders: Optional[bool] = None
+    reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = None
@@ -669,7 +671,7 @@ class EventTemplateCreate(BaseModel):
     is_mandatory: bool = False
     allow_guests: bool = False
     check_in_window_type: Optional[str] = None
-    check_in_minutes_before: Optional[int] = Field(default=30, ge=0)
+    check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
     require_checkout: bool = False
     send_reminders: bool = True
@@ -882,9 +884,10 @@ class RecurringEventCreate(BaseModel):
     is_mandatory: bool = False
     allow_guests: bool = False
     send_reminders: bool = True
+    reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
     check_in_window_type: Optional[str] = Field(default="flexible")
-    check_in_minutes_before: Optional[int] = Field(default=30, ge=0)
+    check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
     require_checkout: bool = False
     custom_category: Optional[str] = Field(

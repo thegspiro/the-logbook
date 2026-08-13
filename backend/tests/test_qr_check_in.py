@@ -424,8 +424,8 @@ class TestCheckInWindowConsistency:
         """
         now = datetime.now(timezone.utc)
         org_id = uuid4()
-        # Event starts in 45 minutes — within old 1-hour window but
-        # outside the default FLEXIBLE 30-minute window
+        # Event starts in 45 minutes — inside the default FLEXIBLE
+        # 60-minute window.
         event = _make_event(
             org_id=org_id,
             start_datetime=now + timedelta(minutes=45),
@@ -433,16 +433,16 @@ class TestCheckInWindowConsistency:
         )
         org = _make_org(org_id=org_id)
 
-        # QR data should report is_valid=False (outside 30-min window)
+        # QR data should report is_valid=True (inside 60-min window)
         mock_db = _mock_db_returning(event, org)
         service = _make_service(mock_db)
         data, error = await service.get_qr_check_in_data(event.id, org_id)
 
         assert error is None
         assert data is not None
-        assert data["is_valid"] is False, (
-            "QR data should not show check-in as active when outside "
-            "the event's configured check-in window"
+        assert data["is_valid"] is True, (
+            "QR data should show check-in as active inside "
+            "the event's configured 60-minute check-in window"
         )
 
     @pytest.mark.asyncio

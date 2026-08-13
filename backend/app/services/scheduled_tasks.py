@@ -834,14 +834,15 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # Determine recipients once for all due intervals
                 recipients = []
-                if event.is_mandatory:
+                reminder_target = getattr(event, "reminder_target", "going")
+                if reminder_target == "all":
                     users_result = await db.execute(
                         select(User)
                         .where(User.organization_id == str(org.id))
                         .where(User.is_active == True)  # noqa: E712
                     )
                     recipients = list(users_result.scalars().all())
-                else:
+                elif reminder_target == "going":
                     going_user_ids = [
                         str(rsvp.user_id)
                         for rsvp in event.rsvps
