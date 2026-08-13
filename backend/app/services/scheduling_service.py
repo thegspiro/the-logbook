@@ -4013,10 +4013,11 @@ class SchedulingService:
         """Per-member hours for a date range, worked and scheduled.
 
         Hours come from attendance (``ShiftAttendance.duration_minutes``,
-        derived from check-in/check-out), because an assignment is a plan and
-        not a measurement: a shift can run short or long, and a member can be
-        rostered for one they never work. Anything that credits or pays a
-        member has to be the measured figure.
+        derived from check-in/check-out) on finalized shifts, because an
+        assignment is a plan and not a measurement: a shift can run short or
+        long, and a member can be rostered for one they never work. Requiring
+        finalization keeps member-controlled, pending attendance out of a
+        report used for credit and payroll conversations.
 
         The scheduled totals stay alongside rather than being dropped, so the
         difference between plan and actual is visible in the report instead of
@@ -4071,6 +4072,7 @@ class SchedulingService:
             .join(User, ShiftAttendance.user_id == User.id)
             .where(Shift.organization_id == str(organization_id))
             .where(User.organization_id == str(organization_id))
+            .where(Shift.is_finalized.is_(True))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
             .group_by(
