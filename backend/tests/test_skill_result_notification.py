@@ -229,6 +229,21 @@ class TestResultVoided:
         )
         assert sent == []
 
+    async def test_void_of_unvalidated_result_stays_silent(self, sent):
+        """Voiding must not bypass the pending-validation disclosure gate."""
+        assert not await notify_candidate_result_voided(
+            None,
+            test=_test(
+                status=SkillTestStatus.VOIDED.value,
+                validated_at=None,
+                void_reason="Evaluator was not qualified",
+            ),
+            template=_template(),
+            org_config=None,
+            organization_id=ORG,
+        )
+        assert sent == []
+
     async def test_void_without_reason_omits_the_clause(self, sent):
         await notify_candidate_result_voided(
             None,

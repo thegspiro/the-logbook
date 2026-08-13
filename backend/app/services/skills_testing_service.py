@@ -1022,6 +1022,13 @@ async def notify_candidate_result_voided(
     if getattr(test, "is_practice", False):
         return False
 
+    # The endpoint calls this after changing the status to ``voided``. Preserve
+    # the validation gate that applied immediately before that transition: an
+    # unvalidated official result was only a pending placeholder, so even its
+    # withdrawal (and reason) must remain undisclosed.
+    if getattr(test, "validated_at", None) is None:
+        return False
+
     view = candidate_result_view(test, template, org_config)
     from app.models.skills_testing import ResultDisclosure
 
