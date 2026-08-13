@@ -104,11 +104,13 @@ export const getTrainingRoutes = () => {
         }
       />
 
-      {/* Compliance Requirements Configuration */}
+      {/* Compliance Requirements Configuration. compliance.manage is enough:
+          compliance officers and elected officers (President, VP, Secretary)
+          own the member-requirement rules but rarely hold settings.manage. */}
       <Route
         path="/training/compliance-config"
         element={
-          <ProtectedRoute requiredPermission="settings.manage">
+          <ProtectedRoute requiredAnyPermission={['settings.manage', 'compliance.manage']}>
             <ComplianceRequirementsConfigPage />
           </ProtectedRoute>
         }

@@ -3,7 +3,8 @@
  *
  * Allows compliance officers to configure:
  * - Compliance thresholds (what % = compliant vs at-risk vs non-compliant)
- * - Compliance profiles (role/membership-based requirement sets)
+ * - Compliance profiles (role/membership-based requirement sets, including
+ *   required admin hours per category and year/quarter)
  * - Report scheduling (monthly/yearly auto-generation + email)
  * - Manual report generation and history
  */
@@ -32,8 +33,11 @@ import toast from 'react-hot-toast';
 import { formatDate, formatDateCustom } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { complianceConfigService } from '../services/trainingServices';
+import { adminHoursCategoryService } from '../modules/admin-hours/services/api';
+import type { AdminHoursCategory } from '../modules/admin-hours/types';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type {
+  AdminHoursRequirementItem,
   ComplianceConfigData,
   ComplianceConfigUpdate,
   ComplianceProfile,
@@ -119,6 +123,8 @@ export default function ComplianceRequirementsConfigPage() {
   const [profileCompliantOverride, setProfileCompliantOverride] = useState('');
   const [profileAtRiskOverride, setProfileAtRiskOverride] = useState('');
   const [profilePriority, setProfilePriority] = useState(0);
+  const [profileHoursReqs, setProfileHoursReqs] = useState<AdminHoursRequirementItem[]>([]);
+  const [adminHoursCategories, setAdminHoursCategories] = useState<AdminHoursCategory[]>([]);
 
   // Report generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -172,14 +178,23 @@ export default function ComplianceRequirementsConfigPage() {
     }
   }, []);
 
+  const loadAdminHoursCategories = useCallback(async () => {
+    try {
+      const cats = await adminHoursCategoryService.list();
+      setAdminHoursCategories(cats);
+    } catch {
+      // Non-critical — the admin hours module may be unused in this org
+    }
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
-      await Promise.all([loadConfig(), loadRequirements(), loadReports()]);
+      await Promise.all([loadConfig(), loadRequirements(), loadReports(), loadAdminHoursCategories()]);
       setIsLoading(false);
     };
     void load();
-  }, [loadConfig, loadRequirements, loadReports]);
+  }, [loadConfig, loadRequirements, loadReports, loadAdminHoursCategories]);
 
   const handleSaveConfig = async () => {
     setIsSaving(true);
@@ -231,6 +246,7 @@ export default function ComplianceRequirementsConfigPage() {
     setProfileCompliantOverride('');
     setProfileAtRiskOverride('');
     setProfilePriority(0);
+    setProfileHoursReqs([]);
     setShowProfileForm(false);
   };
 
@@ -244,12 +260,28 @@ export default function ComplianceRequirementsConfigPage() {
     setProfileCompliantOverride(profile.compliantThresholdOverride?.toString() ?? '');
     setProfileAtRiskOverride(profile.atRiskThresholdOverride?.toString() ?? '');
     setProfilePriority(profile.priority);
+    setProfileHoursReqs(profile.adminHoursRequirements ?? []);
     setShowProfileForm(true);
   };
 
   const handleSaveProfile = async () => {
     if (!profileName.trim()) {
       toast.error('Profile name is required');
+      return;
+    }
+    for (const req of profileHoursReqs) {
+      if (!req.category_id) {
+        toast.error('Select a category for each admin hours requirement');
+        return;
+      }
+      if (!req.required_hours || req.required_hours <= 0) {
+        toast.error('Each admin hours requirement needs hours greater than zero');
+        return;
+      }
+    }
+    const hoursCategoryIds = profileHoursReqs.map((r: AdminHoursRequirementItem) => r.category_id);
+    if (new Set(hoursCategoryIds).size !== hoursCategoryIds.length) {
+      toast.error('Each admin hours category can only appear once per profile');
       return;
     }
 
@@ -263,6 +295,9 @@ export default function ComplianceRequirementsConfigPage() {
         optional_requirement_ids: profileOptionalReqs.length > 0 ? profileOptionalReqs : undefined,
         compliant_threshold_override: profileCompliantOverride ? parseFloat(profileCompliantOverride) : undefined,
         at_risk_threshold_override: profileAtRiskOverride ? parseFloat(profileAtRiskOverride) : undefined,
+        // Always sent (even empty) so removing the last requirement actually
+        // clears the stored list on update rather than leaving it behind.
+        admin_hours_requirements: profileHoursReqs,
         priority: profilePriority,
       };
 
@@ -380,6 +415,16 @@ export default function ComplianceRequirementsConfigPage() {
 
   const getRequirementName = (id: string) => {
     return requirements.find((r: AvailableRequirement) => r.id === id)?.name ?? id;
+  };
+
+  const getAdminHoursCategoryName = (id: string) => {
+    return adminHoursCategories.find((c: AdminHoursCategory) => c.id === id)?.name ?? id;
+  };
+
+  const updateHoursReq = (index: number, patch: Partial<AdminHoursRequirementItem>) => {
+    setProfileHoursReqs((prev: AdminHoursRequirementItem[]) =>
+      prev.map((req: AdminHoursRequirementItem, i: number) => (i === index ? { ...req, ...patch } : req))
+    );
   };
 
   const tabs: { id: ActiveTab; label: string; icon: ReactElement }[] = [
@@ -785,6 +830,88 @@ export default function ComplianceRequirementsConfigPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Admin Hours Requirements */}
+                <div className="md:col-span-2">
+                  <label className={labelClass}>Required Admin Hours</label>
+                  <p className="text-theme-text-secondary mb-2 text-xs">
+                    Members matching this profile must log this many approved admin hours in each period. Only approved
+                    entries count — pending and rejected hours do not.
+                  </p>
+                  {adminHoursCategories.length === 0 ? (
+                    <p className="text-theme-text-secondary text-sm italic">
+                      No admin hours categories found. Create categories under Admin Hours &rarr; Manage first.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {profileHoursReqs.map((req: AdminHoursRequirementItem, index: number) => (
+                        <div key={index} className="flex flex-wrap items-center gap-2">
+                          <select
+                            className="form-input w-auto min-w-44 flex-1"
+                            value={req.category_id}
+                            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                              updateHoursReq(index, { category_id: e.target.value })
+                            }
+                            aria-label="Admin hours category"
+                          >
+                            <option value="">Select category...</option>
+                            {adminHoursCategories.map((cat: AdminHoursCategory) => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.name}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            className="form-input w-24"
+                            min={0.5}
+                            step={0.5}
+                            value={req.required_hours || ''}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                              updateHoursReq(index, { required_hours: Number(e.target.value) })
+                            }
+                            placeholder="Hours"
+                            aria-label="Required hours"
+                          />
+                          <select
+                            className="form-input w-auto"
+                            value={req.frequency}
+                            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                              updateHoursReq(index, { frequency: e.target.value })
+                            }
+                            aria-label="Frequency"
+                          >
+                            <option value="annual">Per year</option>
+                            <option value="quarterly">Per quarter</option>
+                          </select>
+                          <button
+                            onClick={() =>
+                              setProfileHoursReqs((prev: AdminHoursRequirementItem[]) =>
+                                prev.filter((_: AdminHoursRequirementItem, i: number) => i !== index)
+                              )
+                            }
+                            className="rounded p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="Remove hours requirement"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() =>
+                          setProfileHoursReqs((prev: AdminHoursRequirementItem[]) => [
+                            ...prev,
+                            { category_id: '', required_hours: 0, frequency: 'annual' },
+                          ])
+                        }
+                        className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add hours requirement
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="mt-4 flex justify-end gap-2">
@@ -870,6 +997,24 @@ export default function ComplianceRequirementsConfigPage() {
                         className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300"
                       >
                         {getRequirementName(id)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Show admin hours requirements */}
+              {profile.adminHoursRequirements && profile.adminHoursRequirements.length > 0 && (
+                <div className="mt-2">
+                  <span className="text-theme-text-secondary text-xs font-medium">Required Admin Hours:</span>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {profile.adminHoursRequirements.map((req: AdminHoursRequirementItem) => (
+                      <span
+                        key={req.category_id}
+                        className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                      >
+                        {getAdminHoursCategoryName(req.category_id)}: {req.required_hours}h /{' '}
+                        {req.frequency === 'quarterly' ? 'quarter' : 'year'}
                       </span>
                     ))}
                   </div>

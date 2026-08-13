@@ -40,7 +40,7 @@ router = APIRouter()
 @router.get("/config")
 async def get_compliance_config(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("training.manage")),
+    current_user=Depends(require_permission("training.manage", "compliance.view")),
 ):
     """Get the compliance requirements configuration for the organization."""
     async with handle_service_errors("Failed to fetch compliance config"):
@@ -55,7 +55,7 @@ async def get_compliance_config(
 async def update_compliance_config(
     data: ComplianceConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("settings.manage")),
+    current_user=Depends(require_permission("settings.manage", "compliance.manage")),
 ):
     """Create or update compliance requirements configuration."""
     async with handle_service_errors("Failed to update compliance config"):
@@ -74,7 +74,7 @@ async def update_compliance_config(
 async def initialize_compliance_config(
     data: ComplianceConfigCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("settings.manage")),
+    current_user=Depends(require_permission("settings.manage", "compliance.manage")),
 ):
     """Initialize compliance config (first-time setup)."""
     async with handle_service_errors("Failed to initialize compliance config"):
@@ -100,7 +100,7 @@ async def initialize_compliance_config(
 @router.get("/config/requirements")
 async def get_available_requirements(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("training.manage")),
+    current_user=Depends(require_permission("training.manage", "compliance.view")),
 ):
     """Get all training requirements available for compliance configuration."""
     async with handle_service_errors("Failed to fetch requirements"):
@@ -114,13 +114,17 @@ async def get_available_requirements(
 # =============================================================================
 # Compliance Profiles
 # =============================================================================
+# Profiles (including per-category admin-hours requirements) are managed by
+# compliance.manage as well as settings.manage: setting member requirements is
+# the compliance officers' and elected officers' job, and most of them do not
+# hold org-wide settings access.
 
 
 @router.post("/config/profiles")
 async def create_compliance_profile(
     data: ComplianceProfileCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("settings.manage")),
+    current_user=Depends(require_permission("settings.manage", "compliance.manage")),
 ):
     """Create a new compliance profile."""
     async with handle_service_errors("Failed to create profile"):
@@ -138,7 +142,7 @@ async def update_compliance_profile(
     profile_id: str,
     data: ComplianceProfileUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("settings.manage")),
+    current_user=Depends(require_permission("settings.manage", "compliance.manage")),
 ):
     """Update a compliance profile."""
     async with handle_service_errors("Failed to update profile"):
@@ -156,7 +160,7 @@ async def update_compliance_profile(
 async def delete_compliance_profile(
     profile_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("settings.manage")),
+    current_user=Depends(require_permission("settings.manage", "compliance.manage")),
 ):
     """Delete a compliance profile."""
     async with handle_service_errors("Failed to delete profile"):
@@ -203,7 +207,9 @@ async def list_compliance_reports(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("training.manage")),
+    current_user=Depends(
+        require_permission("training.manage", "reports.view", "compliance.view")
+    ),
 ):
     """List stored compliance reports."""
     async with handle_service_errors("Failed to list reports"):
