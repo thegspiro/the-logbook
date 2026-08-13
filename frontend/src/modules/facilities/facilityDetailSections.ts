@@ -35,9 +35,10 @@ export interface FacilityDetailSection {
   icon: React.ElementType;
   /**
    * Sensitive sections carry door/alarm codes, account numbers, budgets, and
-   * lease terms. The backend gates their reads behind facilities.edit/manage,
-   * so showing them to a facilities.view-only member would only render 403
-   * errors — and the data is restricted on purpose.
+   * lease terms. The backend gates their reads behind
+   * facilities.view_sensitive/edit/manage, so showing them to a
+   * facilities.view-only member would only render 403 errors — and the data
+   * is restricted on purpose.
    */
   sensitive?: boolean;
 }

@@ -11,12 +11,16 @@ introspection, so it runs in the sandbox):
    "member" position holds ``facilities.view``, so exposing these reads to
    it would hand every member door/alarm codes, account numbers, budgets,
    and lease terms.
+3. ``facilities.view_sensitive`` is a READ-ONLY grant: sensitive GETs accept
+   it (so captain / vice president / treasurer can read this data), but no
+   mutation on the router does.
 """
 
 from fastapi.routing import APIRoute
 
 from app.api.dependencies import PermissionChecker
 from app.api.v1.endpoints.facilities import router
+from app.core.permissions import DEFAULT_POSITIONS
 
 SENSITIVE_PREFIXES = (
     "/access-keys",
@@ -72,9 +76,65 @@ def test_sensitive_families_are_not_readable_with_facilities_view():
         "sensitive route paths move?"
     )
     assert not leaky, (
-        "Sensitive facility data must require facilities.edit/manage, "
+        "Sensitive facility data must require "
+        "facilities.view_sensitive/edit/manage, "
         f"but these routes accept facilities.view: {leaky}"
     )
+
+
+def test_view_sensitive_grants_sensitive_reads_but_never_writes():
+    missing_read = []
+    writable = []
+    for route in _api_routes():
+        accepts = any(
+            "facilities.view_sensitive" in permissions
+            for permissions in _permission_sets(route)
+        )
+        if route.path.startswith(SENSITIVE_PREFIXES) and route.methods == {"GET"}:
+            if not accepts:
+                missing_read.append(route.path)
+        elif accepts:
+            # Any non-GET route, and any GET outside the sensitive families,
+            # has no business accepting the read-only sensitive grant.
+            writable.append(f"{sorted(route.methods)} {route.path}")
+    assert (
+        not missing_read
+    ), f"Sensitive GETs missing facilities.view_sensitive: {missing_read}"
+    assert (
+        not writable
+    ), f"facilities.view_sensitive must stay read-only, found on: {writable}"
+
+
+def test_default_positions_grant_sensitive_read_to_facility_ranks():
+    """Ranks whose duties require facility knowledge keep the sensitive read."""
+
+    def perms(slug: str) -> set[str]:
+        return set(DEFAULT_POSITIONS[slug]["permissions"])
+
+    # Read-only sensitive access for ranks with facility duties but no
+    # facility write role: station commander, president's deputy, and the
+    # treasurer (utilities/insurance/budgets are financial records).
+    for slug in ("captain", "vice_president", "treasurer"):
+        assert "facilities.view_sensitive" in perms(slug), slug
+
+    # Full-management positions are covered through facilities.manage.
+    for slug in (
+        "fire_chief",
+        "deputy_chief",
+        "assistant_chief",
+        "president",
+        "facilities_manager",
+    ):
+        assert "facilities.manage" in perms(slug), slug
+
+    # The baseline member stays operational-only.
+    member = perms("member")
+    assert "facilities.view" in member
+    assert not member & {
+        "facilities.view_sensitive",
+        "facilities.edit",
+        "facilities.manage",
+    }
 
 
 def test_operational_reads_stay_available_to_facilities_view():
