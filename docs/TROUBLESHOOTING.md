@@ -1144,6 +1144,21 @@ docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
 
 ## Error Message Reference
 
+### Support Error Codes (LB-\*)
+
+Every API error shown in the app carries a stable support code appended to the
+message — e.g. _"Could not validate credentials **(Error code: LB-AUTH-002)**"_.
+Ask the member for the code instead of a screenshot, then look it up:
+
+- **In the app:** Admin → Error Monitoring → _Error Code Reference_ (searchable)
+- **[docs/ERROR_CODES.md](./ERROR_CODES.md)** — published on the wiki as the
+  [Error-Codes](Error-Codes) page
+
+Codes in the `LB-API-*` family embed the HTTP status of a failure that has no
+more specific code (`LB-API-404` = not found, `LB-API-500` = server error).
+Everything else (`LB-AUTH-*`, `LB-EVT-*`, `LB-UPLD-*`, …) names a specific
+known condition with its own resolution steps.
+
 ### Error Message Format (As of 2026-02-07)
 
 All error messages now follow this format:
