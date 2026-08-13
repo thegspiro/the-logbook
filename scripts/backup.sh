@@ -18,13 +18,55 @@
 
 set -euo pipefail
 
-# Load environment variables
-if [[ -f "$(dirname "$0")/../.env" ]]; then
-    set -a
-    # shellcheck disable=SC1091 -- deployment-specific file, resolved at runtime
-    source "$(dirname "$0")/../.env"
-    set +a
+# Load the variables this script needs from .env WITHOUT sourcing it.
+# Sourcing executes the file: an unquoted value containing a space (the
+# template's own `APP_NAME=The Logbook`) runs its second word as a command,
+# and under `set -e` that kills every backup and restore.
+ENV_FILE="$(dirname "$0")/../.env"
+
+# Print the last value assigned to key $1 in $ENV_FILE, stripping an optional
+# `export ` prefix, a trailing CR, and one level of surrounding quotes. The
+# file is only ever read, never executed.
+env_file_get() {
+    local key="$1" line
+    line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" "$ENV_FILE" 2>/dev/null | tail -n1)"
+    [[ -n "$line" ]] || return 0
+    line="${line#*=}"
+    line="${line%$'\r'}"
+    if [[ ${#line} -ge 2 && "$line" == \"*\" && "$line" == *\" ]]; then
+        line="${line#\"}"
+        line="${line%\"}"
+    elif [[ ${#line} -ge 2 && "$line" == \'*\' && "$line" == *\' ]]; then
+        line="${line#\'}"
+        line="${line%\'}"
+    fi
+    printf '%s' "$line"
+}
+
+if [[ -f "$ENV_FILE" ]]; then
+    for _key in DB_HOST DB_USER DB_PASSWORD DB_NAME DB_CONTAINER \
+        BACKUP_LOCATION BACKUP_RETENTION_DAYS VERSION ENVIRONMENT \
+        AWS_S3_BUCKET AZURE_STORAGE_ACCOUNT AZURE_STORAGE_CONTAINER \
+        GCS_BUCKET; do
+        _val="$(env_file_get "$_key")"
+        if [[ -n "$_val" ]]; then
+            export "$_key=$_val"
+        fi
+    done
+    unset _key _val
 fi
+
+# Defaults so `set -u` cannot trip on keys absent from .env (the Unraid .env
+# legitimately omits DB_HOST — the compose hardcodes it per container).
+DB_HOST="${DB_HOST:-}"
+DB_USER="${DB_USER:-}"
+DB_PASSWORD="${DB_PASSWORD:-}"
+DB_NAME="${DB_NAME:-}"
+DB_CONTAINER="${DB_CONTAINER:-}"
+AWS_S3_BUCKET="${AWS_S3_BUCKET:-}"
+AZURE_STORAGE_ACCOUNT="${AZURE_STORAGE_ACCOUNT:-}"
+AZURE_STORAGE_CONTAINER="${AZURE_STORAGE_CONTAINER:-}"
+GCS_BUCKET="${GCS_BUCKET:-}"
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,6 +93,45 @@ print_warning() { echo -e "${YELLOW}⚠ $1${NC}"; }
 print_info() { echo -e "${BLUE}ℹ $1${NC}"; }
 
 # ============================================
+# Database Target Resolution
+# ============================================
+# The compose stacks run MySQL in a container named logbook-db (intranet-mysql
+# is the pre-rename legacy name) WITHOUT publishing its port to the host, so
+# `docker exec` into that container is the only way in — including for the
+# documented Unraid manual backup, where .env leaves DB_HOST unset. Conversely,
+# a genuinely remote DB_HOST must never be shadowed by a coincidentally-running
+# local container, or a restore would land in the wrong database.
+
+detect_db_container() {
+    docker ps --format '{{.Names}}' 2>/dev/null \
+        | grep -m1 -E '^(logbook-db|intranet-mysql)$' || true
+}
+
+# Sets MYSQL_CONTAINER to the container mysqldump/mysql should run in, or to
+# the empty string for a direct host connection to DB_HOST.
+resolve_db_target() {
+    # An explicit DB_CONTAINER is an operator decision — it always wins.
+    if [[ -n "$DB_CONTAINER" ]]; then
+        MYSQL_CONTAINER="$DB_CONTAINER"
+        return
+    fi
+    case "$DB_HOST" in
+        ""|localhost|127.0.0.1|::1|mysql|db)
+            # Unset/loopback, or a compose-internal service name (mysql/db)
+            # that is not resolvable from the host: prefer the container when
+            # one is running, since the host has no direct MySQL access.
+            MYSQL_CONTAINER="$(detect_db_container)"
+            ;;
+        *)
+            # A configured remote host: talk to it directly. Auto-selecting a
+            # local container here would back up / RESTORE INTO the wrong
+            # database.
+            MYSQL_CONTAINER=""
+            ;;
+    esac
+}
+
+# ============================================
 # Backup Functions
 # ============================================
 
@@ -63,33 +144,21 @@ create_backup_dir() {
 backup_database() {
     print_info "Backing up MySQL database..."
 
-    if [[ -n "$DB_HOST" && "$DB_HOST" != "localhost" ]]; then
-        # Docker or remote database. The MySQL container is named logbook-db
-        # in every compose file (intranet-mysql is the pre-rename legacy name);
-        # override with DB_CONTAINER for custom setups. The password travels
-        # via MYSQL_PWD so it never appears on a command line (visible in ps).
-        MYSQL_CONTAINER="${DB_CONTAINER:-$(docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 -E '^(logbook-db|intranet-mysql)$' || true)}"
-        if [[ -n "$MYSQL_CONTAINER" ]]; then
-            docker exec -e MYSQL_PWD="${DB_PASSWORD}" "$MYSQL_CONTAINER" mysqldump \
-                -u"${DB_USER}" \
-                "${DB_NAME}" \
-                --single-transaction \
-                --quick \
-                --lock-tables=false \
-                > "/tmp/$BACKUP_NAME/database.sql"
-        else
-            MYSQL_PWD="${DB_PASSWORD}" mysqldump \
-                -h"${DB_HOST}" \
-                -u"${DB_USER}" \
-                "${DB_NAME}" \
-                --single-transaction \
-                --quick \
-                --lock-tables=false \
-                > "/tmp/$BACKUP_NAME/database.sql"
-        fi
+    # The password travels via MYSQL_PWD so it never appears on a command
+    # line (visible in ps).
+    resolve_db_target
+    if [[ -n "$MYSQL_CONTAINER" ]]; then
+        print_info "Using MySQL container: $MYSQL_CONTAINER"
+        docker exec -e MYSQL_PWD="${DB_PASSWORD}" "$MYSQL_CONTAINER" mysqldump \
+            -u"${DB_USER}" \
+            "${DB_NAME}" \
+            --single-transaction \
+            --quick \
+            --lock-tables=false \
+            > "/tmp/$BACKUP_NAME/database.sql"
     else
-        # Local database
         MYSQL_PWD="${DB_PASSWORD}" mysqldump \
+            -h"${DB_HOST:-localhost}" \
             -u"${DB_USER}" \
             "${DB_NAME}" \
             --single-transaction \
@@ -283,12 +352,14 @@ restore_backup() {
     BACKUP_EXTRACT_DIR="${extracted_dirs[0]}"
 
     # Restore database. In the compose stacks MySQL's port is not published
-    # to the host, so restore through the container when one is running;
-    # fall back to a host mysql client for remote/local databases.
+    # to the host, so restore through the container when DB_HOST points at the
+    # bundled database; a configured remote DB_HOST is restored to directly —
+    # never hijacked by a coincidentally-running local container.
     if [[ -f "$BACKUP_EXTRACT_DIR/database.sql.gz" ]]; then
         print_info "Restoring database..."
-        MYSQL_CONTAINER="${DB_CONTAINER:-$(docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 -E '^(logbook-db|intranet-mysql)$' || true)}"
+        resolve_db_target
         if [[ -n "$MYSQL_CONTAINER" ]]; then
+            print_info "Restoring through MySQL container: $MYSQL_CONTAINER"
             gunzip -c "$BACKUP_EXTRACT_DIR/database.sql.gz" | docker exec -i -e MYSQL_PWD="${DB_PASSWORD}" "$MYSQL_CONTAINER" mysql \
                 -u"${DB_USER}" \
                 "${DB_NAME}"

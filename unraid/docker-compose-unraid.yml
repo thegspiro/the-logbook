@@ -157,6 +157,14 @@ services:
       # HTTP you must front the app with an HTTPS reverse proxy and set this true;
       # see the Unraid installation guide's security section.
       SECURITY_ENFORCE_HTTPS: ${SECURITY_ENFORCE_HTTPS:-false}
+      # Secure flag on auth cookies. This env block is a whitelist, so the
+      # documented LAN-trial override (COOKIE_SECURE=false in .env) must be
+      # passed through here or it silently does nothing — browsers then drop
+      # the Secure cookies over plain http:// and every login fails. The
+      # backend's own default is auto-detect (unset), which in this stack's
+      # production posture resolves to Secure=true — mirrored here because an
+      # empty value is not a valid boolean for the backend.
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
 
       # File Storage
       STORAGE_TYPE: ${STORAGE_TYPE:-local}
@@ -190,8 +198,14 @@ services:
       PUID: ${PUID:-99}
       PGID: ${PGID:-100}
 
+    # SECURITY: published in PLAINTEXT on every host interface by default —
+    # the documented reverse-proxy flow (SWAG / Nginx Proxy Manager) forwards
+    # /api to this host port, so it cannot default to loopback without
+    # breaking that flow. Once HTTPS is set up, restrict it: set
+    # BIND_ADDRESS=127.0.0.1 in .env if the proxy runs on this host (or joins
+    # the logbook-internal network), or to a specific host IP.
     ports:
-      - "${BACKEND_PORT:-7881}:3001"
+      - "${BIND_ADDRESS:-0.0.0.0}:${BACKEND_PORT:-7881}:3001"
 
     volumes:
       - /mnt/user/appdata/the-logbook/data:/app/data
@@ -248,8 +262,15 @@ services:
       PUID: ${PUID:-99}
       PGID: ${PGID:-100}
 
+    # SECURITY: this serves the FULL APP in PLAINTEXT on every host interface
+    # by default, and stays reachable even after HTTPS is set up. The default
+    # cannot be loopback because the documented reverse-proxy flow (SWAG /
+    # Nginx Proxy Manager) forwards to this host port. Once your HTTPS proxy
+    # works, set BIND_ADDRESS=127.0.0.1 in .env (proxy on this host / on the
+    # logbook-internal network) or a specific host IP, so LAN clients cannot
+    # bypass HTTPS.
     ports:
-      - "${FRONTEND_PORT:-7880}:80"
+      - "${BIND_ADDRESS:-0.0.0.0}:${FRONTEND_PORT:-7880}:80"
 
     depends_on:
       - backend

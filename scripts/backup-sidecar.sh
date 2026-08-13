@@ -35,37 +35,85 @@ VERIFY_EVERY="${VERIFY_EVERY_N_BACKUPS:-7}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_COUNTER_FILE="$BACKUP_DIR/.verify_counter"
 
+# NOTE on error handling: run_backup is invoked as `run_backup || ...`, and
+# POSIX errexit is IGNORED inside any function called in a || list — so `set -e`
+# provides no protection here. Without the explicit per-step guards below, a
+# failed mysqldump would still gzip/tar/checksum an EMPTY dump, publish it as a
+# good backup, and then prune older (genuinely good) archives. Every step must
+# therefore abort the run itself, and prune must only ever run after a
+# successful publish.
 run_backup() {
-    local timestamp name work archive
+    local timestamp name workroot work archive
     timestamp="$(date +%Y%m%d_%H%M%S)"
     name="logbook_backup_${timestamp}"
-    work="$(mktemp -d)/$name"
-    mkdir -p "$work" "$BACKUP_DIR"
+    if ! workroot="$(mktemp -d)"; then
+        echo "[backup] ERROR: mktemp failed — aborting run" >&2
+        return 1
+    fi
+    work="$workroot/$name"
+    if ! mkdir -p "$work" "$BACKUP_DIR"; then
+        echo "[backup] ERROR: could not create $work / $BACKUP_DIR — aborting run" >&2
+        rm -rf "$workroot"
+        return 1
+    fi
 
     echo "[backup] $(date -Is) starting $name"
     # MYSQL_PWD keeps the password out of the process list;
     # --no-tablespaces avoids needing the PROCESS privilege (app user).
-    MYSQL_PWD="$DB_PASSWORD" mysqldump \
+    if ! MYSQL_PWD="$DB_PASSWORD" mysqldump \
         -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" \
         "$DB_NAME" \
         --single-transaction --quick --lock-tables=false \
         --routines --triggers --no-tablespaces \
-        > "$work/database.sql"
-    gzip "$work/database.sql"
+        > "$work/database.sql"; then
+        echo "[backup] ERROR: mysqldump failed — nothing published, nothing pruned" >&2
+        rm -rf "$workroot"
+        return 1
+    fi
+    if [[ ! -s "$work/database.sql" ]]; then
+        echo "[backup] ERROR: mysqldump produced an empty dump — nothing published, nothing pruned" >&2
+        rm -rf "$workroot"
+        return 1
+    fi
+    if ! gzip "$work/database.sql"; then
+        echo "[backup] ERROR: gzip of database dump failed — aborting run" >&2
+        rm -rf "$workroot"
+        return 1
+    fi
 
     if [[ -d /uploads ]]; then
-        tar -czf "$work/uploads.tar.gz" -C / uploads
+        if ! tar -czf "$work/uploads.tar.gz" -C / uploads; then
+            echo "[backup] ERROR: archiving /uploads failed — aborting run" >&2
+            rm -rf "$workroot"
+            return 1
+        fi
     fi
     if [[ -d /audit_archives ]]; then
-        tar -czf "$work/audit_archives.tar.gz" -C / audit_archives
+        if ! tar -czf "$work/audit_archives.tar.gz" -C / audit_archives; then
+            echo "[backup] ERROR: archiving /audit_archives failed — aborting run" >&2
+            rm -rf "$workroot"
+            return 1
+        fi
     fi
 
     archive="$BACKUP_DIR/$name.tar.gz"
-    tar -czf "$archive" -C "$(dirname "$work")" "$name"
-    (cd "$BACKUP_DIR" && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
-    rm -rf "$(dirname "$work")"
+    if ! tar -czf "$archive" -C "$workroot" "$name"; then
+        echo "[backup] ERROR: writing $archive failed — removing partial archive" >&2
+        rm -f "$archive"
+        rm -rf "$workroot"
+        return 1
+    fi
+    if ! (cd "$BACKUP_DIR" && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"); then
+        echo "[backup] ERROR: checksumming $archive failed — removing archive" >&2
+        rm -f "$archive" "$archive.sha256"
+        rm -rf "$workroot"
+        return 1
+    fi
+    rm -rf "$workroot"
     echo "[backup] wrote $archive ($(du -h "$archive" | cut -f1))"
 
+    # Prune ONLY after a verified-successful publish: pruning on a failed run
+    # would delete good backups while adding a broken one.
     find "$BACKUP_DIR" -name 'logbook_backup_*.tar.gz*' \
         -mtime "+$RETENTION_DAYS" -delete
     echo "[backup] pruned archives older than $RETENTION_DAYS days"

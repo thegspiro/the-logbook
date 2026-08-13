@@ -240,23 +240,11 @@ create_directories() {
 # Generate .env File
 # ============================================
 
-generate_env() {
-    print_header "CONFIGURING ENVIRONMENT"
-
-    ENV_FILE="$INSTALL_DIR/.env"
-
-    # Check if .env already exists
-    if [ -f "$ENV_FILE" ] && [ "$INSTALL_TYPE" == "2" ]; then
-        print_info ".env file already exists, keeping existing configuration"
-        return
-    fi
-
-    print_info "Generating new .env file..."
-
-    # Production credentials must never be submitted over the plain-HTTP port
-    # exposed by the bundled nginx container.  Require the public URL of an
-    # HTTPS reverse proxy instead of silently turning the startup safety check
-    # into a no-op.  HTTPS_ORIGIN may be supplied by unattended installers.
+# Production credentials must never be submitted over the plain-HTTP port
+# exposed by the bundled nginx container.  Require the public URL of an
+# HTTPS reverse proxy instead of silently turning the startup safety check
+# into a no-op.  HTTPS_ORIGIN may be supplied by unattended installers.
+prompt_https_origin() {
     while :; do
         if [ -z "${HTTPS_ORIGIN:-}" ]; then
             read -r -p "Public HTTPS URL (for example, https://logbook.example.com): " HTTPS_ORIGIN
@@ -264,13 +252,77 @@ generate_env() {
         case "$HTTPS_ORIGIN" in
             https://?*)
                 if [[ "$HTTPS_ORIGIN" != *[[:space:]]* ]]; then
-                    break
+                    return 0
                 fi
                 ;;
         esac
         print_error "A valid https:// URL is required. Configure an HTTPS reverse proxy before continuing."
         HTTPS_ORIGIN=""
     done
+}
+
+# The update path (option 2) keeps the existing .env — but the installs that
+# most need the HTTPS migration are exactly the pre-existing plain-HTTP
+# configs, so validate rather than silently keeping a plaintext posture the
+# summary then claims is HTTPS-protected.
+validate_existing_env() {
+    print_info ".env file already exists, validating its security posture..."
+
+    local origins insecure=0
+    origins=$(sed -n 's/^ALLOWED_ORIGINS=//p' "$ENV_FILE" | tail -n 1)
+    case "$origins" in
+        *http://*) insecure=1 ;;
+    esac
+    if grep -qE '^[[:space:]]*COOKIE_SECURE=[Ff][Aa][Ll][Ss][Ee]' "$ENV_FILE"; then
+        insecure=1
+    fi
+
+    if [ "$insecure" -eq 0 ]; then
+        print_success "Existing .env uses an HTTPS origin — keeping configuration"
+        return
+    fi
+
+    print_warning "Existing .env allows plain-HTTP access (http:// origin and/or Secure"
+    print_warning "cookies disabled). Credentials submitted over HTTP are readable by"
+    print_warning "anyone on the network path."
+
+    if [ "${ALLOW_INSECURE_HTTP:-no}" = "yes" ]; then
+        print_warning "ALLOW_INSECURE_HTTP=yes acknowledged — KEEPING the plaintext"
+        print_warning "configuration. Front the app with an HTTPS reverse proxy as soon"
+        print_warning "as possible."
+        return
+    fi
+
+    print_info "Enter the public HTTPS URL to migrate this install to HTTPS."
+    print_info "(To keep the insecure config, re-run with ALLOW_INSECURE_HTTP=yes.)"
+    prompt_https_origin
+
+    sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=${HTTPS_ORIGIN}|" "$ENV_FILE"
+    if grep -qE '^[[:space:]]*SECURITY_ENFORCE_HTTPS=' "$ENV_FILE"; then
+        sed -i "s|^[[:space:]]*SECURITY_ENFORCE_HTTPS=.*|SECURITY_ENFORCE_HTTPS=true|" "$ENV_FILE"
+    else
+        printf '\nSECURITY_ENFORCE_HTTPS=true\n' >> "$ENV_FILE"
+    fi
+    # Drop any explicit Secure-cookie opt-out so auth cookies are Secure again.
+    sed -i -E '/^[[:space:]]*COOKIE_SECURE=/d' "$ENV_FILE"
+    print_success "Migrated .env to HTTPS origin: ${HTTPS_ORIGIN}"
+    print_info "Other settings (secrets, passwords, ports) were left untouched."
+}
+
+generate_env() {
+    print_header "CONFIGURING ENVIRONMENT"
+
+    ENV_FILE="$INSTALL_DIR/.env"
+
+    # Check if .env already exists
+    if [ -f "$ENV_FILE" ] && [ "$INSTALL_TYPE" == "2" ]; then
+        validate_existing_env
+        return
+    fi
+
+    print_info "Generating new .env file..."
+
+    prompt_https_origin
 
     # Generate secrets
     SECRET_KEY=$(openssl rand -hex 32)
@@ -437,16 +489,38 @@ verify_deployment() {
     print_info "Testing application connectivity..."
     sleep 10
 
-    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:7880" | grep -q "200\|301\|302"; then
-        print_success "Frontend is accessible"
+    # Local container probes only prove the containers answer on the host —
+    # they say nothing about the HTTPS origin users must actually log in
+    # through, so label them as such and probe the real origin separately.
+    FRONTEND_PORT_CFG=$(sed -n 's/^FRONTEND_PORT=//p' "$INSTALL_DIR/.env" | tail -n 1)
+    BACKEND_PORT_CFG=$(sed -n 's/^BACKEND_PORT=//p' "$INSTALL_DIR/.env" | tail -n 1)
+    FRONTEND_PORT_CFG=${FRONTEND_PORT_CFG:-7880}
+    BACKEND_PORT_CFG=${BACKEND_PORT_CFG:-7881}
+
+    if curl -s -o /dev/null -w "%{http_code}" "http://localhost:${FRONTEND_PORT_CFG}" | grep -q "200\|301\|302"; then
+        print_success "Frontend container responds locally (port ${FRONTEND_PORT_CFG})"
     else
-        print_warning "Frontend may not be accessible yet"
+        print_warning "Frontend container may not be running correctly"
     fi
 
-    if curl -s "http://localhost:7881/health" | grep -q "ok\|healthy"; then
-        print_success "Backend is healthy"
+    if curl -s "http://localhost:${BACKEND_PORT_CFG}/health" | grep -q "ok\|healthy"; then
+        print_success "Backend container is healthy (port ${BACKEND_PORT_CFG})"
     else
         print_warning "Backend may not be healthy yet"
+    fi
+
+    # Probe the origin users will actually use (first ALLOWED_ORIGINS entry).
+    PUBLIC_ORIGIN=$(sed -n 's/^ALLOWED_ORIGINS=//p' "$INSTALL_DIR/.env" | tail -n 1 | cut -d, -f1)
+    if [ -n "$PUBLIC_ORIGIN" ]; then
+        ORIGIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$PUBLIC_ORIGIN" 2>/dev/null || echo "000")
+        if echo "$ORIGIN_CODE" | grep -qE "^(200|301|302)$"; then
+            print_success "Configured origin is reachable: $PUBLIC_ORIGIN"
+        else
+            print_warning "Configured origin is NOT reachable yet: $PUBLIC_ORIGIN (HTTP $ORIGIN_CODE)"
+            print_warning "The containers run, but until your HTTPS reverse proxy serves this"
+            print_warning "URL, users cannot log in. See docs/deployment/unraid.md"
+            print_warning "(HTTPS with Reverse Proxy)."
+        fi
     fi
 }
 

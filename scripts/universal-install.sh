@@ -321,6 +321,21 @@ generate_secrets() {
 }
 
 create_env_file() {
+    # Never clobber (or silently weaken) a config the operator already has:
+    # regenerating would replace live DB passwords and secrets. Keep it, but
+    # warn when it cannot boot under the pinned production override.
+    if [[ -f "$INSTALL_DIR/.env" ]]; then
+        log_warning "Existing .env found — keeping it (delete it and re-run to regenerate)"
+        if ! grep -qE '^[[:space:]]*SECURITY_REQUIRE_TLS=' "$INSTALL_DIR/.env"; then
+            log_warning "Your .env does not set SECURITY_REQUIRE_TLS. docker-compose.prod.yml"
+            log_warning "defaults it to TRUE and the backend will REFUSE TO START, because the"
+            log_warning "bundled MySQL/Redis do not terminate TLS. Either configure TLS"
+            log_warning "(DB_SSL/DB_SSL_CA, REDIS_SSL/REDIS_SSL_CA) or add an explicit"
+            log_warning "SECURITY_REQUIRE_TLS=false for the bundled plaintext services."
+        fi
+        return
+    fi
+
     log_info "Creating .env file with profile: $PROFILE"
 
     generate_secrets
@@ -401,6 +416,21 @@ BACKEND_WORKERS=$BACKEND_WORKERS
 COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
 
 # ============================================
+# TRANSPORT TLS TO DATA SERVICES — EXPLICIT OPT-OUT
+# ============================================
+# The bundled MySQL and Redis containers speak PLAINTEXT on the internal
+# Docker network; they do not terminate TLS. With SECURITY_REQUIRE_TLS unset,
+# docker-compose.prod.yml defaults it to true and the backend REFUSES TO
+# START. This explicit false keeps the bundled stack bootable: database and
+# cache traffic stays on the compose-internal network but is NOT encrypted.
+# If you move MySQL/Redis off-host (or add TLS termination), set
+# DB_SSL=true + DB_SSL_CA and REDIS_SSL=true + REDIS_SSL_CA, then flip
+# SECURITY_REQUIRE_TLS=true to keep it that way.
+SECURITY_REQUIRE_TLS=false
+DB_SSL=false
+REDIS_SSL=false
+
+# ============================================
 # NETWORK
 # ============================================
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
@@ -433,6 +463,10 @@ ENABLE_MAILHOG=false
 EOF
 
     log_success ".env file created"
+    log_warning "SECURITY_REQUIRE_TLS=false written to .env: the bundled MySQL/Redis do"
+    log_warning "not terminate TLS, so DB/cache traffic on the internal Docker network is"
+    log_warning "NOT encrypted. If you use external data services, enable DB_SSL/REDIS_SSL"
+    log_warning "(+ CA certs) and set SECURITY_REQUIRE_TLS=true."
 }
 
 # ============================================

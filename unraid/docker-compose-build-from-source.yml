@@ -113,6 +113,14 @@ services:
       # Production refuses to start unless HTTPS is enforced — front the app with
       # an HTTPS reverse proxy and set this true (see the Unraid security guide).
       SECURITY_ENFORCE_HTTPS: ${SECURITY_ENFORCE_HTTPS:-false}
+      # Secure flag on auth cookies. This env block is a whitelist, so the
+      # documented LAN-trial override (COOKIE_SECURE=false in .env) must be
+      # passed through here or it silently does nothing — browsers then drop
+      # the Secure cookies over plain http:// and every login fails. The
+      # backend's own default is auto-detect (unset), which in this stack's
+      # production posture resolves to Secure=true — mirrored here because an
+      # empty value is not a valid boolean for the backend.
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       APP_NAME: ${APP_NAME:-The Logbook}
       VERSION: ${VERSION:-1.0.0}
       ENVIRONMENT: ${ENVIRONMENT:-production}
@@ -151,8 +159,12 @@ services:
       - /mnt/user/appdata/the-logbook/uploads:/app/uploads
       - /mnt/user/appdata/the-logbook/logs:/app/logs
       - /mnt/user/backups/the-logbook:/backups
+    # SECURITY: published in PLAINTEXT on every host interface by default (the
+    # documented reverse-proxy flow forwards /api to this host port). Once
+    # HTTPS is set up, set BIND_ADDRESS in .env to restrict the interface —
+    # see docker-compose-unraid.yml for details.
     ports:
-      - "${BACKEND_PORT:-7881}:3001"
+      - "${BIND_ADDRESS:-0.0.0.0}:${BACKEND_PORT:-7881}:3001"
     networks:
       - logbook-internal
     healthcheck:
@@ -181,8 +193,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    # SECURITY: serves the FULL APP in PLAINTEXT on every host interface by
+    # default — required by the documented reverse-proxy flow, which forwards
+    # to this host port. Once your HTTPS proxy works, set BIND_ADDRESS in
+    # .env (127.0.0.1 or a specific host IP) so LAN clients cannot bypass it.
     ports:
-      - "${FRONTEND_PORT:-7880}:80"
+      - "${BIND_ADDRESS:-0.0.0.0}:${FRONTEND_PORT:-7880}:80"
     networks:
       - logbook-internal
     healthcheck:

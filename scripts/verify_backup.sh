@@ -39,6 +39,60 @@ if [[ -n "$VERIFY_PASSWORD" ]]; then
     MYSQL+=("-p$VERIFY_PASSWORD")
 fi
 
+# Extract an archive without letting it escape the destination. Prefers the
+# Python helper, but the backup sidecar runs on the mysql:8.0 image, which has
+# no python3 — there the member list is validated in shell (absolute paths,
+# `..` traversal, and link/special members are rejected) before extracting.
+safe_extract() {
+    local archive="$1" dest="$2"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 "$SCRIPT_DIR/safe_extract_tar.py" "$archive" "$dest"
+        return
+    fi
+    if ! command -v tar >/dev/null 2>&1; then
+        echo "✗ Neither python3 nor tar is available — cannot extract $archive safely" >&2
+        return 1
+    fi
+
+    local listing verbose line name type
+    if ! verbose="$(tar -tvzf "$archive")"; then
+        echo "✗ tar could not read $archive" >&2
+        return 1
+    fi
+    # First column of -tv output is the mode string; anything but a regular
+    # file (-) or directory (d) — symlink (l), hardlink (h), device (b/c),
+    # fifo (p) — is rejected.
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        type="${line:0:1}"
+        case "$type" in
+            -|d) ;;
+            *)
+                echo "✗ Refusing to extract $archive: non-regular member: $line" >&2
+                return 1
+                ;;
+        esac
+    done <<< "$verbose"
+    if ! listing="$(tar -tzf "$archive")"; then
+        echo "✗ tar could not list $archive" >&2
+        return 1
+    fi
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        case "/$name/" in
+            //*)
+                echo "✗ Refusing to extract $archive: absolute path member: $name" >&2
+                return 1
+                ;;
+            */../*)
+                echo "✗ Refusing to extract $archive: path traversal member: $name" >&2
+                return 1
+                ;;
+        esac
+    done <<< "$listing"
+    tar -xzf "$archive" -C "$dest" --no-same-owner
+}
+
 WORK_DIR="$(mktemp -d)"
 cleanup() {
     rm -rf "$WORK_DIR"
@@ -55,7 +109,7 @@ else
     echo "⚠ No .sha256 file next to the archive — skipping checksum check"
 fi
 
-python3 "$SCRIPT_DIR/safe_extract_tar.py" "$ARCHIVE" "$WORK_DIR"
+safe_extract "$ARCHIVE" "$WORK_DIR"
 SQL_FILE="$(find "$WORK_DIR" -name 'database.sql*' | head -1)"
 if [[ -z "$SQL_FILE" ]]; then
     echo "✗ Archive contains no database.sql(.gz)" >&2

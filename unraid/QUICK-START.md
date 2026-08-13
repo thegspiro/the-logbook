@@ -178,18 +178,24 @@ docker compose restart
 
 ## Security Note
 
-This stack runs in **production posture**. The setup script configures a
-**LAN-trial mode** so the quick start works out of the box on a trusted LAN:
+This stack runs in **production posture**, and logins depend on HTTPS:
 
-- The generated `.env` sets `SECURITY_ENFORCE_HTTPS=true` (required by the
-  production startup gate) **and `COOKIE_SECURE=false`** — without the latter,
-  browsers refuse to send the app's `Secure` auth cookies over plain
-  `http://`, and logins fail.
-- **Before real use**: front the app with an HTTPS reverse proxy (SWAG /
-  Nginx Proxy Manager / Cloudflare Tunnel), point `ALLOWED_ORIGINS` at your
-  `https://` origin, and **delete the `COOKIE_SECURE` line from `.env`** —
-  session cookies over cleartext HTTP are readable by anyone on the network
-  path.
+- The setup script **asks for the public HTTPS URL of a reverse proxy** (SWAG /
+  Nginx Proxy Manager / Cloudflare Tunnel) and writes it into
+  `ALLOWED_ORIGINS`; set the proxy up first. Unattended installs can pass it
+  via the `HTTPS_ORIGIN` environment variable.
+- **Updates are validated too** (option 2): if your existing `.env` still has
+  an `http://` origin or secure cookies disabled, the script runs the same
+  HTTPS migration prompt. To knowingly keep a plaintext LAN trial for now,
+  re-run with `ALLOW_INSECURE_HTTP=yes` — and for such a trial, uncomment
+  `COOKIE_SECURE=false` in `.env` (browsers refuse to send the app's `Secure`
+  auth cookies over plain `http://`, so logins fail without it). Delete that
+  line again once your proxy is live: session cookies over cleartext HTTP are
+  readable by anyone on the network path.
+- The compose **publishes ports `7880`/`7881` in plaintext on all host
+  interfaces** so your proxy can forward to them. Once HTTPS works, set
+  `BIND_ADDRESS` in `.env` (e.g. `127.0.0.1` if the proxy runs on the same
+  host) so LAN clients cannot bypass the proxy.
 - **API docs (`/docs`) are OFF by default** and enabling them blocks boot in
   production.
 - **Leave `TRUSTED_PROXY_IPS` empty** — the compose publishes the backend port
