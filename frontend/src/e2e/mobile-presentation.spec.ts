@@ -74,6 +74,7 @@ const ROUTES: RouteCheck[] = [
   { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/locations/qr-codes', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/facilities', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/elections', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0 },
