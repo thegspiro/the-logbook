@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SubmitTrainingPage from './SubmitTrainingPage';
 
 const mockGetConfig = vi.fn();
 const mockGetMySubmissions = vi.fn();
 const mockGetCategories = vi.fn();
+const mockGetRequirementsEnhanced = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingSubmissionService: {
@@ -15,6 +17,9 @@ vi.mock('../services/api', () => ({
   },
   trainingService: {
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
+  },
+  trainingProgramService: {
+    getRequirementsEnhanced: (...args: unknown[]) => mockGetRequirementsEnhanced(...args) as unknown,
   },
 }));
 
@@ -66,6 +71,33 @@ describe('SubmitTrainingPage', () => {
     mockGetConfig.mockResolvedValue(mockConfig);
     mockGetMySubmissions.mockResolvedValue([]);
     mockGetCategories.mockResolvedValue([]);
+    mockGetRequirementsEnhanced.mockResolvedValue([
+      {
+        id: 'requirement-cpr',
+        name: 'CPR Certification',
+        active: true,
+        requirement_type: 'certification',
+      },
+      {
+        id: 'requirement-cpr-duplicate',
+        name: 'CPR Certification',
+        active: true,
+        requirement_type: 'certification',
+      },
+      {
+        id: 'requirement-driver',
+        name: 'Driver Refresher',
+        active: true,
+        requirement_type: 'courses',
+        training_type: 'refresher',
+      },
+      {
+        id: 'requirement-archived',
+        name: 'Archived Certification',
+        active: false,
+        requirement_type: 'certification',
+      },
+    ]);
   });
 
   it('renders the submit training page', async () => {
@@ -87,6 +119,46 @@ describe('SubmitTrainingPage', () => {
     await waitFor(() => {
       expect(mockGetMySubmissions).toHaveBeenCalledWith();
     });
+  });
+
+  it('defaults to the first training type allowed by the department', async () => {
+    mockGetConfig.mockResolvedValue({ ...mockConfig, allowed_training_types: ['specialty', 'certification'] });
+    renderWithRouter(<SubmitTrainingPage />);
+
+    expect(await screen.findByLabelText('Training Type *')).toHaveValue('specialty');
+  });
+
+  it('asks for training type first and suggests matching department requirements', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SubmitTrainingPage />);
+
+    const trainingType = await screen.findByLabelText('Training Type *');
+    const courseName = screen.getByLabelText('Course Name *');
+    expect(Boolean(trainingType.compareDocumentPosition(courseName) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+    await user.selectOptions(trainingType, 'certification');
+
+    const suggestion = screen.getByLabelText('Suggested Certification');
+    expect(screen.getAllByRole('option', { name: 'CPR Certification' })).toHaveLength(1);
+    expect(screen.queryByRole('option', { name: 'Driver Refresher' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Archived Certification' })).not.toBeInTheDocument();
+
+    await user.selectOptions(suggestion, 'CPR Certification');
+    expect(courseName).toHaveValue('CPR Certification');
+
+    const certificateNumber = screen.getByLabelText('Certificate / ID Number');
+    await user.type(certificateNumber, 'CPR-123');
+    await user.selectOptions(trainingType, 'refresher');
+    expect(courseName).toHaveValue('');
+    expect(screen.queryByLabelText('Certificate / ID Number')).not.toBeInTheDocument();
+
+    await user.selectOptions(trainingType, 'certification');
+    expect(screen.getByLabelText('Certificate / ID Number')).toHaveValue('');
+
+    await user.clear(courseName);
+    await user.type(courseName, 'Community CPR Course');
+    expect(courseName).toHaveValue('Community CPR Course');
+    expect(screen.getByText('You can still enter a different course.', { exact: false })).toBeInTheDocument();
   });
 
   it('handles config load failure', async () => {
