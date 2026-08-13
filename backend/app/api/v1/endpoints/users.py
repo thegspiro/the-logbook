@@ -35,6 +35,7 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_MEMBER
 from app.core.database import database_manager, get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import get_rank_default_permissions
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
@@ -1870,9 +1871,10 @@ async def upload_photo(
     MAX_SIZE = 5 * 1024 * 1024
     contents = await file.read()
     if len(contents) > MAX_SIZE:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File size must be under 5MB",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
     # MIME type validation using file content (not just extension)
@@ -1893,9 +1895,10 @@ async def upload_photo(
             detected_mime = "unknown"
 
     if detected_mime not in ALLOWED_MIME_TYPES:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid file type. Allowed: JPEG, PNG, WebP. Detected: {detected_mime}",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     # Optimize image: resize, strip EXIF, convert to WebP (smaller files)

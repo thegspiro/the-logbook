@@ -6,6 +6,7 @@ import type { ErrorLog } from '../services/errorTracking';
 
 const mockGetErrors = vi.fn();
 const mockGetErrorStats = vi.fn();
+const mockGetErrorCodes = vi.fn();
 
 vi.mock('../services/errorTracking', () => ({
   errorTracker: {
@@ -13,6 +14,12 @@ vi.mock('../services/errorTracking', () => ({
     getErrorStats: (...args: unknown[]) => mockGetErrorStats(...args) as unknown,
     exportErrors: vi.fn(),
     clearErrors: vi.fn(),
+  },
+}));
+
+vi.mock('../services/api', () => ({
+  errorLogsService: {
+    getErrorCodes: (...args: unknown[]) => mockGetErrorCodes(...args) as unknown,
   },
 }));
 
@@ -48,6 +55,7 @@ function makeError(overrides: Partial<ErrorLog> = {}): ErrorLog {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetErrorStats.mockResolvedValue({ total: 0, byType: {}, recentErrors: [] });
+  mockGetErrorCodes.mockResolvedValue([]);
 });
 
 describe('ErrorMonitoringPage', () => {
@@ -123,6 +131,53 @@ describe('ErrorMonitoringPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('No errors found')).toBeInTheDocument();
+    });
+  });
+
+  it('lists the support-code reference so IT can look up a quoted code', async () => {
+    mockGetErrors.mockResolvedValue([]);
+    mockGetErrorCodes.mockResolvedValue([
+      {
+        code: 'LB-AUTH-002',
+        category: 'AUTH',
+        title: 'Session expired or invalid',
+        description: 'A session token was presented but could not be validated.',
+        resolution: ['Have the member sign in again.'],
+      },
+    ]);
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    expect(await screen.findByText(/Error Code Reference/)).toBeInTheDocument();
+    // The code appears in the table row and in the section's explainer text.
+    expect(screen.getAllByText('LB-AUTH-002').length).toBeGreaterThan(0);
+    expect(screen.getByText('Session expired or invalid')).toBeInTheDocument();
+    expect(screen.getByText('Have the member sign in again.')).toBeInTheDocument();
+  });
+
+  it('omits the reference section when the codes cannot be loaded', async () => {
+    mockGetErrors.mockResolvedValue([]);
+    mockGetErrorCodes.mockRejectedValue(new Error('offline'));
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('No errors found')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Error Code Reference/)).not.toBeInTheDocument();
+  });
+
+  it('shows the support code an API failure carried', async () => {
+    mockGetErrors.mockResolvedValue([
+      makeError({
+        context: { source: 'frontend', method: 'POST', path: '/events/42', status: 500, error_code: 'LB-SYS-001' },
+      }),
+    ]);
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/\[LB-SYS-001\]/)).toBeInTheDocument();
     });
   });
 
