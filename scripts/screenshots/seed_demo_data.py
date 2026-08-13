@@ -165,6 +165,16 @@ OFFICER_RANKS = frozenset(
 # per-section point totals and a percentage.
 SCORED_TEMPLATE_NAME = "Handline Advance — Weighted Evaluation"
 
+# The statement the membership coordinator writes for the ballot. Shared so the
+# election package panel and the ballot item that carries it to voters say the
+# same thing — the guide's whole point about a package being what the ballot is
+# built from.
+SUPPORTING_STATEMENT = (
+    "Completed all six pipeline stages with no skipped steps. Two interview "
+    "panels recommended approval; background and medical returned clear. Has "
+    "attended eleven drills as a guest since March."
+)
+
 # The candidate on the one failed test. Not the demo member, whose passed test
 # the scorecard screenshots are built around.
 FAILED_TEST_CANDIDATE_USERNAME = "cfrazier"
@@ -8157,6 +8167,7 @@ class Seeder:
         self._seed_nominations(elections)
         self._seed_closed_election(elections, minutes or [])
         self._seed_open_election(elections)
+        self._seed_membership_vote_election(elections)
         self._seed_runoff_chain(elections)
         self._seed_saved_ballot_template()
         return elections
@@ -8372,6 +8383,56 @@ class Seeder:
             "Rescue technician and lead instructor for vehicle extrication.",
         ),
     ]
+
+    MEMBERSHIP_ELECTION_TITLE = "Membership Vote — August Business Meeting"
+
+    def _seed_membership_vote_election(self, elections: list[dict]) -> None:
+        """A draft election carrying an applicant's membership approval.
+
+        Every other seeded ballot is position races and a bylaw amendment, so
+        the item type the prospective-member pipeline exists to produce could
+        not be pictured at all — and `14-elections.md` documents it.
+
+        Draft on purpose. An open election refuses ballot edits outright
+        ("Only end_date can be updated while voting is active"), which is right
+        — a cast vote references an item id — but it also means the item has to
+        be in place before voting starts, exactly as the guide's workflow says:
+        the coordinator marks the package ready, the secretary adds it to the
+        election, and only then does the election open.
+        """
+        if any(pick(e, "title") == self.MEMBERSHIP_ELECTION_TITLE for e in elections):
+            return
+        try:
+            self.api.post(
+                "/elections",
+                {
+                    "title": self.MEMBERSHIP_ELECTION_TITLE,
+                    "description": (
+                        "Membership approval carried to the floor at the "
+                        "August business meeting."
+                    ),
+                    "election_type": "general",
+                    "ballot_items": [
+                        {
+                            "id": "item-membership-okafor",
+                            "type": "membership_approval",
+                            "title": "Membership Approval — Sam Okafor",
+                            "description": SUPPORTING_STATEMENT,
+                            "vote_type": "approval",
+                        }
+                    ],
+                    "start_date": iso(NOW + timedelta(days=2)),
+                    "end_date": iso(NOW + timedelta(days=9)),
+                    "anonymous_voting": True,
+                    "allow_write_ins": False,
+                    "results_visible_immediately": False,
+                    "voting_method": "simple_majority",
+                    "victory_condition": "majority",
+                    "quorum_type": "none",
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"membership vote election: {exc}")
 
     def _seed_open_election(self, elections: list[dict]) -> None:
         """An election actually taking votes, so the member ballot can be shown.
@@ -9241,9 +9302,25 @@ class Seeder:
             if str(pick(step, "step_type") or "").lower() != "election_vote":
                 continue
             try:
-                self.api.get(
+                package = self.api.get(
                     f"/prospective-members/prospects/{prospect_id}/election-package"
                 )
+                # A package created before this seeder filled the statement in
+                # keeps its empty box, and the ballot item built from it then
+                # quotes a statement the package does not hold. Top it up
+                # rather than skipping — the create path below never runs for a
+                # prospect who already has a package.
+                config = dict(pick(package, "package_config") or {})
+                if not str(config.get("supporting_statement") or "").strip():
+                    config["supporting_statement"] = SUPPORTING_STATEMENT
+                    try:
+                        self.api.put(
+                            f"/prospective-members/prospects/{prospect_id}"
+                            "/election-package",
+                            {"package_config": config},
+                        )
+                    except ApiError as exc:
+                        self.blocked.append(f"election package statement: {exc}")
                 continue
             except ApiError as exc:
                 if exc.code != 404:
@@ -9257,6 +9334,14 @@ class Seeder:
                             "Application, interview notes and background check "
                             "attached for the membership vote."
                         ),
+                        # The statement voters actually read on the ballot.
+                        # It lives inside `package_config`, not as a column —
+                        # sent top-level the API accepts the request and stores
+                        # nothing, which is how this box stayed empty through
+                        # two seeder runs that thought they had filled it.
+                        "package_config": {
+                            "supporting_statement": SUPPORTING_STATEMENT
+                        },
                     },
                 )
             except ApiError as exc:
