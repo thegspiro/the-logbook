@@ -36,10 +36,27 @@ def _ensure_utc(dt: datetime) -> datetime:
 
     MySQL/aiomysql may return naive datetimes even for DateTime(timezone=True)
     columns. This helper assumes naive values are UTC and attaches tzinfo.
+    Only for DB-loaded values — client input goes through _require_utc.
     """
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _require_utc(dt: datetime, field: str) -> datetime:
+    """Validate a client-supplied timestamp is timezone-aware; normalize to UTC.
+
+    A naive value is ambiguous: the pre-2026-08 frontend sent local wall-clock
+    strings, and assuming UTC would store them shifted by the org's UTC offset
+    behind a success response. Reject instead of guessing (ValueError -> 400)
+    so a stale client gets a clear error rather than corrupt hour records.
+    """
+    if dt.tzinfo is None:
+        raise ValueError(
+            f"{field} must include a timezone offset "
+            "(UTC, e.g. 2026-08-12T14:00:00Z)"
+        )
+    return dt.astimezone(timezone.utc)
 
 
 class AdminHoursService:
@@ -430,11 +447,8 @@ class AdminHoursService:
         description: Optional[str] = None,
     ) -> AdminHoursEntry:
         """Create a manual admin hours entry."""
-        # Client-supplied timestamps may arrive naive (no tzinfo) — the API
-        # contract is UTC, so attach it rather than crash the aware-vs-naive
-        # comparison against `now` below (TypeError -> opaque 500).
-        clock_in_at = _ensure_utc(clock_in_at)
-        clock_out_at = _ensure_utc(clock_out_at)
+        clock_in_at = _require_utc(clock_in_at, "clock_in_at")
+        clock_out_at = _require_utc(clock_out_at, "clock_out_at")
 
         category = await self.get_category(category_id, organization_id)
         if not category:
@@ -695,14 +709,11 @@ class AdminHoursService:
                 raise ValueError("Category is no longer active")
             entry.category_id = category_id
 
-        # Normalize client-supplied times to aware UTC: an edited (possibly
-        # naive) value gets compared against the stored (aware) counterpart
-        # below, and mixing the two raises TypeError -> opaque 500.
         if clock_in_at is not None:
-            entry.clock_in_at = _ensure_utc(clock_in_at)
+            entry.clock_in_at = _require_utc(clock_in_at, "clock_in_at")
 
         if clock_out_at is not None:
-            entry.clock_out_at = _ensure_utc(clock_out_at)
+            entry.clock_out_at = _require_utc(clock_out_at, "clock_out_at")
 
         if description is not None:
             entry.description = description

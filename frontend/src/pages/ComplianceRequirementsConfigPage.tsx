@@ -180,7 +180,10 @@ export default function ComplianceRequirementsConfigPage() {
 
   const loadAdminHoursCategories = useCallback(async () => {
     try {
-      const cats = await adminHoursCategoryService.list();
+      // includeInactive so requirements pointing at a deactivated category
+      // still render with a name and stay removable; only active categories
+      // are offered when adding a new requirement.
+      const cats = await adminHoursCategoryService.list({ includeInactive: true });
       setAdminHoursCategories(cats);
     } catch {
       // Non-critical — the admin hours module may be unused in this org
@@ -420,6 +423,8 @@ export default function ComplianceRequirementsConfigPage() {
   const getAdminHoursCategoryName = (id: string) => {
     return adminHoursCategories.find((c: AdminHoursCategory) => c.id === id)?.name ?? id;
   };
+
+  const activeAdminHoursCategories = adminHoursCategories.filter((c: AdminHoursCategory) => c.isActive);
 
   const updateHoursReq = (index: number, patch: Partial<AdminHoursRequirementItem>) => {
     setProfileHoursReqs((prev: AdminHoursRequirementItem[]) =>
@@ -838,65 +843,70 @@ export default function ComplianceRequirementsConfigPage() {
                     Members matching this profile must log this many approved admin hours in each period. Only approved
                     entries count — pending and rejected hours do not.
                   </p>
-                  {adminHoursCategories.length === 0 ? (
-                    <p className="text-theme-text-secondary text-sm italic">
-                      No admin hours categories found. Create categories under Admin Hours &rarr; Manage first.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {profileHoursReqs.map((req: AdminHoursRequirementItem, index: number) => (
-                        <div key={index} className="flex flex-wrap items-center gap-2">
-                          <select
-                            className="form-input w-auto min-w-44 flex-1"
-                            value={req.category_id}
-                            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                              updateHoursReq(index, { category_id: e.target.value })
-                            }
-                            aria-label="Admin hours category"
-                          >
-                            <option value="">Select category...</option>
-                            {adminHoursCategories.map((cat: AdminHoursCategory) => (
-                              <option key={cat.id} value={cat.id}>
-                                {cat.name}
+                  <div className="space-y-2">
+                    {/* Existing rows render even with zero active categories, or a
+                        profile whose categories were all deactivated could never
+                        have its stale requirements removed. */}
+                    {profileHoursReqs.map((req: AdminHoursRequirementItem, index: number) => (
+                      <div key={index} className="flex flex-wrap items-center gap-2">
+                        <select
+                          className="form-input w-auto min-w-44 flex-1"
+                          value={req.category_id}
+                          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                            updateHoursReq(index, { category_id: e.target.value })
+                          }
+                          aria-label="Admin hours category"
+                        >
+                          <option value="">Select category...</option>
+                          {activeAdminHoursCategories.map((cat: AdminHoursCategory) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </option>
+                          ))}
+                          {req.category_id &&
+                            !activeAdminHoursCategories.some((c: AdminHoursCategory) => c.id === req.category_id) && (
+                              <option value={req.category_id}>
+                                {getAdminHoursCategoryName(req.category_id)} (inactive)
                               </option>
-                            ))}
-                          </select>
-                          <input
-                            type="number"
-                            className="form-input w-24"
-                            min={0.5}
-                            step={0.5}
-                            value={req.required_hours || ''}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              updateHoursReq(index, { required_hours: Number(e.target.value) })
-                            }
-                            placeholder="Hours"
-                            aria-label="Required hours"
-                          />
-                          <select
-                            className="form-input w-auto"
-                            value={req.frequency}
-                            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                              updateHoursReq(index, { frequency: e.target.value })
-                            }
-                            aria-label="Frequency"
-                          >
-                            <option value="annual">Per year</option>
-                            <option value="quarterly">Per quarter</option>
-                          </select>
-                          <button
-                            onClick={() =>
-                              setProfileHoursReqs((prev: AdminHoursRequirementItem[]) =>
-                                prev.filter((_: AdminHoursRequirementItem, i: number) => i !== index)
-                              )
-                            }
-                            className="rounded p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            title="Remove hours requirement"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
+                            )}
+                        </select>
+                        <input
+                          type="number"
+                          className="form-input w-24"
+                          min={0.5}
+                          step={0.5}
+                          value={req.required_hours || ''}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                            updateHoursReq(index, { required_hours: Number(e.target.value) })
+                          }
+                          placeholder="Hours"
+                          aria-label="Required hours"
+                        />
+                        <select
+                          className="form-input w-auto"
+                          value={req.frequency}
+                          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                            updateHoursReq(index, { frequency: e.target.value })
+                          }
+                          aria-label="Frequency"
+                        >
+                          <option value="annual">Per year</option>
+                          <option value="quarterly">Per quarter</option>
+                        </select>
+                        <button
+                          onClick={() =>
+                            setProfileHoursReqs((prev: AdminHoursRequirementItem[]) =>
+                              prev.filter((_: AdminHoursRequirementItem, i: number) => i !== index)
+                            )
+                          }
+                          className="rounded p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          title="Remove hours requirement"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {activeAdminHoursCategories.length > 0 ? (
                       <button
                         onClick={() =>
                           setProfileHoursReqs((prev: AdminHoursRequirementItem[]) => [
@@ -909,8 +919,13 @@ export default function ComplianceRequirementsConfigPage() {
                         <Plus className="h-4 w-4" />
                         Add hours requirement
                       </button>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="text-theme-text-secondary text-sm italic">
+                        No active admin hours categories. Create categories under Admin Hours &rarr; Manage to add
+                        requirements{profileHoursReqs.length > 0 ? '; existing ones can still be removed above' : ''}.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 

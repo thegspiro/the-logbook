@@ -204,36 +204,38 @@ class TestCreateManualEntry:
         # category (which only auto-approves server-timed clock-outs).
         assert entry.status == AdminHoursEntryStatus.PENDING
 
-    async def test_naive_datetimes_are_treated_as_utc(self):
-        # A datetime-local string parses to a naive datetime; before
-        # normalization, comparing it against aware `now` raised TypeError,
-        # which surfaced to the member as an opaque HTTP 500.
+    async def test_naive_datetimes_rejected_with_clear_error(self):
+        # A datetime-local string parses to a naive datetime. It is ambiguous
+        # (the pre-2026-08 frontend sent local wall-clock strings), so the
+        # service rejects it with a ValueError (-> 400) instead of either
+        # assuming UTC (silently shifted hours) or crashing on the
+        # aware-vs-naive comparison against `now` (TypeError -> opaque 500).
         naive_now = datetime.now(timezone.utc).replace(tzinfo=None)
+        svc = self._svc(_category(), overlap=None)
+        with pytest.raises(ValueError, match="timezone offset"):
+            await svc.create_manual_entry(
+                "org-1",
+                "u1",
+                "cat-1",
+                naive_now - timedelta(hours=2),
+                naive_now - timedelta(hours=1),
+            )
+
+    async def test_aware_non_utc_offsets_normalized_to_utc(self):
+        # An explicit offset is unambiguous — accept it and store as UTC.
+        eastern = timezone(timedelta(hours=-4))
+        now_local = datetime.now(timezone.utc).astimezone(eastern)
         svc = self._svc(_category(), overlap=None)
         entry = await svc.create_manual_entry(
             "org-1",
             "u1",
             "cat-1",
-            naive_now - timedelta(hours=2),
-            naive_now - timedelta(hours=1),
+            now_local - timedelta(hours=2),
+            now_local - timedelta(hours=1),
         )
         assert entry.duration_minutes == 60
-        assert entry.clock_in_at.tzinfo is not None
-        assert entry.clock_out_at.tzinfo is not None
-
-    async def test_naive_future_clock_in_still_rejected(self):
-        naive_future = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
-            hours=2
-        )
-        svc = self._svc(_category())
-        with pytest.raises(ValueError, match="future"):
-            await svc.create_manual_entry(
-                "org-1",
-                "u1",
-                "cat-1",
-                naive_future,
-                naive_future + timedelta(hours=1),
-            )
+        assert entry.clock_in_at.tzinfo == timezone.utc
+        assert entry.clock_out_at.tzinfo == timezone.utc
 
 
 class TestEditPendingEntry:
@@ -252,17 +254,30 @@ class TestEditPendingEntry:
             status=AdminHoursEntryStatus.PENDING,
         )
 
-    async def test_naive_edit_time_against_aware_stored_time(self):
-        # An admin edit sends only the changed field; a naive edited value must
-        # not TypeError against the aware stored counterpart it's compared to.
+    async def test_naive_edit_time_rejected_with_clear_error(self):
+        # An admin edit sends only the changed field; a naive edited value is
+        # ambiguous and would be compared against the aware stored counterpart
+        # (TypeError -> 500 before, silently shifted hours if assumed UTC).
         entry = self._pending_entry()
         db = _db([_one(entry)])
         naive_out = entry.clock_in_at.replace(tzinfo=None) + timedelta(hours=1)
+        with pytest.raises(ValueError, match="timezone offset"):
+            await AdminHoursService(db).edit_pending_entry(
+                entry_id="entry-1",
+                organization_id="org-1",
+                admin_id="admin-1",
+                clock_out_at=naive_out,
+            )
+
+    async def test_aware_edit_time_recomputes_duration(self):
+        entry = self._pending_entry()
+        db = _db([_one(entry)])
+        new_out = entry.clock_in_at + timedelta(hours=1)
         out = await AdminHoursService(db).edit_pending_entry(
             entry_id="entry-1",
             organization_id="org-1",
             admin_id="admin-1",
-            clock_out_at=naive_out,
+            clock_out_at=new_out,
         )
         assert out.duration_minutes == 60
         assert out.clock_out_at.tzinfo is not None

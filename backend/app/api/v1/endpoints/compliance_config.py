@@ -40,7 +40,12 @@ router = APIRouter()
 @router.get("/config")
 async def get_compliance_config(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("training.manage", "compliance.view")),
+    # compliance.manage listed explicitly: manage does not imply view in this
+    # permission model, and a custom position holding only compliance.manage
+    # passes the write gates but could not hydrate the config page without it.
+    current_user=Depends(
+        require_permission("training.manage", "compliance.view", "compliance.manage")
+    ),
 ):
     """Get the compliance requirements configuration for the organization."""
     async with handle_service_errors("Failed to fetch compliance config"):
@@ -100,7 +105,9 @@ async def initialize_compliance_config(
 @router.get("/config/requirements")
 async def get_available_requirements(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("training.manage", "compliance.view")),
+    current_user=Depends(
+        require_permission("training.manage", "compliance.view", "compliance.manage")
+    ),
 ):
     """Get all training requirements available for compliance configuration."""
     async with handle_service_errors("Failed to fetch requirements"):
@@ -182,7 +189,10 @@ async def delete_compliance_profile(
 async def generate_compliance_report(
     data: ComplianceReportGenerate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("training.manage")),
+    # reports.manage: generating/distributing stored compliance reports is a
+    # reports action — elected officers hold reports.manage without
+    # training.manage, and the report tab renders these actions for them.
+    current_user=Depends(require_permission("training.manage", "reports.manage")),
 ):
     """Generate a new compliance report (monthly or yearly)."""
     async with handle_service_errors("Failed to generate report"):
@@ -254,7 +264,7 @@ async def get_compliance_report(
 async def delete_compliance_report(
     report_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("settings.manage")),
+    current_user=Depends(require_permission("settings.manage", "reports.manage")),
 ):
     """Delete a stored compliance report."""
     async with handle_service_errors("Failed to delete report"):
@@ -272,7 +282,7 @@ async def email_compliance_report(
     report_id: str,
     recipients: List[str],
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("training.manage")),
+    current_user=Depends(require_permission("training.manage", "reports.manage")),
 ):
     """Email an existing report to specified recipients."""
     async with handle_service_errors("Failed to email report"):

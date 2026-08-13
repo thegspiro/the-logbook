@@ -62,10 +62,14 @@ def test_compliance_writes_accept_compliance_manage(handler_name):
 @pytest.mark.parametrize(
     "handler_name", ["get_compliance_config", "get_available_requirements"]
 )
-def test_compliance_reads_accept_compliance_view(handler_name):
+def test_compliance_reads_accept_compliance_view_and_manage(handler_name):
+    # compliance.manage is listed on the reads too: manage does not imply view
+    # in this permission model, and a position holding only compliance.manage
+    # passes the write gates but could not hydrate the config page otherwise.
     assert _permission_names(handler_name) == {
         "training.manage",
         "compliance.view",
+        "compliance.manage",
     }
 
 
@@ -77,6 +81,25 @@ def test_report_listing_accepts_view_permissions():
         "training.manage",
         "reports.view",
         "compliance.view",
+    }
+
+
+@pytest.mark.parametrize(
+    "handler_name", ["generate_compliance_report", "email_compliance_report"]
+)
+def test_report_actions_accept_reports_manage(handler_name):
+    # The report tab renders generate/email for everyone who can open the
+    # page; elected officers hold reports.manage without training.manage.
+    assert _permission_names(handler_name) == {
+        "training.manage",
+        "reports.manage",
+    }
+
+
+def test_report_deletion_accepts_reports_manage():
+    assert _permission_names("delete_compliance_report") == {
+        "settings.manage",
+        "reports.manage",
     }
 
 
