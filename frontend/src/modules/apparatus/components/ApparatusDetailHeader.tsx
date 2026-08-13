@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router';
 import { ArrowLeft, Edit, Archive, AlertTriangle } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import type { Apparatus, ApparatusStatus } from '../types';
+import { useAuthStore } from '../../../stores/authStore';
 
 interface ApparatusDetailHeaderProps {
   currentApparatus: Apparatus;
@@ -25,6 +26,9 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
   isArchived,
 }) => {
   const navigate = useNavigate();
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canManage = checkPermission('apparatus.manage');
+  const canEdit = canManage || checkPermission('apparatus.edit');
 
   return (
     <header className="bg-theme-surface-secondary border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
@@ -62,24 +66,28 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => void navigate(`/apparatus/${id}/edit`)}
-              className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
-            >
-              <Edit className="h-4 w-4" />
-              <span>Edit</span>
-            </button>
-            {!isArchived && (
-              <button
-                onClick={() => void navigate(`/apparatus/${id}/archive`)}
-                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-secondary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
-              >
-                <Archive className="h-4 w-4" />
-                <span>Archive</span>
-              </button>
-            )}
-          </div>
+          {(canEdit || (canManage && !isArchived)) && (
+            <div className="flex items-center space-x-2">
+              {canEdit && (
+                <button
+                  onClick={() => void navigate(`/apparatus/${id}/edit`)}
+                  className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+                >
+                  <Edit className="h-4 w-4" />
+                  <span>Edit</span>
+                </button>
+              )}
+              {canManage && !isArchived && (
+                <button
+                  onClick={() => void navigate(`/apparatus/${id}/archive`)}
+                  className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-secondary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+                >
+                  <Archive className="h-4 w-4" />
+                  <span>Archive</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>
