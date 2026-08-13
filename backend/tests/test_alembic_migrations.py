@@ -326,3 +326,156 @@ class TestMigrationFileQuality:
         ), "Migration revision IDs are not in chronological order:\n" + "\n".join(
             f"  - {o}" for o in out_of_order
         )
+
+
+class TestResumeCountReconciliation:
+    """20260812_0006 repairs the databases the resume-count renumbering skipped.
+
+    ``20260812_0002`` used to be the prospect-uniqueness migration. A deployment
+    that upgraded before it was renumbered is stamped for work now attributed to
+    the resume-count file, so Alembic walks past it and ``skill_tests``
+    never gets ``resume_count`` — a NOT NULL column the model reads on every
+    skills-test load. The stamp is legitimate and cannot be rewritten, so the
+    schema is reconciled instead, and that only works if the reconciliation is
+    a no-op everywhere else.
+    """
+
+    RECONCILE = "20260812_0006"
+    ORIGINAL = "20260812_0002"
+
+    def _migration(self, revision):
+        found = [m for m in MIGRATIONS if m["revision"] == revision]
+        assert found, f"No migration with revision {revision}"
+        return found[0]
+
+    def test_reconciliation_runs_after_the_revision_it_repairs(self):
+        """It has to sit downstream of the whole renumbered stretch.
+
+        An affected database is stamped at 20260812_0002, so anything at or
+        before that revision is never replayed for it.
+        """
+        reconcile = self._migration(self.RECONCILE)
+        assert reconcile["down_revisions"] == ["20260812_0005"]
+
+        # Walk parents back from the reconciliation to the revision it repairs.
+        by_revision = {m["revision"]: m for m in MIGRATIONS}
+        seen = set()
+        current = reconcile
+        while current["down_revisions"]:
+            parent = current["down_revisions"][0]
+            assert parent not in seen, f"cycle in the chain at {parent}"
+            seen.add(parent)
+            if parent == self.ORIGINAL:
+                break
+            current = by_revision[parent]
+        assert self.ORIGINAL in seen
+
+    def test_upgrade_is_guarded_so_a_re_run_changes_nothing(self):
+        source = self._migration(self.RECONCILE)["path"].read_text(encoding="utf-8")
+        assert 'has_table("skill_tests")' in source, (
+            "skill_tests is model-only on some deployments; the migration must "
+            "skip cleanly when the table is absent"
+        )
+        assert 'if "resume_count" in' in source, (
+            "the migration must return early when the column is already there — "
+            "the whole fleet apart from the affected deployments runs it as a "
+            "no-op"
+        )
+
+    def test_column_definition_matches_the_migration_it_repairs(self):
+        """A different type or default would be schema drift by another name."""
+        reconcile = self._migration(self.RECONCILE)["path"].read_text(encoding="utf-8")
+        original = self._migration(self.ORIGINAL)["path"].read_text(encoding="utf-8")
+
+        column_re = re.compile(
+            r'sa\.Column\(\s*"resume_count",(.*?)\)\s*,?\s*\)', re.DOTALL
+        )
+        reconcile_def = column_re.search(reconcile)
+        original_def = column_re.search(original)
+        assert reconcile_def is not None, f"{self.RECONCILE} adds no resume_count"
+        assert original_def is not None, f"{self.ORIGINAL} adds no resume_count"
+
+        def _normalized(text: str) -> str:
+            return re.sub(r"\s+", "", text)
+
+        assert _normalized(reconcile_def.group(1)) == _normalized(
+            original_def.group(1)
+        ), (
+            "20260812_0006 must add exactly the column 20260812_0002 adds — "
+            "same type, nullability and server default"
+        )
+
+    def test_downgrade_does_not_drop_the_column(self):
+        """Reversing the repair must not break the databases that were fine.
+
+        20260812_0002 stays applied when this revision is reversed, so dropping
+        the column here would leave the model reading a column that is gone.
+        """
+        source = self._migration(self.RECONCILE)["path"].read_text(encoding="utf-8")
+        downgrade = source.split("def downgrade()", 1)[1]
+        assert "drop_column" not in downgrade
+
+    @pytest.mark.integration
+    def test_upgrade_restores_the_column_and_is_idempotent(self):
+        """Run it for real against the test database, twice."""
+        import importlib.util
+
+        from alembic.migration import MigrationContext
+        from alembic.operations import Operations
+        from sqlalchemy import create_engine, inspect
+
+        from app.core.config import settings
+
+        path = self._migration(self.RECONCILE)["path"]
+        spec = importlib.util.spec_from_file_location("_reconcile_probe", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        def _has_column(connection) -> bool:
+            return "resume_count" in {
+                c["name"] for c in inspect(connection).get_columns("skill_tests")
+            }
+
+        engine = create_engine(settings.SYNC_DATABASE_URL)
+        try:
+            with engine.connect() as conn:
+                if not inspect(conn).has_table("skill_tests"):
+                    pytest.skip("skill_tests is not present in the test database")
+
+                # Reproduce the affected deployment: stamped, column missing.
+                if _has_column(conn):
+                    conn.exec_driver_sql(
+                        "ALTER TABLE skill_tests DROP COLUMN resume_count"
+                    )
+                    conn.commit()
+                assert not _has_column(conn)
+
+                with Operations.context(MigrationContext.configure(conn)):
+                    module.upgrade()
+                conn.commit()
+                assert _has_column(conn)
+
+                column = next(
+                    c
+                    for c in inspect(conn).get_columns("skill_tests")
+                    if c["name"] == "resume_count"
+                )
+                assert column["nullable"] is False
+                assert str(column["default"]).strip("'") == "0"
+
+                # Idempotent: the same file on a database that already has it.
+                with Operations.context(MigrationContext.configure(conn)):
+                    module.upgrade()
+                conn.commit()
+                assert _has_column(conn)
+        finally:
+            # Never leave the shared test database short a NOT NULL column,
+            # whatever failed above — MySQL DDL does not roll back.
+            with engine.connect() as conn:
+                if inspect(conn).has_table("skill_tests") and not _has_column(conn):
+                    conn.exec_driver_sql(
+                        "ALTER TABLE skill_tests "
+                        "ADD COLUMN resume_count INTEGER NOT NULL DEFAULT 0"
+                    )
+                    conn.commit()
+            engine.dispose()

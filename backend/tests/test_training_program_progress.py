@@ -641,3 +641,46 @@ class TestEnrollmentQueriesLoadTheNestedProgramme:
                 "programme; without selectinload(ProgramEnrollment.program) it "
                 "lazy-loads mid-await and the endpoint answers 500"
             )
+
+    def test_every_mutation_path_loads_the_programme_before_returning(self):
+        """Writes return the enrollment too, and their queries do not eager-load.
+
+        Each of these fetches the row plainly (or creates it) and then commits;
+        `Session.refresh()` does not load a relationship that was never loaded,
+        so the nested programme has to be filled in explicitly before the row
+        reaches ProgramEnrollmentResponse. Withdrawal was the reported case —
+        it committed the withdrawal and then answered 500.
+        """
+        import inspect as _inspect
+
+        from app.services.training_program_service import TrainingProgramService
+
+        mutating = [
+            "enroll_member",
+            "reset_enrollment_progress",
+            "withdraw_enrollment",
+            "reopen_enrollment",
+            "advance_enrollment_phase",
+        ]
+        for name in mutating:
+            source = _inspect.getsource(getattr(TrainingProgramService, name))
+            assert "_ensure_program_loaded" in source, (
+                f"{name} returns an enrollment that is serialized with the "
+                "nested programme; without _ensure_program_loaded it lazy-loads "
+                "after the commit and the caller gets a 500 for a write that "
+                "actually succeeded"
+            )
+
+    def test_the_loader_is_a_no_op_for_a_non_orm_stand_in(self):
+        """Unit tests pass mocks through these methods; they must not blow up."""
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+
+        from app.services.training_program_service import TrainingProgramService
+
+        db = SimpleNamespace(refresh=AsyncMock())
+        service = TrainingProgramService(db)
+        import asyncio
+
+        asyncio.run(service._ensure_program_loaded(SimpleNamespace(id="x")))
+        db.refresh.assert_not_awaited()

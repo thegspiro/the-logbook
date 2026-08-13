@@ -16,16 +16,16 @@ flags: backfill the NULLs, then set the column default so a row inserted
 outside the ORM cannot reintroduce one. The matching Pydantic coercion stays as
 a defensive fallback rather than load-bearing logic.
 
-Revision ID: 20260812_0004
-Revises: 20260812_0003
+Revision ID: 20260812_0005
+Revises: 20260812_0004
 Create Date: 2026-08-12
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260812_0004"
-down_revision = "20260812_0003"
+revision = "20260812_0005"
+down_revision = "20260812_0004"
 branch_labels = None
 depends_on = None
 
@@ -63,18 +63,19 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    inspector = sa.inspect(op.get_bind())
-    if not inspector.has_table("training_module_configs"):
-        return
-
-    existing = {col["name"] for col in inspector.get_columns("training_module_configs")}
-    for column, _default in _COLUMNS:
-        if column not in existing:
-            continue
-        op.alter_column(
-            "training_module_configs",
-            column,
-            existing_type=sa.String(20),
-            existing_nullable=True,
-            server_default=None,
-        )
+    # Deliberately a no-op: the state to restore is "default present".
+    #
+    # 20260807_0009 already establishes these exact defaults when it adds the
+    # columns, so on a database migrated through the chain the pre-upgrade
+    # schema has them — clearing the default here would leave a shape this
+    # revision never created, and a non-ORM insert that omits the columns would
+    # recreate precisely the NULLs (and the response-validation 500s) the
+    # upgrade repaired.
+    #
+    # The deployments this migration exists for — columns materialized from the
+    # model before it carried a server_default — are indistinguishable from the
+    # inside once the default is set, so there is no per-database original to
+    # restore either. The backfill is equally irreversible: which rows held
+    # NULL is not recorded, and the values written are the documented defaults
+    # rather than data anyone entered.
+    pass
