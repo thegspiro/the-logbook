@@ -227,7 +227,7 @@ Below the member-facing pages and above the Administration section, you will fin
 
 The dashboard is your landing page after login. It provides an at-a-glance view of what matters most:
 
-- **Quick Stats** - Total members, active members, upcoming events, training completion rates
+- **Quick Stats** - Total members, active members, upcoming events, training compliance
 - **Your Hours** - Four cards: **Total Hours** plus the three things it adds up — **Training**, **Standby**, and **Administrative**. Every one of them is **month-to-date**, and each card says what it counts underneath the number
 - **Upcoming Events** - The next few scheduled events
 - **Upcoming Shifts** - Your next assigned shifts
@@ -236,6 +236,18 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 - **Department Messages** - Organization-wide announcements from administrators. Urgent messages are highlighted (and may also reach you by email/text), some ask you to **Acknowledge** them, and persistent messages remain visible until an admin clears them. Your full message history lives on the **Messages** page (megaphone icon)
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
+
+> **Training Compliance is all-or-nothing, and that is why it reads 0%**
+> _(2026-08-13)_. The card counts the share of active members who satisfy
+> **every** active training requirement — not the share of requirements met, and
+> nothing to do with the hours figure printed beneath it. A department with 36
+> active requirements will show 0% until somebody clears all 36, even with
+> hundreds of hours logged, and a member short on one requirement counts the
+> same as a member short on all of them.
+>
+> Read it as "how many people are finished", not "how are we doing". For
+> anything finer-grained, use the compliance matrix under **Training Admin**,
+> which reports per-requirement rather than per-member.
 
 > **Hint:** The dashboard is personalized. Officers and administrators see additional summary cards with department-wide metrics. Regular members see their own upcoming items and assignments.
 

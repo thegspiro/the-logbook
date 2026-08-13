@@ -43,7 +43,22 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
-### 00-getting-started — 10 of 11 changed images verified
+### 00-getting-started — complete, 11 of 11 changed images verified
+
+Third tick closed it out with `00-07-dashboard-panels`: current, and its
+resize is content growth rather than layout. Guide 00 is done.
+
+**What appearing in three images finally prompted.** The Department Overview's
+**Training Compliance 0%** sits next to "252 hrs last 30 days", which reads as a
+contradiction. It is not a bug: `compute_org_compliance_pct` counts members who
+satisfy **every** active requirement, and the demo department has 36 of them, so
+0% is arithmetically right and the hours figure beside it is unrelated. Left the
+computation alone and documented the card instead — the same call as the
+"Failed 100%" finding: correct, deliberate, and easy to misread. The guide's
+stats list also said "training completion rates", which named it as something
+it is not.
+
+### 00-getting-started — earlier ticks, 10 of 11 changed images verified
 
 Second tick added five: `00-09-account-settings`, `00-16-sidebar-admin`,
 `00-17-account-settings`, `00-19-change-password`,
