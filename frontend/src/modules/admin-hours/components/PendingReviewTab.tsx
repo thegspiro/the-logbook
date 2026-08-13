@@ -103,7 +103,14 @@ const PendingReviewTab: React.FC = () => {
     if (!editingEntryId || isSavingEdit) return;
     setIsSavingEdit(true);
     try {
-      await editEntry(editingEntryId, editData);
+      // The edit fields hold local wall-clock strings (from
+      // formatForDateTimeInput); the API stores UTC instants, so convert on
+      // save or the edited times land shifted by the org's UTC offset.
+      await editEntry(editingEntryId, {
+        ...editData,
+        clock_in_at: editData.clock_in_at ? localToUTC(editData.clock_in_at, tz) : undefined,
+        clock_out_at: editData.clock_out_at ? localToUTC(editData.clock_out_at, tz) : undefined,
+      });
       toast.success('Entry updated');
       setEditingEntryId(null);
       setEditData({});
@@ -197,13 +204,13 @@ const PendingReviewTab: React.FC = () => {
                         Editing
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                      <div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div className="md:col-span-2">
                         <label className="text-theme-text-muted mb-1 block text-xs font-medium">Category</label>
                         <select
                           value={editData.category_id ?? entry.categoryId}
                           onChange={(e) => setEditData({ ...editData, category_id: e.target.value })}
-                          className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-2 py-1.5 text-sm focus:ring-2"
+                          className="form-input-sm md:max-w-sm"
                         >
                           {categories.map((cat) => (
                             <option key={cat.id} value={cat.id}>
@@ -217,7 +224,7 @@ const PendingReviewTab: React.FC = () => {
                         <DateTimeQuarterHour
                           value={editData.clock_in_at ?? ''}
                           onChange={(val) => setEditData({ ...editData, clock_in_at: val })}
-                          className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-2 py-1.5 text-sm focus:ring-2"
+                          className="form-input-sm"
                         />
                       </div>
                       <div>
@@ -225,7 +232,7 @@ const PendingReviewTab: React.FC = () => {
                         <DateTimeQuarterHour
                           value={editData.clock_out_at ?? ''}
                           onChange={(val) => setEditData({ ...editData, clock_out_at: val })}
-                          className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-2 py-1.5 text-sm focus:ring-2"
+                          className="form-input-sm"
                         />
                       </div>
                     </div>
@@ -243,7 +250,7 @@ const PendingReviewTab: React.FC = () => {
                         type="text"
                         value={editData.description ?? ''}
                         onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                        className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-2 py-1.5 text-sm focus:ring-2"
+                        className="form-input-sm"
                         placeholder="Optional description"
                       />
                     </div>

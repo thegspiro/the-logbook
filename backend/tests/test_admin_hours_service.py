@@ -204,6 +204,80 @@ class TestCreateManualEntry:
         # category (which only auto-approves server-timed clock-outs).
         assert entry.status == AdminHoursEntryStatus.PENDING
 
+    async def test_naive_datetimes_are_treated_as_utc(self):
+        # A datetime-local string parses to a naive datetime; before
+        # normalization, comparing it against aware `now` raised TypeError,
+        # which surfaced to the member as an opaque HTTP 500.
+        naive_now = datetime.now(timezone.utc).replace(tzinfo=None)
+        svc = self._svc(_category(), overlap=None)
+        entry = await svc.create_manual_entry(
+            "org-1",
+            "u1",
+            "cat-1",
+            naive_now - timedelta(hours=2),
+            naive_now - timedelta(hours=1),
+        )
+        assert entry.duration_minutes == 60
+        assert entry.clock_in_at.tzinfo is not None
+        assert entry.clock_out_at.tzinfo is not None
+
+    async def test_naive_future_clock_in_still_rejected(self):
+        naive_future = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+            hours=2
+        )
+        svc = self._svc(_category())
+        with pytest.raises(ValueError, match="future"):
+            await svc.create_manual_entry(
+                "org-1",
+                "u1",
+                "cat-1",
+                naive_future,
+                naive_future + timedelta(hours=1),
+            )
+
+
+class TestEditPendingEntry:
+    @staticmethod
+    def _pending_entry():
+        now = datetime.now(timezone.utc)
+        return SimpleNamespace(
+            id="entry-1",
+            organization_id="org-1",
+            user_id="u1",
+            category_id="cat-1",
+            clock_in_at=now - timedelta(hours=3),
+            clock_out_at=now - timedelta(hours=1),
+            duration_minutes=120,
+            description=None,
+            status=AdminHoursEntryStatus.PENDING,
+        )
+
+    async def test_naive_edit_time_against_aware_stored_time(self):
+        # An admin edit sends only the changed field; a naive edited value must
+        # not TypeError against the aware stored counterpart it's compared to.
+        entry = self._pending_entry()
+        db = _db([_one(entry)])
+        naive_out = entry.clock_in_at.replace(tzinfo=None) + timedelta(hours=1)
+        out = await AdminHoursService(db).edit_pending_entry(
+            entry_id="entry-1",
+            organization_id="org-1",
+            admin_id="admin-1",
+            clock_out_at=naive_out,
+        )
+        assert out.duration_minutes == 60
+        assert out.clock_out_at.tzinfo is not None
+
+    async def test_out_of_order_edit_rejected(self):
+        entry = self._pending_entry()
+        db = _db([_one(entry)])
+        with pytest.raises(ValueError, match="must be after"):
+            await AdminHoursService(db).edit_pending_entry(
+                entry_id="entry-1",
+                organization_id="org-1",
+                admin_id="admin-1",
+                clock_out_at=entry.clock_in_at - timedelta(hours=1),
+            )
+
 
 class TestOrgScopedQueries:
     """AH-5: the active-session and overlap queries filter organization_id."""

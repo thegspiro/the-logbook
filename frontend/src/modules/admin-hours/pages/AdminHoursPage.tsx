@@ -108,7 +108,15 @@ const AdminHoursPage: React.FC = () => {
     setIsSubmitting(true);
     const { adminHoursEntryService } = await import('../services/api');
     try {
-      await adminHoursEntryService.createManual(manualData);
+      // DateTimeQuarterHour emits local wall-clock strings; the API stores UTC
+      // instants, so convert exactly once here on submit. Sending the bare
+      // string would record the hours shifted by the org's UTC offset.
+      await adminHoursEntryService.createManual({
+        ...manualData,
+        clock_in_at: localToUTC(manualData.clock_in_at, tz),
+        clock_out_at: localToUTC(manualData.clock_out_at, tz),
+        description: manualData.description?.trim() || undefined,
+      });
       toast.success('Hours submitted');
       setShowManualForm(false);
       setManualData({ category_id: '', clock_in_at: '', clock_out_at: '', description: '' });
@@ -302,14 +310,14 @@ const AdminHoursPage: React.FC = () => {
             }}
             className="space-y-4"
           >
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
                 <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Category *</label>
                 <select
                   value={manualData.category_id}
                   onChange={(e) => setManualData({ ...manualData, category_id: e.target.value })}
                   required
-                  className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:ring-2"
+                  className="form-input md:max-w-sm"
                 >
                   <option value="">Select category...</option>
                   {categories.map((cat) => (
@@ -326,7 +334,7 @@ const AdminHoursPage: React.FC = () => {
                   value={manualData.clock_in_at}
                   onChange={(val) => setManualData({ ...manualData, clock_in_at: val })}
                   required
-                  className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:ring-2"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -335,7 +343,7 @@ const AdminHoursPage: React.FC = () => {
                   value={manualData.clock_out_at}
                   onChange={(val) => setManualData({ ...manualData, clock_out_at: val })}
                   required
-                  className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:ring-2"
+                  className="form-input"
                 />
               </div>
             </div>
@@ -357,7 +365,7 @@ const AdminHoursPage: React.FC = () => {
                 type="text"
                 value={manualData.description ?? ''}
                 onChange={(e) => setManualData({ ...manualData, description: e.target.value })}
-                className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:ring-2"
+                className="form-input"
                 placeholder="What did you work on?"
               />
             </div>
