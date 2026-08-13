@@ -1662,6 +1662,25 @@ Needs an owner decision: pre-fetching eligibility for every visible shift costs
 a request per card, so hiding or disabling the button up front is a real
 trade-off rather than an obvious fix.
 
+## Storefront — The Payments Tab Cannot Be Screenshotted, By Design (2026-08-13)
+
+`store_payment_events` rows are written from one place: the public PayPal
+webhook at `app/api/public/paypal_webhook.py`, which resolves the integration,
+verifies the payload against PayPal's verify-webhook-signature API, and only
+then records the capture. The authenticated storefront API exposes `GET
+/payments`, `POST /payments/{id}/apply` and `POST /payments/{id}/ignore` — read
+and resolve, no create.
+
+That is the right shape for a ledger of what an external provider reported: a
+hand-written row would be a claim about money movement nobody can substantiate.
+It also means a demo department, which has no PayPal account and no verifiable
+signature, has an empty Payments tab and always will.
+
+`docs/training/18-storefront.md` therefore documents the tab in prose and its
+screenshot placeholder is retired, with the reason in the guide so the next
+person does not re-diagnose it. Same shape as the elections public ballot and
+the Salesforce connection recorded elsewhere in this file.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

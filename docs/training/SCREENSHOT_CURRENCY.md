@@ -43,6 +43,33 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### The storefront Payments tab is unphotographable, and that is the correct design
+
+`store_payment_events` rows are written from exactly one place — the public
+PayPal webhook, which verifies every payload against PayPal's
+verify-webhook-signature API before recording anything. The authenticated
+storefront API offers `GET /payments` and apply/ignore; there is no create.
+
+That is right for a ledger of what an external provider reported, and it means a
+demo department has an empty Payments tab permanently. The placeholder is
+retired with the reason written into the guide itself, alongside the elections
+public ballot and the Salesforce connection.
+
+### Next tick's groundwork on guide 14
+
+`14-elections.md:843` wants an election detail page showing a **membership
+approval** ballot item. None exists: the seeder creates elections with position
+and bylaw items only, and Sam Okafor's election package is still `draft`, so it
+has never reached a ballot. `BallotBuilder.tsx` does support the type
+(`membership_approval`, labelled "Membership Approval"), and `ballot_items` is a
+JSON column on the election, so seeding one is a bounded change.
+
+One thing to settle when doing it: the placeholder also asks for "Approve/Deny
+voting options", and `KNOWN_LIMITATIONS.md` already records that the in-app
+ballot only renders position races. The admin detail page may show the item and
+its supporting statement without any vote controls — in which case the caption
+needs narrowing to what the page actually offers, the way `09-18`'s did.
+
 ### A repair pass that had never repaired anything
 
 `09-skills-testing.md`'s read-aloud placeholder wanted a statement criterion
