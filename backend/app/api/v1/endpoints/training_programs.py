@@ -98,6 +98,12 @@ def _member_progress(progress) -> RequirementProgressResponse:
             for item_id in notes["checklist_done"]
             if str(item_id) in visible_ids
         ]
+    if isinstance(notes.get("checklist_claimed"), list):
+        notes["checklist_claimed"] = [
+            item_id
+            for item_id in notes["checklist_claimed"]
+            if str(item_id) in visible_ids
+        ]
     return response.model_copy(
         update={"requirement": visible_requirement, "progress_notes": notes or None}
     )

@@ -8,6 +8,7 @@ const mockGetEnrollmentProgress = vi.fn();
 const mockGetProgramPhases = vi.fn();
 const mockGetProgramRequirements = vi.fn();
 const mockWithdrawEnrollment = vi.fn();
+const mockUpdateProgress = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -15,6 +16,7 @@ vi.mock('../services/api', () => ({
     getProgramPhases: (...a: unknown[]) => mockGetProgramPhases(...a) as unknown,
     getProgramRequirements: (...a: unknown[]) => mockGetProgramRequirements(...a) as unknown,
     withdrawEnrollment: (...a: unknown[]) => mockWithdrawEnrollment(...a) as unknown,
+    updateProgress: (...a: unknown[]) => mockUpdateProgress(...a) as unknown,
   },
 }));
 
@@ -195,7 +197,7 @@ describe('MyProgramProgressPage — checklist steps', () => {
       requirement_type: 'checklist',
       checklist_items: [
         { id: 's1', text: 'Station tour', member_visible: true },
-        { id: 's2', text: 'PPE issued', member_visible: true },
+        { id: 's2', text: 'PPE issued', member_visible: true, member_can_complete: true },
         { id: 's3', text: 'References called', member_visible: false },
       ],
     },
@@ -232,6 +234,10 @@ describe('MyProgramProgressPage — checklist steps', () => {
         created_at: '',
       },
     ]);
+    mockUpdateProgress.mockResolvedValue({
+      ...checklistRecord,
+      progress_notes: { checklist_done: ['s1'], checklist_claimed: ['s2'] },
+    });
   });
 
   it('names the steps instead of leaving the member to guess', async () => {
@@ -239,6 +245,15 @@ describe('MyProgramProgressPage — checklist steps', () => {
 
     expect(await screen.findByText('Station tour')).toBeInTheDocument();
     expect(screen.getByText('PPE issued')).toBeInTheDocument();
+  });
+
+  it('lets a member report an enabled step for officer validation', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Report PPE issued complete' }));
+
+    await waitFor(() => expect(mockUpdateProgress).toHaveBeenCalledWith('rp-check', { checklist_claimed: ['s2'] }));
+    expect(await screen.findByText(/PPE issued — awaiting officer validation/)).toBeInTheDocument();
   });
 
   it('keeps an officer-only step off the page but still counts it', async () => {

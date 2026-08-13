@@ -26,6 +26,9 @@ class ChecklistItem(BaseModel):
     # the member's view. Visible by default — hiding a step is the deliberate
     # choice, not the fallback.
     member_visible: bool = True
+    # When enabled, a member may report this step as accomplished. It remains
+    # pending until a training officer validates it.
+    member_can_complete: bool = False
 
     @field_validator("id", "text", mode="before")
     @classmethod
