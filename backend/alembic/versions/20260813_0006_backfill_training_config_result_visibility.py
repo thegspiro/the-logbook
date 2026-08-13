@@ -16,16 +16,16 @@ flags: backfill the NULLs, then set the column default so a row inserted
 outside the ORM cannot reintroduce one. The matching Pydantic coercion stays as
 a defensive fallback rather than load-bearing logic.
 
-Revision ID: 20260812_0005
-Revises: 20260812_0004
+Revision ID: 20260813_0006
+Revises: 20260813_0002
 Create Date: 2026-08-12
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260812_0005"
-down_revision = "20260812_0004"
+revision = "20260813_0006"
+down_revision = "20260813_0002"
 branch_labels = None
 depends_on = None
 

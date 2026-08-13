@@ -18,8 +18,8 @@ and add the column when it is absent, matching ``20260812_0002`` and the model
 exactly. A database that took the normal route already has it and this is a
 no-op, which is also what makes the migration safe to re-run.
 
-Revision ID: 20260812_0006
-Revises: 20260812_0005
+Revision ID: 20260813_0007
+Revises: 20260813_0006
 Create Date: 2026-08-13
 """
 
@@ -27,8 +27,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260812_0006"
-down_revision = "20260812_0005"
+revision = "20260813_0007"
+down_revision = "20260813_0006"
 branch_labels = None
 depends_on = None
 

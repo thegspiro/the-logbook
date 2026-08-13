@@ -329,7 +329,7 @@ class TestMigrationFileQuality:
 
 
 class TestResumeCountReconciliation:
-    """20260812_0006 repairs the databases the resume-count renumbering skipped.
+    """20260813_0007 repairs the databases the resume-count renumbering skipped.
 
     ``20260812_0002`` used to be the prospect-uniqueness migration. A deployment
     that upgraded before it was renumbered is stamped for work now attributed to
@@ -340,7 +340,7 @@ class TestResumeCountReconciliation:
     a no-op everywhere else.
     """
 
-    RECONCILE = "20260812_0006"
+    RECONCILE = "20260813_0007"
     ORIGINAL = "20260812_0002"
 
     def _migration(self, revision):
@@ -355,7 +355,7 @@ class TestResumeCountReconciliation:
         before that revision is never replayed for it.
         """
         reconcile = self._migration(self.RECONCILE)
-        assert reconcile["down_revisions"] == ["20260812_0005"]
+        assert reconcile["down_revisions"] == ["20260813_0006"]
 
         # Walk parents back from the reconciliation to the revision it repairs.
         by_revision = {m["revision"]: m for m in MIGRATIONS}
@@ -401,7 +401,7 @@ class TestResumeCountReconciliation:
         assert _normalized(reconcile_def.group(1)) == _normalized(
             original_def.group(1)
         ), (
-            "20260812_0006 must add exactly the column 20260812_0002 adds — "
+            "20260813_0007 must add exactly the column 20260812_0002 adds — "
             "same type, nullability and server default"
         )
 
