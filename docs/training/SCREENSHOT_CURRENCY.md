@@ -43,6 +43,30 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### A regression I introduced, and the capture-order trap that exposed it
+
+**I broke an endpoint two ticks earlier and only found it now.** Declaring
+`program` on `ProgramEnrollmentResponse` — the fix for the dashboard's unnamed
+pipelines — turned it into a serialization-time read, so any query feeding that
+model without eager-loading it lazy-loads mid-await and answers **500**.
+`get_member_enrollments` loads it, which is why the dashboard worked and the
+gates stayed green; `get_program_enrollments` did not, so the program detail
+view's Enrollments tab 500'd. The seeder caught it, not the test suite. Fixed,
+with a test that asserts every enrollment-returning query selects the
+relationship rather than asserting the one that bit us.
+
+That is the same failure mode as the prospect-advance 500 I had just fixed —
+introduced by me, one tick later, while fixing something else.
+
+**The capture run mutates the demo data, and I forgot.**
+`15-09-bulk-action-result` performs a real bulk advance; the manifest says so
+beside it, says that is why it sits last among the 15-\* shots, and says the
+seeder restores the mixed page. Re-running `--only 15-` several times without
+re-seeding pushed six of seven applicants to the final stage, which is why
+`15-08-election-package` came out showing an applicant at Onboarding under a
+caption about the vote stage. Not a defect in the shot — a defect in how I ran
+it. **Re-seed before capturing guide 15.**
+
 ### 15-prospective-members — the two "failures" are not the same kind of thing
 
 **`15-02-board-truncated` is skipped by design, not broken.** It needs a

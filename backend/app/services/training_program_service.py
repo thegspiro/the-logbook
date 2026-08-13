@@ -2353,6 +2353,11 @@ class TrainingProgramService:
         query = (
             select(ProgramEnrollment, User)
             .join(User, ProgramEnrollment.user_id == User.id)
+            # ProgramEnrollmentResponse carries the nested programme, so
+            # serializing without this lazy-loads it mid-await and the endpoint
+            # answers 500 (MissingGreenlet). Every method whose result reaches
+            # that model has to load it.
+            .options(selectinload(ProgramEnrollment.program))
             .where(ProgramEnrollment.program_id == str(program_id))
         )
 

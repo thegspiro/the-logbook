@@ -587,6 +587,14 @@ Applicants receive a link to check their application status without logging in:
 - Token is generated when the applicant is created and included in automated emails
 - Token does not rotate on page view (stable link)
 
+> **You cannot look up an applicant's link from inside the app** _(2026-08-13)_.
+> The token is a credential — anyone holding it can read that applicant's
+> progress without signing in — so it is deliberately withheld from every API
+> response, including the applicant's own detail view and the kanban board.
+> The only copy goes to the applicant, in the email the system sends them. If
+> someone loses their link, re-send it from their record rather than looking
+> for the URL to paste; there is nowhere in the interface that shows it.
+
 ![Public application status page showing an applicant's progress through the pipeline](./images/15-13-application-status.png)
 
 ---

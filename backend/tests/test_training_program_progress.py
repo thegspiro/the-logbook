@@ -608,3 +608,36 @@ class TestEnrollmentResponseCarriesItsProgram:
         )
 
         assert body.program is None
+
+
+class TestEnrollmentQueriesLoadTheNestedProgramme:
+    """Every query whose rows reach ProgramEnrollmentResponse must load it.
+
+    Declaring `program` on that response made it a serialization-time read, so
+    a query that does not eager-load it lazy-loads mid-await and the endpoint
+    answers 500 (MissingGreenlet) rather than anything a caller can act on.
+    `get_program_enrollments` was exactly that, and 500'd the program detail
+    view's Enrollments tab.
+    """
+
+    def test_every_enrollment_query_selects_the_program_relationship(self):
+        import inspect as _inspect
+        import re
+
+        from app.services.training_program_service import TrainingProgramService
+
+        # Methods that return ProgramEnrollment rows to the API layer.
+        returning = [
+            "get_member_enrollments",
+            "get_program_enrollments",
+            "get_enrollment_by_id",
+        ]
+        for name in returning:
+            source = _inspect.getsource(getattr(TrainingProgramService, name))
+            assert re.search(
+                r"selectinload\(\s*ProgramEnrollment\.program\s*\)", source
+            ), (
+                f"{name} returns enrollments that are serialized with the nested "
+                "programme; without selectinload(ProgramEnrollment.program) it "
+                "lazy-loads mid-await and the endpoint answers 500"
+            )
