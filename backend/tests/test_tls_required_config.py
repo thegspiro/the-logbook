@@ -6,9 +6,9 @@ the network in cleartext. That was reported at boot as a WARNING, which never
 blocks anything — so a HIPAA deployment could run that way indefinitely.
 
 SECURITY_REQUIRE_TLS promotes those two checks to CRITICAL, and main.py refuses
-to start in production/staging when any CRITICAL is present. It is opt-in and
-defaults to False so that upgrading cannot refuse to boot an existing
-deployment that terminates TLS elsewhere (a private VPC, a service mesh).
+to start in production/staging when any CRITICAL is present. It defaults to
+True so an unconfigured production deployment fails closed; deployments with
+equivalent transport protection must explicitly opt out.
 
 The distinct "TLS on but unverified peer" case is CRITICAL regardless — that
 one looks secure and is not — and is asserted here so the two don't get
@@ -58,35 +58,34 @@ def _criticals(settings: Settings) -> list[str]:
 
 class TestTlsNotConfigured:
     @pytest.mark.parametrize("disabled", ["DB_SSL", "REDIS_SSL"])
-    def test_warns_but_does_not_block_by_default(self, disabled):
-        """Default behavior is unchanged — a warning, not a boot blocker."""
-        settings = _prod(**{disabled: False})
+    def test_explicit_opt_out_warns_but_does_not_block(self, disabled):
+        settings = _prod(SECURITY_REQUIRE_TLS=False, **{disabled: False})
         joined = " ".join(settings.validate_security_config())
         assert disabled in joined
         assert not _criticals(settings)
 
     @pytest.mark.parametrize("disabled", ["DB_SSL", "REDIS_SSL"])
-    def test_blocks_when_require_tls_is_set(self, disabled):
-        settings = _prod(SECURITY_REQUIRE_TLS=True, **{disabled: False})
+    def test_blocks_by_default(self, disabled):
+        settings = _prod(**{disabled: False})
         criticals = _criticals(settings)
         assert any(disabled in c for c in criticals), criticals
 
     def test_fully_configured_tls_is_clean_under_require_tls(self):
         assert not _criticals(_prod(SECURITY_REQUIRE_TLS=True))
 
-    def test_flag_is_off_by_default(self):
-        assert _prod().SECURITY_REQUIRE_TLS is False
+    def test_flag_is_on_by_default(self):
+        assert _prod().SECURITY_REQUIRE_TLS is True
 
 
 class TestTlsEnabledButUnverified:
     """Independent of SECURITY_REQUIRE_TLS — this case always blocks."""
 
     def test_db_ssl_without_ca_is_critical_even_without_require_tls(self):
-        criticals = _criticals(_prod(DB_SSL_CA=""))
+        criticals = _criticals(_prod(DB_SSL_CA="", SECURITY_REQUIRE_TLS=False))
         assert any("DB_SSL_CA" in c for c in criticals), criticals
 
     def test_redis_ssl_without_ca_is_critical_even_without_require_tls(self):
-        criticals = _criticals(_prod(REDIS_SSL_CA=""))
+        criticals = _criticals(_prod(REDIS_SSL_CA="", SECURITY_REQUIRE_TLS=False))
         assert any("REDIS_SSL_CA" in c for c in criticals), criticals
 
     def test_waivable_via_allow_unverified_tls(self):
