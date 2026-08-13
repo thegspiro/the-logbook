@@ -63,7 +63,12 @@ from app.services.training_waiver_service import (
     fetch_user_waivers,
     get_rolling_period_months,
 )
-from app.utils.checklist import checklist_progress, prune_done_ids, to_storage
+from app.utils.checklist import (
+    checklist_progress,
+    normalize_checklist_items,
+    prune_done_ids,
+    to_storage,
+)
 from app.utils.json_ids import normalize_id_list
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org
@@ -75,6 +80,7 @@ from app.utils.phase_prerequisites import find_cycle
 # update_requirement_progress.
 OFFICER_PROGRESS_NOTE_KEYS = (
     "checklist_done",
+    "checklist_claimed",
     "test_attempts",
     "latest_score",
     "passing_score",
@@ -2495,6 +2501,25 @@ class TrainingProgramService:
                     None,
                     "Only a training officer can check off a checklist step",
                 )
+            if updates.checklist_claimed is not None:
+                requirement = progress.requirement
+                if (
+                    requirement is None
+                    or requirement.requirement_type != RequirementType.CHECKLIST
+                ):
+                    return None, "This requirement is not a checklist"
+                allowed = {
+                    item["id"]
+                    for item in normalize_checklist_items(requirement.checklist_items)
+                    if item["member_visible"] and item["member_can_complete"]
+                }
+                if any(
+                    str(item_id) not in allowed for item_id in updates.checklist_claimed
+                ):
+                    return (
+                        None,
+                        "One or more checklist steps cannot be completed by a member",
+                    )
             if (
                 updates.progress_notes is not None
                 and "checklist_done" in updates.progress_notes
@@ -2656,6 +2681,13 @@ class TrainingProgramService:
 
             notes = copy.deepcopy(progress.progress_notes or {})
             notes["checklist_done"] = done
+            # Validated or unchecked items are no longer pending review.
+            claimed = prune_done_ids(
+                requirement.checklist_items, notes.get("checklist_claimed")
+            )
+            notes["checklist_claimed"] = [
+                item_id for item_id in claimed if item_id not in done
+            ]
             progress.progress_notes = notes
             progress.progress_value = float(completed)
             progress.progress_percentage = completed / total * 100
@@ -2670,6 +2702,20 @@ class TrainingProgramService:
                     progress.verified_at = datetime.now(timezone.utc)
             else:
                 progress.completed_at = None
+
+        # A member's self-report is evidence for an officer to review; it does
+        # not count toward progress until the officer checks the step above.
+        if updates.checklist_claimed is not None:
+            requirement = progress.requirement
+            claimed = prune_done_ids(
+                requirement.checklist_items, updates.checklist_claimed
+            )
+            done = set((progress.progress_notes or {}).get("checklist_done") or [])
+            notes = copy.deepcopy(progress.progress_notes or {})
+            notes["checklist_claimed"] = [
+                item_id for item_id in claimed if item_id not in done
+            ]
+            progress.progress_notes = notes
 
         # Update progress value
         if updates.progress_value is not None:

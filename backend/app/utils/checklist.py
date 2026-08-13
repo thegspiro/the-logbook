@@ -32,7 +32,12 @@ def _coerce_item(raw: Any, index: int) -> Optional[Dict[str, Any]]:
     if isinstance(raw, str):
         text = raw.strip()
         return (
-            {"id": f"item-{index}", "text": text, "member_visible": True}
+            {
+                "id": f"item-{index}",
+                "text": text,
+                "member_visible": True,
+                "member_can_complete": False,
+            }
             if text
             else None
         )
@@ -45,10 +50,13 @@ def _coerce_item(raw: Any, index: int) -> Optional[Dict[str, Any]]:
         # Absent means visible: a step is shown to the member unless the
         # department deliberately marked it officer-only.
         visible = raw.get("member_visible")
+        member_can_complete = raw.get("member_can_complete")
+        is_visible = True if visible is None else bool(visible)
         return {
             "id": item_id,
             "text": text,
-            "member_visible": True if visible is None else bool(visible),
+            "member_visible": is_visible,
+            "member_can_complete": is_visible and bool(member_can_complete),
         }
 
     return None

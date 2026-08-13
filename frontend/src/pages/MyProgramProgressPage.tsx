@@ -1,5 +1,5 @@
 /**
- * My Program Progress (member-facing, read-only)
+ * My Program Progress (member-facing)
  *
  * Lets a student see their progression and status in a training program:
  * current phase, overall completion, and every requirement grouped by phase
@@ -35,7 +35,12 @@ import {
   requirementTarget,
   requirementAction,
 } from '../utils/pipelineProgress';
-import { checklistDoneIds, hiddenChecklistCount, visibleChecklistItems } from '../utils/checklistItems';
+import {
+  checklistClaimedIds,
+  checklistDoneIds,
+  hiddenChecklistCount,
+  visibleChecklistItems,
+} from '../utils/checklistItems';
 import type {
   MemberProgramProgress,
   ProgramPhase,
@@ -43,10 +48,12 @@ import type {
   RequirementProgressRecord,
 } from '../types/training';
 
-const RequirementRow: React.FC<{ record: RequirementProgressRecord; lockedBy?: string[] | undefined }> = ({
-  record,
-  lockedBy,
-}) => {
+const RequirementRow: React.FC<{
+  record: RequirementProgressRecord;
+  lockedBy?: string[] | undefined;
+  saving: boolean;
+  onClaim: (record: RequirementProgressRecord, itemId: string) => Promise<void>;
+}> = ({ record, lockedBy, saving, onClaim }) => {
   const meta = STATUS_META[record.status];
   const done = record.status === 'completed' || record.status === 'verified';
   const score = record.progress_notes?.latest_score;
@@ -60,6 +67,7 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord; lockedBy?: s
   const visibleSteps = isChecklist ? visibleChecklistItems(record.requirement?.checklist_items) : [];
   const hiddenSteps = isChecklist ? hiddenChecklistCount(record.requirement?.checklist_items) : 0;
   const doneIds = checklistDoneIds(record);
+  const claimedIds = checklistClaimedIds(record);
   // Gated behind a prerequisite the member hasn't finished. Shown greyed with
   // the reason rather than hidden — a step that vanishes reads as a bug, and a
   // step offered without explanation gets attempted and refused.
@@ -107,7 +115,16 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord; lockedBy?: s
                 const stepDone = doneIds.includes(item.id);
                 return (
                   <li key={item.id} className="flex items-start gap-1.5 text-xs">
-                    {stepDone ? (
+                    {item.member_can_complete && !stepDone ? (
+                      <input
+                        type="checkbox"
+                        checked={claimedIds.includes(item.id)}
+                        disabled={saving || locked}
+                        onChange={() => void onClaim(record, item.id)}
+                        aria-label={`Report ${item.text} complete`}
+                        className="form-checkbox mt-0.5 shrink-0"
+                      />
+                    ) : stepDone ? (
                       <CheckCircle2
                         className="mt-0.5 h-3 w-3 shrink-0 text-green-600 dark:text-green-400"
                         aria-hidden="true"
@@ -117,6 +134,7 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord; lockedBy?: s
                     )}
                     <span className={stepDone ? 'text-theme-text-muted line-through' : 'text-theme-text-secondary'}>
                       {item.text}
+                      {!stepDone && claimedIds.includes(item.id) && ' — awaiting officer validation'}
                     </span>
                   </li>
                 );
@@ -162,6 +180,7 @@ const MyProgramProgressPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showLeave, setShowLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [savingProgressId, setSavingProgressId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enrollmentId) return;
@@ -210,6 +229,30 @@ const MyProgramProgressPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Unable to leave this program'));
       setLeaving(false);
       setShowLeave(false);
+    }
+  };
+
+  const handleClaim = async (record: RequirementProgressRecord, itemId: string) => {
+    const claimed = checklistClaimedIds(record);
+    const next = claimed.includes(itemId) ? claimed.filter((id) => id !== itemId) : [...claimed, itemId];
+    setSavingProgressId(record.id);
+    try {
+      const updated = await trainingProgramService.updateProgress(record.id, { checklist_claimed: next });
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              requirement_progress: current.requirement_progress.map((item) =>
+                item.id === updated.id ? updated : item
+              ),
+            }
+          : current
+      );
+      toast.success(next.includes(itemId) ? 'Step sent for officer validation' : 'Completion report withdrawn');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Unable to update the checklist'));
+    } finally {
+      setSavingProgressId(null);
     }
   };
 
@@ -347,6 +390,8 @@ const MyProgramProgressPage: React.FC = () => {
                         key={record.id}
                         record={record}
                         lockedBy={data.locked_requirements?.[record.requirement_id]}
+                        saving={savingProgressId === record.id}
+                        onClaim={handleClaim}
                       />
                     ))}
                   </div>
