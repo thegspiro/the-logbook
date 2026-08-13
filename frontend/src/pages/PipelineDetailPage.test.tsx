@@ -144,6 +144,23 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     mockDeleteProgram.mockResolvedValue(undefined);
   });
 
+  it('shows an Admin breadcrumb back to the training admin hub for training managers', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    const nav = await screen.findByRole('navigation', { name: /breadcrumb/i });
+    expect(within(nav).getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/training/admin');
+    expect(within(nav).getByRole('link', { name: 'Programs' })).toHaveAttribute('href', '/training/programs');
+  });
+
+  it('omits the Admin breadcrumb for members without training.manage', async () => {
+    mockHasPermission = false;
+    renderWithRouter(<PipelineDetailPage />);
+
+    const nav = await screen.findByRole('navigation', { name: /breadcrumb/i });
+    expect(within(nav).queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Programs' })).toHaveAttribute('href', '/training/programs');
+  });
+
   it('lists enrolled members by name on the Enrollments tab', async () => {
     renderWithRouter(<PipelineDetailPage />);
 
