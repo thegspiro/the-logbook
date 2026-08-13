@@ -14,6 +14,7 @@ import {
   MapPin,
   CheckCircle2,
   Circle,
+  SkipForward,
   FileText,
   CheckCircle,
   Clock,
@@ -799,27 +800,52 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       // visited prefix. Together they drew a track that
                       // contradicted the Current Stage panel directly above it.
                       const isComplete = entry.status === StepProgressStatus.COMPLETED;
+                      // A skipped stage is finished with, not unreached: Skip
+                      // Stage stamps `completed_at` and moves the pointer on.
+                      // Matching only COMPLETED drew it as a muted upcoming
+                      // bubble while the timeline below showed the same stamp,
+                      // so it gets its own state rather than being folded into
+                      // either — counting it as complete would report work that
+                      // was deliberately bypassed.
+                      const isSkipped = entry.status === StepProgressStatus.SKIPPED;
                       const isCurrent = entry.stage_id === applicant.current_stage_id;
                       const StageIcon = STAGE_TYPE_ICONS[entry.stage_type] ?? Circle;
+                      const stateLabel = isComplete ? 'Complete' : isSkipped ? 'Skipped' : isCurrent ? 'Current' : '';
                       return (
                         <React.Fragment key={entry.id}>
                           {idx > 0 && (
                             <div
-                              className={`h-0.5 w-4 shrink-0 ${isComplete || isCurrent ? 'bg-emerald-400' : 'bg-theme-surface-border'}`}
+                              className={`h-0.5 w-4 shrink-0 ${
+                                isComplete || isCurrent
+                                  ? 'bg-emerald-400'
+                                  : isSkipped
+                                    ? 'bg-amber-400'
+                                    : 'bg-theme-surface-border'
+                              }`}
                             />
                           )}
                           <div
                             className={`flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs ${
                               isComplete
                                 ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                                : isCurrent
-                                  ? 'bg-red-500/10 text-red-700 ring-1 ring-red-500/30 dark:text-red-400'
-                                  : 'bg-theme-surface-hover text-theme-text-muted'
+                                : isSkipped
+                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                  : isCurrent
+                                    ? 'bg-red-500/10 text-red-700 ring-1 ring-red-500/30 dark:text-red-400'
+                                    : 'bg-theme-surface-hover text-theme-text-muted'
                             }`}
-                            title={`${entry.stage_name}${isComplete ? ' (Complete)' : isCurrent ? ' (Current)' : ''}`}
+                            title={`${entry.stage_name}${stateLabel ? ` (${stateLabel})` : ''}`}
                           >
-                            {isComplete ? <CheckCircle2 className="h-3 w-3" /> : <StageIcon className="h-3 w-3" />}
+                            {isComplete ? (
+                              <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                            ) : isSkipped ? (
+                              <SkipForward className="h-3 w-3" aria-hidden="true" />
+                            ) : (
+                              <StageIcon className="h-3 w-3" aria-hidden="true" />
+                            )}
                             <span className="max-w-[80px] truncate">{entry.stage_name}</span>
+                            {/* `title` is not reliably announced; the state has to be in the text. */}
+                            {stateLabel && <span className="sr-only"> ({stateLabel})</span>}
                           </div>
                         </React.Fragment>
                       );
@@ -856,19 +882,32 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 ) : (
                   <div className="space-y-0">
                     {applicant.stage_history.map((entry: StageHistoryEntry, idx: number) => {
-                      const isComplete = !!entry.completed_at;
-                      const isCurrent = idx === applicant.stage_history.length - 1 && !isComplete;
+                      // A skipped stage carries a `completed_at` stamp too, so
+                      // it has to be told apart by status — otherwise it draws
+                      // the same green tick as a stage that was actually
+                      // worked, and disagrees with the progress strip above.
+                      const isSkipped = entry.status === StepProgressStatus.SKIPPED;
+                      const isComplete = !!entry.completed_at && !isSkipped;
+                      const isCurrent = idx === applicant.stage_history.length - 1 && !isComplete && !isSkipped;
 
                       return (
                         <div key={entry.id} className="flex gap-3">
                           {/* Timeline line */}
                           <div className="flex flex-col items-center">
                             {isComplete ? (
-                              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-400" />
+                              <CheckCircle2
+                                className="h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-400"
+                                aria-hidden="true"
+                              />
+                            ) : isSkipped ? (
+                              <SkipForward
+                                className="h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400"
+                                aria-hidden="true"
+                              />
                             ) : isCurrent ? (
                               <div className="h-5 w-5 shrink-0 rounded-full border-2 border-red-500 bg-red-500/20" />
                             ) : (
-                              <Circle className="text-theme-text-muted h-5 w-5 shrink-0" />
+                              <Circle className="text-theme-text-muted h-5 w-5 shrink-0" aria-hidden="true" />
                             )}
                             {idx < applicant.stage_history.length - 1 && (
                               <div className="bg-theme-surface-border my-1 h-full min-h-[24px] w-px" />
@@ -878,13 +917,20 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                           {/* Content */}
                           <div className="min-w-0 pb-4">
                             <p
-                              className={`text-sm font-medium ${isComplete ? 'text-theme-text-secondary' : isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
+                              className={`text-sm font-medium ${isComplete || isSkipped ? 'text-theme-text-secondary' : isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
                             >
                               {entry.stage_name}
+                              {isSkipped && <span className="sr-only"> (Skipped)</span>}
                             </p>
                             <p className="text-theme-text-muted mt-0.5 text-xs">
                               Entered {formatDateTime(entry.entered_at, tz)}
-                              {entry.completed_at && <> &middot; Completed {formatDateTime(entry.completed_at, tz)}</>}
+                              {entry.completed_at && (
+                                <>
+                                  {' '}
+                                  &middot; {isSkipped ? 'Skipped' : 'Completed'}{' '}
+                                  {formatDateTime(entry.completed_at, tz)}
+                                </>
+                              )}
                             </p>
                             {entry.completed_by_name && (
                               <p className="text-theme-text-muted mt-0.5 text-xs">By {entry.completed_by_name}</p>

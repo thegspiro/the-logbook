@@ -914,7 +914,8 @@ class Seeder:
             (m for m in members if pick(m, "username") == TWO_FACTOR_USERNAME),
             None,
         )
-        if not target:
+        user_id = pick(target or {}, "id")
+        if not user_id:
             return
 
         # Read the flag as the administrator, not through the member's own
@@ -930,9 +931,17 @@ class Seeder:
         if enrolled:
             return
 
-        session = Api(self.base_url)
+        # `member_session`, not a bare `login_as`: `POST /users` flags every
+        # account it creates must_change_password, and `/auth/mfa/setup` is not
+        # one of the paths that gate exempts
+        # (`_MUST_CHANGE_PW_ALLOWED_SUFFIXES` in `app/api/dependencies.py`). A
+        # bare sign-in therefore succeeds and the enrolment request that
+        # follows answers 403, leaving nobody enrolled and
+        # `00-23-login-two-factor` timing out on a code step that never
+        # appears. Clearing the flag re-sets the same DEMO_MEMBER_PASSWORD, so
+        # the credentials the manifest signs in with are unchanged.
         try:
-            session.login_as(TWO_FACTOR_USERNAME, DEMO_MEMBER_PASSWORD)
+            session = self.member_session(self.base_url, user_id, TWO_FACTOR_USERNAME)
         except ApiError as exc:
             self.blocked.append(f"two-factor: sign in as member: {exc}")
             return
@@ -3904,6 +3913,20 @@ class Seeder:
                         f"supply: {position} refused lot "
                         f"{pick(lot, 'lot_number', 'lotNumber')}"
                     )
+
+    def _leave_one_short(self, positions: dict[str, str]) -> None:
+        """Record 18 of 24 gauze.
+
+        Two screens need a truck that is short. The supply worklist needs a row
+        that is under par rather than merely expiring, and **Set All to Par**
+        needs something whose count it would raise — its warning is suppressed
+        on a compartment already full, so a fully stocked demo department cannot
+        picture the guard at all.
+        """
+        item_id = positions.get("Gauze 4x4 Sterile")
+        if not item_id:
+            return
+        self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 18})
 
     def _report_one_used(self, positions: dict[str, str], apparatus_id: str) -> None:
         """Raise a restock report as an ordinary member, not as the chief.
@@ -8963,8 +8986,16 @@ class Seeder:
             return
         order = [pick(s, "id") for s in steps]
 
+        # Filtered to this pipeline. `order` holds only the selected pipeline's
+        # step ids, so an applicant from another pipeline never matches it,
+        # reads as index zero, and is then walked forward through *its own*
+        # unrelated stages — recording interviews and undoing whatever scenario
+        # seeded it there.
         prospects = items(
-            self.api.get("/prospective-members/prospects?limit=100"), "prospects"
+            self.api.get(
+                f"/prospective-members/prospects?pipeline_id={pipeline_id}&limit=100"
+            ),
+            "prospects",
         )
         for index, prospect in enumerate(prospects):
             prospect_id = pick(prospect, "id")

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
 from app.models.integration import Integration
 from app.models.user import User
@@ -49,9 +50,10 @@ async def list_calcom_bookings(
     integration = await _get_calcom_integration(db, str(current_user.organization_id))
     api_key = integration.get_secret("api_key")
     if not api_key:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cal.com API key is not configured",
+            error_code=ErrorCode.INT_NOT_CONFIGURED,
         )
 
     service = CalcomService(

@@ -34,6 +34,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import generate_uuid, safe_error_detail, sanitize_error_message
 from app.core.websocket_manager import ws_manager
 from app.models.inventory import (
@@ -1059,9 +1060,10 @@ async def import_items_csv(
     import io
 
     if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid file type. Please upload a CSV file.",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     try:

@@ -14,6 +14,7 @@ from app.api.dependencies import PaginationParams, get_current_user, require_per
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.notifications import (
@@ -368,9 +369,10 @@ async def subscribe_to_push(
     subscribe on someone else's behalf, so there is no id in the payload.
     """
     if not PushService.is_configured():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Push notifications are not configured on this server.",
+            error_code=ErrorCode.MSG_NOT_CONFIGURED,
         )
     service = PushService(db)
     try:
