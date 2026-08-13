@@ -9,7 +9,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
@@ -318,6 +318,21 @@ class ApparatusBase(BaseModel):
     min_staffing: int = Field(
         default=1, ge=1, le=50, description="Minimum staffing level for this apparatus"
     )
+    crew_positions: Optional[List[str]] = Field(
+        None,
+        max_length=50,
+        description="Ordered riding positions/seats available on this apparatus",
+    )
+
+    @field_validator("crew_positions")
+    @classmethod
+    def normalize_crew_positions(cls, positions: Optional[List[str]]):
+        if positions is None:
+            return None
+        normalized = [position.strip().lower() for position in positions]
+        if any(not position or len(position) > 50 for position in normalized):
+            raise ValueError("crew positions must be between 1 and 50 characters")
+        return normalized
 
     # EVOC
     required_evoc_level_id: Optional[str] = Field(
@@ -434,6 +449,17 @@ class ApparatusUpdate(BaseModel):
 
     # Staffing
     min_staffing: Optional[int] = Field(None, ge=1, le=50)
+    crew_positions: Optional[List[str]] = Field(None, max_length=50)
+
+    @field_validator("crew_positions")
+    @classmethod
+    def normalize_crew_positions(cls, positions: Optional[List[str]]):
+        if positions is None:
+            return None
+        normalized = [position.strip().lower() for position in positions]
+        if any(not position or len(position) > 50 for position in normalized):
+            raise ValueError("crew positions must be between 1 and 50 characters")
+        return normalized
 
     # EVOC
     required_evoc_level_id: Optional[str] = None
