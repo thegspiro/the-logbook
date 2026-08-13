@@ -50,6 +50,10 @@ services:
       # Retention exports of purged audit rows go to a persistent volume
       # (backed up by the backup sidecar).
       AUDIT_ARCHIVE_DIR: /app/audit_archives
+      # Restated from the base file so the audit-chain legacy boundary survives
+      # even if this override is applied to a base without the passthrough
+      # (upgraded installs need their pre-HMAC row ID honored, not the 0 default).
+      AUDIT_LOG_LEGACY_MAX_ID: ${AUDIT_LOG_LEGACY_MAX_ID:-0}
     # Production runs the app WITHOUT --reload (no live code execution surface).
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001"]
     # Do NOT bind-mount the source tree in production — use the built image.

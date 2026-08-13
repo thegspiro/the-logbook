@@ -97,6 +97,11 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       ENCRYPTION_SALT: ${ENCRYPTION_SALT}
+      # Audit-chain legacy boundary: pre-HMAC rows up to this ID are exempt from
+      # keyed-hash verification. Must be passed through explicitly — this env
+      # mapping is a whitelist, so omitting it pins upgraded installs to the
+      # default 0 and every pre-upgrade audit row fails integrity checks.
+      AUDIT_LOG_LEGACY_MAX_ID: ${AUDIT_LOG_LEGACY_MAX_ID:-0}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       # Host-header allowlist (rejects spoofed Host with 400); empty derives it
       # from ALLOWED_ORIGINS' hostnames + localhost.

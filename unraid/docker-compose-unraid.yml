@@ -133,6 +133,11 @@ services:
       ENCRYPTION_SALT: ${ENCRYPTION_SALT:-GENERATE_WITH_openssl_rand_hex_16}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 480
+      # Audit-chain legacy boundary: pre-HMAC rows up to this ID are exempt from
+      # keyed-hash verification. Must be passed through explicitly — this env
+      # mapping is a whitelist, so omitting it pins upgraded installs to the
+      # default 0 and every pre-upgrade audit row fails integrity checks.
+      AUDIT_LOG_LEGACY_MAX_ID: ${AUDIT_LOG_LEGACY_MAX_ID:-0}
 
       # CORS - Update with your Unraid IP
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://192.168.1.10:7880,http://unraid.local:7880}

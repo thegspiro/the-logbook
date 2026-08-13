@@ -31,13 +31,24 @@ SENSITIVE_QUERY_KEYS = {
     "code",
     "access_token",
     "refresh_token",
+    # Location kiosk display codes are the bearer credential for the public
+    # guest check-in flow (/public/v1/display/{display_code}/...).
+    "display_code",
 }
 
+# The frontend page routes are not always spelled like the API routes they call
+# (the status page is singular /event-request/..., the API plural
+# /event-requests/...), and client reports carry page paths — so each pattern
+# must cover both spellings.
 TOKEN_PATH_PATTERNS = (
     re.compile(r"(/finance/approvals/)[^/?#]+", re.IGNORECASE),
-    re.compile(r"(/event-requests/status/)[^/?#]+", re.IGNORECASE),
+    re.compile(r"(/event-requests?/status/)[^/?#]+", re.IGNORECASE),
     re.compile(r"(/application-status/)[^/?#]+", re.IGNORECASE),
     re.compile(r"(/calendar/)[^/?#]+(?=\.ics(?:[/\s?#]|$))", re.IGNORECASE),
+    # Kiosk display code, both the frontend page (/display/{code}/...) and the
+    # public API (/public/v1/display/{code}/...). Requires a segment after the
+    # slash, so /locations/{id}/display (which ends there) is untouched.
+    re.compile(r"(/display/)[^/?#]+", re.IGNORECASE),
 )
 
 # ``error_logs.error_type`` is String(50); a longer value fails the insert and
