@@ -14,7 +14,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -66,6 +68,18 @@ from app.utils.json_ids import normalize_id_list
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org
 from app.utils.phase_prerequisites import find_cycle
+
+# progress_notes keys written only through officer-gated paths: checklist
+# sign-off state and knowledge-test scoring. A member editing their own notes
+# must not be able to replace (wipe) or forge these — see the merge in
+# update_requirement_progress.
+OFFICER_PROGRESS_NOTE_KEYS = (
+    "checklist_done",
+    "test_attempts",
+    "latest_score",
+    "passing_score",
+    "passed",
+)
 
 
 class TrainingProgramService:
@@ -1101,7 +1115,8 @@ class TrainingProgramService:
 
         link_rows = await self.db.execute(
             select(ProgramRequirement.requirement_id).where(
-                ProgramRequirement.program_id == pid
+                ProgramRequirement.program_id == pid,
+                ProgramRequirement.owns_requirement.is_(True),
             )
         )
         requirement_ids = [str(r[0]) for r in link_rows.all()]
@@ -2158,6 +2173,7 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
 
         # Send enrollment notification
         try:
@@ -2302,6 +2318,26 @@ class TrainingProgramService:
         )
         return results
 
+    async def _ensure_program_loaded(self, enrollment: ProgramEnrollment) -> None:
+        """Load ``enrollment.program`` before the row is handed to the API.
+
+        ProgramEnrollmentResponse carries the nested programme, so Pydantic
+        reads the relationship during FastAPI's response validation — after the
+        endpoint's last await. Left unloaded, that read is an implicit lazy load
+        outside greenlet_spawn: the mutation has already committed and the
+        caller still gets a 500 (MissingGreenlet). ``Session.refresh(obj)``
+        does not cover it — refreshing the row leaves an unloaded relationship
+        unloaded — so every mutation path that returns an enrollment calls this.
+
+        Reads are a no-op: an already-loaded relationship costs no query, and a
+        non-ORM stand-in (unit tests mock the session) is not inspectable and is
+        left alone.
+        """
+        state = sa_inspect(enrollment, raiseerr=False)
+        if state is None or "program" not in state.unloaded:
+            return
+        await self.db.refresh(enrollment, ["program"])
+
     async def get_member_enrollments(
         self,
         user_id: UUID,
@@ -2353,6 +2389,11 @@ class TrainingProgramService:
         query = (
             select(ProgramEnrollment, User)
             .join(User, ProgramEnrollment.user_id == User.id)
+            # ProgramEnrollmentResponse carries the nested programme, so
+            # serializing without this lazy-loads it mid-await and the endpoint
+            # answers 500 (MissingGreenlet). Every method whose result reaches
+            # that model has to load it.
+            .options(selectinload(ProgramEnrollment.program))
             .where(ProgramEnrollment.program_id == str(program_id))
         )
 
@@ -2730,9 +2771,22 @@ class TrainingProgramService:
                 progress.status = RequirementProgressStatus.COMPLETED
                 progress.completed_at = datetime.now(timezone.utc)
 
-        # Update notes
+        # Update notes. progress_notes is a whole-dict replacement for officers
+        # and system callers, but a member's update is merged: officer-recorded
+        # keys (checklist sign-offs, test attempts) are carried over from the
+        # stored value so a member note edit can neither wipe nor forge them.
+        # Built as a fresh deep copy so SQLAlchemy sees the JSON column change
+        # (shared nested references would make old == new and skip the UPDATE).
         if updates.progress_notes is not None:
-            progress.progress_notes = updates.progress_notes
+            new_notes = copy.deepcopy(updates.progress_notes)
+            if acting_user_id is not None and not can_manage:
+                stored_notes = progress.progress_notes or {}
+                for key in OFFICER_PROGRESS_NOTE_KEYS:
+                    if key in stored_notes:
+                        new_notes[key] = copy.deepcopy(stored_notes[key])
+                    else:
+                        new_notes.pop(key, None)
+            progress.progress_notes = new_notes
 
         # Update verification
         if verified_by:
@@ -3402,6 +3456,7 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
         await self._safe_notify_recert_reset(enrollment, program)
         return enrollment, None
 
@@ -3437,6 +3492,7 @@ class TrainingProgramService:
 
         # Idempotent: already withdrawn is not an error.
         if enrollment.status == EnrollmentStatus.WITHDRAWN:
+            await self._ensure_program_loaded(enrollment)
             return enrollment, None
 
         enrollment.status = EnrollmentStatus.WITHDRAWN
@@ -3446,6 +3502,7 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
         return enrollment, None
 
     async def auto_reset_if_due(self, enrollment: ProgramEnrollment) -> bool:
@@ -3574,6 +3631,7 @@ class TrainingProgramService:
         # to wait for the next progress edit to be marked complete.
         await self._recalculate_enrollment_progress(UUID(str(enrollment.id)))
         await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
         return enrollment, None
 
     async def run_due_recert_resets(
@@ -4029,6 +4087,7 @@ class TrainingProgramService:
         )
         await self.db.commit()
         enrollment.current_phase_id = next_phase.id
+        await self._ensure_program_loaded(enrollment)
 
         await self._notify_phase_for_enrollment(enrollment, program, next_phase.name)
 

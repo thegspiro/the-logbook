@@ -49,6 +49,7 @@ def _full_apparatus(apparatus_id="app-1", type_name="Engine", **kwargs):
         unit_number=kwargs.get("unit_number", "Engine 3"),
         name=kwargs.get("name", "Old Reliable"),
         min_staffing=kwargs.get("min_staffing", 4),
+        crew_positions=kwargs.get("crew_positions", None),
         apparatus_type=(
             SimpleNamespace(name=type_name) if type_name is not None else None
         ),

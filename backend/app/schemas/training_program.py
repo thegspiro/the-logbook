@@ -467,6 +467,14 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase, UTCResponseBase):
     last_recert_reset_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    # The programme this enrollment is on. `get_member_enrollments` has always
+    # eager-loaded it, but without a field here it was dropped on the way out —
+    # so the dashboard's training card, which reads `program?.name`, printed the
+    # literal word "Program" for every enrollment, and a member on two pipelines
+    # saw two identical rows. The member training print-out showed "—" for the
+    # same reason. TrainingProgramResponse is flat (no nested phases or
+    # requirements), so this does not pull a tree along behind it.
+    program: Optional[TrainingProgramResponse] = None
 
     model_config = _response_config
 

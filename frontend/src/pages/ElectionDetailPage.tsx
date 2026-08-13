@@ -386,7 +386,8 @@ export const ElectionDetailPage: React.FC = () => {
   const handleRecordPaperBallots = async (
     entries: Array<{ candidate_id: string; count: number }>,
     notes: string,
-    allowOverCount: boolean
+    allowOverCount: boolean,
+    ballotsCast: number | undefined
   ) => {
     if (!electionId || entries.length === 0) return;
     try {
@@ -396,6 +397,7 @@ export const ElectionDetailPage: React.FC = () => {
         entries,
         notes: notes.trim() || undefined,
         allow_over_count: allowOverCount || undefined,
+        ballots_cast: ballotsCast,
       });
       setShowPaperBallotsModal(false);
       toast.success(result.message);
@@ -2111,8 +2113,8 @@ export const ElectionDetailPage: React.FC = () => {
             recording={isRecordingPaper}
             error={paperBallotsError}
             attestationsRequired={featureFlags.paper_ballot_attestations_required}
-            onSubmit={(entries, notes, allowOverCount) => {
-              void handleRecordPaperBallots(entries, notes, allowOverCount);
+            onSubmit={(entries, notes, allowOverCount, ballotsCast) => {
+              void handleRecordPaperBallots(entries, notes, allowOverCount, ballotsCast);
             }}
             onClose={() => {
               setShowPaperBallotsModal(false);

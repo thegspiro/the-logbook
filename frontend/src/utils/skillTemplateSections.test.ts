@@ -86,4 +86,55 @@ describe('hydrateTemplateSections', () => {
 
     expect(sections[0]?.criteria[0]?.starts_timer).toBe(false);
   });
+  // Hydration is a whitelist, so a field it forgets is a field the examiner
+  // screen, the review view and both print pages all lose — a deduction would
+  // vanish from every display while the percentage still took it.
+  it('carries the score mode and its penalty through', () => {
+    const sections = hydrateTemplateSections([
+      {
+        name: 'Cot Questions',
+        criteria: [
+          { label: 'How many people', type: 'pass_fail', score_mode: 'deduct', deduction_points: 2 },
+          { label: 'How high', type: 'pass_fail', score_mode: 'points', max_score: 3 },
+        ],
+      },
+    ]);
+
+    const [deducting, earning] = sections[0]?.criteria ?? [];
+    expect(deducting).toMatchObject({ score_mode: 'deduct', deduction_points: 2 });
+    expect(earning).toMatchObject({ score_mode: 'points', max_score: 3 });
+  });
+
+  it('leaves an unrecognized mode unset rather than inventing one', () => {
+    // Unset defers to the template-wide Pass/Fail setting, which is what the
+    // backend scorer does with a mode it does not know. Reading it as 'none'
+    // here would disagree with the number the scorecard reports.
+    const sections = hydrateTemplateSections([
+      {
+        name: 'S',
+        criteria: [
+          { label: 'a', score_mode: 'penalise' },
+          { label: 'b', score_mode: 3 },
+        ],
+      },
+    ]);
+
+    expect(sections[0]?.criteria.map((c) => c.score_mode)).toEqual([undefined, undefined]);
+  });
+
+  it('drops a penalty that is not a usable number', () => {
+    const sections = hydrateTemplateSections([
+      {
+        name: 'S',
+        criteria: [
+          { label: 'a', score_mode: 'deduct', deduction_points: 0 },
+          { label: 'b', score_mode: 'deduct', deduction_points: '2' },
+        ],
+      },
+    ]);
+
+    // The scorer charges one point for a deduct step with no usable value, and
+    // showing "−0" beside a failed step would contradict it.
+    expect(sections[0]?.criteria.map((c) => c.deduction_points)).toEqual([undefined, undefined]);
+  });
 });

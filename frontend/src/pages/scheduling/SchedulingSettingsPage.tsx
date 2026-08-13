@@ -8,12 +8,13 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { ShiftSettingsPanel } from '../../modules/scheduling/components/ShiftSettingsPanel';
 import { SCHEDULING_SETTINGS_SECTIONS } from '../../modules/scheduling/components/schedulingSettingsSections';
 import type { SettingsTab } from '../../modules/scheduling/components/schedulingSettingsSections';
 import { SettingsLayout } from '../../components/settings/SettingsLayout';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
+import SchedulingHeader from './SchedulingHeader';
 
 const isSettingsTab = (value: string | null): value is SettingsTab =>
   value !== null && SCHEDULING_SETTINGS_SECTIONS.some((s) => s.key === value);
@@ -75,22 +76,6 @@ const SchedulingSettingsPage: React.FC = () => {
   // the section appear once the flag resolves.
   const visibleTab = sections.some((s) => s.key === activeTab) ? activeTab : 'general';
 
-  const header = (
-    <div className="mb-8 flex items-start gap-3">
-      <button
-        onClick={() => void navigate('/scheduling')}
-        className="hover:bg-theme-surface-hover text-theme-text-muted mt-1 rounded-lg p-1.5"
-        aria-label="Back to scheduling"
-      >
-        <ArrowLeft className="h-5 w-5" />
-      </button>
-      <div>
-        <h1 className="text-theme-text-primary text-2xl font-bold">Scheduling Settings</h1>
-        <p className="text-theme-text-muted mt-1 text-sm">Configure department-wide defaults for shift scheduling.</p>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen">
       <SettingsLayout
@@ -98,7 +83,12 @@ const SchedulingSettingsPage: React.FC = () => {
         activeSection={visibleTab}
         onSectionChange={handleTabChange}
         navLabel="Scheduling settings sections"
-        header={header}
+        header={
+          <SchedulingHeader
+            backTo="/scheduling"
+            description="Settings · Configure department-wide scheduling defaults"
+          />
+        }
       >
         {!templatesLoaded ? (
           <div className="flex items-center justify-center py-20" role="status" aria-live="polite">

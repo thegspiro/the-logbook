@@ -21,6 +21,7 @@
  *    total shown alongside, and nothing else.
  */
 
+import { CriterionScoreMode, SCORE_MODE_TYPES } from '../types/skillsTesting';
 import type { CriterionResult, SkillCriterion } from '../types/skillsTesting';
 
 export interface SectionTally {
@@ -28,6 +29,8 @@ export interface SectionTally {
    *  section holds none and so contributed nothing to the percentage. */
   earned: number | null;
   available: number | null;
+  /** Points taken off by failed 'deduct' steps in this section. */
+  deducted: number;
   countsTowardScore: boolean;
   passed: number;
   failed: number;
@@ -39,18 +42,38 @@ function findResult(results: CriterionResult[], criterion: SkillCriterion): Crit
   return results.find((r) => r.criterion_id === criterion.id || r.criterion_label === criterion.label);
 }
 
+/** How a criterion affects the percentage.
+ *  Mirrors _criterion_score_mode in skills_testing_service.py. */
+function scoreMode(criterion: SkillCriterion, scorePassFailCriteria: boolean): CriterionScoreMode {
+  if (criterion.type === 'score') return CriterionScoreMode.POINTS;
+  if (!SCORE_MODE_TYPES.includes(criterion.type)) return CriterionScoreMode.NONE;
+
+  const mode = criterion.score_mode;
+  if (mode === CriterionScoreMode.NONE || mode === CriterionScoreMode.POINTS || mode === CriterionScoreMode.DEDUCT) {
+    return mode;
+  }
+  // Unset falls back to the template-wide toggle, which governed Pass/Fail
+  // steps alone — this is what keeps pre-existing templates scoring the same.
+  if (criterion.type === 'pass_fail' && scorePassFailCriteria) return CriterionScoreMode.POINTS;
+  return CriterionScoreMode.NONE;
+}
+
 /** What a criterion is worth toward the percentage, or null if it carries no
  *  points. Mirrors _criterion_point_value in skills_testing_service.py. */
 function pointValue(criterion: SkillCriterion, scorePassFailCriteria: boolean): number | null {
-  if (criterion.type === 'score') {
-    const max = criterion.max_score;
-    return max != null && max > 0 ? max : null;
-  }
-  if (criterion.type === 'pass_fail' && scorePassFailCriteria) {
-    const max = criterion.max_score;
-    return max != null && max > 0 ? max : 1;
-  }
-  return null;
+  if (scoreMode(criterion, scorePassFailCriteria) !== CriterionScoreMode.POINTS) return null;
+
+  const max = criterion.max_score;
+  if (criterion.type === 'score') return max != null && max > 0 ? max : null;
+  return max != null && max > 0 ? max : 1;
+}
+
+/** Points this criterion takes off the total when failed; 0 otherwise.
+ *  Mirrors _criterion_deduction in skills_testing_service.py. */
+export function deductionValue(criterion: SkillCriterion, scorePassFailCriteria = false): number {
+  if (scoreMode(criterion, scorePassFailCriteria) !== CriterionScoreMode.DEDUCT) return 0;
+  const points = criterion.deduction_points;
+  return points != null && points > 0 ? points : 1;
 }
 
 type Outcome = 'passed' | 'failed' | 'not_scored' | 'statement' | 'points';
@@ -78,6 +101,7 @@ export function computeSectionTally(
 ): SectionTally {
   let earned = 0;
   let available = 0;
+  let deducted = 0;
   const counts = { passed: 0, failed: 0, notScored: 0, statements: 0 };
 
   for (const criterion of criteria) {
@@ -93,7 +117,12 @@ export function computeSectionTally(
       }
     }
 
-    switch (outcomeOf(criterion, result)) {
+    const outcome = outcomeOf(criterion, result);
+    // Charged on a recorded failure only — a step the examiner never marked is
+    // not a judgement, so it cannot cost the candidate points.
+    if (outcome === 'failed') deducted += deductionValue(criterion, scorePassFailCriteria);
+
+    switch (outcome) {
       case 'statement':
         counts.statements += 1;
         break;
@@ -111,11 +140,14 @@ export function computeSectionTally(
     }
   }
 
-  const countsTowardScore = available > 0;
+  const hasPointPool = available > 0;
   return {
-    earned: countsTowardScore ? earned : null,
-    available: countsTowardScore ? available : null,
-    countsTowardScore,
+    earned: hasPointPool ? earned : null,
+    available: hasPointPool ? available : null,
+    deducted,
+    // A section can hold nothing but deduct steps: no points earned, and the
+    // percentage still moves.
+    countsTowardScore: hasPointPool || deducted > 0,
     ...counts,
   };
 }

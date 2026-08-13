@@ -767,7 +767,7 @@ class InterviewResponse(UTCResponseBase):
     prospect_id: UUID
     pipeline_id: Optional[UUID] = None
     step_id: Optional[UUID] = None
-    interviewer_id: UUID
+    interviewer_id: Optional[UUID] = None
     interviewer_name: Optional[str] = None
     interviewer_role: Optional[str] = None
     notes: Optional[str] = None

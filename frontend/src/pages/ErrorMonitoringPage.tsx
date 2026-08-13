@@ -6,6 +6,7 @@ import { errorTracker, type ErrorLog } from '../services/errorTracking';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
+import { contextText, errorAction, errorPage } from '../utils/errorContext';
 import toast from 'react-hot-toast';
 
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -18,6 +19,19 @@ function sourceLabel(error: ErrorLog): string {
     return 'Server';
   }
   return 'Client';
+}
+
+function statusLabel(context: Record<string, unknown>): string | null {
+  const status = context.status;
+  return typeof status === 'number' || typeof status === 'string' ? String(status) : null;
+}
+
+function sourceLocation(context: Record<string, unknown>): string | null {
+  const filename = contextText(context, 'filename');
+  if (!filename) return null;
+  const line = typeof context.line === 'number' ? context.line : null;
+  const column = typeof context.column === 'number' ? context.column : null;
+  return `${filename}${line !== null ? `:${line}` : ''}${column !== null ? `:${column}` : ''}`;
 }
 
 /**
@@ -43,6 +57,16 @@ const ErrorMonitoringPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [errorCodes, setErrorCodes] = useState<ErrorCodeEntry[]>([]);
   const [codeSearch, setCodeSearch] = useState('');
+  const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
+
+  const toggleDetails = (id: string) => {
+    setExpandedErrors((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const loadErrors = useCallback(async () => {
     try {
@@ -247,7 +271,7 @@ const ErrorMonitoringPage: React.FC = () => {
                     scope="col"
                     className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
-                    Context
+                    Page &amp; Action
                   </th>
                   <th
                     scope="col"
@@ -255,75 +279,195 @@ const ErrorMonitoringPage: React.FC = () => {
                   >
                     Error ID
                   </th>
+                  <th scope="col" className="px-6 py-3">
+                    <span className="sr-only">Details</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-theme-surface-border divide-y">
                 {errors.map((error) => (
-                  <tr key={error.id} className="hover:bg-theme-surface-hover">
-                    <td className="text-theme-text-primary px-6 py-4 text-sm whitespace-nowrap">
-                      {formatDateTime(error.timestamp, tz)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs leading-5 font-semibold ${
-                          error.errorType?.startsWith('BACKEND_')
-                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
-                            : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
-                        }`}
-                      >
-                        {error.errorType}
-                      </span>
-                      {/* A collapsed burst reports once with a count. Without
+                  <React.Fragment key={error.id}>
+                    <tr className="hover:bg-theme-surface-hover">
+                      <td className="text-theme-text-primary px-6 py-4 text-sm whitespace-nowrap">
+                        {formatDateTime(error.timestamp, tz)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs leading-5 font-semibold ${
+                            error.errorType?.startsWith('BACKEND_')
+                              ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
+                              : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
+                          }`}
+                        >
+                          {error.errorType}
+                        </span>
+                        {/* A collapsed burst reports once with a count. Without
                           showing it, "one error" and "one error that happened
                           400 times in a minute" look identical. */}
-                      {typeof error.context.occurrences === 'number' && error.context.occurrences > 1 && (
-                        <span className="text-theme-text-muted ml-2 text-xs font-semibold">
-                          ×{error.context.occurrences}
-                        </span>
-                      )}
-                    </td>
-                    <td className="text-theme-text-secondary px-6 py-4 text-xs whitespace-nowrap">
-                      {sourceLabel(error)}
-                    </td>
-                    <td className="text-theme-text-secondary max-w-md px-6 py-4 text-sm">
-                      <div className="truncate">{error.userMessage}</div>
-                      {/* The technical message is what an administrator
+                        {typeof error.context.occurrences === 'number' && error.context.occurrences > 1 && (
+                          <span className="text-theme-text-muted ml-2 text-xs font-semibold">
+                            ×{error.context.occurrences}
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-theme-text-secondary px-6 py-4 text-xs whitespace-nowrap">
+                        {sourceLabel(error)}
+                      </td>
+                      <td className="text-theme-text-secondary max-w-md px-6 py-4 text-sm">
+                        <div className="truncate">{error.userMessage}</div>
+                        {/* The technical message is what an administrator
                           actually needs to act on; the user message above is
                           what the member was shown. */}
-                      {error.errorMessage && error.errorMessage !== error.userMessage && (
-                        <div className="text-theme-text-muted mt-1 truncate font-mono text-xs">
-                          {error.errorMessage}
+                        {error.errorMessage && error.errorMessage !== error.userMessage && (
+                          <div className="text-theme-text-muted mt-1 truncate font-mono text-xs">
+                            {error.errorMessage}
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-theme-text-secondary px-6 py-4 text-sm">
+                        <div className="max-w-xs">
+                          <div className="truncate text-xs" title={errorPage(error.context)}>
+                            <span className="text-theme-text-muted font-medium">Page:</span>{' '}
+                            <span className="font-mono">{errorPage(error.context)}</span>
+                          </div>
+                          <div className="mt-1 truncate text-xs" title={errorAction(error.context)}>
+                            <span className="text-theme-text-muted font-medium">Action:</span>{' '}
+                            {errorAction(error.context)}
+                          </div>
                         </div>
-                      )}
-                    </td>
-                    <td className="text-theme-text-secondary px-6 py-4 text-sm">
-                      {error.context.path ? (
-                        <span className="font-mono text-xs">
-                          {(error.context.method as string | undefined) ?? ''} {error.context.path as string}
-                          {error.context.status ? ` → ${error.context.status as number}` : ''}
-                          {typeof error.context.error_code === 'string' ? ` [${error.context.error_code}]` : ''}
-                        </span>
-                      ) : (
-                        <>
-                          {error.context.eventId && (
-                            <Link
-                              to={`/events/${error.context.eventId as string}`}
-                              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                            >
-                              Event
-                            </Link>
-                          )}
-                          {error.context.userId && ` | User: ${(error.context.userId as string).substring(0, 8)}`}
-                        </>
-                      )}
-                      {typeof error.context.page === 'string' && (
-                        <div className="text-theme-text-muted mt-1 truncate text-xs">on {error.context.page}</div>
-                      )}
-                    </td>
-                    <td className="text-theme-text-muted px-6 py-4 font-mono text-xs whitespace-nowrap">
-                      {error.id?.split('-')[0]}
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="text-theme-text-muted px-6 py-4 font-mono text-xs whitespace-nowrap">
+                        {error.id?.split('-')[0]}
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+                          aria-expanded={expandedErrors.has(error.id)}
+                          aria-controls={`error-details-${error.id}`}
+                          onClick={() => toggleDetails(error.id)}
+                        >
+                          {expandedErrors.has(error.id) ? 'Hide details' : 'View details'}
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedErrors.has(error.id) && (
+                      <tr id={`error-details-${error.id}`} className="bg-theme-surface-secondary">
+                        <td colSpan={7} className="px-6 py-5">
+                          <div className="grid gap-5 md:grid-cols-2">
+                            <dl className="space-y-3 text-sm">
+                              <div>
+                                <dt className="text-theme-text-muted text-xs font-semibold uppercase">Page</dt>
+                                <dd className="text-theme-text-primary mt-1 font-mono text-xs break-all">
+                                  {errorPage(error.context)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-theme-text-muted text-xs font-semibold uppercase">Action</dt>
+                                <dd className="text-theme-text-primary mt-1">{errorAction(error.context)}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-theme-text-muted text-xs font-semibold uppercase">
+                                  Failed request
+                                </dt>
+                                <dd className="text-theme-text-primary mt-1 font-mono text-xs break-all">
+                                  {contextText(error.context, 'method') ?? ''}{' '}
+                                  {contextText(error.context, 'path') ?? 'Not recorded'}
+                                  {statusLabel(error.context) ? ` → ${statusLabel(error.context)}` : ''}
+                                  {contextText(error.context, 'error_code')
+                                    ? ` [${contextText(error.context, 'error_code')}]`
+                                    : ''}
+                                </dd>
+                              </div>
+                              {(error.eventId || contextText(error.context, 'eventId')) && (
+                                <div>
+                                  <dt className="text-theme-text-muted text-xs font-semibold uppercase">
+                                    Related event
+                                  </dt>
+                                  <dd className="mt-1">
+                                    <Link
+                                      to={`/events/${error.eventId ?? contextText(error.context, 'eventId') ?? ''}`}
+                                      className="text-blue-600 hover:underline dark:text-blue-400"
+                                    >
+                                      Open event
+                                    </Link>
+                                  </dd>
+                                </div>
+                              )}
+                              {error.userId && (
+                                <div>
+                                  <dt className="text-theme-text-muted text-xs font-semibold uppercase">
+                                    Affected user
+                                  </dt>
+                                  <dd className="text-theme-text-primary mt-1 font-mono text-xs">
+                                    {error.userId.slice(0, 8)}…
+                                  </dd>
+                                </div>
+                              )}
+                              {typeof error.context.occurrences === 'number' && (
+                                <div>
+                                  <dt className="text-theme-text-muted text-xs font-semibold uppercase">Occurrences</dt>
+                                  <dd className="text-theme-text-primary mt-1">{error.context.occurrences}</dd>
+                                </div>
+                              )}
+                            </dl>
+                            <div className="space-y-4 text-sm">
+                              <div>
+                                <h3 className="text-theme-text-muted text-xs font-semibold uppercase">
+                                  Technical message
+                                </h3>
+                                <p className="text-theme-text-primary mt-1 font-mono text-xs break-words">
+                                  {error.errorMessage || 'Not recorded'}
+                                </p>
+                              </div>
+                              {error.troubleshootingSteps.length > 0 && (
+                                <div>
+                                  <h3 className="text-theme-text-muted text-xs font-semibold uppercase">
+                                    Troubleshooting
+                                  </h3>
+                                  <ul className="text-theme-text-secondary mt-1 list-disc space-y-1 pl-5">
+                                    {error.troubleshootingSteps.map((step) => (
+                                      <li key={step}>{step}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {contextText(error.context, 'traceback') && (
+                                <div>
+                                  <h3 className="text-theme-text-muted text-xs font-semibold uppercase">
+                                    Server traceback
+                                  </h3>
+                                  <pre className="bg-theme-surface mt-1 max-h-64 overflow-auto rounded p-3 text-xs whitespace-pre-wrap">
+                                    {contextText(error.context, 'traceback')}
+                                  </pre>
+                                </div>
+                              )}
+                              {sourceLocation(error.context) && (
+                                <div>
+                                  <h3 className="text-theme-text-muted text-xs font-semibold uppercase">
+                                    Client source
+                                  </h3>
+                                  <p className="text-theme-text-primary mt-1 font-mono text-xs break-all">
+                                    {sourceLocation(error.context)}
+                                  </p>
+                                </div>
+                              )}
+                              {contextText(error.context, 'userAgent') && (
+                                <div>
+                                  <h3 className="text-theme-text-muted text-xs font-semibold uppercase">
+                                    Browser environment
+                                  </h3>
+                                  <p className="text-theme-text-primary mt-1 text-xs break-words">
+                                    {contextText(error.context, 'userAgent')}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

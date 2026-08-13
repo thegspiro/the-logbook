@@ -102,11 +102,59 @@ class TestModuleRegistry:
             "membership",
         ]:
             assert ls.is_known_label_module(m)
-            assert ls.required_permission_for_module(m)
+            assert ls.required_permissions_for_module(m)
 
     def test_unknown_module(self):
         assert not ls.is_known_label_module("nope")
-        assert ls.required_permission_for_module("nope") is None
+        assert ls.required_permissions_for_module("nope") is None
+
+    def test_every_module_accepts_view_or_manage(self):
+        """A manage-only user must be able to print — permission_matches does
+        not treat manage as implying view, so both must be registered."""
+        for module, (permissions, _) in ls.MODULE_LABELS.items():
+            actions = {p.split(".")[-1] for p in permissions}
+            assert actions == {"view", "manage"}, module
+
+
+class TestAuthorizeModule:
+    """Endpoint-layer gate: either the view or the manage grant opens the
+    label endpoints (the print-labels route accepts both, so a manage-only
+    user must not land on an all-403 page)."""
+
+    @staticmethod
+    def _user(*permissions):
+        return SimpleNamespace(
+            positions=[SimpleNamespace(permissions=list(permissions))],
+            rank=None,
+        )
+
+    def test_view_only_is_accepted(self):
+        from app.api.v1.endpoints.labels import _authorize_module
+
+        _authorize_module(self._user("facilities.view"), "facilities")
+
+    def test_manage_only_is_accepted(self):
+        from app.api.v1.endpoints.labels import _authorize_module
+
+        _authorize_module(self._user("facilities.manage"), "facilities")
+
+    def test_other_module_permissions_are_rejected(self):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints.labels import _authorize_module
+
+        with pytest.raises(HTTPException) as exc:
+            _authorize_module(self._user("inventory.manage"), "facilities")
+        assert exc.value.status_code == 403
+
+    def test_unknown_module_is_not_found(self):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints.labels import _authorize_module
+
+        with pytest.raises(HTTPException) as exc:
+            _authorize_module(self._user("facilities.manage"), "unknown")
+        assert exc.value.status_code == 404
 
 
 class TestGenerate:

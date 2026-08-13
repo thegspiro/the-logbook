@@ -120,6 +120,25 @@ describe('MySkillTestResultPage', () => {
     expect(screen.getByText(/Chief Adams/)).toBeInTheDocument();
   });
 
+  // A resumed evaluation's clock carried on from the last save, so the
+  // candidate must not read the figure as a stopwatch reading — on a timed
+  // evolution it is not evidence of the limit being met.
+  it('marks the total time when the timing is unverified', () => {
+    currentMockTest = { ...baseTest, resume_count: 1, timing_verified: false };
+    renderWithRouter(<MySkillTestResultPage />);
+
+    expect(screen.getByText('Total time')).toBeInTheDocument();
+    expect(screen.getByText(/Not verified — the evaluation was resumed/)).toBeInTheDocument();
+  });
+
+  it('leaves a straight-through test unmarked', () => {
+    currentMockTest = { ...baseTest, timing_verified: true };
+    renderWithRouter(<MySkillTestResultPage />);
+
+    expect(screen.getByText('Total time')).toBeInTheDocument();
+    expect(screen.queryByText(/Not verified/)).not.toBeInTheDocument();
+  });
+
   it('loads the test on mount and clears it on unmount', () => {
     currentMockTest = { ...baseTest };
     const { unmount } = renderWithRouter(<MySkillTestResultPage />);

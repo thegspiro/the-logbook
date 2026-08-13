@@ -5,11 +5,14 @@ The admin status-change endpoint previously allowed any-to-any transitions
 and the validator's error behavior.
 """
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi import HTTPException
 
 from app.api.v1.endpoints.member_status import (
     ALLOWED_STATUS_TRANSITIONS,
+    _send_property_return_email,
     assert_transition_allowed,
 )
 from app.core.permissions import DEFAULT_POSITIONS
@@ -96,3 +99,69 @@ class TestMemberBaselinePermissions:
         # view stays leadership-only: it also opens compliance/failure
         # reports, which are not baseline member material.
         assert "equipment_check.view" not in member["permissions"]
+
+
+@pytest.mark.asyncio
+async def test_property_return_email_releases_session_before_delivery(monkeypatch):
+    """Slow outbound delivery must not retain a database connection."""
+    session_open = False
+    session_was_open_during_send = None
+
+    class Result:
+        def scalar_one_or_none(self):
+            return SimpleNamespace(name="Test Department")
+
+    class Session:
+        async def execute(self, _query):
+            return Result()
+
+    async def get_session():
+        nonlocal session_open
+        session_open = True
+        try:
+            yield Session()
+        finally:
+            session_open = False
+
+    class TemplateService:
+        def __init__(self, _session):
+            pass
+
+        async def get_template(self, *_args):
+            return None
+
+    class EmailService:
+        def __init__(self, _organization):
+            pass
+
+        async def send_email(self, **_kwargs):
+            nonlocal session_was_open_during_send
+            session_was_open_during_send = session_open
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.member_status.database_manager.get_session",
+        get_session,
+    )
+    monkeypatch.setattr("app.services.email_service.EmailService", EmailService)
+    monkeypatch.setattr(
+        "app.services.email_template_service.EmailTemplateService", TemplateService
+    )
+
+    await _send_property_return_email(
+        organization_id="org-1",
+        to_emails=["member@example.com"],
+        cc_emails=[],
+        report_data={
+            "member_name": "Test Member",
+            "drop_type_display": "Voluntary",
+            "effective_date": "2026-08-12",
+            "return_deadline": "2026-08-26",
+            "item_count": 0,
+            "items": [],
+            "total_value": 0,
+            "performed_by_name": "Test Admin",
+            "performed_by_title": "Chief",
+        },
+        member_email="member@example.com",
+    )
+    assert session_was_open_during_send is False

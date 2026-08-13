@@ -986,12 +986,15 @@ class TestElectionBallotDefinitionValidation:
             ElectionUpdate(ballot_items=[item, item])
 
     def test_invalid_ballot_item_id_rejected(self):
+        # Strictness lives on the write-path model (BallotItemInput) — the
+        # shared BallotItem stays tolerant so response models can still
+        # serialize legacy stored ids (see test_election_codex_fixes.py).
         import pydantic
 
-        from app.schemas.election import BallotItem
+        from app.schemas.election import BallotItemInput
 
         with pytest.raises(pydantic.ValidationError):
-            BallotItem(
+            BallotItemInput(
                 id="../../ambiguous item",
                 type="general_vote",
                 title="Resolution",
@@ -1000,8 +1003,9 @@ class TestElectionBallotDefinitionValidation:
     def test_invalid_ballot_item_overrides_rejected(self):
         import pydantic
 
-        from app.schemas.election import BallotItem
+        from app.schemas.election import BallotItem, BallotItemInput
 
+        # Choice validation guards both read and write paths.
         with pytest.raises(pydantic.ValidationError, match="voting method"):
             BallotItem(
                 id="resolution_1",
@@ -1009,8 +1013,10 @@ class TestElectionBallotDefinitionValidation:
                 title="Resolution",
                 voting_method="trust_the_client",
             )
+        # Supermajority-without-percentage is rejected on input only; legacy
+        # stored items must still deserialize in responses.
         with pytest.raises(pydantic.ValidationError, match="victory_percentage"):
-            BallotItem(
+            BallotItemInput(
                 id="resolution_1",
                 type="general_vote",
                 title="Resolution",

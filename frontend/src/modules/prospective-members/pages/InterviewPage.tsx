@@ -37,7 +37,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getInitials } from '../utils';
 import type { Interview, InterviewRecommendation, StageHistoryEntry } from '../types';
-import { INTERVIEW_RECOMMENDATION_LABELS, INTERVIEW_RECOMMENDATION_COLORS } from '../types';
+import { INTERVIEW_RECOMMENDATION_LABELS, INTERVIEW_RECOMMENDATION_COLORS, StepProgressStatus } from '../types';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 // ---------------------------------------------------------------------------
@@ -97,9 +97,12 @@ const ApplicantInfoSection: React.FC<ApplicantInfoSectionProps> = ({ applicant, 
 
           {/* Contact details */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Mail className="text-theme-text-tertiary h-4 w-4" />
-              <span className="text-theme-text-primary">{applicant.email}</span>
+            {/* min-w-0 + break-all: a flex child will not shrink below its
+                content, so an email longer than half the card ran straight
+                through the phone number in the next grid column. */}
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+              <Mail className="text-theme-text-tertiary h-4 w-4 shrink-0" />
+              <span className="text-theme-text-primary break-all">{applicant.email}</span>
             </div>
             {applicant.phone && (
               <div className="flex items-center gap-2 text-sm">
@@ -191,7 +194,11 @@ const PipelineProgressSection: React.FC<PipelineProgressSectionProps> = ({ appli
           {/* Stage history timeline */}
           <div className="space-y-2">
             {applicant.stage_history.map((entry: StageHistoryEntry) => {
-              const isCompleted = !!entry.completed_at;
+              // The record's own status, not the presence of a stamp: a
+              // `completed_at` can outlive the completion it recorded, and
+              // this panel was ticking the applicant's *current* stage as
+              // finished directly under a heading naming it as current.
+              const isCompleted = entry.status === StepProgressStatus.COMPLETED;
               const isCurrent = entry.stage_id === applicant.current_stage_id;
 
               return (
@@ -211,7 +218,7 @@ const PipelineProgressSection: React.FC<PipelineProgressSectionProps> = ({ appli
                     >
                       {entry.stage_name}
                     </p>
-                    {entry.completed_at && (
+                    {isCompleted && entry.completed_at && (
                       <p className="text-theme-text-tertiary text-xs">
                         Completed {formatDateTime(entry.completed_at, timezone)}
                         {entry.completed_by_name ? ` by ${entry.completed_by_name}` : ''}

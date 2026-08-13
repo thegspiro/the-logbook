@@ -238,7 +238,7 @@ async def create_message(
         username=current_user.username,
     )
     # Fan the message out to the channels members actually watch (bell inbox,
-    # plus email/SMS escalation for urgent/ack-required). Deferred so the POST
+    # email for every message, SMS escalation for urgent). Deferred so the POST
     # returns immediately; failures there never affect the created message.
     # Messages scheduled for a future time (scheduled_at still set) are escalated
     # later by the publish task, not now.

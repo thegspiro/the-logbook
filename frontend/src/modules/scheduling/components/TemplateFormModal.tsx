@@ -16,6 +16,7 @@ import {
   getPositionOptions,
   emptyTemplateForm,
 } from './shiftTemplateTypes';
+import { getCachedShiftSettings } from '../services/shiftSettingsApi';
 
 /**
  * A hex field is developer-facing, and the old default was the same red the
@@ -81,26 +82,16 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
   const loadApparatusTypeDefaults = (type: string) => {
     if (!type) return;
-    try {
-      const stored = localStorage.getItem('scheduling_settings');
-      if (stored) {
-        const settings = JSON.parse(stored) as {
-          apparatusTypeDefaults?: Record<string, { positions?: string[]; minStaffing?: number }>;
-        };
-        const defaults = settings.apparatusTypeDefaults?.[type];
-        if (defaults) {
-          setFormData((prev) => ({
-            ...prev,
-            positions: defaults.positions
-              ? defaults.positions.map((p) => ({ position: p, required: true }))
-              : prev.positions,
-            min_staffing: String(defaults.minStaffing ?? prev.min_staffing),
-          }));
-          return;
-        }
-      }
-    } catch {
-      /* ignore */
+    // Department settings are backend-backed; the cache is warmed by the
+    // getPositionOptions() call in this modal's render, so by the time a type
+    // is picked this reads the department-wide value (or its offline mirror).
+    const defaults = getCachedShiftSettings().apparatusTypeDefaults[type];
+    if (defaults) {
+      setFormData((prev) => ({
+        ...prev,
+        positions: defaults.positions.map((p) => ({ position: p, required: true })),
+        min_staffing: String(defaults.minStaffing),
+      }));
     }
   };
 

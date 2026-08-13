@@ -44,6 +44,7 @@ async def test_update_allows_safe_facility_reassignment(service):
     organization_id = str(uuid4())
     location = MagicMock()
     location.name = "Station"
+    location.facility_room_id = None
     service.get_location = AsyncMock(return_value=location)
 
     with patch(
@@ -62,6 +63,7 @@ async def test_update_can_clear_facility_link(service):
     organization_id = str(uuid4())
     location = MagicMock()
     location.name = "Station"
+    location.facility_room_id = None
     service.get_location = AsyncMock(return_value=location)
 
     with patch(
@@ -73,3 +75,57 @@ async def test_update_can_clear_facility_link(service):
 
     assert validate.await_args.kwargs["allow_none"] is True
     assert location.facility_id is None
+
+
+async def test_update_blocks_reparenting_room_backed_location(service):
+    """A location that mirrors a FacilityRoom cannot be pointed at a facility
+    other than the room's — that would leave room and location inconsistent."""
+    organization_id = str(uuid4())
+    rooms_facility_id = str(uuid4())
+    location = MagicMock()
+    location.name = "Bunk Room"
+    location.facility_room_id = str(uuid4())
+    service.get_location = AsyncMock(return_value=location)
+    service.db.scalar = AsyncMock(return_value=rooms_facility_id)
+
+    with patch("app.services.location_service.assert_in_org", new_callable=AsyncMock):
+        with pytest.raises(ValueError, match="facility room"):
+            await service.update_location(
+                uuid4(), LocationUpdate(facility_id=uuid4()), organization_id
+            )
+
+    service.db.commit.assert_not_awaited()
+
+
+async def test_update_blocks_clearing_facility_on_room_backed_location(service):
+    organization_id = str(uuid4())
+    location = MagicMock()
+    location.name = "Bunk Room"
+    location.facility_room_id = str(uuid4())
+    service.get_location = AsyncMock(return_value=location)
+    service.db.scalar = AsyncMock(return_value=str(uuid4()))
+
+    with patch("app.services.location_service.assert_in_org", new_callable=AsyncMock):
+        with pytest.raises(ValueError, match="facility room"):
+            await service.update_location(
+                uuid4(), LocationUpdate(facility_id=None), organization_id
+            )
+
+
+async def test_update_allows_room_backed_location_keeping_rooms_facility(service):
+    """Re-sending the room's own facility id is not a reparent and must pass
+    (UUID-vs-str representations included)."""
+    organization_id = str(uuid4())
+    facility_id = uuid4()
+    location = MagicMock()
+    location.name = "Bunk Room"
+    location.facility_room_id = str(uuid4())
+    service.get_location = AsyncMock(return_value=location)
+    service.db.scalar = AsyncMock(return_value=str(facility_id))
+
+    with patch("app.services.location_service.assert_in_org", new_callable=AsyncMock):
+        await service.update_location(
+            uuid4(), LocationUpdate(facility_id=facility_id), organization_id
+        )
+
+    assert location.facility_id == facility_id

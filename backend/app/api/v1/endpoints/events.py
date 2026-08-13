@@ -76,6 +76,7 @@ from app.schemas.event import (
     SendRemindersResponse,
     VisibleEventTypesResponse,
 )
+from app.schemas.organization import MembershipTierSettings
 from app.services.documents_service import DocumentsService
 from app.services.event_service import (
     BULK_ADD_MAX_SIZE,
@@ -134,6 +135,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         max_attendees=event.max_attendees,
         allowed_rsvp_statuses=event.allowed_rsvp_statuses,
         is_mandatory=event.is_mandatory,
+        mandatory_membership_types=event.mandatory_membership_types,
         allow_guests=event.allow_guests,
         send_reminders=event.send_reminders,
         reminder_schedule=event.reminder_schedule or [24],
@@ -295,6 +297,7 @@ async def list_events(
                 location_name=location_name,
                 requires_rsvp=event.requires_rsvp,
                 is_mandatory=event.is_mandatory,
+                mandatory_membership_types=event.mandatory_membership_types,
                 is_draft=event.is_draft or False,
                 is_cancelled=event.is_cancelled,
                 is_recurring=event.is_recurring or False,
@@ -677,10 +680,17 @@ async def get_visible_event_types(
         "visible_custom_categories",
         EVENT_SETTINGS_DEFAULTS["visible_custom_categories"],
     )
+    tier_settings = MembershipTierSettings.model_validate(
+        (org.settings or {}).get("membership_tiers", {})
+    )
     return {
         "visible_event_types": visible,
         "custom_event_categories": custom_categories,
         "visible_custom_categories": visible_custom,
+        "membership_types": [
+            {"value": tier.id, "label": tier.name}
+            for tier in sorted(tier_settings.tiers, key=lambda tier: tier.sort_order)
+        ],
     }
 
 

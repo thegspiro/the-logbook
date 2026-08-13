@@ -25,6 +25,17 @@ _BOOL_FIELD_DEFAULTS: Dict[str, bool] = {
     "manual_entry_require_apparatus": True,
 }
 
+# Same problem, non-boolean columns: these two arrived in 20260807_0009, which
+# adds them only when absent — so a database whose table was already
+# materialized from the model keeps the column without a DEFAULT and its
+# existing row holds NULL. The response declares them as Literals with no None
+# member, so that NULL is a ResponseValidationError, i.e. a 500 on a plain GET
+# of the training module config.
+_ENUM_FIELD_DEFAULTS: Dict[str, str] = {
+    "skills_result_disclosure": "full",
+    "skills_result_release": "on_completion",
+}
+
 
 class TrainingModuleConfigResponse(UTCResponseBase):
     """Response schema for training module configuration."""
@@ -92,12 +103,13 @@ class TrainingModuleConfigResponse(UTCResponseBase):
     @classmethod
     def coerce_null_booleans(cls, data: Any) -> Any:
         """DB columns added after initial rows exist may be NULL; coerce to defaults."""
+        defaults: Dict[str, Any] = {**_BOOL_FIELD_DEFAULTS, **_ENUM_FIELD_DEFAULTS}
         if isinstance(data, dict):
-            for field, default in _BOOL_FIELD_DEFAULTS.items():
+            for field, default in defaults.items():
                 if data.get(field) is None:
                     data[field] = default
         else:
-            for field, default in _BOOL_FIELD_DEFAULTS.items():
+            for field, default in defaults.items():
                 if getattr(data, field, None) is None:
                     try:
                         setattr(data, field, default)

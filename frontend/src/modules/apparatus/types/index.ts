@@ -178,6 +178,7 @@ export interface Apparatus {
 
   // Staffing
   minStaffing: number;
+  crewPositions: string[] | null;
 
   // EVOC
   requiredEvocLevelId: string | null;
@@ -315,6 +316,7 @@ export interface ApparatusCreate {
   seatingCapacity?: number | undefined;
   gvwr?: number | undefined;
   minStaffing?: number | undefined;
+  crewPositions?: string[] | undefined;
   requiredEvocLevelId?: string | undefined;
   pumpCapacityGpm?: number | undefined;
   tankCapacityGallons?: number | undefined;

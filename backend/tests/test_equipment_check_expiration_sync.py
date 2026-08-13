@@ -83,6 +83,31 @@ class TestResolveExpiration:
         resolved = service._resolve_expiration({"expiration_date": YESTERDAY}, None)
         assert resolved == YESTERDAY
 
+    def test_observed_past_date_forces_the_expired_state(self, service):
+        """The crew read an already-past date off the unit while the template
+        promised next year: the observation wins in the conservative
+        direction — the item must be treated as expired."""
+        item = _template_item(expiration_date=NEXT_YEAR)
+        resolved = service._resolve_expiration(
+            {"template_item_id": "ti-1", "expiration_found": YESTERDAY}, item
+        )
+        assert resolved == YESTERDAY
+
+    def test_observed_past_date_does_not_write_to_the_template(self, service):
+        item = _template_item(expiration_date=NEXT_YEAR)
+        service._resolve_expiration(
+            {"template_item_id": "ti-1", "expiration_found": YESTERDAY}, item
+        )
+        # The record itself is only updated by the inventory-lot swap flow.
+        assert item.expiration_date == NEXT_YEAR
+
+    def test_observed_past_date_leaves_an_untracked_item_untracked(self, service):
+        item = _template_item(has_expiration=False)
+        resolved = service._resolve_expiration(
+            {"template_item_id": "ti-1", "expiration_found": YESTERDAY}, item
+        )
+        assert resolved is None
+
 
 class TestComputeCheckStatus:
     """Expiry decides whether a safety-critical item is force-failed, so it is
@@ -114,6 +139,25 @@ class TestComputeCheckStatus:
         ]
         _, _, failed, overall = service._compute_check_status(
             items, {"ti-1": _template_item()}
+        )
+        assert items[0]["status"] == "fail"
+        assert items[0]["is_expired"] is True
+        assert items[0]["expiration_date"] == YESTERDAY
+        assert (failed, overall) == (1, "fail")
+
+    def test_observed_expired_unit_fails_despite_in_date_template(self, service):
+        """A crew-observed expiration earlier than the template's, already in
+        the past, must fail the item exactly as if the template date were
+        expired — a submitted 'pass' does not stand."""
+        items = [
+            {
+                "template_item_id": "ti-1",
+                "status": "pass",
+                "expiration_found": YESTERDAY,
+            }
+        ]
+        _, _, failed, overall = service._compute_check_status(
+            items, {"ti-1": _template_item(expiration_date=NEXT_YEAR)}
         )
         assert items[0]["status"] == "fail"
         assert items[0]["is_expired"] is True
@@ -777,13 +821,32 @@ class TestUpdateDeployedLot:
 
 
 class TestUpdateDeployedLotAuthorization:
-    """Counts are crew corrections; compliance metadata is privileged."""
+    """Counts are crew corrections; compliance metadata is privileged.
+
+    The privilege decision is made against the row's *current values*, not key
+    presence: the check form round-trips the metadata it was shown, so a
+    quantity-only save that echoed the lot number and date used to 403 for
+    every submit-only crew member.
+    """
 
     @staticmethod
     def _user():
-        return MagicMock(organization_id="org-1")
+        return MagicMock(
+            id="u-1", organization_id="org-1", first_name="A", last_name="B"
+        )
+
+    @staticmethod
+    def _wire(mock_db, item):
+        result = MagicMock()
+        result.first.return_value = (item, "tmpl-1")
+        mock_db.execute = AsyncMock(return_value=result)
+        mock_db.flush = AsyncMock()
+        mock_db.add = MagicMock()
 
     async def test_submitter_cannot_rewrite_expiration(self, mock_db):
+        item = _template_item(expected_quantity=2)
+        item.deployed_lots = [_deployed("dl-1", 2, TOMORROW)]
+        self._wire(mock_db, item)
         with patch(
             "app.api.v1.endpoints.equipment_check._collect_user_permissions",
             return_value={"equipment_check.submit"},
@@ -795,6 +858,26 @@ class TestUpdateDeployedLotAuthorization:
                     DeployedLotUpdateRequest(
                         quantity=1, expiration_date=date(2099, 1, 1)
                     ),
+                    mock_db,
+                    self._user(),
+                )
+
+        assert exc.value.status_code == 403
+        mock_db.commit.assert_not_awaited()
+
+    async def test_submitter_cannot_rewrite_lot_number(self, mock_db):
+        item = _template_item(expected_quantity=2)
+        item.deployed_lots = [_deployed("dl-1", 2, TOMORROW, lot_number="OLD-1")]
+        self._wire(mock_db, item)
+        with patch(
+            "app.api.v1.endpoints.equipment_check._collect_user_permissions",
+            return_value={"equipment_check.submit"},
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await update_deployed_lot(
+                    "ti-1",
+                    "dl-1",
+                    DeployedLotUpdateRequest(quantity=2, lot_number="NEW-9"),
                     mock_db,
                     self._user(),
                 )
@@ -823,6 +906,57 @@ class TestUpdateDeployedLotAuthorization:
             )
 
         service_class.return_value.update_deployed_lot.assert_awaited_once()
+        assert (
+            service_class.return_value.update_deployed_lot.await_args.kwargs[
+                "allow_metadata_change"
+            ]
+            is False
+        )
+
+    async def test_submitter_quantity_save_with_echoed_metadata_succeeds(self, mock_db):
+        """The check form sends back the lot/date it displayed; unchanged
+        values are not a metadata rewrite and must not 403."""
+        item = _template_item(expected_quantity=4)
+        lot = _deployed("dl-1", 4, TOMORROW, lot_number="KEEP-1")
+        item.deployed_lots = [lot]
+        self._wire(mock_db, item)
+        with patch(
+            "app.api.v1.endpoints.equipment_check._collect_user_permissions",
+            return_value={"equipment_check.submit"},
+        ):
+            result = await update_deployed_lot(
+                "ti-1",
+                "dl-1",
+                DeployedLotUpdateRequest(
+                    quantity=3, lot_number="KEEP-1", expiration_date=TOMORROW
+                ),
+                mock_db,
+                self._user(),
+            )
+
+        assert result is not None
+        assert (lot.quantity, lot.lot_number) == (3, "KEEP-1")
+        assert lot.expiration_date == TOMORROW
+
+    async def test_submitter_can_remove_a_lot(self, mock_db):
+        """Zero quantity discards metadata, so removal never needs manage."""
+        item = _template_item(expected_quantity=2)
+        gone = _deployed("dl-1", 2, TOMORROW)
+        item.deployed_lots = [gone]
+        self._wire(mock_db, item)
+        with patch(
+            "app.api.v1.endpoints.equipment_check._collect_user_permissions",
+            return_value={"equipment_check.submit"},
+        ):
+            await update_deployed_lot(
+                "ti-1",
+                "dl-1",
+                DeployedLotUpdateRequest(quantity=0),
+                mock_db,
+                self._user(),
+            )
+
+        assert gone not in item.deployed_lots
 
     async def test_inventory_manager_can_rewrite_expiration(self, mock_db):
         with (
@@ -845,10 +979,9 @@ class TestUpdateDeployedLotAuthorization:
                 self._user(),
             )
 
-        updates = service_class.return_value.update_deployed_lot.await_args.kwargs[
-            "updates"
-        ]
-        assert updates == {"quantity": 1, "expiration_date": None}
+        kwargs = service_class.return_value.update_deployed_lot.await_args.kwargs
+        assert kwargs["updates"] == {"quantity": 1, "expiration_date": None}
+        assert kwargs["allow_metadata_change"] is True
 
 
 class TestUnitLabels:

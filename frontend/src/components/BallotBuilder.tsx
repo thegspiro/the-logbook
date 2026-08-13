@@ -132,7 +132,7 @@ interface SortableBallotCardProps {
   index: number;
   isExpanded: boolean;
   isDeleteConfirm: boolean;
-  isClosed: boolean;
+  isLocked: boolean;
   saving: boolean;
   election: Election;
   onToggleExpand: (id: string) => void;
@@ -147,7 +147,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
   index,
   isExpanded,
   isDeleteConfirm,
-  isClosed,
+  isLocked,
   saving,
   election,
   onToggleExpand,
@@ -199,7 +199,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
         {/* ── Collapsed header row ── */}
         <div className="flex items-center gap-3 px-4 py-3">
           {/* Drag handle */}
-          {!isClosed && (
+          {!isLocked && (
             <button
               type="button"
               className="text-theme-text-muted shrink-0 cursor-grab touch-none active:cursor-grabbing"
@@ -247,7 +247,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
             </button>
 
             {/* Delete */}
-            {!isClosed && (
+            {!isLocked && (
               <>
                 {isDeleteConfirm ? (
                   <span className="flex items-center gap-1" aria-live="polite">
@@ -326,7 +326,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   className={inputClass}
                   value={item.title}
                   onChange={(e) => onUpdateItem(item.id, { title: e.target.value })}
-                  disabled={isClosed}
+                  disabled={isLocked}
                 />
               </div>
 
@@ -342,7 +342,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                       description: e.target.value || undefined,
                     })
                   }
-                  disabled={isClosed}
+                  disabled={isLocked}
                   placeholder="Optional description..."
                 />
               </div>
@@ -354,7 +354,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   className={selectClass}
                   value={item.type}
                   onChange={(e) => onUpdateItem(item.id, { type: e.target.value })}
-                  disabled={isClosed}
+                  disabled={isLocked}
                 >
                   <option value={BallotItemType.GENERAL_VOTE}>General Vote</option>
                   <option value={BallotItemType.MEMBERSHIP_APPROVAL}>Membership Approval</option>
@@ -369,7 +369,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   className={selectClass}
                   value={item.vote_type}
                   onChange={(e) => onUpdateItem(item.id, { vote_type: e.target.value })}
-                  disabled={isClosed}
+                  disabled={isLocked}
                 >
                   <option value={VoteType.APPROVAL}>Approval (Yes/No)</option>
                   <option value={VoteType.CANDIDATE_SELECTION}>Candidate Selection</option>
@@ -387,7 +387,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                       eligible_voter_types: e.target.value.split(','),
                     })
                   }
-                  disabled={isClosed}
+                  disabled={isLocked}
                 >
                   {VOTER_TYPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -404,7 +404,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   id={`attendance_${item.id}`}
                   checked={item.require_attendance ?? true}
                   onChange={(e) => onUpdateItem(item.id, { require_attendance: e.target.checked })}
-                  disabled={isClosed}
+                  disabled={isLocked}
                   className="border-theme-input-border h-4 w-4 rounded text-red-600"
                 />
                 <label htmlFor={`attendance_${item.id}`} className="text-theme-text-secondary text-sm">
@@ -425,9 +425,17 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   checked={hasOverride}
                   onChange={(e) => {
                     if (e.target.checked) {
+                      const condition = election.victory_condition ?? VC.MOST_VOTES;
+                      const needsPercentage = condition === VC.SUPERMAJORITY || condition === VC.THRESHOLD;
                       onUpdateItem(item.id, {
-                        victory_condition: election.victory_condition ?? VC.MOST_VOTES,
-                        victory_percentage: election.victory_percentage,
+                        victory_condition: condition,
+                        // The percentage input renders "?? 67" as its default,
+                        // and the backend rejects a supermajority item with no
+                        // percentage (422) — persist the displayed default so
+                        // what the user sees is what is submitted.
+                        victory_percentage: needsPercentage
+                          ? (election.victory_percentage ?? 67)
+                          : election.victory_percentage,
                       });
                     } else {
                       onUpdateItem(item.id, {
@@ -436,7 +444,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                       });
                     }
                   }}
-                  disabled={isClosed}
+                  disabled={isLocked}
                   className="border-theme-input-border h-4 w-4 rounded text-red-600"
                 />
                 <label htmlFor={`override_${item.id}`} className="text-theme-text-secondary text-sm">
@@ -451,12 +459,21 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                     <select
                       className={selectClass}
                       value={item.victory_condition ?? VC.MOST_VOTES}
-                      onChange={(e) =>
-                        onUpdateItem(item.id, {
-                          victory_condition: e.target.value as VictoryCondition,
-                        })
-                      }
-                      disabled={isClosed}
+                      onChange={(e) => {
+                        const condition = e.target.value as VictoryCondition;
+                        const updates: Partial<BallotItem> = { victory_condition: condition };
+                        // Switching to a percentage-based condition must also
+                        // persist the input's displayed default (67) — the
+                        // backend 422s a supermajority item with no percentage.
+                        if (
+                          (condition === VC.SUPERMAJORITY || condition === VC.THRESHOLD) &&
+                          item.victory_percentage == null
+                        ) {
+                          updates.victory_percentage = 67;
+                        }
+                        onUpdateItem(item.id, updates);
+                      }}
+                      disabled={isLocked}
                     >
                       {VICTORY_CONDITION_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -476,10 +493,14 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                         value={item.victory_percentage ?? 67}
                         onChange={(e) =>
                           onUpdateItem(item.id, {
-                            victory_percentage: parseInt(e.target.value, 10) || undefined,
+                            // Clearing the field displays 67 (the "?? 67"
+                            // above), so persist 67 rather than undefined —
+                            // an unset percentage on a supermajority item is
+                            // a guaranteed 422.
+                            victory_percentage: parseInt(e.target.value, 10) || 67,
                           })
                         }
-                        disabled={isClosed}
+                        disabled={isLocked}
                       />
                     </div>
                   )}
@@ -538,7 +559,14 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const isClosed = election.status === ElectionStatus.CLOSED || election.status === ElectionStatus.CANCELLED;
+  // While voting is OPEN the backend rejects every ballot_items update (only
+  // end_date may change), so structural edits — including "Replace" from a
+  // saved template — must be locked too, not just for CLOSED/CANCELLED.
+  // Offering them produced a guaranteed error toast after user confirmation.
+  const isLocked =
+    election.status === ElectionStatus.OPEN ||
+    election.status === ElectionStatus.CLOSED ||
+    election.status === ElectionStatus.CANCELLED;
 
   // Positions already used by existing ballot items (one ballot item per position)
   const usedPositions = useMemo(() => new Set(ballotItems.map((item) => item.position).filter(Boolean)), [ballotItems]);
@@ -578,16 +606,16 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
   }, [showTemplatePopover]);
 
   const loadTemplates = async () => {
-    try {
-      const [builtIn, saved] = await Promise.all([
-        electionService.getBallotTemplates(),
-        electionService.getSavedBallotTemplates(),
-      ]);
-      setTemplates(builtIn);
-      setSavedTemplates(saved);
-    } catch (_err) {
-      // Templates list will be empty
-    }
+    // Fetched independently: the saved-template endpoint is optional extra
+    // data, and a rejection there must not empty the built-in template list
+    // (or vice versa), so no Promise.all coupling. A failed fetch leaves
+    // that list as-is.
+    const [builtIn, saved] = await Promise.allSettled([
+      electionService.getBallotTemplates(),
+      electionService.getSavedBallotTemplates(),
+    ]);
+    if (builtIn.status === 'fulfilled') setTemplates(builtIn.value);
+    if (saved.status === 'fulfilled') setSavedTemplates(saved.value);
   };
 
   const handleSaveTemplate = async () => {
@@ -774,7 +802,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
       {/* ── Header ── */}
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-theme-text-primary text-lg font-medium">Ballot Items ({ballotItems.length})</h3>
-        {!isClosed && (
+        {!isLocked && (
           <div className="relative flex gap-2" ref={templateRef}>
             {ballotItems.length > 0 && (
               <button
@@ -1026,7 +1054,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
         )}
       </div>
 
-      {showSaveTemplate && !isClosed && (
+      {showSaveTemplate && !isLocked && (
         <div className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end">
           <div className="flex-1">
             <label className={labelClass} htmlFor="saved-ballot-template-name">
@@ -1069,7 +1097,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
           <p className="text-theme-text-muted mt-1 max-w-md text-sm">
             Add items from a template or create custom ones to build your ballot.
           </p>
-          {!isClosed && (
+          {!isLocked && (
             <div className="mt-4 flex gap-3">
               <button
                 type="button"
@@ -1115,7 +1143,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                       index={index}
                       isExpanded={expandedItemId === item.id}
                       isDeleteConfirm={deleteConfirmId === item.id}
-                      isClosed={isClosed}
+                      isLocked={isLocked}
                       saving={saving}
                       election={election}
                       onToggleExpand={handleToggleExpand}
@@ -1131,7 +1159,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
           )}
 
           {/* ── Custom item form (dashed add card) ── */}
-          {!isClosed && !showCustomForm && ballotItems.length > 0 && (
+          {!isLocked && !showCustomForm && ballotItems.length > 0 && (
             <button
               type="button"
               onClick={() => {

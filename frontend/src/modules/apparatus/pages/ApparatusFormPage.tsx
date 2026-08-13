@@ -31,6 +31,10 @@ export const ApparatusFormPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [evocLevels, setEvocLevels] = useState<EvocLevel[]>([]);
+  // Keep the user's in-progress commas and spaces intact. Parsing this into an
+  // array on every keystroke made it impossible to type a second seat because
+  // a trailing comma was immediately removed by the controlled input.
+  const [crewPositionsText, setCrewPositionsText] = useState('');
 
   // Form state
   const [formData, setFormData] = useState<ApparatusCreate>({
@@ -54,6 +58,7 @@ export const ApparatusFormPage: React.FC = () => {
     seatingCapacity: undefined,
     gvwr: undefined,
     minStaffing: 1,
+    crewPositions: [],
     requiredEvocLevelId: '',
     pumpCapacityGpm: undefined,
     tankCapacityGallons: undefined,
@@ -111,6 +116,7 @@ export const ApparatusFormPage: React.FC = () => {
   // Populate form when editing
   useEffect(() => {
     if (isEditing && currentApparatus) {
+      setCrewPositionsText((currentApparatus.crewPositions ?? []).join(', '));
       setFormData({
         unitNumber: currentApparatus.unitNumber,
         name: currentApparatus.name || '',
@@ -132,6 +138,7 @@ export const ApparatusFormPage: React.FC = () => {
         seatingCapacity: currentApparatus.seatingCapacity || undefined,
         gvwr: currentApparatus.gvwr || undefined,
         minStaffing: currentApparatus.minStaffing ?? 1,
+        crewPositions: currentApparatus.crewPositions ?? [],
         requiredEvocLevelId: currentApparatus.requiredEvocLevelId || '',
         pumpCapacityGpm: currentApparatus.pumpCapacityGpm || undefined,
         tankCapacityGallons: currentApparatus.tankCapacityGallons || undefined,
@@ -222,7 +229,13 @@ export const ApparatusFormPage: React.FC = () => {
 
     try {
       // Clean up empty strings to undefined
-      const cleanedData: ApparatusCreate | ApparatusUpdate = { ...formData };
+      const cleanedData: ApparatusCreate | ApparatusUpdate = {
+        ...formData,
+        crewPositions: crewPositionsText
+          .split(',')
+          .map((position) => position.trim().toLowerCase())
+          .filter(Boolean),
+      };
       Object.keys(cleanedData).forEach((key) => {
         const k = key as keyof typeof cleanedData;
         if (cleanedData[k] === '') {
@@ -555,6 +568,20 @@ export const ApparatusFormPage: React.FC = () => {
                   onChange={handleChange}
                   className="form-input"
                 />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-theme-text-secondary mb-1 block text-sm">Crew Positions / Seats</label>
+                <input
+                  type="text"
+                  value={crewPositionsText}
+                  onChange={(e) => setCrewPositionsText(e.target.value)}
+                  className="form-input"
+                  placeholder="officer, driver, firefighter, firefighter"
+                />
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Enter seats in riding order, separated by commas. Repeated roles create multiple seats and are
+                  imported into shifts.
+                </p>
               </div>
               <div>
                 <label className="text-theme-text-secondary mb-1 block text-sm">GVWR (lbs)</label>

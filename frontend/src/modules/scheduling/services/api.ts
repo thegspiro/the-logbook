@@ -218,6 +218,7 @@ export interface ShiftTemplateRecord {
   min_staffing: number;
   category?: string;
   apparatus_type?: string;
+  apparatus_id?: string;
   is_default: boolean;
   is_active: boolean;
   open_to_all_members?: boolean;

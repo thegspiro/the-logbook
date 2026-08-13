@@ -1,7 +1,7 @@
 /**
  * Forms Module Routes
  *
- * Includes both the admin form builder (protected) and
+ * Includes both the admin form builder (management-only) and
  * the public form submission page (no auth required).
  *
  * To disable the forms module, simply remove or comment out
@@ -23,7 +23,7 @@ export const getFormsRoutes = () => {
       <Route
         path="/forms"
         element={
-          <ProtectedRoute requiredPermission="forms.view">
+          <ProtectedRoute requiredPermission="forms.manage">
             <Suspense fallback={null}>
               <FormsPage />
             </Suspense>

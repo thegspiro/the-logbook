@@ -7,7 +7,8 @@
  * by these IDs.
  */
 
-import type { CriterionType, SkillTemplateSection } from '../types/skillsTesting';
+import { CriterionScoreMode } from '../types/skillsTesting';
+import type { CriterionScoreMode as ScoreMode, CriterionType, SkillTemplateSection } from '../types/skillsTesting';
 
 const CRITERION_TYPES: ReadonlySet<string> = new Set<CriterionType>([
   'pass_fail',
@@ -16,6 +17,26 @@ const CRITERION_TYPES: ReadonlySet<string> = new Set<CriterionType>([
   'checklist',
   'statement',
 ]);
+
+const SCORE_MODES: ReadonlySet<string> = new Set<ScoreMode>([
+  CriterionScoreMode.NONE,
+  CriterionScoreMode.POINTS,
+  CriterionScoreMode.DEDUCT,
+]);
+
+/**
+ * Coerce a stored score mode to one the scorer honours, or leave it unset.
+ *
+ * Unset is the right landing place for an unrecognized value, and is not the
+ * same as `'none'`: it defers to the template-wide Pass/Fail setting, which is
+ * exactly what `_criterion_score_mode` does with a mode it does not know. The
+ * API rejects unknown modes, so this only fires on rows written straight to the
+ * JSON column — but the two sides must agree, or a scorecard would show a
+ * deduction the percentage never took.
+ */
+function normalizeScoreMode(raw: unknown): ScoreMode | undefined {
+  return typeof raw === 'string' && SCORE_MODES.has(raw) ? (raw as ScoreMode) : undefined;
+}
 
 /**
  * Coerce a stored criterion type to one the examiner screen can render.
@@ -62,6 +83,12 @@ export function hydrateTemplateSections(raw: Record<string, unknown>[] | undefin
         checklist_items: c.checklist_items as string[] | undefined,
         statement_text: c.statement_text as string | undefined,
         starts_timer: (c.starts_timer as boolean | undefined) ?? false,
+        score_mode: normalizeScoreMode(c.score_mode),
+        // A penalty that is not a positive number is no penalty: the scorer
+        // falls back to one point for a deduct step without a usable value, and
+        // reading a bad value as 0 here would show "−0" against a failed step.
+        deduction_points:
+          typeof c.deduction_points === 'number' && c.deduction_points > 0 ? c.deduction_points : undefined,
       })),
     };
   });
