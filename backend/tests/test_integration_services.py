@@ -12,10 +12,17 @@ Tests cover:
 - ePCR CSV/XML import
 """
 
+from io import StringIO
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from loguru import logger
 
+from app.services.integration_services import (
+    discord_service,
+    slack_service,
+    teams_service,
+)
 from app.services.integration_services.calcom_service import (
     CalcomService,
     format_booking_as_event,
@@ -91,6 +98,36 @@ def _mock_client(response):
     cm.__aenter__ = AsyncMock(return_value=client)
     cm.__aexit__ = AsyncMock(return_value=False)
     return cm
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("service", "sender", "args"),
+    [
+        (slack_service, slack_service.send_slack_notification, ("message",)),
+        (discord_service, discord_service.send_discord_notification, ("message",)),
+        (teams_service, teams_service.send_teams_notification, ("title", "message")),
+    ],
+)
+async def test_unsafe_webhook_log_does_not_expose_secret(service, sender, args):
+    secret = "SECRET_WEBHOOK_TOKEN"
+    webhook_url = f"https://example.com/webhook/{secret}"
+    output = StringIO()
+    sink_id = logger.add(output, format="{message}")
+
+    try:
+        with patch.object(
+            service,
+            "assert_outbound_url_safe",
+            side_effect=ValueError(f"unsafe URL: {webhook_url}"),
+        ):
+            assert await sender(webhook_url, *args) is False
+    finally:
+        logger.remove(sink_id)
+
+    assert "failed safety validation" in output.getvalue()
+    assert secret not in output.getvalue()
+    assert webhook_url not in output.getvalue()
 
 
 # ============================================
