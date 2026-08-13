@@ -9,6 +9,7 @@ Read-permission gates (owner decision 2026-08-09):
 DB mocked where needed; no MySQL.
 """
 
+import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,6 +17,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1.endpoints import reports as reports_ep
+from app.api.v1.endpoints import users as users_ep
 from app.services.finance_service import FinanceService
 
 
@@ -46,6 +48,21 @@ class TestReportPiiGate:
         # Even if the user has no extra permission, an aggregate report passes.
         with patch.object(reports_ep, "user_has_permission", return_value=False):
             reports_ep._enforce_report_pii_permission(user, "call_volume")
+
+
+class TestMemberDirectoryGate:
+    """Owner decision 2026-08-13: the member directory is member-facing.
+
+    `members.view` ("View member list") is the baseline grant on every default
+    position, and `GET /users` is the directory endpoint — the roster the
+    member guide tells every member to use. RPT-3 already made members.view
+    the roster-read permission for reports; this keeps the live endpoint on
+    the same rule. Contact info stays governed by the org visibility setting.
+    """
+
+    def test_member_directory_accepts_members_view(self):
+        dep = inspect.signature(users_ep.list_users).parameters["current_user"].default
+        assert "members.view" in dep.dependency.required_permissions
 
 
 class TestExpenseReportScoping:

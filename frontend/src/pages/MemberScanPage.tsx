@@ -11,8 +11,9 @@
  *
  * Accessible at /members/scan. Requires users.view or members.manage — the
  * quartermaster's position grants users.view, so gear checks can validate a
- * member from their card. The route gate mirrors the backend permission on
- * the profile/roster lookups the scanner performs.
+ * member from their card. This gate is deliberately narrower than the
+ * directory (members.view): the scanner is a validation tool for positions
+ * that check people in, not a general member-lookup surface.
  */
 
 import React, { useRef, useState, useCallback } from 'react';
