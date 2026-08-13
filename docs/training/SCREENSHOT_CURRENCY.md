@@ -43,7 +43,22 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
-### 01-membership — 14 of 19 changed images verified
+### 01-membership — images complete, 19 of 19 verified
+
+The last five opened and current: `01-05-add-member-form`,
+`01-06-import-members`, `01-07-admin-member-edit`,
+`01-08-member-audit-history`, `01-36-membership-number-field`. Nothing in them
+contradicted its caption — the import page's nine-step instructions match the
+validation the review screen actually applies, and the edit form's
+"Exempt from Compliance" control carries the explanation the guide relies on.
+
+Guide 01's **two placeholders remain open** and are the only outstanding work
+here: an election package showing status "Elected" with a 35-3 tally and a
+linked prospect record, and a training-program phase view (Phase 1 Complete
+4/4, Phase 2 In Progress 0/6, Phase 3 Locked 1/3 pre-credited, Phase 4 Locked
+0/2, overall 25%).
+
+### 01-membership — earlier tick, 14 of 19 changed images verified
 
 Seven more opened and current: `01-01-member-directory`, `01-11-create-waiver`,
 `01-19-create-waiver`, `01-23-print-member-badges`,
