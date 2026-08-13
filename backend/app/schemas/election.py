@@ -694,8 +694,9 @@ class ManualBallotsRequest(BaseModel):
     allow_over_count: bool = Field(
         default=False,
         description=(
-            "Bypass the per-position plausibility check (total ballots vs "
-            "eligible voters). The override is recorded in the audit log."
+            "Bypass the plausibility checks (per-position total ballots and "
+            "the attested physical ballot count, each vs eligible voters). "
+            "The override is recorded in the audit log."
         ),
     )
 

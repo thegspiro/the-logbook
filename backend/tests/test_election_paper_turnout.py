@@ -153,9 +153,10 @@ class TestRecordedPhysicalBallotCounts:
             ElectionService._count_ballots_cast(election, votes, {"batch-1": 10}) == 10
         )
 
-    def test_recorded_counts_combine_via_max_not_sum(self):
-        # Separate batches may tally the SAME physical ballots (e.g. one
-        # batch per position), so recorded counts must never be added.
+    def test_one_stack_recorded_per_position_is_not_double_counted(self):
+        # Batches covering DISJOINT positions may be a single stack keyed in
+        # position by position — one physical ballot can mark several
+        # positions — so across positions only the max is provable.
         election = _election(voting_method="approval")
         votes = [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(4)] + [
             _paper_in_batch("Deputy", "c", batch_id="b2") for _ in range(4)
@@ -164,6 +165,72 @@ class TestRecordedPhysicalBallotCounts:
             ElectionService._count_ballots_cast(election, votes, {"b1": 6, "b2": 5})
             == 6
         )
+
+    def test_batches_sharing_a_position_add_up(self):
+        # A physical ballot marks a GIVEN position at most once, so two
+        # batches that both hold Chief votes cannot be the same ballots.
+        # Taking the max here reported 10 for 20 ballots in the room, which
+        # a percentage quorum then failed.
+        election = _election(voting_method="approval")
+        votes = [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(10)] + [
+            _paper_in_batch("Chief", "b", batch_id="b2") for _ in range(10)
+        ]
+        assert (
+            ElectionService._count_ballots_cast(election, votes, {"b1": 10, "b2": 10})
+            == 20
+        )
+
+    def test_shared_position_adds_while_disjoint_positions_do_not(self):
+        # b1 and b2 share Chief, so they add (20); b3's Deputy-only stack
+        # could be either of them re-keyed, so it does not.
+        election = _election(voting_method="approval")
+        votes = (
+            [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(10)]
+            + [_paper_in_batch("Chief", "b", batch_id="b2") for _ in range(10)]
+            + [_paper_in_batch("Deputy", "c", batch_id="b3") for _ in range(10)]
+        )
+        assert (
+            ElectionService._count_ballots_cast(
+                election, votes, {"b1": 10, "b2": 10, "b3": 10}
+            )
+            == 20
+        )
+
+    def test_a_batch_spanning_positions_counts_once_per_position(self):
+        # b1 is one stack whose ballots marked both positions; b2 is a
+        # second Chief stack. Chief proves 10 + 10; Deputy only proves 10.
+        election = _election(voting_method="approval")
+        votes = (
+            [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(6)]
+            + [_paper_in_batch("Deputy", "c", batch_id="b1") for _ in range(6)]
+            + [_paper_in_batch("Chief", "b", batch_id="b2") for _ in range(6)]
+        )
+        assert (
+            ElectionService._count_ballots_cast(election, votes, {"b1": 10, "b2": 10})
+            == 20
+        )
+
+    def test_positionless_batches_share_one_bucket(self):
+        # Votes with no position are their own bucket, exactly as the
+        # tally-derived estimate buckets them — they are not merged into
+        # every named position, nor split into a bucket each.
+        election = _election(voting_method="approval")
+        votes = [_paper_in_batch(None, "a", batch_id="b1") for _ in range(4)] + [
+            _paper_in_batch(None, "b", batch_id="b2") for _ in range(4)
+        ]
+        assert (
+            ElectionService._count_ballots_cast(election, votes, {"b1": 5, "b2": 6})
+            == 11
+        )
+
+    def test_unrecorded_batches_do_not_contribute_a_phantom_zero(self):
+        # b2 attested nothing; the pair must still report at least what b1
+        # attested, never b1 + 0 held down by an absent count.
+        election = _election(voting_method="approval")
+        votes = [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(2)] + [
+            _paper_in_batch("Chief", "b", batch_id="b2") for _ in range(2)
+        ]
+        assert ElectionService._count_ballots_cast(election, votes, {"b1": 9}) == 9
 
     def test_recorded_count_never_lowers_the_estimate(self):
         # A recorded count for one batch cannot hide voters another,

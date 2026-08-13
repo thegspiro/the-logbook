@@ -15,7 +15,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from types import SimpleNamespace
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -1866,8 +1866,8 @@ class ElectionService:
 
         When the recording officer attested the physical ballot count for a
         batch (``recorded_ballots``, keyed by batch id), that exact count is
-        preferred over the estimate — see the inline note for why recorded
-        counts combine via max rather than sum.
+        preferred over the estimate — see the inline note for how counts from
+        several batches combine.
         """
         if election.anonymous_voting:
             identified = {v.voter_hash for v in all_votes if v.voter_hash}
@@ -1903,25 +1903,46 @@ class ElectionService:
 
         # Prefer counts the recording officer attested (ManualBallotBatch.
         # ballots_cast) over the tally-derived estimate. Each recorded count
-        # is exact for its own stack of ballots, but separate batches may
-        # tally the SAME physical ballots (e.g. one batch per position), so
-        # combining via max — never sum — keeps this a provable lower bound,
-        # consistent with how the estimate already treats per-position
-        # stacks. Only batches whose votes are present in all_votes count,
-        # so attestation/void filtering applied upstream carries over.
+        # is exact for its own stack, but two batches may or may not be the
+        # same physical ballots, so they combine per position:
+        #
+        #   sum ballots_cast over the batches that recorded votes for a
+        #   position, then take the max across positions.
+        #
+        # A physical ballot marks any GIVEN position at most once, so two
+        # batches that both hold votes for the same position cannot be the
+        # same ballots — their attested counts add. Batches covering
+        # disjoint positions may well be one stack recorded position by
+        # position (a ballot can mark several positions), so across
+        # positions only the max is provable. Both halves are therefore
+        # lower bounds, and so is the result — it can understate a genuinely
+        # split box but can never certify a quorum that was not met.
+        #
+        # Votes with no position share the None bucket, exactly as the
+        # estimate above buckets them, so an unpositioned batch is compared
+        # against its peers rather than silently merged into every position.
+        # Only batches whose votes are present in all_votes count, so
+        # attestation/void filtering applied upstream carries over, and a
+        # batch with no attested count contributes nothing rather than a
+        # zero that would drag the total under the estimate.
         if recorded_ballots:
-            batch_ids = {
-                getattr(vote, "manual_batch_id", None)
-                for vote in all_votes
-                if getattr(vote, "is_manual", False)
-            }
-            recorded = [
-                recorded_ballots[batch_id]
-                for batch_id in batch_ids
-                if batch_id in recorded_ballots
-            ]
-            if recorded:
-                paper_ballots = max([paper_ballots, *recorded])
+            positions_by_batch: Dict[str, Set[Optional[str]]] = {}
+            for vote in all_votes:
+                if not getattr(vote, "is_manual", False):
+                    continue
+                batch_id = getattr(vote, "manual_batch_id", None)
+                if batch_id in recorded_ballots:
+                    positions_by_batch.setdefault(batch_id, set()).add(vote.position)
+
+            recorded_by_position: Dict[Optional[str], int] = {}
+            for batch_id, positions in positions_by_batch.items():
+                for position in positions:
+                    recorded_by_position[position] = (
+                        recorded_by_position.get(position, 0)
+                        + recorded_ballots[batch_id]
+                    )
+            if recorded_by_position:
+                paper_ballots = max(paper_ballots, max(recorded_by_position.values()))
 
         return len(identified) + paper_ballots
 
@@ -3160,9 +3181,12 @@ class ElectionService:
         integrity verification covers the full ballot box.
 
         Sanity guard: a batch that would push any position's total ballots
-        past what the eligible-voter count can produce is rejected — a typo
-        like 40-for-4 must be a conscious override (``allow_over_count``,
-        which is audited), never a silent success.
+        past what the eligible-voter count can produce is rejected, and so is
+        an attested physical count (``ballots_cast``) above that same
+        eligible-voter count — a typo like 40-for-4 must be a conscious
+        override (``allow_over_count``, which is audited), never a silent
+        success. The attested count is the one turnout and quorum trust
+        directly, so an implausible one certifies a quorum out of nothing.
 
         Every vote in the batch shares a ``manual_batch_id`` so a mis-keyed
         batch can be voided in one action (void_manual_ballot_batch).
@@ -3244,43 +3268,62 @@ class ElectionService:
                         cand.position, 0
                     ) + int(entry.get("count", 0))
 
-            if new_by_position:
+            if new_by_position or ballots_cast is not None:
                 eligible_count = await self._count_eligible_voters(
                     election, organization_id
                 )
-                existing_rows = await self.db.execute(
-                    select(Vote.position, func.count(Vote.id))
-                    .where(Vote.election_id == str(election_id))
-                    .where(Vote.deleted_at.is_(None))
-                    .where(Vote.is_test.is_(False))
-                    .where(Vote.position.in_(list(new_by_position.keys())))
-                    .group_by(Vote.position)
-                )
-                existing_by_position = dict(existing_rows.all())
 
-                for pos, new_count in new_by_position.items():
-                    if election.voting_method == "approval":
-                        cand_count_result = await self.db.execute(
-                            select(func.count(Candidate.id))
-                            .where(Candidate.election_id == str(election_id))
-                            .where(Candidate.position == pos)
-                            .where(Candidate.accepted.is_(True))
-                        )
-                        multiplier = max(cand_count_result.scalar() or 1, 1)
-                    else:
-                        multiplier = max(election.max_votes_per_position or 1, 1)
-                    cap = eligible_count * multiplier
-                    projected = existing_by_position.get(pos, 0) + new_count
-                    if cap and projected > cap:
-                        return (
-                            0,
-                            None,
-                            f"This batch would put {pos} at {projected} ballots, "
-                            f"but only {eligible_count} member(s) are eligible "
-                            f"(cap {cap}). Double-check the counts, or re-submit "
-                            f"with the over-count override if the tally is "
-                            f"correct.",
-                        )
+                # One eligible member can hand in one physical ballot, so the
+                # attested count has no multiplier — unlike a position tally,
+                # which a multi-vote ballot legitimately inflates.
+                if (
+                    ballots_cast is not None
+                    and eligible_count
+                    and ballots_cast > eligible_count
+                ):
+                    return (
+                        0,
+                        None,
+                        f"This batch attests {ballots_cast} physical ballot(s), "
+                        f"but only {eligible_count} member(s) are eligible. "
+                        f"Double-check the ballot count, or re-submit with the "
+                        f"over-count override if the tally is correct.",
+                    )
+
+                if new_by_position:
+                    existing_rows = await self.db.execute(
+                        select(Vote.position, func.count(Vote.id))
+                        .where(Vote.election_id == str(election_id))
+                        .where(Vote.deleted_at.is_(None))
+                        .where(Vote.is_test.is_(False))
+                        .where(Vote.position.in_(list(new_by_position.keys())))
+                        .group_by(Vote.position)
+                    )
+                    existing_by_position = dict(existing_rows.all())
+
+                    for pos, new_count in new_by_position.items():
+                        if election.voting_method == "approval":
+                            cand_count_result = await self.db.execute(
+                                select(func.count(Candidate.id))
+                                .where(Candidate.election_id == str(election_id))
+                                .where(Candidate.position == pos)
+                                .where(Candidate.accepted.is_(True))
+                            )
+                            multiplier = max(cand_count_result.scalar() or 1, 1)
+                        else:
+                            multiplier = max(election.max_votes_per_position or 1, 1)
+                        cap = eligible_count * multiplier
+                        projected = existing_by_position.get(pos, 0) + new_count
+                        if cap and projected > cap:
+                            return (
+                                0,
+                                None,
+                                f"This batch would put {pos} at {projected} "
+                                f"ballots, but only {eligible_count} member(s) "
+                                f"are eligible (cap {cap}). Double-check the "
+                                f"counts, or re-submit with the over-count "
+                                f"override if the tally is correct.",
+                            )
 
         batch_id = str(uuid4())
         now = datetime.now(timezone.utc).replace(microsecond=0)
