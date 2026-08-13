@@ -113,6 +113,47 @@ describe('RoomQRCodesPage', () => {
     expect(screen.getAllByRole('button', { name: /Download PNG/ })).toHaveLength(4);
   });
 
+  it('filters cards by search query', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Annex Hall')).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByRole('textbox', { name: 'Search rooms...' }), 'training');
+
+    expect(screen.getByText('Training Room #101')).toBeInTheDocument();
+    expect(screen.queryByText('Annex Hall')).not.toBeInTheDocument();
+    expect(screen.queryByText('Meeting Room')).not.toBeInTheDocument();
+
+    await user.clear(screen.getByRole('textbox', { name: 'Search rooms...' }));
+    await user.type(screen.getByRole('textbox', { name: 'Search rooms...' }), 'zzz-no-match');
+
+    expect(screen.getByText('No rooms match your search')).toBeInTheDocument();
+    // Not the "no codes yet" empty state — codes exist, the search just excluded them
+    expect(screen.queryByText('No QR codes yet')).not.toBeInTheDocument();
+  });
+
+  it('switches to full-page room signs layout', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Annex Hall')).toBeInTheDocument();
+    });
+    // Grid mode groups by station; signs mode is a flat list with a per-sign scan hint
+    expect(screen.getByRole('heading', { level: 2, name: 'Station 1' })).toBeInTheDocument();
+    expect(screen.queryByText(/Scan to check in/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Room signs/ }));
+
+    expect(screen.queryByRole('heading', { level: 2, name: 'Station 1' })).not.toBeInTheDocument();
+    // One sign per location with a code (4 in the fixture)
+    expect(screen.getAllByText(/Scan to check in/)).toHaveLength(4);
+    expect(screen.getByText('Annex Hall')).toBeInTheDocument();
+  });
+
   it('shows an empty state when no locations have display codes', async () => {
     mockGetLocations.mockResolvedValue([]);
     renderPage();
