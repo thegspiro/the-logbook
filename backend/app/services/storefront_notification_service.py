@@ -473,11 +473,11 @@ class StorefrontNotificationService:
         try:
             email_service = EmailService(organization=organization)
             if bcc:
-                # Store-wide announcements go out BCC so one member's email
-                # address is never disclosed to the rest of the department.
+                # EmailService builds a separate message for every To address.
+                # Passing the other members as BCC would put the first member's
+                # address in every message's visible To header.
                 success, _ = await email_service.send_email(
-                    to_emails=addresses[:1],
-                    bcc_emails=addresses[1:],
+                    to_emails=addresses,
                     subject=subject,
                     html_body=html_body,
                     text_body=text_body,

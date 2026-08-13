@@ -271,7 +271,7 @@ class TestPaymentNotices:
 
 class TestWindowNotices:
     async def test_an_announcement_never_discloses_the_membership_list(self):
-        """Store-wide notices go BCC — one member must not see the roster."""
+        """Store-wide notices become individual messages, not a visible roster."""
         service = StorefrontNotificationService(None)
         recipients = [f"member{i}@example.org" for i in range(5)]
         await service.send_window_opened(
@@ -282,8 +282,22 @@ class TestWindowNotices:
         )
 
         message = _last()
-        assert message["to_emails"] == recipients[:1]
-        assert message["bcc_emails"] == recipients[1:]
+        assert message["to_emails"] == recipients
+        assert not message.get("bcc_emails")
+
+    async def test_vendor_notice_never_discloses_another_customers_address(self):
+        service = StorefrontNotificationService(None)
+        recipients = ["alice@example.org", "bob@example.org", "zoe@example.org"]
+        await service.send_vendor_order_placed(
+            _window(vendor_name="Acme Apparel"),
+            _settings(),
+            recipients,
+            _org(),
+        )
+
+        message = _last()
+        assert message["to_emails"] == recipients
+        assert not message.get("bcc_emails")
 
     async def test_an_opening_states_the_deadline_and_the_extra_message(self):
         service = StorefrontNotificationService(None)
