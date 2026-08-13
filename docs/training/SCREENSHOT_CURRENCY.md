@@ -78,19 +78,24 @@ produces exactly the banner the guide describes:
 > type not eligible for 1/1 item(s) (requires: operational; member has:
 > administrative). Bram Hollis: same.
 
-**The image is not committed, because the toast above it reads "Ballots sent to
-0 voter(s), 20 failed, 2 skipped".** Email is not configured in this demo, so
-every actual send fails. The skip logic is genuine and the banner is exactly
-what a department would see; the failure count is an artifact of the
+**The first capture was thrown away, because the toast above the banner read
+"Ballots sent to 0 voter(s), 20 failed, 2 skipped".** Email is not configured in
+this demo, so every actual send fails. The skip logic is genuine and the banner
+is exactly what a department would see; the failure count is an artifact of the
 environment, and a reader shown "0 sent, 20 failed" under a caption about
 skipped members would draw the wrong conclusion.
 
-So the shot needs to picture the banner alone. `selector` was tried and the
-banner has no stable hook — a plain div, no test id, no role — so either the
-harness grows a `clip` option, the banner gets a hook, or the capture waits for
-the toast to expire (it is transient; the banner is not) before shooting the
-viewport. The last is the smallest change and probably right: wait out the
-toast, then shoot.
+The fix was to wait the toast out. It is transient and the banner is not, so the
+prepare step now waits for the count text to disappear before shooting. A
+`selector` was tried first and abandoned — the banner is a plain div with no test
+id and no role.
+
+`allowEmptyState` is set for a real reason: the page also says "No votes cast
+yet", which is correct for an election whose ballots went out seconds ago and is
+not what this pictures.
+
+Verified: the banner names Jonah Whitfield and Bram Hollis with the eligibility
+reason, over the election that produced it, with no toast in frame.
 
 Everything else is committed and working: the seeded election, the
 `mutatesSeedData` flag (the manifest invariant caught the shot in the wrong

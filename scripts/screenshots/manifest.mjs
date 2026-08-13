@@ -8145,12 +8145,26 @@ export const SHOTS = [
       const banner = page.getByText(/member\(s\) skipped when sending ballots/);
       await banner.waitFor({ timeout: 30_000 });
       await banner.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      // Wait the toast out. It reports "N sent, M failed, M skipped", and in a
+      // demo with no SMTP configured every send fails — "0 voter(s), 20
+      // failed" over a caption about *skipped* members reads as a broken
+      // feature rather than an eligibility rule. The banner is persistent and
+      // is the part the guide is about, so the shot is taken once the toast
+      // has gone. react-hot-toast dismisses an error after 4s.
+      await page
+        .getByText(/Ballots sent to \d+ voter/)
+        .waitFor({ state: "hidden", timeout: 15_000 })
+        .catch(() => {});
       await page.waitForTimeout(600);
     },
     // Viewport rather than a selector: the banner is a plain div with no
     // stable hook, and the surrounding page is the useful context anyway —
     // the election it was sent for is named directly above it.
     fullPage: false,
+    // "No votes cast yet" further down the page. An election whose ballots
+    // went out seconds ago has had no time to collect one, so that is the
+    // correct state rather than a seed gap — and it is not what this pictures.
+    allowEmptyState: true,
   },
 
   // ── Tenth batch: the applicant pipeline ────────────────────────────
