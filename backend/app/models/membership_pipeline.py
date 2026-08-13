@@ -359,6 +359,14 @@ class ProspectStepProgress(Base):
     """
 
     __tablename__ = "prospect_step_progress"
+    __table_args__ = (
+        Index(
+            "idx_step_progress_prospect_step",
+            "prospect_id",
+            "step_id",
+            unique=True,
+        ),
+    )
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     prospect_id = Column(

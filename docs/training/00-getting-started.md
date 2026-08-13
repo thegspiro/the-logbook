@@ -233,7 +233,7 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 - **Upcoming Shifts** - Your next assigned shifts
 - **Recent Activity** - Latest actions across the department
 - **Notifications** - Unread alerts and reminders with **Clear All** and individual dismiss (X) buttons. Persistent department messages (set by administrators) cannot be dismissed by regular members and show a "Persistent" badge
-- **Department Messages** - Organization-wide announcements from administrators. Urgent messages are highlighted (and may also reach you by email/text), some ask you to **Acknowledge** them, and persistent messages remain visible until an admin clears them. Your full message history lives on the **Messages** page (megaphone icon)
+- **Department Messages** - Organization-wide announcements you haven't dealt with yet. Urgent messages are highlighted (every message also reaches you by email, urgent ones by text too), some ask you to **Acknowledge** them, and persistent messages remain visible until an admin clears them. Once you've read or acknowledged a message it clears off the card; your full message history lives on the **Messages** page (megaphone icon)
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
 
@@ -360,7 +360,7 @@ Because Oakville FD requires multi-factor authentication, Jake is redirected to 
 After completing setup, the dashboard loads with personalized widgets:
 
 - **Hours this month** — four figures across the top: total, training, standby and administrative
-- **Department Messages** — anything the department has posted, urgent items first
+- **Department Messages** — what he hasn't read or acknowledged yet, plus any persistent standing notices, pinned items first
 - **Notifications** — the most recent, with an unread count and Clear All
 - **My Upcoming Shifts** — his next five shifts with dates, times, and the officer on each
 - **Open Shifts** — shifts he can sign up for. **Five at a time**, with a line

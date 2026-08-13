@@ -1103,7 +1103,8 @@ class TrainingProgramService:
 
         link_rows = await self.db.execute(
             select(ProgramRequirement.requirement_id).where(
-                ProgramRequirement.program_id == pid
+                ProgramRequirement.program_id == pid,
+                ProgramRequirement.owns_requirement.is_(True),
             )
         )
         requirement_ids = [str(r[0]) for r in link_rows.all()]

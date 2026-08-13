@@ -21,11 +21,13 @@ they run without a database and stay in CI's unit job.
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.models.finance import DuesPayment, DuesStatus, MemberDues
+from app.schemas.finance import MemberDuesUnwaive
 from app.services.finance_service import FinanceService, _apply_payment_totals
 
 pytestmark = [pytest.mark.unit]
@@ -225,6 +227,28 @@ class TestIdempotency:
         assert dues.amount_paid == Decimal("40.00")
 
 
+class TestPaymentLedgerAccess:
+    async def test_viewer_is_scoped_to_their_own_dues(self):
+        dues = _dues([_payment("40.00")])
+        service = _service_for(dues)
+        viewer_id = str(uuid.uuid4())
+
+        await service.list_dues_payments(dues.id, ORG_ID, viewer_user_id=viewer_id)
+
+        query = str(service.db.execute.await_args.args[0])
+        assert "AND member_dues.user_id =" in query
+
+    async def test_manager_can_read_any_members_ledger(self):
+        dues = _dues([_payment("40.00")])
+        service = _service_for(dues)
+
+        payments = await service.list_dues_payments(dues.id, ORG_ID)
+
+        query = str(service.db.execute.await_args.args[0])
+        assert "AND member_dues.user_id =" not in query
+        assert payments == list(dues.payments)
+
+
 class TestUnwaive:
     """The way back out of WAIVED, which payments deliberately no longer are."""
 
@@ -237,11 +261,10 @@ class TestUnwaive:
         )
         service = _service_for(dues)
 
-        result, prior_reason = await service.unwaive_dues(
+        result = await service.unwaive_dues(
             dues.id, ORG_ID, reason="Member paid after all"
         )
 
-        assert prior_reason == "Hardship — approved by the board"
         # 40 of 100 was already on the ledger, so it lands on PARTIAL — not
         # PENDING, and not the PAID the old code would have produced.
         assert result.status == DuesStatus.PARTIAL
@@ -257,9 +280,7 @@ class TestUnwaive:
         )
         service = _service_for(dues)
 
-        result, _ = await service.unwaive_dues(
-            dues.id, ORG_ID, reason="Entered in error"
-        )
+        result = await service.unwaive_dues(dues.id, ORG_ID, reason="Entered in error")
 
         assert result.status == DuesStatus.PENDING
         assert result.amount_paid == Decimal("0.00")
@@ -285,6 +306,32 @@ class TestUnwaive:
         assert dues.status == DuesStatus.PAID
         assert dues.amount_paid == Decimal("100.00")
         assert len(dues.payments) == 1
+
+    async def test_audit_event_excludes_free_text_reasons(self, monkeypatch):
+        from app.api.v1.endpoints import finance as endpoint
+
+        dues = _dues(status=DuesStatus.PENDING)
+        service = MagicMock()
+        service.unwaive_dues = AsyncMock(return_value=dues)
+        audit = AsyncMock()
+        monkeypatch.setattr(endpoint, "FinanceService", lambda _db: service)
+        monkeypatch.setattr(endpoint, "log_audit_event", audit)
+        user = SimpleNamespace(
+            id=uuid.uuid4(), organization_id=uuid.uuid4(), username="treasurer"
+        )
+
+        await endpoint.unwaive_dues(
+            dues.id,
+            MemberDuesUnwaive(reason="Private medical hardship was resolved"),
+            db=MagicMock(),
+            current_user=user,
+        )
+
+        event_data = audit.await_args.kwargs["event_data"]
+        assert event_data == {
+            "dues_id": dues.id,
+            "restored_status": DuesStatus.PENDING.value,
+        }
 
 
 class TestTotalsAreDerived:

@@ -3326,7 +3326,7 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
         select(DepartmentMessage).where(
             DepartmentMessage.scheduled_at.isnot(None),
             DepartmentMessage.scheduled_at <= now,
-            DepartmentMessage.is_active == True,  # noqa: E712
+            DepartmentMessage.is_active.is_(True),
             DepartmentMessage.deleted_at.is_(None),
         )
     )

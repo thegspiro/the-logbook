@@ -135,4 +135,76 @@ describe('ScoreBreakdownPanel', () => {
 
     expect(screen.getByText(/No percentage could be calculated/)).toBeInTheDocument();
   });
+  // A failed step that costs points is the whole reason the panel needs a
+  // subtraction line: without one the reader adds up the marks, gets the gross
+  // total, and cannot reconcile it against the percentage.
+  describe('deductions', () => {
+    const withDeductions = () =>
+      breakdown({
+        earned: 20,
+        available: 20,
+        deducted: 1,
+        percentage: 95,
+        deductions: [{ section_name: 'Cot Questions', criterion_label: 'How many people', points: 1 }],
+        deductions_unapplied: false,
+      });
+
+    it('shows the subtraction beside the gross total, not folded into it', () => {
+      render(<ScoreBreakdownPanel breakdown={withDeductions()} />);
+
+      expect(screen.getByText(/earned/)).toHaveTextContent('20 of 20 points earned, −1 deducted = 95%');
+    });
+
+    it('names the step that took the points', () => {
+      render(<ScoreBreakdownPanel breakdown={withDeductions()} />);
+
+      expect(screen.getByText(/One failed step deducted points/)).toBeInTheDocument();
+      expect(screen.getByText('How many people')).toBeInTheDocument();
+    });
+
+    it('says nothing about deductions when there were none', () => {
+      render(<ScoreBreakdownPanel breakdown={breakdown()} />);
+
+      expect(screen.queryByText(/deducted points/)).not.toBeInTheDocument();
+    });
+
+    it('reports a section that only deducts rather than calling it unscored', () => {
+      render(
+        <ScoreBreakdownPanel
+          breakdown={breakdown({
+            deducted: 2,
+            sections: [
+              section({
+                section_id: 'section-1',
+                section_name: 'Cot Questions',
+                earned: null,
+                available: null,
+                deducted: 2,
+                failed: 1,
+              }),
+            ],
+          })}
+        />
+      );
+
+      expect(screen.getByText('−2 pts')).toBeInTheDocument();
+      expect(screen.queryByText('not scored')).not.toBeInTheDocument();
+    });
+
+    it('warns when deductions had no point total to come off', () => {
+      render(
+        <ScoreBreakdownPanel
+          breakdown={breakdown({
+            method: 'section_average',
+            available: 0,
+            earned: 0,
+            deducted: 1,
+            deductions_unapplied: true,
+          })}
+        />
+      );
+
+      expect(screen.getByText(/did not affect this score/)).toBeInTheDocument();
+    });
+  });
 });
