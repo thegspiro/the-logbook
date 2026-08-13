@@ -20,7 +20,7 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy import update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1047,6 +1047,25 @@ class ElectionService:
 
         Returns: (Vote object, error message)
         """
+        # Serialize vote validation and insertion for this election. The
+        # method-aware dedup hash permits distinct candidates/ranks, so its
+        # unique constraint cannot enforce per-voter limits by itself. The
+        # lock is taken BEFORE the eligibility/duplicate reads: under MySQL
+        # REPEATABLE READ a plain SELECT reads the transaction's snapshot,
+        # so reads issued before the lock could never observe a competing
+        # voter's commit even after the lock was granted — two concurrent
+        # submissions both passed the duplicate check.
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        election = result.scalar_one_or_none()
+
+        if not election:
+            return None, "Election not found"
+
         # Check eligibility. This gate is authoritative: check_voter_eligibility
         # enforces election status, the open/close window, restricted
         # eligible-voter lists, membership-tier/attendance rules, and — because
@@ -1060,20 +1079,6 @@ class ElectionService:
         )
         if not eligibility.is_eligible:
             return None, eligibility.reason or "You are not eligible to vote"
-
-        # Serialize vote validation and insertion for this election. The
-        # method-aware dedup hash permits distinct candidates/ranks, so its
-        # unique constraint cannot enforce per-voter limits by itself.
-        result = await self.db.execute(
-            select(Election)
-            .where(Election.id == str(election_id))
-            .where(Election.organization_id == str(organization_id))
-            .with_for_update()
-        )
-        election = result.scalar_one_or_none()
-
-        if not election:
-            return None, "Election not found"
 
         # Validate vote_rank matches voting method
         if election.voting_method == "ranked_choice" and vote_rank is None:
@@ -1103,8 +1108,13 @@ class ElectionService:
         # Method-aware duplicate and limit checks. Approval voting records one
         # vote per approved candidate and ranked choice one vote per rank, so
         # a blanket "already voted for this position" rule would reject every
-        # legitimate second vote (module-audit ELEC-3).
-        existing_votes = await self._get_user_votes(user_id, election_id, election)
+        # legitimate second vote (module-audit ELEC-3). This must be a locking
+        # read: the transaction's snapshot may predate the election lock (the
+        # auth dependency reads first), and a snapshot read here would miss a
+        # competing voter's just-committed rows.
+        existing_votes = await self._get_user_votes(
+            user_id, election_id, election, for_update=True
+        )
         position_votes = [v for v in existing_votes if v.position == position]
 
         if election.voting_method == "ranked_choice":
@@ -1257,27 +1267,42 @@ class ElectionService:
         return vote, None
 
     async def _get_user_votes(
-        self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
+        self,
+        user_id: UUID,
+        election_id: UUID,
+        election: Optional[Election] = None,
+        for_update: bool = False,
     ) -> List[Vote]:
-        """Get all active (non-deleted) votes by a user in an election (handles anonymous voting)"""
+        """Get all active (non-deleted) votes by a user in an election (handles anonymous voting).
+
+        ``for_update`` makes this a locking read. Under MySQL REPEATABLE READ
+        a plain SELECT reads the transaction's snapshot, which can predate a
+        competing voter's commit even when the caller already holds the
+        election row lock — duplicate-vote checks need committed current
+        rows, not the snapshot. Callers must hold the election lock first so
+        lock ordering stays election → votes.
+        """
         # For anonymous elections, lookup by voter_hash since voter_id is NULL
         if election and election.anonymous_voting:
             voter_hash = self._generate_voter_hash(
                 user_id, election_id, election.voter_anonymity_salt or ""
             )
-            result = await self.db.execute(
+            query = (
                 select(Vote)
                 .where(Vote.election_id == str(election_id))
                 .where(Vote.voter_hash == voter_hash)
                 .where(Vote.deleted_at.is_(None))
             )
         else:
-            result = await self.db.execute(
+            query = (
                 select(Vote)
                 .where(Vote.election_id == str(election_id))
                 .where(Vote.voter_id == str(user_id))
                 .where(Vote.deleted_at.is_(None))
             )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalars().all()
 
     def _generate_voter_hash(
@@ -1826,9 +1851,10 @@ class ElectionService:
         approval, ranked-choice, and other multi-vote elections. Since paper
         tallies do not retain ballot-level groupings, use the largest candidate
         tally as the conservative number of represented paper voters in those
-        elections. Single-choice elections can safely use the largest summed
-        position tally. This cannot incorrectly certify quorum by treating
-        multiple selections on one ballot as multiple voters.
+        elections — a lower bound (ten approval ballots split 5/5 across two
+        candidates count as five voters), which understates turnout but cannot
+        certify a quorum that was never met. Single-choice elections can
+        safely use the largest summed position tally.
         """
         if election.anonymous_voting:
             identified = {v.voter_hash for v in all_votes if v.voter_hash}
@@ -1844,9 +1870,19 @@ class ElectionService:
                 )
                 key = (vote.position, vote.candidate_id)
                 manual_by_candidate[key] = manual_by_candidate.get(key, 0) + 1
+        # Multi-vote is a property of the ballot, not just the election row:
+        # ballot items may override the election-level voting method (the
+        # same resolution submit_token_ballot applies when accepting votes).
+        # If ANY item is effectively multi-vote, position sums would count
+        # one paper ballot once per selection, so only the per-candidate
+        # tally is a safe per-voter bound.
+        election_method = getattr(election, "voting_method", "simple_majority")
+        effective_methods = {election_method}
+        for item in getattr(election, "ballot_items", None) or []:
+            if isinstance(item, dict):
+                effective_methods.add(item.get("voting_method") or election_method)
         is_single_choice = (
-            getattr(election, "voting_method", "simple_majority")
-            in ("simple_majority", "supermajority")
+            effective_methods.issubset({"simple_majority", "supermajority"})
             and getattr(election, "max_votes_per_position", 1) == 1
         )
         manual_counts = manual_by_position if is_single_choice else manual_by_candidate
@@ -3549,6 +3585,18 @@ class ElectionService:
         if not source:
             return None, "Election not found"
 
+        # Ballot items may carry a prospect_package_id (added when an
+        # applicant's election package is put on the ballot). That link is
+        # state, not configuration: _sync_package_statuses follows it when an
+        # election closes, so a copied id would let the clone's votes
+        # overwrite the ORIGINAL applicant package's elected/not_elected
+        # status. Strip it from every cloned item.
+        cloned_ballot_items = copy.deepcopy(source.ballot_items)
+        if cloned_ballot_items:
+            for item in cloned_ballot_items:
+                if isinstance(item, dict):
+                    item.pop("prospect_package_id", None)
+
         clone = Election(
             id=str(uuid4()),
             organization_id=str(organization_id),
@@ -3558,10 +3606,10 @@ class ElectionService:
             description=source.description,
             election_type=source.election_type,
             positions=copy.deepcopy(source.positions),
-            # Ballot items are the core of a reusable ballot.  Copy the JSON
-            # structure deeply so a later edit to the clone cannot mutate a
-            # mutable source value held by the ORM session.
-            ballot_items=copy.deepcopy(source.ballot_items),
+            # Ballot items are the core of a reusable ballot.  Copied deeply
+            # (so a later edit to the clone cannot mutate a mutable source
+            # value held by the ORM session) with stateful keys stripped above.
+            ballot_items=cloned_ballot_items,
             position_eligibility=copy.deepcopy(source.position_eligibility),
             start_date=start_date,
             end_date=end_date,
@@ -6816,17 +6864,33 @@ Best regards,
         # to a no-op filter and any prior vote (for any position) would block.
         # Match is_test so a manager's test ballot never consumes their real
         # vote slot — mirroring the `test:` namespace in the dedup hash.
+        # Votes stored before position normalization have position IS NULL
+        # (with NULL-based dedup hashes), so a same-position filter alone
+        # would let a token that voted pre-deploy cast a second counted vote.
+        # Handled at read time — no migration: a NULL-position vote for a
+        # candidate running for the effective position counts as a vote for
+        # that position.
+        if effective_position:
+            position_filter = or_(
+                Vote.position == effective_position,
+                and_(
+                    Vote.position.is_(None),
+                    Vote.candidate_id.in_(
+                        select(Candidate.id)
+                        .where(Candidate.election_id == election.id)
+                        .where(Candidate.position == effective_position)
+                    ),
+                ),
+            )
+        else:
+            position_filter = Vote.position.is_(None)
         existing_votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election.id)
             .where(Vote.voter_hash == voting_token.voter_hash)
             .where(Vote.is_test == voting_token.is_test)
             .where(Vote.deleted_at.is_(None))
-            .where(
-                Vote.position == effective_position
-                if effective_position
-                else Vote.position.is_(None)
-            )
+            .where(position_filter)
         )
         position_votes = existing_votes_result.scalars().all()
 
@@ -6901,10 +6965,14 @@ Best regards,
         # Update election chain pointer
         election.last_chain_hash = vote.chain_hash
 
-        # Track which positions have been voted on via this token
+        # Track which positions have been voted on via this token. Use the
+        # effective position (falls back to candidate.position), not the raw
+        # submitted one — an omitted position field would otherwise never
+        # mark the token as having voted for it, leaving the token reusable
+        # for that position and never completing (used=True) below.
         positions_voted = copy.deepcopy(voting_token.positions_voted or [])
-        if position and position not in positions_voted:
-            positions_voted.append(position)
+        if effective_position and effective_position not in positions_voted:
+            positions_voted.append(effective_position)
             voting_token.positions_voted = positions_voted
 
         # Mark token as fully used only when all positions are voted
@@ -7122,16 +7190,33 @@ Best regards,
             # Check if already voted for this position (prevents double-voting
             # within the ballot). Match is_test so a test ballot never blocks
             # the same member's real ballot — mirroring the dedup-hash
-            # namespace (`test:` prefix).
+            # namespace (`test:` prefix). Votes stored before position
+            # normalization have position IS NULL, so a same-position filter
+            # alone would let a token that voted pre-deploy vote again —
+            # treat a NULL-position vote for a candidate of this position as
+            # a vote on this item (read-time handling, no migration).
             existing_check = await self.db.execute(
                 select(Vote)
                 .where(Vote.election_id == election.id)
                 .where(Vote.voter_hash == voting_token.voter_hash)
                 .where(Vote.is_test == voting_token.is_test)
-                .where(Vote.position == position)
+                .where(
+                    or_(
+                        Vote.position == position,
+                        and_(
+                            Vote.position.is_(None),
+                            Vote.candidate_id.in_(
+                                select(Candidate.id)
+                                .where(Candidate.election_id == election.id)
+                                .where(Candidate.position == position)
+                            ),
+                        ),
+                    )
+                )
                 .where(Vote.deleted_at.is_(None))
+                .limit(1)
             )
-            if existing_check.scalar_one_or_none():
+            if existing_check.scalars().first():
                 return (
                     None,
                     f"You have already voted on: {ballot_item.get('title', ballot_item_id)}",
