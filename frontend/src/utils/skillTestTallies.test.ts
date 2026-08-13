@@ -123,4 +123,73 @@ describe('computeSectionTally', () => {
 
     expect(computeSectionTally(criteria, results).earned).toBe(1);
   });
+  describe('per-step score modes', () => {
+    // Mirrors backend/tests/test_skill_score_breakdown.py::TestPerCriterionScoreModes.
+    const questions = (overrides: Partial<SkillCriterion>) => [
+      criterion({ id: 'criterion-0-0' }),
+      criterion({ id: 'criterion-0-1', ...overrides }),
+    ];
+    const marks: CriterionResult[] = [
+      { criterion_id: 'criterion-0-0', passed: true },
+      { criterion_id: 'criterion-0-1', passed: false },
+    ];
+
+    it('costs nothing when no mode is set', () => {
+      const tally = computeSectionTally(questions({}), marks);
+
+      expect(tally.deducted).toBe(0);
+      expect(tally.available).toBeNull();
+      expect(tally.failed).toBe(1);
+    });
+
+    it('deducts the configured points on a recorded fail', () => {
+      const tally = computeSectionTally(questions({ score_mode: 'deduct', deduction_points: 2 }), marks);
+
+      expect(tally.deducted).toBe(2);
+      // A deduction must not enlarge the pool — a candidate who performs the
+      // step correctly should read the same score as one whose sheet omits it.
+      expect(tally.available).toBeNull();
+    });
+
+    it('defaults an unweighted deduction to one point', () => {
+      expect(computeSectionTally(questions({ score_mode: 'deduct' }), marks).deducted).toBe(1);
+    });
+
+    it('charges nothing for a deduct step that passed or was left unscored', () => {
+      const criteria = questions({ score_mode: 'deduct' });
+
+      expect(computeSectionTally(criteria, [{ criterion_id: 'criterion-0-1', passed: true }]).deducted).toBe(0);
+      expect(computeSectionTally(criteria, []).deducted).toBe(0);
+    });
+
+    it('counts a section as scored when it only deducts', () => {
+      const tally = computeSectionTally(questions({ score_mode: 'deduct' }), marks);
+
+      // It earns nothing and still moves the percentage, so reporting it as
+      // "not scored" would leave the number unaccounted for.
+      expect(tally.countsTowardScore).toBe(true);
+    });
+
+    it('puts a points-mode step into the pool instead', () => {
+      const tally = computeSectionTally(questions({ score_mode: 'points', max_score: 4 }), marks);
+
+      expect(tally.available).toBe(4);
+      expect(tally.earned).toBe(0);
+      expect(tally.deducted).toBe(0);
+    });
+
+    it('lets an explicit none override the template-wide setting', () => {
+      const tally = computeSectionTally(questions({ score_mode: 'none' }), marks, true);
+
+      // Only the unset step follows the toggle; the opted-out one stays out.
+      expect(tally.available).toBe(1);
+      expect(tally.earned).toBe(1);
+    });
+
+    it('ignores a mode on a type that does not honour it', () => {
+      const criteria = [criterion({ id: 'criterion-0-0', type: 'statement', score_mode: 'deduct' })];
+
+      expect(computeSectionTally(criteria, [{ criterion_id: 'criterion-0-0', passed: false }]).deducted).toBe(0);
+    });
+  });
 });
