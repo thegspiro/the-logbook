@@ -299,6 +299,7 @@ describe('reportApiError', () => {
     expect(sentBody()).toMatchObject({ error_type: 'API_SERVER_ERROR' });
     expect(sentBody()['context']).toMatchObject({
       method: 'POST',
+      action: 'Creating or submitting events',
       path: '/events/1',
       status: 500,
     });
