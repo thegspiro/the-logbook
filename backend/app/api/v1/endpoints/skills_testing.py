@@ -95,6 +95,16 @@ CANDIDATE_SEARCH_MAX_RESULTS = 15
 # reader asking why it was voided still needs to see what it said.
 _SCORED_TEST_STATUSES = ("completed", "voided")
 
+# These values determine what an official result credits and who may see it.
+# They are deliberately still part of the request schemas because officers use
+# the same create/update endpoints to make per-test exceptions.
+_OFFICER_CONTROLLED_TEST_FIELDS = {
+    "requirement_id",
+    "result_disclosure",
+    "result_release",
+    "result_viewer_positions",
+}
+
 
 def _format_points(value: float) -> str:
     """Point totals without float noise: 12.0 -> "12", 12.5 -> "12.5"."""
@@ -162,6 +172,21 @@ def _can_manage_tests(user: User) -> bool:
     dependency on routes that now admit practice examiners too.
     """
     return user_has_permission(user, "training.manage")
+
+
+def _guard_official_test_policy_fields(
+    fields: set[str], *, is_practice: bool, user: User
+) -> None:
+    """Keep ordinary examiners from choosing official credit/access policy."""
+    restricted = fields & _OFFICER_CONTROLLED_TEST_FIELDS
+    if restricted and not is_practice and not _can_manage_tests(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Only a training officer can set official test fields: "
+                f"{', '.join(sorted(restricted))}"
+            ),
+        )
 
 
 def _authorize_test_write(test: SkillTest, user: User) -> None:
@@ -834,6 +859,9 @@ async def duplicate_template(
         score_pass_fail_criteria=source.score_pass_fail_criteria,
         tags=source.tags,
         visibility=source.visibility,
+        result_disclosure=source.result_disclosure,
+        result_release=source.result_release,
+        result_viewer_positions=source.result_viewer_positions,
     )
 
     db.add(new_template)
@@ -1188,6 +1216,21 @@ async def create_test(
     """
     is_officer = _can_manage_tests(current_user)
 
+    # A member may record the scorecard, but only an officer may choose what an
+    # official result credits or override its disclosure policy.  Otherwise a
+    # member-supplied value would become authoritative when an officer validates
+    # the result. Null values are harmless because they retain template policy.
+    supplied_policy_fields = {
+        field
+        for field in _OFFICER_CONTROLLED_TEST_FIELDS
+        if getattr(test_data, field) is not None
+    }
+    _guard_official_test_policy_fields(
+        supplied_policy_fields,
+        is_practice=test_data.is_practice,
+        user=current_user,
+    )
+
     # Verify template exists, is published, and belongs to org
     template_result = await db.execute(
         select(SkillTemplate)
@@ -1449,6 +1492,13 @@ async def update_test(
 
     update_data = test_update.model_dump(exclude_unset=True)
 
+    # Unlike create, an explicit null on update is significant: it can erase an
+    # officer's override and fall back to a broader template/org policy. Check
+    # field presence before processing or writing any values.
+    _guard_official_test_policy_fields(
+        set(update_data), is_practice=test.is_practice, user=current_user
+    )
+
     # Optimistic concurrency. Refuse rather than silently overwrite when the
     # client's copy is stale — two examiners on one test, or an officer editing
     # the scorecard while a phone still holds unsaved criteria, previously lost
@@ -1461,6 +1511,13 @@ async def update_test(
     # "cannot update expected_version on a completed test", which named the wrong
     # problem entirely.
     expected_version = update_data.pop("expected_version", None)
+
+    # Popped for the same reason as expected_version: it is a fact the client is
+    # reporting, not a column it is asking to set. The count is incremented
+    # here rather than assigned, so a client cannot inflate it — and a save that
+    # merely repeats the flag cannot either, because the examiner screen sends
+    # it once per pickup.
+    resumed = update_data.pop("resumed", None)
 
     # Completed tests only allow notes updates (section_results for criterion notes, top-level notes)
     if test.status == "completed":
@@ -1480,6 +1537,21 @@ async def update_test(
                 "Reload to see the current results before saving again."
             ),
         )
+
+    # After the conflict check, so a refused write cannot bump the count.
+    # Incremented rather than assigned, so a client cannot set it directly — and
+    # a replayed save cannot inflate it either, because the examiner screen
+    # sends the flag once per pickup.
+    #
+    # Only while scoring can actually run (draft/in_progress): a completed test
+    # still accepts notes edits through this endpoint, and letting a stray flag
+    # ride along on one would retroactively mark a validated record's timing
+    # unverified — changing what a signed scorecard asserts.
+    if resumed and test.status in (
+        SkillTestStatus.DRAFT.value,
+        SkillTestStatus.IN_PROGRESS.value,
+    ):
+        test.resume_count = (test.resume_count or 0) + 1
 
     # Convert section_results to JSON-serializable dicts if provided
     if "section_results" in update_data and update_data["section_results"] is not None:
@@ -3215,6 +3287,7 @@ async def export_tests_csv(
                 "Started (UTC)",
                 "Completed (UTC)",
                 "Elapsed (s)",
+                "Timing Verified",
                 "Validated (UTC)",
                 "Validated By",
                 "Voided (UTC)",
@@ -3239,6 +3312,11 @@ async def export_tests_csv(
                     _csv_dt(t.started_at),
                     _csv_dt(t.completed_at),
                     "" if t.elapsed_seconds is None else t.elapsed_seconds,
+                    # A resumed test's clock carried on from the last save, so
+                    # the seconds are not a stopwatch reading. An audit packet
+                    # that presented them as one would be overstating what the
+                    # record can support.
+                    _csv_bool(not (t.resume_count or 0)),
                     _csv_dt(t.validated_at),
                     name_of(t.validated_by),
                     _csv_dt(t.voided_at),
@@ -3572,6 +3650,8 @@ def _build_test_response(
         returned_by_name=_format_user_name(returner) if returner else None,
         return_reason=test.return_reason,
         return_count=test.return_count or 0,
+        resume_count=test.resume_count or 0,
+        timing_verified=not (test.resume_count or 0),
         validated_at=_ensure_utc(test.validated_at),
         validated_by=test.validated_by,
         pending_validation=is_pending_validation(test),

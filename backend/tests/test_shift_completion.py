@@ -1097,6 +1097,26 @@ class TestTraineeReportReleaseBoundary:
 
 
 class TestTrainingCreditReleaseBoundary:
+    async def test_creation_only_credits_approved_reports(
+        self, db_session, setup_training_org
+    ):
+        org_id, officer_id, trainee_id = setup_training_org
+        service = ShiftCompletionService(db_session)
+        service._create_skill_checkoffs = AsyncMock(return_value=[])
+        service._update_requirement_progress = AsyncMock(return_value=[])
+
+        await service.create_report(
+            organization_id=uuid.UUID(org_id),
+            officer_id=uuid.UUID(officer_id),
+            trainee_id=trainee_id,
+            shift_date=date.today(),
+            hours_on_shift=12.0,
+            review_status="pending_review",
+        )
+
+        service._create_skill_checkoffs.assert_not_awaited()
+        service._update_requirement_progress.assert_not_awaited()
+
     async def test_pending_review_does_not_credit_until_approved(self):
         org_id = uuid.uuid4()
         report = SimpleNamespace(

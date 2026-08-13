@@ -20,8 +20,16 @@ from uuid import uuid4
 from app.services.election_service import ElectionService
 
 
-def _election(anonymous_voting=True):
-    return SimpleNamespace(anonymous_voting=anonymous_voting)
+def _election(
+    anonymous_voting=True,
+    voting_method="simple_majority",
+    max_votes_per_position=1,
+):
+    return SimpleNamespace(
+        anonymous_voting=anonymous_voting,
+        voting_method=voting_method,
+        max_votes_per_position=max_votes_per_position,
+    )
 
 
 def _electronic(position="Chief"):
@@ -34,9 +42,10 @@ def _electronic(position="Chief"):
     )
 
 
-def _paper(position="Chief"):
+def _paper(position="Chief", candidate_id="candidate-1"):
     return SimpleNamespace(
         position=position,
+        candidate_id=candidate_id,
         voter_hash=None,
         voter_id=None,
         is_manual=True,
@@ -74,13 +83,33 @@ class TestPaperBallotsCountAsVoters:
         votes = [_paper(position) for position in ("Chief", "Deputy", "Captain")]
         assert ElectionService._count_ballots_cast(_election(), votes) == 1
 
-    def test_largest_position_tally_is_the_ballot_count(self):
+    def test_largest_position_tally_is_the_single_choice_ballot_count(self):
         # Not every ballot marks every position: 5 voted for Chief, 3 of them
         # also for Deputy. Five people were in the room.
         votes = [_paper("Chief") for _ in range(5)] + [
             _paper("Deputy") for _ in range(3)
         ]
         assert ElectionService._count_ballots_cast(_election(), votes) == 5
+
+    def test_approval_selections_do_not_inflate_paper_turnout(self):
+        # Three physical ballots approving two candidates produce six rows,
+        # but must not satisfy quorum as though six people voted.
+        votes = [
+            _paper("Board", candidate_id)
+            for candidate_id in ("candidate-1", "candidate-2")
+            for _ in range(3)
+        ]
+        election = _election(voting_method="approval")
+        assert ElectionService._count_ballots_cast(election, votes) == 3
+
+    def test_multi_vote_selections_do_not_inflate_paper_turnout(self):
+        votes = [
+            _paper("Board", candidate_id)
+            for candidate_id in ("candidate-1", "candidate-2")
+            for _ in range(3)
+        ]
+        election = _election(max_votes_per_position=2)
+        assert ElectionService._count_ballots_cast(election, votes) == 3
 
     def test_mixed_election_adds_paper_to_electronic(self):
         votes = [_electronic() for _ in range(4)] + [_paper() for _ in range(6)]

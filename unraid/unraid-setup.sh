@@ -253,6 +253,25 @@ generate_env() {
 
     print_info "Generating new .env file..."
 
+    # Production credentials must never be submitted over the plain-HTTP port
+    # exposed by the bundled nginx container.  Require the public URL of an
+    # HTTPS reverse proxy instead of silently turning the startup safety check
+    # into a no-op.  HTTPS_ORIGIN may be supplied by unattended installers.
+    while :; do
+        if [ -z "${HTTPS_ORIGIN:-}" ]; then
+            read -r -p "Public HTTPS URL (for example, https://logbook.example.com): " HTTPS_ORIGIN
+        fi
+        case "$HTTPS_ORIGIN" in
+            https://?*)
+                if [[ "$HTTPS_ORIGIN" != *[[:space:]]* ]]; then
+                    break
+                fi
+                ;;
+        esac
+        print_error "A valid https:// URL is required. Configure an HTTPS reverse proxy before continuing."
+        HTTPS_ORIGIN=""
+    done
+
     # Generate secrets
     SECRET_KEY=$(openssl rand -hex 32)
     ENCRYPTION_KEY=$(openssl rand -hex 32)
@@ -283,7 +302,7 @@ DB_NAME=the_logbook
 DB_USER=logbook_user
 
 # Network Configuration
-ALLOWED_ORIGINS=http://${UNRAID_IP}:7880
+ALLOWED_ORIGINS=${HTTPS_ORIGIN}
 
 # Application Settings
 APP_NAME=The Logbook
@@ -292,18 +311,8 @@ ENVIRONMENT=production
 DEBUG=false
 
 # ---- Security posture -----------------------------------------------------
-# The production startup gate requires SECURITY_ENFORCE_HTTPS=true to boot.
+# Requests must arrive through the HTTPS reverse proxy named above.
 SECURITY_ENFORCE_HTTPS=true
-# LAN-TRIAL ESCAPE HATCH: in production the app marks auth cookies Secure,
-# which browsers refuse to send over plain http:// — so logins would fail at
-# http://${UNRAID_IP}:7880. COOKIE_SECURE=false below allows cookie auth over
-# plain HTTP so you can trial the app on a trusted LAN.
-#
-# BEFORE REAL USE: front the app with an HTTPS reverse proxy (Swag, Nginx
-# Proxy Manager), point ALLOWED_ORIGINS at your https:// origin, and DELETE
-# the COOKIE_SECURE line — session cookies over cleartext HTTP are exposed to
-# anyone on the network path. See docs/deployment/unraid.md.
-COOKIE_SECURE=false
 
 # Ports
 FRONTEND_PORT=7880
@@ -446,13 +455,14 @@ verify_deployment() {
 # ============================================
 
 display_summary() {
+    PUBLIC_ORIGIN=$(sed -n 's/^ALLOWED_ORIGINS=//p' "$INSTALL_DIR/.env" | head -n 1)
     print_header "INSTALLATION COMPLETE!"
 
     echo ""
     echo -e "${GREEN}The Logbook has been successfully installed!${NC}"
     echo ""
     echo -e "${BLUE}Access Information:${NC}"
-    echo -e "  Frontend:  ${GREEN}http://${UNRAID_IP}:7880${NC}"
+    echo -e "  Frontend:  ${GREEN}${PUBLIC_ORIGIN}${NC}"
     echo -e "  Backend:   ${GREEN}http://${UNRAID_IP}:7881/health${NC}"
     echo "  (API docs are disabled in production; enabling them blocks startup)"
     echo ""
@@ -469,16 +479,13 @@ display_summary() {
     echo "  Config File:     $INSTALL_DIR/.env"
     echo ""
     echo -e "${YELLOW}Next Steps:${NC}"
-    echo "  1. Open http://${UNRAID_IP}:7880 in your browser"
+    echo "  1. Open ${PUBLIC_ORIGIN} in your browser"
     echo "  2. Complete the onboarding wizard"
     echo "  3. Configure your organization settings"
     echo ""
-    echo -e "${YELLOW}⚠ SECURITY — LAN trial mode:${NC}"
-    echo "  This install allows logins over plain HTTP (COOKIE_SECURE=false in"
-    echo "  .env) so you can trial the app on a trusted LAN. Before real use,"
-    echo "  put an HTTPS reverse proxy in front (Swag / Nginx Proxy Manager),"
-    echo "  point ALLOWED_ORIGINS at your https:// origin, and remove the"
-    echo "  COOKIE_SECURE line from $INSTALL_DIR/.env."
+    echo -e "${YELLOW}⚠ SECURITY:${NC}"
+    echo "  Onboarding and login must use the HTTPS URL above. Do not expose or"
+    echo "  use the plain-HTTP ports for browser access."
     echo "  Guide: docs/deployment/unraid.md (HTTPS with Reverse Proxy)"
     echo ""
     echo -e "${BLUE}Support:${NC}"

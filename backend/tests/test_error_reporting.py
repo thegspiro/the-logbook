@@ -18,6 +18,7 @@ from app.core.error_reporting import (
     extract_request_identity,
     is_excluded_path,
     persist_error_log,
+    sanitize_path,
     sanitize_query_params,
 )
 from app.core.security import create_access_token
@@ -115,6 +116,33 @@ class TestSanitizeQueryParams:
 
     def test_redaction_is_case_insensitive(self):
         assert "supersecret" not in sanitize_query_params("TOKEN=supersecret")
+
+
+class TestSanitizePath:
+    def test_redacts_token_route_parameter(self):
+        token = "FINTOK_0123456789abcdefghijklmnopqrstuvwxyz"
+
+        result = sanitize_path(
+            f"/public/v1/finance/approvals/{token}/approve", {"token": token}
+        )
+
+        assert token not in result
+        assert result == "/public/v1/finance/approvals/[REDACTED]/approve"
+
+    def test_preserves_non_sensitive_route_parameters(self):
+        assert sanitize_path("/api/v1/events/42", {"event_id": "42"}) == (
+            "/api/v1/events/42"
+        )
+
+    def test_redacts_token_before_file_suffix(self):
+        assert sanitize_path("/calendar/secret.ics", {"token": "secret"}) == (
+            "/calendar/[REDACTED].ics"
+        )
+
+    def test_redacts_known_public_token_path_without_route_metadata(self):
+        assert sanitize_path("/application-status/emailed-secret") == (
+            "/application-status/[REDACTED]"
+        )
 
 
 class TestBuildErrorType:

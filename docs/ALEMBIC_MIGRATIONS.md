@@ -16,9 +16,16 @@
 
 ## Current Head
 
-> **Update (2026-08-10):** The current head is **`20260810_0008`**
-> (`20260810_0008_add_deployed_lots.py`). **New migrations must set
-> `down_revision = "20260810_0008"`.**
+> **Update (2026-08-12):** The current head is **`20260812_0001`**
+> (`20260812_0001_add_saved_ballot_templates.py`). **New migrations must set
+> `down_revision = "20260812_0001"`.**
+>
+> Past `20260810_0008` the chain runs `20260811_0001` (optional equipment-kit
+> items) → `20260811_0002` (skill-test return trail) → `20260812_0001`
+> (`saved_ballot_templates` — org-scoped reusable ballot snapshots).
+>
+> **Superseded (2026-08-10):** The head was **`20260810_0008`**
+> (`20260810_0008_add_deployed_lots.py`).
 >
 > Past `20260805_0010` the chain runs `20260806_*` → `20260807_*` →
 > `20260808_0001` (skill test validation) → `0002` (owns_requirement) → `0003`

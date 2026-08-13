@@ -7,7 +7,9 @@ the HTTP-exception handler in ``main.py`` funnel through here so that every
 server-side failure an administrator could act on lands in one place.
 """
 
+import re
 import traceback
+from collections.abc import Mapping
 from typing import Any
 from urllib.parse import parse_qs, urlencode
 
@@ -30,6 +32,13 @@ SENSITIVE_QUERY_KEYS = {
     "access_token",
     "refresh_token",
 }
+
+TOKEN_PATH_PATTERNS = (
+    re.compile(r"(/finance/approvals/)[^/?#]+", re.IGNORECASE),
+    re.compile(r"(/event-requests/status/)[^/?#]+", re.IGNORECASE),
+    re.compile(r"(/application-status/)[^/?#]+", re.IGNORECASE),
+    re.compile(r"(/calendar/)[^/?#]+(?=\.ics(?:[/\s?#]|$))", re.IGNORECASE),
+)
 
 # ``error_logs.error_type`` is String(50); a longer value fails the insert and
 # would lose the error entirely rather than truncating it.
@@ -57,6 +66,27 @@ def sanitize_query_params(query_string: str) -> str:
         if key.lower() in SENSITIVE_QUERY_KEYS:
             parsed[key] = ["[REDACTED]"]
     return urlencode(parsed, doseq=True)
+
+
+def sanitize_path(path: str, path_params: Mapping[str, Any] | None = None) -> str:
+    """Redact credential-like route parameters before persisting a path."""
+    sanitized = path
+    if isinstance(path_params, Mapping):
+        for name, value in path_params.items():
+            if name.lower() not in SENSITIVE_QUERY_KEYS or value is None:
+                continue
+            # Match a complete path segment (including tokens immediately before a
+            # suffix such as ``.ics``), not an incidental occurrence elsewhere.
+            sanitized = re.sub(
+                rf"(?<=/){re.escape(str(value))}(?=/|\.|$)",
+                "[REDACTED]",
+                sanitized,
+            )
+    # Client reports do not include Starlette's path_params, so retain a
+    # conservative route-aware fallback for the public bearer-token workflows.
+    for pattern in TOKEN_PATH_PATTERNS:
+        sanitized = pattern.sub(r"\1[REDACTED]", sanitized)
+    return sanitized
 
 
 def build_error_type(name: str, prefix: str = "BACKEND_") -> str:
@@ -139,8 +169,8 @@ async def persist_error_log(
     Returns True when a row was written. Never raises: an error in the error
     reporter must not replace the error the caller is already handling.
     """
-    path = str(request.url.path)
-    if is_excluded_path(path):
+    raw_path = str(request.url.path)
+    if is_excluded_path(raw_path):
         return False
 
     user_id, org_id = extract_request_identity(request)
@@ -152,7 +182,7 @@ async def persist_error_log(
 
     context: dict[str, Any] = {
         "method": request.method,
-        "path": path,
+        "path": sanitize_path(raw_path, getattr(request, "path_params", None)),
         "query": sanitize_query_params(str(request.url.query)),
         "source": "backend",
     }
@@ -160,6 +190,12 @@ async def persist_error_log(
         context["traceback"] = format_traceback(exc)
     if extra_context:
         context.update(extra_context)
+    # Callers may supply additional request context, but may not bypass the
+    # credential redaction applied to the canonical path above.
+    if isinstance(context.get("path"), str):
+        context["path"] = sanitize_path(
+            context["path"], getattr(request, "path_params", None)
+        )
 
     try:
         from app.core.database import database_manager

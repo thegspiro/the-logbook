@@ -99,6 +99,50 @@ class TestCompletedTestFieldGuard:
         assert "expected_version" not in str(exc.value.detail)
         assert not db.committed
 
+
+class TestOfficerControlledFields:
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("requirement_id", uuid4()),
+            ("result_disclosure", "full"),
+            ("result_release", "on_completion"),
+            ("result_viewer_positions", ["captain"]),
+        ],
+    )
+    async def test_member_cannot_change_official_credit_or_visibility(
+        self, field, value
+    ):
+        """Member scorecard access must not include officer policy controls."""
+        db = StubSession(_completed_test(status="in_progress"))
+
+        with pytest.raises(HTTPException) as exc:
+            await update_test(
+                test_id=TEST_ID,
+                test_update=SkillTestUpdate(**{field: value}),
+                db=db,
+                current_user=_examiner(),
+            )
+
+        assert exc.value.status_code == 403
+        assert field in str(exc.value.detail)
+        assert not db.committed
+
+    async def test_member_cannot_clear_an_official_policy_override(self):
+        db = StubSession(_completed_test(status="in_progress"))
+
+        with pytest.raises(HTTPException) as exc:
+            await update_test(
+                test_id=TEST_ID,
+                test_update=SkillTestUpdate(result_disclosure=None),
+                db=db,
+                current_user=_examiner(),
+            )
+
+        assert exc.value.status_code == 403
+        assert "result_disclosure" in str(exc.value.detail)
+        assert not db.committed
+
     async def test_genuinely_frozen_fields_are_still_refused(self):
         db = StubSession(_completed_test())
 

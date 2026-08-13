@@ -75,6 +75,17 @@ implemented via the OpenID Connect authorization-code flow in
    SPA landing page `/auth/callback` (`OAUTH_SUCCESS_REDIRECT`). On failure it
    redirects to `OAUTH_FAILURE_REDIRECT` (default `/login`) with an `error=`
    query param
+6. **MFA is enforced on the OAuth path too** *(2026-08-12)*. If the matched
+   account has TOTP enabled, step 5 does **not** happen: no session cookies are
+   issued and no session row is created. The callback instead redirects to
+   `/auth/callback#mfa_token=<jwt>` — a 5-minute `mfa_pending` token carried in
+   the **URL fragment**, which browsers never send to a server. The SPA strips
+   the fragment from history immediately (`history.replaceState`), stores the
+   challenge in the auth store, and routes to `/login`, where the standard
+   two-factor form completes `POST /auth/mfa/login`. Previously OAuth verified
+   only the primary credential, so a compromised Google/Microsoft account
+   bypassed the app's second factor entirely. Audit event:
+   `oauth_mfa_challenge` (category `authentication`)
 
 ### Supported Providers
 
@@ -186,6 +197,17 @@ rest. A member who loses their authenticator and exhausts their recovery codes
 can have MFA reset by an administrator (Members admin → **Reset MFA**, or
 `POST /users/{user_id}/reset-mfa`), then re-enroll from Settings → Security.
 
+**Privilege ceiling on admin resets** *(2026-08-12)*: the admin
+password-reset and MFA-reset endpoints now refuse to touch an account whose
+effective permissions exceed the caller's own. A `members.manage` holder can
+no longer reset the password or strip the second factor of a `security.manage`
+admin and log in as them — the classic reset-to-escalate path. Every
+permission the target holds must be within the caller's set (wildcards
+honored, so `*` clears anyone); a violation returns 403
+("You cannot reset the account of a user with privileges beyond your own")
+and files a privilege-escalation report. Equal-privilege peers remain
+resettable, and both endpoints stay rate-limited and org-scoped.
+
 ---
 
 ## Public Portal API Keys
@@ -216,6 +238,33 @@ the app):
 | Inactivity timeout | 30 minutes (no mouse/keyboard/touch) |
 | Concurrent sessions | 3 per user (configurable) |
 | Session IP monitoring | Alerts on IP change during session |
+
+### Refresh Rotation Is Strict — No Replay Grace *(2026-08-12)*
+
+Refresh tokens rotate on every use, and a **used token is dead immediately**.
+The former 30-second "rotation grace window" — which handed the session's
+*current* token pair to anyone presenting the just-rotated previous token, to
+tolerate multi-tab and app-boot races — is removed: it let a token thief take
+over a session for 30 seconds after every legitimate refresh. Presenting any
+stale refresh token is now treated as replay/theft and **revokes all of that
+user's sessions** (logout everywhere). Concurrent refreshes from multiple tabs
+that previously slid through the grace window will now trip this — an accepted
+trade. The `REFRESH_ROTATION_GRACE_SECONDS` setting and the
+`user_sessions.previous_refresh_token` column still exist but are no longer
+consulted; the column is actively nulled on each rotation.
+
+### Deactivated Organizations Cannot Log In *(2026-08-12)*
+
+Password login now joins on the organization and requires
+`organizations.active IS TRUE` — both when resolving the canonical org and in
+the cross-org username fallback. Previously a member of a **deactivated**
+organization could still authenticate. The rejection is indistinguishable from
+a wrong password ("Incorrect username or password", with the usual dummy-hash
+timing defense), so org status is not enumerable. Two boundaries to know:
+the check runs at authentication time (existing sessions are not revoked when
+an org is deactivated, and expire naturally), and the **OAuth path does not
+yet perform an org-active check** — it rejects only inactive *users* (tracked
+in KNOWN_LIMITATIONS).
 
 ---
 

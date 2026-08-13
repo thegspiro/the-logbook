@@ -3,7 +3,7 @@ Schemas for Training Module Configuration (Member Visibility Settings)
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -57,6 +57,10 @@ class TrainingModuleConfigResponse(UTCResponseBase):
 
     # Reports access
     allow_member_report_export: bool
+
+    # Skills-test result visibility defaults
+    skills_result_disclosure: Literal["none", "scores", "full"] = "full"
+    skills_result_release: Literal["on_completion", "on_release"] = "on_completion"
 
     # Shift report review workflow
     report_review_required: bool = False
@@ -145,6 +149,10 @@ class TrainingModuleConfigUpdate(BaseModel):
     show_submission_history: Optional[bool] = None
 
     allow_member_report_export: Optional[bool] = None
+
+    # Skills-test result visibility defaults
+    skills_result_disclosure: Optional[Literal["none", "scores", "full"]] = None
+    skills_result_release: Optional[Literal["on_completion", "on_release"]] = None
 
     # Shift report review workflow
     report_review_required: Optional[bool] = None

@@ -622,10 +622,17 @@ const runPreflight = (
   return { headerRow, total: dataRecords.length, valid, invalid };
 };
 
-const escapeCell = (value: string): string => (/[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
+const escapeCell = (value: string): string => {
+  // Spreadsheet applications can execute cells beginning with these characters
+  // as formulas. A leading apostrophe makes the value literal when the CSV is
+  // opened in a spreadsheet while leaving the user-supplied text visible.
+  const safeValue = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return /[",\r\n]/.test(safeValue) ? `"${safeValue.replace(/"/g, '""')}"` : safeValue;
+};
 
 /**
- * The rejected rows, verbatim, with the reasons in a leading column.
+ * The rejected rows, with spreadsheet formula prefixes neutralized and the
+ * reasons in a leading column.
  *
  * `errorReason` leads rather than trails so it cannot collide with a row that
  * carries more cells than the header — precisely the shifted-column case this
