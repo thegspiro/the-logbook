@@ -178,6 +178,10 @@ class EventBase(BaseModel):
         description="Allowed RSVP statuses. Defaults to ['going', 'not_going']",
     )
     is_mandatory: bool = Field(default=False)
+    mandatory_membership_types: Optional[List[str]] = Field(
+        default=None,
+        description="Membership tier IDs required to attend; null means all member types",
+    )
     allow_guests: bool = Field(default=False)
     send_reminders: bool = Field(default=True)
     reminder_schedule: List[int] = Field(
@@ -271,6 +275,7 @@ class EventUpdate(BaseModel):
     max_attendees: Optional[int] = Field(None, ge=1)
     allowed_rsvp_statuses: Optional[List[str]] = None
     is_mandatory: Optional[bool] = None
+    mandatory_membership_types: Optional[List[str]] = None
     allow_guests: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_schedule: Optional[List[int]] = None
@@ -361,6 +366,7 @@ class EventListItem(UTCResponseBase):
     location_name: Optional[str] = None  # Resolved location name if location_id is set
     requires_rsvp: bool
     is_mandatory: bool
+    mandatory_membership_types: Optional[List[str]] = None
     is_draft: bool = False
     is_cancelled: bool
     is_recurring: bool = False
@@ -880,6 +886,7 @@ class RecurringEventCreate(BaseModel):
     rsvp_deadline: Optional[datetime] = None
     max_attendees: Optional[int] = Field(None, ge=1)
     is_mandatory: bool = False
+    mandatory_membership_types: Optional[List[str]] = None
     allow_guests: bool = False
     send_reminders: bool = True
     reminder_schedule: List[int] = Field(default=[24])
@@ -1024,6 +1031,7 @@ class VisibleEventTypesResponse(BaseModel):
     visible_event_types: List[str]
     custom_event_categories: List[EventCategoryConfig]
     visible_custom_categories: List[str]
+    membership_types: List[OutreachEventType]
 
 
 class AttachmentUploadResponse(BaseModel):

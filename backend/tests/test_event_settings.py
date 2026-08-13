@@ -188,3 +188,29 @@ class TestEventSettingsDefaults:
             assert isinstance(
                 EVENT_SETTINGS_DEFAULTS[key], list
             ), f"{key} should be a list, got {type(EVENT_SETTINGS_DEFAULTS[key])}"
+
+
+class TestVisibleEventTypes:
+    @pytest.mark.asyncio
+    async def test_includes_configured_membership_tiers_in_sort_order(self):
+        org = _make_org(
+            initial_settings={
+                "membership_tiers": {
+                    "tiers": [
+                        {"id": "active", "name": "Active Member", "sort_order": 2},
+                        {"id": "cadet", "name": "Cadet", "sort_order": 1},
+                    ]
+                }
+            }
+        )
+        db = _make_db(org)
+        user = _make_user()
+
+        from app.api.v1.endpoints.events import get_visible_event_types
+
+        result = await get_visible_event_types(db=db, current_user=user)
+
+        assert result["membership_types"] == [
+            {"value": "cadet", "label": "Cadet"},
+            {"value": "active", "label": "Active Member"},
+        ]
