@@ -43,6 +43,38 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### Groundwork on the last five: what each one actually needs
+
+No images this pass — both candidates examined turned out to need seed work
+larger than a tick, and guessing at it would have produced a picture that did
+not match its caption. Written down so the next pass starts from the answer.
+
+**`14-elections.md:352` — the ballot send confirmation.** The caption's "42
+ballots sent, 3 skipped" is not what the screen says. `EmailBallotResponse`
+carries `recipients_count`, `failed_count`, `skipped_count` and
+`skipped_details`, and `ElectionDetailPage` renders a toast reading "Ballots
+sent to N voter(s), M skipped (see banner below)" plus a **persistent banner**
+listing each skipped member and reason. The caption should be rewritten against
+those two, not the invented numbers.
+
+Producing a skip needs an eligibility mismatch — the reasons are "No eligible
+ballot items — role type and attendance did not match any item requirements" and
+"Not eligible for any position … membership type does not match any position's
+voter-type rules". So the seed needs an **open** election whose items restrict
+`eligible_voter_types`, with members on file who fall outside it. Sending is a
+real mutation, so the shot must be flagged `mutatesSeedData` and will be forced
+last in guide 14 by the manifest's own invariant.
+
+**`01-membership.md:1282` — the training program phases.** The caption asks for
+Phase 1 (Complete, 4/4), Phase 2 (In Progress, 0/6), Phase 3 (Locked, 1/3
+pre-credited), Phase 4 (Locked, 0/2) and a 25% bar — numbers from the guide's
+worked example, not from any screen. The three seeded programs have two or three
+phases each and **zero requirements in any phase**, so no progress fraction can
+render at all. Filling this means seeding a four-phase program with 4/6/3/2
+requirements and an enrolment part-way through it, or narrowing the caption to
+what a program detail can show. The former is a day's demo data; the latter
+should be a deliberate choice, not a silent one.
+
 ### A membership vote nothing could picture, and a field that silently discarded writes
 
 `14-elections.md:843` wanted a membership approval ballot item. None existed
