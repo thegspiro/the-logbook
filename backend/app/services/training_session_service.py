@@ -21,10 +21,14 @@ from app.models.training import (
     ApprovalStatus,
     EnrollmentStatus,
     ProgramEnrollment,
+    ProgramPhase,
     RequirementProgress,
     TrainingApproval,
+    TrainingCategory,
     TrainingCourse,
+    TrainingProgram,
     TrainingRecord,
+    TrainingRequirement,
     TrainingSession,
     TrainingType,
 )
@@ -33,9 +37,12 @@ from app.schemas.training_session import (
     AttendeeApprovalData,
     RecurringTrainingSessionCreate,
     TrainingSessionCreate,
+    TrainingSessionLinkageUpdate,
 )
 from app.services.event_service import EventService
 from app.services.location_service import LocationService
+from app.utils.model_updates import apply_updates
+from app.utils.org_scoping import is_in_org
 
 
 class TrainingSessionService:
@@ -43,6 +50,119 @@ class TrainingSessionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _validate_linkage_ids(
+        self,
+        session_data: "TrainingSessionCreate | TrainingSessionLinkageUpdate",
+        organization_id: UUID,
+    ) -> Optional[str]:
+        """Verify client-supplied linkage FKs belong to the caller's org (XC-1).
+
+        Returns an error message, or None when everything checks out. Errors are
+        deliberately generic so they cannot be used as a cross-tenant existence
+        oracle. ProgramPhase has no organization_id of its own, so it is scoped
+        through its (already-validated) program instead.
+        """
+        if session_data.category_id and not await is_in_org(
+            self.db, TrainingCategory, session_data.category_id, organization_id
+        ):
+            return "Invalid training category"
+
+        if session_data.program_id and not await is_in_org(
+            self.db, TrainingProgram, session_data.program_id, organization_id
+        ):
+            return "Invalid training program"
+
+        if session_data.requirement_id and not await is_in_org(
+            self.db, TrainingRequirement, session_data.requirement_id, organization_id
+        ):
+            return "Invalid training requirement"
+
+        if session_data.phase_id:
+            # ProgramPhase carries no organization_id, so scope it through its
+            # program. Deliberately NOT required to match session_data.program_id:
+            # cohort-generated sessions can carry a class-level phase from a
+            # different (or no) cohort program, and rejecting that would break
+            # event generation for existing course setups.
+            phase_result = await self.db.execute(
+                select(ProgramPhase.id)
+                .join(TrainingProgram, ProgramPhase.program_id == TrainingProgram.id)
+                .where(
+                    ProgramPhase.id == str(session_data.phase_id),
+                    TrainingProgram.organization_id == str(organization_id),
+                )
+            )
+            if phase_result.scalar_one_or_none() is None:
+                return "Invalid program phase"
+
+        # getattr: the linkage-update schema carries no instructor_id
+        instructor_id = getattr(session_data, "instructor_id", None)
+        if instructor_id and not await is_in_org(
+            self.db, User, instructor_id, organization_id
+        ):
+            return "Invalid instructor"
+
+        return None
+
+    async def get_session_by_event(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+    ) -> Optional[TrainingSession]:
+        """Fetch the training session attached to an event, org-scoped."""
+        result = await self.db.execute(
+            select(TrainingSession)
+            .where(TrainingSession.event_id == str(event_id))
+            .where(TrainingSession.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def update_session_linkage(
+        self,
+        training_session_id: UUID,
+        updates: TrainingSessionLinkageUpdate,
+        organization_id: UUID,
+    ) -> Tuple[Optional[TrainingSession], Optional[str]]:
+        """Update a session's category/program/phase/requirement links.
+
+        Fields omitted from the payload are untouched; explicit nulls clear
+        the link. Links only steer *future* crediting — records and pipeline
+        progress already written at finalization are not reflowed.
+
+        Returns: (training_session, error_message)
+        """
+        result = await self.db.execute(
+            select(TrainingSession)
+            .where(TrainingSession.id == str(training_session_id))
+            .where(TrainingSession.organization_id == str(organization_id))
+        )
+        training_session = result.scalar_one_or_none()
+        if not training_session:
+            return None, "Training session not found"
+
+        payload = updates.model_dump(exclude_unset=True)
+        if not payload:
+            return training_session, None
+
+        linkage_error = await self._validate_linkage_ids(updates, organization_id)
+        if linkage_error:
+            return None, linkage_error
+
+        # The columns are String(36); UUIDs bound raw match/store nothing
+        # sensible (same mismatch as the course lookup above).
+        payload = {
+            key: str(value) if value is not None else None
+            for key, value in payload.items()
+        }
+
+        try:
+            apply_updates(training_session, payload)
+        except ValueError as e:
+            return None, str(e)
+
+        await self.db.commit()
+        await self.db.refresh(training_session)
+        return training_session, None
 
     async def create_training_session(
         self,
@@ -69,6 +189,10 @@ class TrainingSessionService:
         if session_data.requires_rsvp and session_data.rsvp_deadline:
             if session_data.rsvp_deadline >= session_data.start_datetime:
                 return None, "RSVP deadline must be before event start"
+
+        linkage_error = await self._validate_linkage_ids(session_data, organization_id)
+        if linkage_error:
+            return None, linkage_error
 
         # Validate course data
         if session_data.use_existing_course:
@@ -225,6 +349,10 @@ class TrainingSessionService:
         if session_data.requires_rsvp and session_data.rsvp_deadline:
             if session_data.rsvp_deadline >= session_data.start_datetime:
                 return [], "RSVP deadline must be before event start"
+
+        linkage_error = await self._validate_linkage_ids(session_data, organization_id)
+        if linkage_error:
+            return [], linkage_error
 
         # Validate course data
         if session_data.use_existing_course:

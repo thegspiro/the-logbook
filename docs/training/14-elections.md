@@ -138,13 +138,12 @@ and apply it to next year's election:
 > ballot **structure only**: items, positions, voting methods, victory
 > conditions, write-in settings, eligibility types. It never carries
 > candidates, voters, votes, tokens, or attendance — the builder says exactly
-> this under the name field, and the server enforces it. Applying last year's
-> template gives you last year's *questions*, with nobody pre-nominated.
+> this under the name field, and the stored shape has nowhere to put them, so
+> they cannot survive the round trip even if something tries to send them.
+> Applying last year's template gives you last year's _questions_, with nobody
+> pre-nominated.
 
-> **[SCREENSHOT NEEDED]:** _The Ballot Builder with the **Save as Template**
-> form open — the "Template name" field, the "Saves ballot configuration
-> only—never candidates, voters, votes, or attendance" helper text, and the
-> Save Template / Cancel buttons._
+![The Save as Template form open in the Ballot Builder — the Template name field, the configuration-only note, and the Save Template / Cancel buttons](./images/14-21-save-ballot-template.png)
 
 ### Applying one
 
@@ -156,21 +155,18 @@ and apply it to next year's election:
    ballot, which is why it asks twice
 4. Add this year's candidates to the applied items
 
-> **[SCREENSHOT NEEDED]:** _The template picker showing the "Your saved
-> ballots" section with one saved template ("Annual officer election · 4 items
-> · replaces current ballot") above the built-in template grid, with the
-> two-step Replace / Cancel confirmation armed._
+![The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates](./images/14-22-ballot-template-picker.png)
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario                                                    | Behavior                                                                                                                                                             |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Two templates named "Annual Officers" and "annual officers" | Rejected — names are unique per department **case-insensitively** (409 "A ballot template with this name already exists"). The saved name keeps your original casing |
-| Applying a template over a ballot you were editing | The current ballot is **replaced**, not merged — the two-step confirm exists because of this |
-| The member who saved a template leaves the department | The template survives — it belongs to the organization, not its author |
-| Deleting a template used by past elections | Safe — elections hold their own copy of their ballot; a template is only a starting point |
-| Applying the same template to two elections | Each application mints fresh ballot-item ids, so the two ballots never share identifiers |
-| A template from another department | Invisible — templates are organization-scoped; list and delete both 404 across org lines |
+| Applying a template over a ballot you were editing          | The current ballot is **replaced**, not merged — the two-step confirm exists because of this                                                                         |
+| The member who saved a template leaves the department       | The template survives — it belongs to the organization, not its author                                                                                               |
+| Deleting a template used by past elections                  | Safe — elections hold their own copy of their ballot; a template is only a starting point                                                                            |
+| Applying the same template to two elections                 | Each application mints fresh ballot-item ids, so the two ballots never share identifiers                                                                             |
+| A template from another department                          | Invisible — templates are organization-scoped; list and delete both 404 across org lines                                                                             |
 
 ---
 
@@ -353,7 +349,12 @@ When you click **Send Ballots**, the system:
 3. Sends an email with a link to the public ballot page (`/ballot#token=...` — the token rides in the URL fragment, which browsers never send to any server, so the credential stays out of access logs; the page also removes it from the address bar once loaded)
 4. Reports how many ballots were sent and which members were skipped (with reasons)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ballot send confirmation showing "42 ballots sent, 3 skipped" with a list of skipped members and reasons (e.g., "No email address", "Ineligible tier")._
+![The banner after a ballot send, naming each member who was skipped and why](./images/14-24-ballot-send-skipped.png)
+
+Two things report the result. A **toast** gives the counts — "Ballots sent to N
+voter(s)", plus "M failed" and "M skipped (see banner below)" when either
+applies — and it disappears. A **banner** stays on the page and names each
+skipped member with the reason, which is the part you act on.
 
 > **Hint:** Ballot links are built from the server-configured `FRONTEND_URL`, not the address of the request that triggers the send. Your administrator should set `FRONTEND_URL` to the department's real public site URL (e.g. `https://app.yourdept.org`) so members receive working ballot links — if it is misconfigured, the emailed link points to the wrong host even though the send still reports success.
 
@@ -525,15 +526,15 @@ photographed after the close carries its trail and no buttons.
 
 ### Edge Cases
 
-| Scenario                                           | Behavior                                                                                   |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Typo: 40 votes entered for a 4-vote race           | Rejected by the plausibility guard; over-count checkbox appears only after the guard fires |
-| Recorder clicks Attest on their own batch          | Rejected — attestation requires a _different_ officer                                      |
-| Setting changed from 2 to 0 after batches recorded | Existing pending batches still require their snapshotted 2 attestations                    |
+| Scenario                                           | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Typo: 40 votes entered for a 4-vote race           | Rejected by the plausibility guard; over-count checkbox appears only after the guard fires                                                                                                                                                                                                                                                                                                                                    |
+| Recorder clicks Attest on their own batch          | Rejected — attestation requires a _different_ officer                                                                                                                                                                                                                                                                                                                                                                         |
+| Setting changed from 2 to 0 after batches recorded | Existing pending batches still require their snapshotted 2 attestations                                                                                                                                                                                                                                                                                                                                                       |
 | Election closed with a batch still pending         | Batch excluded from certified results; warning audit event written. _(2026-08-12)_ The exclusion now also covers the close path's own arithmetic: a pending batch's votes cannot decide which candidates advance to a **runoff** and cannot flip a **membership-approval** package to elected/not elected. Before this fix an unattested batch was invisible in the published results yet still counted in those two outcomes |
-| A batch reaches Confirmed before close             | Its votes count everywhere — results, runoff advancement, and package outcomes. Exclusion applies only while the batch is Pending (or, via its votes' soft-delete, Voided) |
-| Mis-keyed batch already attested                   | Void the batch (reason required) and re-record                                             |
-| Attestation requirement set to 0                   | Batches confirm immediately on recording (not recommended)                                 |
+| A batch reaches Confirmed before close             | Its votes count everywhere — results, runoff advancement, and package outcomes. Exclusion applies only while the batch is Pending (or, via its votes' soft-delete, Voided)                                                                                                                                                                                                                                                    |
+| Mis-keyed batch already attested                   | Void the batch (reason required) and re-record                                                                                                                                                                                                                                                                                                                                                                                |
+| Attestation requirement set to 0                   | Batches confirm immediately on recording (not recommended)                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
 
@@ -844,7 +845,12 @@ When a prospective member reaches the **Election Vote** stage of their pipeline,
 4. Members vote to approve or deny
 5. Results flow back: package status → `elected` or `not_elected`
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the election detail page showing a membership approval ballot item with an applicant's name, supporting statement, and Approve/Deny voting options._
+![The ballot preview's membership approval item — the applicant named in the title, the coordinator's supporting statement, and the Approve and Deny options](./images/14-23-membership-ballot-item.png)
+
+The election detail page lists the item; **Preview Ballot** is what shows it as a
+voter will see it — Approve, Deny, and **Abstain (Do not vote on this item)**,
+which every approval item carries. The options are inert in the preview: it is a
+rendering of the ballot, not a ballot.
 
 See [Membership Management > Prospective Members](./01-membership.md#prospective-members-pipeline) for the full pipeline workflow.
 

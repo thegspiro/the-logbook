@@ -18,22 +18,22 @@ report), be scheduled for later, expire, be pinned, or be persistent.
 
 ### Backend
 
-| Layer | File |
-|-------|------|
-| Model | `backend/app/models/notification.py` (`DepartmentMessage`, `DepartmentMessageRead`, `MessagePriority`, `MessageTargetType`) |
-| Endpoints | `backend/app/api/v1/endpoints/messages.py` (mounted at `/api/v1/messages`) |
-| Service (CRUD, targeting, read/ack, reports) | `backend/app/services/messaging_service.py` |
-| Delivery / escalation | `backend/app/services/message_delivery_service.py` |
-| Scheduled publish task | `backend/app/services/scheduled_tasks.py` (`run_publish_scheduled_messages`) |
+| Layer                                        | File                                                                                                                        |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Model                                        | `backend/app/models/notification.py` (`DepartmentMessage`, `DepartmentMessageRead`, `MessagePriority`, `MessageTargetType`) |
+| Endpoints                                    | `backend/app/api/v1/endpoints/messages.py` (mounted at `/api/v1/messages`)                                                  |
+| Service (CRUD, targeting, read/ack, reports) | `backend/app/services/messaging_service.py`                                                                                 |
+| Delivery / escalation                        | `backend/app/services/message_delivery_service.py`                                                                          |
+| Scheduled publish task                       | `backend/app/services/scheduled_tasks.py` (`run_publish_scheduled_messages`)                                                |
 
 ### Frontend (`frontend/src/modules/communications/`)
 
-| Concern | File |
-|---------|------|
-| Member inbox | `pages/MessagesInboxPage.tsx` (`/messages`) |
+| Concern              | File                                                       |
+| -------------------- | ---------------------------------------------------------- |
+| Member inbox         | `pages/MessagesInboxPage.tsx` (`/messages`)                |
 | Admin compose/manage | `pages/MessagesAdminPage.tsx` (`/communications/messages`) |
-| Compose/edit form | `components/MessageComposeForm.tsx` |
-| Service | `services/communicationsServices.ts` (`messagesService`) |
+| Compose/edit form    | `components/MessageComposeForm.tsx`                        |
+| Service              | `services/communicationsServices.ts` (`messagesService`)   |
 
 Message bodies render through `components/ux/LinkifiedText.tsx`, which turns
 `http(s)` URLs into links safely (text is emitted as React nodes — no
@@ -43,19 +43,19 @@ Message bodies render through `components/ux/LinkifiedText.tsx`, which turns
 
 ### `DepartmentMessage` (`department_messages`)
 
-| Column | Notes |
-|--------|-------|
-| `title`, `body` | Content. Body is plain text (links auto-rendered). |
-| `priority` | `normal` / `important` / `urgent` — drives escalation. |
-| `target_type` | `all` / `roles` / `statuses` / `members`. |
-| `target_roles` | JSON array of **role (position) ids** (rename-safe; name fallback for legacy rows). |
-| `target_statuses`, `target_member_ids` | JSON arrays for status/member targeting. |
-| `is_pinned`, `is_persistent`, `requires_acknowledgment` | Display/behavior flags. |
-| `is_active` | Deactivated (e.g. by soft delete) messages are hidden. |
-| `expires_at` | Optional; expired messages drop out of the inbox. Indexed via `idx_dept_msg_org_active_expires`. |
-| `deleted_at` | Soft delete — hides the message while preserving read/ack records. |
-| `scheduled_at` | Future value = not yet published; cleared to NULL on publish. Indexed via `idx_dept_msg_scheduled_at`. |
-| `posted_by` | Author (FK users, SET NULL). |
+| Column                                                  | Notes                                                                                                  |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `title`, `body`                                         | Content. Body is plain text (links auto-rendered).                                                     |
+| `priority`                                              | `normal` / `important` / `urgent` — drives escalation.                                                 |
+| `target_type`                                           | `all` / `roles` / `statuses` / `members`.                                                              |
+| `target_roles`                                          | JSON array of **role (position) ids** (rename-safe; name fallback for legacy rows).                    |
+| `target_statuses`, `target_member_ids`                  | JSON arrays for status/member targeting.                                                               |
+| `is_pinned`, `is_persistent`, `requires_acknowledgment` | Display/behavior flags.                                                                                |
+| `is_active`                                             | Deactivated (e.g. by soft delete) messages are hidden.                                                 |
+| `expires_at`                                            | Optional; expired messages drop out of the inbox. Indexed via `idx_dept_msg_org_active_expires`.       |
+| `deleted_at`                                            | Soft delete — hides the message while preserving read/ack records.                                     |
+| `scheduled_at`                                          | Future value = not yet published; cleared to NULL on publish. Indexed via `idx_dept_msg_scheduled_at`. |
+| `posted_by`                                             | Author (FK users, SET NULL).                                                                           |
 
 ### `DepartmentMessageRead` (`department_message_reads`)
 
@@ -77,24 +77,25 @@ disagree about the audience.
 On create (immediate) or at scheduled publish, `MessageDeliveryService.deliver`
 fans the message out (excluding the author):
 
-| Priority / flag | In-app | Email | SMS |
-|-----------------|:---:|:---:|:---:|
-| Normal / Important | ✅ | — | — |
-| Requires acknowledgment | ✅ | ✅ | — |
-| Urgent | ✅ | ✅ | ✅ |
+| Priority / flag         | In-app | Email | SMS |
+| ----------------------- | :----: | :---: | :-: |
+| Normal / Important      |   ✅   |  ✅   |  —  |
+| Requires acknowledgment |   ✅   |  ✅   |  —  |
+| Urgent                  |   ✅   |  ✅   | ✅  |
 
 - **In-app:** one `NotificationLog` (`channel="in_app"`, category
   `department_message`) per recipient → the bell inbox.
 - **Email:** reuses `EmailService` + `wrap_email_body`. For a department message
-  this is the **record-of-notice channel**, so it is sent **unconditionally** —
-  deliberately *not* filtered by the member's `email_notifications` preference or
-  by consent, so a member can never claim they weren't informed. (The
-  `email_notifications` preference still governs the separate reminder/alert
-  flows.)
+  this is the **record-of-notice channel**, so it is sent for **every message,
+  at every priority**, and **unconditionally** per member — deliberately _not_
+  filtered by the member's `email_notifications` preference or by consent, so a
+  member can never claim they weren't informed. Important/urgent messages get an
+  `[IMPORTANT]`/`[URGENT]` subject prefix. (The `email_notifications` preference
+  still governs the separate reminder/alert flows.)
 - **SMS:** `SMSService.send_bulk_sms` when Twilio is enabled and the member has a
   `mobile`/`phone`, **and** the member has granted express **SMS consent**
   (`ConsentType.SMS_NOTIFICATIONS`, checked via `ConsentService.granted_user_ids`,
-  which fails closed — a member who was never asked is treated as *not* consented,
+  which fails closed — a member who was never asked is treated as _not_ consented,
   per US TCPA), **and** their `sms_notifications` preference is on. A member who
   turns off (or never grants) SMS still receives the email above.
 
@@ -136,10 +137,10 @@ POST   /api/v1/messages/{id}/acknowledge         # Acknowledge
 
 ## Permissions
 
-| Action | Permission |
-|--------|------------|
-| Create / edit / delete / stats / acknowledgment report | `notifications.manage` |
-| Read own inbox, mark read, acknowledge | Authenticated member (targeting-gated) |
+| Action                                                 | Permission                             |
+| ------------------------------------------------------ | -------------------------------------- |
+| Create / edit / delete / stats / acknowledgment report | `notifications.manage`                 |
+| Read own inbox, mark read, acknowledge                 | Authenticated member (targeting-gated) |
 
 Message create, update, delete, and acknowledgment are audit-logged.
 
@@ -147,9 +148,10 @@ Message create, update, delete, and acknowledgment are audit-logged.
 
 - `20260218_0500_add_department_messages.py` — original tables.
 - `20260321_0301_add_department_message_is_persistent.py` — `is_persistent`.
-- `20260720_0001_add_department_message_deleted_at.py` — `deleted_at` + expiry index.
 - `20260720_0002_backfill_department_message_role_ids.py` — role names → ids.
 - `20260720_0003_add_department_message_scheduled_at.py` — `scheduled_at` + index.
+- `20260720_0004_add_department_message_deleted_at.py` — `deleted_at` + expiry
+  index (renumbered from `20260720_0001` in the duplicate-revision fix).
 
 ## Email templates & footers _(2026-08-10)_
 

@@ -525,7 +525,8 @@ class TestGuestCheckInSchema:
         # data the published schema calls valid. Checked exhaustively rather
         # than by reasoning about which definition of whitespace applies
         # where — Python and JSON Schema disagree exactly where this bug
-        # lived (U+001C–001F, U+0085).
+        # lived (U+001C–001F, U+0085). Reading the pattern from the model's
+        # JSON schema (not a constant) keeps this pinned to what clients see.
         import re
 
         from app.schemas.event import GuestCheckInRequest

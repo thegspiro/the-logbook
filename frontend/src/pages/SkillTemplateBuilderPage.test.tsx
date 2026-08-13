@@ -519,4 +519,115 @@ describe('SkillTemplateBuilderPage', () => {
       );
     });
   });
+  // The gap these close: with only Critical available, a failed step either
+  // ended the evaluation or cost nothing at all, so a scorecard could show a
+  // recorded Fail above a 100%.
+  describe('Per-step score effect', () => {
+    const scoreEffect = () => screen.getByLabelText(/score effect for criterion 1/i);
+
+    const startTemplate = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+      await user.type(screen.getByPlaceholderText(/SCBA Proficiency Evaluation/i), name);
+      await user.type(screen.getByPlaceholderText(/section name/i), 'Section 1');
+      await user.type(screen.getByPlaceholderText(/dons scba/i), 'Cot question');
+    };
+
+    const save = async (user: ReturnType<typeof userEvent.setup>) => {
+      const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
+      await user.click(saveButtons[saveButtons.length - 1] as HTMLElement);
+    };
+
+    it('offers the choice on a Pass/Fail step and not on a statement', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      expect(scoreEffect()).toBeInTheDocument();
+
+      await user.selectOptions(screen.getByDisplayValue('Pass / Fail'), 'statement');
+
+      expect(screen.queryByLabelText(/score effect for criterion 1/i)).not.toBeInTheDocument();
+    });
+
+    it('defaults to the template-wide setting, and names what that resolves to', async () => {
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      expect(scoreEffect()).toHaveValue('');
+      expect(screen.getByRole('option', { name: /template default \(no effect\)/i })).toBeInTheDocument();
+    });
+
+    it('asks for a penalty only once the step deducts', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      expect(screen.queryByLabelText(/points off for criterion 1/i)).not.toBeInTheDocument();
+
+      await user.selectOptions(scoreEffect(), 'deduct');
+
+      expect(screen.getByLabelText(/points off for criterion 1/i)).toBeInTheDocument();
+    });
+
+    it('sends the mode and penalty with the criterion', async () => {
+      mockCreateTemplate.mockResolvedValue({ id: 'new-tpl-1', name: 'T', sections: [] });
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await startTemplate(user, 'Deducting Template');
+      // Something has to earn points for a deduction to come off.
+      await user.click(screen.getByRole('button', { name: /add criterion/i }));
+      await user.selectOptions(screen.getAllByDisplayValue('Pass / Fail')[1] as HTMLElement, 'score');
+      await user.type(screen.getAllByPlaceholderText(/dons scba/i)[1] as HTMLElement, 'Packages patient');
+      await user.type(screen.getByPlaceholderText('3'), '20');
+
+      await user.selectOptions(scoreEffect(), 'deduct');
+      await user.type(screen.getByLabelText(/points off for criterion 1/i), '2');
+      await save(user);
+
+      expect(mockCreateTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              criteria: [
+                expect.objectContaining({ score_mode: 'deduct', deduction_points: 2 }),
+                expect.objectContaining({ type: 'score' }),
+              ],
+            }),
+          ],
+        })
+      );
+    });
+
+    it('refuses to save a deduction with no points anywhere to take it off', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await startTemplate(user, 'Nothing To Deduct From');
+      await user.selectOptions(scoreEffect(), 'deduct');
+      await save(user);
+
+      expect(mockCreateTemplate).not.toHaveBeenCalled();
+      expect(screen.getByText(/no step on this template earns any/i)).toBeInTheDocument();
+    });
+
+    it('drops a penalty left behind when the step stops deducting', async () => {
+      mockCreateTemplate.mockResolvedValue({ id: 'new-tpl-1', name: 'T', sections: [] });
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await startTemplate(user, 'Changed Mind Template');
+      await user.selectOptions(scoreEffect(), 'deduct');
+      await user.type(screen.getByLabelText(/points off for criterion 1/i), '3');
+      // A number the author can no longer see must not come back into force.
+      await user.selectOptions(scoreEffect(), 'points');
+      await save(user);
+
+      expect(mockCreateTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              criteria: [expect.objectContaining({ score_mode: 'points', deduction_points: undefined })],
+            }),
+          ],
+        })
+      );
+    });
+  });
 });

@@ -7,6 +7,8 @@ import pytest
 from sqlalchemy import func, select
 
 from app.models.email_template import MessageHistory
+from app.models.event import Event, EventExternalAttendee
+from app.models.membership_pipeline import ProspectiveMember
 from app.models.user import Organization
 from app.services.retention_service import RECORD_CLASSES, RetentionService
 
@@ -45,6 +47,42 @@ async def _count_messages(db, org) -> int:
     ).scalar()
 
 
+async def _make_event(db, org):
+    event = Event(
+        organization_id=org.id,
+        title="Open House",
+        start_datetime=datetime.now(UTC) - timedelta(days=5000),
+        end_datetime=datetime.now(UTC) - timedelta(days=5000),
+    )
+    db.add(event)
+    await db.flush()
+    return event
+
+
+async def _make_guest(db, org, event, age_days: int, prospect_id: str | None = None):
+    row = EventExternalAttendee(
+        organization_id=org.id,
+        event_id=event.id,
+        name="Community Guest",
+        email="guest@example.org",
+        created_at=datetime.now(UTC) - timedelta(days=age_days),
+        prospect_id=prospect_id,
+    )
+    db.add(row)
+    await db.flush()
+    return row
+
+
+async def _count_guests(db, org) -> int:
+    return (
+        await db.execute(
+            select(func.count())
+            .select_from(EventExternalAttendee)
+            .where(EventExternalAttendee.organization_id == org.id)
+        )
+    ).scalar()
+
+
 class TestRetentionPolicy:
     async def test_defaults_reported_when_unconfigured(self, db_session):
         org = await _make_org(db_session)
@@ -56,6 +94,9 @@ class TestRetentionPolicy:
         assert message["is_configured"] is False
         forms = next(p for p in policy if p["record_class"] == "form_submissions")
         assert forms["effective_days"] is None  # keep forever until opt-in
+        guests = next(p for p in policy if p["record_class"] == "guest_check_ins")
+        assert guests["effective_days"] is None  # keep forever until opt-in
+        assert guests["min_days"] == 90
 
     async def test_set_policy_respects_floor(self, db_session):
         org = await _make_org(db_session)
@@ -148,6 +189,54 @@ class TestRetentionEnforcement:
         assert await _count_messages(db_session, malformed_org) == 0
         assert await _count_messages(db_session, later_org) == 0
         assert result["orgs_processed"] >= 2
+
+    async def test_guest_check_ins_kept_forever_until_opt_in(self, db_session):
+        org = await _make_org(db_session)
+        event = await _make_event(db_session, org)
+        await _make_guest(db_session, org, event, age_days=4000)
+
+        await RetentionService(db_session).enforce()
+
+        assert await _count_guests(db_session, org) == 1
+
+    async def test_guest_check_ins_opt_in_deletes_only_expired_rows(self, db_session):
+        org = await _make_org(db_session, retention={"guest_check_ins": 365})
+        event = await _make_event(db_session, org)
+        await _make_guest(db_session, org, event, age_days=400)
+        await _make_guest(db_session, org, event, age_days=10)
+
+        result = await RetentionService(db_session).enforce()
+
+        assert await _count_guests(db_session, org) == 1
+        assert result["deleted"][f"{org.id}:guest_check_ins"] == 1
+
+    async def test_guest_check_in_sweep_never_touches_the_linked_prospect(
+        self, db_session
+    ):
+        """A check-in can open a prospective-member record in the recruitment
+        pipeline. Purging the attendance row must delete only the attendance —
+        the prospect's lifecycle is a pipeline decision, not a retention one."""
+        org = await _make_org(db_session, retention={"guest_check_ins": 365})
+        event = await _make_event(db_session, org)
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Guest",
+            email="pat.guest@example.org",
+        )
+        db_session.add(prospect)
+        await db_session.flush()
+        await _make_guest(db_session, org, event, age_days=400, prospect_id=prospect.id)
+
+        await RetentionService(db_session).enforce()
+
+        assert await _count_guests(db_session, org) == 0
+        remaining = (
+            await db_session.execute(
+                select(ProspectiveMember).where(ProspectiveMember.id == prospect.id)
+            )
+        ).scalar_one_or_none()
+        assert remaining is not None
 
     async def test_only_class_restricts_scope(self, db_session):
         org = await _make_org(db_session)

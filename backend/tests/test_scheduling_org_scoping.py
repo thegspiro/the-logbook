@@ -98,6 +98,31 @@ class TestCreateShiftApparatusScoping:
         assert shift is not None
         db.add.assert_called_once()
 
+    async def test_imports_full_apparatus_crew_positions_and_staffing(self):
+        apparatus = SimpleNamespace(
+            id="app-1",
+            crew_positions=["officer", "driver", "firefighter", "firefighter"],
+            min_staffing=3,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_scalars_first(apparatus)])
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        svc = SchedulingService(db)
+
+        shift, err = await svc.create_shift("org-1", {"apparatus_id": "app-1"}, "u1")
+
+        assert err is None
+        assert shift.positions == [
+            {"position": "officer", "required": True},
+            {"position": "driver", "required": True},
+            {"position": "firefighter", "required": True},
+            {"position": "firefighter", "required": True},
+        ]
+        assert shift.min_staffing == 3
+
 
 class TestUpdateShiftApparatusScoping:
     async def test_rejects_foreign_apparatus_on_update(self):
@@ -122,6 +147,35 @@ class TestUpdateShiftApparatusScoping:
 
         assert shift is None
         assert err == "Apparatus not found"
+
+    async def test_imports_staffing_when_apparatus_changes(self):
+        existing = SimpleNamespace(
+            id="s1",
+            organization_id="org-1",
+            shift_officer_id=None,
+            is_finalized=False,
+            positions=[{"position": "old-seat", "required": True}],
+            min_staffing=1,
+        )
+        apparatus = SimpleNamespace(
+            id="app-2",
+            crew_positions=["officer", "driver"],
+            min_staffing=2,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(existing), _scalars_first(apparatus)])
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        svc = SchedulingService(db)
+
+        shift, err = await svc.update_shift("s1", "org-1", {"apparatus_id": "app-2"})
+
+        assert err is None
+        assert shift.positions == [
+            {"position": "officer", "required": True},
+            {"position": "driver", "required": True},
+        ]
+        assert shift.min_staffing == 2
 
 
 class TestFinalizeManualHoursScoping:

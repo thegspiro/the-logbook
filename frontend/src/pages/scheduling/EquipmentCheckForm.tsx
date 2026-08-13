@@ -71,6 +71,7 @@ import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartme
 import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
 
 import { useConfirm } from '../../contexts/ConfirmContext';
+import { useAuthStore } from '../../stores/authStore';
 // ============================================================================
 // Types
 // ============================================================================
@@ -212,23 +213,30 @@ function getExpirationStatus(item: CheckTemplateItem, today: string): 'ok' | 'ex
 function getCompartmentStatus(
   compartment: CheckTemplateCompartment,
   results: Record<string, ItemResult>
-): 'complete' | 'has_failures' | 'in_progress' | 'not_started' {
+): 'complete' | 'has_failures' | 'has_out_of_service' | 'in_progress' | 'not_started' {
   const checkable = compartment.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
   if (checkable.length === 0) return 'complete';
 
   let checked = 0;
   let failed = 0;
+  let outOfService = 0;
   for (const item of checkable) {
     const result = results[item.id];
     if (result && result.status !== 'not_checked') {
       checked++;
       if (result.status === 'fail') failed++;
+      // Counted apart from failures: the server tallies it as a failed item
+      // (the check as a whole fails), but the form paints out-of-service amber
+      // rather than red, and a compartment that reported one must not read as
+      // a green "Complete".
+      if (result.status === 'out_of_service') outOfService++;
     }
   }
 
   if (checked === 0) return 'not_started';
   if (checked === checkable.length) {
-    return failed > 0 ? 'has_failures' : 'complete';
+    if (failed > 0) return 'has_failures';
+    return outOfService > 0 ? 'has_out_of_service' : 'complete';
   }
   return 'in_progress';
 }
@@ -236,6 +244,9 @@ function getCompartmentStatus(
 const STATUS_COLORS = {
   complete: 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400',
   has_failures: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400',
+  // Amber, matching the "Out of service" answer button: needs attention, but
+  // distinct from a failed item.
+  has_out_of_service: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
   in_progress: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400',
   not_started: 'border-theme-surface-border bg-theme-surface text-theme-text-muted',
 } as const;
@@ -243,6 +254,7 @@ const STATUS_COLORS = {
 const STATUS_LABELS: Record<string, string> = {
   complete: 'Complete',
   has_failures: 'Has Failures',
+  has_out_of_service: 'Out of Service',
   in_progress: 'In Progress',
   not_started: 'Not Started',
 };
@@ -273,6 +285,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   shiftContext,
 }) => {
   const { confirm } = useConfirm();
+  const { checkPermission } = useAuthStore();
+  // Swapping stock onto the truck writes the template's lot/expiration record,
+  // so the endpoint keeps it a manage right; the button must not offer a
+  // submit-only member an action the server will deterministically 403.
+  const canSwapStock = checkPermission('equipment_check.manage') || checkPermission('inventory.manage');
   const tz = useTimezone();
   // Calendar day in the org's timezone — the reference every expiry check in
   // this form compares against, so the badge, the auto-fail and the server all
@@ -1687,9 +1704,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             ? 'border-green-500/30 bg-green-500/5'
             : effectiveStatus === 'fail'
               ? 'border-red-500/30 bg-red-500/5'
-              : effectiveStatus === 'not_applicable'
-                ? 'border-theme-surface-border bg-theme-surface-hover/40'
-                : 'border-theme-surface-border bg-theme-surface'
+              : effectiveStatus === 'out_of_service'
+                ? 'border-amber-500/30 bg-amber-500/5'
+                : effectiveStatus === 'not_applicable'
+                  ? 'border-theme-surface-border bg-theme-surface-hover/40'
+                  : 'border-theme-surface-border bg-theme-surface'
         }`}
       >
         {/* Item header */}
@@ -1770,14 +1789,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               is near its date. Expiry is one reason a unit comes off a truck;
               used, damaged, contaminated, missing and recalled are the others,
               and gating on the date left a crew holding an empty bracket with
-              ready stock on the shelf and no way to reach it. */}
+              ready stock on the shelf and no way to reach it. Disabled (not
+              hidden) without a manage permission: the server refuses the swap,
+              and the tooltip tells the crew who to hand the unit to instead of
+              letting the tap end in a 403. */}
           {item.inventoryItemId && (
             <button
               type="button"
+              disabled={!canSwapStock}
               onClick={() => {
                 void openSwap(item);
               }}
-              className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors ${
+              title={canSwapStock ? undefined : 'Swaps from stock are recorded by an officer or supply manager'}
+              className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
                   ? 'text-blue-600 hover:text-blue-700'
                   : 'text-theme-text-muted hover:text-theme-text-secondary'
@@ -1812,7 +1836,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 htmlFor={`replaced-expiration-${item.id}`}
                 className="block text-xs text-blue-700 dark:text-blue-400"
               >
-                Expiration on the replacement — the template will be updated to match.
+                {/* The date is recorded on this check only — the server
+                    deliberately refuses to let a check submission rewrite the
+                    template's expiration (only the inventory-lot swap flow
+                    does), so this copy must not promise that it will. */}
+                Expiration on the replacement — recorded with this check. An officer or admin updates the template date.
               </label>
               <input
                 id={`replaced-expiration-${item.id}`}
@@ -1973,7 +2001,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                             {checked}/{checkable.length} checked
                           </span>
                           {status === 'complete' && <CheckCircle className="h-4 w-4" aria-hidden="true" />}
-                          {status === 'has_failures' && <AlertTriangle className="h-4 w-4" aria-hidden="true" />}
+                          {(status === 'has_failures' || status === 'has_out_of_service') && (
+                            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                          )}
                         </div>
                       </div>
                       {isCollapsed ? (

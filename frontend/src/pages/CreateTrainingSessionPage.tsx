@@ -8,6 +8,7 @@ import {
   CheckCircle,
   QrCode,
   ArrowLeft,
+  Link2,
   MapPin,
   Repeat,
 } from 'lucide-react';
@@ -24,6 +25,8 @@ import { userService, locationsService, trainingSessionService, trainingService 
 import { schedulingService } from '../modules/scheduling/services/api';
 import { useRanks } from '../hooks/useRanks';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
+import { TrainingLinkageFields } from '../components/training/TrainingLinkageFields';
+import { useTrainingLinkageData } from '../hooks/useTrainingLinkageData';
 
 const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -109,6 +112,10 @@ const CreateTrainingSessionPage: React.FC = () => {
     is_mandatory: false,
     use_existing_course: false,
     course_id: '',
+    category_id: undefined,
+    program_id: undefined,
+    phase_id: undefined,
+    requirement_id: undefined,
     course_name: '',
     course_code: '',
     training_type: 'continuing_education',
@@ -158,12 +165,24 @@ const CreateTrainingSessionPage: React.FC = () => {
       });
   }, []);
 
+  const linkageData = useTrainingLinkageData(formData.program_id);
+  const { categories, requirements, programs, phases } = linkageData;
+
   const updateField = (
     field: keyof TrainingSessionCreate,
     value: TrainingSessionCreate[keyof TrainingSessionCreate]
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
+
+  const selectedCourse = formData.use_existing_course
+    ? availableCourses.find((c) => c.id === formData.course_id)
+    : undefined;
+
+  const categoryName = categories.find((c) => c.id === formData.category_id)?.name;
+  const programName = programs.find((p) => p.id === formData.program_id)?.name;
+  const phaseName = phases.find((p) => p.id === formData.phase_id)?.name;
+  const requirementName = requirements.find((r) => r.id === formData.requirement_id)?.name;
 
   const getRecurrenceLabel = (): string => {
     const match = RECURRENCE_PATTERNS.find((p) => p.value === recurrencePattern);
@@ -208,6 +227,10 @@ const CreateTrainingSessionPage: React.FC = () => {
         location: formData.location?.trim() || undefined,
         location_details: formData.location_details?.trim() || undefined,
         course_id: formData.course_id || undefined,
+        category_id: formData.category_id || undefined,
+        program_id: formData.program_id || undefined,
+        phase_id: formData.phase_id || undefined,
+        requirement_id: formData.requirement_id || undefined,
         course_name: formData.course_name?.trim() || undefined,
         course_code: formData.course_code?.trim() || undefined,
         instructor: formData.instructor?.trim() || undefined,
@@ -764,6 +787,10 @@ const CreateTrainingSessionPage: React.FC = () => {
                           instructor: course.instructor || prev.instructor,
                           expiration_months: course.expiration_months ?? prev.expiration_months,
                           max_attendees: course.max_participants ?? prev.max_attendees,
+                          // Pre-link what the course already declares, without
+                          // overriding a choice the officer has made
+                          category_id: prev.category_id || course.category_ids?.[0] || undefined,
+                          program_id: prev.program_id || course.program_id || undefined,
                         }));
                       }
                     }}
@@ -898,6 +925,25 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </div>
                 </>
               )}
+
+              {/* Requirement & Program Linkage */}
+              <div className="border-theme-surface-border border-t pt-6">
+                <div className="mb-1 flex items-center gap-2">
+                  <Link2 className="h-5 w-5 text-red-700" />
+                  <h3 className="text-theme-text-primary font-semibold">Connect to Requirements & Programs</h3>
+                </div>
+                <p className="text-theme-text-muted mb-4 text-sm">
+                  Optional — link this session so attendance automatically counts toward department requirements and
+                  training pipeline progress.
+                </p>
+
+                <TrainingLinkageFields
+                  data={linkageData}
+                  value={formData}
+                  onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+                  selectedCourse={selectedCourse}
+                />
+              </div>
 
               {/* Certification Settings */}
               <div className="border-theme-surface-border border-t pt-6">
@@ -1106,6 +1152,19 @@ const CreateTrainingSessionPage: React.FC = () => {
                     </>
                   )}
                 </ReviewSection>
+
+                {(formData.category_id || formData.program_id || formData.requirement_id) && (
+                  <ReviewSection title="Requirement & Program Links">
+                    {formData.category_id && (
+                      <ReviewItem label="Category" value={categoryName ?? 'Selected category'} />
+                    )}
+                    {formData.requirement_id && (
+                      <ReviewItem label="Requirement" value={requirementName ?? 'Selected requirement'} />
+                    )}
+                    {formData.program_id && <ReviewItem label="Program" value={programName ?? 'Selected program'} />}
+                    {formData.phase_id && <ReviewItem label="Phase" value={phaseName ?? 'Selected phase'} />}
+                  </ReviewSection>
+                )}
 
                 <ReviewSection title="Attendance Settings">
                   <ReviewItem label="QR Code Check-In" value="Enabled" />

@@ -557,3 +557,283 @@ class TestSnapshotPinsTheScoringRule:
         assert calculate_test_result(test, scored_against) == (100.0, "pass")
         # Taken today, the same performance would score 1 of 2.
         assert calculate_test_result(_test(results), live) == (50.0, "pass")
+
+
+class TestPerCriterionScoreModes:
+    """What a failed non-critical step costs, chosen per step.
+
+    The gap these close is the one on the scorecard that prompted them: a
+    practice run recorded a Fail against a cot question and reported 100%,
+    because the only two settings available were "critical" (one slip fails the
+    whole evaluation) and nothing at all.
+    """
+
+    # A twenty-point sheet with four knowledge questions beside it, one of them
+    # answered wrong — the shape of the scorecard that started this.
+    def _sheet(self, question_overrides):
+        questions = [
+            {"type": "pass_fail", "label": "Up a hill"},
+            {"type": "pass_fail", "label": "How many people", **question_overrides},
+            {"type": "pass_fail", "label": "With a patient"},
+            {"type": "pass_fail", "label": "How high"},
+        ]
+        return [
+            {
+                "name": "Patient on Cot",
+                "criteria": [{"type": "score", "label": "Package", "max_score": 20}],
+            },
+            {"name": "Cot Questions", "criteria": questions},
+        ]
+
+    def _marks(self):
+        return [
+            {
+                "section_id": "section-0",
+                "criteria_results": [{"criterion_id": "criterion-0-0", "score": 20}],
+            },
+            {
+                "section_id": "section-1",
+                "criteria_results": [
+                    {"criterion_id": "criterion-1-0", "passed": True},
+                    {"criterion_id": "criterion-1-1", "passed": False},
+                    {"criterion_id": "criterion-1-2", "passed": True},
+                    {"criterion_id": "criterion-1-3", "passed": True},
+                ],
+            },
+        ]
+
+    def test_unset_mode_still_costs_nothing(self):
+        """The reported behavior, pinned: absent a mode, a failed Pass/Fail step
+        leaves the percentage untouched."""
+        breakdown = build_score_breakdown(
+            _test(self._marks()), _template(self._sheet({}))
+        )
+
+        assert breakdown["percentage"] == 100.0
+        assert breakdown["deducted"] == 0.0
+        assert _section_of(breakdown, "Cot Questions")["failed"] == 1
+
+    def test_deduct_takes_points_off_without_enlarging_the_pool(self):
+        breakdown = build_score_breakdown(
+            _test(self._marks()),
+            _template(self._sheet({"score_mode": "deduct"})),
+        )
+
+        assert (breakdown["earned"], breakdown["available"]) == (20.0, 20.0)
+        assert breakdown["deducted"] == 1.0
+        assert breakdown["percentage"] == 95.0
+
+    def test_deduction_amount_is_configurable(self):
+        breakdown = build_score_breakdown(
+            _test(self._marks()),
+            _template(
+                self._sheet({"score_mode": "deduct", "deduction_points": 5}),
+            ),
+        )
+
+        assert breakdown["deducted"] == 5.0
+        assert breakdown["percentage"] == 75.0
+
+    def test_points_mode_enlarges_the_pool_instead(self):
+        breakdown = build_score_breakdown(
+            _test(self._marks()),
+            _template(self._sheet({"score_mode": "points"})),
+        )
+
+        # Only the one question opted in, so the pool grows by its single point.
+        assert (breakdown["earned"], breakdown["available"]) == (20.0, 21.0)
+        assert breakdown["deducted"] == 0.0
+        assert breakdown["percentage"] == 95.2
+
+    def test_a_passing_deduct_step_costs_nothing(self):
+        marks = self._marks()
+        marks[1]["criteria_results"][1]["passed"] = True
+
+        breakdown = build_score_breakdown(
+            _test(marks), _template(self._sheet({"score_mode": "deduct"}))
+        )
+
+        assert breakdown["deducted"] == 0.0
+        assert breakdown["percentage"] == 100.0
+
+    def test_an_unscored_deduct_step_costs_nothing(self):
+        """A deduction is a recorded judgement about what the candidate did. An
+        examiner who never marked the step made no such judgement, and inventing
+        one would charge a candidate for the examiner's omission."""
+        marks = self._marks()
+        del marks[1]["criteria_results"][1]
+
+        breakdown = build_score_breakdown(
+            _test(marks), _template(self._sheet({"score_mode": "deduct"}))
+        )
+
+        assert breakdown["deducted"] == 0.0
+        assert _section_of(breakdown, "Cot Questions")["not_scored"] == 1
+
+    def test_names_each_deduction_so_a_scorecard_can_show_its_working(self):
+        breakdown = build_score_breakdown(
+            _test(self._marks()),
+            _template(self._sheet({"score_mode": "deduct", "deduction_points": 2})),
+        )
+
+        assert breakdown["deductions"] == [
+            {
+                "section_name": "Cot Questions",
+                "criterion_label": "How many people",
+                "points": 2.0,
+            }
+        ]
+
+    def test_deduction_is_reported_against_its_own_section(self):
+        breakdown = build_score_breakdown(
+            _test(self._marks()),
+            _template(self._sheet({"score_mode": "deduct"})),
+        )
+
+        questions = _section_of(breakdown, "Cot Questions")
+        assert questions["deducted"] == 1.0
+        # It earns nothing and still moves the percentage, so it cannot be
+        # reported as a section that did not count.
+        assert questions["counts_toward_score"] is True
+        assert questions["available"] is None
+        assert _section_of(breakdown, "Patient on Cot")["deducted"] == 0.0
+
+    def test_explicit_none_overrides_the_template_wide_setting(self):
+        """One question the department wants recorded but not scored, on a sheet
+        where Pass/Fail steps otherwise carry points."""
+        breakdown = build_score_breakdown(
+            _test(self._marks()),
+            _template(
+                self._sheet({"score_mode": "none"}), score_pass_fail_criteria=True
+            ),
+        )
+
+        # Three questions in the pool, not four; the failed one is outside it.
+        assert (breakdown["earned"], breakdown["available"]) == (23.0, 23.0)
+        assert breakdown["percentage"] == 100.0
+
+    def test_deduct_and_critical_are_independent(self):
+        breakdown = build_score_breakdown(
+            _test(self._marks()),
+            _template(
+                self._sheet({"score_mode": "deduct", "required": True}),
+                require_all_critical=True,
+            ),
+        )
+
+        assert breakdown["deducted"] == 1.0
+        assert [f["criterion_label"] for f in breakdown["critical_failures"]] == [
+            "How many people"
+        ]
+
+    def test_deductions_cannot_drive_the_percentage_below_zero(self):
+        breakdown = build_score_breakdown(
+            _test(self._marks()),
+            _template(self._sheet({"score_mode": "deduct", "deduction_points": 50})),
+        )
+
+        assert breakdown["deducted"] == 50.0
+        assert breakdown["percentage"] == 0.0
+
+    def test_deductions_with_no_point_pool_are_flagged_rather_than_hidden(self):
+        """Nothing on the sheet earns points, so there is no total to subtract
+        from. The scorer cannot apply the deduction; it must not pretend it did."""
+        sections = [
+            {
+                "name": "Cot Questions",
+                "criteria": [
+                    {"type": "pass_fail", "label": "How high", "score_mode": "deduct"}
+                ],
+            }
+        ]
+        test = _test(
+            [
+                {
+                    "section_id": "section-0",
+                    "section_score": 50,
+                    "criteria_results": [
+                        {"criterion_id": "criterion-0-0", "passed": False}
+                    ],
+                }
+            ]
+        )
+
+        breakdown = build_score_breakdown(test, _template(sections))
+
+        assert breakdown["method"] == "section_average"
+        assert breakdown["deducted"] == 1.0
+        assert breakdown["deductions_unapplied"] is True
+
+    def test_unapplied_is_false_when_the_deduction_landed(self):
+        breakdown = build_score_breakdown(
+            _test(self._marks()), _template(self._sheet({"score_mode": "deduct"}))
+        )
+
+        assert breakdown["deductions_unapplied"] is False
+
+    def test_modes_are_frozen_into_the_snapshot(self):
+        """A deduction added to a published template must not re-score results
+        already on file — the same guarantee the template-wide setting has."""
+        sections = self._sheet({})
+        test = SimpleNamespace(
+            template_snapshot=build_template_snapshot(_template(sections)),
+            section_results=self._marks(),
+        )
+        live = _template(self._sheet({"score_mode": "deduct", "deduction_points": 5}))
+
+        assert calculate_test_result(test, resolve_test_template(test, live)) == (
+            100.0,
+            "pass",
+        )
+        assert calculate_test_result(_test(self._marks()), live) == (75.0, "pass")
+
+    def test_an_unknown_mode_is_treated_as_no_effect(self):
+        """The schema rejects these on the way in; a row that predates that
+        validation, or was written straight to the JSON column, must degrade to
+        the behavior a template without modes has rather than crash a scorecard."""
+        breakdown = build_score_breakdown(
+            _test(self._marks()), _template(self._sheet({"score_mode": "penalise"}))
+        )
+
+        assert breakdown["percentage"] == 100.0
+        assert breakdown["deducted"] == 0.0
+
+    def test_checklist_and_timed_steps_can_deduct_too(self):
+        sections = [
+            {
+                "name": "Evolution",
+                "criteria": [
+                    {"type": "score", "label": "Technique", "max_score": 10},
+                    {
+                        "type": "time_limit",
+                        "label": "Under 60s",
+                        "time_limit_seconds": 60,
+                        "score_mode": "deduct",
+                        "deduction_points": 2,
+                    },
+                    {
+                        "type": "checklist",
+                        "label": "Equipment",
+                        "checklist_items": ["Mask", "Gloves"],
+                        "score_mode": "deduct",
+                    },
+                ],
+            }
+        ]
+        test = _test(
+            [
+                {
+                    "section_id": "section-0",
+                    "criteria_results": [
+                        {"criterion_id": "criterion-0-0", "score": 10},
+                        {"criterion_id": "criterion-0-1", "passed": False},
+                        {"criterion_id": "criterion-0-2", "passed": False},
+                    ],
+                }
+            ]
+        )
+
+        breakdown = build_score_breakdown(test, _template(sections))
+
+        assert breakdown["deducted"] == 3.0
+        assert breakdown["percentage"] == 70.0

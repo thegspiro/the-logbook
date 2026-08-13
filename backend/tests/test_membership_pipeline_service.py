@@ -187,15 +187,13 @@ class TestProspectDocumentStepValidation:
 
 
 class TestChecklistStepGate:
-    """A checklist stage's gate, and the dead end it currently is.
+    """A checklist stage's gate grades the action_result submitted with the
+    completion request, merged over any stored progress row.
 
-    ``_validate_step_completion`` counts ``action_result["completed_items"]``
-    on the stored progress row. Nothing in the application writes that key —
-    ``complete-step`` carries only notes, there is no partial-progress
-    endpoint, and no component renders the items as tickable — so a stage with
-    items configured can be neither completed nor skipped through the product.
-    Recorded in docs/KNOWN_LIMITATIONS.md; these tests pin the behaviour so a
-    fix has something to change deliberately.
+    The stored row is only ever written by complete-step itself, so grading
+    the stored value alone made a stage with items configured impossible to
+    complete legitimately (the KNOWN_LIMITATIONS.md dead end); the gate now
+    counts the submitted payload.
     """
 
     @staticmethod
@@ -230,13 +228,49 @@ class TestChecklistStepGate:
             )
 
     async def test_refuses_when_nothing_has_recorded_progress(self):
-        """The state every applicant is actually in."""
         service = MembershipPipelineService(AsyncMock())
         with pytest.raises(ValueError, match="only 0 done"):
             await service._validate_step_completion(
                 self._prospect(None),
                 self._step(["Gear issued", "Station tour"]),
             )
+
+    async def test_submitted_items_satisfy_the_gate(self):
+        """The fix: a first-time completion carrying all items passes even
+        though no progress row was ever stored."""
+        service = MembershipPipelineService(AsyncMock())
+        await service._validate_step_completion(
+            self._prospect(None),
+            self._step(["Gear issued", "Station tour"]),
+            {"completed_items": ["Gear issued", "Station tour"]},
+        )
+
+    async def test_submitted_items_refused_when_incomplete(self):
+        service = MembershipPipelineService(AsyncMock())
+        with pytest.raises(ValueError, match="only 1 done"):
+            await service._validate_step_completion(
+                self._prospect(None),
+                self._step(["Gear issued", "Station tour"]),
+                {"completed_items": ["Gear issued"]},
+            )
+
+    async def test_submitted_key_wins_over_stored_key(self):
+        """Key-level merge: the caller's payload is what gets graded, not a
+        stale stored list."""
+        service = MembershipPipelineService(AsyncMock())
+        with pytest.raises(ValueError, match="only 1 done"):
+            await service._validate_step_completion(
+                self._prospect(["Gear issued", "Station tour"]),
+                self._step(["Gear issued", "Station tour"]),
+                {"completed_items": ["Gear issued"]},
+            )
+
+    async def test_stored_progress_still_counts_when_nothing_submitted(self):
+        service = MembershipPipelineService(AsyncMock())
+        await service._validate_step_completion(
+            self._prospect(["Gear issued", "Station tour"]),
+            self._step(["Gear issued", "Station tour"]),
+        )
 
     async def test_allows_a_stage_with_no_items_configured(self):
         """Which is why the demo pipeline's Onboarding stage still advances."""
@@ -249,3 +283,294 @@ class TestChecklistStepGate:
             self._prospect(None),
             self._step(["Gear issued"], require_all=False),
         )
+
+
+class TestMultiApprovalAndReferenceGates:
+    """The other two action_result-graded gates accept the submitted payload."""
+
+    @staticmethod
+    def _prospect_without_progress():
+        return SimpleNamespace(step_progress=[])
+
+    async def test_submitted_approvals_satisfy_the_gate(self):
+        service = MembershipPipelineService(AsyncMock())
+        step = SimpleNamespace(
+            id="step-1",
+            step_type=PipelineStepType.MULTI_APPROVAL,
+            config={"required_approvers": ["chief", "president"]},
+        )
+        await service._validate_step_completion(
+            self._prospect_without_progress(),
+            step,
+            {"approvals": [{"role": "chief"}, {"role": "president"}]},
+        )
+
+    async def test_missing_approver_still_refused(self):
+        service = MembershipPipelineService(AsyncMock())
+        step = SimpleNamespace(
+            id="step-1",
+            step_type=PipelineStepType.MULTI_APPROVAL,
+            config={"required_approvers": ["chief", "president"]},
+        )
+        with pytest.raises(ValueError, match="president"):
+            await service._validate_step_completion(
+                self._prospect_without_progress(),
+                step,
+                {"approvals": [{"role": "chief"}]},
+            )
+
+    async def test_submitted_references_satisfy_the_gate(self):
+        service = MembershipPipelineService(AsyncMock())
+        step = SimpleNamespace(
+            id="step-1",
+            step_type=PipelineStepType.REFERENCE_CHECK,
+            config={"required_count": 2, "require_all_before_advance": True},
+        )
+        await service._validate_step_completion(
+            self._prospect_without_progress(),
+            step,
+            {"references": [{"name": "A"}, {"name": "B"}]},
+        )
+
+    async def test_too_few_references_still_refused(self):
+        service = MembershipPipelineService(AsyncMock())
+        step = SimpleNamespace(
+            id="step-1",
+            step_type=PipelineStepType.REFERENCE_CHECK,
+            config={"required_count": 2, "require_all_before_advance": True},
+        )
+        with pytest.raises(ValueError, match="only 1 received"):
+            await service._validate_step_completion(
+                self._prospect_without_progress(),
+                step,
+                {"references": [{"name": "A"}]},
+            )
+
+
+class TestCompleteStepActionResult:
+    """complete_step feeds the submitted action_result into the gate and
+    persists the merged view onto the progress row."""
+
+    @staticmethod
+    def _checklist_step():
+        return SimpleNamespace(
+            id="s1",
+            step_type=PipelineStepType.CHECKLIST,
+            config={"items": ["Gear issued", "Station tour"], "require_all": True},
+            is_final_step=False,
+            notify_prospect_on_completion=False,
+        )
+
+    @classmethod
+    def _prospect(cls, step, progress_rows):
+        return SimpleNamespace(
+            id="p1",
+            email=None,
+            pipeline=SimpleNamespace(steps=[step], auto_transfer_on_approval=False),
+            step_progress=progress_rows,
+            current_step_id="s1",
+        )
+
+    def _service(self, prospect):
+        db = AsyncMock()
+        db.add = MagicMock()
+        svc = MembershipPipelineService(db)
+        patches = [
+            patch.object(
+                svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
+            ),
+            patch.object(svc, "_log_activity", new_callable=AsyncMock),
+            patch.object(svc, "_advance_current_step", new_callable=AsyncMock),
+            patch.object(svc, "_do_transfer", new_callable=AsyncMock),
+        ]
+        return svc, patches
+
+    async def test_submitted_payload_completes_a_required_checklist(self):
+        step = self._checklist_step()
+        prospect = self._prospect(step, [])
+        svc, patches = self._service(prospect)
+        with patches[0], patches[1], patches[2], patches[3]:
+            result = await svc.complete_step(
+                prospect_id="p1",
+                organization_id="org1",
+                step_id="s1",
+                completed_by="u1",
+                action_result={"completed_items": ["Gear issued", "Station tour"]},
+            )
+        assert result is prospect
+        added = svc.db.add.call_args[0][0]
+        assert added.action_result == {
+            "completed_items": ["Gear issued", "Station tour"]
+        }
+
+    async def test_incomplete_payload_is_still_refused(self):
+        step = self._checklist_step()
+        prospect = self._prospect(step, [])
+        svc, patches = self._service(prospect)
+        with patches[0], patches[1], patches[2], patches[3]:
+            with pytest.raises(ValueError, match="checklist items"):
+                await svc.complete_step(
+                    prospect_id="p1",
+                    organization_id="org1",
+                    step_id="s1",
+                    completed_by="u1",
+                    action_result={"completed_items": ["Gear issued"]},
+                )
+
+    async def test_merged_result_is_persisted_over_stored_keys(self):
+        step = self._checklist_step()
+        existing = SimpleNamespace(
+            step_id="s1",
+            action_result={"notes_key": "kept", "completed_items": []},
+            status=None,
+            completed_at=None,
+            completed_by=None,
+            notes=None,
+        )
+        prospect = self._prospect(step, [existing])
+        svc, patches = self._service(prospect)
+        with patches[0], patches[1], patches[2], patches[3]:
+            await svc.complete_step(
+                prospect_id="p1",
+                organization_id="org1",
+                step_id="s1",
+                completed_by="u1",
+                action_result={"completed_items": ["Gear issued", "Station tour"]},
+            )
+        assert existing.action_result == {
+            "notes_key": "kept",
+            "completed_items": ["Gear issued", "Station tour"],
+        }
+
+
+class TestSkipNeverTransfers:
+    """A skip is a coordinator bypass, not an approval: even when the skipped
+    stage still carries is_final_step (e.g. left mid-pipeline by a reorder)
+    and auto-transfer is on, skipping must advance — never convert the
+    prospect to an active member."""
+
+    @staticmethod
+    def _pipeline_with_misplaced_final_flag():
+        flagged_mid = SimpleNamespace(
+            id="s1",
+            sort_order=0,
+            step_type=PipelineStepType.CHECKLIST,
+            config={"items": ["Vote held"], "require_all": True},
+            is_final_step=True,
+            notify_prospect_on_completion=False,
+        )
+        actual_last = SimpleNamespace(
+            id="s2",
+            sort_order=1,
+            step_type=PipelineStepType.CHECKLIST,
+            config={},
+            is_final_step=False,
+            notify_prospect_on_completion=False,
+        )
+        return SimpleNamespace(
+            steps=[flagged_mid, actual_last],
+            auto_transfer_on_approval=True,
+        )
+
+    def _prospect(self):
+        return SimpleNamespace(
+            id="p1",
+            email=None,
+            pipeline=self._pipeline_with_misplaced_final_flag(),
+            step_progress=[],
+            current_step_id="s1",
+        )
+
+    async def test_skip_advances_instead_of_transferring(self):
+        prospect = self._prospect()
+        db = AsyncMock()
+        db.add = MagicMock()
+        svc = MembershipPipelineService(db)
+        with patch.object(
+            svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
+        ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
+            svc, "_advance_current_step", new_callable=AsyncMock
+        ) as mock_advance, patch.object(
+            svc, "_do_transfer", new_callable=AsyncMock
+        ) as mock_transfer:
+            result = await svc.skip_current_step(
+                "p1", "org1", "coordinator", notes="bypass"
+            )
+        assert result is prospect
+        mock_transfer.assert_not_awaited()
+        mock_advance.assert_awaited_once()
+        added = db.add.call_args[0][0]
+        assert added.action_result == {"skipped": True}
+
+    async def test_genuine_final_completion_still_transfers(self):
+        """Regression guard for the other direction: an actual approval of
+        the final stage keeps auto-transferring."""
+        prospect = self._prospect()
+        db = AsyncMock()
+        db.add = MagicMock()
+        svc = MembershipPipelineService(db)
+        with patch.object(
+            svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
+        ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
+            svc, "_advance_current_step", new_callable=AsyncMock
+        ) as mock_advance, patch.object(
+            svc, "_do_transfer", new_callable=AsyncMock
+        ) as mock_transfer:
+            await svc.complete_step(
+                prospect_id="p1",
+                organization_id="org1",
+                step_id="s1",
+                completed_by="u1",
+                action_result={"completed_items": ["Vote held"]},
+            )
+        mock_transfer.assert_awaited_once()
+        mock_advance.assert_not_awaited()
+
+
+class TestGetProspectEagerLoadsWhatValidationReads:
+    """`_validate_step_completion` must not trigger a lazy load.
+
+    It counts `prospect.interviews` when the step is an interview_requirement.
+    That is a lazy backref, so reading it mid-await raised MissingGreenlet and
+    surfaced as a 500 from advance/complete — past the endpoint's ValueError
+    handling, which turns real business-rule failures into a 409. Interview is
+    the third stage of the default pipeline, so it blocked advancing anyone out
+    of it, one at a time or in bulk.
+    """
+
+    def test_interviews_is_in_the_eager_load_list(self):
+        import inspect as _inspect
+
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+        )
+
+        source = _inspect.getsource(MembershipPipelineService.get_prospect)
+
+        assert "selectinload(ProspectiveMember.interviews)" in source, (
+            "get_prospect must eager-load interviews; _validate_step_completion "
+            "reads it and a lazy load there raises MissingGreenlet"
+        )
+
+    def test_validation_reads_no_other_unloaded_relationship(self):
+        """Guard the audit, not just the one relationship that bit us."""
+        import inspect as _inspect
+        import re
+
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+        )
+
+        validator = _inspect.getsource(
+            MembershipPipelineService._validate_step_completion
+        )
+        loaded = _inspect.getsource(MembershipPipelineService.get_prospect)
+
+        # Relationship reads look like getattr(prospect, "name", ...) or
+        # prospect.name — collect both and check each is eager-loaded.
+        touched = set(re.findall(r'getattr\(\s*prospect,\s*"([a-z_]+)"', validator))
+        for name in touched:
+            assert f"ProspectiveMember.{name}" in loaded, (
+                f"_validate_step_completion reads prospect.{name} but "
+                "get_prospect does not eager-load it"
+            )

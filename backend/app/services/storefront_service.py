@@ -1356,7 +1356,7 @@ class StorefrontService:
         stable order because two carts holding the same pair of products in
         opposite orders would otherwise deadlock.
         """
-        ordered_ids = sorted({str(pid) for pid in product_ids if pid})
+        ordered_ids = sorted({str(pid).lower() for pid in product_ids if pid})
         if not ordered_ids:
             return
         await self.db.execute(
@@ -1430,19 +1430,27 @@ class StorefrontService:
         # are different goods and must stay separate lines.
         merged: Dict[Tuple[str, Optional[str], Optional[str]], int] = {}
         for item in items:
+            product_id = str(item["product_id"]).lower()
+            variant_id = item.get("variant_id")
             key = (
-                str(item["product_id"]),
-                item.get("variant_id"),
+                product_id,
+                str(variant_id).lower() if variant_id is not None else None,
                 (item.get("personalization_text") or "").strip() or None,
             )
             merged[key] = merged.get(key, 0) + int(item["quantity"])
 
         lines: List[Dict[str, Any]] = []
         requested_per_product: Dict[str, int] = {}
-        for (product_id, _variant_id, _text), quantity in merged.items():
+        requested_per_variant: Dict[Tuple[str, str], int] = {}
+        for (product_id, variant_id, _text), quantity in merged.items():
             requested_per_product[product_id] = (
                 requested_per_product.get(product_id, 0) + quantity
             )
+            if variant_id is not None:
+                variant_key = (product_id, str(variant_id))
+                requested_per_variant[variant_key] = (
+                    requested_per_variant.get(variant_key, 0) + quantity
+                )
 
         for (product_id, variant_id, personalization), quantity in merged.items():
             product = await self.get_product(product_id, organization_id)
@@ -1504,7 +1512,11 @@ class StorefrontService:
                 variant_remaining = self._variant_remaining(
                     variant, window_totals, None
                 )
-                if variant_remaining is not None and quantity > variant_remaining:
+                variant_requested = requested_per_variant[(product.id, variant.id)]
+                if (
+                    variant_remaining is not None
+                    and variant_requested > variant_remaining
+                ):
                     raise ValueError(
                         f"Only {variant_remaining} of "
                         f"'{product.name} — {variant.label}' remain available"
@@ -1684,6 +1696,8 @@ class StorefrontService:
             raise ValueError("Order not found")
         if order.status == StoreOrderStatus.CANCELLED:
             raise ValueError("A cancelled order cannot take a payment")
+        if order.payment_status == StorePaymentStatus.WAIVED:
+            raise ValueError("A waived order cannot take a payment")
 
         applied = _money(amount)
         if applied <= 0:
@@ -1758,11 +1772,12 @@ class StorefrontService:
             actor_id, order.user_id, action="mark paid", record="order"
         )
 
-        balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
-        if balance <= 0:
+        if _is_settled(order):
             # Already settled (or waived) — not an error, just nothing to do,
             # so a bulk run over a mixed selection doesn't fail on it.
             return order
+
+        balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
 
         return await self.record_payment(
             order_id,
@@ -1853,10 +1868,7 @@ class StorefrontService:
                 before = await self.get_order(order_id, organization_id)
                 if before is None:
                     raise ValueError("Order not found")
-                balance = _money(
-                    Decimal(before.total or 0) - Decimal(before.amount_paid or 0)
-                )
-                if balance <= 0:
+                if _is_settled(before):
                     skipped += 1
                     continue
                 await self.mark_order_paid(
@@ -2402,7 +2414,10 @@ class StorefrontService:
         if window_ids is not None:
             filters.append(StoreOrder.window_id.in_([str(w) for w in window_ids]))
 
-        balance = StoreOrder.total - StoreOrder.amount_paid
+        balance = case(
+            (StoreOrder.payment_status == StorePaymentStatus.WAIVED, paid),
+            else_=StoreOrder.total - StoreOrder.amount_paid,
+        )
         result = await self.db.execute(
             select(
                 StoreOrder.window_id,
@@ -2846,6 +2861,8 @@ class StorefrontService:
         self, order: StoreOrder, settings: StoreSettings
     ) -> Optional[Dict[str, Any]]:
         """Where the member should send the balance, with a prefilled link."""
+        if _is_settled(order):
+            return None
         balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
         if balance <= 0:
             return None

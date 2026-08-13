@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
 from app.schemas.training_enhancements import (
     CompetencyMatrixCreate,
@@ -747,19 +748,22 @@ async def upload_record_attachment(
 
     content = await file.read()
     if len(content) > MAX_ATTACHMENT_BYTES:
-        raise HTTPException(
-            status_code=400, detail="File too large. Maximum size is 25MB."
+        raise CodedHTTPException(
+            status_code=400,
+            detail="File too large. Maximum size is 25MB.",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
     detected_mime = magic.from_buffer(content[:2048], mime=True)
     ext = ALLOWED_ATTACHMENT_MIME.get(detected_mime)
     if not ext:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail=(
                 f"File type not allowed (detected: {detected_mime}). "
                 "Allowed: PDF, Word, or image files."
             ),
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     org_dir = os.path.join(TRAINING_ATTACHMENT_DIR, str(current_user.organization_id))

@@ -15,7 +15,8 @@ import type { ShiftTemplateRecord, SchedulingFeatureSettings } from '../services
 import { schedulingService } from '../services/api';
 import { useSchedulingStore } from '../store/schedulingStore';
 import type { ShiftSettings } from '../types/shiftSettings';
-import { BUILTIN_POSITIONS, DEFAULT_SETTINGS, SETTINGS_KEY } from '../types/shiftSettings';
+import { BUILTIN_POSITIONS } from '../types/shiftSettings';
+import { getCachedShiftSettings, loadShiftSettings, shiftSettingsService } from '../services/shiftSettingsApi';
 import type { SettingsTab } from './schedulingSettingsSections';
 import { LOCALLY_SAVED_SECTIONS } from './schedulingSettingsSections';
 import { SchedulingNotificationsPanel } from './SchedulingNotificationsPanel';
@@ -107,20 +108,25 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     }
   };
 
-  const [settings, setSettings] = useState<ShiftSettings>(() => {
-    try {
-      const stored = localStorage.getItem(SETTINGS_KEY);
-      return stored
-        ? {
-            ...DEFAULT_SETTINGS,
-            ...(JSON.parse(stored) as Partial<ShiftSettings>),
-          }
-        : DEFAULT_SETTINGS;
-    } catch {
-      return DEFAULT_SETTINGS;
-    }
-  });
+  // Paint immediately from the cached/mirrored value, then replace with the
+  // department-wide copy from the backend. migrateLocal: this panel requires
+  // scheduling.manage, so if the backend has never stored settings but this
+  // browser has a pre-backend localStorage copy, that copy is pushed up once
+  // so it becomes the whole department's settings instead of a private one.
+  const [settings, setSettings] = useState<ShiftSettings>(() => getCachedShiftSettings());
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const loaded = await loadShiftSettings({ migrateLocal: true });
+      if (!cancelled) setSettings(loaded);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Normalize apparatus positions to flat strings for child components
   const normalizedApparatusList = useMemo(
@@ -139,15 +145,30 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     return [...builtIn, ...custom];
   }, [settings.customPositions]);
 
-  const handleSave = () => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const persisted = await shiftSettingsService.saveShiftSettings(settings);
+      setSettings(persisted);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleReset = () => {
-    setSettings(DEFAULT_SETTINGS);
-    localStorage.removeItem(SETTINGS_KEY);
+  const handleReset = async () => {
+    setSaving(true);
+    try {
+      const defaults = await shiftSettingsService.resetShiftSettings();
+      setSettings(defaults);
+    } catch {
+      toast.error('Failed to reset settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -562,8 +583,11 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       {LOCALLY_SAVED_SECTIONS.includes(activeTab) && (
         <div className="border-theme-surface-border flex items-center justify-between border-t pt-4">
           <button
-            onClick={handleReset}
-            className="text-theme-text-muted hover:text-theme-text-primary text-sm transition-colors"
+            onClick={() => {
+              void handleReset();
+            }}
+            disabled={saving}
+            className="text-theme-text-muted hover:text-theme-text-primary text-sm transition-colors disabled:opacity-50"
           >
             Reset to defaults
           </button>
@@ -573,7 +597,13 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 Settings saved
               </span>
             )}
-            <button onClick={handleSave} className="btn-primary px-6 py-2 text-sm">
+            <button
+              onClick={() => {
+                void handleSave();
+              }}
+              disabled={saving}
+              className="btn-primary px-6 py-2 text-sm disabled:opacity-50"
+            >
               Save Settings
             </button>
           </div>

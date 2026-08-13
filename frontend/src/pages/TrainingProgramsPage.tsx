@@ -21,6 +21,8 @@ import {
   Edit,
 } from 'lucide-react';
 import { trainingProgramService, trainingService } from '../services/api';
+import { useAuthStore } from '../stores/authStore';
+import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import RegistryImportModal from './RegistryImportModal';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -40,6 +42,7 @@ type TabView = 'programs' | 'requirements' | 'templates';
 
 const TrainingProgramsPage: React.FC = () => {
   const navigate = useNavigate();
+  const canManage = useAuthStore((s) => s.checkPermission('training.manage'));
   const [activeTab, setActiveTab] = useState<TabView>('programs');
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
@@ -176,6 +179,15 @@ const TrainingProgramsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Members without training.manage cannot open /training/admin, so the
+            Admin crumb only renders for users who can actually follow it. */}
+        <Breadcrumbs
+          items={[
+            { label: 'Training', path: '/training' },
+            ...(canManage ? [{ label: 'Admin', path: '/training/admin' }] : []),
+            { label: 'Programs' },
+          ]}
+        />
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

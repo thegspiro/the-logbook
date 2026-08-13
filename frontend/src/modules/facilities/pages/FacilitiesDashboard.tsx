@@ -75,7 +75,13 @@ export default function FacilitiesDashboard() {
       void facilitiesService
         .getFacilities({ is_archived: false, search: query, limit: 100 })
         .then((results) => active && setSearchResults(results))
-        .catch(() => active && toast.error('Failed to search facilities'));
+        .catch(() => {
+          if (!active) return;
+          // Drop the previous query's results — leaving them rendered under
+          // the new query text presents stale matches as current ones.
+          setSearchResults(null);
+          toast.error('Failed to search facilities');
+        });
     }, 250);
     return () => {
       active = false;

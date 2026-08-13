@@ -1512,6 +1512,13 @@ async def update_test(
     # problem entirely.
     expected_version = update_data.pop("expected_version", None)
 
+    # Popped for the same reason as expected_version: it is a fact the client is
+    # reporting, not a column it is asking to set. The count is incremented
+    # here rather than assigned, so a client cannot inflate it — and a save that
+    # merely repeats the flag cannot either, because the examiner screen sends
+    # it once per pickup.
+    resumed = update_data.pop("resumed", None)
+
     # Completed tests only allow notes updates (section_results for criterion notes, top-level notes)
     if test.status == "completed":
         allowed_fields = {"section_results", "notes"}
@@ -1530,6 +1537,21 @@ async def update_test(
                 "Reload to see the current results before saving again."
             ),
         )
+
+    # After the conflict check, so a refused write cannot bump the count.
+    # Incremented rather than assigned, so a client cannot set it directly — and
+    # a replayed save cannot inflate it either, because the examiner screen
+    # sends the flag once per pickup.
+    #
+    # Only while scoring can actually run (draft/in_progress): a completed test
+    # still accepts notes edits through this endpoint, and letting a stray flag
+    # ride along on one would retroactively mark a validated record's timing
+    # unverified — changing what a signed scorecard asserts.
+    if resumed and test.status in (
+        SkillTestStatus.DRAFT.value,
+        SkillTestStatus.IN_PROGRESS.value,
+    ):
+        test.resume_count = (test.resume_count or 0) + 1
 
     # Convert section_results to JSON-serializable dicts if provided
     if "section_results" in update_data and update_data["section_results"] is not None:
@@ -3090,6 +3112,27 @@ def _csv_bool(value: object) -> str:
     return "Yes" if value else "No"
 
 
+def _csv_points(value: object) -> str:
+    """A signed point movement, or blank when the step moved nothing.
+
+    Blank rather than "0" so an export reader can see at a glance which steps
+    are in the point pool at all — a sheet where most steps are recorded-only
+    would otherwise be a column of zeroes with the real figures buried in it.
+
+    Note the leading "+": a bare "1" in a spreadsheet column that also holds
+    "-1" reads as a magnitude, not a direction. ``SafeCsvWriter`` neutralizes
+    the leading "-" of a negative so Excel cannot read it as a formula.
+    """
+    try:
+        points = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return ""
+    if points == 0:
+        return ""
+    trimmed = f"{points:g}"
+    return f"+{trimmed}" if points > 0 else trimmed
+
+
 def _csv_dt(value: object) -> str:
     """An ISO-8601 UTC stamp, or blank.
 
@@ -3265,6 +3308,7 @@ async def export_tests_csv(
                 "Started (UTC)",
                 "Completed (UTC)",
                 "Elapsed (s)",
+                "Timing Verified",
                 "Validated (UTC)",
                 "Validated By",
                 "Voided (UTC)",
@@ -3289,6 +3333,11 @@ async def export_tests_csv(
                     _csv_dt(t.started_at),
                     _csv_dt(t.completed_at),
                     "" if t.elapsed_seconds is None else t.elapsed_seconds,
+                    # A resumed test's clock carried on from the last save, so
+                    # the seconds are not a stopwatch reading. An audit packet
+                    # that presented them as one would be overstating what the
+                    # record can support.
+                    _csv_bool(not (t.resume_count or 0)),
                     _csv_dt(t.validated_at),
                     name_of(t.validated_by),
                     _csv_dt(t.voided_at),
@@ -3306,6 +3355,7 @@ async def export_tests_csv(
                 "Examiner",
                 "Completed (UTC)",
                 "Test Result",
+                "Timing Verified",
                 "Section #",
                 "Section",
                 "Step #",
@@ -3313,6 +3363,11 @@ async def export_tests_csv(
                 "Type",
                 "Critical",
                 "Outcome",
+                # What the step moved the point total by, signed. A reviewer
+                # reconciling the percentage against the marks needs the
+                # deduction as a figure; "Fail" alone does not say whether it
+                # cost anything.
+                "Points Effect",
                 "Score",
                 "Max Score",
                 "Time (s)",
@@ -3330,6 +3385,12 @@ async def export_tests_csv(
             candidate_name = name_of(t.candidate_id)
             examiner_name = name_of(t.examiner_id)
             completed = _csv_dt(t.completed_at)
+            # Same judgement as the summary export: a resumed test's clock
+            # carried on from the last save, so its recorded seconds are not a
+            # stopwatch reading. The per-step file is the one auditors are
+            # actually handed, and a time_limit step's Time (s) column read as
+            # verified evidence without this.
+            timing_verified = _csv_bool(not (t.resume_count or 0))
             for row in iter_criterion_rows(t, effective):
                 ticked = row["checklist"]
                 writer.writerow(
@@ -3340,6 +3401,7 @@ async def export_tests_csv(
                         examiner_name,
                         completed,
                         t.result or "",
+                        timing_verified,
                         row["section_index"] + 1,
                         row["section_name"],
                         row["criterion_index"] + 1,
@@ -3347,6 +3409,7 @@ async def export_tests_csv(
                         row["type"],
                         _csv_bool(row["critical"]),
                         row["outcome"],
+                        _csv_points(row["points_delta"]),
                         "" if row["score"] is None else row["score"],
                         "" if row["max_score"] is None else row["max_score"],
                         "" if row["time_seconds"] is None else row["time_seconds"],
@@ -3622,6 +3685,8 @@ def _build_test_response(
         returned_by_name=_format_user_name(returner) if returner else None,
         return_reason=test.return_reason,
         return_count=test.return_count or 0,
+        resume_count=test.resume_count or 0,
+        timing_verified=not (test.resume_count or 0),
         validated_at=_ensure_utc(test.validated_at),
         validated_by=test.validated_by,
         pending_validation=is_pending_validation(test),

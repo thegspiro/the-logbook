@@ -409,11 +409,13 @@ export const eventService = {
     visible_event_types: import('../types/event').EventType[];
     custom_event_categories: import('../types/event').EventCategoryConfig[];
     visible_custom_categories: string[];
+    membership_types: { value: string; label: string }[];
   }> {
     const response = await api.get<{
       visible_event_types: import('../types/event').EventType[];
       custom_event_categories: import('../types/event').EventCategoryConfig[];
       visible_custom_categories: string[];
+      membership_types: { value: string; label: string }[];
     }>('/events/visible-event-types');
     return response.data;
   },

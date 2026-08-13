@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.email_template import MessageHistory
 from app.models.error_log import ErrorLog
+from app.models.event import EventExternalAttendee
 from app.models.forms import FormSubmission
 from app.models.ip_security import BlockedAccessAttempt
 from app.models.notification import NotificationLog
@@ -107,6 +108,21 @@ RECORD_CLASSES: list[RecordClass] = [
         ),
         model=FormSubmission,
         timestamp_attr="submitted_at",
+        default_days=None,
+        min_days=90,
+    ),
+    RecordClass(
+        key="guest_check_ins",
+        description=(
+            "External (non-member) event attendees — guest check-in and "
+            "public outreach sign-in rows holding name/email/phone submitted "
+            "by the public. Kept forever by default, like form submissions — "
+            "configure per your records schedule. A prospective-member record "
+            "opened from a check-in lives in the recruitment pipeline and is "
+            "never touched by this sweep."
+        ),
+        model=EventExternalAttendee,
+        timestamp_attr="created_at",
         default_days=None,
         min_days=90,
     ),

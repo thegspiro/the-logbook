@@ -3,6 +3,18 @@ Facilities API Endpoints
 
 Endpoints for facility/building management including CRUD operations,
 maintenance tracking, building systems, inspections, photos, and documents.
+
+Read-permission tiers: operational data (facilities, rooms, systems,
+maintenance, inspections, contacts, shutoffs, compliance, photos, documents)
+is readable with ``facilities.view`` — the baseline member grant. Sensitive
+data (access keys/codes, utility accounts and readings, capital projects,
+insurance policies, occupants) requires ``facilities.view_sensitive``,
+``facilities.edit``, or ``facilities.manage``: door/alarm codes, account
+numbers, budgets, and lease terms must not be exposed to every member just
+because the module is visible to them. ``facilities.view_sensitive`` exists
+so ranks that need facility knowledge (captain, vice president, treasurer)
+can read this data without facility write access. Keep new endpoints on the
+correct side of this line.
 """
 
 from datetime import date
@@ -10,7 +22,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_permission, user_has_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -96,6 +108,39 @@ from app.services.documents_service import DocumentsService
 from app.services.facilities_service import FacilitiesService
 
 router = APIRouter()
+
+_SENSITIVE_READ_PERMISSIONS = (
+    "facilities.view_sensitive",
+    "facilities.edit",
+    "facilities.manage",
+)
+
+
+def _facility_response_for(facility, current_user: User) -> FacilityResponse:
+    """Serialize a facility, blanking lease/tax fields for baseline viewers.
+
+    ``lease_expiration`` and ``property_tax_id`` are lease/ownership terms —
+    the same class of data as the endpoint families gated on
+    ``facilities.view_sensitive``/``edit``/``manage`` — but they live on the
+    main facility record, which must stay readable with plain
+    ``facilities.view``. Redact the two fields rather than gating the whole
+    endpoint. Building the full response and then clearing fields (instead of
+    a reduced parallel schema) mirrors the users-roster redaction: a column
+    added to the schema later is visible by default and has to be considered
+    here, whereas an allow-list would silently drop it.
+
+    Every handler returning ``FacilityResponse`` goes through this helper —
+    even those currently reachable only with edit/manage — so a future
+    relaxation of a route's permission gate cannot silently reopen the leak.
+    """
+    payload = FacilityResponse.model_validate(facility)
+    if not any(
+        user_has_permission(current_user, permission)
+        for permission in _SENSITIVE_READ_PERMISSIONS
+    ):
+        payload.lease_expiration = None
+        payload.property_tax_id = None
+    return payload
 
 
 # ============================================================================
@@ -488,7 +533,7 @@ async def create_facility(
         organization_id=current_user.organization_id,
     )
 
-    return facility
+    return _facility_response_for(facility, current_user)
 
 
 @router.post(
@@ -523,7 +568,7 @@ async def archive_facility(
             status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
         )
 
-    return facility
+    return _facility_response_for(facility, current_user)
 
 
 @router.post(
@@ -557,7 +602,7 @@ async def restore_facility(
             status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
         )
 
-    return facility
+    return _facility_response_for(facility, current_user)
 
 
 # ============================================================================
@@ -1568,14 +1613,16 @@ async def list_facility_utility_accounts(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     List facility utility accounts
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     accounts = await service.list_utility_accounts(
@@ -1633,14 +1680,16 @@ async def get_facility_utility_account(
     account_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     Get a specific facility utility account
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     account = await service.get_utility_account(
@@ -1747,14 +1796,16 @@ async def list_facility_utility_readings(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     List utility readings for a specific account
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     readings = await service.list_utility_readings(
@@ -1902,14 +1953,16 @@ async def list_facility_access_keys(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     List facility access keys
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     keys = await service.list_access_keys(
@@ -1968,14 +2021,16 @@ async def get_facility_access_key(
     key_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     Get a specific facility access key
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     key = await service.get_access_key(
@@ -2604,14 +2659,16 @@ async def list_facility_capital_projects(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     List facility capital projects
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     projects = await service.list_capital_projects(
@@ -2669,14 +2726,16 @@ async def get_facility_capital_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     Get a specific facility capital project
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     project = await service.get_capital_project(
@@ -2781,14 +2840,16 @@ async def list_facility_insurance_policies(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     List facility insurance policies
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     policies = await service.list_insurance_policies(
@@ -2846,14 +2907,16 @@ async def get_facility_insurance_policy(
     policy_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     Get a specific facility insurance policy
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     policy = await service.get_insurance_policy(
@@ -2955,14 +3018,16 @@ async def list_facility_occupants(
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     List facility occupants
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     occupants = await service.list_occupants(
@@ -3019,14 +3084,16 @@ async def get_facility_occupant(
     occupant_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
+        require_permission(
+            "facilities.view_sensitive", "facilities.edit", "facilities.manage"
+        )
     ),
 ):
     """
     Get a specific facility occupant
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     occupant = await service.get_occupant(
@@ -3532,7 +3599,7 @@ async def get_facility(
             status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
         )
 
-    return facility
+    return _facility_response_for(facility, current_user)
 
 
 @router.patch("/{facility_id}", response_model=FacilityResponse, tags=["Facilities"])
@@ -3575,4 +3642,4 @@ async def update_facility(
         organization_id=current_user.organization_id,
     )
 
-    return facility
+    return _facility_response_for(facility, current_user)

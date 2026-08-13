@@ -39,6 +39,7 @@ vi.mock('../../../services/api', () => ({
 
 // Import store AFTER mocks
 import { useFacilitiesStore } from './facilitiesStore';
+import { getTodayLocalDate } from '../../../utils/dateFormatting';
 
 const mockFacility = {
   id: 'f1',
@@ -175,6 +176,32 @@ describe('facilitiesStore', () => {
         overdueMaintenanceCount: 17,
         upcomingInspectionCount: 9,
       });
+    });
+
+    it('lists a today-dated inspection as upcoming, matching the backend count date semantics', async () => {
+      mockGetFacilities.mockResolvedValue([]);
+      mockGetMaintenanceRecords.mockResolvedValue([]);
+      mockGetInspections.mockResolvedValue([
+        {
+          id: 'insp-today',
+          facilityId: 'f1',
+          title: 'Annual fire inspection',
+          nextInspectionDate: getTodayLocalDate(),
+        },
+        { id: 'insp-past', facilityId: 'f1', title: 'Last year', nextInspectionDate: '2020-01-01' },
+        { id: 'insp-far', facilityId: 'f1', title: 'Beyond 30 days', nextInspectionDate: '2999-01-01' },
+      ]);
+      mockGetDashboardCounts.mockResolvedValue({
+        totalFacilities: 1,
+        operationalFacilities: 1,
+        overdueMaintenance: 0,
+        upcomingInspections: 1,
+      });
+
+      await useFacilitiesStore.getState().loadDashboardStats();
+
+      const stats = useFacilitiesStore.getState().dashboardStats;
+      expect(stats?.upcomingInspections.map((i) => i.id)).toEqual(['insp-today']);
     });
   });
 

@@ -169,6 +169,21 @@ class RecurringTrainingSessionCreate(TrainingSessionCreate):
         return self
 
 
+class TrainingSessionLinkageUpdate(BaseModel):
+    """Partial update for a session's requirement/program linkage.
+
+    Three-state contract (see CLAUDE.md pitfall #1): a field omitted from the
+    payload is left untouched, an explicit null clears the link, a value sets
+    it. The service applies this via ``model_dump(exclude_unset=True)`` +
+    ``apply_updates``.
+    """
+
+    category_id: Optional[UUID] = None
+    program_id: Optional[UUID] = None
+    phase_id: Optional[UUID] = None
+    requirement_id: Optional[UUID] = None
+
+
 class TrainingSessionResponse(UTCResponseBase):
     """Schema for training session response"""
 

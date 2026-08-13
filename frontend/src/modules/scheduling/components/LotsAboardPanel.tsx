@@ -23,8 +23,12 @@ import { formatCalendarDate } from '@/utils/dateFormatting';
 
 interface LotsAboardPanelProps {
   lots: DeployedLot[];
-  /** Absent for a read-only view (a preview, or a member without the action). */
-  onSave?: (lotId: string, changes: { quantity: number; lotNumber: string; expirationDate: string }) => Promise<void>;
+  /**
+   * Absent for a read-only view (a preview, or a member without the action).
+   * `lotNumber` / `expirationDate` are present only when the edit actually
+   * changed them — see `commit`.
+   */
+  onSave?: (lotId: string, changes: { quantity: number; lotNumber?: string; expirationDate?: string }) => Promise<void>;
   onRemove?: (lotId: string) => Promise<void>;
   busy?: boolean;
   /** Shown above the list; omitted where the surrounding screen already says it. */
@@ -54,13 +58,25 @@ const LotsAboardPanel: React.FC<LotsAboardPanelProps> = ({ lots, onSave, onRemov
 
   const commit = async () => {
     if (!editingId || !onSave) return;
+    const original = lots.find((lot) => lot.id === editingId);
+    // Untouched metadata is omitted from the payload, not round-tripped:
+    // changing a lot number or expiration is a manage-gated act on the server,
+    // and sending back the values the form was shown made every quantity-only
+    // correction by submit-only crew look like a metadata change and 403.
+    // A field the crew actually edited is still sent — including edited to
+    // blank, which the API layer turns into an explicit null to clear it.
+    const changes: { quantity: number; lotNumber?: string; expirationDate?: string } = {
+      quantity: Math.max(0, Number(draft.quantity) || 0),
+    };
+    if (draft.lotNumber !== (original?.lotNumber ?? '')) {
+      changes.lotNumber = draft.lotNumber;
+    }
+    if (draft.expirationDate !== (original?.expirationDate ? original.expirationDate.slice(0, 10) : '')) {
+      changes.expirationDate = draft.expirationDate;
+    }
     setSaving(true);
     try {
-      await onSave(editingId, {
-        quantity: Math.max(0, Number(draft.quantity) || 0),
-        lotNumber: draft.lotNumber,
-        expirationDate: draft.expirationDate,
-      });
+      await onSave(editingId, changes);
       setEditingId(null);
     } finally {
       setSaving(false);

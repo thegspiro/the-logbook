@@ -152,8 +152,8 @@ class ApparatusDisplay:
     """The fields a shift list needs about its apparatus, from either table.
 
     ``Apparatus`` and ``BasicApparatus`` overlap but do not match: the full
-    record normalizes its type into ``apparatus_types`` and has no riding
-    positions at all, while ``BasicApparatus`` stores both inline. This is the
+    record normalizes its type into ``apparatus_types`` and stores riding
+    positions separately, while ``BasicApparatus`` stores them inline. This is the
     shared shape, so shift enrichment does not have to branch on which
     inventory the department uses.
     """
@@ -185,10 +185,8 @@ async def resolve_apparatus_display_map(
     skipped entirely when the first resolved them all — which is the common case
     for a department that uses one inventory consistently.
 
-    ``positions`` is always ``None`` for a full ``Apparatus``: riding positions
-    are a ``BasicApparatus`` concept and the full module does not model them.
-    Callers already fall back to the shift's own positions, so this reads as
-    "not specified" rather than "empty".
+    ``positions`` is the configured ordered crew-seat list for either apparatus
+    model. Callers fall back to shift/template positions when it is empty.
     """
     ids = {str(i) for i in (apparatus_ids or []) if i}
     if not ids or not organization_id:
@@ -213,6 +211,7 @@ async def resolve_apparatus_display_map(
             unit_number=row.unit_number,
             apparatus_type=type_name.lower() if type_name else None,
             min_staffing=row.min_staffing,
+            positions=row.crew_positions,
         )
 
     remaining = ids - set(found)

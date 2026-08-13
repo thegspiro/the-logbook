@@ -360,7 +360,11 @@ class FacilityBase(BaseModel):
     num_bays: Optional[int] = Field(None, ge=0)
     lot_size_acres: Optional[Decimal] = Field(None, ge=0)
 
-    # Ownership
+    # Ownership. lease_expiration and property_tax_id are sensitive lease
+    # terms: FacilityResponse nulls them for callers without
+    # facilities.view_sensitive/edit/manage (see _facility_response_for in
+    # the facilities endpoints) — route any new response path through that
+    # helper.
     is_owned: bool = True
     lease_expiration: Optional[date] = None
     property_tax_id: Optional[str] = Field(None, max_length=100)
@@ -966,6 +970,10 @@ class FacilityRoomResponse(FacilityRoomBase):
     updated_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # Kiosk display code of the linked Location record (rooms sync to
+    # Locations for Events/QR check-in). Attached by the service layer —
+    # not a column on FacilityRoom itself.
+    display_code: Optional[str] = None
     model_config = _response_config
 
 

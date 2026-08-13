@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.storefront import StoreOrderStatus
+from app.models.storefront import StoreOrderStatus, StorePaymentStatus
 from app.services.finance_service import FinanceService
 from app.services.storefront_service import StorefrontService
 
@@ -33,7 +33,7 @@ class TestFinanceDisbursementSoD:
     async def test_requester_cannot_mark_own_expense_paid(self):
         svc = FinanceService(MagicMock())
         svc.get_expense_report = AsyncMock(
-            return_value=SimpleNamespace(requested_by="u1")
+            return_value=SimpleNamespace(submitted_by="u1")
         )
         with pytest.raises(ValueError, match="cannot mark paid your own"):
             await svc.mark_expense_paid("er1", "org1", None, acted_by="u1")
@@ -81,6 +81,10 @@ class TestStorefrontDisbursementSoD:
             id="o1",
             user_id="u1",
             status=StoreOrderStatus.AWAITING_PAYMENT,
+            # _is_settled short-circuits on PAID/WAIVED before looking at the
+            # balance, so the stub must carry the reconciliation state a real
+            # StoreOrder always has.
+            payment_status=StorePaymentStatus.UNPAID,
             total=Decimal("45.00"),
             amount_paid=Decimal("0.00"),
             payment_method=None,

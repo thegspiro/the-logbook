@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.utils import generate_display_code
 from app.models.event import Event
-from app.models.facilities import Facility
+from app.models.facilities import Facility, FacilityRoom
 from app.models.location import Location
 from app.schemas.location import LocationCreate, LocationUpdate
 from app.utils.org_scoping import assert_in_org
@@ -155,6 +155,28 @@ class LocationService:
                 allow_none=True,
                 label="facility",
             )
+            # A room-backed location mirrors its FacilityRoom, whose facility
+            # is authoritative. Repointing (or clearing) the location's
+            # facility link would leave the room and its location referencing
+            # different facilities — a persistent inconsistency org membership
+            # checks alone do not prevent.
+            if location.facility_room_id:
+                room_facility_id = await self.db.scalar(
+                    select(FacilityRoom.facility_id).where(
+                        FacilityRoom.id == location.facility_room_id
+                    )
+                )
+                new_facility_id = update_data["facility_id"]
+                # Schema carries a UUID, the column stores a str — normalize
+                # before comparing so a same-facility update is not rejected.
+                if room_facility_id is not None and (
+                    new_facility_id is None
+                    or str(new_facility_id) != str(room_facility_id)
+                ):
+                    raise ValueError(
+                        "This location is linked to a facility room; "
+                        "it cannot be moved to a different facility"
+                    )
         for field, value in update_data.items():
             setattr(location, field, value)
 
@@ -289,6 +311,26 @@ class LocationService:
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    async def regenerate_display_code(
+        self, location_id: UUID, organization_id: str
+    ) -> Optional[Location]:
+        """Rotate a location's public display code.
+
+        The display code gates unauthenticated kiosk access at
+        /display/{code}, so a leaked or walked-off printed code must be
+        invalidatable. The old code stops resolving immediately; any
+        posted QR codes and kiosk tablets must be updated to the new URL.
+        """
+        location = await self.get_location(location_id, organization_id)
+        if not location:
+            return None
+
+        location.display_code = await self._generate_unique_display_code()
+        await self.db.commit()
+        await self.db.refresh(location)
+
+        return location
 
     async def get_location_by_display_code(
         self, display_code: str

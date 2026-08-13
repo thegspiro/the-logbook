@@ -122,16 +122,27 @@ async def list_templates(
     # EC-7: view OR submit (see get_shift_checklists). The member-facing
     # "Start a Check" picker lists templates to choose from, so gating this
     # behind the officer's view permission leaves the picker empty for the
-    # people the feature is for.
+    # people the feature is for. Manage is accepted too: every template write
+    # on this router is a manage right, and a manage-without-view role could
+    # otherwise edit templates it cannot list.
     current_user: User = Depends(
-        require_permission("equipment_check.view", "equipment_check.submit")
+        require_permission(
+            "equipment_check.view",
+            "equipment_check.submit",
+            "equipment_check.manage",
+        )
     ),
 ):
     """List equipment check templates with optional filters."""
     service = EquipmentCheckService(db)
     permissions = _collect_user_permissions(current_user)
     visible_positions = None
-    if not _has_permission("equipment_check.view", permissions):
+    # Manage is unrestricted like view: a role that may edit every template
+    # must not have its listing narrowed to its own shift positions.
+    if not (
+        _has_permission("equipment_check.view", permissions)
+        or _has_permission("equipment_check.manage", permissions)
+    ):
         visible_positions = await service.get_user_check_positions(
             str(current_user.id), str(current_user.organization_id)
         )
@@ -154,16 +165,26 @@ async def get_template(
     # EC-7: view OR submit (see get_shift_checklists). This is the endpoint the
     # check form itself loads — the member taps "Start Check" on a checklist
     # assigned to them, and without submit here the form never opens, so the
-    # whole start/end-of-shift flow 403s for the crew it is meant for.
+    # whole start/end-of-shift flow 403s for the crew it is meant for. Manage
+    # is accepted too — a manage-without-view role edits templates it must be
+    # able to fetch (see list_templates).
     current_user: User = Depends(
-        require_permission("equipment_check.view", "equipment_check.submit")
+        require_permission(
+            "equipment_check.view",
+            "equipment_check.submit",
+            "equipment_check.manage",
+        )
     ),
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
     permissions = _collect_user_permissions(current_user)
     visible_positions = None
-    if not _has_permission("equipment_check.view", permissions):
+    # Manage is unrestricted like view (see list_templates).
+    if not (
+        _has_permission("equipment_check.view", permissions)
+        or _has_permission("equipment_check.manage", permissions)
+    ):
         visible_positions = await service.get_user_check_positions(
             str(current_user.id), str(current_user.organization_id)
         )
@@ -171,6 +192,9 @@ async def get_template(
         template_id,
         current_user.organization_id,
         visible_positions=visible_positions,
+        # A restricted member resuming their own incomplete check can still
+        # load the template even if it was deactivated after they started.
+        submitter_user_id=str(current_user.id),
     )
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -1547,13 +1571,15 @@ async def update_deployed_lot(
     the box in the bag says. Zero quantity removes the lot from the truck.
     """
     updates = data.model_dump(exclude_unset=True)
-    if {"lot_number", "expiration_date"} & updates.keys():
-        permissions = _collect_user_permissions(current_user)
-        can_manage_lot_metadata = _has_permission(
-            "equipment_check.manage", permissions
-        ) or _has_permission("inventory.manage", permissions)
-        if not can_manage_lot_metadata:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
+    # Rewriting lot metadata stays a manage right, but the decision has to be
+    # made against the row's *current values*, not key presence: the check form
+    # round-trips the lot number and date it was shown, so gating on the keys
+    # alone 403'd every quantity-only save by submit-only crew. The service
+    # raises PermissionError only when a submitted value actually differs.
+    permissions = _collect_user_permissions(current_user)
+    can_manage_lot_metadata = _has_permission(
+        "equipment_check.manage", permissions
+    ) or _has_permission("inventory.manage", permissions)
 
     service = EquipmentCheckService(db)
     try:
@@ -1563,7 +1589,10 @@ async def update_deployed_lot(
             organization_id=str(current_user.organization_id),
             user=current_user,
             updates=updates,
+            allow_metadata_change=can_manage_lot_metadata,
         )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if result is None:

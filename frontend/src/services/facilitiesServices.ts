@@ -290,6 +290,10 @@ export interface UtilityReading {
 }
 
 export interface UtilityReadingCreate {
+  // Required by the backend schema even though the endpoint also carries the
+  // account id in the URL path — FastAPI validates the body before the
+  // handler can overwrite it from the path param.
+  utility_account_id: string;
   reading_date: string;
   period_start?: string;
   period_end?: string;
@@ -428,6 +432,14 @@ export interface OccupantCreate {
   contact_name?: string;
   effective_date?: string;
 }
+
+/**
+ * Update payloads may carry explicit nulls: the backend applies updates with
+ * `exclude_unset`, so an omitted key means "leave this alone" and `null`
+ * clears the stored value (see CLAUDE.md Pitfall #1). `undefined` values are
+ * dropped by JSON serialization, which is how a key is omitted.
+ */
+export type UpdatePayload<T> = { [K in keyof T]?: T[K] | null | undefined };
 
 // ============================================
 // Facilities Service
@@ -660,7 +672,10 @@ export const facilitiesService = {
     const response = await api.post<ShutoffLocation>('/facilities/shutoff-locations', data);
     return response.data;
   },
-  async updateShutoffLocation(locationId: string, data: Partial<ShutoffLocationCreate>): Promise<ShutoffLocation> {
+  async updateShutoffLocation(
+    locationId: string,
+    data: UpdatePayload<ShutoffLocationCreate>
+  ): Promise<ShutoffLocation> {
     const response = await api.patch<ShutoffLocation>(`/facilities/shutoff-locations/${locationId}`, data);
     return response.data;
   },
@@ -685,7 +700,7 @@ export const facilitiesService = {
     const response = await api.post<CapitalProject>('/facilities/capital-projects', data);
     return response.data;
   },
-  async updateCapitalProject(projectId: string, data: Partial<CapitalProjectCreate>): Promise<CapitalProject> {
+  async updateCapitalProject(projectId: string, data: UpdatePayload<CapitalProjectCreate>): Promise<CapitalProject> {
     const response = await api.patch<CapitalProject>(`/facilities/capital-projects/${projectId}`, data);
     return response.data;
   },
@@ -710,7 +725,7 @@ export const facilitiesService = {
     const response = await api.post<InsurancePolicy>('/facilities/insurance-policies', data);
     return response.data;
   },
-  async updateInsurancePolicy(policyId: string, data: Partial<InsurancePolicyCreate>): Promise<InsurancePolicy> {
+  async updateInsurancePolicy(policyId: string, data: UpdatePayload<InsurancePolicyCreate>): Promise<InsurancePolicy> {
     const response = await api.patch<InsurancePolicy>(`/facilities/insurance-policies/${policyId}`, data);
     return response.data;
   },
@@ -731,7 +746,7 @@ export const facilitiesService = {
     const response = await api.post<Occupant>('/facilities/occupants', data);
     return response.data;
   },
-  async updateOccupant(occupantId: string, data: Partial<OccupantCreate>): Promise<Occupant> {
+  async updateOccupant(occupantId: string, data: UpdatePayload<OccupantCreate>): Promise<Occupant> {
     const response = await api.patch<Occupant>(`/facilities/occupants/${occupantId}`, data);
     return response.data;
   },
@@ -756,7 +771,7 @@ export const facilitiesService = {
     const response = await api.post<UtilityAccount>('/facilities/utility-accounts', data);
     return response.data;
   },
-  async updateUtilityAccount(accountId: string, data: Partial<UtilityAccountCreate>): Promise<UtilityAccount> {
+  async updateUtilityAccount(accountId: string, data: UpdatePayload<UtilityAccountCreate>): Promise<UtilityAccount> {
     const response = await api.patch<UtilityAccount>(`/facilities/utility-accounts/${accountId}`, data);
     return response.data;
   },
@@ -832,7 +847,7 @@ export const facilitiesService = {
     const response = await api.post<AccessKey>('/facilities/access-keys', data);
     return response.data;
   },
-  async updateAccessKey(keyId: string, data: Partial<AccessKeyCreate>): Promise<AccessKey> {
+  async updateAccessKey(keyId: string, data: UpdatePayload<AccessKeyCreate>): Promise<AccessKey> {
     const response = await api.patch<AccessKey>(`/facilities/access-keys/${keyId}`, data);
     return response.data;
   },
@@ -951,6 +966,12 @@ export const locationsService = {
 
   async deleteLocation(locationId: string): Promise<void> {
     await api.delete(`/locations/${locationId}`);
+  },
+
+  /** Rotate a location's kiosk display code — the old /display/{code} URL stops working immediately */
+  async regenerateDisplayCode(locationId: string): Promise<Location> {
+    const response = await api.post<Location>(`/locations/${locationId}/regenerate-display-code`);
+    return response.data;
   },
 };
 

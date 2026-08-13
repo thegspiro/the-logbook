@@ -155,6 +155,43 @@ setup_environment() {
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             print_info "Keeping existing .env file"
+            # The deployment below is safe either way — it passes -f for both
+            # compose files explicitly — but the management commands the
+            # operator runs afterwards (logs/restart/down/update) are bare
+            # `docker compose` calls that read COMPOSE_FILE from .env. A
+            # preserved .env may predate that pin, so append it when ABSENT.
+            # Append-only: an existing value is the operator's and is never
+            # rewritten, and no other line (secrets included) is touched.
+            if ! grep -qE '^[[:space:]]*COMPOSE_FILE=' "$SCRIPT_DIR/.env"; then
+                cat >> "$SCRIPT_DIR/.env" <<'EOF'
+
+# Added by the installer: pin the production override so bare
+# `docker compose ...` commands in this directory layer
+# docker-compose.prod.yml on the development base file.
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+EOF
+                print_info "Added COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml to .env"
+            elif ! grep -qE '^[[:space:]]*COMPOSE_FILE=.*docker-compose\.prod\.yml' "$SCRIPT_DIR/.env"; then
+                print_warning "Your .env sets COMPOSE_FILE without docker-compose.prod.yml."
+                print_warning "This installer still deploys the production stack (it passes -f"
+                print_warning "explicitly), but your own bare \`docker compose\` commands will"
+                print_warning "start the development posture (uvicorn --reload, published"
+                print_warning "backend port, docs on)."
+            fi
+            # Never modify a config the operator already customized — but do
+            # tell them when it cannot boot: docker-compose.prod.yml defaults
+            # SECURITY_REQUIRE_TLS to true, and the backend refuses to start
+            # in production when TLS to MySQL/Redis is required but not
+            # configured. The bundled services do not terminate TLS.
+            if ! grep -qE '^[[:space:]]*SECURITY_REQUIRE_TLS=' "$SCRIPT_DIR/.env"; then
+                print_warning "Your existing .env does not set SECURITY_REQUIRE_TLS."
+                print_warning "The production override defaults it to TRUE, and the backend"
+                print_warning "will REFUSE TO START because the bundled MySQL/Redis do not"
+                print_warning "terminate TLS. Either configure TLS (DB_SSL/DB_SSL_CA and"
+                print_warning "REDIS_SSL/REDIS_SSL_CA, then SECURITY_REQUIRE_TLS=true) or add"
+                print_warning "an explicit SECURITY_REQUIRE_TLS=false to .env for the bundled"
+                print_warning "plaintext services (traffic stays on the internal Docker network)."
+            fi
             return
         fi
     fi
@@ -201,6 +238,37 @@ setup_environment() {
         echo "COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml" >> "$SCRIPT_DIR/.env"
     else
         sed -i "s|^COMPOSE_FILE=.*|COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml|" "$SCRIPT_DIR/.env"
+    fi
+
+    # Transport TLS posture. docker-compose.prod.yml fails closed
+    # (SECURITY_REQUIRE_TLS defaults to true) and the backend then refuses to
+    # start unless DB_SSL/REDIS_SSL are configured — but the bundled MySQL and
+    # Redis containers do NOT terminate TLS, so a fresh bundled install could
+    # never boot. Write the opt-out explicitly and loudly instead of shipping
+    # an unbootable config. This only runs on a freshly generated .env — an
+    # existing operator-customized .env is never modified (see above).
+    if ! grep -qE '^[[:space:]]*SECURITY_REQUIRE_TLS=' "$SCRIPT_DIR/.env"; then
+        cat >> "$SCRIPT_DIR/.env" <<'EOF'
+
+# ============================================
+# TRANSPORT TLS TO DATA SERVICES — EXPLICIT OPT-OUT
+# ============================================
+# The bundled MySQL and Redis containers speak PLAINTEXT on the internal
+# Docker network; they do not terminate TLS. With SECURITY_REQUIRE_TLS unset,
+# docker-compose.prod.yml defaults it to true and the backend REFUSES TO
+# START. This explicit false keeps the bundled stack bootable: database and
+# cache traffic stays on the compose-internal network but is NOT encrypted.
+# If you move MySQL/Redis off-host (or add TLS termination), set
+# DB_SSL=true + DB_SSL_CA and REDIS_SSL=true + REDIS_SSL_CA, then flip
+# SECURITY_REQUIRE_TLS=true to keep it that way.
+SECURITY_REQUIRE_TLS=false
+DB_SSL=false
+REDIS_SSL=false
+EOF
+        print_warning "SECURITY_REQUIRE_TLS=false written to .env: the bundled MySQL/Redis"
+        print_warning "do not terminate TLS, so DB/cache traffic on the internal Docker"
+        print_warning "network is NOT encrypted. If you use external data services, enable"
+        print_warning "DB_SSL/REDIS_SSL (+ CA certs) and set SECURITY_REQUIRE_TLS=true."
     fi
 
     print_success "Environment configured with secure secrets"

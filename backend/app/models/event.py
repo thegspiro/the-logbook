@@ -117,6 +117,7 @@ class Event(Base):
 
     # Attendance settings
     is_mandatory = Column(Boolean, nullable=False, default=False, server_default="0")
+    mandatory_membership_types = Column(JSON, nullable=True)
 
     # Additional settings
     allow_guests = Column(Boolean, nullable=False, default=False, server_default="0")

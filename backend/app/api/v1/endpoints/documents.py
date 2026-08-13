@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PaginationParams, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.document import Document, DocumentStatus
 from app.models.user import User
@@ -235,8 +236,10 @@ async def upload_document(
     max_size = 50 * 1024 * 1024
     content = await file.read()
     if len(content) > max_size:
-        raise HTTPException(
-            status_code=400, detail="File too large. Maximum size is 50MB."
+        raise CodedHTTPException(
+            status_code=400,
+            detail="File too large. Maximum size is 50MB.",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
     # Validate MIME type using magic bytes (not the HTTP Content-Type header)
@@ -246,10 +249,11 @@ async def upload_document(
             f"Document upload rejected: detected MIME type '{detected_mime}' "
             f"(claimed: '{file.content_type}') for file '{file.filename}'"
         )
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail=f"File type not allowed. Detected type: {detected_mime}. "
             "Allowed types: PDF, Word, Excel, PowerPoint, text, CSV, images, ZIP.",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     # Create upload directory

@@ -21,6 +21,26 @@ export type SkillTestStatus =
 
 export type CriterionType = 'pass_fail' | 'score' | 'time_limit' | 'checklist' | 'statement';
 
+/** How a pass/fail-judged step touches the overall percentage.
+ *
+ *  Severity is orthogonal to the `required` ("Critical") flag: a step can
+ *  deduct points *and* fail the test outright. Before this existed the two
+ *  settings could only express the extremes — critical, or free — which is how
+ *  a scorecard could show a failed question above a 100%. */
+export const CriterionScoreMode = {
+  /** Recorded only; the mark shows on the scorecard and moves no number. */
+  NONE: 'none',
+  /** Worth `max_score` (or 1) points, earned by passing. */
+  POINTS: 'points',
+  /** Costs `deduction_points` (or 1) off the total when failed. */
+  DEDUCT: 'deduct',
+} as const;
+export type CriterionScoreMode = (typeof CriterionScoreMode)[keyof typeof CriterionScoreMode];
+
+/** The types a score mode applies to — those judged by a pass/fail verdict.
+ *  `score` already carries points by definition; `statement` is read aloud. */
+export const SCORE_MODE_TYPES: readonly CriterionType[] = ['pass_fail', 'checklist', 'time_limit'];
+
 export type TemplateStatus = 'draft' | 'published' | 'archived';
 
 export type TemplateVisibility = 'all_members' | 'officers_only' | 'assigned_only';
@@ -84,6 +104,13 @@ export interface SkillCriterion {
    *  Defaults to false — statements mark themselves as a section renders, and
    *  that is nobody's action, so it cannot start a clock on its own. */
   starts_timer?: boolean | undefined;
+  /** How this step affects the percentage. Undefined means "unset", which is
+   *  not the same as 'none': an unset Pass/Fail step still follows the
+   *  template-wide `score_pass_fail_criteria` toggle, so templates written
+   *  before per-step modes keep scoring identically. */
+  score_mode?: CriterionScoreMode | undefined;
+  /** Points off the total when a 'deduct' step is failed. Defaults to 1. */
+  deduction_points?: number | undefined;
 }
 
 /** A section grouping related criteria within a template */
@@ -167,6 +194,8 @@ export interface SkillCriterionCreate {
   checklist_items?: string[] | undefined;
   statement_text?: string | undefined;
   starts_timer?: boolean | undefined;
+  score_mode?: CriterionScoreMode | undefined;
+  deduction_points?: number | undefined;
 }
 
 export interface SkillTemplateUpdate {
@@ -219,6 +248,11 @@ export interface ScoreBreakdownSection {
   counts_toward_score: boolean;
   earned?: number | null | undefined;
   available?: number | null | undefined;
+  /** Points taken off the total by failed 'deduct' steps in this section. A
+   *  section can hold nothing but these — earning no points and still moving
+   *  the percentage — which is why `counts_toward_score` is not read off
+   *  `available` alone. */
+  deducted?: number | undefined;
   /** Pass/fail-style steps marked passed. Excludes statements (which mark
    *  themselves) and non-critical scored steps (whose contribution is points). */
   passed: number;
@@ -238,8 +272,23 @@ export interface ScoreBreakdown {
    *  percentages; 'none' — nothing scorable was recorded. */
   method: 'points' | 'section_average' | 'none';
   score_pass_fail_criteria: boolean;
+  /** Gross points earned, *before* deductions — so a scorecard can show the
+   *  subtraction as its own line rather than a reduced total the reader cannot
+   *  reconcile against the marks above it. */
   earned: number;
   available: number;
+  /** Total points taken off by failed 'deduct' steps. The percentage is
+   *  `(earned − deducted) / available`, clamped at zero. */
+  deducted?: number | undefined;
+  /** Each failed 'deduct' step and what it cost, so the panel can name them. */
+  deductions?: {
+    section_name?: string | undefined;
+    criterion_label?: string | undefined;
+    points: number;
+  }[];
+  /** Deductions were recorded against a sheet with no point pool for them to
+   *  come off — the template is misconfigured and the percentage ignores them. */
+  deductions_unapplied?: boolean | undefined;
   percentage?: number | null | undefined;
   passing_percentage?: number | null | undefined;
   meets_threshold: boolean;
@@ -329,6 +378,13 @@ export interface SkillTest {
   /** How many times this test has been sent back. One is a slip; a third is a
    *  training conversation. */
   return_count?: number | undefined;
+  /** How many times scoring was picked up again after the screen was left. */
+  resume_count?: number | undefined;
+  /** Whether the recorded duration is a trustworthy stopwatch reading. False
+   *  once a test has been resumed: the clock counts on from the last save, so
+   *  time before the interruption is missing and time spent getting back in is
+   *  not. Server-derived, so every surface agrees about it. */
+  timing_verified?: boolean | undefined;
 }
 
 export interface SkillTestCreate {
@@ -341,6 +397,10 @@ export interface SkillTestCreate {
 }
 
 export interface SkillTestUpdate {
+  /** Reported once by the examiner screen when scoring is picked up again on a
+   *  test that already had time on the clock. The server increments its own
+   *  counter; the client never sets it. */
+  resumed?: boolean | undefined;
   status?: SkillTestStatus;
   section_results?: SectionResult[];
   overall_score?: number;

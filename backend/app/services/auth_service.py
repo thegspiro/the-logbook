@@ -356,13 +356,30 @@ class AuthService:
                     "Revoking all sessions."
                 )
                 await self._revoke_all_user_sessions(str(user_id))
+                # Security invariant: the account-wide revocation must survive
+                # the 401 this (None, None) turns into. The request-scoped
+                # session dependency rolls back on exception, and
+                # _revoke_all_user_sessions only flushes — without an explicit
+                # commit here the revocation would be rolled back and the
+                # stolen/rotated tokens would keep working. Only SELECTs have
+                # run on this session before this point, so the commit cannot
+                # persist unrelated pending work.
+                await self.db.commit()
                 return None, None
 
-            # Get user
+            # Get user — require the organization to still be active, mirroring
+            # the login path's Organization.active filter. Without it, members
+            # of a deactivated organization keep re-issuing 7-day refresh
+            # tokens forever; with it they lose access at the next refresh.
+            # Failing via (None, None) keeps the error indistinguishable from
+            # any other refresh failure, matching login's anti-enumeration
+            # convention.
             user_result = await self.db.execute(
                 select(User)
+                .join(Organization, User.organization_id == Organization.id)
                 .where(User.id == str(user_id))
                 .where(User.deleted_at.is_(None))
+                .where(Organization.active.is_(True))
             )
             user = user_result.scalar_one_or_none()
 

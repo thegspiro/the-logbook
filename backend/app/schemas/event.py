@@ -178,6 +178,10 @@ class EventBase(BaseModel):
         description="Allowed RSVP statuses. Defaults to ['going', 'not_going']",
     )
     is_mandatory: bool = Field(default=False)
+    mandatory_membership_types: Optional[List[str]] = Field(
+        default=None,
+        description="Membership tier IDs required to attend; null means all member types",
+    )
     allow_guests: bool = Field(default=False)
     send_reminders: bool = Field(default=True)
     reminder_schedule: List[int] = Field(
@@ -271,6 +275,7 @@ class EventUpdate(BaseModel):
     max_attendees: Optional[int] = Field(None, ge=1)
     allowed_rsvp_statuses: Optional[List[str]] = None
     is_mandatory: Optional[bool] = None
+    mandatory_membership_types: Optional[List[str]] = None
     allow_guests: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_schedule: Optional[List[int]] = None
@@ -361,6 +366,7 @@ class EventListItem(UTCResponseBase):
     location_name: Optional[str] = None  # Resolved location name if location_id is set
     requires_rsvp: bool
     is_mandatory: bool
+    mandatory_membership_types: Optional[List[str]] = None
     is_draft: bool = False
     is_cancelled: bool
     is_recurring: bool = False
@@ -514,6 +520,21 @@ class QRCheckInData(BaseModel):
     )
 
 
+# A name must contain at least one character that is neither whitespace nor a
+# control code. Spelled as an explicit negated class rather than ``\S`` because
+# the validator below rejects names that ``str.strip()`` empties, and Python
+# treats more code points as whitespace than JSON Schema's ``\s`` does —
+# U+001C-001F and U+0085 among them. While the schema was the looser of the two,
+# it advertised a lone U+001D as a valid name and the endpoint answered 422,
+# which is the contract breach the API suite reports as rejected-valid-data.
+# Every code point matching this class survives ``strip()``, so schema-valid
+# input can no longer reach the blank branch.
+NAME_HAS_CONTENT = (
+    r"[^\s\x00-\x20\x7f-\xa0"
+    r"\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+)
+
+
 class GuestCheckInRequest(BaseModel):
     """Schema for an unauthenticated guest recording their own attendance.
 
@@ -522,14 +543,13 @@ class GuestCheckInRequest(BaseModel):
     belongs on the real application form the follow-up email links to.
     """
 
-    # `pattern` carries what _strip_name enforces into the published schema.
-    # min_length=1 alone declares "\n" valid — it is one character — so a
-    # generated client, and the schemathesis contract suite, reads a
-    # whitespace-only name as acceptable input and the 422 below as the API
-    # breaking its own contract. \S is unanchored, so " Mary Anne " still
-    # passes and is stripped; only all-whitespace is refused.
-    first_name: str = Field(..., min_length=1, max_length=100, pattern=r"\S")
-    last_name: str = Field(..., min_length=1, max_length=100, pattern=r"\S")
+    # `pattern` carries what _strip_name enforces into the published schema —
+    # min_length=1 alone declares "\n" valid. NAME_HAS_CONTENT is unanchored,
+    # so " Mary Anne " still passes and is stripped; only names that strip()
+    # would empty are refused, and (unlike ``\S``) it refuses them under both
+    # Python's and JSON Schema's whitespace definitions.
+    first_name: str = Field(..., min_length=1, max_length=100, pattern=NAME_HAS_CONTENT)
+    last_name: str = Field(..., min_length=1, max_length=100, pattern=NAME_HAS_CONTENT)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(default=None, max_length=50)
     organization_name: Optional[str] = Field(default=None, max_length=255)
@@ -866,6 +886,7 @@ class RecurringEventCreate(BaseModel):
     rsvp_deadline: Optional[datetime] = None
     max_attendees: Optional[int] = Field(None, ge=1)
     is_mandatory: bool = False
+    mandatory_membership_types: Optional[List[str]] = None
     allow_guests: bool = False
     send_reminders: bool = True
     reminder_schedule: List[int] = Field(default=[24])
@@ -1010,6 +1031,7 @@ class VisibleEventTypesResponse(BaseModel):
     visible_event_types: List[str]
     custom_event_categories: List[EventCategoryConfig]
     visible_custom_categories: List[str]
+    membership_types: List[OutreachEventType]
 
 
 class AttachmentUploadResponse(BaseModel):

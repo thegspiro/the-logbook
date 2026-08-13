@@ -63,6 +63,24 @@ export const DEMO_MEMBER_CREDENTIALS = {
 };
 
 /**
+ * The one account enrolled in TOTP, used to photograph the login page's
+ * authentication-code step.
+ *
+ * Signing in as this account deliberately does *not* complete: it stops at the
+ * code step, which is the shot. Never give it to `auth:` — it cannot produce a
+ * session.
+ *
+ * Must match TWO_FACTOR_USERNAME in seed_demo_data.py. It was hard-coded here
+ * once and drifted the moment the seeder moved the enrolment to a different
+ * member, which failed as a bare capture timeout with nothing pointing at the
+ * cause.
+ */
+export const DEMO_TWO_FACTOR_CREDENTIALS = {
+  username: "whalloway",
+  password: "DemoMember!2026",
+};
+
+/**
  * Click a control by its visible label.
  *
  * Matches buttons, tabs and links, because which of the three a given tab strip
@@ -236,18 +254,7 @@ export function openFirstFromApi(apiPath, routeFor, listKey, match) {
   };
 }
 
-/**
- * Put the medic unit's stocked inventory on screen.
- *
- * The Apparatus Inventory page opens on "Select an apparatus…", which is an
- * empty state rather than the screen — every shot of it has to pick a rig
- * first. M-3 is the one `seed_supply_tracking` stocks: two lots on the drug
- * bag, gauze and gloves under par, and a restock report from a member.
- *
- * Selected by the option's **value**, not its label. The label is built from
- * two fields ("M-3 — Medic 3"), so matching it as a string breaks the moment
- * either one is edited.
- */
+/** True for an event that has started but not finished. */
 export async function selectMedicApparatus(page) {
   const select = page.locator("#apparatus-select");
   await select.waitFor({ timeout: 20_000 });
@@ -590,13 +597,21 @@ export function openIntegrationConnect(providerName) {
   };
 }
 
-export function openApplicantDrawer(name) {
+/**
+ * Open the drawer of whichever applicant is currently at `stage`.
+ *
+ * Naming the applicant instead ties the shot to one seeding order: the
+ * election-package section renders only on an election_vote stage, and it was
+ * hard-coded to "Morgan Tran", so the moment the seeder spread applicants
+ * differently the shot pictured someone at Interview under a caption about the
+ * vote. The table's Current Stage column is the fact worth matching on.
+ */
+export function openApplicantAtStage(stage) {
   return async (page) => {
     await clickByName(/^table$/i)(page);
-    await page
-      .getByText(name, { exact: true })
-      .first()
-      .click({ timeout: 10_000 });
+    const row = page.locator("tbody tr").filter({ hasText: stage }).first();
+    await row.waitFor({ timeout: 15_000 });
+    await row.click({ timeout: 10_000 });
     await page.waitForTimeout(600);
   };
 }
@@ -984,6 +999,81 @@ export const SHOTS = [
     selector: "div.card:has(h3:has-text('My Upcoming Shifts'))",
   },
   {
+    id: "03-62-dashboard-signup-positions",
+    doc: "03-scheduling.md",
+    line: 790,
+    anchor: "Screenshot of the Dashboard's Open Shifts section",
+    alt: "An open shift expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for",
+    auth: "member",
+    route: "/dashboard",
+    prepare: async (page) => {
+      // The eligibility check happens on press, not on render — every open
+      // shift shows Sign Up regardless of rank — so the dropdown this pictures
+      // only exists after the card is expanded.
+      const panel = page
+        .locator("div.card:has(h3:has-text('Open Shifts'))")
+        .first();
+      await panel.waitFor({ timeout: 20_000 });
+      await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await panel
+        .getByRole("button", { name: /sign up/i })
+        .first()
+        .click({ timeout: 10_000 });
+      // The positions come from a request fired by the click; waiting on the
+      // select rather than a fixed delay keeps the shot off the spinner.
+      await panel.locator("select").first().waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div.card:has(h3:has-text('Open Shifts'))",
+  },
+  {
+    id: "03-63-offline-banner",
+    doc: "03-scheduling.md",
+    line: 2158,
+    anchor: "The offline banner on the Shift Reports tab",
+    alt: "The Shift Reports tab offline banner — reports will be saved locally and submitted when connectivity returns",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      // A page-level fake rather than `context.setOffline(true)`. The context
+      // is shared by every later shot and nothing in the harness restores it,
+      // so a real offline flag set here would silently break the rest of the
+      // run. `useOnlineStatus` reads `navigator.onLine` and listens for the
+      // window events, both of which can be faked inside this one page — and a
+      // page navigation resets it, so the leak cannot outlive the shot.
+      await page.evaluate(() => {
+        Object.defineProperty(window.navigator, "onLine", {
+          configurable: true,
+          get: () => false,
+        });
+        window.dispatchEvent(new Event("offline"));
+      });
+      const banner = page.getByText(/You're offline\. Reports will be saved/);
+      await banner.waitFor({ timeout: 20_000 });
+      await banner.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "div:has(> svg) >> text=/You're offline\\. Reports will be saved/",
+  },
+  {
+    id: "02-90-crew-summary-table",
+    doc: "02-training.md",
+    line: 2470,
+    anchor: "The Crew summary table on",
+    alt: "The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      // Guide 02's worked example calls this "the Shift Reports tab", and the
+      // tab lives under Scheduling rather than Training — the same screen
+      // guide 03 photographs, shown here for its per-crew roll-up rather than
+      // its Review Queue.
+      const table = page.locator("table:has(th:text-is('Crew member'))").first();
+      await table.waitFor({ timeout: 20_000 });
+      await table.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    selector: "div:has(> div > table:has(th:text-is('Crew member')))",
+  },
+  {
     id: "03-61-review-queue-batch",
     doc: "03-scheduling.md",
     line: 1144,
@@ -1137,10 +1227,6 @@ export const SHOTS = [
     anchor: "Screenshot of a shift's Crew Board with one position filled",
     alt: "A shift's crew board — one filled position and three open, each with Assign and Sign Up",
     route: "/scheduling",
-    // "No calls logged for this shift" is the Calls/Runs panel further down the
-    // same drawer. This shift is deliberately in the future — that is what
-    // leaves its seats open — and a shift that has not run yet has no calls.
-    allowEmptyState: true,
     prepare: async (page) => {
       // A shift with several slots still open: that is what puts open-position
       // rows on the board and brings up the bulk "Fill All Open" action, which
@@ -1187,10 +1273,6 @@ export const SHOTS = [
       "Screenshot of the Required EVOC Level control on an apparatus edit form",
     alt: "The Required EVOC Level control on an apparatus, set to the level needed to drive it",
     route: "/apparatus",
-    // "No EVOC requirement" is this select's placeholder option. It is in the
-    // DOM — and so in the text the empty-state scan reads — on every apparatus,
-    // including the one picked here precisely because it *has* a level set.
-    allowEmptyState: true,
     prepare: async (page) => {
       // The control is on the apparatus *edit form*, not the detail page, and
       // it renders only once the organization has EVOC levels configured.
@@ -1865,6 +1947,46 @@ export const SHOTS = [
     route: "/events/admin?tab=settings",
     prepare: clickByName(/^Hour Tracking/),
     fullPage: true,
+  },
+  {
+    id: "04-43-create-election",
+    doc: "04-events-meetings.md",
+    line: 649,
+    anchor: "Screenshot of the election creation form showing the title",
+    alt: "The Create New Election dialog — title, description, voting window, and the victory-condition and runoff settings",
+    route: "/elections",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Create Election$/ })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 20_000 });
+      await dialog.getByLabel(/^Title/).fill("Fall 2026 Officer Election");
+      await dialog
+        .getByLabel(/^Description/)
+        .fill(
+          "Annual officer election held at the November business meeting. " +
+            "Polls open at the call to order and close before adjournment.",
+        );
+      // The labelled control is the date half of DateTimeQuarterHour — a
+      // native `type=date` input — so it takes a plain date, not a
+      // datetime-local value. The time is three separate selects beside it.
+      // Filling the start date also reveals the quick-duration row beneath the
+      // end date, which is part of what this shot is for.
+      await dialog.getByLabel(/^Start Date & Time/).fill("2026-11-10");
+      await dialog.getByLabel(/^End Date & Time/).fill("2026-11-10");
+      // Blur so the last field is not left with a focus ring and a selected
+      // date segment, which reads as a half-finished edit.
+      await dialog.getByLabel(/^Title/).click();
+      await page.waitForTimeout(600);
+    },
+    selector: '[role="dialog"]',
+    // "No linked meeting" is the Linked Meeting select's default option, which
+    // is in the DOM on every new election — the field is optional and the
+    // guide's steps do not ask for it to be set.
+    allowEmptyState: true,
+    fullPage: false,
   },
   {
     id: "04-38-rolling-recurrence",
@@ -2993,6 +3115,11 @@ export const SHOTS = [
       await page.waitForTimeout(1800);
     },
     fullPage: true,
+    // The board spreads seven applicants across six stages, so some columns
+    // read "No applicants", and a drawer for an applicant who has uploaded
+    // nothing reads "No documents yet". Both are honest; the populated
+    // check is Total Active.
+    allowEmptyState: true,
   },
   // ── 00 Getting Started ──────────────────────────────────────────────
   {
@@ -3004,6 +3131,38 @@ export const SHOTS = [
     alt: "The Logbook login page with username and password fields",
     route: "/login",
     auth: "anonymous",
+  },
+  {
+    id: "00-23-login-two-factor",
+    doc: "00-getting-started.md",
+    line: 98,
+    anchor: "The login page showing the two-factor",
+    alt: "The login page's two-factor step — the 6-digit code field and the Use a recovery code link",
+    route: "/login",
+    auth: "anonymous",
+    prepare: async (page) => {
+      // The code step is one render branch keyed on `mfaRequired`, reached the
+      // same way whether the first factor was a password or a returning OAuth
+      // sign-in — so a password sign-in as the enrolled demo member puts the
+      // page in exactly the state the guide is describing. `signIn` cannot be
+      // reused: it waits to leave /login, which is precisely what a 2FA
+      // account does not do.
+      await page
+        .getByLabel(/username|email/i)
+        .first()
+        .fill(DEMO_TWO_FACTOR_CREDENTIALS.username);
+      await page
+        .getByLabel(/password/i)
+        .first()
+        .fill(DEMO_TWO_FACTOR_CREDENTIALS.password);
+      await page
+        .getByRole("button", { name: /sign in|log ?in/i })
+        .first()
+        .click();
+      const code = page.locator("#mfa-code");
+      await code.waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
   },
   {
     id: "00-21-login-sso-options",
@@ -3157,7 +3316,7 @@ export const SHOTS = [
     line: 206,
     anchor:
       "Screenshot of the Account Settings page showing the profile section, notification preferences",
-    alt: "Account Settings page with profile, notification preferences, and password sections",
+    alt: "Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications",
     route: "/settings/account",
     fullPage: true,
   },
@@ -3215,6 +3374,11 @@ export const SHOTS = [
       "Screenshot of the Kanban board view showing pipeline stages as columns (e.g.,",
     alt: "Prospective members kanban board with pipeline stages as columns",
     route: "/prospective-members",
+    // "No applicants" is the per-column empty text, and a board that spreads
+    // seven applicants across six stages necessarily leaves some columns
+    // empty — that spread is the point of the shot. The board itself is
+    // populated; check the Total Active card, not the column text.
+    allowEmptyState: true,
   },
   {
     // Corrected 2026-08-08. This was captured at /members/admin but described as
@@ -3301,6 +3465,10 @@ export const SHOTS = [
     // The drawer itself, from its header down: taller than the viewport, so
     // the element rather than the screen.
     selector: "div.drawer-panel",
+    // "No checklist data recorded yet" is the Checklist Progress section for
+    // an applicant whose onboarding checklist has not been started. The shot
+    // is about the final stage and its Convert action, both of which render.
+    allowEmptyState: true,
   },
   {
     id: "01-34-desired-membership-type",
@@ -3533,6 +3701,11 @@ export const SHOTS = [
       }
       throw new Error("01-25: no applicant is past the first stage");
     },
+    // The board spreads seven applicants across six stages, so some
+    // columns read "No applicants" — and the drawer reads "No documents
+    // yet" for an applicant who has uploaded none. Both are honest, and
+    // neither means the page is empty; check Total Active.
+    allowEmptyState: true,
   },
   {
     id: "01-26-print-applicant-badges",
@@ -3554,6 +3727,11 @@ export const SHOTS = [
       await page.waitForTimeout(400);
       await page.evaluate(() => window.scrollTo(0, 0));
     },
+    // The board spreads seven applicants across six stages, so some
+    // columns read "No applicants" — and the drawer reads "No documents
+    // yet" for an applicant who has uploaded none. Both are honest, and
+    // neither means the page is empty; check Total Active.
+    allowEmptyState: true,
   },
   {
     id: "01-27-stage-type-picker",
@@ -3710,6 +3888,9 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       await page.waitForTimeout(800);
     },
+    // "No EVOC level" is this select's placeholder option — in the DOM on
+    // every operator, including this one, which has Level 1 selected.
+    allowEmptyState: true,
   },
 
   // ── 02 Training ─────────────────────────────────────────────────────
@@ -3948,12 +4129,6 @@ export const SHOTS = [
       "Screenshot of the Expiring on Apparatus page with the three summary pills",
     alt: "Expiring on Apparatus: the summary pills, the 30/60/90 window, and three rows — one expiring, one reported used, one short of par",
     route: "/scheduling/supply/expiring",
-    // "No stock" here is a **badge on a populated row** — the Nozzle position,
-    // which is short and has nothing behind it, and is the one row on this page
-    // that pictures "order it" rather than "swap it". The empty-state check
-    // matches it as a whole short line and holds the shot back; the page is the
-    // opposite of empty, carrying five rows across every filter it offers.
-    allowEmptyState: true,
     fullPage: true,
   },
 
@@ -4064,8 +4239,7 @@ export const SHOTS = [
     id: "05-53-items-grid-lot-stock",
     doc: "05-inventory.md",
     line: 662,
-    anchor:
-      "Screenshot of the inventory items grid with two consumable rows visible",
+    anchor: "Screenshot of the inventory items grid with two consumable rows visible",
     alt: 'Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure',
     // Needs `seed_supply_tracking` to have run: without dated lots on at least
     // one item every row reports the pool figure and the two ledgers cannot be
@@ -4164,96 +4338,6 @@ export const SHOTS = [
       "Screenshot of the Integrations page showing available integrations as cards with logos,",
     alt: "Integrations page showing available integrations and connection status",
     route: "/integrations",
-  },
-
-  {
-    id: "06-22-apparatus-operators-tab",
-    doc: "06-apparatus-facilities.md",
-    line: 672,
-    anchor:
-      "Screenshot of an engine's Operators tab listing three operators by name",
-    alt: "The Operators tab: certified operators by name, with EVOC level and certification dates",
-    route: "/apparatus",
-    prepare: async (page) => {
-      // `?tab=operators` is read on mount, so no click is needed — but the
-      // apparatus id has to be resolved first, and E-1 is the rig the seeder
-      // gives three operators with spread EVOC levels.
-      await openFirstFromApi(
-        "/apparatus",
-        (id) => `/apparatus/${id}?tab=operators`,
-        "apparatus",
-        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
-      )(page);
-      await page
-        .getByRole("button", { name: /Add Operator/i })
-        .first()
-        .waitFor({ timeout: 20_000 });
-      await page.waitForTimeout(800);
-    },
-    fullPage: false,
-  },
-  {
-    id: "06-23-add-operator-member-picker",
-    doc: "06-apparatus-facilities.md",
-    line: 687,
-    anchor:
-      "Screenshot of the Add Operator form with a member chosen from the picker",
-    alt: "The Add Operator form: a member picker, not the free-text UUID box it replaced",
-    route: "/apparatus",
-    // Both selects are native, and an open native popup is drawn by the OS
-    // rather than the page — Playwright cannot photograph it. Showing the two
-    // fields *set* makes the same point the caption does, and better: a real
-    // member name proves the box is a picker over the roster, and an EVOC level
-    // is the combination that used to return a server error.
-    allowEmptyState: true, // "No EVOC level" is the placeholder option, not an empty page
-    prepare: async (page) => {
-      await openFirstFromApi(
-        "/apparatus",
-        (id) => `/apparatus/${id}?tab=operators`,
-        "apparatus",
-        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
-      )(page);
-      const add = page.getByRole("button", { name: /Add Operator/i }).first();
-      await add.waitFor({ timeout: 20_000 });
-      await add.click();
-
-      // Pick by position rather than by name: the roster is seeded and the
-      // first real option is a member either way, whereas naming one couples
-      // this shot to the seeder's name list.
-      const member = page.locator("#operator-member");
-      await member.waitFor({ timeout: 10_000 });
-      // The roster is fetched after the modal mounts, so the select exists for
-      // a moment holding nothing but its placeholder. Waiting on the element
-      // is not waiting on the list.
-      await member
-        .locator("option")
-        .nth(1)
-        .waitFor({ state: "attached", timeout: 20_000 });
-      const memberValue = await member.evaluate(
-        (el) =>
-          Array.from(el.options).find((option) => option.value !== "")?.value ??
-          "",
-      );
-      if (!memberValue) throw new Error("member picker has no members in it");
-      await member.selectOption(memberValue);
-
-      const evoc = page.locator("select").nth(1);
-      const evocValue = await evoc.evaluate(
-        (el) =>
-          Array.from(el.options).find((option) =>
-            /intermediate/i.test(option.text),
-          )?.value ?? "",
-      );
-      if (!evocValue) throw new Error("no Intermediate EVOC level defined");
-      await evoc.selectOption(evocValue);
-
-      await page
-        .getByLabel(/Certified to operate/i)
-        .first()
-        .check();
-      await page.waitForTimeout(800);
-    },
-    fullPage: false,
   },
 
   // ── 08 Administration & Reports ─────────────────────────────────────
@@ -4803,6 +4887,19 @@ export const SHOTS = [
     },
   },
   {
+    id: "10-13-mobile-header-menu",
+    doc: "10-mobile-pwa.md",
+    line: 140,
+    anchor: "Re-shoot of the phone header showing the ☰ button",
+    alt: "Phone header with the menu button at the left edge and the department name beside it",
+    route: "/dashboard",
+    viewport: "mobile",
+    // Clipped to the header: the placeholder is about where one button sits,
+    // and a whole-phone shot buries it above a screen of dashboard.
+    selector: 'header[role="banner"].md\\:hidden',
+    allowEmptyState: true,
+  },
+  {
     id: "10-12-mobile-bottom-nav",
     doc: "10-mobile-pwa.md",
     line: 127,
@@ -5097,6 +5194,11 @@ export const SHOTS = [
       "Screenshot of the Prospective Members main page showing the kanban board view",
     alt: "Prospective members kanban board with a column per pipeline stage",
     route: "/prospective-members",
+    // The board spreads seven applicants across six stages, so some columns
+    // read "No applicants", and a drawer for an applicant who has uploaded
+    // nothing reads "No documents yet". Both are honest; the populated
+    // check is Total Active.
+    allowEmptyState: true,
   },
   {
     id: "15-02-board-truncated",
@@ -5116,38 +5218,6 @@ export const SHOTS = [
         .filter({ hasText: /Showing \d+ of \d+ applicants/ });
       await notice.first().waitFor({ state: "visible", timeout: 20_000 });
       await page.waitForTimeout(400);
-    },
-  },
-  {
-    id: "15-09-bulk-action-result",
-    doc: "15-prospective-members.md",
-    line: 495,
-    anchor: "The pair of notifications after a bulk advance that",
-    alt: "Bulk advance reporting how many moved and naming the applicants it skipped",
-    route: "/prospective-members",
-    // Runs a real bulk advance, so it *changes the seeded data* — which is why
-    // it sits last among the 15-* shots. Re-running the seeder restores a mixed
-    // page (it tops the pipeline up and re-parks two applicants at the final
-    // stage), so the shot is repeatable; it is just not idempotent on its own.
-    //
-    // The partial failure is the point. Page one is deliberately mixed: most
-    // rows are at intake and a few are at the final stage, where advancing is
-    // refused. Selecting the page produces both toasts — the count that moved,
-    // and the named applicants that could not.
-    prepare: async (page) => {
-      await clickByName("Table")(page);
-      const selectAll = page.locator("thead th:first-child button");
-      await selectAll.waitFor({ state: "visible", timeout: 15_000 });
-      await selectAll.click();
-      await clickByName("Advance All")(page);
-      // Both toasts, not just the first: the success one renders immediately
-      // and the skipped one follows the response, so waiting on either alone
-      // races the capture.
-      await page
-        .getByText(/Skipped \d+:/)
-        .first()
-        .waitFor({ state: "visible", timeout: 30_000 });
-      await page.waitForTimeout(600);
     },
   },
   {
@@ -6210,24 +6280,16 @@ export const SHOTS = [
   },
   {
     id: "03-22-equipment-check-builder",
+    // a builder opened on a new template correctly starts with no compartments;
+    // the shot is of the builder layout
+    allowEmptyState: true,
     doc: "03-scheduling.md",
     line: 668,
     anchor:
       "Screenshot of the Equipment Check Template Builder showing the template header (name,",
-    alt: "Equipment check template builder: the template header, its compartments and items, and the catalog-linked count",
-    route: "/scheduling",
-    // An existing template, not `/new`. The shot used to be of the blank
-    // create page — carrying `allowEmptyState` to say so — and the guide text
-    // above it is about compartments, item check types and drag-to-reorder,
-    // none of which a page with "No compartments yet" can show. The toolbar's
-    // linked/unlinked catalog count and the quick-add bar's catalog search,
-    // both added by the supply work, need items on the page to render at all.
-    prepare: openTemplateNamed("Medic 3 Supply Check"),
-    // Viewport, not full page: the builder's toolbar and its summary bar are
-    // both sticky, so a full-page capture paints each of them twice — once
-    // pinned and once where they sit in the document — leaving a duplicated
-    // toolbar across the middle of the image.
-    fullPage: false,
+    alt: "Equipment check template builder with the template header and sections",
+    route: "/scheduling/equipment-check-templates/new",
+    fullPage: true,
   },
   {
     id: "04-04-event-qr-code",
@@ -7297,6 +7359,94 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "14-23-membership-ballot-item",
+    doc: "14-elections.md",
+    line: 843,
+    anchor: "Screenshot of the ballot preview showing a membership approval",
+    alt: "The ballot preview's membership approval item — the applicant named in the title, the coordinator's supporting statement, and the Approve and Deny options",
+    route: "/elections",
+    prepare: async (page) => {
+      // Matched on `election_type`, not a title. The obvious filter — an
+      // election carrying a membership_approval ballot item — cannot be used
+      // here: the list endpoint returns no `ballot_items` at all, only the
+      // detail does. `general` is the only seeded election that is neither a
+      // position race nor an issue vote, which is exactly what a membership
+      // approval is.
+      //
+      // The preview is the one screen that renders Approve/Deny for such an
+      // item; the in-app ballot draws position races only (see
+      // KNOWN_LIMITATIONS).
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => election.election_type === "general",
+      )(page);
+      await clickByName(/^Preview Ballot$/)(page);
+      const approve = page.getByText("Approve", { exact: true }).first();
+      await approve.waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div[role='dialog']",
+  },
+  {
+    id: "14-21-save-ballot-template",
+    doc: "14-elections.md",
+    line: 144,
+    anchor: "The Ballot Builder with the **Save as Template**",
+    alt: "The Save as Template form open in the Ballot Builder — the Template name field, the configuration-only note, and the Save Template / Cancel buttons",
+    route: "/elections",
+    prepare: async (page) => {
+      // A draft election, because Save as Template is hidden on a closed one
+      // and the guide's steps say to build the ballot on a draft.
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => (election.status ?? "") === "draft",
+      )(page);
+      const save = page.getByRole("button", { name: /^Save as Template$/ });
+      await save.waitFor({ timeout: 20_000 });
+      await save.click();
+      const name = page.locator("#saved-ballot-template-name");
+      await name.waitFor({ timeout: 10_000 });
+      await name.fill("Annual officer election");
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> div > h3:text-is('Ballot Items (1)'))",
+  },
+  {
+    id: "14-22-ballot-template-picker",
+    doc: "14-elections.md",
+    line: 159,
+    anchor: 'The template picker showing the "Your saved',
+    alt: 'The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates',
+    route: "/elections",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => (election.status ?? "") === "draft",
+      )(page);
+      const use = page.getByRole("button", { name: /^Use Template$/ });
+      await use.waitFor({ timeout: 20_000 });
+      await use.click();
+      // Clicking the saved template arms the two-step confirm rather than
+      // applying it — which is the state the guide is describing.
+      // Scoped to the popover and taken first: the built-in "Officer
+      // Election" template below also matches a loose name regex.
+      const popover = page.locator("div:has(> h4:text-is('Select a Template'))");
+      const saved = popover
+        .getByRole("button", { name: /Annual officer election/ })
+        .first();
+      await saved.waitFor({ timeout: 10_000 });
+      await saved.click();
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> h4:text-is('Select a Template'))",
+  },
+  {
     id: "14-20-runoff-chain",
     doc: "14-elections.md",
     line: 601,
@@ -7422,6 +7572,11 @@ export const SHOTS = [
         .click({ timeout: 10_000 });
     },
     fullPage: true,
+    // The board spreads seven applicants across six stages, so some columns
+    // read "No applicants", and a drawer for an applicant who has uploaded
+    // nothing reads "No documents yet". Both are honest; the populated
+    // check is Total Active.
+    allowEmptyState: true,
   },
 
   // ── Sixth batch: documents, forms and department messaging ─────────
@@ -7629,6 +7784,95 @@ export const SHOTS = [
       await evoc.selectOption(value);
     },
     fullPage: true,
+  },
+  {
+    id: "06-22-apparatus-operators-tab",
+    doc: "06-apparatus-facilities.md",
+    line: 672,
+    anchor:
+      "Screenshot of an engine's Operators tab listing three operators by name",
+    alt: "The Operators tab: certified operators by name, with EVOC level and certification dates",
+    route: "/apparatus",
+    prepare: async (page) => {
+      // `?tab=operators` is read on mount, so no click is needed — but the
+      // apparatus id has to be resolved first, and E-1 is the rig the seeder
+      // gives three operators with spread EVOC levels.
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}?tab=operators`,
+        "apparatus",
+        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
+      )(page);
+      await page
+        .getByRole("button", { name: /Add Operator/i })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
+  },
+  {
+    id: "06-23-add-operator-member-picker",
+    doc: "06-apparatus-facilities.md",
+    line: 687,
+    anchor:
+      "Screenshot of the Add Operator form with a member chosen from the picker",
+    alt: "The Add Operator form: a member picker, not the free-text UUID box it replaced",
+    route: "/apparatus",
+    // Both selects are native, and an open native popup is drawn by the OS
+    // rather than the page — Playwright cannot photograph it. Showing the two
+    // fields *set* makes the same point the caption does, and better: a real
+    // member name proves the box is a picker over the roster, and an EVOC level
+    // is the combination that used to return a server error.
+    allowEmptyState: true, // "No EVOC level" is the placeholder option, not an empty page
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}?tab=operators`,
+        "apparatus",
+        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
+      )(page);
+      const add = page.getByRole("button", { name: /Add Operator/i }).first();
+      await add.waitFor({ timeout: 20_000 });
+      await add.click();
+
+      // Pick by position rather than by name: the roster is seeded and the
+      // first real option is a member either way, whereas naming one couples
+      // this shot to the seeder's name list.
+      const member = page.locator("#operator-member");
+      await member.waitFor({ timeout: 10_000 });
+      // The roster is fetched after the modal mounts, so the select exists for
+      // a moment holding nothing but its placeholder. Waiting on the element
+      // is not waiting on the list.
+      await member
+        .locator("option")
+        .nth(1)
+        .waitFor({ state: "attached", timeout: 20_000 });
+      const memberValue = await member.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) => option.value !== "")?.value ??
+          "",
+      );
+      if (!memberValue) throw new Error("member picker has no members in it");
+      await member.selectOption(memberValue);
+
+      const evoc = page.locator("select").nth(1);
+      const evocValue = await evoc.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) =>
+            /intermediate/i.test(option.text),
+          )?.value ?? "",
+      );
+      if (!evocValue) throw new Error("no Intermediate EVOC level defined");
+      await evoc.selectOption(evocValue);
+
+      await page
+        .getByLabel(/Certified to operate/i)
+        .first()
+        .check();
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
   },
 
   // ── Eighth batch: personal data rights ─────────────────────────────
@@ -7875,6 +8119,53 @@ export const SHOTS = [
     fullPage: true,
     allowEmptyState: true,
   },
+  {
+    id: "14-24-ballot-send-skipped",
+    doc: "14-elections.md",
+    line: 352,
+    anchor: "The result of a ballot send",
+    alt: "The banner after a ballot send, naming each member who was skipped and why",
+    route: "/elections",
+    // Sends real ballots, so it changes the election's `email_sent` state and
+    // mints voting tokens. Last in guide 14 by the manifest's own invariant.
+    mutatesSeedData: true,
+    prepare: async (page) => {
+      // The one election whose ballot item restricts eligible_voter_types, so
+      // the send skips the two administrative members rather than nobody.
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => election.title?.startsWith("Operations Committee Seat"),
+      )(page);
+      await clickByName(/^(Send|Resend) Ballot Emails$/)(page);
+      await clickByName(/^Send Ballots$/)(page);
+      // The banner, not the toast: the toast is transient and says "see banner
+      // below", and the banner is the part that names who was skipped.
+      const banner = page.getByText(/member\(s\) skipped when sending ballots/);
+      await banner.waitFor({ timeout: 30_000 });
+      await banner.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      // Wait the toast out. It reports "N sent, M failed, M skipped", and in a
+      // demo with no SMTP configured every send fails — "0 voter(s), 20
+      // failed" over a caption about *skipped* members reads as a broken
+      // feature rather than an eligibility rule. The banner is persistent and
+      // is the part the guide is about, so the shot is taken once the toast
+      // has gone. react-hot-toast dismisses an error after 4s.
+      await page
+        .getByText(/Ballots sent to \d+ voter/)
+        .waitFor({ state: "hidden", timeout: 15_000 })
+        .catch(() => {});
+      await page.waitForTimeout(600);
+    },
+    // Viewport rather than a selector: the banner is a plain div with no
+    // stable hook, and the surrounding page is the useful context anyway —
+    // the election it was sent for is named directly above it.
+    fullPage: false,
+    // "No votes cast yet" further down the page. An election whose ballots
+    // went out seconds ago has had no time to collect one, so that is the
+    // correct state rather than a seed gap — and it is not what this pictures.
+    allowEmptyState: true,
+  },
 
   // ── Tenth batch: the applicant pipeline ────────────────────────────
   {
@@ -7966,7 +8257,11 @@ export const SHOTS = [
       "Screenshot of the applicant detail drawer showing the action buttons",
     alt: "Applicant drawer action bar with the stage-movement buttons",
     route: "/prospective-members",
-    prepare: openApplicantDrawer("Sam Okafor"),
+    // Both stage-movement buttons only render for an applicant who has
+    // somewhere to go in each direction, so this needs a mid-pipeline stage —
+    // matched by stage rather than by name so a re-spread cannot land it on
+    // somebody at either end with half the action bar missing.
+    prepare: openApplicantAtStage("Background & Medical"),
     fullPage: true,
     allowEmptyState: true,
   },
@@ -7979,8 +8274,10 @@ export const SHOTS = [
     alt: "Election package section showing the package status for an applicant at the vote",
     route: "/prospective-members",
     // The section renders only for an applicant on an election_vote stage —
-    // "Membership Vote" in the seeded pipeline.
-    prepare: openApplicantDrawer("Morgan Tran"),
+    // "Membership Vote" in the seeded pipeline. Matched on the stage rather
+    // than a name, so a different seeding spread cannot silently point this at
+    // somebody who is not at the vote.
+    prepare: openApplicantAtStage("Membership Vote"),
     fullPage: true,
     allowEmptyState: true,
   },
@@ -7990,12 +8287,14 @@ export const SHOTS = [
     line: 389,
     anchor:
       "Screenshot of the Convert to Member modal showing membership type selector",
-    alt: "Convert to member modal with membership type, ID and rank fields",
+    alt: "Step 2 of the Convert to Member modal — membership type, rank, station and hire date",
     route: "/prospective-members",
     prepare: async (page) => {
       // Conversion is not its own button: Advance on the *last* stage opens
-      // the modal. Riley Bishop sits on Onboarding, the final stage.
-      await openApplicantDrawer("Riley Bishop")(page);
+      // the modal, so this shot needs whoever is sitting on Onboarding —
+      // match on that stage rather than on a name, since the seeder spreads
+      // applicants across stages and who lands on the last one moves.
+      await openApplicantAtStage("Onboarding")(page);
       await clickByName(/convert/i)(page);
       // The modal opens on step 1 of 2 (Review Applicant); the membership
       // type, ID, rank and start date the placeholder names are on step 2.
@@ -8005,44 +8304,57 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
-    id: "15-13-application-status",
+    id: "15-09-bulk-action-result",
     doc: "15-prospective-members.md",
-    line: 575,
-    anchor:
-      "Screenshot of the public application status page showing the applicant name",
-    alt: "Public application status page showing an applicant's progress through the pipeline",
+    line: 495,
+    anchor: "The pair of notifications after a bulk advance that",
+    alt: "Bulk advance reporting how many moved and naming the applicants it skipped",
     route: "/prospective-members",
+    // Runs a real bulk advance, so it *changes the seeded data* — every
+    // applicant on page one moves a stage on. It must therefore stay the LAST
+    // 15-* entry: the shots above it match applicants by the stage they sit on
+    // (`openApplicantAtStage`), and a run of this one empties whichever stages
+    // those shots were waiting for. It had drifted up to fourth, and
+    // 15-05-applicant-actions timed out looking for a Background & Medical
+    // applicant this had already advanced past. Re-running the seeder puts the
+    // spread back, so the shot is repeatable; it is just not idempotent, and
+    // nothing that depends on the spread may run after it.
+    //
+    // The partial failure is the point: the applicant on the final stage has
+    // nowhere to advance to, so selecting the page produces both toasts — the
+    // count that moved, and the named applicants that could not.
+    mutatesSeedData: true,
     prepare: async (page) => {
-      // The status link is addressed by a per-applicant token, and the token
-      // is only on the prospect *detail* response — the list omits it.
-      const token = await page.evaluate(async () => {
-        const list = await fetch(
-          "/api/v1/prospective-members/prospects?limit=20",
-          { credentials: "include" },
-        );
-        if (!list.ok) return "";
-        const body = await list.json();
-        for (const row of body.items || []) {
-          const detail = await fetch(
-            `/api/v1/prospective-members/prospects/${row.id}`,
-            { credentials: "include" },
-          );
-          if (!detail.ok) continue;
-          const record = await detail.json();
-          if (record.status_token) return record.status_token;
-        }
-        return "";
-      });
-      if (!token) throw new Error("no applicant carries a status token");
-      await page.goto(
-        new URL(`/application-status/${token}`, page.url()).toString(),
-        {
-          waitUntil: "domcontentloaded",
-        },
-      );
+      await clickByName("Table")(page);
+      const selectAll = page.locator("thead th:first-child button");
+      await selectAll.waitFor({ state: "visible", timeout: 15_000 });
+      await selectAll.click();
+      await clickByName("Advance All")(page);
+      // Both toasts, not just the first: the success one renders immediately
+      // and the skipped one follows the response, so waiting on either alone
+      // races the capture.
+      await page
+        .getByText(/Skipped \d+:/)
+        .first()
+        .waitFor({ state: "visible", timeout: 30_000 });
+      await page.waitForTimeout(600);
     },
-    fullPage: true,
   },
+  // 15-13-application-status has no entry, on purpose.
+  //
+  // The public application-status page is addressed by a per-applicant
+  // `status_token`. This shot used to read that token from the prospect detail
+  // response; a security fix then removed the field from every response,
+  // because it is the credential behind that page and was leaking into the
+  // kanban board as well. The tokens still exist — every applicant has one —
+  // but no supported interface hands one out: it reaches the applicant only in
+  // the email the system sends them, and this environment runs no mail catcher.
+  //
+  // The committed `15-13-application-status.png` predates that fix and remains
+  // a true picture of the page, so the guide keeps it. It simply cannot be
+  // refreshed from here, and an entry that fails on every run is noise rather
+  // than a finding. Restoring it means giving the seeder a way to surface a
+  // status URL, or reading it out of a mail catcher the way an applicant would.
   {
     id: "09-04-template-builder",
     doc: "09-skills-testing.md",
@@ -8156,6 +8468,30 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "03-60-report-used-sheet",
+    doc: "03-scheduling.md",
+    line: 880,
+    anchor:
+      'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
+    alt: "The report-used sheet: quantity stepper, optional note, and the position's current count",
+    auth: "member",
+    route: "/scheduling/apparatus-inventory",
+    viewport: "mobile",
+    prepare: async (page) => {
+      await selectMedicApparatus(page);
+      // "Flag" on a counted position, "Used" on one with no target — the same
+      // report by either name, so match both rather than assuming which the
+      // seeder produced for the first row.
+      const trigger = page
+        .getByRole("button", { name: /^(Flag|Used)$/ })
+        .first();
+      await trigger.waitFor({ timeout: 20_000 });
+      await trigger.click();
+      await page.waitForTimeout(900);
+    },
+    fullPage: false,
+  },
+  {
     id: "09-20-result-disclosure-settings",
     doc: "09-skills-testing.md",
     line: 1051,
@@ -8235,6 +8571,44 @@ export const SHOTS = [
         .waitFor({ timeout: 20_000 });
     },
     selector: "div[role='dialog'], div.fixed.inset-0 > div",
+  },
+  {
+    id: "09-18-statement-starts-clock",
+    doc: "09-skills-testing.md",
+    line: 457,
+    anchor: "A statement criterion on the scoring screen with",
+    alt: "A read-aloud statement inside the time limit, with the START CLOCK & READ button beneath it",
+    route: "/training/skills-testing",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/skills-testing/tests?limit=50",
+        (id) => `/training/skills-testing/test/${id}/active`,
+        "tests",
+        (test) => test.status === "in_progress",
+      )(page);
+      // The timed statement lives in Hose Advance, not the opening section —
+      // the briefing there is read *off* the clock and so has no button, which
+      // is the distinction this shot exists to draw.
+      // The section chips are numbered, so their visible text is "2" — the
+      // section name is only in the accessible name, which is what this matches.
+      await page
+        .getByRole("button", { name: /Hose Advance:/i })
+        .first()
+        .click({ timeout: 15_000 });
+      // The button only exists while the clock is stopped — once it is running
+      // the criterion shows the note instead, which is the state *after* the
+      // tap this shot is about. Opening an in-progress test resumes the timer,
+      // so pause it first.
+      const pause = page.getByRole("button", { name: "Pause timer" });
+      if (await pause.isVisible().catch(() => false)) {
+        await pause.click({ timeout: 10_000 });
+      }
+      const button = page.getByRole("button", { name: /START CLOCK/i }).first();
+      await button.waitFor({ timeout: 20_000 });
+      await button.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
   },
   {
     id: "09-17-scoring-criteria-mix",
@@ -8899,3 +9273,29 @@ export const SHOTS = [
     fullPage: false,
   },
 ];
+
+/**
+ * A shot flagged `mutatesSeedData` leaves the database changed for everything
+ * captured after it, so it has to be the last shot of its guide.
+ *
+ * Enforced here rather than trusted to a comment because the failure is silent
+ * in the worst way: 15-09-bulk-action-result drifted to fourth among the 15-*
+ * entries during an unrelated edit, advanced every applicant a stage on, and
+ * the shots below it — which find their applicant by the stage they sit on —
+ * either timed out or would have pictured the wrong person under a caption
+ * about the right one. Import time is the right place to catch it; by capture
+ * time the evidence is a 15-second locator timeout with no hint of the cause.
+ */
+for (const [index, shot] of SHOTS.entries()) {
+  if (!shot.mutatesSeedData) continue;
+  const laterInSameDoc = SHOTS.slice(index + 1).filter(
+    (later) => later.doc === shot.doc,
+  );
+  if (laterInSameDoc.length > 0) {
+    throw new Error(
+      `${shot.id} mutates the seeded data, so it must be the last shot of ` +
+        `${shot.doc}; these still follow it: ` +
+        laterInSameDoc.map((later) => later.id).join(", "),
+    );
+  }
+}

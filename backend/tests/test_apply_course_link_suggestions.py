@@ -249,7 +249,9 @@ class TestApply:
 
 
 class TestRestore:
-    async def test_puts_the_previous_value_back(self, tmp_path):
+    async def test_puts_the_previous_value_back(self, monkeypatch, tmp_path):
+        audit = AsyncMock()
+        monkeypatch.setattr(applier, "log_audit_event", audit)
         req = _req("r1", "CPR", ["c-cpr"])
         db = _fake_db([], [], [req])
         path = tmp_path / "rollback.json"
@@ -272,6 +274,12 @@ class TestRestore:
         assert await applier._restore(db, str(path)) == 0
         assert req.required_courses == ["CPR / BLS"]
         db.commit.assert_awaited()
+        audit.assert_awaited_once()
+        payload = audit.await_args.kwargs
+        assert payload["event_type"] == "training_requirement_courses_relink_restored"
+        assert payload["event_data"]["before"] == ["c-cpr"]
+        assert payload["event_data"]["after"] == ["CPR / BLS"]
+        assert payload["organization_id"] == "org-a"
 
     async def test_leaves_a_requirement_edited_since_the_relink(self, tmp_path):
         """Restoring would throw away whatever the officer did after."""

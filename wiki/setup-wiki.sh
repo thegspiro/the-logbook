@@ -83,12 +83,20 @@ echo -e "${BLUE}Step 2: Copying wiki pages...${NC}"
 #   Troubleshooting.md — generated below from docs/TROUBLESHOOTING.md. It should
 #                        not exist here; the guard catches it if someone
 #                        re-creates one by hand.
-WIKI_EXCLUDE=("README.md" "Troubleshooting.md")
+#   Error-Codes.md     — generated below from docs/ERROR_CODES.md, same reason.
+WIKI_EXCLUDE=("README.md" "Troubleshooting.md" "Error-Codes.md")
 
 if [ -f "Troubleshooting.md" ]; then
     echo -e "${RED}✗${NC} wiki/Troubleshooting.md exists but is generated from"
     echo -e "  docs/TROUBLESHOOTING.md at publish time. Delete it and add any"
     echo -e "  new entries to docs/TROUBLESHOOTING.md instead."
+    exit 1
+fi
+
+if [ -f "Error-Codes.md" ]; then
+    echo -e "${RED}✗${NC} wiki/Error-Codes.md exists but is generated from"
+    echo -e "  docs/ERROR_CODES.md at publish time. Delete it and add any"
+    echo -e "  new codes to docs/ERROR_CODES.md instead."
     exit 1
 fi
 
@@ -135,6 +143,25 @@ if [ -f "$TROUBLESHOOTING_SRC" ]; then
     echo -e "${GREEN}✓${NC} Generated Troubleshooting.md from docs/TROUBLESHOOTING.md"
 else
     echo -e "${RED}✗${NC} $TROUBLESHOOTING_SRC not found — wiki Troubleshooting page not generated"
+    exit 1
+fi
+
+# Error-Codes is generated from the same single source the app serves
+# (docs/ERROR_CODES.md mirrors backend/app/core/error_codes.py, enforced by
+# backend/tests/test_error_codes.py) — a hand-maintained wiki copy would be
+# the drift problem all over again.
+ERROR_CODES_SRC="../docs/ERROR_CODES.md"
+if [ -f "$ERROR_CODES_SRC" ]; then
+    {
+        echo "<!-- GENERATED FILE — DO NOT EDIT."
+        echo "     Source: docs/ERROR_CODES.md in the main repository."
+        echo "     Regenerate by running wiki/setup-wiki.sh. -->"
+        echo ""
+        cat "$ERROR_CODES_SRC"
+    } > "$WIKI_DIR/Error-Codes.md"
+    echo -e "${GREEN}✓${NC} Generated Error-Codes.md from docs/ERROR_CODES.md"
+else
+    echo -e "${RED}✗${NC} $ERROR_CODES_SRC not found — wiki Error-Codes page not generated"
     exit 1
 fi
 

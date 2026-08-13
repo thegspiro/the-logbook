@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import generate_uuid, safe_error_detail
 from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
 from app.models.notification import NotificationChannel
@@ -75,6 +76,7 @@ from app.schemas.event import (
     SendRemindersResponse,
     VisibleEventTypesResponse,
 )
+from app.schemas.organization import MembershipTierSettings
 from app.services.documents_service import DocumentsService
 from app.services.event_service import (
     BULK_ADD_MAX_SIZE,
@@ -133,6 +135,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         max_attendees=event.max_attendees,
         allowed_rsvp_statuses=event.allowed_rsvp_statuses,
         is_mandatory=event.is_mandatory,
+        mandatory_membership_types=event.mandatory_membership_types,
         allow_guests=event.allow_guests,
         send_reminders=event.send_reminders,
         reminder_schedule=event.reminder_schedule or [24],
@@ -294,6 +297,7 @@ async def list_events(
                 location_name=location_name,
                 requires_rsvp=event.requires_rsvp,
                 is_mandatory=event.is_mandatory,
+                mandatory_membership_types=event.mandatory_membership_types,
                 is_draft=event.is_draft or False,
                 is_cancelled=event.is_cancelled,
                 is_recurring=event.is_recurring or False,
@@ -676,10 +680,17 @@ async def get_visible_event_types(
         "visible_custom_categories",
         EVENT_SETTINGS_DEFAULTS["visible_custom_categories"],
     )
+    tier_settings = MembershipTierSettings.model_validate(
+        (org.settings or {}).get("membership_tiers", {})
+    )
     return {
         "visible_event_types": visible,
         "custom_event_categories": custom_categories,
         "visible_custom_categories": visible_custom,
+        "membership_types": [
+            {"value": tier.id, "label": tier.name}
+            for tier in sorted(tier_settings.tiers, key=lambda tier: tier.sort_order)
+        ],
     }
 
 
@@ -2272,16 +2283,19 @@ async def upload_event_attachment(
     # Validate file extension
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     # Read and validate size
     content = await file.read()
     if len(content) > MAX_ATTACHMENT_SIZE:
-        raise HTTPException(
-            status_code=400, detail="File too large. Maximum size is 25MB."
+        raise CodedHTTPException(
+            status_code=400,
+            detail="File too large. Maximum size is 25MB.",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
     # SEC: Validate actual file content via magic bytes, not just extension
@@ -2289,18 +2303,20 @@ async def upload_event_attachment(
         detected_mime = detect_mime_type(content)
     except RuntimeError:
         logger.error("Event attachment validation unavailable: libmagic missing")
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Attachment validation is temporarily unavailable.",
+            error_code=ErrorCode.UPLD_VALIDATION_UNAVAILABLE,
         )
     if detected_mime not in ALLOWED_ATTACHMENT_MIME_TYPES:
         logger.warning(
             f"Event attachment rejected: detected MIME '{detected_mime}' "
             f"(claimed: '{file.content_type}') for file '{file.filename}'"
         )
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail=f"File content type '{detected_mime}' not allowed.",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     # Save file
@@ -2915,16 +2931,18 @@ async def import_events_csv(
     location, description, is_mandatory.
     """
     if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail="File must be a CSV (.csv) file",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
         )
 
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:  # 5 MB limit
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=400,
             detail="File size must be under 5 MB",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
     try:

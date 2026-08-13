@@ -6,7 +6,12 @@ interface RecordPaperBallotsModalProps {
   recording: boolean;
   error: string | null;
   attestationsRequired?: number;
-  onSubmit: (entries: Array<{ candidate_id: string; count: number }>, notes: string, allowOverCount: boolean) => void;
+  onSubmit: (
+    entries: Array<{ candidate_id: string; count: number }>,
+    notes: string,
+    allowOverCount: boolean,
+    ballotsCast: number | undefined
+  ) => void;
   onClose: () => void;
 }
 
@@ -26,6 +31,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [allowOverCount, setAllowOverCount] = useState(false);
+  const [ballotsCastInput, setBallotsCastInput] = useState('');
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -40,6 +46,10 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
     .map((c) => ({ candidate_id: c.id, count: parseInt(counts[c.id] ?? '', 10) }))
     .filter((e) => Number.isFinite(e.count) && e.count > 0);
   const total = entries.reduce((sum, e) => sum + e.count, 0);
+  // Optional; blank stays undefined so the key is omitted from the payload
+  // and turnout falls back to the tally-derived estimate.
+  const parsedBallotsCast = parseInt(ballotsCastInput, 10);
+  const ballotsCast = Number.isFinite(parsedBallotsCast) && parsedBallotsCast > 0 ? parsedBallotsCast : undefined;
 
   return (
     <div
@@ -104,6 +114,26 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
           </div>
 
           <div className="mt-4">
+            <label htmlFor="paper-ballots-cast" className="text-theme-text-secondary block text-sm font-medium">
+              Physical ballots in this stack <span className="text-theme-text-muted text-xs">(optional)</span>
+            </label>
+            <p className="text-theme-text-muted mt-0.5 text-xs">
+              For ballots that select multiple candidates (approval or ranked voting), this count is what turnout and
+              quorum are measured against — without it a conservative estimate is used.
+            </p>
+            <input
+              id="paper-ballots-cast"
+              type="number"
+              min={1}
+              max={2000}
+              value={ballotsCastInput}
+              onChange={(e) => setBallotsCastInput(e.target.value)}
+              placeholder="e.g. 42"
+              className="form-input-sm mt-1 w-28 text-right"
+            />
+          </div>
+
+          <div className="mt-4">
             <label htmlFor="paper-notes" className="text-theme-text-secondary block text-sm font-medium">
               Notes <span className="text-theme-text-muted text-xs">(optional)</span>
             </label>
@@ -146,7 +176,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => onSubmit(entries, notes, allowOverCount)}
+                onClick={() => onSubmit(entries, notes, allowOverCount, ballotsCast)}
                 disabled={recording || total === 0}
                 className="btn-primary rounded-md disabled:opacity-50"
               >

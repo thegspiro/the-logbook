@@ -35,6 +35,7 @@ from app.api.v1.email_test_helper import (
     test_smtp_connection,
 )
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.onboarding import (
@@ -432,9 +433,10 @@ async def get_or_create_session(
         select(Organization).order_by(Organization.created_at.asc()).limit(1)
     )
     if org_result.scalar_one_or_none() is not None:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     session_id = request.headers.get("X-Session-ID")
@@ -496,9 +498,10 @@ async def validate_session(
     session_id = request.headers.get("X-Session-ID")
 
     if not session_id:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session ID required. Please start onboarding first.",
+            error_code=ErrorCode.ONBD_SESSION_INVALID,
         )
 
     # Get session
@@ -510,9 +513,10 @@ async def validate_session(
     session = result.scalar_one_or_none()
 
     if not session:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid session. Please restart onboarding.",
+            error_code=ErrorCode.ONBD_SESSION_INVALID,
         )
 
     # Check expiration
@@ -522,9 +526,10 @@ async def validate_session(
         else session.expires_at
     )
     if session_exp < datetime.now(timezone.utc):
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your onboarding session has expired due to inactivity (30-minute limit). Please refresh the page to start a new session. Your previously saved progress will be retained.",
+            error_code=ErrorCode.ONBD_SESSION_INVALID,
         )
 
     # Validate CSRF token if required
@@ -537,9 +542,10 @@ async def validate_session(
             or not stored_csrf
             or not secrets.compare_digest(csrf_token, stored_csrf)
         ):
-            raise HTTPException(
+            raise CodedHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="CSRF validation failed. Please refresh and try again.",
+                error_code=ErrorCode.AUTH_CSRF_INVALID,
             )
 
     # Update expiration on activity
@@ -803,9 +809,10 @@ async def start_onboarding(
 
     # Check if already completed
     if not await service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     # Get client info
@@ -938,9 +945,10 @@ async def create_organization(
 
     # Verify onboarding is in progress
     if not await service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     # Generate slug if not provided
@@ -1030,9 +1038,10 @@ async def create_system_owner(
 
     # Verify onboarding is in progress
     if not await service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     # Get organization from onboarding status
@@ -1144,9 +1153,10 @@ async def configure_modules(
     # Reject once onboarding is complete — a still-valid session must not be
     # replayable to mutate org settings after setup.
     if not await service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     try:
@@ -1174,9 +1184,10 @@ async def configure_notifications(
     service = OnboardingService(db)
 
     if not await service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     onboarding_status = await service.get_onboarding_status()
@@ -1214,9 +1225,10 @@ async def complete_onboarding(
     # service also latches on is_completed, but guarding here avoids re-writing
     # org settings from a stale session.
     if not await service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     # Persist session-collected data into Organization.settings before completion
@@ -1538,9 +1550,10 @@ async def save_session_stations(
     # write real Facility/Location rows into the provisioned org, bypassing the
     # authenticated facilities.manage path. Matches the sibling steps.
     if not await service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     previous_ids = (session.data or {}).get("stations", {}).get("facility_ids", [])
@@ -1601,9 +1614,10 @@ async def save_session_apparatus(
     # must not be replayable to write real BasicApparatus rows into the
     # provisioned org after setup. Matches the sibling steps.
     if not await service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     previous_ids = (session.data or {}).get("apparatus", {}).get("apparatus_ids", [])
@@ -1742,9 +1756,10 @@ async def save_session_organization(
 
     # Verify onboarding is in progress
     if not await service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     # Generate slug if not provided
@@ -1828,6 +1843,42 @@ async def save_session_organization(
         )
 
 
+def _merge_default_permissions(
+    permission_list: list[str],
+    submitted: dict[str, RolePermission],
+    default_perms: list[str],
+) -> list[str]:
+    """Merge a system position's default permissions into a rebuilt list.
+
+    The onboarding position editor models exactly two checkboxes per module
+    (view/manage), so a rebuilt permission list contains only ``module.view``,
+    ``module.manage``, and ``module.*``. Two classes of default permission
+    cannot be re-submitted through it and must be carried over from
+    DEFAULT_POSITIONS or a customized position silently loses them at save:
+
+    1. Whole modules the frontend registry doesn't cover (audit, organization,
+       users, locations, meetings, ...) — keep all their defaults.
+    2. Sub-permissions within a submitted module (facilities.view_sensitive,
+       members.assign_positions, equipment_check.submit, ...) — keep them
+       while the module retains any access. An admin who unchecked the module
+       entirely revoked it, so its sub-permissions drop too; a module saved
+       with manage already carries the ``module.*`` wildcard, which covers
+       every sub-permission without cluttering the list.
+    """
+    merged = list(permission_list)
+    for perm in default_perms:
+        if "." not in perm:
+            continue
+        module_prefix, _, action = perm.partition(".")
+        if module_prefix not in submitted:
+            merged.append(perm)
+        elif action not in ("view", "manage", "*"):
+            module_perms = submitted[module_prefix]
+            if module_perms.view and not module_perms.manage:
+                merged.append(perm)
+    return merged
+
+
 @router.post("/session/roles", response_model=RolesSetupResponse)
 async def save_session_roles(
     request: Request, data: RolesSetupRequest, db: AsyncSession = Depends(get_db)
@@ -1854,9 +1905,10 @@ async def save_session_roles(
     # roles after setup with no authenticated-user or permission check.
     guard_service = OnboardingService(db)
     if not await guard_service.needs_onboarding():
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
     # Get organization from session data
@@ -1943,17 +1995,9 @@ async def save_session_roles(
             if "*" in default_perms:
                 permission_list = ["*"]
             else:
-                # The frontend module registry doesn't cover every backend
-                # permission module (e.g. audit, organization, users,
-                # locations, meetings).  Preserve the default permissions
-                # for any modules the frontend submission doesn't include,
-                # so roles like Chief keep audit.view, users.create, etc.
-                submitted_modules = set(role_data.permissions.keys())
-                for perm in default_perms:
-                    if "." in perm:
-                        module_prefix = perm.split(".")[0]
-                        if module_prefix not in submitted_modules:
-                            permission_list.append(perm)
+                permission_list = _merge_default_permissions(
+                    permission_list, role_data.permissions, default_perms
+                )
 
             existing_role.permissions = permission_list
             existing_role.priority = role_data.priority

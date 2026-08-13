@@ -34,6 +34,7 @@ import ShiftCard from './scheduling/ShiftCard';
 import { trainingModuleConfigService } from '../services/api';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
+import SchedulingHeader from './scheduling/SchedulingHeader';
 
 // Lazy-loaded tab components
 const MyShiftsTab = lazyWithRetry(() => import('./scheduling/MyShiftsTab'));
@@ -49,6 +50,13 @@ type ViewMode = 'week' | 'month';
 const TAB_IDS: TabId[] = ['schedule', 'my-shifts', 'open-shifts', 'requests', 'equipment-checks', 'shift-reports'];
 
 const isTabId = (value: string | null): value is TabId => value !== null && (TAB_IDS as string[]).includes(value);
+const isViewMode = (value: string | null): value is ViewMode => value === 'week' || value === 'month';
+
+const parseCalendarDate = (value: string | null): Date | null => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) || formatDateISO(date) !== value ? null : date;
+};
 
 // Fallback templates when no backend templates are configured
 const FALLBACK_TEMPLATES: ShiftTemplateRecord[] = [
@@ -171,6 +179,10 @@ const SchedulingPage: React.FC = () => {
     };
   }, [canManage]);
   const [shiftReportsEnabled, setShiftReportsEnabled] = useState(true);
+  const visibleTabs = useMemo(
+    () => (shiftReportsEnabled ? TAB_CONFIG : TAB_CONFIG.filter((tab) => tab.id !== 'shift-reports')),
+    [shiftReportsEnabled]
+  );
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Shared store — members, templates, apparatus loaded once and cached
@@ -220,6 +232,26 @@ const SchedulingPage: React.FC = () => {
     [searchParams, setSearchParams]
   );
 
+  const handleTabKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>, currentTab: TabId) => {
+      const currentIndex = visibleTabs.findIndex((tab) => tab.id === currentTab);
+      let nextIndex: number | undefined;
+
+      if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % visibleTabs.length;
+      if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
+      if (event.key === 'Home') nextIndex = 0;
+      if (event.key === 'End') nextIndex = visibleTabs.length - 1;
+      if (nextIndex === undefined) return;
+
+      event.preventDefault();
+      const nextTab = visibleTabs[nextIndex];
+      if (!nextTab) return;
+      handleTabChange(nextTab.id);
+      requestAnimationFrame(() => document.getElementById(`scheduling-tab-${nextTab.id}`)?.focus());
+    },
+    [handleTabChange, visibleTabs]
+  );
+
   // Sync tab state when the URL changes underneath us (deep link, back button).
   // A missing ?tab= is not a request to reset — it is the Schedule default that
   // handleTabChange writes, and re-asserting it here would fight local state.
@@ -247,13 +279,15 @@ const SchedulingPage: React.FC = () => {
   }, []);
 
   // Calendar state
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const initialViewParam = searchParams.get('view');
+  const [viewMode, setViewMode] = useState<ViewMode>(isViewMode(initialViewParam) ? initialViewParam : 'week');
+  const [currentDate, setCurrentDate] = useState(() => parseCalendarDate(searchParams.get('date')) ?? new Date());
   const [showCreateShift, setShowCreateShift] = useState(false);
 
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [calendarAnnouncement, setCalendarAnnouncement] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
@@ -404,6 +438,14 @@ const SchedulingPage: React.FC = () => {
     return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
   }, [currentDate, viewMode, weekDates, tz]);
 
+  // Keep the calendar location shareable and preserve it across browser history.
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    next.set('view', viewMode);
+    next.set('date', formatDateISO(currentDate));
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [currentDate, searchParams, setSearchParams, viewMode]);
+
   const isToday = (date: Date) => {
     const today = new Date();
     return (
@@ -425,6 +467,9 @@ const SchedulingPage: React.FC = () => {
         fetchedShifts = await schedulingService.getWeekCalendar(weekStartStr);
       }
       setShifts(fetchedShifts);
+      setCalendarAnnouncement(
+        `${fetchedShifts.length} ${fetchedShifts.length === 1 ? 'shift' : 'shifts'} loaded for ${dateRangeLabel}`
+      );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load shifts';
       setError(message);
@@ -432,7 +477,7 @@ const SchedulingPage: React.FC = () => {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDate, viewMode]);
+  }, [currentDate, dateRangeLabel, viewMode]);
 
   useEffect(() => {
     void fetchShifts();
@@ -453,6 +498,10 @@ const SchedulingPage: React.FC = () => {
   const handleCreateShift = async () => {
     if (!shiftForm.startDate) {
       setCreateError('Start date is required.');
+      return;
+    }
+    if (apparatusList.length > 0 && !shiftForm.apparatus_id) {
+      setCreateError('Select the apparatus for this shift.');
       return;
     }
 
@@ -484,7 +533,14 @@ const SchedulingPage: React.FC = () => {
         endDateTime = rolled.toISOString();
       }
 
+      const selectedApparatus = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
+      const apparatusPositions = selectedApparatus?.positions?.map((position) =>
+        typeof position === 'string'
+          ? { position, required: true }
+          : { position: position.position, required: position.required !== false }
+      );
       const templatePositions = resolveTemplatePositions(template.positions);
+      const shiftPositions = apparatusPositions?.length ? apparatusPositions : templatePositions;
 
       await schedulingService.createShift({
         shift_date: shiftForm.startDate,
@@ -494,8 +550,10 @@ const SchedulingPage: React.FC = () => {
         ...(shiftForm.apparatus_id ? { apparatus_id: shiftForm.apparatus_id } : {}),
         ...(shiftForm.shift_officer_id ? { shift_officer_id: shiftForm.shift_officer_id } : {}),
         ...(template.color ? { color: template.color } : {}),
-        ...(templatePositions.length > 0 ? { positions: templatePositions } : {}),
-        ...(template.min_staffing ? { min_staffing: template.min_staffing } : {}),
+        ...(shiftPositions.length > 0 ? { positions: shiftPositions } : {}),
+        ...(selectedApparatus?.min_staffing || template.min_staffing
+          ? { min_staffing: selectedApparatus?.min_staffing || template.min_staffing }
+          : {}),
       });
 
       // Refresh shifts and summary
@@ -527,58 +585,57 @@ const SchedulingPage: React.FC = () => {
 
   const hasShifts = shifts.length > 0;
 
-  const visibleTabs = shiftReportsEnabled ? TAB_CONFIG : TAB_CONFIG.filter((t) => t.id !== 'shift-reports');
-
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        {/* Page Header */}
-        <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div className="flex items-center space-x-3">
-            <div className="rounded-lg bg-violet-600 p-2">
-              <Clock className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div>
-              {/* The nav calls this "Shift Scheduling"; the page called itself
-                  "Scheduling & Shifts". Two names for one screen. */}
-              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Shift Scheduling</h1>
-              <p className="text-theme-text-muted text-sm">Manage schedules, sign up for shifts, and handle trades</p>
-            </div>
-          </div>
-          {canManage && activeTab === 'schedule' && (
-            <button
-              onClick={() => setShowCreateShift(true)}
-              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-violet-600 px-4 py-2 text-white transition-colors hover:bg-violet-700 sm:w-auto"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              <span>Create Shift</span>
-            </button>
-          )}
-        </div>
+        <SchedulingHeader
+          actions={
+            canManage && activeTab === 'schedule' ? (
+              <button
+                onClick={() => setShowCreateShift(true)}
+                className="flex w-full items-center justify-center space-x-2 rounded-lg bg-violet-600 px-4 py-2 text-white transition-colors hover:bg-violet-700 sm:w-auto"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span>Create Shift</span>
+              </button>
+            ) : undefined
+          }
+        />
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {calendarAnnouncement}
+        </p>
 
         {/* Tab Navigation */}
         <div className="border-theme-surface-border relative -mx-4 mb-6 border-b px-4 sm:mx-0 sm:px-0">
-          <nav className="flex scrollbar-thin space-x-1 overflow-x-auto scroll-smooth" aria-label="Scheduling tabs">
+          <div
+            className="flex scrollbar-thin space-x-1 overflow-x-auto scroll-smooth"
+            role="tablist"
+            aria-label="Scheduling views"
+          >
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
+                  id={`scheduling-tab-${tab.id}`}
+                  role="tab"
+                  aria-selected={isActive}
+                  tabIndex={isActive ? 0 : -1}
                   onClick={() => handleTabChange(tab.id)}
-                  className={`flex min-h-[44px] items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors sm:px-4 ${
+                  onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
+                  className={`focus-visible:ring-theme-focus flex min-h-[44px] items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset sm:px-4 ${
                     isActive
                       ? 'border-violet-600 text-violet-600 dark:text-violet-400'
                       : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                  <span className="sm:hidden">{tab.label}</span>
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  <span>{tab.label}</span>
                 </button>
               );
             })}
-          </nav>
+          </div>
           {/* Scroll fade hint on right edge (mobile) */}
           <div
             className="from-theme-bg pointer-events-none absolute top-0 right-0 bottom-0 w-8 bg-linear-to-l to-transparent sm:hidden"
@@ -594,8 +651,10 @@ const SchedulingPage: React.FC = () => {
             app. A strip above the content instead: same links, no scrolling,
             and the Supply count says what it is counting. */}
         {canManage && (
-          <div className="mb-6">
-            <h2 className="text-theme-text-muted mb-2 text-xs font-semibold">Officer tools</h2>
+          <nav className="mb-6" aria-labelledby="officer-tools-heading">
+            <h2 id="officer-tools-heading" className="text-theme-text-muted mb-2 text-xs font-semibold">
+              Officer tools
+            </h2>
             <div className="hscroll flex gap-2">
               {adminLinks.map((link) => {
                 const Icon = link.icon;
@@ -618,7 +677,7 @@ const SchedulingPage: React.FC = () => {
                 );
               })}
             </div>
-          </div>
+          </nav>
         )}
 
         {/* Tab Content */}
@@ -1136,6 +1195,10 @@ const SchedulingPage: React.FC = () => {
                             ...prev,
                             shiftTemplate: e.target.value,
                             endDate: computeEndDate(prev.startDate, tmpl),
+                            apparatus_id:
+                              tmpl?.apparatus_id && apparatusList.some((a) => a.id === tmpl.apparatus_id)
+                                ? tmpl.apparatus_id
+                                : prev.apparatus_id,
                           }));
                         }}
                         className="form-input focus:ring-violet-500"
@@ -1336,6 +1399,69 @@ const SchedulingPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Apparatus Selection */}
+                    {apparatusList.length > 0 && (
+                      <div>
+                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                          <span className="flex items-center gap-1.5">
+                            <Truck className="h-4 w-4" /> Apparatus <span aria-hidden="true">*</span>
+                          </span>
+                        </label>
+                        <select
+                          value={shiftForm.apparatus_id}
+                          onChange={(e) =>
+                            setShiftForm({
+                              ...shiftForm,
+                              apparatus_id: e.target.value,
+                            })
+                          }
+                          className="form-input focus:ring-violet-500"
+                          required
+                          aria-required="true"
+                        >
+                          <option value="">Select apparatus...</option>
+                          {apparatusList.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.unit_number} — {a.name}
+                            </option>
+                          ))}
+                        </select>
+                        {(() => {
+                          const selected = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
+                          if (selected?.positions && selected.positions.length > 0) {
+                            return (
+                              <div className="mt-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5">
+                                <p className="mb-1.5 text-xs font-medium text-violet-700 dark:text-violet-400">
+                                  Positions on {selected.unit_number}:
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selected.positions.map((pos, i) => {
+                                    const name = typeof pos === 'string' ? pos : pos.position;
+                                    return (
+                                      <span
+                                        key={i}
+                                        className="rounded-sm bg-violet-500/10 px-2 py-0.5 text-xs text-violet-700 capitalize dark:text-violet-300"
+                                      >
+                                        {name}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          }
+                          if (shiftForm.apparatus_id) {
+                            return (
+                              <p className="text-theme-text-muted mt-1 text-xs">
+                                No positions defined — members can sign up with any position.
+                              </p>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    )}
+
                     {/* Auto-generated shift label preview */}
                     {(() => {
                       const tmpl = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
@@ -1419,67 +1545,6 @@ const SchedulingPage: React.FC = () => {
                               </button>
                             )}
                           </div>
-
-                          {/* Apparatus Selection */}
-                          {apparatusList.length > 0 && (
-                            <div>
-                              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                                <span className="flex items-center gap-1.5">
-                                  <Truck className="h-4 w-4" /> Apparatus
-                                </span>
-                              </label>
-                              <select
-                                value={shiftForm.apparatus_id}
-                                onChange={(e) =>
-                                  setShiftForm({
-                                    ...shiftForm,
-                                    apparatus_id: e.target.value,
-                                  })
-                                }
-                                className="form-input focus:ring-violet-500"
-                              >
-                                <option value="">No specific apparatus</option>
-                                {apparatusList.map((a) => (
-                                  <option key={a.id} value={a.id}>
-                                    {a.unit_number} — {a.name}
-                                  </option>
-                                ))}
-                              </select>
-                              {(() => {
-                                const selected = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
-                                if (selected?.positions && selected.positions.length > 0) {
-                                  return (
-                                    <div className="mt-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5">
-                                      <p className="mb-1.5 text-xs font-medium text-violet-700 dark:text-violet-400">
-                                        Positions on {selected.unit_number}:
-                                      </p>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {selected.positions.map((pos, i) => {
-                                          const name = typeof pos === 'string' ? pos : pos.position;
-                                          return (
-                                            <span
-                                              key={i}
-                                              className="rounded-sm bg-violet-500/10 px-2 py-0.5 text-xs text-violet-700 capitalize dark:text-violet-300"
-                                            >
-                                              {name}
-                                            </span>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                if (shiftForm.apparatus_id) {
-                                  return (
-                                    <p className="text-theme-text-muted mt-1 text-xs">
-                                      No positions defined — members can sign up with any position.
-                                    </p>
-                                  );
-                                }
-                                return null;
-                              })()}
-                            </div>
-                          )}
 
                           {/* Shift Officer Selection */}
                           {membersList.length > 0 && (

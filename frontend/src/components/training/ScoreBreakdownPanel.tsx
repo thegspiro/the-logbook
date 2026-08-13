@@ -37,19 +37,30 @@ const ScoredSectionRow: React.FC<{ section: ScoreBreakdown['sections'][number] }
   if (section.not_scored > 0) tallies.push(`${section.not_scored} not scored`);
   if (section.statements > 0) tallies.push(`${section.statements} statement${section.statements === 1 ? '' : 's'}`);
 
+  const deducted = section.deducted ?? 0;
+  const hasPool = section.available != null && section.available > 0;
+
   return (
     <div className="flex items-baseline justify-between gap-3 py-1.5">
       <div className="min-w-0 flex-1">
         <p className="text-theme-text-primary truncate text-sm">{section.section_name || 'Untitled section'}</p>
         {tallies.length > 0 && <p className="text-theme-text-muted text-xs">{tallies.join(' · ')}</p>}
       </div>
-      {section.counts_toward_score ? (
-        <p className="text-theme-text-primary shrink-0 font-mono text-sm font-medium">
-          {formatPoints(section.earned ?? 0)}/{formatPoints(section.available ?? 0)} pts
-        </p>
-      ) : (
-        <p className="text-theme-text-muted shrink-0 text-xs italic">not scored</p>
-      )}
+      <div className="flex shrink-0 items-baseline gap-2">
+        {hasPool && (
+          <p className="text-theme-text-primary font-mono text-sm font-medium">
+            {formatPoints(section.earned ?? 0)}/{formatPoints(section.available ?? 0)} pts
+          </p>
+        )}
+        {/* A section can deduct without earning anything, so this stands on its
+            own rather than being appended to a points figure that may not exist. */}
+        {deducted > 0 && (
+          <p className="font-mono text-sm font-medium text-red-600 dark:text-red-400">
+            &minus;{formatPoints(deducted)} pts
+          </p>
+        )}
+        {!hasPool && deducted === 0 && <p className="text-theme-text-muted text-xs italic">not scored</p>}
+      </div>
     </div>
   );
 };
@@ -65,6 +76,9 @@ export const ScoreBreakdownPanel: React.FC<{ breakdown: ScoreBreakdown }> = ({ b
     require_all_critical: requireAllCritical,
     critical_failures: criticalFailures,
     score_pass_fail_criteria: scorePassFail,
+    deducted = 0,
+    deductions = [],
+    deductions_unapplied: deductionsUnapplied,
     sections,
   } = breakdown;
 
@@ -82,7 +96,21 @@ export const ScoreBreakdownPanel: React.FC<{ breakdown: ScoreBreakdown }> = ({ b
           <span className="font-mono font-medium">
             {formatPoints(earned)} of {formatPoints(available)} points
           </span>{' '}
-          earned{percentage != null && <> = {percentage}%</>}
+          earned
+          {/* Shown as its own subtraction rather than folded into the earned
+              figure: a reader adding up the marks above arrives at the gross
+              total, and a headline that had already netted the penalties off
+              would look like an arithmetic error. */}
+          {deducted > 0 && (
+            <>
+              {', '}
+              <span className="font-mono font-medium text-red-600 dark:text-red-400">
+                &minus;{formatPoints(deducted)}
+              </span>{' '}
+              deducted
+            </>
+          )}
+          {percentage != null && <> = {percentage}%</>}
         </p>
       )}
       {method === 'section_average' && (
@@ -131,10 +159,57 @@ export const ScoreBreakdownPanel: React.FC<{ breakdown: ScoreBreakdown }> = ({ b
             <>
               {' '}
               Pass/Fail steps are not worth points on this template — a training officer can change that in its scoring
-              settings.
+              settings, or give an individual step its own point value or deduction.
             </>
           )}
         </p>
+      )}
+
+      {/* Named individually, for the same reason critical failures are: a
+          candidate looking at a score below the marks on their sheet is owed
+          the specific steps that took the points, not just a total. */}
+      {deductions.length > 0 && (
+        <div className="border-theme-surface-border mt-3 border-t pt-3">
+          <p className="text-theme-text-muted text-xs font-medium">
+            {deductions.length === 1
+              ? 'One failed step deducted points'
+              : `${deductions.length} failed steps deducted points`}
+          </p>
+          <ul className="mt-1 space-y-0.5 text-sm">
+            {deductions.map((deduction, index) => (
+              <li
+                key={`${deduction.criterion_label ?? 'criterion'}-${index}`}
+                className="text-theme-text-secondary flex items-baseline justify-between gap-3"
+              >
+                <span className="min-w-0">
+                  {deduction.criterion_label || 'Unnamed step'}
+                  {deduction.section_name && (
+                    <span className="text-theme-text-muted text-xs"> ({deduction.section_name})</span>
+                  )}
+                </span>
+                <span className="shrink-0 font-mono text-red-600 dark:text-red-400">
+                  &minus;{formatPoints(deduction.points)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* The template is misconfigured: deductions were recorded and there is
+          no point total for them to come off, so the percentage ignores them.
+          Said plainly rather than left to look like the deductions applied. */}
+      {deductionsUnapplied && (
+        <div className="alert-warning mt-3">
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            The {formatPoints(deducted)} deducted point{deducted === 1 ? '' : 's'} did not affect this score
+          </p>
+          <p className="mt-1 text-sm">
+            No step on this template earns points, so there is no total to subtract from. A training officer should give
+            the scored steps a point value.
+          </p>
+        </div>
       )}
 
       {requireAllCritical && criticalFailures.length > 0 && (

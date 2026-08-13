@@ -10,9 +10,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Users, Loader2, ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 import { schedulingService, type PlatoonOverview } from '../../modules/scheduling/services/api';
 import { getErrorMessage } from '../../utils/errorHandling';
+import SchedulingHeader from './SchedulingHeader';
 
 // Standard platoon labels offered in the assign dropdown, merged with any
 // platoons already present in the org.
@@ -80,19 +81,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
   return (
     <div className="bg-theme-bg min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <div className="mb-6 flex items-center gap-3">
-          <button
-            onClick={() => void navigate('/scheduling')}
-            className="hover:bg-theme-surface-hover text-theme-text-muted rounded-lg p-1.5"
-            aria-label="Back to scheduling"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-violet-500" />
-            <h1 className="text-theme-text-primary text-xl font-bold">Platoon Management</h1>
-          </div>
-        </div>
+        <SchedulingHeader backTo="/scheduling" description="Platoons · Assign and manage department rosters" />
 
         {loading ? (
           <div className="flex items-center justify-center py-20" role="status" aria-live="polite">

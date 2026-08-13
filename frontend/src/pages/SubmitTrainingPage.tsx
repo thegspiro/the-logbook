@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, Send, FileText, Clock, CheckCircle2, XCircle, RotateCcw, Trash2, Edit2, Info } from 'lucide-react';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { trainingSubmissionService, trainingService } from '../services/api';
+import { trainingProgramService, trainingSubmissionService, trainingService } from '../services/api';
 import type {
   TrainingSubmission,
   TrainingSubmissionCreate,
@@ -12,6 +12,7 @@ import type {
   SelfReportConfig,
   TrainingType,
   SubmissionStatus,
+  TrainingRequirementEnhanced,
 } from '../types/training';
 
 // ==================== Helpers ====================
@@ -75,14 +76,17 @@ function formatHours(h: number): string {
 const SubmissionForm: React.FC<{
   config: SelfReportConfig;
   categories: TrainingCategory[];
+  requirements: TrainingRequirementEnhanced[];
   onSuccess: () => void;
   editSubmission?: TrainingSubmission | null;
   onCancelEdit?: () => void;
-}> = ({ config, categories, onSuccess, editSubmission, onCancelEdit }) => {
+}> = ({ config, categories, requirements, onSuccess, editSubmission, onCancelEdit }) => {
   const isEdit = !!editSubmission;
+  const defaultTrainingType: TrainingType =
+    (config.allowed_training_types?.[0] as TrainingType | undefined) ?? 'continuing_education';
   const [formData, setFormData] = useState<TrainingSubmissionCreate>({
     course_name: '',
-    training_type: 'continuing_education',
+    training_type: defaultTrainingType,
     completion_date: '',
     hours_completed: 0,
   });
@@ -171,7 +175,7 @@ const SubmissionForm: React.FC<{
       if (!isEdit) {
         setFormData({
           course_name: '',
-          training_type: 'continuing_education',
+          training_type: defaultTrainingType,
           completion_date: '',
           hours_completed: 0,
         });
@@ -193,6 +197,17 @@ const SubmissionForm: React.FC<{
     : TRAINING_TYPES;
 
   const parentCategories = categories.filter((c) => !c.parent_category_id);
+  const suggestedRequirements = requirements
+    .filter((requirement) => {
+      if (!requirement.active) return false;
+      if (requirement.training_type) return requirement.training_type === formData.training_type;
+      return formData.training_type === 'certification' && requirement.requirement_type === 'certification';
+    })
+    .filter((requirement, index, matches) => matches.findIndex((match) => match.name === requirement.name) === index)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const selectedSuggestion = suggestedRequirements.some((requirement) => requirement.name === formData.course_name)
+    ? formData.course_name
+    : '';
 
   return (
     <form
@@ -218,32 +233,39 @@ const SubmissionForm: React.FC<{
         </div>
       )}
 
-      {/* Course name - always visible */}
-      <div>
-        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
-          {fieldLabel('course_name', 'Course / Class Name')}{' '}
-          {isFieldRequired('course_name') && <span className="text-red-700 dark:text-red-400">*</span>}
-        </label>
-        <input
-          type="text"
-          value={formData.course_name}
-          onChange={(e) => setFormData({ ...formData, course_name: e.target.value })}
-          className="form-input text-sm"
-          placeholder="e.g., Wildland Firefighting - S130/S190"
-          required
-        />
-      </div>
-
       {/* Training type */}
       {isFieldVisible('training_type') && (
         <div>
-          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+          <label
+            htmlFor="submission-training-type"
+            className="text-theme-text-secondary mb-1 block text-sm font-medium"
+          >
             {fieldLabel('training_type', 'Training Type')}{' '}
             {isFieldRequired('training_type') && <span className="text-red-700 dark:text-red-400">*</span>}
           </label>
           <select
+            id="submission-training-type"
             value={formData.training_type}
-            onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
+            onChange={(e) => {
+              const trainingType = e.target.value as TrainingType;
+              const courseCameFromSuggestion = requirements.some(
+                (requirement) => requirement.name === formData.course_name
+              );
+              setFormData({
+                ...formData,
+                training_type: trainingType,
+                course_name: courseCameFromSuggestion ? '' : formData.course_name,
+                // Credential metadata is meaningful only for certifications. Do
+                // not submit stale values if the member changes their answer.
+                ...(trainingType === 'certification'
+                  ? {}
+                  : {
+                      certification_number: undefined,
+                      issuing_agency: undefined,
+                      expiration_date: undefined,
+                    }),
+              });
+            }}
             className="form-input text-sm"
             required={isFieldRequired('training_type')}
           >
@@ -255,6 +277,50 @@ const SubmissionForm: React.FC<{
           </select>
         </div>
       )}
+
+      {suggestedRequirements.length > 0 && (
+        <div>
+          <label
+            htmlFor="submission-requirement-suggestion"
+            className="text-theme-text-secondary mb-1 block text-sm font-medium"
+          >
+            Suggested {TRAINING_TYPES.find((type) => type.value === formData.training_type)?.label}
+          </label>
+          <select
+            id="submission-requirement-suggestion"
+            value={selectedSuggestion}
+            onChange={(e) => setFormData({ ...formData, course_name: e.target.value })}
+            className="form-input text-sm"
+          >
+            <option value="">Select a department requirement...</option>
+            {suggestedRequirements.map((requirement) => (
+              <option key={requirement.id} value={requirement.name}>
+                {requirement.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Choosing one fills the course name below. You can still enter a different course.
+          </p>
+        </div>
+      )}
+
+      {/* Course name follows the type and optional department suggestion. */}
+      <div>
+        <label htmlFor="submission-course-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+          {fieldLabel('course_name', 'Course / Class Name')}{' '}
+          {isFieldRequired('course_name') && <span className="text-red-700 dark:text-red-400">*</span>}
+        </label>
+        <input
+          id="submission-course-name"
+          type="text"
+          value={formData.course_name}
+          onChange={(e) => setFormData({ ...formData, course_name: e.target.value })}
+          className="form-input text-sm"
+          placeholder="e.g., Wildland Firefighting - S130/S190"
+          required
+        />
+      </div>
 
       {/* Start / End datetime pickers + calculated hours */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -395,58 +461,72 @@ const SubmissionForm: React.FC<{
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {/* Certification Number */}
-        {isFieldVisible('certification_number') && (
-          <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              {fieldLabel('certification_number', 'Certificate / ID Number')}{' '}
-              {isFieldRequired('certification_number') && <span className="text-red-700 dark:text-red-400">*</span>}
-            </label>
-            <input
-              type="text"
-              value={formData.certification_number || ''}
-              onChange={(e) => setFormData({ ...formData, certification_number: e.target.value || undefined })}
-              className="form-input text-sm"
-              required={isFieldRequired('certification_number')}
-            />
-          </div>
-        )}
+      {formData.training_type === 'certification' && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Certification Number */}
+          {isFieldVisible('certification_number') && (
+            <div>
+              <label
+                htmlFor="submission-certification-number"
+                className="text-theme-text-secondary mb-1 block text-sm font-medium"
+              >
+                {fieldLabel('certification_number', 'Certificate / ID Number')}{' '}
+                {isFieldRequired('certification_number') && <span className="text-red-700 dark:text-red-400">*</span>}
+              </label>
+              <input
+                id="submission-certification-number"
+                type="text"
+                value={formData.certification_number || ''}
+                onChange={(e) => setFormData({ ...formData, certification_number: e.target.value || undefined })}
+                className="form-input text-sm"
+                required={isFieldRequired('certification_number')}
+              />
+            </div>
+          )}
 
-        {/* Issuing Agency */}
-        {isFieldVisible('issuing_agency') && (
-          <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              {fieldLabel('issuing_agency', 'Issuing Agency')}{' '}
-              {isFieldRequired('issuing_agency') && <span className="text-red-700 dark:text-red-400">*</span>}
-            </label>
-            <input
-              type="text"
-              value={formData.issuing_agency || ''}
-              onChange={(e) => setFormData({ ...formData, issuing_agency: e.target.value || undefined })}
-              className="form-input text-sm"
-              required={isFieldRequired('issuing_agency')}
-            />
-          </div>
-        )}
+          {/* Issuing Agency */}
+          {isFieldVisible('issuing_agency') && (
+            <div>
+              <label
+                htmlFor="submission-issuing-agency"
+                className="text-theme-text-secondary mb-1 block text-sm font-medium"
+              >
+                {fieldLabel('issuing_agency', 'Issuing Agency')}{' '}
+                {isFieldRequired('issuing_agency') && <span className="text-red-700 dark:text-red-400">*</span>}
+              </label>
+              <input
+                id="submission-issuing-agency"
+                type="text"
+                value={formData.issuing_agency || ''}
+                onChange={(e) => setFormData({ ...formData, issuing_agency: e.target.value || undefined })}
+                className="form-input text-sm"
+                required={isFieldRequired('issuing_agency')}
+              />
+            </div>
+          )}
 
-        {/* Expiration Date */}
-        {isFieldVisible('expiration_date') && (
-          <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              {fieldLabel('expiration_date', 'Expiration Date')}{' '}
-              {isFieldRequired('expiration_date') && <span className="text-red-700 dark:text-red-400">*</span>}
-            </label>
-            <input
-              type="date"
-              value={formData.expiration_date || ''}
-              onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value || undefined })}
-              className="form-input text-sm"
-              required={isFieldRequired('expiration_date')}
-            />
-          </div>
-        )}
-      </div>
+          {/* Expiration Date */}
+          {isFieldVisible('expiration_date') && (
+            <div>
+              <label
+                htmlFor="submission-expiration-date"
+                className="text-theme-text-secondary mb-1 block text-sm font-medium"
+              >
+                {fieldLabel('expiration_date', 'Expiration Date')}{' '}
+                {isFieldRequired('expiration_date') && <span className="text-red-700 dark:text-red-400">*</span>}
+              </label>
+              <input
+                id="submission-expiration-date"
+                type="date"
+                value={formData.expiration_date || ''}
+                onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value || undefined })}
+                className="form-input text-sm"
+                required={isFieldRequired('expiration_date')}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Buttons */}
       <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-3 border-t pt-4">
@@ -482,6 +562,7 @@ const SubmitTrainingPage: React.FC = () => {
   const { confirm } = useConfirm();
   const [config, setConfig] = useState<SelfReportConfig | null>(null);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
+  const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
   const [submissions, setSubmissions] = useState<TrainingSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -491,14 +572,17 @@ const SubmitTrainingPage: React.FC = () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [configData, categoriesData, submissionsData] = await Promise.all([
+      const [configData, categoriesData, submissionsData, requirementsData] = await Promise.all([
         trainingSubmissionService.getConfig(),
         trainingService.getCategories(),
         trainingSubmissionService.getMySubmissions(),
+        // Suggestions enhance the free-text field but should never prevent a submission.
+        trainingProgramService.getRequirementsEnhanced().catch(() => []),
       ]);
       setConfig(configData);
       setCategories(categoriesData);
       setSubmissions(submissionsData);
+      setRequirements(requirementsData);
     } catch (_error) {
       setLoadError('Failed to load submission form. Please try again.');
       toast.error('Failed to load submission form');
@@ -585,6 +669,7 @@ const SubmitTrainingPage: React.FC = () => {
         <SubmissionForm
           config={config}
           categories={categories}
+          requirements={requirements}
           onSuccess={() => {
             setEditingSubmission(null);
             void loadData();

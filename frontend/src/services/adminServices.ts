@@ -88,6 +88,20 @@ export interface TrainingSessionResponse {
   created_by?: string;
 }
 
+/**
+ * Partial update of a session's requirement/program links.
+ *
+ * An update payload, so the three states are distinct on the wire: omit the
+ * key to leave a link alone, send `null` to clear it, send an id to set it.
+ * `undefined` is not one of them — use `null` to clear (CLAUDE.md pitfall #1).
+ */
+export interface TrainingSessionLinkageUpdate {
+  category_id?: string | null;
+  program_id?: string | null;
+  phase_id?: string | null;
+  requirement_id?: string | null;
+}
+
 export interface TrainingSessionCreate {
   title: string;
   description?: string | undefined;
@@ -181,6 +195,14 @@ export interface ErrorLogStats {
   recent_errors: ErrorLogRecord[];
 }
 
+export interface ErrorCodeEntry {
+  code: string;
+  category: string;
+  title: string;
+  description: string;
+  resolution: string[];
+}
+
 export const errorLogsService = {
   async logError(data: {
     error_type: string;
@@ -205,6 +227,11 @@ export const errorLogsService = {
   async getStats(): Promise<ErrorLogStats> {
     const response = await api.get<ErrorLogStats>('/errors/stats');
     return response.data;
+  },
+
+  async getErrorCodes(): Promise<ErrorCodeEntry[]> {
+    const response = await api.get<{ codes: ErrorCodeEntry[] }>('/errors/codes');
+    return response.data.codes;
   },
 
   async clearErrors(): Promise<void> {

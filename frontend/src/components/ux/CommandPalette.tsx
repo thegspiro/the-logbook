@@ -19,12 +19,15 @@ import {
   Bell,
   BarChart3,
   Building2,
+  MapPin,
+  QrCode,
   Vote,
   ClipboardList,
   Home,
   X,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { useEnabledModules } from '../../hooks/useEnabledModules';
 
 interface CommandItem {
   id: string;
@@ -35,6 +38,14 @@ interface CommandItem {
   section: string;
   keywords?: string[];
   permission?: string;
+  /**
+   * Hide this command when the named module is explicitly enabled — for
+   * fallback pages that a module supersedes (e.g. /locations when the
+   * Facilities module owns location management). Only applies once the org's
+   * module config has loaded; unconfigured orgs see everything, matching the
+   * navigation's behavior.
+   */
+  hideWhenModuleOn?: string;
 }
 
 const COMMANDS: CommandItem[] = [
@@ -95,6 +106,23 @@ const COMMANDS: CommandItem[] = [
     icon: Building2,
     section: 'Navigation',
     keywords: ['buildings', 'stations'],
+  },
+  {
+    id: 'locations',
+    label: 'Locations & Rooms',
+    path: '/locations',
+    icon: MapPin,
+    section: 'Navigation',
+    keywords: ['stations', 'rooms', 'buildings', 'addresses'],
+    hideWhenModuleOn: 'facilities',
+  },
+  {
+    id: 'room-qr-codes',
+    label: 'Check-In QR Codes',
+    path: '/locations/qr-codes',
+    icon: QrCode,
+    section: 'Navigation',
+    keywords: ['qr', 'kiosk', 'display', 'check-in', 'checkin', 'print', 'rooms', 'apparatus', 'shift'],
   },
   {
     id: 'documents',
@@ -165,7 +193,14 @@ const COMMANDS: CommandItem[] = [
     section: 'Admin',
     permission: 'settings.manage',
   },
-  { id: 'reports', label: 'Reports', path: '/reports', icon: BarChart3, section: 'Admin' },
+  {
+    id: 'reports',
+    label: 'Reports',
+    path: '/reports',
+    icon: BarChart3,
+    section: 'Admin',
+    permission: 'reports.view',
+  },
   { id: 'account', label: 'My Account', path: '/account', icon: Settings, section: 'Admin' },
 ];
 
@@ -178,10 +213,16 @@ export const CommandPalette: React.FC = () => {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
+  const { enabledModules } = useEnabledModules();
 
-  // Filter commands by permissions and search query
+  // Filter commands by permissions, module supersession, and search query
   const filteredCommands = useMemo(() => {
-    const accessible = COMMANDS.filter((cmd) => !cmd.permission || checkPermission(cmd.permission));
+    const accessible = COMMANDS.filter(
+      (cmd) =>
+        (!cmd.permission || checkPermission(cmd.permission)) &&
+        // enabledModules is null while loading/unconfigured — hide nothing then
+        !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn))
+    );
 
     if (!query.trim()) return accessible;
 
@@ -193,7 +234,7 @@ export const CommandPalette: React.FC = () => {
         cmd.keywords?.some((kw) => kw.includes(q)) ||
         cmd.section.toLowerCase().includes(q)
     );
-  }, [query, checkPermission]);
+  }, [query, checkPermission, enabledModules]);
 
   // Group by section
   const sections = useMemo(() => {
