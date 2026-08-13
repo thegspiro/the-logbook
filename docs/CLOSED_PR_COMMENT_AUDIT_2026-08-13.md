@@ -9,8 +9,10 @@
 > the feed token on the live deployment and rewriting shared history) and the
 > **1.10 residual** (the audit trust boundary remains a numeric row ID rather
 > than an attestation of the final legacy chain hash — the env-var wiring
-> half IS done). Tier 2 implementation is in progress on the same branch;
-> lower tiers remain open.
+> half IS done). Tier 2 is also implemented on this branch — see commits
+> `fix(deploy)`, `fix(facilities)` (extended sections), `fix(equipment-checks)`,
+> `fix(a11y,skills-testing)`, `fix(elections)` (ballot builder), and
+> `feat(scheduling)` (server-side shift settings). Tiers 3-4 remain open.
 
 An audit of review comments on the 150 most recently closed pull requests
 (#1197–#1358, closed 2026-08-08 → 2026-08-13) to find helpful, actionable
