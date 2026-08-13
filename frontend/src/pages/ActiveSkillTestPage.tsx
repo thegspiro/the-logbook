@@ -1147,7 +1147,10 @@ export const ActiveSkillTestPage: React.FC = () => {
   const hydratedTimerForTestRef = useRef<string | undefined>(undefined);
   // Kept until a save succeeds so a dropped connection cannot erase the fact
   // that this clock was restored rather than continuously measured.
-  const pendingResumeRef = useRef(false);
+  // Store the owner as well as the pending fact: this component remains mounted
+  // when the route moves directly between tests, so a component-wide boolean
+  // could otherwise report one test's restored clock on the next test's save.
+  const pendingResumeTestIdRef = useRef<string | undefined>(undefined);
   const loadedTestId = currentTest?.id;
   const loadedElapsedSeconds = currentTest?.elapsed_seconds;
   const loadedTestStatus = currentTest?.status;
@@ -1165,7 +1168,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       // the recorded timing unverified. The server refuses the flag on
       // non-live tests too; not sending it keeps the wire honest.
       if (isTestLive(loadedTestStatus)) {
-        pendingResumeRef.current = true;
+        pendingResumeTestIdRef.current = loadedTestId;
       }
     }
   }, [loadedTestId, loadedElapsedSeconds, loadedTestStatus, setActiveTestTimer]);
@@ -1304,14 +1307,14 @@ export const ActiveSkillTestPage: React.FC = () => {
     async (updates: SkillTestUpdate) => {
       if (!currentTest) return;
       setSaveState('saving');
-      const reportingResume = pendingResumeRef.current;
+      const reportingResume = pendingResumeTestIdRef.current === currentTest.id;
       try {
         await updateTest(currentTest.id, {
           ...updates,
           ...(reportingResume ? { resumed: true } : {}),
           expected_version: currentTest.version,
         });
-        if (reportingResume) pendingResumeRef.current = false;
+        if (reportingResume) pendingResumeTestIdRef.current = undefined;
         setSaveState('saved');
       } catch (err: unknown) {
         setSaveState('failed');

@@ -868,6 +868,33 @@ describe('ActiveSkillTestPage', () => {
   // loadTest resets the section index, so returning to an interrupted
   // evaluation dropped the examiner at section 1 to hunt for where they got to.
   describe('Resuming an interrupted test', () => {
+    it('does not report a resume against a different test after navigation', async () => {
+      const user = userEvent.setup();
+      currentMockTest = {
+        ...mockTestWithSections,
+        id: 'resumed-test',
+        status: 'in_progress' as const,
+        elapsed_seconds: 180,
+      };
+      const { rerender } = renderWithRouter(<ActiveSkillTestPage />);
+
+      currentMockTest = {
+        ...mockTestWithSections,
+        id: 'unrelated-test',
+        status: 'in_progress' as const,
+        elapsed_seconds: 0,
+      };
+      rerender(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      await waitFor(() =>
+        expect(mockUpdateTest).toHaveBeenLastCalledWith(
+          'unrelated-test',
+          expect.not.objectContaining({ resumed: true })
+        )
+      );
+    });
+
     it('should open at the first section that still has blank steps', () => {
       currentMockTest = {
         ...mockFullyScoredTest,
