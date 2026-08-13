@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
+from app.core.utils import utc_isoformat
 from app.models.audit import AuditLog
 from app.models.user import User
 
@@ -27,7 +28,7 @@ router = APIRouter()
 def _serialize(entry: AuditLog) -> dict[str, Any]:
     return {
         "id": entry.id,
-        "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
+        "timestamp": utc_isoformat(entry.timestamp),
         "event_type": entry.event_type,
         "event_category": entry.event_category,
         "severity": entry.severity.value if entry.severity else None,

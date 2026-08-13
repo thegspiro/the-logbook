@@ -19,6 +19,7 @@ from app.core.error_codes import catalog_entries
 from app.core.error_reporting import sanitize_path
 from app.core.security import is_rate_limited
 from app.core.security_middleware import get_client_ip
+from app.core.utils import utc_isoformat
 from app.models.error_log import ErrorLog
 from app.models.user import User
 
@@ -168,7 +169,7 @@ async def get_errors(
                 "context": e.context or {},
                 "user_id": e.user_id,
                 "event_id": e.event_id,
-                "created_at": e.created_at.isoformat() if e.created_at else None,
+                "created_at": utc_isoformat(e.created_at),
             }
             for e in errors
         ],
@@ -226,7 +227,7 @@ async def get_error_stats(
                 "context": e.context or {},
                 "user_id": e.user_id,
                 "event_id": e.event_id,
-                "created_at": e.created_at.isoformat() if e.created_at else None,
+                "created_at": utc_isoformat(e.created_at),
             }
             for e in recent
         ],
@@ -317,7 +318,7 @@ async def export_errors(
             "context": e.context or {},
             "user_id": e.user_id,
             "event_id": e.event_id,
-            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "created_at": utc_isoformat(e.created_at),
         }
         for e in errors
     ]

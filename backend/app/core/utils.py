@@ -9,6 +9,7 @@ import secrets
 import string
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any, Optional, TypeVar
 
 from fastapi import HTTPException, status
@@ -175,6 +176,24 @@ def _to_http_exception(exc: Exception, status_code: int, detail: str) -> HTTPExc
             status_code=status_code, detail=detail, error_code=code
         )
     return HTTPException(status_code=status_code, detail=detail)
+
+
+def utc_isoformat(dt: Optional[datetime]) -> Optional[str]:
+    """ISO-8601 string with an explicit UTC offset, or None for None.
+
+    MySQL DATETIME columns come back from the driver as *naive* datetimes even
+    when the column is declared ``DateTime(timezone=True)``, and this codebase
+    stores all datetimes as UTC. A naive ``.isoformat()`` therefore emits
+    "2026-08-13T00:15:00" with no offset — which JavaScript's ``new Date()``
+    interprets as *local* time, so the UI shows the UTC wall-clock shifted
+    into the member's zone. Serialize API timestamps through this helper so
+    the browser receives "...+00:00" and can convert to local time correctly.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
 
 
 def generate_uuid() -> str:
