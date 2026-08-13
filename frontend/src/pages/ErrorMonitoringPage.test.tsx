@@ -68,10 +68,43 @@ describe('ErrorMonitoringPage', () => {
 
     renderWithRouter(<ErrorMonitoringPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/POST \/events\/42/)).toBeInTheDocument();
-    });
+    await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+    expect(screen.getByText(/POST\s+\/events\/42/)).toBeInTheDocument();
     expect(screen.getByText(/→ 500/)).toBeInTheDocument();
+  });
+
+  it('shows the page and action in the list and provides expanded diagnostic details', async () => {
+    mockGetErrors.mockResolvedValue([
+      makeError({
+        userId: '12345678-abcd-efgh-ijkl-123456789012',
+        troubleshootingSteps: ['Try the request again.', 'Check the server logs.'],
+        context: {
+          source: 'frontend',
+          page: '/events/42/edit',
+          action: 'Updating events',
+          method: 'PATCH',
+          path: '/events/42',
+          traceback: 'ValueError: invalid event',
+          occurrences: 3,
+          filename: 'https://example.test/assets/app.js',
+          line: 42,
+          column: 7,
+          userAgent: 'Test Browser 1.0',
+        },
+      }),
+    ]);
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    expect(await screen.findByText('/events/42/edit')).toBeInTheDocument();
+    expect(screen.getByText('Updating events')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'View details' }));
+    expect(screen.getByText(/PATCH\s+\/events\/42/)).toBeInTheDocument();
+    expect(screen.getByText('Try the request again.')).toBeInTheDocument();
+    expect(screen.getByText('ValueError: invalid event')).toBeInTheDocument();
+    expect(screen.getByText('12345678…')).toBeInTheDocument();
+    expect(screen.getByText('https://example.test/assets/app.js:42:7')).toBeInTheDocument();
+    expect(screen.getByText('Test Browser 1.0')).toBeInTheDocument();
   });
 
   it('shows the technical message alongside the message the member was shown', async () => {
@@ -176,9 +209,8 @@ describe('ErrorMonitoringPage', () => {
 
     renderWithRouter(<ErrorMonitoringPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/\[LB-SYS-001\]/)).toBeInTheDocument();
-    });
+    await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+    expect(screen.getByText(/\[LB-SYS-001\]/)).toBeInTheDocument();
   });
 
   it('shows a retryable error instead of false healthy data when loading fails', async () => {
