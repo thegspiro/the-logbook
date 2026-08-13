@@ -13,6 +13,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     Column,
+    Computed,
     Date,
     DateTime,
     Enum,
@@ -295,6 +296,16 @@ class ProspectiveMember(Base):
 
     notes = Column(Text)
 
+    # MySQL has no partial unique indexes.  NULL values do not conflict in a
+    # unique index, so this generated column enforces uniqueness only while a
+    # prospect is active (and keeps create_all schemas aligned with Alembic).
+    active_email = Column(
+        String(255),
+        Computed(
+            "CASE WHEN status = 'active' THEN email ELSE NULL END", persisted=True
+        ),
+    )
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -323,6 +334,12 @@ class ProspectiveMember(Base):
         Index("idx_prospect_org_status", "organization_id", "status"),
         Index("idx_prospect_org_pipeline", "organization_id", "pipeline_id"),
         Index("idx_prospect_org_email", "organization_id", "email"),
+        Index(
+            "uq_prospect_org_active_email",
+            "organization_id",
+            "active_email",
+            unique=True,
+        ),
     )
 
     @property
