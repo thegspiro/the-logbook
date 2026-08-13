@@ -43,6 +43,23 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### The shift-report table guide 02 described does not exist
+
+`02-training.md` asked for "the Shift Reports tab showing the batch of 26
+reports filed for the Q2 drill, with columns for trainee name, apparatus, hours
+(all showing 4), skills observed count, and approval status".
+
+Three things were wrong with that. The tab is under **Scheduling**, not
+Training — the same screen guide 03 already photographs. There is no per-drill
+table of individual reports: the tab rolls them up **per crew member**. And the
+columns are Crew member, Reports, Hours, Calls and Avg Rating — not one of the
+five named.
+
+Caption rewritten against the table that exists, with a note saying plainly that
+the old columns do not, and `02-90-crew-summary-table` captured against it.
+Verified: ten crew members, one report each, hours from 8.0 to 12.0, calls and
+ratings per row.
+
 ### Groundwork on the last five: what each one actually needs
 
 No images this pass — both candidates examined turned out to need seed work

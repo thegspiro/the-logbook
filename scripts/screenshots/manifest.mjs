@@ -1027,6 +1027,25 @@ export const SHOTS = [
     selector: "div.card:has(h3:has-text('Open Shifts'))",
   },
   {
+    id: "02-90-crew-summary-table",
+    doc: "02-training.md",
+    line: 2470,
+    anchor: "The Crew summary table on",
+    alt: "The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      // Guide 02's worked example calls this "the Shift Reports tab", and the
+      // tab lives under Scheduling rather than Training — the same screen
+      // guide 03 photographs, shown here for its per-crew roll-up rather than
+      // its Review Queue.
+      const table = page.locator("table:has(th:text-is('Crew member'))").first();
+      await table.waitFor({ timeout: 20_000 });
+      await table.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    selector: "div:has(> div > table:has(th:text-is('Crew member')))",
+  },
+  {
     id: "03-61-review-queue-batch",
     doc: "03-scheduling.md",
     line: 1144,
