@@ -353,15 +353,29 @@ to the channels members actually watch when they're not in the app:
 | Requires acknowledgment |               ✅                |  ✅   |  —  |
 | Urgent                  |               ✅                |  ✅   | ✅  |
 
-When a message escalates, **email is always sent** to targeted members — it is
-the department's record that they were notified, so it is _not_ suppressed by a
-member's email preference or by consent (a member can never opt out of being
-informed of an important/urgent notice). **SMS** is different: it is only sent
+When a message escalates, **email is attempted for every targeted member** — it
+is _not_ suppressed by a member's email preference or by consent (a member can
+never opt out of being informed of an important/urgent notice). Email is a
+best-effort channel, not a guarantee of receipt, and three conditions can stop
+it — none of which is reported back to the author:
+
+- **No address on file.** Members without an email address are skipped.
+- **Hourly cap.** A department sends at most 30 escalation emails per hour;
+  once that cap is reached, later messages in the same hour are posted in-app
+  but the whole email escalation is skipped.
+- **Delivery failures.** Provider errors are logged, not surfaced in the UI.
+
+Treat the in-app inbox and the acknowledgment report — not the email — as the
+record that a member was notified. For anything time-critical, use **Require
+acknowledgment** and check the report rather than assuming the email landed.
+
+**SMS** is different: it is only sent
 when the department has SMS (Twilio) configured, the member has a mobile number
 on file, the member has granted **express SMS consent** (US TCPA rules — a member
 who was never asked counts as _not_ consented), **and** their text-message
-preference is on. A member who turns off or never grants SMS still receives the
-email. The author of a message is not notified about their own post.
+preference is on. A member who turns off or never grants SMS is still included
+in the email escalation, subject to the caveats above. The author of a message
+is not notified about their own post.
 
 ### Requiring acknowledgment
 
