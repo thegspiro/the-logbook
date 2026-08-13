@@ -686,9 +686,31 @@ class TestPayments:
         assert waived.status == StoreOrderStatus.PAID
         # No money moved, so the rollup must not invent revenue.
         assert waived.amount_paid == Decimal("0.00")
+        # A waiver settles the debt without turning it into collected revenue.
+        assert (
+            await service.mark_order_paid(
+                order.id, org.id, str(officer.id), notify_member=False
+            )
+            == waived
+        )
+        bulk = await service.bulk_mark_paid(
+            org.id, [order.id], str(officer.id), notify_members=False
+        )
+        assert bulk == {"updated": 0, "skipped": 1, "errors": []}
+        with pytest.raises(ValueError, match="waived order"):
+            await service.record_payment(
+                order.id,
+                org.id,
+                Decimal("5.00"),
+                str(officer.id),
+                notify_member=False,
+            )
+        settings = await service.get_settings(org.id)
+        assert service.build_payment_instructions(waived, settings) is None
         summary = await service.get_window_summary(window.id, org.id)
         assert summary["collected"] == Decimal("0.00")
         assert summary["gross_sales"] == Decimal("45.00")
+        assert summary["outstanding"] == Decimal("0.00")
 
     async def test_bulk_mark_paid_settles_a_selection(self, db_session):
         org = await _make_org(db_session)
