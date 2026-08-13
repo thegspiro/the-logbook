@@ -1,5 +1,6 @@
 import React from 'react';
 import { Clock, Truck, PartyPopper, Flag, Trophy, Megaphone, Zap, Home, ShieldCheck, Heart, Bike } from 'lucide-react';
+import { ensureShiftSettingsLoaded, getCachedShiftSettings } from '../services/shiftSettingsApi';
 
 export type TemplateCategory = 'standard' | 'specialty' | 'event';
 
@@ -310,23 +311,18 @@ export const BUILTIN_POSITION_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export const getPositionOptions = (): { value: string; label: string }[] => {
-  try {
-    const stored = localStorage.getItem('scheduling_settings');
-    if (stored) {
-      const settings = JSON.parse(stored) as { customPositions?: { value: string; label: string }[] };
-      const custom = settings.customPositions ?? [];
-      const merged = [...BUILTIN_POSITION_OPTIONS];
-      for (const cp of custom) {
-        if (!merged.some((p) => p.value === cp.value)) {
-          merged.push(cp);
-        }
-      }
-      return merged;
+  // Department settings live on the backend; kick a (single-flight) load so a
+  // later call sees fresh data, and read synchronously from the cache — which
+  // falls back to the localStorage mirror, then the built-in defaults.
+  void ensureShiftSettingsLoaded();
+  const custom = getCachedShiftSettings().customPositions;
+  const merged = [...BUILTIN_POSITION_OPTIONS];
+  for (const cp of custom) {
+    if (!merged.some((p) => p.value === cp.value)) {
+      merged.push(cp);
     }
-  } catch {
-    /* ignore */
   }
-  return BUILTIN_POSITION_OPTIONS;
+  return merged;
 };
 
 export interface TemplateFormData {

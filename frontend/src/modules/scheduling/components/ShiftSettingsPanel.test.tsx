@@ -1,7 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
+import { DEFAULT_SETTINGS } from '../types/shiftSettings';
 import type { SettingsTab } from './schedulingSettingsSections';
+
+// Department-wide settings are backend-backed (services/shiftSettingsApi);
+// the panel must load/save/reset through that service, never localStorage.
+const mockLoadShiftSettings = vi.fn();
+const mockSaveShiftSettings = vi.fn();
+const mockResetShiftSettings = vi.fn();
+
+vi.mock('../services/shiftSettingsApi', () => ({
+  loadShiftSettings: (...args: unknown[]) => mockLoadShiftSettings(...args) as unknown,
+  getCachedShiftSettings: () => ({ ...DEFAULT_SETTINGS }),
+  shiftSettingsService: {
+    saveShiftSettings: (...args: unknown[]) => mockSaveShiftSettings(...args) as unknown,
+    resetShiftSettings: (...args: unknown[]) => mockResetShiftSettings(...args) as unknown,
+  },
+}));
 
 const storeState = {
   platoonsEnabled: false,
@@ -67,6 +84,9 @@ describe('ShiftSettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    mockLoadShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    mockSaveShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    mockResetShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
   });
 
   it('renders the requested section only', () => {
@@ -104,5 +124,36 @@ describe('ShiftSettingsPanel', () => {
     renderPanel('general');
 
     expect(screen.queryByRole('heading', { name: /Shift Settings/i })).not.toBeInTheDocument();
+  });
+
+  it('loads the department settings from the backend on mount, migrating any local copy', async () => {
+    renderPanel('general');
+
+    await waitFor(() => {
+      expect(mockLoadShiftSettings).toHaveBeenCalledWith({ migrateLocal: true });
+    });
+  });
+
+  it('saves through the backend service and confirms', async () => {
+    const user = userEvent.setup();
+    renderPanel('general');
+
+    await user.click(screen.getByRole('button', { name: 'Save Settings' }));
+
+    expect(mockSaveShiftSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultDurationHours: DEFAULT_SETTINGS.defaultDurationHours })
+    );
+    expect(await screen.findByText('Settings saved')).toBeInTheDocument();
+  });
+
+  it('resets through the backend service', async () => {
+    const user = userEvent.setup();
+    renderPanel('general');
+
+    await user.click(screen.getByRole('button', { name: 'Reset to defaults' }));
+
+    await waitFor(() => {
+      expect(mockResetShiftSettings).toHaveBeenCalledTimes(1);
+    });
   });
 });
