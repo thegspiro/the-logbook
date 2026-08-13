@@ -43,6 +43,31 @@ committed. Images that changed but were not opened are deliberately left
 uncommitted rather than taken on trust — see the navigation incident below for
 why that rule exists.
 
+### The "Elected package with its tally" is three things on two screens
+
+`01-membership.md:1156` asks for "the Elections module showing Alex Rivera's
+election package with status **Elected**, vote tally (35-3), and the linked
+prospect record". No single screen shows those together.
+
+`ElectionPackageSection` renders the package status as a badge — `elected` gets
+the same emerald treatment as `ready`, and the text is the status with
+underscores swapped for spaces — inside the applicant drawer, beside the
+applicant it belongs to. That covers the status and the linked prospect. **The
+tally is not there**: vote counts live on the election results screen, which
+guide 14 already photographs, and nothing joins the two.
+
+So the caption needs splitting the way `09-18`'s did: the package badge in the
+drawer, with the tally described in prose and cross-referenced to guide 14.
+
+Reaching `elected` at all is the same seed problem as the ballot-send shot. The
+seeded packages are `draft`; getting one to `elected` needs the package on a
+ballot, the election closed, and results applied back. That is the same open
+election the send shot needs, so the two should be built together rather than
+seeded twice.
+
+**All three remaining placeholders are now characterised** — none is a mystery,
+each is a bounded piece of demo-data work, and two of them share a fixture.
+
 ### The ballot-send shot is blocked on the demo having only one membership type
 
 `14-elections.md:352` needs a send that skips somebody. The skip reason is
