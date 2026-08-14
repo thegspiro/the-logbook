@@ -6,6 +6,8 @@ the surviving chain verifies, and rejection of unsanctioned head deletions.
 """
 
 import gzip
+import os
+import stat
 
 import pytest
 from sqlalchemy import delete, func, select
@@ -79,6 +81,10 @@ class TestArchiveExpiredLogs:
         assert result["purge_start_id"] == old_rows[0].id
         assert result["purge_end_id"] == old_rows[-1].id
         assert await _count_logs(db_session) == 3
+
+        # Sensitive archives are restricted to the service account.
+        assert stat.S_IMODE(tmp_path.stat().st_mode) == 0o700
+        assert stat.S_IMODE(os.stat(result["archive_file"]).st_mode) == 0o600
 
         # Export contains every purged row with its chain hashes.
         with gzip.open(result["archive_file"], "rt", encoding="utf-8") as fh:

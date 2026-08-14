@@ -31,6 +31,7 @@ def test_uniqueness_migration_reconciles_legacy_duplicates_first():
     reconcile = migration.index("SET duplicate.status = 'inactive'")
     create_index = migration.index("op.create_index(")
     assert "LOWER(TRIM(email))" in migration
+    assert "COALESCE(keeper.created_at" in migration
     assert reconcile < create_index
 
 

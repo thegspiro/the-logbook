@@ -34,3 +34,22 @@ def test_restores_parent_referenced_in_down_revision_tuple(tmp_path):
 
     assert (tmp_path / "right.py").exists()
     assert not stale.exists()
+
+
+def test_restores_parent_referenced_in_multiline_down_revision_tuple(tmp_path):
+    cleanup_duplicate_revisions = _load_cleanup_function()
+    (tmp_path / "merge.py").write_text(
+        'revision = "merge"\n'
+        "down_revision = (\n"
+        '    "left",\n'
+        '    "right",\n'
+        ")\n"
+    )
+    (tmp_path / "left.py").write_text('revision = "left"\n' "down_revision = None\n")
+    stale = tmp_path / "right.py.stale"
+    stale.write_text('revision = "right"\n' "down_revision = None\n")
+
+    cleanup_duplicate_revisions(str(tmp_path))
+
+    assert (tmp_path / "right.py").exists()
+    assert not stale.exists()

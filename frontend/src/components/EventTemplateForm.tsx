@@ -5,7 +5,7 @@
  * Includes all configurable template fields organized in collapsible sections.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { EventTemplate, EventTemplateCreate } from '../types/event';
 import { EventType } from '../constants/enums';
@@ -71,6 +71,10 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
 
   // Reminders
   const [sendReminders, setSendReminders] = useState(initialData?.send_reminders ?? false);
+  const [reminderTarget, setReminderTarget] = useState<'going' | 'all' | 'none'>(
+    initialData?.reminder_target ?? 'going'
+  );
+  const reminderAudienceEdited = useRef(initialData?.reminder_target !== undefined);
   const [reminderSchedule, setReminderSchedule] = useState(initialData?.reminder_schedule?.join(', ') ?? '');
 
   // Check-in settings
@@ -115,6 +119,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
       is_mandatory: isMandatory,
       allow_guests: allowGuests,
       send_reminders: sendReminders,
+      reminder_target: sendReminders ? reminderTarget : 'none',
       require_checkout: requireCheckout,
     };
 
@@ -134,9 +139,9 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
     if (parsedReminders.length > 0) data.reminder_schedule = parsedReminders;
     if (checkInWindowType) data.check_in_window_type = checkInWindowType as 'flexible' | 'strict' | 'window';
     const parsedMinsBefore = parseInt(checkInMinutesBefore, 10);
-    if (parsedMinsBefore > 0) data.check_in_minutes_before = parsedMinsBefore;
+    if (checkInMinutesBefore.trim() && parsedMinsBefore >= 0) data.check_in_minutes_before = parsedMinsBefore;
     const parsedMinsAfter = parseInt(checkInMinutesAfter, 10);
-    if (parsedMinsAfter > 0) data.check_in_minutes_after = parsedMinsAfter;
+    if (checkInMinutesAfter.trim() && parsedMinsAfter >= 0) data.check_in_minutes_after = parsedMinsAfter;
 
     void onSubmit(data);
   };
@@ -313,7 +318,14 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 id="template-is-mandatory"
                 type="checkbox"
                 checked={isMandatory}
-                onChange={(e) => setIsMandatory(e.target.checked)}
+                onChange={(e) => {
+                  const mandatory = e.target.checked;
+                  setIsMandatory(mandatory);
+                  if (!reminderAudienceEdited.current) {
+                    setReminderTarget(mandatory ? 'all' : 'going');
+                    setSendReminders(true);
+                  }
+                }}
                 className={checkboxClass}
               />
               <label htmlFor="template-is-mandatory" className="text-theme-text-primary text-sm">
@@ -367,21 +379,40 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
             </div>
 
             {sendReminders && (
-              <div>
-                <label htmlFor="template-reminder-schedule" className={labelClass}>
-                  Reminder Schedule (hours before event, comma-separated)
-                </label>
-                <input
-                  id="template-reminder-schedule"
-                  type="text"
-                  value={reminderSchedule}
-                  onChange={(e) => setReminderSchedule(e.target.value)}
-                  className={inputClass}
-                  placeholder="24, 2"
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Enter hours before the event when reminders should be sent.
-                </p>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="template-reminder-target" className={labelClass}>
+                    Who should receive reminders?
+                  </label>
+                  <select
+                    id="template-reminder-target"
+                    value={reminderTarget}
+                    onChange={(e) => {
+                      reminderAudienceEdited.current = true;
+                      setReminderTarget(e.target.value as 'going' | 'all' | 'none');
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="going">Members who sign up</option>
+                    <option value="all">All active members</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="template-reminder-schedule" className={labelClass}>
+                    Reminder Schedule (hours before event, comma-separated)
+                  </label>
+                  <input
+                    id="template-reminder-schedule"
+                    type="text"
+                    value={reminderSchedule}
+                    onChange={(e) => setReminderSchedule(e.target.value)}
+                    className={inputClass}
+                    placeholder="24, 2"
+                  />
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    Enter hours before the event when reminders should be sent.
+                  </p>
+                </div>
               </div>
             )}
           </div>

@@ -11,6 +11,7 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import httpx
 import jwt
 import pytest
 
@@ -409,6 +410,35 @@ async def test_token_request_retries_transient_failure(monkeypatch):
 
     assert await sf._refresh_access_token() == "recovered"
     assert client.post.await_count == 2
+
+
+async def test_token_request_retries_transport_failure(monkeypatch):
+    sf = SalesforceService(
+        {
+            "instance_url": "https://acme.my.salesforce.com",
+            "client_id": "consumer-key",
+            "client_secret": "consumer-secret",
+        }
+    )
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.__aexit__.return_value = None
+    client.post.side_effect = [
+        httpx.ConnectError("connection reset"),
+        FakeResponse(200, {"access_token": "recovered"}),
+    ]
+    monkeypatch.setattr(
+        "app.services.integration_services.salesforce_service.create_integration_client",
+        lambda: client,
+    )
+    sleep = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.integration_services.salesforce_service.asyncio.sleep", sleep
+    )
+
+    assert await sf._refresh_access_token() == "recovered"
+    assert client.post.await_count == 2
+    sleep.assert_awaited_once_with(1)
 
 
 async def test_create_record_respects_disabled_graceful(monkeypatch):

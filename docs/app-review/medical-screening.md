@@ -1,7 +1,70 @@
 # Application Review — Medical Screening (Tier B)
 
 **Prefix:** `MS2` · **Iteration:** B1 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-08-14 (pass 5)
+
+---
+
+## Pass 5 (2026-08-14) — end-to-end workflow review
+
+This pass followed the officer-facing create-record workflow from the Records
+tab through `ScreeningRecordForm`, the Zustand store, request schema, service,
+and compliance queries. The pass-4 encryption and the earlier tenant-scoping,
+enum-validation, and name-enrichment fixes remain intact.
+
+### MS2-6 — HIGH functionality — the UI still creates subjectless screening records — 🚩 OPEN
+
+The **Add Record** button opens `ScreeningRecordForm`, but the create form has no
+member or prospect control. Its payload includes requirement, type, status,
+dates, provider, result, and notes, but never `user_id` or `prospect_id`. The
+backend accepts both fields as optional and does not enforce exactly one, so the
+request succeeds and persists a screening record attached to nobody.
+
+This is a live correctness defect rather than a cosmetic missing field. Member
+and prospect compliance queries select records by their subject ID. A physical,
+drug, or clearance screening entered through the primary UI therefore cannot
+count toward the screened person's compliance, and the Records table can only
+label it `Unknown`. Demo/screenshots do not prove the path works because their
+seed requests provide `user_id` directly to the API.
+
+The defect was already described in `KNOWN_LIMITATIONS.md` on 2026-08-08; this
+pass re-verified it against the current form and schemas rather than duplicating
+it as a new discovery. It remains fully reproducible.
+
+**Recommended fix:**
+
+1. Add an explicit subject type (`member` or `prospect`) and a searchable,
+   organization-scoped subject picker to the create form.
+2. Put only the selected subject's ID in the request and clear the other field
+   whenever the type changes.
+3. Add a Pydantic `model_validator` requiring exactly one of `user_id` and
+   `prospect_id`; UI validation is not a data-integrity boundary.
+4. Reject legacy subjectless/both-subject create requests with 422. Existing
+   rows require a separate reconciliation report because their intended subject
+   cannot be inferred safely.
+
+**Acceptance criteria:** a record cannot be submitted without choosing exactly
+one in-organization member or prospect; the created row immediately appears
+under that subject's compliance summary; foreign IDs still fail closed; and
+frontend plus API tests cover member, prospect, neither, both, and subject-type
+switching.
+
+### Feature opportunities re-verified
+
+- `fetchUserCompliance` and `fetchProspectCompliance` remain store actions with
+  no component callers, so there is still no per-person compliance detail view.
+- `ComplianceDashboard` still has no overdue/expiring/status filter. Officers
+  must visually scan the entire result set instead of acting on an exception
+  queue.
+- Record and requirement listing remains an in-memory pagination path. This is
+  acceptable at current scale but should move filtering/counting into SQL before
+  large departments accumulate years of screening history.
+
+No behavior-changing fix was applied in this pass: selecting a subject is a
+required workflow addition, and enforcing the invariant before that UI exists
+would turn the current silently-wrong create path into a completely blocked
+one. The frontend and backend must land together.
 
 ---
 
@@ -32,7 +95,7 @@ them can't break a lookup.
 1. **New `EncryptedJSON` column type** (`app/core/encrypted_types.py`) — the same
    transparent contract as `EncryptedText`, but `json.dumps`/`json.loads` around
    the payload. Its legacy-read path also handles the `JSON`→`TEXT` alter: a
-   pre-encryption row is the JSON *text*, so an `InvalidToken` read falls back to
+   pre-encryption row is the JSON _text_, so an `InvalidToken` read falls back to
    `json.loads` of that text (and to the raw string only if it isn't valid JSON).
 2. **Model** (`app/models/medical_screening.py`) — `provider_name`,
    `result_summary`, `notes` → `EncryptedText`; `result_data` → `EncryptedJSON`.
@@ -120,11 +183,11 @@ rejected on create and update, case-normalization, omitted-fields-on-update pass
   but a true SQL `LIMIT/OFFSET` (with a separate full-set path for compliance) is
   the 10× fix. Future dev.
 - **Exactly-one-of `user_id`/`prospect_id` not enforced (LOW)** — the model
-  docstring says a record links to *either*, but `create_record` accepts both or
+  docstring says a record links to _either_, but `create_record` accepts both or
   neither. Unchanged from pass 1 (a `@model_validator` on the create schema is the
   fix); left flagged because it changes accept/reject behavior on a PHI write path.
 - **Compliance-by-id doesn't 404 an unknown subject (LOW)** — `GET
-  /compliance/{user_id}` returns an empty-ish summary for any id rather than 404;
+/compliance/{user_id}` returns an empty-ish summary for any id rather than 404;
   not a leak (org-scoped, no data returned), but a clearer contract would validate
   the subject in-org first. Future dev.
 
@@ -212,7 +275,7 @@ client-supplied `user_id`, `prospect_id`, and `requirement_id` with no in-org
 check.
 
 **Why it's worse than a generic XC-1 here:** the record holds **PHI**. A generic
-dangling FK is a mis-attribution nuisance; attaching a *medical screening result*
+dangling FK is a mis-attribution nuisance; attaching a _medical screening result_
 to a foreign or wrong `user_id` is a PHI-integrity problem — the screening data
 ends up associated with the wrong person. The original audit rated it LOW as a
 plain dangling-FK; the PHI context nudges it toward MED.
@@ -271,7 +334,7 @@ this module and is migration-shaped, not a review-time fix.
 
 ## Duplication
 
-None introduced; `_resolve_names` *removes* the latent temptation to resolve
+None introduced; `_resolve_names` _removes_ the latent temptation to resolve
 names per-row in two separate methods by giving both one shared, org-scoped path.
 
 ## Dead code
@@ -296,17 +359,18 @@ TODO/FIXME markers. Frontend avoids Pitfall #1 (no `??` on outgoing form values)
    tests mock the queries; an integration test would lock the org-scoping join
    behavior once MySQL is available in CI.
 3. **`create_record` doesn't enforce exactly-one-of `user_id`/`prospect_id`** —
-   the model comment says a record links to *either*, but nothing rejects both
-   or neither. Out of scope for MS-3 (which was about *in-org* validation); worth
+   the model comment says a record links to _either_, but nothing rejects both
+   or neither. Out of scope for MS-3 (which was about _in-org_ validation); worth
    a `@model_validator` on the schema.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2517 passed, 0 failed** (was 2514 — 3 tests added; the 19 medical-screening tests all pass). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+| Check                | Result                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                                                                                     |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                                      |
+| `black --check`      | ✅ 503 files unchanged                                                                                                                                                               |
+| `eslint`             | ✅ clean                                                                                                                                                                             |
+| backend tests        | ✅ **2517 passed, 0 failed** (was 2514 — 3 tests added; the 19 medical-screening tests all pass). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+
 </content>

@@ -77,7 +77,8 @@ import { useNotificationCountStore } from '../hooks/useNotificationCount';
  * Two answers, in this order: what needs me, and what am I doing this week.
  * Everything the member is on the hook for collects in one "Needs you" panel;
  * shifts, open slots and events merge into one seven-day list rather than
- * three parallel ones. Department reporting lives behind the Overview tab so
+ * three parallel ones. Organization-wide reporting lives behind the
+ * Organization tab so
  * it does not outrank a member's own work.
  */
 const INSTALL_BANNER_DISMISSED_KEY = 'installBannerDismissed';
@@ -143,12 +144,15 @@ const Dashboard: React.FC = () => {
     setDismissedInstall(true);
   };
 
-  // Admin summary (only loaded for users with settings.manage)
-  const isAdmin = checkPermission('settings.manage');
-  const canManageMessages = isAdmin || checkPermission('notifications.manage');
-  const isInventoryAdmin = isAdmin || checkPermission('inventory.manage');
+  // Organization reporting contains department-wide information, so only
+  // leaders explicitly entrusted with organization settings can reveal it.
+  // Everyone — including those leaders — still lands on the personal view.
+  const canViewOrganization = checkPermission('settings.manage');
+  const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
+  const isInventoryAdmin = canViewOrganization || checkPermission('inventory.manage');
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
-  const [loadingAdmin, setLoadingAdmin] = useState(isAdmin);
+  const [loadingAdmin, setLoadingAdmin] = useState(canViewOrganization);
+  const [adminError, setAdminError] = useState(false);
 
   // Notifications
   const [notifications, setNotifications] = useState<NotificationLogRecord[]>([]);
@@ -202,6 +206,8 @@ const Dashboard: React.FC = () => {
   const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
+  const [myEquipment, setMyEquipment] = useState({ assigned: 0, checkedOut: 0, overdue: 0 });
+  const [loadingMyEquipment, setLoadingMyEquipment] = useState(true);
 
   // Upcoming events
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
@@ -213,14 +219,30 @@ const Dashboard: React.FC = () => {
     total: number;
   } | null>(null);
 
-  // Department reporting is a separate view rather than a taller page, and the
+  // Organization reporting is a separate view rather than a taller page, and the
   // selection is mirrored into ?tab= so a chief can bookmark it.
-  const activeTab = isAdmin && searchParams.get('tab') === 'overview' ? 'overview' : 'department';
-  const selectTab = (tab: 'department' | 'overview') => {
+  // Continue accepting the former `overview` URL so existing bookmarks land on
+  // the renamed view, while all new navigation writes the clearer URL.
+  const organizationTabRequested = ['organization', 'overview'].includes(searchParams.get('tab') ?? '');
+  const activeTab = canViewOrganization && organizationTabRequested ? 'organization' : 'department';
+  const selectTab = (tab: 'department' | 'organization') => {
     const next = new URLSearchParams(searchParams);
-    if (tab === 'overview') next.set('tab', 'overview');
+    if (tab === 'organization') next.set('tab', 'organization');
     else next.delete('tab');
     setSearchParams(next, { replace: true });
+  };
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    let nextTab: 'department' | 'organization' | null = null;
+    if (event.key === 'Home') nextTab = 'department';
+    else if (event.key === 'End') nextTab = 'organization';
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      nextTab = activeTab === 'department' ? 'organization' : 'department';
+    }
+
+    if (!nextTab) return;
+    event.preventDefault();
+    selectTab(nextTab);
+    window.requestAnimationFrame(() => document.getElementById(`dashboard-tab-${nextTab}`)?.focus());
   };
 
   useEffect(() => {
@@ -245,25 +267,56 @@ const Dashboard: React.FC = () => {
     void loadMyShifts();
     void loadOpenShifts();
     void loadDeptMessages();
-    if (isAdmin) {
-      void loadAdminSummary();
-      void loadSetupProgress();
-    }
     void loadHours();
     void loadTrainingProgress();
-    void loadInventorySummary();
+    void loadMyEquipment();
     void loadUpcomingEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, []);
+
+  // Do not fetch department-wide reporting merely because a leader opened the
+  // dashboard. The personal view is the default; organization data is loaded
+  // only after that leader intentionally opens the Organization tab.
+  useEffect(() => {
+    if (activeTab === 'organization') {
+      void loadAdminSummary();
+      void loadSetupProgress();
+      void loadInventorySummary();
+    }
+  }, [activeTab]);
 
   const loadAdminSummary = async () => {
+    setLoadingAdmin(true);
+    setAdminError(false);
     try {
       const data = await dashboardService.getAdminSummary();
       setAdminSummary(data);
     } catch (err) {
       console.error('Failed to load admin summary:', err);
+      setAdminError(true);
     } finally {
       setLoadingAdmin(false);
+    }
+  };
+
+  const loadMyEquipment = async () => {
+    if (!currentUser?.id) {
+      setLoadingMyEquipment(false);
+      return;
+    }
+    try {
+      const data = await inventoryService.getUserInventory(currentUser.id);
+      setMyEquipment({
+        assigned:
+          data.permanent_assignments.reduce((total, item) => total + (item.quantity ?? 1), 0) +
+          data.issued_items.reduce((total, item) => total + item.quantity_issued, 0),
+        checkedOut: data.active_checkouts.length,
+        overdue: data.active_checkouts.filter((item) => item.is_overdue).length,
+      });
+    } catch {
+      // Personal equipment is non-critical on the dashboard.
+    } finally {
+      setLoadingMyEquipment(false);
     }
   };
 
@@ -650,29 +703,8 @@ const Dashboard: React.FC = () => {
       busy: acknowledgingId === msg.id,
     });
   }
-  if ((adminSummary?.overdue_action_items ?? 0) > 0) {
-    const overdue = adminSummary?.overdue_action_items ?? 0;
-    needsYouItems.push({
-      id: 'overdue-action-items',
-      icon: ClipboardList,
-      title: `${overdue} overdue action item${overdue === 1 ? '' : 's'}`,
-      detail: `${adminSummary?.open_action_items ?? 0} open in total`,
-      actionLabel: 'Open',
-      onAction: () => void navigate('/action-items'),
-      tone: needsYouItems.length === 0 ? 'primary' : 'neutral',
-    });
-  }
-  if (isAdmin && setupProgress && setupProgress.completed < setupProgress.total) {
-    needsYouItems.push({
-      id: 'department-setup',
-      icon: Rocket,
-      title: 'Complete Department Setup',
-      detail: `${setupProgress.completed} of ${setupProgress.total} steps complete`,
-      actionLabel: 'Continue',
-      onAction: () => void navigate('/setup'),
-      tone: needsYouItems.length === 0 ? 'primary' : 'neutral',
-    });
-  }
+  // Department-wide action-item and setup totals belong in Organization. They
+  // must not make the personal "Needs you" list look like an individual inbox.
 
   // ── Department feed ───────────────────────────────────────────────────────
   // Messages and notifications used to render as two panels off one list, and
@@ -746,12 +778,12 @@ const Dashboard: React.FC = () => {
       loadDeptMessages(),
       loadHours(),
       loadTrainingProgress(),
-      loadInventorySummary(),
+      loadMyEquipment(),
       loadUpcomingEvents(),
-      ...(isAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
+      ...(activeTab === 'organization' ? [loadAdminSummary(), loadSetupProgress(), loadInventorySummary()] : []),
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, [activeTab]);
 
   useRegisterPullToRefresh(refreshDashboard);
 
@@ -889,13 +921,45 @@ const Dashboard: React.FC = () => {
         {/* Header — who, when, and the one number a member checks daily */}
         <div className="mb-5 sm:mb-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h2 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{greeting}</h2>
               <p className="text-theme-text-muted mt-0.5 text-sm sm:text-base">
                 {formatDateCustom(new Date(), { weekday: 'long', month: 'long', day: 'numeric' }, tz)}
                 <span className="hidden sm:inline">{' · ' + departmentName}</span>
               </p>
             </div>
+            {canViewOrganization && (
+              <div
+                role="tablist"
+                aria-label="Dashboard view"
+                className="bg-theme-surface-hover order-3 inline-flex w-full gap-1 rounded-full p-1 sm:order-none sm:w-auto"
+              >
+                {(
+                  [
+                    { id: 'department', label: 'My Department' },
+                    { id: 'organization', label: 'Organization' },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    id={`dashboard-tab-${tab.id}`}
+                    aria-selected={activeTab === tab.id}
+                    aria-controls={`dashboard-panel-${tab.id}`}
+                    tabIndex={activeTab === tab.id ? 0 : -1}
+                    onClick={() => selectTab(tab.id)}
+                    onKeyDown={handleTabKeyDown}
+                    className={`focus:ring-theme-focus-ring min-h-[44px] flex-1 rounded-full px-4 text-sm font-semibold transition-colors focus:ring-2 focus:outline-hidden sm:flex-none ${
+                      activeTab === tab.id
+                        ? 'bg-theme-surface text-theme-text-primary shadow-sm'
+                        : 'text-theme-text-secondary hover:text-theme-text-primary'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <span className="border-theme-surface-border bg-theme-surface text-theme-text-secondary inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border px-4 text-[13px]">
               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
@@ -903,44 +967,13 @@ const Dashboard: React.FC = () => {
               </span>
             </span>
           </div>
-
-          {isAdmin && (
-            <div
-              role="tablist"
-              aria-label="Dashboard view"
-              className="bg-theme-surface-hover mt-4 inline-flex gap-1 rounded-full p-1"
-            >
-              {(
-                [
-                  { id: 'department', label: 'My Department' },
-                  { id: 'overview', label: 'Overview' },
-                ] as const
-              ).map((tab) => (
-                <button
-                  key={tab.id}
-                  role="tab"
-                  id={`dashboard-tab-${tab.id}`}
-                  aria-selected={activeTab === tab.id}
-                  aria-controls={`dashboard-panel-${tab.id}`}
-                  onClick={() => selectTab(tab.id)}
-                  className={`focus:ring-theme-focus-ring min-h-[44px] rounded-full px-4 text-sm font-semibold transition-colors focus:ring-2 focus:outline-hidden ${
-                    activeTab === tab.id
-                      ? 'bg-theme-surface text-theme-text-primary shadow-sm'
-                      : 'text-theme-text-secondary hover:text-theme-text-primary'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {activeTab === 'department' ? (
           <div
             id="dashboard-panel-department"
-            role={isAdmin ? 'tabpanel' : undefined}
-            aria-labelledby={isAdmin ? 'dashboard-tab-department' : undefined}
+            role={canViewOrganization ? 'tabpanel' : undefined}
+            aria-labelledby={canViewOrganization ? 'dashboard-tab-department' : undefined}
             className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-6"
           >
             {/* ── Main column ── */}
@@ -1096,12 +1129,13 @@ const Dashboard: React.FC = () => {
 
             {/* ── Rail ── */}
             <div className="flex min-w-0 flex-col gap-4">
-              {/* Department Feed */}
-              <section className="card overflow-hidden" aria-labelledby="department-feed-heading">
+              {/* The member's own inbox activity; department-wide reporting is
+                  deliberately kept in the Organization tab. */}
+              <section className="card overflow-hidden" aria-labelledby="my-updates-heading">
                 <div className="border-theme-surface-border flex items-center gap-2 border-b px-4 py-3">
                   <Megaphone className="text-theme-accent-yellow h-4 w-4 shrink-0" aria-hidden="true" />
-                  <h3 id="department-feed-heading" className="text-theme-text-primary text-[15px] font-bold">
-                    Department Feed
+                  <h3 id="my-updates-heading" className="text-theme-text-primary text-[15px] font-bold">
+                    My Updates
                   </h3>
                   {feedUnread > 0 && (
                     <span
@@ -1282,8 +1316,8 @@ const Dashboard: React.FC = () => {
 
               <DashboardHoursCard monthLabel={monthLabel} segments={hoursSegments} loading={loadingHours} />
 
-              {/* Equipment — compact in the rail; the full picture is in Overview */}
-              {!loadingInventory && inventorySummary && inventorySummary.total_items > 0 && (
+              {/* Equipment — compact in the rail; the full picture is in Organization */}
+              {!loadingMyEquipment && (myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
                 <section className="card p-4" aria-labelledby="my-equipment-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="my-equipment-heading" className="text-theme-text-primary text-[15px] font-bold">
@@ -1300,20 +1334,16 @@ const Dashboard: React.FC = () => {
                   <dl className="flex flex-col gap-1.5 text-[13px]">
                     <div className="flex items-center justify-between gap-2">
                       <dt className="text-theme-text-secondary">Assigned items</dt>
-                      <dd className="text-theme-text-primary font-bold tabular-nums">{inventorySummary.total_items}</dd>
+                      <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.assigned}</dd>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <dt className="text-theme-text-secondary">Checked out</dt>
-                      <dd className="text-theme-text-primary font-bold tabular-nums">
-                        {inventorySummary.active_checkouts}
-                      </dd>
+                      <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.checkedOut}</dd>
                     </div>
-                    {inventorySummary.overdue_checkouts > 0 && (
+                    {myEquipment.overdue > 0 && (
                       <div className="flex items-center justify-between gap-2">
                         <dt className="text-theme-text-secondary">Overdue</dt>
-                        <dd className="font-bold text-red-700 tabular-nums dark:text-red-400">
-                          {inventorySummary.overdue_checkouts}
-                        </dd>
+                        <dd className="font-bold text-red-700 tabular-nums dark:text-red-400">{myEquipment.overdue}</dd>
                       </div>
                     )}
                   </dl>
@@ -1322,85 +1352,150 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         ) : (
-          /* ── Overview: department reporting, admins only ── */
+          /* ── Organization: department-wide reporting, admins only ── */
           <div
-            id="dashboard-panel-overview"
+            id="dashboard-panel-organization"
             role="tabpanel"
-            aria-labelledby="dashboard-tab-overview"
+            aria-labelledby="dashboard-tab-organization"
             className="flex flex-col gap-6"
           >
             <div>
-              <h3 className="text-theme-text-primary mb-4 flex items-center gap-2 text-lg font-semibold">
-                <Shield className="h-5 w-5 text-red-500" aria-hidden="true" />
-                Department Overview
-              </h3>
-              <div
-                className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5"
-                role="region"
-                aria-label="Department overview"
-              >
-                <DashboardStatCard
-                  label="Active Members"
-                  value={adminSummary?.active_members ?? 0}
-                  icon={Users}
-                  iconColor="text-blue-700 dark:text-blue-400"
-                  description={`${adminSummary?.total_members ?? 0} total`}
-                  loading={loadingAdmin}
-                />
-
-                <DashboardStatCard
-                  label="Training Compliance"
-                  value={`${adminSummary?.training_completion_pct ?? 0}%`}
-                  icon={GraduationCap}
-                  iconColor="text-green-700 dark:text-green-400"
-                  description={`${adminSummary?.recent_training_hours ?? 0} hrs last 30 days`}
-                  loading={loadingAdmin}
-                />
-
-                <DashboardStatCard
-                  label="Upcoming Events"
-                  value={adminSummary?.upcoming_events_count ?? 0}
-                  icon={Calendar}
-                  iconColor="text-purple-700 dark:text-purple-400"
-                  description="Next 30 days"
-                  loading={loadingAdmin}
-                />
-
-                <DashboardStatCard
-                  label="Action Items"
-                  value={adminSummary?.open_action_items ?? 0}
-                  icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
-                  iconColor={
-                    (adminSummary?.overdue_action_items ?? 0) > 0
-                      ? 'text-red-700 dark:text-red-400'
-                      : 'text-yellow-700 dark:text-yellow-400'
-                  }
-                  description={
-                    (adminSummary?.overdue_action_items ?? 0) > 0
-                      ? `${adminSummary?.overdue_action_items} overdue`
-                      : 'All on track'
-                  }
-                  loading={loadingAdmin}
-                  onClick={() => void navigate('/action-items')}
-                  ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
-                />
-
-                <DashboardStatCard
-                  label="Admin Hours"
-                  value={adminSummary?.recent_admin_hours ?? 0}
-                  icon={ClipboardCheck}
-                  iconColor="text-indigo-700 dark:text-indigo-400"
-                  description={
-                    (adminSummary?.pending_admin_hours_approvals ?? 0) > 0
-                      ? `${adminSummary?.pending_admin_hours_approvals} pending approval`
-                      : 'Last 30 days'
-                  }
-                  loading={loadingAdmin}
-                  onClick={() => void navigate('/admin-hours/manage')}
-                  ariaLabel={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ''}`}
-                />
+              <div className="mb-4">
+                <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+                  <Shield className="h-5 w-5 text-red-500" aria-hidden="true" />
+                  Organization
+                </h3>
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  Department-wide staffing, compliance, events, action items, and operations.
+                </p>
               </div>
+              {adminError ? (
+                <div className="card border-red-500/30 p-5" role="alert">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-theme-text-primary font-semibold">Organization summary is unavailable</p>
+                      <p className="text-theme-text-muted mt-1 text-sm">
+                        We could not load the department-wide metrics. Your personal dashboard is unaffected.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void loadAdminSummary()}
+                      className="btn-primary min-h-[44px] px-4"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5"
+                  role="region"
+                  aria-label="Department overview"
+                >
+                  <DashboardStatCard
+                    label="Active Members"
+                    value={adminSummary?.active_members ?? 0}
+                    icon={Users}
+                    iconColor="text-blue-700 dark:text-blue-400"
+                    description={`${adminSummary?.total_members ?? 0} total`}
+                    loading={loadingAdmin}
+                  />
+
+                  <DashboardStatCard
+                    label="Training Compliance"
+                    value={`${adminSummary?.training_completion_pct ?? 0}%`}
+                    icon={GraduationCap}
+                    iconColor="text-green-700 dark:text-green-400"
+                    description={`${adminSummary?.recent_training_hours ?? 0} hrs last 30 days`}
+                    loading={loadingAdmin}
+                  />
+
+                  <DashboardStatCard
+                    label="Upcoming Events"
+                    value={adminSummary?.upcoming_events_count ?? 0}
+                    icon={Calendar}
+                    iconColor="text-purple-700 dark:text-purple-400"
+                    description="Next 30 days"
+                    loading={loadingAdmin}
+                  />
+
+                  <DashboardStatCard
+                    label="Action Items"
+                    value={adminSummary?.open_action_items ?? 0}
+                    icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
+                    iconColor={
+                      (adminSummary?.overdue_action_items ?? 0) > 0
+                        ? 'text-red-700 dark:text-red-400'
+                        : 'text-yellow-700 dark:text-yellow-400'
+                    }
+                    description={
+                      (adminSummary?.overdue_action_items ?? 0) > 0
+                        ? `${adminSummary?.overdue_action_items} overdue`
+                        : 'All on track'
+                    }
+                    loading={loadingAdmin}
+                    onClick={() => void navigate('/action-items')}
+                    ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
+                  />
+
+                  <DashboardStatCard
+                    label="Admin Hours"
+                    value={adminSummary?.recent_admin_hours ?? 0}
+                    icon={ClipboardCheck}
+                    iconColor="text-indigo-700 dark:text-indigo-400"
+                    description={
+                      (adminSummary?.pending_admin_hours_approvals ?? 0) > 0
+                        ? `${adminSummary?.pending_admin_hours_approvals} pending approval`
+                        : 'Last 30 days'
+                    }
+                    loading={loadingAdmin}
+                    onClick={() => void navigate('/admin-hours/manage')}
+                    ariaLabel={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ''}`}
+                  />
+                </div>
+              )}
             </div>
+
+            {setupProgress && setupProgress.completed < setupProgress.total && (
+              <section className="card p-4 sm:p-5" aria-labelledby="organization-setup-heading">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <span className="bg-theme-accent-red-muted text-theme-accent-red flex h-11 w-11 shrink-0 items-center justify-center rounded-lg">
+                    <Rocket className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <h4 id="organization-setup-heading" className="text-theme-text-primary font-semibold">
+                        Organization setup
+                      </h4>
+                      <span className="text-theme-text-secondary text-sm font-semibold tabular-nums">
+                        {setupProgress.completed} of {setupProgress.total}
+                      </span>
+                    </div>
+                    <div
+                      className="bg-theme-surface-hover mt-2 h-2 overflow-hidden rounded-full"
+                      role="progressbar"
+                      aria-label="Organization setup progress"
+                      aria-valuemin={0}
+                      aria-valuemax={setupProgress.total}
+                      aria-valuenow={setupProgress.completed}
+                    >
+                      <div
+                        className="bg-theme-accent-red h-full rounded-full"
+                        style={{ width: `${(setupProgress.completed / setupProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void navigate('/setup')}
+                    className="btn-primary min-h-[44px] shrink-0 px-4 text-sm font-semibold"
+                  >
+                    Continue setup
+                  </button>
+                </div>
+              </section>
+            )}
 
             {!loadingInventory && inventorySummary && inventorySummary.total_items > 0 && (
               <div className="card p-4 sm:p-6">

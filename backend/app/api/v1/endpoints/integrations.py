@@ -322,10 +322,14 @@ def _extract_secrets(
     public: dict[str, Any] = {}
     secrets: dict[str, str] = {}
     for k, v in config.items():
-        if k in SECRET_CONFIG_KEYS and isinstance(v, str) and v:
-            secrets[k] = v
-        else:
-            public[k] = v
+        if k in SECRET_CONFIG_KEYS:
+            # Secret-shaped keys must never fall through into plaintext config.
+            # Empty strings are control values and are intentionally omitted;
+            # the endpoint handles the requested deletion.
+            if isinstance(v, str) and v:
+                secrets[k] = v
+            continue
+        public[k] = v
     return public, secrets
 
 
@@ -593,8 +597,10 @@ async def update_integration(
         and "refresh_token" in config
         and config["refresh_token"] == ""
     )
-    # Validate config schema
-    config = _validate_config(integration.integration_type, config)
+    # PATCH validation includes stored public settings so callers can update or
+    # clear one secret without resending unrelated required configuration.
+    validation_config = {**(integration.config or {}), **config}
+    config = _validate_config(integration.integration_type, validation_config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
     # Split secrets from public config
