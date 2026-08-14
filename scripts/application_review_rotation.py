@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -16,6 +17,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / ".github" / "application-review-rotation.json"
 MARKER_PREFIX = "<!-- application-review-rotation:"
+FEATURE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 class GitHubApiError(RuntimeError):
@@ -39,6 +41,10 @@ def load_config(path: Path) -> dict[str, Any]:
                 raise ValueError(f"feature {index} must have a non-empty {field}")
         if feature["id"] in ids:
             raise ValueError(f"duplicate feature id: {feature['id']}")
+        if not FEATURE_ID_PATTERN.fullmatch(feature["id"]):
+            raise ValueError(
+                f"feature {index} id must contain lowercase letters, numbers, and single hyphens"
+            )
         ids.add(feature["id"])
 
     for field in ("label", "title_prefix"):
@@ -90,9 +96,19 @@ class GitHubClient:
 
     def issues(self, label: str) -> list[dict[str, Any]]:
         encoded_label = urllib.parse.quote(label, safe="")
-        return self.request(
-            "GET", f"/issues?state=all&labels={encoded_label}&per_page=100"
-        )
+        issues: list[dict[str, Any]] = []
+        page = 1
+        while True:
+            batch = self.request(
+                "GET",
+                f"/issues?state=all&labels={encoded_label}&per_page=100&page={page}",
+            )
+            if not isinstance(batch, list):
+                raise RuntimeError("GitHub issues response must be a list")
+            issues.extend(batch)
+            if len(batch) < 100:
+                return issues
+            page += 1
 
     def create_issue(self, title: str, body: str, label: str) -> dict[str, Any]:
         return self.request(

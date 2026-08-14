@@ -1,7 +1,14 @@
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
-from application_review_rotation import feature_marker, load_config, select_next_feature
+from application_review_rotation import (
+    GitHubClient,
+    feature_marker,
+    load_config,
+    select_next_feature,
+)
 
 
 class ApplicationReviewRotationTest(unittest.TestCase):
@@ -48,6 +55,55 @@ class ApplicationReviewRotationTest(unittest.TestCase):
 
         assert state == "complete"
         assert feature is None
+
+    def test_config_rejects_marker_unsafe_feature_id(self):
+        config = {
+            "label": "review",
+            "title_prefix": "Review:",
+            "features": [
+                {"id": "unsafe -->", "name": "Unsafe", "scope": "Invalid marker"}
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+
+            error_message = ""
+            try:
+                load_config(path)
+            except ValueError as error:
+                error_message = str(error)
+
+            assert "feature 1 id" in error_message
+
+
+class GitHubClientTest(unittest.TestCase):
+    def test_issues_reads_every_page(self):
+        client = GitHubClient("owner/repo", "token")
+        first_page = [{"number": index} for index in range(100)]
+        calls = []
+
+        def request(method, path, payload=None):
+            calls.append((method, path, payload))
+            return first_page if path.endswith("page=1") else [{"number": 100}]
+
+        client.request = request
+
+        issues = client.issues("application review")
+
+        assert len(issues) == 101
+        assert calls == [
+            (
+                "GET",
+                "/issues?state=all&labels=application%20review&per_page=100&page=1",
+                None,
+            ),
+            (
+                "GET",
+                "/issues?state=all&labels=application%20review&per_page=100&page=2",
+                None,
+            ),
+        ]
 
 
 if __name__ == "__main__":

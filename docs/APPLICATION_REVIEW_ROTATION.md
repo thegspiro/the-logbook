@@ -1,7 +1,9 @@
 # Application Review Rotation
 
-The application-wide review advances through a repository-owned GitHub Actions
-workflow every 15 minutes. The queue is defined in
+The application-wide review is **coordinated** through a repository-owned
+GitHub Actions workflow scheduled every 15 minutes. The workflow creates and
+advances review issues; it does not run an AI reviewer or assert that the issue's
+checklist has been completed. The queue is defined in
 `.github/application-review-rotation.json`; each entry represents one focused
 review area from the full review plan.
 
@@ -17,6 +19,10 @@ review area from the full review plan.
    run opens the next queue item.
 5. Once every queue item has a closed issue, later runs exit successfully
    without creating duplicates.
+
+Closing an issue is the explicit completion signal. Reviewers must not close an
+issue merely because 15 minutes elapsed. GitHub Actions cannot inspect the code
+and certify the checklist on the reviewer's behalf.
 
 The repository `GITHUB_TOKEN` is sufficient. The workflow grants only
 `contents: read` and `issues: write`; it does not need a personal access token.
@@ -39,6 +45,7 @@ the review is complete.
 
   ```bash
   python3 scripts/application_review_rotation.py --validate
+  python3 -m unittest discover -s scripts -p 'test_application_review_rotation.py' -v
   ```
 
 - A repository administrator can pause the cadence by disabling the workflow
