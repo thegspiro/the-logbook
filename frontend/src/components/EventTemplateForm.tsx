@@ -138,9 +138,9 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
     if (parsedReminders.length > 0) data.reminder_schedule = parsedReminders;
     if (checkInWindowType) data.check_in_window_type = checkInWindowType as 'flexible' | 'strict' | 'window';
     const parsedMinsBefore = parseInt(checkInMinutesBefore, 10);
-    if (parsedMinsBefore > 0) data.check_in_minutes_before = parsedMinsBefore;
+    if (checkInMinutesBefore.trim() && parsedMinsBefore >= 0) data.check_in_minutes_before = parsedMinsBefore;
     const parsedMinsAfter = parseInt(checkInMinutesAfter, 10);
-    if (parsedMinsAfter > 0) data.check_in_minutes_after = parsedMinsAfter;
+    if (checkInMinutesAfter.trim() && parsedMinsAfter >= 0) data.check_in_minutes_after = parsedMinsAfter;
 
     void onSubmit(data);
   };
