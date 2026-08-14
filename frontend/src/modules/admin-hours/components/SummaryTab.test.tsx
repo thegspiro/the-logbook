@@ -16,6 +16,8 @@ vi.mock('../store/adminHoursStore', () => ({
   useAdminHoursStore: (selector: (state: unknown) => unknown) => selector({ summary, fetchSummary }),
 }));
 
+vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
+
 const populatedSummary: AdminHoursSummary = {
   totalHours: 10,
   totalEntries: 4,
@@ -70,8 +72,8 @@ describe('SummaryTab', () => {
     fireEvent.change(screen.getByLabelText('Reporting period'), { target: { value: '30-days' } });
 
     await waitFor(() => expect(fetchSummary).toHaveBeenCalledTimes(2));
-    expect(lastSummaryParams?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T23:59:59\.999$/);
+    expect(lastSummaryParams?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}T04:00:00\.000Z$/);
+    expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T03:59:59\.999Z$/);
   });
 
   it('requests the current calendar year and displays a bounded reporting period', async () => {
@@ -86,8 +88,8 @@ describe('SummaryTab', () => {
     fireEvent.change(screen.getByLabelText('Reporting period'), { target: { value: 'year' } });
 
     await waitFor(() => expect(fetchSummary).toHaveBeenCalledTimes(2));
-    expect(lastSummaryParams?.startDate).toMatch(/^\d{4}-01-01$/);
-    expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T23:59:59\.999$/);
+    expect(lastSummaryParams?.startDate).toBe('2026-01-01T05:00:00.000Z');
+    expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T03:59:59\.999Z$/);
   });
 
   it('applies and validates a custom date range', () => {
@@ -101,8 +103,8 @@ describe('SummaryTab', () => {
     fireEvent.change(screen.getByLabelText('Through'), { target: { value: '2026-03-31' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply range' }));
     expect(fetchSummary).toHaveBeenLastCalledWith({
-      startDate: '2026-03-10',
-      endDate: '2026-03-31T23:59:59.999',
+      startDate: '2026-03-10T04:00:00.000Z',
+      endDate: '2026-04-01T03:59:59.999Z',
     });
   });
 

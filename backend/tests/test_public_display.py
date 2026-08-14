@@ -78,19 +78,19 @@ class TestPublicDisplayWindow:
         assert result.current_events[0]["is_valid"] is False
 
     async def test_flexible_early_event_is_valid(self, monkeypatch):
-        # FLEXIBLE event starting in 20 min: within the 30-min early grace,
+        # FLEXIBLE event starting in 20 min: within the 60-min early grace,
         # so the kiosk reports it as available (early check-in is allowed).
         _patch_location_service(monkeypatch, [_event(CheckInWindowType.FLEXIBLE, 20)])
         result = await _call()
         assert result.current_events[0]["is_valid"] is True
 
     async def test_reports_authoritative_window_start(self, monkeypatch):
-        # FLEXIBLE default opens 30 min before start (not the old 1-hour guess).
+        # FLEXIBLE default opens 60 min before start.
         event = _event(CheckInWindowType.FLEXIBLE, 60)
         _patch_location_service(monkeypatch, [event])
         result = await _call()
         reported = datetime.fromisoformat(result.current_events[0]["check_in_start"])
-        expected = event.start_datetime - timedelta(minutes=30)
+        expected = event.start_datetime - timedelta(minutes=60)
         assert abs((reported - expected).total_seconds()) < 1
 
     async def test_invalid_display_code_404s(self, monkeypatch):
