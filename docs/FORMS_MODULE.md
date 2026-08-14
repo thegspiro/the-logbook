@@ -351,3 +351,13 @@ Integration configuration includes a visual field mapping interface:
 - **Public form fixes**: Fixed doubled `/v1` in API URL path; removed forced name/email section
 - **Permission fix**: Forms page now uses `forms.view` instead of `settings.manage`
 - **Theme compatibility**: Fixed form editor background and tab text for light/dark themes
+
+## August 12–14, 2026 event connection update
+
+Event Settings now obtains its choices through the event-request forms
+connection point rather than the general form catalog. Discovery requires event
+administration, is organization-scoped, and returns public-outreach forms only.
+A general form viewer therefore cannot enumerate the administrative catalog,
+and a non-outreach or cross-organization form cannot be linked through this
+flow. The user workflow and screenshot state are in
+[training lesson 19](./training/19-august-2026-release-changes.md#events-and-outreach-forms).

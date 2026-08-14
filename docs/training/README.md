@@ -1,5 +1,7 @@
 # The Logbook - Training Documentation
 
+> **New release lesson:** [August 12–14, 2026 workflow updates](./19-august-2026-release-changes.md) covers changed workflows, permissions, data-sharing boundaries, edge cases, exact screenshot states, and required demo data.
+
 Welcome to the training documentation for The Logbook. These guides are designed to help new users learn the system and serve as a reference for experienced users.
 
 > **Maintainers:** See the [training materials review and screenshot plan](./TRAINING_MATERIALS_REVIEW.md)

@@ -943,3 +943,7 @@ Sarah generates the election report and emails it to the department.
 ---
 
 **Previous:** [Medical Screening](./13-medical-screening.md) | **Next:** [Prospective Members Pipeline](./15-prospective-members.md)
+
+## August 12–14, 2026 update
+
+Saved ballot settings, physical ballot counts, validation, and legacy/concurrency cases from August 12–14 are covered with two screenshot markers in [the release workflow lesson](./19-august-2026-release-changes.md#elections-reuse-a-ballot-without-reusing-election-data).

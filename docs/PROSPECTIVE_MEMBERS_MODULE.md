@@ -919,3 +919,16 @@ Document upload was metadata-only and is now backed by real file storage
 **Document Version**: 1.6
 **Last Updated**: 2026-05-29
 **Maintainer**: Development Team
+
+## August 12–14, 2026 data integrity update
+
+Active prospect email uniqueness is enforced on the normalized email within an
+organization and applies only to active rows. The upgrade reconciliation keeps
+one canonical active record while allowing inactive historical duplicates; it
+was intentionally moved out of a previously released migration. Stage progress
+uses authenticated multi-approval signers, eagerly loaded interviews, and
+skip/advance guards around gated and final stages. Deleted interviewers remain
+available for historical display. Transfer/anonymization paths scrub applicant
+PII without crossing organization boundaries. Operators must review the
+reconciliation migration log around upgrade; see
+[the Alembic route](./CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).

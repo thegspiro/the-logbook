@@ -1,5 +1,9 @@
 # Welcome to The Logbook Wiki
 
+> **Release handoff:** [Changes from August 12–14, 2026](Recent-Changes-2026-08-12-to-14)
+> maps new pages, APIs, data, migrations, sharing boundaries, edge cases, and
+> documentation/media follow-up.
+
 ![The Logbook](https://img.shields.io/badge/Version-1.0.0-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
