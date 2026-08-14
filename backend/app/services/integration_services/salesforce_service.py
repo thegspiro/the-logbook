@@ -9,6 +9,8 @@ between The Logbook and a department's Salesforce org.
 
 import asyncio
 import re
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 from loguru import logger
@@ -33,6 +35,7 @@ _UNKNOWN_COLUMN_RE = re.compile(r"No such column '([^']+)'")
 _MAX_FIELD_RETRIES = 6
 _MAX_REQUEST_RETRIES = 3
 _RETRYABLE_READ_STATUSES = frozenset({429, 500, 502, 503, 504})
+_MAX_RETRY_DELAY_SECONDS = 120.0
 
 _INSTANCE_URL_RE = re.compile(r"^https://[a-zA-Z0-9.-]+\.salesforce\.com$")
 
@@ -102,10 +105,14 @@ class SalesforceService:
             }
 
         async with create_integration_client() as client:
-            response = await client.post(
-                self._token_url,
-                data=token_request,
-            )
+            response = None
+            for attempt in range(_MAX_REQUEST_RETRIES + 1):
+                response = await client.post(self._token_url, data=token_request)
+                if response.status_code not in _RETRYABLE_READ_STATUSES:
+                    break
+                if attempt < _MAX_REQUEST_RETRIES:
+                    await asyncio.sleep(self._retry_delay(response, attempt))
+            assert response is not None
             if response.status_code != 200:
                 # OAuth error bodies can contain identifiers and must not be
                 # copied into application logs.
@@ -196,22 +203,52 @@ class SalesforceService:
                 # them, so 429 is safe to retry for reads and writes. For
                 # ambiguous 5xx responses, only retry idempotent reads to
                 # avoid accidentally creating duplicate records.
-                retryable = response.status_code == 429 or (
+                retryable = self._is_rate_limited(response) or (
                     method.upper() == "GET"
                     and response.status_code in _RETRYABLE_READ_STATUSES
                 )
                 if not retryable or transient_attempt >= _MAX_REQUEST_RETRIES:
                     break
 
-                retry_after = response.headers.get("Retry-After", "")
-                try:
-                    delay = min(max(float(retry_after), 0.0), 10.0)
-                except (TypeError, ValueError):
-                    delay = float(2**transient_attempt)
+                delay = self._retry_delay(response, transient_attempt)
                 transient_attempt += 1
                 await asyncio.sleep(delay)
 
             return response
+
+    @staticmethod
+    def _is_rate_limited(response: "httpx.Response") -> bool:  # noqa: F821
+        """Recognize both HTTP and Salesforce-specific rate-limit responses."""
+        if response.status_code == 429:
+            return True
+        if response.status_code != 403:
+            return False
+        try:
+            body = response.json()
+        except Exception:
+            return False
+        errors = body if isinstance(body, list) else [body]
+        return any(
+            isinstance(error, dict)
+            and error.get("errorCode") == "REQUEST_LIMIT_EXCEEDED"
+            for error in errors
+        )
+
+    @staticmethod
+    def _retry_delay(response: "httpx.Response", attempt: int) -> float:  # noqa: F821
+        """Parse Retry-After seconds or HTTP-date, with a bounded fallback."""
+        retry_after = response.headers.get("Retry-After", "")
+        try:
+            delay = float(retry_after)
+        except (TypeError, ValueError):
+            try:
+                retry_at = parsedate_to_datetime(retry_after)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                delay = (retry_at - datetime.now(timezone.utc)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                delay = float(2**attempt)
+        return min(max(delay, 0.0), _MAX_RETRY_DELAY_SECONDS)
 
     async def test_connection(self) -> str:
         """Verify connectivity by querying the Salesforce org limits endpoint."""

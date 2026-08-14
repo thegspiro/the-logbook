@@ -493,6 +493,8 @@ export interface SavedBallotTemplate {
   name: string;
   description?: string;
   ballot_items: BallotItem[];
+  voting_method: string;
+  allow_write_ins: boolean;
   created_by?: string;
   created_at: string;
   updated_at: string;

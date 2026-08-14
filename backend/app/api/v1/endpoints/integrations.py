@@ -477,6 +477,11 @@ async def connect_integration(
         )
 
     config = body.config
+    clear_salesforce_refresh_token = (
+        integration.integration_type == "salesforce"
+        and "refresh_token" in config
+        and config["refresh_token"] == ""
+    )
     # Validate config schema
     config = _validate_config(integration.integration_type, config)
     # Validate URLs for SSRF
@@ -490,6 +495,10 @@ async def connect_integration(
     # Store secrets encrypted
     for key, value in secrets.items():
         integration.set_secret(key, value)
+    if clear_salesforce_refresh_token:
+        # An explicit blank switches Salesforce from the interactive refresh
+        # grant to client credentials. Omission still means "leave unchanged."
+        integration.clear_secret("refresh_token")
     await db.commit()
     await db.refresh(integration)
 
@@ -575,6 +584,11 @@ async def update_integration(
         )
 
     config = body.config
+    clear_salesforce_refresh_token = (
+        integration.integration_type == "salesforce"
+        and "refresh_token" in config
+        and config["refresh_token"] == ""
+    )
     # Validate config schema
     config = _validate_config(integration.integration_type, config)
     # Validate URLs for SSRF
@@ -585,6 +599,8 @@ async def update_integration(
     integration.config = {**(integration.config or {}), **public_config}
     for key, value in secrets.items():
         integration.set_secret(key, value)
+    if clear_salesforce_refresh_token:
+        integration.clear_secret("refresh_token")
     await db.commit()
     await db.refresh(integration)
 

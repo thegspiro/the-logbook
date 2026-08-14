@@ -382,6 +382,8 @@ describe('electionService', () => {
     it('saves configuration-only ballot data', async () => {
       const payload = {
         name: 'Annual ballot',
+        voting_method: 'simple_majority',
+        allow_write_ins: false,
         ballot_items: [
           {
             id: 'item-1',

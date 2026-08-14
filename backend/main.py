@@ -474,9 +474,14 @@ def _cleanup_duplicate_revisions(versions_dir):
             logger.debug(f"Could not remove versions __pycache__: {e}")
 
     revision_re = re.compile(r"^revision\b.*?=\s*['\"](.+?)['\"]", re.MULTILINE)
-    down_revision_re = re.compile(
-        r"^down_revision\b.*?=\s*['\"](.+?)['\"]", re.MULTILINE
-    )
+    down_revision_re = re.compile(r"^down_revision\b.*?=\s*(.+)$", re.MULTILINE)
+
+    def parse_down_revisions(content):
+        """Return every parent from string and tuple Alembic declarations."""
+        match = down_revision_re.search(content)
+        if not match:
+            return ()
+        return tuple(re.findall(r"['\"]([^'\"]+)['\"]", match.group(1)))
 
     # Map revision ID -> list of (filepath, down_revision)
     rev_to_files = {}
@@ -491,9 +496,8 @@ def _cleanup_duplicate_revisions(versions_dir):
             if not rev_match:
                 continue
             rev_id = rev_match.group(1)
-            down_match = down_revision_re.search(content)
-            down_rev = down_match.group(1) if down_match else None
-            rev_to_files.setdefault(rev_id, []).append((filepath, filename, down_rev))
+            down_revs = parse_down_revisions(content)
+            rev_to_files.setdefault(rev_id, []).append((filepath, filename, down_revs))
         except (OSError, ValueError):
             logger.debug(f"Could not parse migration file: {filename}", exc_info=True)
             continue
@@ -502,9 +506,8 @@ def _cleanup_duplicate_revisions(versions_dir):
     # A file that is depended on by another file is part of the chain.
     referenced_revisions = set()
     for rev_id, files in rev_to_files.items():
-        for _, _, down_rev in files:
-            if down_rev:
-                referenced_revisions.add(down_rev)
+        for _, _, down_revs in files:
+            referenced_revisions.update(down_revs)
 
     # For each duplicate, keep the file that's referenced by other migrations
     # (i.e., part of the active chain). Remove extras.
@@ -566,11 +569,9 @@ def _cleanup_duplicate_revisions(versions_dir):
             with open(filepath, "r") as f:
                 content = f.read(2048)
             rev_match = revision_re.search(content)
-            down_match = down_revision_re.search(content)
             if rev_match:
                 active_revisions.add(rev_match.group(1))
-            if down_match:
-                active_down_revisions.add(down_match.group(1))
+            active_down_revisions.update(parse_down_revisions(content))
         except (OSError, ValueError):
             continue
 

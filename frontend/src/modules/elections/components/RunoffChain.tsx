@@ -48,22 +48,9 @@ export const RunoffChain: React.FC<RunoffChainProps> = ({ election }) => {
       setLoading(true);
       const elections = await electionService.getElections();
 
-      // The list schema does not carry parent_election_id, so the links are
-      // only visible on the detail records — fetch them once and walk the
-      // chain in memory. Walking has to be transitive in both directions: a
-      // department that goes three rounds has round 3 parented to round 2, so
-      // matching only the root's direct children (and only climbing two levels
-      // up) drew a two-node chain and silently dropped every later round.
-      const details = new Map<string, Election>();
-      await Promise.all(
-        elections.map(async (e) => {
-          try {
-            details.set(e.id, await electionService.getElection(e.id));
-          } catch {
-            // Skip inaccessible elections
-          }
-        })
-      );
+      // The list response carries the runoff relationship, so building the
+      // chain stays one request regardless of how many elections exist.
+      const details = new Map<string, Election>(elections.map((item) => [item.id, item]));
       details.set(election.id, election);
 
       // Climb to the root, guarding against a cycle in the parent links.

@@ -421,7 +421,7 @@ const NotificationsPage: React.FC = () => {
 
         {/* Tabs */}
         <div
-          className="bg-theme-surface-secondary hscroll mb-6 flex w-fit space-x-1 rounded-lg p-1"
+          className="bg-theme-surface-secondary hscroll mb-6 flex max-w-full space-x-1 rounded-lg p-1"
           role="tablist"
           aria-label="Notification views"
         >

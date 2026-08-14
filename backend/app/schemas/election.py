@@ -585,6 +585,10 @@ class ElectionListResponse(UTCResponseBase):
     meeting_id: Optional[UUID] = None
     meeting_title: Optional[str] = None
     meeting_date: Optional[datetime] = None
+    is_runoff: bool = False
+    parent_election_id: Optional[UUID] = None
+    runoff_round: int = 0
+    enable_runoffs: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1174,6 +1178,8 @@ class SavedBallotTemplateCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2_000)
     ballot_items: List[BallotItemInput] = Field(..., min_length=1, max_length=250)
+    voting_method: str = Field(default="simple_majority", max_length=50)
+    allow_write_ins: bool = False
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("name")
@@ -1198,6 +1204,8 @@ class SavedBallotTemplateResponse(UTCResponseBase):
     name: str
     description: Optional[str] = None
     ballot_items: List[BallotItem]
+    voting_method: str = "simple_majority"
+    allow_write_ins: bool = False
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime

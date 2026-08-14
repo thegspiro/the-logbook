@@ -103,6 +103,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
+    { label: 'Learning Center', path: '/learning' },
     ...(isModuleOn('training')
       ? [
           {

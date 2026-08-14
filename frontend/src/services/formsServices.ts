@@ -3,7 +3,7 @@
  */
 
 import axios from 'axios';
-import api from './apiClient';
+import api, { performSharedRefresh } from './apiClient';
 import type {
   FormsSummary,
   FormsListResponse,
@@ -158,6 +158,16 @@ function publicRequestConfig(method: 'GET' | 'POST') {
   };
 }
 
+function isExpiredSessionError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const response = (error as { response?: { status?: number } }).response;
+  try {
+    return response?.status === 401 && localStorage.getItem('has_session') === '1';
+  } catch {
+    return false;
+  }
+}
+
 export const publicFormsService = {
   async getForm(slug: string): Promise<PublicFormDef> {
     const response = await axios.get<PublicFormDef>(
@@ -177,11 +187,19 @@ export const publicFormsService = {
     if (honeypot) {
       payload.website = honeypot;
     }
-    const response = await axios.post<PublicFormSubmissionResponse>(
-      `${PUBLIC_API_BASE}/public/v1/forms/${slug}/submit`,
-      payload,
-      publicRequestConfig('POST')
-    );
+    const url = `${PUBLIC_API_BASE}/public/v1/forms/${slug}/submit`;
+    let response;
+    try {
+      response = await axios.post<PublicFormSubmissionResponse>(url, payload, publicRequestConfig('POST'));
+    } catch (error) {
+      // This route deliberately uses the public API base rather than the
+      // shared /api/v1 client, but authenticated forms still need the same
+      // cookie-refresh behavior. Otherwise a completed form is lost merely
+      // because its access cookie expired while the member was filling it in.
+      if (!isExpiredSessionError(error)) throw error;
+      await performSharedRefresh();
+      response = await axios.post<PublicFormSubmissionResponse>(url, payload, publicRequestConfig('POST'));
+    }
     return response.data;
   },
 };

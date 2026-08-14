@@ -77,6 +77,7 @@ describe('RunoffChain', () => {
     });
     expect(screen.getByText('Original')).toBeInTheDocument();
     expect(screen.getByText('Runoff 1')).toBeInTheDocument();
+    expect(mockGetElection).not.toHaveBeenCalled();
   });
 
   it('finds the root from the last round, however deep it is', async () => {
