@@ -192,6 +192,7 @@ export interface StoreSettings {
   tagline?: string | null;
   description?: string | null;
   currency: string;
+  showOpenOrderBanner: boolean;
   acceptedPaymentMethods: string[];
   paymentPolicy: StorePaymentPolicy;
   venmoHandle?: string | null;
@@ -258,6 +259,7 @@ export interface StoreSettingsUpdate {
   storeName?: string;
   tagline?: string | null;
   description?: string | null;
+  showOpenOrderBanner?: boolean;
   acceptedPaymentMethods?: string[];
   paymentPolicy?: StorePaymentPolicy | null;
   venmoHandle?: string | null;
@@ -464,6 +466,7 @@ export interface Storefront {
   tagline?: string | null;
   description?: string | null;
   currency: string;
+  showOpenOrderBanner: boolean;
   termsText?: string | null;
   allowPickup: boolean;
   allowShipping: boolean;

@@ -313,6 +313,7 @@ async def get_storefront(
         "tagline": settings.tagline,
         "description": settings.description,
         "currency": settings.currency,
+        "show_open_order_banner": settings.show_open_order_banner,
         "terms_text": settings.terms_text,
         "allow_pickup": settings.allow_pickup,
         "allow_shipping": settings.allow_shipping,
