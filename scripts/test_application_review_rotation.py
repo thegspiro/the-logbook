@@ -23,30 +23,30 @@ class ApplicationReviewRotationTest(unittest.TestCase):
         state, feature = select_next_feature(self.config, [])
 
         assert state == "create"
-        assert feature["id"] == "baseline"
+        assert feature["id"] == "inventory"
 
     def test_open_issue_blocks_advancement(self):
         state, feature = select_next_feature(
-            self.config, [self.issue("baseline", state="open")]
+            self.config, [self.issue("inventory", state="open")]
         )
 
         assert state == "waiting"
         assert feature is None
 
     def test_closed_issue_advances_queue(self):
-        state, feature = select_next_feature(self.config, [self.issue("baseline")])
+        state, feature = select_next_feature(self.config, [self.issue("inventory")])
 
         assert state == "create"
-        assert feature["id"] == "architecture"
+        assert feature["id"] == "facilities"
 
     def test_pull_requests_do_not_count_as_review_issues(self):
-        issue = self.issue("baseline")
+        issue = self.issue("inventory")
         issue["pull_request"] = {"url": "https://example.invalid"}
 
         state, feature = select_next_feature(self.config, [issue])
 
         assert state == "create"
-        assert feature["id"] == "baseline"
+        assert feature["id"] == "inventory"
 
     def test_all_closed_completes_rotation(self):
         issues = [self.issue(feature["id"]) for feature in self.config["features"]]

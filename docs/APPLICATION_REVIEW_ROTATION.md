@@ -5,7 +5,8 @@ GitHub Actions workflow scheduled every 15 minutes. The workflow creates and
 advances review issues; it does not run an AI reviewer or assert that the issue's
 checklist has been completed. The queue is defined in
 `.github/application-review-rotation.json`; each entry represents one focused
-review area from the full review plan.
+review area remaining in the active pass. The canonical feature inventory and
+completion record remains `docs/app-review/PROGRESS.md`.
 
 ## How advancement works
 
@@ -37,6 +38,9 @@ the review is complete.
 
 ## Queue maintenance
 
+- Keep the queue aligned with the active pass in `docs/app-review/PROGRESS.md`.
+  When this coordinator is introduced partway through a pass, omit features
+  already completed rather than reopening them under a second tracking system.
 - Keep feature IDs unique and stable. Closed issues are the durable progress
   record, so renaming an ID makes that feature appear new.
 - Append new review areas instead of inserting urgent work ahead of an active
