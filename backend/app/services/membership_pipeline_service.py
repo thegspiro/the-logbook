@@ -899,7 +899,9 @@ class MembershipPipelineService:
             pipeline_id=pipeline_id,
             first_name=data["first_name"],
             last_name=data["last_name"],
-            email=data["email"],
+            # Store the same canonical value used by duplicate detection and
+            # the active-email uniqueness constraint.
+            email=email,
             phone=data.get("phone"),
             mobile=data.get("mobile"),
             date_of_birth=data.get("date_of_birth"),
@@ -920,7 +922,19 @@ class MembershipPipelineService:
             status_token_created_at=datetime.now(timezone.utc),
         )
         self.db.add(prospect)
-        await self.db.flush()
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            # The preflight lookup is intentionally only a friendly fast path;
+            # the unique index is the concurrency boundary. A simultaneous
+            # public submission may win after our SELECT, in which case return
+            # that durable application rather than surfacing a database 500.
+            await self.db.rollback()
+            existing = await self._find_active_prospect_by_email(organization_id, email)
+            if existing:
+                await self._notify_duplicate_application(existing, organization_id)
+                return existing
+            raise
 
         # Initialize step progress records for all steps in the pipeline
         if pipeline_id:

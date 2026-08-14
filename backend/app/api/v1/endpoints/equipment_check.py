@@ -352,28 +352,16 @@ async def link_inventory_items(
     service = EquipmentCheckService(db)
     try:
         changed = await service.link_inventory_items(
-            template_id, current_user.organization_id, data.links
+            template_id,
+            current_user.organization_id,
+            data.links,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if changed is None:
         raise HTTPException(status_code=404, detail="Template not found")
-
-    if changed:
-        await service.log_template_change(
-            organization_id=str(current_user.organization_id),
-            template_id=template_id,
-            user_id=str(current_user.id),
-            user_name=_user_display_name(current_user),
-            action="update",
-            entity_type="template",
-            entity_id=template_id,
-            changes={
-                "inventory_links": data.links,
-                "changed_count": changed,
-            },
-        )
-        await db.commit()
 
     coverage = await service.get_link_coverage(
         template_id, current_user.organization_id
