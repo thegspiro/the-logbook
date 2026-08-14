@@ -154,6 +154,102 @@ class TestTokenBallotSetup:
 
 
 class TestPerItemEligibility(TestTokenBallotSetup):
+    async def test_send_ballot_skips_member_outside_frozen_roll(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        """The email path must not mint tokens for post-open members."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.models.election import VotingToken
+
+        data = setup_ballot_election
+        await db_session.execute(
+            text(
+                "UPDATE elections SET eligible_roster_snapshot = :snapshot "
+                "WHERE id = :id"
+            ),
+            {"snapshot": "[]", "id": data["election_id"]},
+        )
+        await db_session.flush()
+
+        with patch(
+            "app.services.email_service.EmailService.send_batch",
+            new=AsyncMock(return_value=[]),
+        ):
+            sent, failed, skipped, details, _ = await ElectionService(
+                db_session
+            ).send_ballot_emails(
+                election_id=uuid.UUID(data["election_id"]),
+                organization_id=uuid.UUID(data["org_id"]),
+                recipient_user_ids=[uuid.UUID(data["user_id"])],
+                base_ballot_url="https://fd.example/ballot",
+            )
+
+        tokens = (
+            (
+                await db_session.execute(
+                    select(VotingToken).where(
+                        VotingToken.election_id == data["election_id"]
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert (sent, failed, skipped) == (0, 0, 1)
+        assert "frozen" in details[0]["reason"].lower()
+        assert tokens == []
+
+    async def test_frozen_roll_rejects_token_for_post_open_member(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        """A previously minted token cannot bypass the frozen voter roll."""
+        data = setup_ballot_election
+        _, raw_token = await self._issue_token(db_session, data)
+        await db_session.execute(
+            text(
+                "UPDATE elections SET eligible_roster_snapshot = :snapshot "
+                "WHERE id = :id"
+            ),
+            {"snapshot": "[]", "id": data["election_id"]},
+        )
+        await db_session.flush()
+
+        election, token, err = await ElectionService(db_session).get_ballot_by_token(
+            raw_token
+        )
+
+        assert election is None
+        assert token is None
+        assert "frozen" in err.lower()
+
+    async def test_frozen_roll_override_allows_token(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        """Secretary overrides continue to admit post-freeze voters."""
+        data = setup_ballot_election
+        _, raw_token = await self._issue_token(db_session, data)
+        await db_session.execute(
+            text(
+                "UPDATE elections SET eligible_roster_snapshot = :snapshot, "
+                "voter_overrides = :overrides WHERE id = :id"
+            ),
+            {
+                "snapshot": "[]",
+                "overrides": '[{"user_id": "' + data["user_id"] + '"}]',
+                "id": data["election_id"],
+            },
+        )
+        await db_session.flush()
+
+        election, token, err = await ElectionService(db_session).get_ballot_by_token(
+            raw_token
+        )
+
+        assert err is None
+        assert election is not None
+        assert token is not None
+
     async def test_vote_on_ineligible_item_rejected(
         self, db_session: AsyncSession, setup_ballot_election
     ):
