@@ -1042,7 +1042,8 @@ class TestTraineeReportReleaseBoundary:
         await ShiftCompletionService(db).get_reports_for_trainee(
             organization_id=uuid.uuid4(),
             trainee_id="trainee-1",
-            shift_date=date.today(),
+            start_date=date.today(),
+            end_date=date.today(),
             released_only=True,
         )
 
@@ -1154,6 +1155,7 @@ class TestTrainingCreditReleaseBoundary:
             organization_id=str(org_id),
             officer_id="filing-officer",
             trainee_id="trainee-1",
+            shift_date=date.today(),
             review_status="pending_review",
             review_history=[],
         )

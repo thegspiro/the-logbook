@@ -34,12 +34,11 @@ def test_uniqueness_migration_reconciles_legacy_duplicates_first():
     assert reconcile < create_index
 
 
-def test_initial_uniqueness_migration_reconciles_exact_duplicates():
+def test_released_uniqueness_migration_is_not_rewritten_with_data_repairs():
     released = (
         Path(__file__).parents[1]
         / "alembic/versions/20260812_0003_restore_active_prospect_uniqueness.py"
     ).read_text()
 
-    reconcile = released.index("SET duplicate.status = 'inactive'")
-    create_index = released.index("op.create_index(")
-    assert reconcile < create_index
+    assert "LOWER(TRIM(email))" not in released
+    assert "SET duplicate.status" not in released

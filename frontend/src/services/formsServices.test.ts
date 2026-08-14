@@ -6,9 +6,11 @@ const mockPost = vi.fn();
 const mockPatch = vi.fn();
 const mockDelete = vi.fn();
 const mockPerformSharedRefresh = vi.fn();
+const mockHandleExpiredSession = vi.fn();
 
 vi.mock('./apiClient', () => ({
   performSharedRefresh: (...args: unknown[]) => mockPerformSharedRefresh(...args) as unknown,
+  handleExpiredSession: (...args: unknown[]) => mockHandleExpiredSession(...args) as unknown,
   default: {
     get: (...args: unknown[]) => mockGet(...args) as unknown,
     post: (...args: unknown[]) => mockPost(...args) as unknown,
@@ -399,6 +401,18 @@ describe('publicFormsService', () => {
 
       await expect(publicFormsService.submitForm('members-only', {})).rejects.toBe(unauthorized);
       expect(mockPerformSharedRefresh).not.toHaveBeenCalled();
+    });
+
+    it('clears an expired session when refresh fails', async () => {
+      localStorage.setItem('has_session', '1');
+      const refreshError = new Error('refresh expired');
+      mockAxiosPost.mockRejectedValueOnce({ response: { status: 401 } });
+      mockPerformSharedRefresh.mockRejectedValueOnce(refreshError);
+
+      await expect(publicFormsService.submitForm('members-only', {})).rejects.toBe(refreshError);
+
+      expect(mockHandleExpiredSession).toHaveBeenCalledTimes(1);
+      expect(mockAxiosPost).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -3,7 +3,7 @@
  */
 
 import axios from 'axios';
-import api, { performSharedRefresh } from './apiClient';
+import api, { handleExpiredSession, performSharedRefresh } from './apiClient';
 import type {
   FormsSummary,
   FormsListResponse,
@@ -197,7 +197,12 @@ export const publicFormsService = {
       // cookie-refresh behavior. Otherwise a completed form is lost merely
       // because its access cookie expired while the member was filling it in.
       if (!isExpiredSessionError(error)) throw error;
-      await performSharedRefresh();
+      try {
+        await performSharedRefresh();
+      } catch (refreshError) {
+        handleExpiredSession();
+        throw refreshError;
+      }
       response = await axios.post<PublicFormSubmissionResponse>(url, payload, publicRequestConfig('POST'));
     }
     return response.data;
