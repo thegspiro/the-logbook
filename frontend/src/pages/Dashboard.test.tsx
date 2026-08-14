@@ -34,6 +34,9 @@ const {
   mockAcknowledge,
   mockGetMyTraining,
   mockGetEvents,
+  mockCheckPermission,
+  mockGetAdminSummary,
+  mockGetSetupChecklist,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -43,6 +46,9 @@ const {
   mockAcknowledge: vi.fn(),
   mockGetMyTraining: vi.fn(),
   mockGetEvents: vi.fn(),
+  mockCheckPermission: vi.fn(),
+  mockGetAdminSummary: vi.fn(),
+  mockGetSetupChecklist: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -77,7 +83,7 @@ vi.mock('../services/api', () => ({
     getMyTraining: mockGetMyTraining,
   },
   organizationService: {
-    getSetupChecklist: vi.fn().mockResolvedValue({ completed_count: 0, total_count: 0 }),
+    getSetupChecklist: mockGetSetupChecklist,
   },
   inventoryService: {
     getSummary: vi.fn().mockResolvedValue({
@@ -94,7 +100,7 @@ vi.mock('../services/api', () => ({
   },
   dashboardService: {
     getStats: vi.fn().mockResolvedValue({}),
-    getAdminSummary: vi.fn().mockResolvedValue({}),
+    getAdminSummary: mockGetAdminSummary,
     getActionItems: vi.fn().mockResolvedValue([]),
     getCommunityEngagement: vi.fn().mockResolvedValue({}),
     getBranding: vi.fn().mockResolvedValue({ name: 'Test FD' }),
@@ -110,7 +116,7 @@ vi.mock('../modules/admin-hours/services/api', () => ({
 // Mock auth store
 vi.mock('../stores/authStore', () => ({
   useAuthStore: () => ({
-    checkPermission: vi.fn().mockReturnValue(false),
+    checkPermission: mockCheckPermission,
     user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
   }),
 }));
@@ -152,6 +158,7 @@ const makeShift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
 describe('Dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/');
     mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
     mockGetOpenShifts.mockResolvedValue([]);
     mockSignupForShift.mockResolvedValue({});
@@ -160,6 +167,9 @@ describe('Dashboard', () => {
     mockAcknowledge.mockResolvedValue(undefined);
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(false);
+    mockGetAdminSummary.mockResolvedValue({});
+    mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
   });
 
   describe('Next 7 Days', () => {
@@ -418,7 +428,7 @@ describe('Dashboard', () => {
 
       renderWithRouter(<Dashboard />);
 
-      const feed = await screen.findByRole('region', { name: 'Department Feed' });
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
       expect(within(feed).getByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
       expect(within(feed).getByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
       expect(within(feed).getByText('Persistent')).toBeInTheDocument();
@@ -427,22 +437,62 @@ describe('Dashboard', () => {
     it('shows an empty state rather than a card full of nothing', async () => {
       renderWithRouter(<Dashboard />);
 
-      const feed = await screen.findByRole('region', { name: 'Department Feed' });
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
       await waitFor(() => {
         expect(within(feed).getByText('Nothing new')).toBeInTheDocument();
       });
     });
   });
 
-  describe('Overview tab', () => {
+  describe('Organization tab', () => {
     it('is hidden from members without settings.manage', async () => {
       renderWithRouter(<Dashboard />);
 
       await waitFor(() => {
         expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
       });
-      expect(screen.queryByRole('tab', { name: 'Overview' })).not.toBeInTheDocument();
-      expect(screen.queryByText('Department Overview')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Organization' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Department-wide staffing, compliance, events, action items, and operations.')
+      ).not.toBeInTheDocument();
+      expect(mockGetAdminSummary).not.toHaveBeenCalled();
+      expect(mockGetSetupChecklist).not.toHaveBeenCalled();
+    });
+
+    it('separates department-wide reporting from the personal dashboard for leaders', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const personalTab = await screen.findByRole('tab', { name: 'My Department' });
+      const organizationTab = screen.getByRole('tab', { name: 'Organization' });
+      expect(personalTab).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByText('Next 7 Days')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
+      expect(mockGetAdminSummary).not.toHaveBeenCalled();
+      expect(mockGetSetupChecklist).not.toHaveBeenCalled();
+
+      await user.click(organizationTab);
+
+      expect(organizationTab).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Department Feed' })).toBeInTheDocument();
+      expect(screen.queryByText('Next 7 Days')).not.toBeInTheDocument();
+      expect(window.location.search).toBe('?tab=organization');
+      await waitFor(() => {
+        expect(mockGetAdminSummary).toHaveBeenCalledTimes(1);
+        expect(mockGetSetupChecklist).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('keeps legacy overview bookmarks working', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      window.history.replaceState({}, '', '/dashboard?tab=overview');
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('tab', { name: 'Organization' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
     });
   });
 });
