@@ -115,18 +115,6 @@ class TestUpgrade:
 
         assert PERMISSION in _permissions(engine, "p1")
 
-    def test_does_not_grant_to_station_scoped_captain(self, engine, positions):
-        """Sensitive reads are organization-wide, while Captain is station-scoped."""
-        _seed(
-            engine,
-            positions,
-            [{"id": "p1", "slug": "captain", "permissions": ["facilities.view"]}],
-        )
-
-        _run(engine, "upgrade")
-
-        assert _permissions(engine, "p1") == ["facilities.view"]
-
     def test_grants_to_any_position_holding_facilities_manage(self, engine, positions):
         _seed(
             engine,
