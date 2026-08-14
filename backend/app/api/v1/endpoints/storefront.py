@@ -1100,9 +1100,19 @@ async def get_dashboard(
     data = await service.get_dashboard(str(current_user.organization_id))
     settings = await service.get_settings(str(current_user.organization_id))
     active_window = data["active_window"]
+    active_rollup = data["active_window_rollup"]
     return {
-        **data,
-        "active_window": _window_payload(active_window) if active_window else None,
+        **{key: value for key, value in data.items() if key != "active_window_rollup"},
+        "active_window": (
+            _window_payload(
+                active_window,
+                order_count=active_rollup["order_count"],
+                total_sales=active_rollup["gross_sales"],
+                outstanding=active_rollup["outstanding"],
+            )
+            if active_window
+            else None
+        ),
         "recent_orders": [
             _order_payload(order, service, settings, include_internal=True)
             for order in data["recent_orders"]
@@ -1117,6 +1127,8 @@ async def list_orders(
     payment_status: Optional[str] = Query(None),
     payment_method: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    submitted_within_hours: Optional[int] = Query(None, ge=1, le=168),
+    open_only: bool = Query(False),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -1131,6 +1143,8 @@ async def list_orders(
         payment_status=payment_status,
         payment_method=payment_method,
         search=search,
+        submitted_within_hours=submitted_within_hours,
+        open_only=open_only,
         page=page,
         page_size=page_size,
     )
