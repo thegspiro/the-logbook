@@ -96,20 +96,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  const hasAnyAdminPermission =
-    // users.view alone opens the Admin menu: the member ID scanner lives here,
-    // and validating a scanned card only needs users.view (see /members/scan).
-    checkPermission('users.view') ||
-    checkPermission('members.manage') ||
-    checkPermission('prospective_members.manage') ||
-    checkPermission('events.manage') ||
-    checkPermission('training.manage') ||
-    checkPermission('inventory.manage') ||
-    checkPermission('admin_hours.manage') ||
-    checkPermission('positions.manage_permissions') ||
-    checkPermission('settings.manage') ||
-    checkPermission('forms.view') ||
-    checkPermission('analytics.view');
+  // users.view alone opens the Admin menu: the member ID scanner lives here,
+  // and validating a scanned card only needs users.view (see /members/scan).
+  const hasAnyAdminPermission = checkPermission('users.view') || hasAdministrationAccess(checkPermission);
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
