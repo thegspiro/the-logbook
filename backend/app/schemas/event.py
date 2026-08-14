@@ -106,6 +106,7 @@ class EventDefaultsUpdate(BaseModel):
     allow_guests: Optional[bool] = None
     is_mandatory: Optional[bool] = None
     send_reminders: Optional[bool] = None
+    reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
     default_reminder_time: Optional[str] = Field(None, max_length=10)
     default_duration_minutes: Optional[int] = Field(None, ge=1)

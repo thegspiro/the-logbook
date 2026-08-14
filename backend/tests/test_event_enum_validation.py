@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from app.schemas.event import (
     EventCreate,
+    EventDefaultsUpdate,
     EventTemplateCreate,
     EventUpdate,
     ManagerAddAttendee,
@@ -69,6 +70,10 @@ class TestEventEnumValidation:
     def test_template_rejects_bad_type(self):
         with pytest.raises(ValidationError):
             EventTemplateCreate(name="X", event_type="bogus")
+
+    def test_event_defaults_reject_bad_reminder_target(self):
+        with pytest.raises(ValidationError):
+            EventDefaultsUpdate(reminder_target="mandatory")
 
     def test_recurring_rejects_bad_pattern(self):
         with pytest.raises(ValidationError):

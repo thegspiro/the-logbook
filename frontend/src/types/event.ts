@@ -462,6 +462,7 @@ export interface EventModuleSettings {
     allow_guests: boolean;
     is_mandatory: boolean;
     send_reminders: boolean;
+    reminder_target: 'going' | 'all' | 'none';
     reminder_schedule: number[];
     default_reminder_time: string;
     default_duration_minutes: number;
