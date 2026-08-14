@@ -508,6 +508,7 @@ describe('Dashboard', () => {
 
       expect(organizationTab).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Admin Hours:/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'My Updates' })).not.toBeInTheDocument();
       expect(screen.queryByText('Next 7 Days')).not.toBeInTheDocument();
       expect(window.location.search).toBe('?tab=organization');

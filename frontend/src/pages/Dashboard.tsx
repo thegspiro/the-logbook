@@ -150,6 +150,7 @@ const Dashboard: React.FC = () => {
   const canViewOrganization = checkPermission('settings.manage');
   const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
   const isInventoryAdmin = canViewOrganization || checkPermission('inventory.manage');
+  const canManageAdminHours = checkPermission('admin_hours.manage');
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewOrganization);
   const [adminError, setAdminError] = useState(false);
@@ -1450,7 +1451,7 @@ const Dashboard: React.FC = () => {
                         : 'Last 30 days'
                     }
                     loading={loadingAdmin}
-                    onClick={() => void navigate('/admin-hours/manage')}
+                    {...(canManageAdminHours ? { onClick: () => void navigate('/admin-hours/manage') } : {})}
                     ariaLabel={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ''}`}
                   />
                 </div>
