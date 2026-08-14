@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import PaginationParams, require_permission
 from app.core.database import get_db
 from app.core.public_portal_security import check_ip_rate_limit
 from app.core.security_middleware import get_client_ip
@@ -50,6 +50,8 @@ from app.schemas.event_request import (
     SendTemplateEmail,
     TaskCompletionUpdate,
 )
+from app.schemas.forms import FormResponse, FormsListResponse
+from app.services.forms_service import FormsService
 from app.utils.org_scoping import assert_in_org
 
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
@@ -695,6 +697,44 @@ async def list_email_templates(
         .order_by(EventRequestEmailTemplate.name)
     )
     return result.scalars().all()
+
+
+@router.get("/forms", response_model=FormsListResponse)
+async def list_event_request_forms(
+    pagination: PaginationParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """List forms connected to public outreach event requests.
+
+    This event-scoped endpoint lets event administrators see the forms they
+    manage without granting access to unrelated forms and submissions.
+    """
+    from app.models.forms import IntegrationType
+
+    service = FormsService(db)
+    forms, total = await service.get_forms(
+        organization_id=current_user.organization_id,
+        integration_type=IntegrationType.EVENT_REQUEST,
+        skip=pagination.skip,
+        limit=pagination.limit,
+    )
+    submission_counts = await service.get_submission_counts(
+        [form.id for form in forms], current_user.organization_id
+    )
+    responses = []
+    for form in forms:
+        response = FormResponse.model_validate(form)
+        response.field_count = len(form.fields) if form.fields else 0
+        response.submission_count = submission_counts.get(str(form.id), 0)
+        responses.append(response)
+
+    return FormsListResponse(
+        forms=responses,
+        total=total,
+        skip=pagination.skip,
+        limit=pagination.limit,
+    )
 
 
 @router.get("/{request_id}", response_model=EventRequestResponse)

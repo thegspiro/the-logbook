@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.models.forms import FormCategory, FormStatus, IntegrationType
+from app.models.forms import FormCategory, FormStatus
 from app.models.user import User
 from app.schemas.forms import (  # Form schemas; Field schemas; Submission schemas; Integration schemas; Member lookup; Summary
     FormCreate,
@@ -49,7 +49,6 @@ async def list_forms(
     category: str | None = None,
     search: str | None = None,
     is_template: bool | None = None,
-    integration_type: IntegrationType | None = None,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("forms.view")),
@@ -88,7 +87,6 @@ async def list_forms(
         category=category_enum,
         search=search,
         is_template=is_template,
-        integration_type=integration_type,
         skip=pagination.skip,
         limit=pagination.limit,
     )

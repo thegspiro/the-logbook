@@ -17,7 +17,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { Settings, Loader2, FileText, ExternalLink, ClipboardList, Clock, Mail, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { eventService, eventRequestService, userService, formsService } from '../services/api';
+import { eventService, eventRequestService, userService } from '../services/api';
 import type { EventModuleSettings, EventType, EventCategoryConfig, EmailTemplate } from '../types/event';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import {
@@ -132,7 +132,7 @@ const EventsSettingsTab: React.FC = () => {
   const fetchEventRequestForms = useCallback(async () => {
     try {
       setLoadingForms(true);
-      const response = await formsService.getForms({ integration_type: 'event_request', limit: 50 });
+      const response = await eventRequestService.getForms({ limit: 50 });
       setEventRequestForms(response.forms);
     } catch {
       // Silently fail — the list is supplemental
