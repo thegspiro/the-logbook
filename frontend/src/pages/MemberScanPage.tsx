@@ -9,7 +9,11 @@
  *   - QR code (JSON payload with `type: "member_id"` and `id`)
  *   - Code128 barcode of a membership number (looks up member by number)
  *
- * Accessible at /members/scan.
+ * Accessible at /members/scan. Requires users.view or members.manage — the
+ * quartermaster's position grants users.view, so gear checks can validate a
+ * member from their card. This gate is deliberately narrower than the
+ * directory (members.view): the scanner is a validation tool for positions
+ * that check people in, not a general member-lookup surface.
  */
 
 import React, { useRef, useState, useCallback } from 'react';
