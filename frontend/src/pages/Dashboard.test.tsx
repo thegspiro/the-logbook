@@ -37,6 +37,8 @@ const {
   mockCheckPermission,
   mockGetAdminSummary,
   mockGetSetupChecklist,
+  mockGetUserInventory,
+  mockGetInventorySummary,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -49,6 +51,8 @@ const {
   mockCheckPermission: vi.fn(),
   mockGetAdminSummary: vi.fn(),
   mockGetSetupChecklist: vi.fn(),
+  mockGetUserInventory: vi.fn(),
+  mockGetInventorySummary: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -86,13 +90,8 @@ vi.mock('../services/api', () => ({
     getSetupChecklist: mockGetSetupChecklist,
   },
   inventoryService: {
-    getSummary: vi.fn().mockResolvedValue({
-      total_items: 0,
-      total_value: 0,
-      active_checkouts: 0,
-      overdue_checkouts: 0,
-      maintenance_due_count: 0,
-    }),
+    getUserInventory: mockGetUserInventory,
+    getSummary: mockGetInventorySummary,
     getLowStockItems: vi.fn().mockResolvedValue([]),
   },
   eventService: {
@@ -170,6 +169,14 @@ describe('Dashboard', () => {
     mockCheckPermission.mockReturnValue(false);
     mockGetAdminSummary.mockResolvedValue({});
     mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
+    mockGetUserInventory.mockResolvedValue({ permanent_assignments: [], active_checkouts: [], issued_items: [] });
+    mockGetInventorySummary.mockResolvedValue({
+      total_items: 0,
+      total_value: 0,
+      active_checkouts: 0,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+    });
   });
 
   describe('Next 7 Days', () => {
@@ -445,6 +452,29 @@ describe('Dashboard', () => {
   });
 
   describe('Organization tab', () => {
+    it('keeps a leader’s personal equipment totals separate from organization inventory', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      mockGetUserInventory.mockResolvedValue({
+        permanent_assignments: [{ item_id: 'item-1', quantity: 1 }],
+        active_checkouts: [],
+        issued_items: [],
+      });
+      mockGetInventorySummary.mockResolvedValue({
+        total_items: 99,
+        total_value: 1000,
+        active_checkouts: 12,
+        overdue_checkouts: 3,
+        maintenance_due_count: 4,
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const equipment = await screen.findByRole('region', { name: 'My Equipment' });
+      expect(within(equipment).getByText('1')).toBeInTheDocument();
+      expect(within(equipment).queryByText('99')).not.toBeInTheDocument();
+      expect(mockGetInventorySummary).not.toHaveBeenCalled();
+    });
+
     it('is hidden from members without settings.manage', async () => {
       renderWithRouter(<Dashboard />);
 
@@ -457,6 +487,7 @@ describe('Dashboard', () => {
       ).not.toBeInTheDocument();
       expect(mockGetAdminSummary).not.toHaveBeenCalled();
       expect(mockGetSetupChecklist).not.toHaveBeenCalled();
+      expect(mockGetInventorySummary).not.toHaveBeenCalled();
     });
 
     it('separates department-wide reporting from the personal dashboard for leaders', async () => {
@@ -471,17 +502,19 @@ describe('Dashboard', () => {
       expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
       expect(mockGetAdminSummary).not.toHaveBeenCalled();
       expect(mockGetSetupChecklist).not.toHaveBeenCalled();
+      expect(mockGetInventorySummary).not.toHaveBeenCalled();
 
       await user.click(organizationTab);
 
       expect(organizationTab).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
-      expect(screen.getByRole('region', { name: 'Department Feed' })).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'My Updates' })).not.toBeInTheDocument();
       expect(screen.queryByText('Next 7 Days')).not.toBeInTheDocument();
       expect(window.location.search).toBe('?tab=organization');
       await waitFor(() => {
         expect(mockGetAdminSummary).toHaveBeenCalledTimes(1);
         expect(mockGetSetupChecklist).toHaveBeenCalledTimes(1);
+        expect(mockGetInventorySummary).toHaveBeenCalledTimes(1);
       });
     });
 
@@ -512,6 +545,22 @@ describe('Dashboard', () => {
       expect(organizationTab).toHaveAttribute('tabindex', '0');
       expect(personalTab).toHaveAttribute('tabindex', '-1');
       await waitFor(() => expect(organizationTab).toHaveFocus());
+    });
+
+    it('shows a retry state instead of false zero metrics when the organization summary fails', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      mockGetAdminSummary.mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValueOnce({});
+      window.history.replaceState({}, '', '/dashboard?tab=organization');
+      const user = userEvent.setup();
+
+      renderWithRouter(<Dashboard />);
+
+      const alert = await screen.findByRole('alert');
+      expect(within(alert).getByText('Organization summary is unavailable')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
+
+      await user.click(within(alert).getByRole('button', { name: 'Try again' }));
+      await waitFor(() => expect(mockGetAdminSummary).toHaveBeenCalledTimes(2));
     });
   });
 });
