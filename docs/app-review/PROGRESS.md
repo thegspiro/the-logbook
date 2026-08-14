@@ -39,8 +39,8 @@ from its open list.
 
 | #   | Feature                    | Prefix | Status |
 | --- | -------------------------- | ------ | ------ |
-| B1  | medical-screening          | MS2    | ⬜     |
-| B2  | apparatus                  | AP2    | ⬜     |
+| B1  | medical-screening          | MS2    | ✅     |
+| B2  | apparatus                  | AP2    | ✅     |
 | B3  | inventory                  | INV2   | ⬜     |
 | B4  | facilities                 | FAC2   | ⬜     |
 | B5  | elections                  | ELEC2  | ⬜     |
@@ -75,6 +75,10 @@ those were front-loaded, never-reviewed surfaces; a fresh pass re-runs the
 27-feature Tier B lens (duplication, dead code, doc accuracy, correctness,
 future-dev), starting from the fixes the first pass already landed.
 
+**Pass 5 (opened 2026-08-14).** The current rotation uses the same completion
+gate with an end-to-end feature/functionality lens. B10 was completed early by
+owner request; B1–B2 are now complete. Next: **B3 inventory**.
+
 ---
 
 ## Baseline health (2026-08-05)
@@ -103,6 +107,20 @@ Established before the first iteration, so any later failure is attributable:
   `course_syllabus`, `email_templates`, `dashboard`, `locations`, and
   `scheduled` (with `scheduled_tasks.py`, 4570 L) had never appeared in any
   rotation. Baseline health recorded above.
+- **B1 medical-screening ✅ (pass 5).** Followed the create-record workflow
+  end-to-end and re-verified the open UI/data-integrity defect: the only create
+  form supplies neither `user_id` nor `prospect_id`, while the API accepts both
+  as optional, so a successful record belongs to nobody and cannot count toward
+  compliance. Reconfirmed the missing per-person compliance screen and filters.
+  No partial fix: the subject picker and exactly-one backend validator must land
+  together. See medical-screening.md → Pass 5. Next: B2 apparatus.
+- **B2 apparatus ✅ (pass 5).** Followed the fleet-detail workflow and confirmed
+  two existing guide gaps remain live product defects: the complete NFPA CRUD
+  backend has no frontend beyond an enable checkbox and “Tracking Enabled” card,
+  and deficiency state exposes neither its age nor originating check/maintenance
+  record. Recorded implementation boundaries and acceptance criteria; no partial
+  UI patch because NFPA needs a full stateful tab and deficiency provenance needs
+  a data-model decision. See apparatus.md → Pass 5. Next: B3 inventory.
 - **A1 storefront & payments ✅** — the largest never-reviewed feature (~11k L)
   and the only payment-handling surface. **It is in better shape than most
   modules the original security audit covered**, and several recurring defect

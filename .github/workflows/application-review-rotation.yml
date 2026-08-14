@@ -1,0 +1,35 @@
+name: Application Review Rotation
+
+on:
+  schedule:
+    # GitHub schedules use UTC and may be delayed during periods of high load.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: application-review-rotation
+  cancel-in-progress: false
+
+jobs:
+  advance-review:
+    name: Advance application review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Validate review queue
+        run: python3 scripts/application_review_rotation.py --validate
+
+      - name: Open the next review rotation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/application_review_rotation.py

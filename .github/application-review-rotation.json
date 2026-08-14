@@ -1,0 +1,116 @@
+{
+  "label": "application-review-rotation",
+  "title_prefix": "Application review:",
+  "features": [
+    {
+      "id": "baseline",
+      "name": "Automated quality baseline",
+      "scope": "Run and record the frontend, backend, migration, security, documentation, build, and E2E checks."
+    },
+    {
+      "id": "architecture",
+      "name": "Cross-cutting architecture",
+      "scope": "Review boundaries, oversized components and services, duplicated rules, configuration, transactions, caching, observability, and background work."
+    },
+    {
+      "id": "auth-security",
+      "name": "Authentication and platform security",
+      "scope": "Review sessions, cookies, CSRF, MFA, OAuth, password recovery, rate limits, uploads, exports, secrets, encryption, logging, and webhooks."
+    },
+    {
+      "id": "authorization-tenancy",
+      "name": "Authorization and tenant isolation",
+      "scope": "Compare UI and API permission gates and test organization scoping, object access, role ceilings, module flags, and public or tokenized paths."
+    },
+    {
+      "id": "onboarding-admin",
+      "name": "Onboarding and administration",
+      "scope": "Review fresh setup, organization configuration, roles, module configuration, scheduled tasks, audit logs, error monitoring, and recovery."
+    },
+    {
+      "id": "membership",
+      "name": "Membership lifecycle",
+      "scope": "Review member creation, invitations, profiles, roles, ranks, stations, leave, status transitions, archival, anonymization, and property return."
+    },
+    {
+      "id": "prospects-public",
+      "name": "Prospective members and public portal",
+      "scope": "Review applications, pipelines, stages, interviews, checklist gates, bulk actions, privacy, token access, duplicate detection, and public presentation."
+    },
+    {
+      "id": "events",
+      "name": "Events and attendance",
+      "scope": "Review creation, recurrence, requests, RSVP, waitlists, member and guest check-in, locations, attachments, reminders, analytics, and exports."
+    },
+    {
+      "id": "training",
+      "name": "Training and compliance",
+      "scope": "Review courses, programs, cohorts, sessions, external training, skills testing, credit, recertification, waivers, dashboards, and compliance reporting."
+    },
+    {
+      "id": "scheduling",
+      "name": "Scheduling and shift reports",
+      "scope": "Review configuration, platoons, eligibility, signup, assignment, swaps, holdovers, apparatus seating, completion, calls, review, and reporting."
+    },
+    {
+      "id": "apparatus-equipment",
+      "name": "Apparatus and equipment checks",
+      "scope": "Review apparatus records, operators, EVOC, assignments, check templates, member access, expirations, flagged results, and operational workflows."
+    },
+    {
+      "id": "inventory-storefront",
+      "name": "Inventory and storefront",
+      "scope": "Review catalog, lots, stock, assignments, transfers, temporary issues, returns, scanning, labels, fulfillment, departure clearance, payments, and reconciliation."
+    },
+    {
+      "id": "facilities",
+      "name": "Facilities and locations",
+      "scope": "Review facilities, rooms, linked locations, QR displays, maintenance, inspections, utilities, projects, compliance, and sensitive-data permissions."
+    },
+    {
+      "id": "elections",
+      "name": "Elections and governance",
+      "scope": "Review configuration, nominations, ballot modes, eligibility, proxy and token voting, secrecy, lifecycle, tallying, results, templates, and forensic auditability."
+    },
+    {
+      "id": "communications",
+      "name": "Communications and notifications",
+      "scope": "Review messages, notices, templates, footers, email, SMS, push, delivery history, preferences, reminders, retries, and failure visibility."
+    },
+    {
+      "id": "documents-forms-minutes",
+      "name": "Documents, forms, meetings, and minutes",
+      "scope": "Review access, uploads, retention, forms, public submissions, meetings, quorum, packages, minutes, action items, signatures, and exports."
+    },
+    {
+      "id": "finance-fundraising",
+      "name": "Finance, grants, and fundraising",
+      "scope": "Review requests, approvals, separation of duties, dues, payments, external approvers, grants, pledges, fundraising events, reporting, and reconciliation."
+    },
+    {
+      "id": "medical-privacy",
+      "name": "Medical screening and privacy",
+      "scope": "Review record ownership, consent, minimum access, encryption, auditing, disclosure, retention, exports, and safe failure behavior."
+    },
+    {
+      "id": "integrations-reports",
+      "name": "Integrations, analytics, and reports",
+      "scope": "Review provider setup, credentials, sync, webhooks, calendars, error history, replay, data freshness, filters, totals, exports, and scheduled delivery."
+    },
+    {
+      "id": "frontend-experience",
+      "name": "Application-wide frontend experience",
+      "scope": "Review navigation, search, forms, loading and error states, destructive safeguards, accessibility, responsiveness, PWA and offline behavior, performance, and discoverability."
+    },
+    {
+      "id": "deployment-operations",
+      "name": "Deployment and operations",
+      "scope": "Review Docker modes, proxy assumptions, migrations, seed idempotency, backups and restore, health checks, task workers, monitoring, upgrade safety, and documentation."
+    },
+    {
+      "id": "triage-roadmap",
+      "name": "Finding validation and roadmap",
+      "scope": "Deduplicate findings, verify evidence, assign priority and effort, add acceptance criteria and regression tests, and assemble the phased application-wide roadmap."
+    }
+  ]
+}
