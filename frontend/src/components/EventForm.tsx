@@ -1112,9 +1112,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 const isMandatory = e.target.checked;
                 update({
                   is_mandatory: isMandatory,
-                  mandatory_membership_types: isMandatory
-                    ? formData.mandatory_membership_types
-                    : undefined,
+                  mandatory_membership_types: isMandatory ? formData.mandatory_membership_types : undefined,
                   ...(!reminderAudienceEdited.current
                     ? { reminder_target: isMandatory ? 'all' : 'going', send_reminders: true }
                     : {}),

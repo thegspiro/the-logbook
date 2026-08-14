@@ -1,6 +1,12 @@
 name: Application Review Rotation
 
 on:
+  pull_request:
+    paths:
+      - ".github/application-review-rotation.json"
+      - ".github/workflows/application-review-rotation.yml"
+      - "scripts/application_review_rotation.py"
+      - "scripts/test_application_review_rotation.py"
   schedule:
     # GitHub schedules use UTC and may be delayed during periods of high load.
     - cron: "*/15 * * * *"
@@ -8,15 +14,14 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: application-review-rotation
   cancel-in-progress: false
 
 jobs:
-  advance-review:
-    name: Advance application review
+  validate:
+    name: Validate application review coordinator
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -28,6 +33,27 @@ jobs:
 
       - name: Validate review queue
         run: python3 scripts/application_review_rotation.py --validate
+
+      - name: Test rotation behavior
+        run: python3 -m unittest discover -s scripts -p "test_application_review_rotation.py" -v
+
+  advance-review:
+    name: Advance application review
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
 
       - name: Open the next review rotation
         env:
