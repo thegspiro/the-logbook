@@ -74,6 +74,22 @@ describe('SummaryTab', () => {
     expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T23:59:59\.999$/);
   });
 
+  it('requests the current calendar year and displays a bounded reporting period', async () => {
+    summary = {
+      ...populatedSummary,
+      periodStart: '2026-01-01T00:00:00Z',
+      periodEnd: '2026-08-14T23:59:59.999Z',
+    };
+    render(<SummaryTab />);
+
+    expect(screen.getByText(/2026.*–.*2026/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Reporting period'), { target: { value: 'year' } });
+
+    await waitFor(() => expect(fetchSummary).toHaveBeenCalledTimes(2));
+    expect(lastSummaryParams?.startDate).toMatch(/^\d{4}-01-01$/);
+    expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T23:59:59\.999$/);
+  });
+
   it('applies and validates a custom date range', () => {
     render(<SummaryTab />);
 
