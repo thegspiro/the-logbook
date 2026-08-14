@@ -11,7 +11,8 @@ completion record remains `docs/app-review/PROGRESS.md`.
 ## How advancement works
 
 1. `.github/workflows/application-review-rotation.yml` runs every 15 minutes
-   and can also be started with **Run workflow**.
+   and can also be started with **Run workflow**. Pull requests that change the
+   coordinator run validation and unit tests, but never create issues.
 2. The workflow looks for issues carrying the `application-review-rotation`
    label and its private feature marker.
 3. If a rotation issue is open, the workflow does nothing. This prevents a

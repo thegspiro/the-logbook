@@ -106,5 +106,18 @@ class GitHubClientTest(unittest.TestCase):
         ]
 
 
+class WorkflowTest(unittest.TestCase):
+    def test_pull_requests_validate_without_creating_issues(self):
+        workflow = Path(".github/workflows/application-review-rotation.yml").read_text(
+            encoding="utf-8"
+        )
+        assert "  pull_request:\n" in workflow
+        assert "  validate:\n" in workflow
+        assert "    if: github.event_name != 'pull_request'\n" in workflow
+        assert "    needs: validate\n" in workflow
+        assert "      issues: write\n" in workflow
+        assert "      - name: Open the next review rotation\n" in workflow
+
+
 if __name__ == "__main__":
     unittest.main()
