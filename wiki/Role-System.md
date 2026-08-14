@@ -268,3 +268,10 @@ When adding new modules:
 - [ ] Bulk role assignment
 - [ ] Permission delegation (users granting temporary permissions)
 - [ ] Role templates for quick setup
+
+## Directory versus scanner access (August 14, 2026)
+
+`members.view` grants the redacted member directory/profile. The ID-card scanner
+is an elevated lookup and requires either `users.view` or `members.manage`.
+Navigation and direct-route protection use the same OR rule; granting only
+`members.view` must not surface the scanner.

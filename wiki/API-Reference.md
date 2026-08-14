@@ -731,13 +731,13 @@ are backfilled as validated by their examiner.
 
 ## Prospective Members — Kanban Response Model & Bulk Actions _(2026-08-08)_
 
-Router prefix `/api/v1/membership-pipeline`.
+Router prefix `/api/v1/prospective-members`.
 
 ```
-GET    /api/v1/membership-pipeline/pipelines/{id}/kanban   # Now returns KanbanBoardResponse, not a bare dict
-POST   /api/v1/membership-pipeline/prospects/bulk-advance  # members.manage | prospective_members.manage
-POST   /api/v1/membership-pipeline/prospects/bulk-status   # members.manage | prospective_members.manage
-POST   /api/v1/membership-pipeline/prospects/{id}/advance  # Now 409 when there is nowhere to advance to
+GET    /api/v1/prospective-members/pipelines/{id}/kanban   # Now returns KanbanBoardResponse, not a bare dict
+POST   /api/v1/prospective-members/prospects/bulk-advance  # members.manage | prospective_members.manage
+POST   /api/v1/prospective-members/prospects/bulk-status   # members.manage | prospective_members.manage
+POST   /api/v1/prospective-members/prospects/{id}/advance  # Now 409 when there is nowhere to advance to
 ```
 
 **The kanban endpoint declared no response model**, so FastAPI serialized every

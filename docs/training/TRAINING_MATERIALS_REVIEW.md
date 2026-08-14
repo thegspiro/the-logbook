@@ -1,5 +1,20 @@
 # Training materials review and screenshot plan
 
+## 2026-08-14 three-day documentation gate
+
+Changes from 2026-08-12 through 2026-08-14 are catalogued in the
+[three-day change and connection audit](../CHANGE_AUDIT_2026-08-12_TO_14.md).
+Authors adding the new workflows must place this marker at the exact teaching
+step until a verified image exists:
+
+> **[SCREENSHOT NEEDED — describe the exact state/control and required demo data]**
+
+Existing images affected by those workflows must be labeled **REPLACE** in
+[`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md), not silently treated as
+current. Training copy must include same-org/cross-org permission behavior,
+empty and legacy states, validation failures, concurrent actions, and what data
+is intentionally _not_ copied or shared.
+
 **Review date:** 2026-08-11
 **Scope:** the training index, all 19 numbered training guides, the screenshot
 status/currency reports, and the automated screenshot workflow.

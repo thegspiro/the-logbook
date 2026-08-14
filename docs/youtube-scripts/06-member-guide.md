@@ -710,3 +710,31 @@ My Account > Notifications, showing the Push notifications toggle.]**
 | Setting Up Dark Mode         | 20:30–21:30 | "Customizing Your Logbook (Dark Mode & More)"      |
 | Privacy Choices & Your Data  | 21:30–22:30 | "Your Privacy Choices — and Downloading Your Data" |
 | Adding to Home Screen        | 23:00–23:30 | "Add The Logbook to Your Phone's Home Screen"      |
+
+## AUGUST 14 RELEASE INSERTS — YOUR DATA SCOPE
+
+### Replace “THE MEMBER DASHBOARD” opening
+
+**[SCREEN: Personal dashboard. If using a leader account, briefly show the separate Organization tab.]**
+
+> "This Personal view is about me: my equipment, training, activity, and items
+> needing attention. Leaders may also have an Organization tab, but department
+> totals do not load into or masquerade as personal data."
+
+### Add to “MEMBER DIRECTORY”
+
+> "A department may grant `members.view`, which opens a redacted colleague
+> profile. That does not grant the ID-card scanner; scanning requires the
+> elevated `users.view` or `members.manage` permission. If Scanner is absent,
+> that is a permission boundary, not a broken menu."
+
+### Add to “YOUR PRIVACY CHOICES & YOUR DATA”
+
+**[SCREEN: personal export summary; do not expose evaluation text.]**
+
+> "Your export includes training history, but it is not a back door around
+> officer-only results. If the department hides a shift evaluation from trainees,
+> a new personal export omits those fields too. Changing the setting does not
+> recall a file you already downloaded."
+
+**EDITOR:** Add 1:30 and re-time Chapters 2, 6, 7 and the clip table.

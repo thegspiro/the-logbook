@@ -144,3 +144,17 @@ Tighten them if the platform is used during activations.
       passwords) stored offline in at least two locations
 - [ ] Quarterly restore drill scheduled, with results recorded
 - [ ] RTO/RPO targets written into department SOPs
+
+## Audit archive filesystem permissions (August 14, 2026)
+
+New audit archive directories are created as owner-only (`0700`) and archive
+files as owner read/write (`0600`). Creation uses an exclusive descriptor, so
+there is no interval in which a newly written archive is world-readable. This
+protects exported audit payloads independently of the surrounding deployment's
+umask.
+
+This is forward-looking: the application does not silently chmod historical
+archives. During upgrade, inspect the configured archive path and repair older
+files/directories according to department ownership and retention policy. Do
+not broaden permissions merely to make a backup sidecar work; grant that process
+access through the owning account/group and test restore separately.

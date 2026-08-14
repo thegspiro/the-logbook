@@ -5,6 +5,7 @@ Business logic for event management.
 """
 
 import calendar
+import copy
 import csv
 import io
 from datetime import datetime, timedelta
@@ -543,6 +544,18 @@ class EventService:
         if not source_event:
             return None
 
+        # custom_fields mixes organizer configuration with lifecycle markers
+        # written by scheduled jobs. A copy keeps the configuration, but must
+        # be eligible for its own reminders and post-event notifications.
+        custom_fields = copy.deepcopy(source_event.custom_fields)
+        if custom_fields:
+            for lifecycle_key in (
+                "reminders_sent",
+                "validation_notification_sent",
+                "series_end_reminder_sent",
+            ):
+                custom_fields.pop(lifecycle_key, None)
+
         # Fields to copy from the source event
         new_event = Event(
             organization_id=organization_id,
@@ -558,19 +571,22 @@ class EventService:
             requires_rsvp=source_event.requires_rsvp,
             rsvp_deadline=source_event.rsvp_deadline,
             max_attendees=source_event.max_attendees,
-            allowed_rsvp_statuses=source_event.allowed_rsvp_statuses,
+            allowed_rsvp_statuses=copy.deepcopy(source_event.allowed_rsvp_statuses),
             is_mandatory=source_event.is_mandatory,
             mandatory_membership_types=source_event.mandatory_membership_types,
             allow_guests=source_event.allow_guests,
             send_reminders=source_event.send_reminders,
-            reminder_schedule=source_event.reminder_schedule,
+            reminder_schedule=copy.deepcopy(source_event.reminder_schedule),
+            reminder_target=source_event.reminder_target,
             check_in_window_type=source_event.check_in_window_type,
             check_in_minutes_before=source_event.check_in_minutes_before,
             check_in_minutes_after=source_event.check_in_minutes_after,
             require_checkout=source_event.require_checkout,
+            allow_guest_check_in=source_event.allow_guest_check_in,
+            guest_check_in_creates_prospect=source_event.guest_check_in_creates_prospect,
             custom_category=source_event.custom_category,
-            custom_fields=source_event.custom_fields,
-            attachments=source_event.attachments,
+            custom_fields=custom_fields,
+            attachments=copy.deepcopy(source_event.attachments),
             template_id=source_event.template_id,
             # Explicitly NOT copying: RSVPs, cancellation state, actual times, recurrence
         )
@@ -1796,7 +1812,7 @@ class EventService:
             minutes_before = (
                 event.check_in_minutes_before
                 if event.check_in_minutes_before is not None
-                else 30
+                else 60
             )
             check_in_start = _ensure_utc(event.start_datetime) - timedelta(
                 minutes=minutes_before

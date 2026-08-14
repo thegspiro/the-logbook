@@ -1,5 +1,25 @@
 # Script currency
 
+## Resolved in-script for the 2026-08-12 → 08-14 changes
+
+The previously flagged material is now written word-for-word in the actual
+scripts rather than living only in this queue:
+
+| Scripts | Applied update |
+|---|---|
+| **01, 03** | Fail-closed TLS, duplicate preflight, single Alembic head, audit legacy boundary, reset ceiling, archive modes, export visibility |
+| **04, 06** | Personal/Organization dashboard scopes, conditional cards, directory/scanner permissions, privacy exports |
+| **04, 07** | Event reminder audience, defaults, email preferences, 60-minute Flexible window, overlap/guest edges, related-notification cleanup |
+| **08** | New Short **8AF**: Room QR search, PNG/print, rotation invalidation, safe demo handling |
+| **12** | Saved ballot boundaries/settings verification, fresh IDs, frozen roll at issuance/redemption, paper turnout bounds |
+| **13** | Store banner, member payment-method change, activity/status counts and filters, recipient privacy |
+| **14, 16** | Session requirement/course/program linkage and ownership/cross-org edges |
+| **15, 16** | Point deduction vs overall failure, per-test resume conflicts, server policy and result/export visibility |
+
+Every affected file carries an **EDITOR** instruction giving the inserted runtime
+and the chapters/clip tables that must be re-timed. Script text is current; final
+timecodes remain a production edit because pacing depends on the recorded take.
+
 Which YouTube scripts still describe the application, and which have gone out of
 date. Companion to
 [`docs/training/SCREENSHOT_CURRENCY.md`](../training/SCREENSHOT_CURRENCY.md),
@@ -79,13 +99,13 @@ left edge** of the header on every signed-in page.
 **Section: the `SECURITY_REQUIRE_TLS` beat (~35:00, script lines 595–610)** ·
 **Wrong.**
 
-The callout — *"Defaults to false so upgrading can't refuse to boot your
-instance"* — is no longer true for the stack this series installs.
+The callout — _"Defaults to false so upgrading can't refuse to boot your
+instance"_ — is no longer true for the stack this series installs.
 `docker-compose.prod.yml` now defaults `SECURITY_REQUIRE_TLS` to **true**, so
 an upgrade of the documented production stack running the bundled plaintext
 MySQL/Redis **will** refuse to start until the operator either configures
 `DB_SSL`/`REDIS_SSL` or writes an explicit `SECURITY_REQUIRE_TLS=false` into
-`.env`. The *application* default is still `false` — the compose file is what
+`.env`. The _application_ default is still `false` — the compose file is what
 changed — but the narration is delivered over that compose file, so as
 recorded it would promise the opposite of what the viewer experiences.
 Rewrite the beat as: "the production compose ships fail-closed; here is the
@@ -124,7 +144,7 @@ wants: build the slate once, click **Save as Template**, and next year apply
 it instead of rebuilding. Two things worth saying on camera, because they are
 the two questions a secretary will ask: applying one **replaces** the current
 ballot (it confirms twice for that reason), and a template carries the
-ballot's *structure only* — never candidates, voters, votes, or attendance,
+ballot's _structure only_ — never candidates, voters, votes, or attendance,
 so last year's nominees do not haunt this year's ballot. Budget ~45 seconds;
 it also makes a natural short ("Never rebuild your officer ballot again").
 
@@ -134,7 +154,7 @@ election** / **Keep it open** — any capture of the old browser popup is
 stale, and the narration ("confirm") still holds.
 
 **Section: `PAPER BALLOTS, ATTESTATION` (43:00 – 49:00)** · **No change —
-recorded here because the narration got *truer*.** The line "No unverified
+recorded here because the narration got _truer_.** The line "No unverified
 paper ever slides into a certified total" was written before 2026-08-12,
 when a pending batch — excluded from published results — could still steer
 **runoff advancement** and **membership-package outcomes** at close. That

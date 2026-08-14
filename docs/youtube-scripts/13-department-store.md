@@ -645,3 +645,31 @@ station.]**
 | 13l | Mail Yourself a Test Before Anyone Else Gets It | Chapter 2 |
 | 13m | Rewrite What Your Store Emails Say | Chapter 2 |
 | 13n | Why Your Reworded Email Never Arrived | Chapter 2 |
+
+## AUGUST 14 RELEASE INSERTS — ADMIN COUNTS, FILTERS, BANNER, AND MEMBER PAYMENT METHOD
+
+### Add to Setup — 0:30
+
+**[SCREEN: Store Settings → store-open banner switch; member navigation before/after.]**
+
+> "The store-open banner has its own organization setting. Hiding the banner does
+> not close an order window or disable the store; it changes navigation notice
+> presentation only."
+
+### Add to Member Side — 0:40
+
+> "A member can change the external payment method on their own order. That
+> records how they intend to pay; it does not transfer money or verify payment,
+> and it cannot edit another member's order."
+
+### Replace “WORKING THE ORDERS” opening — 0:50
+
+**[SCREEN: activity/status cards; click each into matching order filter.]**
+
+> "These activity and status counts come from the same organization-scoped
+> source as the order filters. Click a card to work that exact queue. Payment
+> status and fulfillment status remain separate. Product and option locks use
+> canonical identifiers, and email or test-send results never reveal the other
+> recipients."
+
+**EDITOR:** Add 2:00 and repair the existing Chapter 3/4 and Chapter 6 timing overlaps while re-timing the rest.

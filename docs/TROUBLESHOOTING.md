@@ -2686,7 +2686,7 @@ Only explicitly named users can evaluate.
 
 - If the person is a returning member: use `POST /api/v1/users/{user_id}/reactivate` to restore their archived profile
 - If it's a genuinely different person who happens to share the email: update the archived member's email first, then retry
-- Use `POST /api/v1/membership-pipeline/prospects/check-existing?email=...` to preview matches before creating
+- Use `POST /api/v1/prospective-members/prospects/check-existing?email=...` to preview matches before creating
 
 #### Cannot Reactivate Member
 

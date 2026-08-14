@@ -1071,3 +1071,25 @@ dates. The lots sheet opens.]**
   in its description for viewers who want more depth.
 - **Hashtags:** #FireDepartment #VolunteerFire #FirefighterLife #OpenSource
   #FireDeptTech
+
+## SHORT 8AF: Print a Room QR Code — and Know When It Stops Working
+
+**Target Length:** 50–60 seconds
+
+**[0:00 — SCREEN: Room QR Codes directory; search for “Training Room.”]**
+
+> "Need a room check-in sign? Open Room QR Codes, search for the room, then
+> download its PNG or print the sign. The bulk directory is restricted, and each
+> code belongs to this organization."
+
+**[0:20 — SCREEN: inline room QR entry point, then Regenerate Display Code confirmation.]**
+
+> "If a code was posted somewhere it should not be, regenerate it. The old
+> printed sign stops working immediately, so replace every copy. Regeneration is
+> a security rotation, not a second valid code."
+
+**[0:42 — SCREEN: new sign scans successfully; old sign produces invalid state.]**
+
+> "Test the new sign before you leave the room—and destroy the old one."
+
+**Production:** Use non-sensitive demo rooms. Do not show a live reusable code long enough for viewers to scan.

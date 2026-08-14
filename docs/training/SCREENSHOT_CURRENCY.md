@@ -1,5 +1,43 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-12 → 08-14 changes
+
+The three-day connection audit identified the following capture work. These
+are **not verified captures**; each remains open until the image is opened and
+checked against its guide caption.
+
+### SCREENSHOT NEEDED
+
+- Saved-ballot picker showing the visible template name, item count, replacement
+  warning, and action buttons; a separate before/apply/after capture of the
+  election settings form demonstrates that settings were restored. Also capture
+  the manual paper-ballot count on election results.
+- Station-board dashboard and the admin-hours calendar-year/category summary.
+- Store admin activity/status counts, order filters, open-banner toggle, and a
+  member changing their own external payment method.
+- Inventory temporary-issue deadline/overdue state and stock arithmetic showing
+  why on-hand and available differ.
+- Room QR Codes directory (search, print, PNG), the regeneration warning, and
+  rank-backed apparatus crew positions.
+- Event create/template reminder audience and Flexible 60-minute check-in state.
+- Personal versus Organization dashboard tabs, directory-versus-scanner
+  navigation, and personal-export field visibility before/after the Training
+  setting changes.
+- Event Settings outreach-form picker, training-session requirement/program
+  linkage, and a related notification before and after automatic archive.
+
+### REPLACE / re-verify
+
+Replace any existing capture that shows the old dashboard, admin-hours
+summary, store admin dashboard, Ballot Builder without saved settings,
+free-text apparatus crew positions, old outreach-form discovery, or QR
+navigation before the Room QR directory. Re-verify mobile captures containing
+changed headers, dashboard cards, breadcrumbs, or actions at 375px; the 44px
+touch-target fixes can change spacing even when the words are unchanged.
+
+The reason, data path, and edge cases for each screen are recorded in
+[`../CHANGE_AUDIT_2026-08-12_TO_14.md`](../CHANGE_AUDIT_2026-08-12_TO_14.md#documentation-and-media-disposition).
+
 Which captured screenshots still match the application. Companion to
 [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md), which counts how many
 placeholders are **filled**; this file records whether what was captured is still

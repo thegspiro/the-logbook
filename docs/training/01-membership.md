@@ -1371,3 +1371,19 @@ Key integration points:
 ---
 
 **Previous:** [Getting Started](./00-getting-started.md) | **Next:** [Training & Certification](./02-training.md)
+
+## Directory profiles and ID-card scanner access (August 14, 2026)
+
+`members.view` opens the member directory and a redacted colleague profile.
+That permission does **not** authorize the ID-card scanner. Scanning requires
+`users.view` or `members.manage`, because a scan is an elevated lookup rather
+than ordinary roster browsing. Side and top navigation use the same OR rule as
+the protected routes, so a visible Scanner link should never lead to an access
+denial for an otherwise authorized user.
+
+**Edge cases:** members can still open their own record; a redacted colleague
+profile does not expose elevated administrative fields; possessing either
+scanner permission is sufficient; removing the last qualifying permission
+removes the navigation entry and blocks direct-route access.
+
+> **[SCREENSHOT NEEDED — side-by-side navigation for a `members.view`-only role and a `users.view` role, showing Directory for both and Scanner only for the elevated role.]**

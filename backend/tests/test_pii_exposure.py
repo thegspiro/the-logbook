@@ -438,7 +438,9 @@ class TestProfileEndpointAccessControl:
     `members.manage`, yet MemberIdCardPage, MemberProfilePage and
     UserSettingsPage all load the caller's own record through this endpoint —
     gating it entirely behind those permissions 403'd every ordinary member
-    off their own ID card. Viewing anyone else still requires a grant.
+    off their own ID card. Viewing anyone else requires a grant:
+    `members.view` (the directory permission every default position carries)
+    opens a redacted profile; a caller with no grants at all is refused.
     """
 
     async def test_member_without_grants_reads_their_own_record(self):
@@ -479,6 +481,25 @@ class TestProfileEndpointAccessControl:
         result = await _call_endpoint(subject, caller)
 
         assert result.username == "jsmith"
+
+    async def test_members_view_reads_other_records_redacted(self):
+        # The directory permission opens colleagues' profiles, but on the
+        # roster's terms: contact info per org visibility settings (all off
+        # here), DOB and emergency contacts leadership-only.
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.view"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.username == "jsmith"
+        assert result.phone is None
+        assert result.address_street is None
+        assert result.date_of_birth is None
+        assert result.emergency_contacts == []
 
     async def test_wildcard_grant_satisfies_the_gate(self):
         # `users.*` must satisfy `users.view` — the gate goes through

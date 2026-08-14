@@ -106,6 +106,7 @@ class EventDefaultsUpdate(BaseModel):
     allow_guests: Optional[bool] = None
     is_mandatory: Optional[bool] = None
     send_reminders: Optional[bool] = None
+    reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
     default_reminder_time: Optional[str] = Field(None, max_length=10)
     default_duration_minutes: Optional[int] = Field(None, ge=1)
@@ -184,6 +185,7 @@ class EventBase(BaseModel):
     )
     allow_guests: bool = Field(default=False)
     send_reminders: bool = Field(default=True)
+    reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(
         default=[24],
         description=(
@@ -195,10 +197,16 @@ class EventBase(BaseModel):
         default="flexible", description="Check-in window type: flexible, strict, window"
     )
     check_in_minutes_before: Optional[int] = Field(
-        default=30, description="Minutes before event start to allow check-in"
+        default=60,
+        ge=0,
+        le=1440,
+        description="Minutes before event start to allow check-in",
     )
     check_in_minutes_after: Optional[int] = Field(
-        default=15, description="For 'window' type: minutes after event start"
+        default=15,
+        ge=0,
+        le=1440,
+        description="For 'window' type: minutes after event start",
     )
     require_checkout: bool = Field(
         default=False, description="Require manual check-out"
@@ -236,6 +244,17 @@ class EventCreate(EventBase):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_mandatory_reminder_target(cls, data):
+        if (
+            isinstance(data, dict)
+            and data.get("is_mandatory")
+            and "reminder_target" not in data
+        ):
+            return {**data, "reminder_target": "all"}
+        return data
 
     @model_validator(mode="after")
     def validate_dates(self) -> "EventCreate":
@@ -278,10 +297,11 @@ class EventUpdate(BaseModel):
     mandatory_membership_types: Optional[List[str]] = None
     allow_guests: Optional[bool] = None
     send_reminders: Optional[bool] = None
+    reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
     check_in_window_type: Optional[str] = None
-    check_in_minutes_before: Optional[int] = None
-    check_in_minutes_after: Optional[int] = None
+    check_in_minutes_before: Optional[int] = Field(None, ge=0, le=1440)
+    check_in_minutes_after: Optional[int] = Field(None, ge=0, le=1440)
     require_checkout: Optional[bool] = None
     allow_guest_check_in: Optional[bool] = None
     guest_check_in_creates_prospect: Optional[bool] = None
@@ -661,6 +681,17 @@ class EventTemplateCreate(BaseModel):
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def default_mandatory_reminder_target(cls, data):
+        if (
+            isinstance(data, dict)
+            and data.get("is_mandatory")
+            and "reminder_target" not in data
+        ):
+            return {**data, "reminder_target": "all"}
+        return data
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     event_type: str = Field(default="other")
@@ -675,10 +706,11 @@ class EventTemplateCreate(BaseModel):
     is_mandatory: bool = False
     allow_guests: bool = False
     check_in_window_type: Optional[str] = None
-    check_in_minutes_before: Optional[int] = Field(default=30, ge=0)
+    check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
     require_checkout: bool = False
     send_reminders: bool = True
+    reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
     custom_fields_template: Optional[Dict[str, Any]] = None
 
@@ -711,6 +743,7 @@ class EventTemplateUpdate(BaseModel):
     check_in_minutes_after: Optional[int] = Field(None, ge=0)
     require_checkout: Optional[bool] = None
     send_reminders: Optional[bool] = None
+    reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
     custom_fields_template: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
@@ -741,6 +774,7 @@ class EventTemplateResponse(UTCResponseBase):
     check_in_minutes_after: Optional[int] = None
     require_checkout: bool
     send_reminders: bool
+    reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
     custom_fields_template: Optional[Dict[str, Any]] = None
     is_active: bool
@@ -834,6 +868,17 @@ class RecurringEventCreate(BaseModel):
         _enum_check(_RECURRENCE_PATTERNS, "recurrence_pattern")
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def default_mandatory_reminder_target(cls, data):
+        if (
+            isinstance(data, dict)
+            and data.get("is_mandatory")
+            and "reminder_target" not in data
+        ):
+            return {**data, "reminder_target": "all"}
+        return data
+
     # Base event data
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -889,11 +934,14 @@ class RecurringEventCreate(BaseModel):
     mandatory_membership_types: Optional[List[str]] = None
     allow_guests: bool = False
     send_reminders: bool = True
+    reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
     check_in_window_type: Optional[str] = Field(default="flexible")
-    check_in_minutes_before: Optional[int] = Field(default=30, ge=0)
+    check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
     require_checkout: bool = False
+    allow_guest_check_in: bool = False
+    guest_check_in_creates_prospect: bool = False
     custom_category: Optional[str] = Field(
         None,
         max_length=100,

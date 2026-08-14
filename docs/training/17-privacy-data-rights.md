@@ -368,3 +368,19 @@ and re-introducing her name would defeat the purpose.
 ---
 
 **Previous:** [Integrations](./16-integrations.md)
+
+## Training evaluation fields in personal exports (August 14, 2026)
+
+A personal-data export still includes the member's training and shift-report
+history, but it now applies the organization's Training result-visibility rule
+to `ShiftCompletionReport` evaluation fields. If officer-only results are hidden
+from trainees in the application, the export omits those same officer-only
+fields; an export is not a bypass around the screen-level policy.
+
+**Edge cases:** changing visibility affects exports generated afterwards, not
+files already downloaded; administrators retain authorized operational access;
+ordinary completion facts remain exportable even when narrative evaluation is
+hidden; and one organization's setting never controls another organization's
+export.
+
+> **[SCREENSHOT NEEDED — two personal-export summaries for the same seeded shift report, before and after result visibility is disabled; redact actual evaluation text and show only the included-field difference.]**
