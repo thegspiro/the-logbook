@@ -658,16 +658,22 @@ class AuditLogger:
         )
         last_row = rows[-1]
 
-        os.makedirs(archive_dir, exist_ok=True)
+        # Archives contain the complete, unredacted audit records.  Do not
+        # rely on the process umask to keep either the directory or files
+        # private, especially when the configured path is on a shared volume.
+        os.makedirs(archive_dir, mode=0o700, exist_ok=True)
+        os.chmod(archive_dir, 0o700)
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         filename = f"audit_archive_{rows[0].id:012d}-{purge_end:012d}_{stamp}.jsonl.gz"
         archive_path = os.path.join(archive_dir, filename)
-        with gzip.open(archive_path, "wt", encoding="utf-8") as fh:
-            for row in rows:
-                fh.write(
-                    json.dumps(self.serialize_row(row), sort_keys=True, default=str)
-                    + "\n"
-                )
+        fd = os.open(archive_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as raw_fh:
+            with gzip.open(raw_fh, "wt", encoding="utf-8") as fh:
+                for row in rows:
+                    fh.write(
+                        json.dumps(self.serialize_row(row), sort_keys=True, default=str)
+                        + "\n"
+                    )
 
         boundary_cp.archived_at = datetime.now(UTC)
         boundary_cp.last_log_hash = last_row.current_hash
