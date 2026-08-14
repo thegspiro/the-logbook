@@ -1521,6 +1521,7 @@ async def generate_event_request_form(
         allow_multiple_submissions=True,
         notify_on_submission=True,
         status=FormStatus.DRAFT,
+        integration_type=IntegrationType.EVENT_REQUEST.value,
         created_by=current_user.id,
     )
     db.add(form)

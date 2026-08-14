@@ -32,6 +32,7 @@ export const formsService = {
     category?: string | undefined;
     search?: string | undefined;
     is_template?: boolean | undefined;
+    integration_type?: string | undefined;
     skip?: number | undefined;
     limit?: number | undefined;
   }): Promise<FormsListResponse> {

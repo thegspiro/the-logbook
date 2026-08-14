@@ -132,9 +132,8 @@ const EventsSettingsTab: React.FC = () => {
   const fetchEventRequestForms = useCallback(async () => {
     try {
       setLoadingForms(true);
-      const response = await formsService.getForms({ limit: 50 });
-      const filtered = response.forms.filter((f) => f.integration_type === 'event_request');
-      setEventRequestForms(filtered);
+      const response = await formsService.getForms({ integration_type: 'event_request', limit: 50 });
+      setEventRequestForms(response.forms);
     } catch {
       // Silently fail — the list is supplemental
     } finally {
