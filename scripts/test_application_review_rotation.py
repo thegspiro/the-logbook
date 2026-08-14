@@ -113,7 +113,11 @@ class WorkflowTest(unittest.TestCase):
         )
         assert "  pull_request:\n" in workflow
         assert "  validate:\n" in workflow
-        assert "    if: github.event_name != 'pull_request'\n" in workflow
+        assert "      github.event_name != 'pull_request' &&\n" in workflow
+        assert (
+            "      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)\n"
+            in workflow
+        )
         assert "    needs: validate\n" in workflow
         assert "      issues: write\n" in workflow
         assert "      - name: Open the next review rotation\n" in workflow
