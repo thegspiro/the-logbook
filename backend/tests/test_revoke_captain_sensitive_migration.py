@@ -30,6 +30,15 @@ def _run(engine, direction="upgrade"):
             getattr(_migration_module(), direction)()
 
 
+@pytest.fixture
+def engine():
+    database = sa.create_engine("sqlite://")
+    try:
+        yield database
+    finally:
+        database.dispose()
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
@@ -42,8 +51,7 @@ def test_load_permissions_accepts_driver_json_shapes(raw, expected):
     assert _migration_module()._load_permissions(raw) == expected
 
 
-def test_upgrade_revokes_only_the_system_captain_grant():
-    engine = sa.create_engine("sqlite://")
+def test_upgrade_revokes_only_the_system_captain_grant(engine):
     metadata = sa.MetaData()
     positions = sa.Table(
         "positions",
@@ -88,14 +96,11 @@ def test_upgrade_revokes_only_the_system_captain_grant():
         "custom": [PERMISSION],
         "treasurer": [PERMISSION],
     }
-    engine.dispose()
 
 
-def test_upgrade_and_downgrade_are_safe_without_positions_table():
-    engine = sa.create_engine("sqlite://")
+def test_upgrade_and_downgrade_are_safe_without_positions_table(engine):
 
     _run(engine)
     _run(engine, "downgrade")
 
     assert not sa.inspect(engine).has_table("positions")
-    engine.dispose()
