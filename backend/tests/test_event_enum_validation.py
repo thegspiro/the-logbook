@@ -75,6 +75,29 @@ class TestEventEnumValidation:
         with pytest.raises(ValidationError):
             EventDefaultsUpdate(reminder_target="mandatory")
 
+    def test_new_mandatory_events_default_to_all_member_reminders(self):
+        assert _event(is_mandatory=True).reminder_target == "all"
+
+    def test_explicit_mandatory_event_target_is_preserved(self):
+        assert (
+            _event(is_mandatory=True, reminder_target="going").reminder_target
+            == "going"
+        )
+
+    def test_mandatory_templates_default_to_all_member_reminders(self):
+        assert EventTemplateCreate(name="X", is_mandatory=True).reminder_target == "all"
+
+    def test_mandatory_recurring_events_default_to_all_member_reminders(self):
+        event = RecurringEventCreate(
+            title="T",
+            recurrence_pattern="weekly",
+            rolling_recurrence=True,
+            start_datetime=_START,
+            end_datetime=_END,
+            is_mandatory=True,
+        )
+        assert event.reminder_target == "all"
+
     def test_recurring_rejects_bad_pattern(self):
         with pytest.raises(ValidationError):
             RecurringEventCreate(

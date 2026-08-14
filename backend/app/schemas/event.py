@@ -241,6 +241,17 @@ class EventCreate(EventBase):
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def default_mandatory_reminder_target(cls, data):
+        if (
+            isinstance(data, dict)
+            and data.get("is_mandatory")
+            and "reminder_target" not in data
+        ):
+            return {**data, "reminder_target": "all"}
+        return data
+
     @model_validator(mode="after")
     def validate_dates(self) -> "EventCreate":
         if self.end_datetime <= self.start_datetime:
@@ -664,6 +675,17 @@ class EventTemplateCreate(BaseModel):
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def default_mandatory_reminder_target(cls, data):
+        if (
+            isinstance(data, dict)
+            and data.get("is_mandatory")
+            and "reminder_target" not in data
+        ):
+            return {**data, "reminder_target": "all"}
+        return data
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     event_type: str = Field(default="other")
@@ -839,6 +861,17 @@ class RecurringEventCreate(BaseModel):
     _check_recurrence_pattern = field_validator("recurrence_pattern")(
         _enum_check(_RECURRENCE_PATTERNS, "recurrence_pattern")
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_mandatory_reminder_target(cls, data):
+        if (
+            isinstance(data, dict)
+            and data.get("is_mandatory")
+            and "reminder_target" not in data
+        ):
+            return {**data, "reminder_target": "all"}
+        return data
 
     # Base event data
     title: str = Field(..., min_length=1, max_length=200)

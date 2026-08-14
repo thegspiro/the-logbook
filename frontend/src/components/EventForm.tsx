@@ -231,6 +231,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   );
   const [newExceptionDate, setNewExceptionDate] = useState('');
   const checkInLeadTimeEdited = useRef(initialData?.check_in_minutes_before !== undefined);
+  const reminderAudienceEdited = useRef(initialData?.reminder_target !== undefined);
 
   // Existing attachments from initialData (shown when editing)
   const existingAttachments: EventAttachment[] = initialData?.attachments || [];
@@ -1082,7 +1083,15 @@ export const EventForm: React.FC<EventFormProps> = ({
               type="checkbox"
               id="is-mandatory"
               checked={formData.is_mandatory}
-              onChange={(e) => update({ is_mandatory: e.target.checked })}
+              onChange={(e) => {
+                const isMandatory = e.target.checked;
+                update({
+                  is_mandatory: isMandatory,
+                  ...(!reminderAudienceEdited.current
+                    ? { reminder_target: isMandatory ? 'all' : 'going', send_reminders: true }
+                    : {}),
+                });
+              }}
               className={checkboxClass}
             />
             <label htmlFor="is-mandatory" className="text-theme-text-secondary text-sm">
@@ -1323,6 +1332,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               value={formData.send_reminders ? formData.reminder_target || 'going' : 'none'}
               onChange={(e) => {
                 const target = e.target.value as 'going' | 'all' | 'none';
+                reminderAudienceEdited.current = true;
                 update({ send_reminders: target !== 'none', reminder_target: target });
               }}
               className={selectClass}

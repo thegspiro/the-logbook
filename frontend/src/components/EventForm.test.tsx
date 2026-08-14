@@ -281,6 +281,15 @@ describe('EventForm', () => {
   });
 
   describe('Notifications Section', () => {
+    it('defaults mandatory events to all-member reminders', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await user.click(screen.getByLabelText(/mandatory attendance/i));
+
+      expect(screen.getByLabelText(/who should receive reminders/i)).toHaveValue('all');
+    });
+
     it('should remind signed-up members by default', () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
