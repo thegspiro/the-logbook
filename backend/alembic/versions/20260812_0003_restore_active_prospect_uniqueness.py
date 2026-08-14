@@ -23,36 +23,6 @@ def upgrade() -> None:
     columns = {
         column["name"] for column in inspector.get_columns("prospective_members")
     }
-
-    # Canonicalize before generating/indexing active_email. This matches the
-    # service's case-insensitive duplicate lookup and prevents whitespace or
-    # casing variants from surviving as distinct active applications.
-    op.execute(
-        sa.text(
-            "UPDATE prospective_members SET email = LOWER(TRIM(email)) "
-            "WHERE email IS NOT NULL"
-        )
-    )
-
-    # Historical deployments may already contain duplicates from the former
-    # check-then-insert race. Preserve the oldest application and make later
-    # copies inactive before creating the unique index so upgrades cannot be
-    # blocked by data the old application legitimately allowed.
-    op.execute(
-        sa.text(
-            "UPDATE prospective_members AS duplicate "
-            "JOIN prospective_members AS keeper "
-            "  ON keeper.organization_id = duplicate.organization_id "
-            " AND keeper.status = 'active' "
-            " AND duplicate.status = 'active' "
-            " AND keeper.email = duplicate.email "
-            " AND (keeper.created_at < duplicate.created_at "
-            "      OR (keeper.created_at = duplicate.created_at "
-            "          AND keeper.id < duplicate.id)) "
-            "SET duplicate.status = 'inactive'"
-        )
-    )
-
     if "active_email" not in columns:
         op.execute(
             "ALTER TABLE prospective_members "
