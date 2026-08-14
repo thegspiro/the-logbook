@@ -497,8 +497,12 @@ async def connect_integration(
         integration.set_secret(key, value)
     if clear_salesforce_refresh_token:
         # An explicit blank switches Salesforce from the interactive refresh
-        # grant to client credentials. Omission still means "leave unchanged."
+        # grant to client credentials. Discard the cached access token as well
+        # so the next sync obtains client credentials immediately rather than
+        # continuing as the previous OAuth user until that token expires.
+        # Omission still means "leave unchanged."
         integration.clear_secret("refresh_token")
+        integration.clear_secret("access_token")
     await db.commit()
     await db.refresh(integration)
 
@@ -601,6 +605,7 @@ async def update_integration(
         integration.set_secret(key, value)
     if clear_salesforce_refresh_token:
         integration.clear_secret("refresh_token")
+        integration.clear_secret("access_token")
     await db.commit()
     await db.refresh(integration)
 
