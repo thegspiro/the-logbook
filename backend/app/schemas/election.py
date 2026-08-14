@@ -1190,6 +1190,12 @@ class SavedBallotTemplateCreate(BaseModel):
             raise ValueError("Template name cannot be blank")
         return value
 
+    @field_validator("voting_method")
+    @classmethod
+    def validate_voting_method(cls, value: str) -> str:
+        """Reject templates that could not later be applied to an election."""
+        return _validate_choice(value, VALID_VOTING_METHODS, "voting method")
+
     @field_validator("ballot_items")
     @classmethod
     def unique_item_ids(cls, values: List[BallotItemInput]) -> List[BallotItemInput]:
