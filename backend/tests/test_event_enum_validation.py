@@ -66,6 +66,23 @@ class TestEventEnumValidation:
                 end_datetime=_END,
             )
 
+    def test_recurring_preserves_reminder_and_guest_check_in_options(self):
+        event = RecurringEventCreate(
+            title="T",
+            event_type="training",
+            recurrence_pattern="weekly",
+            rolling_recurrence=True,
+            start_datetime=_START,
+            end_datetime=_END,
+            reminder_target="all",
+            allow_guest_check_in=True,
+            guest_check_in_creates_prospect=True,
+        )
+
+        assert event.reminder_target == "all"
+        assert event.allow_guest_check_in is True
+        assert event.guest_check_in_creates_prospect is True
+
 
 class TestRsvpStatusValidation:
     def test_rsvp_accepts_valid_incl_waitlisted(self):

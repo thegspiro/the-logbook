@@ -384,11 +384,14 @@ export interface RecurringEventCreate {
 
   allow_guests?: boolean | undefined;
   send_reminders?: boolean | undefined;
+  reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
   check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
   check_in_minutes_before?: number | undefined;
   check_in_minutes_after?: number | undefined;
   require_checkout?: boolean | undefined;
+  allow_guest_check_in?: boolean | undefined;
+  guest_check_in_creates_prospect?: boolean | undefined;
   custom_category?: string | undefined;
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;

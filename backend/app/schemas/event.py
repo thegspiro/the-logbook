@@ -893,6 +893,8 @@ class RecurringEventCreate(BaseModel):
     check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
     require_checkout: bool = False
+    allow_guest_check_in: bool = False
+    guest_check_in_creates_prospect: bool = False
     custom_category: Optional[str] = Field(
         None,
         max_length=100,
