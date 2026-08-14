@@ -12,7 +12,7 @@ Nothing has been recorded yet, so make these edits **before** production:
 | **08**     | Add a Room QR short covering search, print/PNG download, rotation invalidating the previous code, and directory permission boundaries.                                                  | New short                   |
 | **12**     | Add saved template election settings, fresh item IDs, physical ballot count, and rejected legacy/invalid ballot edge cases.                                                             | Rewrite template beat       |
 | **13**     | Add admin activity/status counts, order filters, configurable open banner, own payment-method change, and recipient privacy.                                                            | Add chapter + B-roll        |
-| **14, 16** | Add session-to-requirement/program linkage, failed-step point behavior, resume/result visibility rules, and officer-only sign-off boundaries.                                           | Add beat                    |
+| **14, 15, 16** | Add session-to-requirement/program linkage, failed-step point behavior, resume/result visibility rules, and officer-only sign-off boundaries. Script 15 is the dedicated skills-testing walkthrough and must show the updated resume, score breakdown, and candidate visibility behavior.                                           | Add beat                    |
 
 Inserting chapters moves every later timestamp. Re-time the chapter table and
 clip list in the same edit. The full cross-module source is the

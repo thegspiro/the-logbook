@@ -25,7 +25,7 @@ def test_active_prospect_email_has_database_uniqueness_guard():
 def test_uniqueness_migration_reconciles_legacy_duplicates_first():
     migration = (
         Path(__file__).parents[1]
-        / "alembic/versions/20260814_0003_reconcile_active_prospect_emails.py"
+        / "alembic/versions/20260814_0004_reconcile_active_prospect_emails.py"
     ).read_text()
 
     reconcile = migration.index("SET duplicate.status = 'inactive'")

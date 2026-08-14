@@ -382,8 +382,27 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 The revisions and their data/permission backfills for this window are listed in
 the [three-day change audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).
 Of particular importance, active-prospect email reconciliation lives in
-`20260814_0003`, not the already released uniqueness migration. Require one
+`20260814_0004`, not the already released uniqueness migration. Require one
 `alembic heads` result, back up first, run `alembic upgrade head`, and inspect
 reconciliation output. Do not downgrade to repair a branch fork. Installations
 that encountered interim skill resume or saved-ballot revisions are reconciled
-by the later forward migrations.
+by the later forward migrations. `20260814_0005` merges the concurrently landed
+event-reminder branch with this release chain and is the required single head.
+
+### Active-prospect duplicate preflight
+
+`20260812_0003` creates `uq_prospect_org_active_email` before the later
+reconciliation revision. Before upgrading, run:
+
+```sql
+SELECT organization_id, LOWER(TRIM(email)) AS normalized_email, COUNT(*) AS active_rows
+FROM prospective_members
+WHERE status = 'active' AND email IS NOT NULL
+GROUP BY organization_id, LOWER(TRIM(email))
+HAVING COUNT(*) > 1;
+```
+
+A non-empty result is a hard stop. Choose the earliest `created_at` (then lowest
+`id`) as keeper after reviewing linked application data, mark the other rows
+`inactive`, and require a zero-row recheck. Otherwise the unique-index migration
+fails before `20260814_0004` can reconcile anything.

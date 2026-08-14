@@ -8,11 +8,15 @@ checked against its guide caption.
 
 ### SCREENSHOT NEEDED
 
-- Saved-ballot picker showing preserved election settings and the validation
-  state; manual paper-ballot count on election results.
+- Saved-ballot picker showing the visible template name, item count, replacement
+  warning, and action buttons; a separate before/apply/after capture of the
+  election settings form demonstrates that settings were restored. Also capture
+  the manual paper-ballot count on election results.
 - Station-board dashboard and the admin-hours calendar-year/category summary.
 - Store admin activity/status counts, order filters, open-banner toggle, and a
   member changing their own external payment method.
+- Inventory temporary-issue deadline/overdue state and stock arithmetic showing
+  why on-hand and available differ.
 - Room QR Codes directory (search, print, PNG), the regeneration warning, and
   rank-backed apparatus crew positions.
 - Event Settings outreach-form picker, training-session requirement/program
