@@ -34,6 +34,11 @@ const {
   mockAcknowledge,
   mockGetMyTraining,
   mockGetEvents,
+  mockCheckPermission,
+  mockGetAdminSummary,
+  mockGetSetupChecklist,
+  mockGetUserInventory,
+  mockGetInventorySummary,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -43,6 +48,11 @@ const {
   mockAcknowledge: vi.fn(),
   mockGetMyTraining: vi.fn(),
   mockGetEvents: vi.fn(),
+  mockCheckPermission: vi.fn(),
+  mockGetAdminSummary: vi.fn(),
+  mockGetSetupChecklist: vi.fn(),
+  mockGetUserInventory: vi.fn(),
+  mockGetInventorySummary: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -77,16 +87,11 @@ vi.mock('../services/api', () => ({
     getMyTraining: mockGetMyTraining,
   },
   organizationService: {
-    getSetupChecklist: vi.fn().mockResolvedValue({ completed_count: 0, total_count: 0 }),
+    getSetupChecklist: mockGetSetupChecklist,
   },
   inventoryService: {
-    getSummary: vi.fn().mockResolvedValue({
-      total_items: 0,
-      total_value: 0,
-      active_checkouts: 0,
-      overdue_checkouts: 0,
-      maintenance_due_count: 0,
-    }),
+    getUserInventory: mockGetUserInventory,
+    getSummary: mockGetInventorySummary,
     getLowStockItems: vi.fn().mockResolvedValue([]),
   },
   eventService: {
@@ -94,7 +99,7 @@ vi.mock('../services/api', () => ({
   },
   dashboardService: {
     getStats: vi.fn().mockResolvedValue({}),
-    getAdminSummary: vi.fn().mockResolvedValue({}),
+    getAdminSummary: mockGetAdminSummary,
     getActionItems: vi.fn().mockResolvedValue([]),
     getCommunityEngagement: vi.fn().mockResolvedValue({}),
     getBranding: vi.fn().mockResolvedValue({ name: 'Test FD' }),
@@ -110,7 +115,7 @@ vi.mock('../modules/admin-hours/services/api', () => ({
 // Mock auth store
 vi.mock('../stores/authStore', () => ({
   useAuthStore: () => ({
-    checkPermission: vi.fn().mockReturnValue(false),
+    checkPermission: mockCheckPermission,
     user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
   }),
 }));
@@ -152,6 +157,7 @@ const makeShift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
 describe('Dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/');
     mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
     mockGetOpenShifts.mockResolvedValue([]);
     mockSignupForShift.mockResolvedValue({});
@@ -160,6 +166,17 @@ describe('Dashboard', () => {
     mockAcknowledge.mockResolvedValue(undefined);
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(false);
+    mockGetAdminSummary.mockResolvedValue({});
+    mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
+    mockGetUserInventory.mockResolvedValue({ permanent_assignments: [], active_checkouts: [], issued_items: [] });
+    mockGetInventorySummary.mockResolvedValue({
+      total_items: 0,
+      total_value: 0,
+      active_checkouts: 0,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+    });
   });
 
   describe('Next 7 Days', () => {
@@ -418,7 +435,7 @@ describe('Dashboard', () => {
 
       renderWithRouter(<Dashboard />);
 
-      const feed = await screen.findByRole('region', { name: 'Department Feed' });
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
       expect(within(feed).getByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
       expect(within(feed).getByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
       expect(within(feed).getByText('Persistent')).toBeInTheDocument();
@@ -427,22 +444,123 @@ describe('Dashboard', () => {
     it('shows an empty state rather than a card full of nothing', async () => {
       renderWithRouter(<Dashboard />);
 
-      const feed = await screen.findByRole('region', { name: 'Department Feed' });
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
       await waitFor(() => {
         expect(within(feed).getByText('Nothing new')).toBeInTheDocument();
       });
     });
   });
 
-  describe('Overview tab', () => {
+  describe('Organization tab', () => {
+    it('keeps a leader’s personal equipment totals separate from organization inventory', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      mockGetUserInventory.mockResolvedValue({
+        permanent_assignments: [{ item_id: 'item-1', quantity: 1 }],
+        active_checkouts: [],
+        issued_items: [],
+      });
+      mockGetInventorySummary.mockResolvedValue({
+        total_items: 99,
+        total_value: 1000,
+        active_checkouts: 12,
+        overdue_checkouts: 3,
+        maintenance_due_count: 4,
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const equipment = await screen.findByRole('region', { name: 'My Equipment' });
+      expect(within(equipment).getByText('1')).toBeInTheDocument();
+      expect(within(equipment).queryByText('99')).not.toBeInTheDocument();
+      expect(mockGetInventorySummary).not.toHaveBeenCalled();
+    });
+
     it('is hidden from members without settings.manage', async () => {
       renderWithRouter(<Dashboard />);
 
       await waitFor(() => {
         expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
       });
-      expect(screen.queryByRole('tab', { name: 'Overview' })).not.toBeInTheDocument();
-      expect(screen.queryByText('Department Overview')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Organization' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Department-wide staffing, compliance, events, action items, and operations.')
+      ).not.toBeInTheDocument();
+      expect(mockGetAdminSummary).not.toHaveBeenCalled();
+      expect(mockGetSetupChecklist).not.toHaveBeenCalled();
+      expect(mockGetInventorySummary).not.toHaveBeenCalled();
+    });
+
+    it('separates department-wide reporting from the personal dashboard for leaders', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const personalTab = await screen.findByRole('tab', { name: 'My Department' });
+      const organizationTab = screen.getByRole('tab', { name: 'Organization' });
+      expect(personalTab).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByText('Next 7 Days')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
+      expect(mockGetAdminSummary).not.toHaveBeenCalled();
+      expect(mockGetSetupChecklist).not.toHaveBeenCalled();
+      expect(mockGetInventorySummary).not.toHaveBeenCalled();
+
+      await user.click(organizationTab);
+
+      expect(organizationTab).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'My Updates' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Next 7 Days')).not.toBeInTheDocument();
+      expect(window.location.search).toBe('?tab=organization');
+      await waitFor(() => {
+        expect(mockGetAdminSummary).toHaveBeenCalledTimes(1);
+        expect(mockGetSetupChecklist).toHaveBeenCalledTimes(1);
+        expect(mockGetInventorySummary).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('keeps legacy overview bookmarks working', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      window.history.replaceState({}, '', '/dashboard?tab=overview');
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('tab', { name: 'Organization' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
+    });
+
+    it('supports keyboard navigation between leadership views', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const personalTab = await screen.findByRole('tab', { name: 'My Department' });
+      const organizationTab = screen.getByRole('tab', { name: 'Organization' });
+      expect(personalTab).toHaveAttribute('tabindex', '0');
+      expect(organizationTab).toHaveAttribute('tabindex', '-1');
+
+      personalTab.focus();
+      await user.keyboard('{ArrowRight}');
+
+      expect(organizationTab).toHaveAttribute('aria-selected', 'true');
+      expect(organizationTab).toHaveAttribute('tabindex', '0');
+      expect(personalTab).toHaveAttribute('tabindex', '-1');
+      await waitFor(() => expect(organizationTab).toHaveFocus());
+    });
+
+    it('shows a retry state instead of false zero metrics when the organization summary fails', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      mockGetAdminSummary.mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValueOnce({});
+      window.history.replaceState({}, '', '/dashboard?tab=organization');
+      const user = userEvent.setup();
+
+      renderWithRouter(<Dashboard />);
+
+      const alert = await screen.findByRole('alert');
+      expect(within(alert).getByText('Organization summary is unavailable')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
+
+      await user.click(within(alert).getByRole('button', { name: 'Try again' }));
+      await waitFor(() => expect(mockGetAdminSummary).toHaveBeenCalledTimes(2));
     });
   });
 });
