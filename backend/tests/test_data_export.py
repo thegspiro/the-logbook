@@ -2,12 +2,19 @@
 
 import json
 import uuid
+from datetime import date
 
 import pytest
 
 from app.core.audit import audit_logger
 from app.models.inventory import MemberSizePreferences
-from app.models.training import TrainingRecord, TrainingStatus, TrainingType
+from app.models.training import (
+    ShiftCompletionReport,
+    TrainingModuleConfig,
+    TrainingRecord,
+    TrainingStatus,
+    TrainingType,
+)
 from app.models.user import Organization, User
 from app.services.data_export_service import DataExportService
 
@@ -114,6 +121,53 @@ class TestDataExportService:
 
         names = [r["course_name"] for r in export["training_records"]]
         assert names == ["A-Course"]
+
+    async def test_shift_reports_respect_trainee_visibility(self, db_session):
+        org = Organization(name="Export FD", slug=f"export-{uuid.uuid4().hex[:8]}")
+        db_session.add(org)
+        await db_session.flush()
+        trainee = await _make_member(db_session, org)
+        officer = await _make_member(db_session, org)
+        db_session.add(
+            TrainingModuleConfig(
+                organization_id=org.id,
+                show_officer_narrative=False,
+                show_performance_rating=False,
+            )
+        )
+        approved = ShiftCompletionReport(
+            organization_id=org.id,
+            trainee_id=trainee.id,
+            officer_id=officer.id,
+            shift_date=date(2026, 8, 1),
+            hours_on_shift=8,
+            review_status="approved",
+            officer_narrative="Officer-only narrative",
+            performance_rating=2,
+            areas_of_strength="Teamwork",
+            reviewer_notes="Reviewer-only note",
+        )
+        pending = ShiftCompletionReport(
+            organization_id=org.id,
+            trainee_id=trainee.id,
+            officer_id=officer.id,
+            shift_date=date(2026, 8, 2),
+            hours_on_shift=8,
+            review_status="pending_review",
+            officer_narrative="Draft narrative",
+        )
+        db_session.add_all([approved, pending])
+        await db_session.flush()
+
+        export = await DataExportService(db_session).export_user_data(trainee)
+
+        assert len(export["shift_completion_reports"]) == 1
+        exported = export["shift_completion_reports"][0]
+        assert exported["id"] == approved.id
+        assert exported["areas_of_strength"] == "Teamwork"
+        assert "officer_narrative" not in exported
+        assert "performance_rating" not in exported
+        assert "reviewer_notes" not in exported
 
     async def test_audit_summary_counts_only_own_entries(self, db_session):
         org = Organization(name="Export FD", slug=f"export-{uuid.uuid4().hex[:8]}")
