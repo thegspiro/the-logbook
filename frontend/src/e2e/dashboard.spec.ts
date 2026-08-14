@@ -14,7 +14,7 @@ import {
  * Dashboard E2E Tests
  *
  * Covers the station-board layout: greeting, the seven-day list that merges
- * shifts, open slots and events, the three quick actions, the department feed,
+ * shifts, open slots and events, the three quick actions, the personal updates feed,
  * training progress and the hours breakdown — plus empty states and the mobile
  * layout.
  *
@@ -92,13 +92,13 @@ test.describe('Dashboard', () => {
     });
   });
 
-  test.describe('Department Feed', () => {
+  test.describe('My Updates', () => {
     test.beforeEach(async ({ page }) => {
       await gotoDashboard(page);
     });
 
-    test('should display the Department Feed section heading', async ({ page }) => {
-      const heading = page.getByRole('heading', { name: /department feed/i }).first();
+    test('should display the My Updates section heading', async ({ page }) => {
+      const heading = page.getByRole('heading', { name: /my updates/i }).first();
       await expect(heading).toBeVisible({ timeout: 10000 });
     });
 
@@ -164,7 +164,7 @@ test.describe('Dashboard', () => {
       await expect(greeting).toBeVisible({ timeout: 10000 });
 
       await expect(page.getByRole('heading', { name: /next 7 days/i }).first()).toBeVisible();
-      await expect(page.getByRole('heading', { name: /department feed/i }).first()).toBeVisible();
+      await expect(page.getByRole('heading', { name: /my updates/i }).first()).toBeVisible();
       await expect(page.locator('main')).toBeVisible();
     });
 
@@ -173,7 +173,7 @@ test.describe('Dashboard', () => {
       await gotoDashboard(page);
 
       const timeline = page.getByRole('heading', { name: /next 7 days/i }).first();
-      const feed = page.getByRole('heading', { name: /department feed/i }).first();
+      const feed = page.getByRole('heading', { name: /my updates/i }).first();
       await expect(timeline).toBeVisible({ timeout: 10000 });
       await expect(feed).toBeVisible();
 
