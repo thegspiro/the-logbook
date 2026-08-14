@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Three-day release documentation handoff (2026-08-14)
+
+**Documentation**
+
+- Audited the net changes from 2026-08-12 through 2026-08-14 and published a
+  single cross-functional map of pages, routes, models and data points,
+  Alembic migration order, end-to-end data paths, organization/permission
+  sharing boundaries, operational edge cases, screenshot replacements, and
+  YouTube script updates. The narrative audit is
+  [`docs/CHANGE_AUDIT_2026-08-12_TO_14.md`](docs/CHANGE_AUDIT_2026-08-12_TO_14.md);
+  its generated 879-path net manifest is retained beside it for traceability.
+- Added the same handoff to the repository wiki index and added explicit
+  **SCREENSHOT NEEDED** / **REPLACE** and pre-recording script queues so media
+  work cannot be mistaken for completed documentation.
+
 ### Messaging: the guides now say what delivery actually does (2026-08-13)
 
 **Changed**
