@@ -102,6 +102,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import Organization, User
 from app.services.email_service import _redact_email
 
+
+def _resolve_event_reminder_target(event: Any) -> str:
+    """Return the stored audience, retaining legacy mandatory-event behavior."""
+    return getattr(event, "reminder_target", None) or (
+        "all" if event.is_mandatory else "going"
+    )
+
+
 # Schedule definitions (for documentation and frontend display)
 SCHEDULE = {
     "election_lifecycle": {
@@ -835,7 +843,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # Determine recipients once for all due intervals
                 recipients = []
-                reminder_target = getattr(event, "reminder_target", "going")
+                reminder_target = _resolve_event_reminder_target(event)
                 if reminder_target == "all":
                     users_result = await db.execute(
                         select(User)
