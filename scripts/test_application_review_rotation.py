@@ -33,6 +33,23 @@ class ApplicationReviewRotationTest(unittest.TestCase):
         assert state == "waiting"
         assert feature is None
 
+    def test_open_issue_from_removed_queue_item_blocks_advancement(self):
+        state, feature = select_next_feature(
+            self.config,
+            [{"body": feature_marker("removed-feature"), "state": "open"}],
+        )
+
+        assert state == "waiting"
+        assert feature is None
+
+    def test_unmarked_labelled_issue_does_not_block_advancement(self):
+        state, feature = select_next_feature(
+            self.config, [{"body": "Ordinary labelled issue", "state": "open"}]
+        )
+
+        assert state == "create"
+        assert feature["id"] == "inventory"
+
     def test_closed_issue_advances_queue(self):
         state, feature = select_next_feature(self.config, [self.issue("inventory")])
 

@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / ".github" / "application-review-rotation.json"
 MARKER_PREFIX = "<!-- application-review-rotation:"
 FEATURE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+FEATURE_MARKER_PATTERN = re.compile(
+    rf"{re.escape(MARKER_PREFIX)}([a-z0-9]+(?:-[a-z0-9]+)*) -->"
+)
 
 
 class GitHubApiError(RuntimeError):
@@ -120,12 +123,10 @@ def feature_marker(feature_id: str) -> str:
     return f"{MARKER_PREFIX}{feature_id} -->"
 
 
-def issue_feature_id(issue: dict[str, Any], valid_ids: set[str]) -> str | None:
+def issue_feature_id(issue: dict[str, Any]) -> str | None:
     body = issue.get("body") or ""
-    for feature_id in valid_ids:
-        if feature_marker(feature_id) in body:
-            return feature_id
-    return None
+    match = FEATURE_MARKER_PATTERN.search(body)
+    return match.group(1) if match else None
 
 
 def issue_body(feature: dict[str, str], position: int, total: int) -> str:
@@ -156,15 +157,17 @@ def select_next_feature(
 ) -> tuple[str, dict[str, str] | None]:
     features = config["features"]
     valid_ids = {feature["id"] for feature in features}
-    rotation_issues = [
-        (issue, issue_feature_id(issue, valid_ids))
-        for issue in issues
-        if "pull_request" not in issue
-    ]
+    rotation_issues: list[tuple[dict[str, Any], str]] = []
+    for issue in issues:
+        if "pull_request" in issue:
+            continue
+        feature_id = issue_feature_id(issue)
+        if feature_id is not None:
+            rotation_issues.append((issue, feature_id))
     open_ids = {
         feature_id
         for issue, feature_id in rotation_issues
-        if feature_id and issue.get("state") == "open"
+        if issue.get("state") == "open"
     }
     if open_ids:
         return "waiting", None
@@ -172,7 +175,7 @@ def select_next_feature(
     completed_ids = {
         feature_id
         for issue, feature_id in rotation_issues
-        if feature_id and issue.get("state") == "closed"
+        if feature_id in valid_ids and issue.get("state") == "closed"
     }
     for feature in features:
         if feature["id"] not in completed_ids:

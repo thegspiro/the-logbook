@@ -45,7 +45,9 @@ the review is complete.
   When this coordinator is introduced partway through a pass, omit features
   already completed rather than reopening them under a second tracking system.
 - Keep feature IDs unique and stable. Closed issues are the durable progress
-  record, so renaming an ID makes that feature appear new.
+  record, so renaming an ID makes that feature appear new. An open issue with a
+  removed or renamed feature ID still blocks advancement; close or migrate that
+  issue before changing the active queue.
 - Append new review areas instead of inserting urgent work ahead of an active
   issue. Reordering unfinished entries changes their future execution order.
 - Validate changes locally with:
