@@ -499,3 +499,24 @@ action buttons visible._
   means two videos to re-record every time the feature moves.
 - The workflow beat (14:15) is the most-clipped segment of the original
   26-minute cut. Give it a clean in-point.
+
+## AUGUST 14 RELEASE INSERTS — HONEST SKILL STATE AND LINKED SESSIONS
+
+### Add to Skills Testing — 1:00
+
+> "A failed step can cost points without automatically failing the entire test;
+> critical criteria and the configured passing rule still control the result.
+> Resume conflicts are scoped to the current test and require refresh/reconcile,
+> not a blind retry. Result visibility and official-test policy are enforced by
+> the server, including what appears in a trainee's personal export."
+
+### Add to Training Events — 0:45
+
+**[SCREEN: session editor with Requirement, Course, and Program.]**
+
+> "Link a session to the requirement, course, and program it should advance.
+> Cross-organization or mismatched links are rejected. Approved attendance feeds
+> only the owned requirement, and deleting a program cannot take a requirement it
+> does not own with it."
+
+**EDITOR:** Add 1:45 and re-time Chapters 2–4 and the clip table. Keep Script 15 as the canonical detailed skills-testing demonstration.

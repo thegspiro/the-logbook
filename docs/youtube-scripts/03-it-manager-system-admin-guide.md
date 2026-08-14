@@ -1033,3 +1033,34 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 | Member Data Rights            | 36:30–38:00 | "Privacy Choices & Data Export for Members"    |
 | Anonymizing a Departed Member | 38:00–39:00 | "Removing a Former Member's Personal Data"     |
 | Admin Quick Reference         | 39:00–42:00 | "IT Manager Quick Reference Guide"             |
+
+## AUGUST 14 RELEASE INSERTS — OPERATIONS, PERMISSIONS, AND PRIVACY
+
+### Insert in Security Configuration — 1:15
+
+**[SCREEN: audit archive directory modes, then a personal export with officer-only training fields absent.]**
+
+> "New audit archive directories are owner-only—zero-seven-zero-zero—and files
+> are zero-six-zero-zero from the instant they are created. Existing archives
+> are not changed automatically, so audit the historical path during upgrade.
+> Personal-data exports also honor Training result visibility: hiding an
+> officer-only shift evaluation in the app hides it from a newly generated
+> trainee export. Existing downloaded files are not recalled."
+
+### Insert in Position & Permission Management — 0:45
+
+**[SCREEN: `members.view` role sees Directory but not Scanner; add `users.view`, refresh, show Scanner.]**
+
+> "Directory access and scanning are intentionally different. `members.view`
+> opens redacted colleague profiles. The ID-card scanner requires `users.view`
+> or `members.manage`. Navigation and direct-route protection use that same OR
+> rule, so do not grant broad user access merely to make a menu item appear."
+
+### Insert in Maintenance & Operations — 1:15
+
+Use the TLS and migration narration from Script 01. Also show
+`AUDIT_LOG_LEGACY_MAX_ID` as a one-time upgrade boundary, explain that new
+installs leave it at zero, and state that account reset cannot target an account
+holding permissions the operator lacks.
+
+**EDITOR:** Add 3:15 total and re-time Chapters 5 onward and the clip table.

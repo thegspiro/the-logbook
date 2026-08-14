@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### YouTube scripts: August release changes are written into the takes (2026-08-14)
+
+**Documentation**
+
+- Replaced the script-currency-only queue with word-for-word recording inserts in
+  scripts 01, 03, 04, 06, 07, 12, 13, 14, 15, and 16, plus new Room QR Short
+  8AF. The scripts now cover TLS/upgrades, dashboard data scopes, Events,
+  permissions/privacy, notification cleanup, saved/frozen-roll elections,
+  storefront operations, linked training sessions, and skills scoring/resume/
+  visibility behavior with screen directions and edge-case narration.
+- Each changed script now identifies its insertion point, B-roll state, runtime
+  added, and exact chapters/clip tables requiring re-timing. Final timecodes are
+  intentionally a recording-production task because narration pacing determines
+  them; no behavioral content remains only in `SCRIPT_CURRENCY.md`.
+
+
 ### Events: reminder audience and check-in teaching update (2026-08-14)
 
 **Changed**

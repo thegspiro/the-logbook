@@ -547,3 +547,24 @@ The following segments can be cut into standalone short videos:
 | Environment Setup | 8:30–11:00 | "Configuring The Logbook Environment File" |
 | Raspberry Pi Setup | 13:00–14:00 | "Running The Logbook on a Raspberry Pi" |
 | Troubleshooting | 18:00–19:00 | "3 Common Install Issues (and How to Fix Them)" |
+
+## AUGUST 14 RELEASE INSERT — TLS AND SAFE UPGRADES
+
+**Place after “START THE SERVICES.” Add 1:30; re-time every later chapter.**
+
+**[SCREEN: `.env`, with secrets blurred; highlight `SECURITY_REQUIRE_TLS`. Then terminal: `alembic heads` returning one line.]**
+
+> "The production Compose profile now fails closed on transport security. If
+> your database or Redis connection is not using TLS, the application will not
+> quietly start anyway. Configure `DB_SSL` and `REDIS_SSL`, or—only on a network
+> you have deliberately accepted as trusted—set `SECURITY_REQUIRE_TLS=false`.
+> That is an explicit risk decision, not a troubleshooting shortcut."
+>
+> "Before any upgrade, back up the database and encryption keys separately.
+> Run `alembic heads` and require exactly one line. If the active-prospect
+> duplicate preflight in the upgrade notes returns rows, stop: review linked
+> applications, keep the earliest record, mark the other active duplicates
+> inactive, and re-run the query. Only then run `alembic upgrade head`. Never
+> downgrade just to repair a migration fork."
+
+**ON-SCREEN CALLOUT:** Existing audit archives are not permission-migrated; inspect historical archive modes after upgrade.

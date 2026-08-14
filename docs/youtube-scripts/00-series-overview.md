@@ -1,11 +1,11 @@
 # The Logbook — YouTube Tutorial Series Overview
 
 > **Before recording anything, read
-> [SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md).** It tracks which scripts have gone
-> out of date against the application and what has to change before the take —
-> which is the cheap moment to fix it. As of **2026-08-11** it flags corrections
-> in scripts **04**, **06** and **07**, a possible addition to **03**, and five
-> proposed new shorts.
+> [SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md).** It tracks code-to-script drift and
+> the recording patches applied before production. As of **2026-08-14**, scripts
+> **01, 03, 04, 06, 07, 12, 13, 14, 15, and 16** contain word-for-word August
+> release inserts, and Short **8AF** covers Room QR rotation. Editors must apply
+> each script's explicit re-timing note before recording.
 
 ## Series Structure
 

@@ -1,25 +1,24 @@
 # Script currency
 
-## Flagged by the 2026-08-12 → 08-14 changes
+## Resolved in-script for the 2026-08-12 → 08-14 changes
 
-Nothing has been recorded yet, so make these edits **before** production:
+The previously flagged material is now written word-for-word in the actual
+scripts rather than living only in this queue:
 
-| Script     | Required update                                                                                                                                                                         | Disposition                 |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| **01, 03** | Production transport TLS is fail-closed; explain the explicit plaintext override, single-head Alembic check, reconciliation review, audit legacy boundary, and reset privilege ceiling. | Narration + terminal B-roll |
-| **04, 06** | Replace the old dashboard tour with the station-board layout; call out conditional panels, pending/persistent messages, calendar-year admin-hours totals, and mobile targets.           | Rewrite + B-roll            |
-| **04, 07 (events)** | Show the reminder-audience selector (`going` / `all` / `none`), mandatory/optional defaults, preference-aware email, and the Flexible 60-minute check-in default with the overlapping-meeting 15-minute exception. | Rewrite + event-form B-roll |
-| **03, 06 (permissions)** | Distinguish `members.view` directory/profile access from the `users.view` or `members.manage` scanner gate, and show the same result in navigation and direct routes. | Narration + B-roll |
-| **03, 06 (privacy)** | Explain that personal exports honor Training result visibility, that existing downloads are not recalled, and that new audit archives are owner-only while historical modes require an operator audit. | Add security/privacy beat |
-| **07**     | Explain action-related notification auto-archive and retain the corrected rule that every targeted department message gets best-effort email.                                           | Add beat                    |
-| **08**     | Add a Room QR short covering search, print/PNG download, rotation invalidating the previous code, and directory permission boundaries.                                                  | New short                   |
-| **12**     | Add saved template election settings, fresh item IDs, physical ballot count, and rejected legacy/invalid ballot edge cases.                                                             | Rewrite template beat       |
-| **13**     | Add admin activity/status counts, order filters, configurable open banner, own payment-method change, and recipient privacy.                                                            | Add chapter + B-roll        |
-| **14, 15, 16** | Add session-to-requirement/program linkage, failed-step point behavior, resume/result visibility rules, and officer-only sign-off boundaries. Script 15 is the dedicated skills-testing walkthrough and must show the updated resume, score breakdown, and candidate visibility behavior.                                           | Add beat                    |
+| Scripts | Applied update |
+|---|---|
+| **01, 03** | Fail-closed TLS, duplicate preflight, single Alembic head, audit legacy boundary, reset ceiling, archive modes, export visibility |
+| **04, 06** | Personal/Organization dashboard scopes, conditional cards, directory/scanner permissions, privacy exports |
+| **04, 07** | Event reminder audience, defaults, email preferences, 60-minute Flexible window, overlap/guest edges, related-notification cleanup |
+| **08** | New Short **8AF**: Room QR search, PNG/print, rotation invalidation, safe demo handling |
+| **12** | Saved ballot boundaries/settings verification, fresh IDs, frozen roll at issuance/redemption, paper turnout bounds |
+| **13** | Store banner, member payment-method change, activity/status counts and filters, recipient privacy |
+| **14, 16** | Session requirement/course/program linkage and ownership/cross-org edges |
+| **15, 16** | Point deduction vs overall failure, per-test resume conflicts, server policy and result/export visibility |
 
-Inserting chapters moves every later timestamp. Re-time the chapter table and
-clip list in the same edit. The full cross-module source is the
-[`three-day change audit`](../CHANGE_AUDIT_2026-08-12_TO_14.md).
+Every affected file carries an **EDITOR** instruction giving the inserted runtime
+and the chapters/clip tables that must be re-timed. Script text is current; final
+timecodes remain a production edit because pacing depends on the recorded take.
 
 Which YouTube scripts still describe the application, and which have gone out of
 date. Companion to
