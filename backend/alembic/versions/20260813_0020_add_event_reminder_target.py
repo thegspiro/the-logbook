@@ -31,7 +31,23 @@ def upgrade() -> None:
     op.execute(
         sa.text("UPDATE events SET reminder_target = 'all' WHERE is_mandatory = 1")
     )
+    op.add_column(
+        "event_templates",
+        sa.Column(
+            "reminder_target",
+            sa.String(length=20),
+            nullable=False,
+            server_default="going",
+        ),
+    )
+    op.execute(
+        sa.text(
+            "UPDATE event_templates SET reminder_target = 'all' "
+            "WHERE is_mandatory = 1"
+        )
+    )
 
 
 def downgrade() -> None:
+    op.drop_column("event_templates", "reminder_target")
     op.drop_column("events", "reminder_target")

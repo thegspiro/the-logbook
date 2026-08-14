@@ -675,6 +675,7 @@ class EventTemplateCreate(BaseModel):
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
     require_checkout: bool = False
     send_reminders: bool = True
+    reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
     custom_fields_template: Optional[Dict[str, Any]] = None
 
@@ -707,6 +708,7 @@ class EventTemplateUpdate(BaseModel):
     check_in_minutes_after: Optional[int] = Field(None, ge=0)
     require_checkout: Optional[bool] = None
     send_reminders: Optional[bool] = None
+    reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
     custom_fields_template: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
@@ -737,6 +739,7 @@ class EventTemplateResponse(UTCResponseBase):
     check_in_minutes_after: Optional[int] = None
     require_checkout: bool
     send_reminders: bool
+    reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
     custom_fields_template: Optional[Dict[str, Any]] = None
     is_active: bool

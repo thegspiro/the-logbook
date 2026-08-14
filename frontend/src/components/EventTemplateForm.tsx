@@ -71,6 +71,9 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
 
   // Reminders
   const [sendReminders, setSendReminders] = useState(initialData?.send_reminders ?? false);
+  const [reminderTarget, setReminderTarget] = useState<'going' | 'all' | 'none'>(
+    initialData?.reminder_target ?? 'going'
+  );
   const [reminderSchedule, setReminderSchedule] = useState(initialData?.reminder_schedule?.join(', ') ?? '');
 
   // Check-in settings
@@ -115,6 +118,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
       is_mandatory: isMandatory,
       allow_guests: allowGuests,
       send_reminders: sendReminders,
+      reminder_target: sendReminders ? reminderTarget : 'none',
       require_checkout: requireCheckout,
     };
 
@@ -367,21 +371,37 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
             </div>
 
             {sendReminders && (
-              <div>
-                <label htmlFor="template-reminder-schedule" className={labelClass}>
-                  Reminder Schedule (hours before event, comma-separated)
-                </label>
-                <input
-                  id="template-reminder-schedule"
-                  type="text"
-                  value={reminderSchedule}
-                  onChange={(e) => setReminderSchedule(e.target.value)}
-                  className={inputClass}
-                  placeholder="24, 2"
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Enter hours before the event when reminders should be sent.
-                </p>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="template-reminder-target" className={labelClass}>
+                    Who should receive reminders?
+                  </label>
+                  <select
+                    id="template-reminder-target"
+                    value={reminderTarget}
+                    onChange={(e) => setReminderTarget(e.target.value as 'going' | 'all' | 'none')}
+                    className={inputClass}
+                  >
+                    <option value="going">Members who sign up</option>
+                    <option value="all">All active members</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="template-reminder-schedule" className={labelClass}>
+                    Reminder Schedule (hours before event, comma-separated)
+                  </label>
+                  <input
+                    id="template-reminder-schedule"
+                    type="text"
+                    value={reminderSchedule}
+                    onChange={(e) => setReminderSchedule(e.target.value)}
+                    className={inputClass}
+                    placeholder="24, 2"
+                  />
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    Enter hours before the event when reminders should be sent.
+                  </p>
+                </div>
               </div>
             )}
           </div>

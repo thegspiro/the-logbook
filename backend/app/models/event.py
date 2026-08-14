@@ -390,6 +390,9 @@ class EventTemplate(Base):
     # Notification defaults
     send_reminders = Column(Boolean, nullable=False, default=True, server_default="1")
     reminder_schedule = Column(JSON, nullable=False, default=lambda: [24])
+    reminder_target = Column(
+        String(20), nullable=False, default="going", server_default="going"
+    )
 
     # Custom fields template (structure for custom data fields)
     custom_fields_template = Column(JSON, nullable=True)

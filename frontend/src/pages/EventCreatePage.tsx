@@ -50,6 +50,7 @@ function templateToInitialData(template: EventTemplate): Partial<EventCreate> {
     check_in_minutes_after: template.check_in_minutes_after || undefined,
     require_checkout: template.require_checkout,
     send_reminders: template.send_reminders,
+    reminder_target: template.reminder_target,
     reminder_schedule: template.reminder_schedule,
     custom_fields:
       (template.custom_fields_template as Record<string, string | number | boolean | null> | undefined) || undefined,

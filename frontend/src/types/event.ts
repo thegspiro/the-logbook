@@ -327,6 +327,7 @@ export interface EventTemplate {
   check_in_minutes_after?: number;
   require_checkout: boolean;
   send_reminders: boolean;
+  reminder_target: 'going' | 'all' | 'none';
   reminder_schedule: number[];
   custom_fields_template?: Record<string, unknown>;
   is_active: boolean;
@@ -354,6 +355,7 @@ export interface EventTemplateCreate {
   check_in_minutes_after?: number | undefined;
   require_checkout?: boolean | undefined;
   send_reminders?: boolean | undefined;
+  reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
   custom_fields_template?: Record<string, unknown> | undefined;
 }
