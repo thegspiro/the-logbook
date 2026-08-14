@@ -909,6 +909,23 @@ class StoreWindowSummaryResponse(UTCResponseBase):
     tallies: List[StoreWindowProductTally] = Field(default_factory=list)
 
 
+class StoreDashboardActivityResponse(UTCResponseBase):
+    """A recent order-timeline event with enough order context to act on it."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    order_id: str
+    order_number: str
+    customer_name: str
+    event_type: StoreOrderEventType
+    from_status: Optional[str] = None
+    to_status: Optional[str] = None
+    message: Optional[str] = None
+    author_name: Optional[str] = None
+    created_at: datetime
+
+
 class StoreDashboardResponse(UTCResponseBase):
     """Admin landing-page rollup"""
 
@@ -916,6 +933,7 @@ class StoreDashboardResponse(UTCResponseBase):
 
     is_enabled: bool
     active_window: Optional[StoreOrderWindowResponse] = None
+    new_order_count: int
     open_order_count: int
     awaiting_payment_count: int
     pending_verification_count: int
@@ -923,6 +941,11 @@ class StoreDashboardResponse(UTCResponseBase):
     outstanding_balance: Decimal
     collected_this_window: Decimal
     active_product_count: int
+    # Complete workflow distribution, including zero-value statuses.  The
+    # admin overview uses this to expose every queue rather than making staff
+    # infer it from the ten most recent orders.
+    status_counts: Dict[str, int] = Field(default_factory=dict)
+    recent_activity: List[StoreDashboardActivityResponse] = Field(default_factory=list)
     recent_orders: List[StoreOrderResponse] = Field(default_factory=list)
 
 
