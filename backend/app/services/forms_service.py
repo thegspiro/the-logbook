@@ -350,6 +350,11 @@ class FormsService:
         try:
             fields_data = form_data.pop("fields", None) or []
             integration_type_str = form_data.pop("integration_type", None)
+            # Persist the lightweight ownership marker in addition to the
+            # detailed integration row created below. This keeps module forms
+            # discoverable even when no fields can be mapped automatically.
+            if integration_type_str:
+                form_data["integration_type"] = integration_type_str
 
             form = Form(
                 organization_id=organization_id, created_by=created_by, **form_data
@@ -486,6 +491,7 @@ class FormsService:
         category: Optional[FormCategory] = None,
         search: Optional[str] = None,
         is_template: Optional[bool] = None,
+        integration_type: Optional[IntegrationType] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[Form], int]:
@@ -504,6 +510,20 @@ class FormsService:
 
         if is_template is not None:
             query = query.where(Form.is_template == is_template)
+
+        if integration_type:
+            # Newer forms carry the integration type directly, while forms
+            # created by older module generators only have a related
+            # FormIntegration row. Include both representations so module
+            # settings pages do not lose track of legacy forms.
+            query = query.where(
+                or_(
+                    Form.integration_type == integration_type,
+                    Form.integrations.any(
+                        FormIntegration.integration_type == integration_type
+                    ),
+                )
+            )
 
         if search:
             safe_search = (

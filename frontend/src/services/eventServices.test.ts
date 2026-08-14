@@ -449,6 +449,18 @@ describe('eventService', () => {
 // eventRequestService
 // ============================================
 describe('eventRequestService', () => {
+  describe('getForms', () => {
+    it('should GET the event-scoped outreach forms endpoint', async () => {
+      const forms = { forms: [], total: 0, skip: 0, limit: 50 };
+      mockGet.mockResolvedValueOnce({ data: forms });
+
+      const result = await eventRequestService.getForms({ limit: 50 });
+
+      expect(mockGet).toHaveBeenCalledWith('/event-requests/forms', { params: { limit: 50 } });
+      expect(result).toEqual(forms);
+    });
+  });
+
   describe('listRequests', () => {
     it('should GET /event-requests with params', async () => {
       const requests = [{ id: 'r1', status: 'pending' }];
