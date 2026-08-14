@@ -63,4 +63,44 @@ describe('EventTemplateForm reminder audience', () => {
       })
     );
   });
+
+  it('does not re-enable reminders when they were explicitly disabled', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <EventTemplateForm
+        initialData={{
+          id: 'template-1',
+          organization_id: 'org-1',
+          name: 'No reminders',
+          event_type: 'business_meeting',
+          requires_rsvp: false,
+          is_mandatory: false,
+          allow_guests: false,
+          require_checkout: false,
+          send_reminders: true,
+          reminder_target: 'going',
+          reminder_schedule: [24],
+          is_active: true,
+          created_at: '2026-08-14T00:00:00Z',
+          updated_at: '2026-08-14T00:00:00Z',
+        }}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText(/send reminders/i));
+    await user.click(screen.getByRole('button', { name: /rsvp & attendance/i }));
+    await user.click(screen.getByLabelText(/mandatory attendance/i));
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        is_mandatory: true,
+        send_reminders: false,
+        reminder_target: 'none',
+      })
+    );
+  });
 });

@@ -370,7 +370,10 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 id="template-send-reminders"
                 type="checkbox"
                 checked={sendReminders}
-                onChange={(e) => setSendReminders(e.target.checked)}
+                onChange={(e) => {
+                  reminderAudienceEdited.current = true;
+                  setSendReminders(e.target.checked);
+                }}
                 className={checkboxClass}
               />
               <label htmlFor="template-send-reminders" className="text-theme-text-primary text-sm">
