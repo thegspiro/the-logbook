@@ -95,6 +95,7 @@ test.describe('Dashboard', () => {
   test.describe('Department Feed', () => {
     test.beforeEach(async ({ page }) => {
       await gotoDashboard(page);
+      await page.getByRole('tab', { name: 'Organization' }).click();
     });
 
     test('should display the Department Feed section heading', async ({ page }) => {
@@ -164,7 +165,7 @@ test.describe('Dashboard', () => {
       await expect(greeting).toBeVisible({ timeout: 10000 });
 
       await expect(page.getByRole('heading', { name: /next 7 days/i }).first()).toBeVisible();
-      await expect(page.getByRole('heading', { name: /department feed/i }).first()).toBeVisible();
+      await expect(page.getByRole('button', { name: /log training/i })).toBeVisible();
       await expect(page.locator('main')).toBeVisible();
     });
 
@@ -173,16 +174,16 @@ test.describe('Dashboard', () => {
       await gotoDashboard(page);
 
       const timeline = page.getByRole('heading', { name: /next 7 days/i }).first();
-      const feed = page.getByRole('heading', { name: /department feed/i }).first();
+      const actions = page.getByRole('button', { name: /log training/i });
       await expect(timeline).toBeVisible({ timeout: 10000 });
-      await expect(feed).toBeVisible();
+      await expect(actions).toBeVisible();
 
       const timelineBox = await timeline.boundingBox();
-      const feedBox = await feed.boundingBox();
+      const actionsBox = await actions.boundingBox();
       expect(timelineBox).not.toBeNull();
-      expect(feedBox).not.toBeNull();
-      // Single-column layout: the rail sits below the seven-day list.
-      expect(feedBox?.y ?? 0).toBeGreaterThan(timelineBox?.y ?? 0);
+      expect(actionsBox).not.toBeNull();
+      // Single-column layout: quick actions sit below the seven-day list.
+      expect(actionsBox?.y ?? 0).toBeGreaterThan(timelineBox?.y ?? 0);
     });
   });
 
