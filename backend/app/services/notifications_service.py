@@ -10,7 +10,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import safe_error_detail
@@ -304,7 +304,7 @@ class NotificationsService:
         try:
             now = datetime.now(timezone.utc)
             result = await self.db.execute(
-                select(NotificationLog)
+                update(NotificationLog)
                 .where(NotificationLog.organization_id == str(organization_id))
                 .where(NotificationLog.channel == NotificationChannel.IN_APP)
                 .where(NotificationLog.category == category)
@@ -314,23 +314,20 @@ class NotificationsService:
                         NotificationLog.expires_at > now,
                     )
                 )
+                .where(
+                    NotificationLog.notification_metadata[resource_key].as_string()
+                    == str(resource_id)
+                )
+                .values(
+                    expires_at=now,
+                    read=True,
+                    read_at=func.coalesce(NotificationLog.read_at, now),
+                )
             )
-            matched = []
-            for log in result.scalars().all():
-                metadata = log.notification_metadata or {}
-                if str(metadata.get(resource_key, "")) != str(resource_id):
-                    continue
-                # expires_at powers the active/archive split used by the inbox.
-                # Marking it read at the same time keeps historical unread
-                # totals accurate when an administrator includes archives.
-                log.expires_at = now
-                log.read = True
-                log.read_at = log.read_at or now
-                matched.append(log)
-
-            if matched:
+            matched = result.rowcount or 0
+            if matched > 0:
                 await self.db.commit()
-            return len(matched)
+            return matched
         except Exception:
             await self.db.rollback()
             logger.exception(
