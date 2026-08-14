@@ -376,3 +376,14 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 > chain, so `alembic upgrade head` is unambiguous.
 > `tests/test_alembic_migrations.py` validates the single-head DAG (it
 > understands merge migrations).
+
+## August 12–14, 2026 upgrade set
+
+The revisions and their data/permission backfills for this window are listed in
+the [three-day change audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).
+Of particular importance, active-prospect email reconciliation lives in
+`20260814_0003`, not the already released uniqueness migration. Require one
+`alembic heads` result, back up first, run `alembic upgrade head`, and inspect
+reconciliation output. Do not downgrade to repair a branch fork. Installations
+that encountered interim skill resume or saved-ballot revisions are reconciled
+by the later forward migrations.

@@ -1457,3 +1457,7 @@ This replaces the previous workaround of reusing the `sendBallotEmail` endpoint 
 ---
 
 **Previous:** [Shifts & Scheduling](./03-scheduling.md) | **Next:** [Inventory Management](./05-inventory.md)
+
+## August 12–14, 2026 update
+
+Event outreach-form discovery, configured membership tiers, and early-end attendance behavior from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#events-and-outreach-forms), including the required event-admin screenshot.

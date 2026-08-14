@@ -1686,3 +1686,15 @@ review.
 ---
 
 *Last Updated: August 10, 2026*
+
+## August 12–14, 2026 scheduling/apparatus connections
+
+Shift settings now travel through organization-scoped GET/PUT/DELETE settings
+endpoints and persist in `SchedulingModuleConfig`; frontend state and caches must
+be keyed by organization. Shift templates can reference vehicle fields and
+apparatus crew positions use rank IDs as canonical data, retaining legacy names
+for display only. Completion/report flows remain available to authorized
+members after equipment-check administration was tightened. Related completion
+actions archive matching notifications by organization plus entity/action ID,
+not by presentation text. See
+[training lesson 19](./training/19-august-2026-release-changes.md#apparatus-crew-seats-and-scheduling-settings).

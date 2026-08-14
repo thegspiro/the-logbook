@@ -675,3 +675,7 @@ She clicks **Export CSV** to download the data for the monthly operations report
 ---
 
 **Previous:** [Apparatus & Facilities](./06-apparatus-facilities.md) | **Next:** [Administration & Reports](./08-admin-reports.md)
+
+## August 12–14, 2026 update
+
+The event-scoped public-outreach form catalog and its permission/data-sharing boundaries are covered in [the August 12–14 release lesson](./19-august-2026-release-changes.md#events-and-outreach-forms).

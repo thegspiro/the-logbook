@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the same handoff to the repository wiki index and added explicit
   **SCREENSHOT NEEDED** / **REPLACE** and pre-recording script queues so media
   work cannot be mistaken for completed documentation.
+- Updated the relevant storefront, forms, prospective-member, scheduling,
+  training-program, and Alembic references plus the affected numbered training
+  guides. Added an operator-facing release lesson with exact screenshot state,
+  required demo data, permissions, non-shared data, and edge cases for each
+  changed workflow; expanded the wiki page so it also works outside `docs/`.
 
 ### Messaging: the guides now say what delivery actually does (2026-08-13)
 

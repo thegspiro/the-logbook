@@ -672,3 +672,9 @@ The next week, Steve checks the integrations dashboard:
 ---
 
 **Previous:** [Prospective Members Pipeline](./15-prospective-members.md) | **Next:** [Privacy & Your Data](./17-privacy-data-rights.md)
+
+## August 12–14, 2026 update
+
+Salesforce retry, pagination, secret handling, and redacted webhook diagnostics
+are taught in [the release workflow lesson](./19-august-2026-release-changes.md#notifications-and-integrations),
+with a redacted readiness/preview screenshot marker and invalid-credential edge case.

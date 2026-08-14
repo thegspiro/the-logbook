@@ -1,21 +1,45 @@
 # Recent changes: August 12–14, 2026
 
-The canonical three-day release handoff is maintained in
-[`docs/CHANGE_AUDIT_2026-08-12_TO_14.md`](../docs/CHANGE_AUDIT_2026-08-12_TO_14.md).
+This wiki handoff is intentionally usable without the repository `docs/` tree.
+The deeper engineering audit is available in the source repository at
+[`docs/CHANGE_AUDIT_2026-08-12_TO_14.md`](https://github.com/thegspiro/the-logbook/blob/work/docs/CHANGE_AUDIT_2026-08-12_TO_14.md).
 
-It covers:
+## Pages and connection points
 
-- every changed product area and user-facing page;
-- API/service connection points, models, persisted data points, and data paths;
-- the complete Alembic upgrade route and migration edge cases;
-- organization, permission, privacy, and external-integration sharing rules;
-- training steps needing screenshots and existing images needing replacement;
-- YouTube scripts that must change before recording; and
-- an exact 879-file net manifest for release traceability.
+| Area                        | Pages                                                           | API/data connection                                                                                      | Boundary and important edge cases                                                                                                                                                                                                                                              |
+| --------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Elections                   | Ballot Builder, saved templates, results/runoffs                | `/api/v1/elections/templates/saved-ballots`; `SavedBallotTemplate`; manual paper count                   | `elections.manage`, per organization. Templates copy settings/structure but never candidates, voters, tokens, votes, attendance, or results; applying creates new item IDs. Names are case-insensitively unique. Invalid methods/items and paper counts above the roster fail. |
+| Dashboard/admin hours       | Station board and Summary                                       | dashboard/report services; calendar-year and category totals                                             | Pending/persistent messages replace arbitrary recent history. Conditional cards are not always present. Calendar year is not rolling 365 days.                                                                                                                                 |
+| Storefront                  | Store Admin, order filters, member order                        | `/storefront/*`; `show_store_open_banner`; status/activity counts; payment-method PATCH                  | Counts, filters, locks, and orders are organization-scoped. Members edit only their order. Payment reporting is not payment processing. Recipient lists stay private.                                                                                                          |
+| Facilities/QR/apparatus     | Room QR directory, room/facility pages, apparatus crew editor   | facility counts, location display-code regeneration, rank-backed crew positions                          | Bulk directory is restricted. Rotation invalidates old signs. `facilities.view_sensitive` does not grant edit. Rank IDs are canonical; legacy names are display fallback.                                                                                                      |
+| Events/forms/prospects      | Event Settings outreach picker and prospect progress            | `/event-requests/forms`; normalized active-prospect email; skip/advance/approval services                | Only event admins discover public-outreach forms. Active email uniqueness is organization + active rows. Signers authenticate; gated/final stages reject unsafe skips; deleted interviewers remain historical.                                                                 |
+| Training/skills             | Session editor, program pages, skill runner/results             | session by-event/linkage endpoints; requirement/course/program IDs; `resume_count` and result visibility | Linked records must belong together and to the organization. Undated records cannot satisfy recency. Officer-only state stays private. A failed step may deduct points without forcing overall failure.                                                                        |
+| Scheduling/equipment checks | Shift settings, calendar, checklist reports                     | settings GET/PUT/DELETE; `SchedulingModuleConfig`; related notifications                                 | Settings/cache keys include organization. Authorized member completion remains available despite tighter template administration. Matching action completion archives only its related notification.                                                                           |
+| Integrations                | Salesforce readiness, preview, sync                             | encrypted secret, external IDs, retry/backoff and pagination cursor                                      | Secret exists decrypted only in process and is absent from logs/responses. Retries cover transient failures, not bad credentials. Webhook diagnostics are redacted.                                                                                                            |
+| Authentication/operations   | OAuth/MFA, Error Code Reference, audit/error logs, installation | rotating refresh family, `LB-*`, `AUDIT_LOG_LEGACY_MAX_ID`, production TLS                               | OAuth cannot bypass MFA; replay revocation commits before 401; reset authority has a privilege ceiling. Production TLS fails closed unless explicitly overridden. Public errors expose support codes, not internals.                                                           |
 
-Use the canonical document instead of duplicating its large tables here, so
-the wiki and repository documentation cannot drift. User-facing highlights are
-saved ballot settings, station-board/admin-hours dashboards, storefront counts
-and filters, Room QR tooling, rank-backed apparatus seats, event-scoped
-outreach forms, training-session linkage, related-notification cleanup, and
-security/upgrade hardening.
+## Database upgrade route
+
+Back up database and encryption keys separately, require one result from
+`alembic heads`, then run `alembic upgrade head`. The window contains saved
+ballot templates/settings, skill resume reconciliation, active-prospect
+uniqueness/reconciliation, public portal key/timestamp hardening, shift vehicle
+and crew data, training-result visibility, sensitive-facility permission,
+manual paper-ballot counts, scheduling settings, mandatory membership types,
+and the store-open banner. Active-email reconciliation is in
+`20260814_0003`; inspect its logs before and after rollout. Never downgrade just
+to repair a migration fork.
+
+## Documentation and media actions
+
+Screenshots are still needed for saved ballot settings/paper count, the station
+board and admin-hours categories, store counts/filters/banner/payment method,
+Room QR download/print/rotation, rank-backed crew seats, event outreach forms,
+training-session linkage/skill scoring, notification auto-archive, and redacted
+Salesforce readiness. Replace older images showing the prior versions of those
+screens, and re-check changed mobile headers/cards/actions at 375px.
+
+Before recording, update YouTube scripts **01/03** (TLS/migrations/security),
+**04/06** (dashboard), **07** (messages/notification cleanup), **08** (Room QR),
+**12** (elections), **13** (store), and **14/16** (training/skills). Recalculate
+all later timestamps after inserting a chapter.

@@ -2013,3 +2013,7 @@ look there.
 ---
 
 **Previous:** [Documents & Forms](./07-documents-forms.md) | **Next:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)
+
+## August 12–14, 2026 update
+
+The station-board, calendar-year admin-hours summary, related-notification cleanup, and operator upgrade notes are covered in [the August 12–14 release lesson](./19-august-2026-release-changes.md#dashboard-and-admin-hours).

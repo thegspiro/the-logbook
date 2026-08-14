@@ -705,3 +705,7 @@ Alex Rivera is now a full member of the Oakville Fire Department.
 ---
 
 **Previous:** [Elections & Voting](./14-elections.md) | **Next:** [Integrations](./16-integrations.md)
+
+## August 12–14, 2026 update
+
+Active-email reconciliation, authenticated approvals, gated/final stage behavior, historical deleted interviewers, and applicant scrubbing are catalogued in [the technical release map](../CHANGE_AUDIT_2026-08-12_TO_14.md#release-map).
