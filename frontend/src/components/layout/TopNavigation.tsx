@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import {
   LogOut,
-  Menu,
-  X,
   Sun,
   Moon,
   Monitor,
@@ -496,21 +494,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               </button>
             </div>
           </nav>
-
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-theme-text-primary hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2.5 transition-colors focus:ring-2 focus:outline-hidden md:hidden"
-            aria-expanded={mobileMenuOpen}
-            aria-controls="mobile-menu"
-            aria-label={mobileMenuOpen ? 'Close main menu' : 'Open main menu'}
-          >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" aria-hidden="true" />
-            ) : (
-              <Menu className="h-6 w-6" aria-hidden="true" />
-            )}
-          </button>
         </div>
 
         {/* Mobile Navigation */}
