@@ -27,7 +27,7 @@ export const EventEditPage: React.FC = () => {
 
   useEffect(() => {
     void eventService
-      .getEvents({ end_after: new Date().toISOString() })
+      .getEvents({ end_after: new Date().toISOString(), limit: 500 })
       .then((data) => {
         setUserEvents(
           data.map((e) => ({
@@ -35,6 +35,7 @@ export const EventEditPage: React.FC = () => {
             title: e.title,
             start_datetime: e.start_datetime,
             end_datetime: e.end_datetime,
+            event_type: e.event_type,
           }))
         );
       })
@@ -131,9 +132,10 @@ export const EventEditPage: React.FC = () => {
     is_mandatory: event.is_mandatory,
     allow_guests: event.allow_guests,
     send_reminders: event.send_reminders,
+    reminder_target: event.reminder_target,
     reminder_schedule: event.reminder_schedule,
     check_in_window_type: event.check_in_window_type ?? 'flexible',
-    check_in_minutes_before: event.check_in_minutes_before ?? 30,
+    check_in_minutes_before: event.check_in_minutes_before ?? 60,
     check_in_minutes_after: event.check_in_minutes_after ?? 15,
     require_checkout: event.require_checkout ?? false,
     allow_guest_check_in: event.allow_guest_check_in ?? false,
