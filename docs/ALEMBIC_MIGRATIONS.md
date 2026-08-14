@@ -386,4 +386,24 @@ Of particular importance, active-prospect email reconciliation lives in
 `alembic heads` result, back up first, run `alembic upgrade head`, and inspect
 reconciliation output. Do not downgrade to repair a branch fork. Installations
 that encountered interim skill resume or saved-ballot revisions are reconciled
-by the later forward migrations.
+by the later forward migrations. `20260814_0004` performs the Captain permission
+repair and merges the event-reminder branch into this release chain, producing
+the required single head without changing the published `0002`/`0003` identities.
+
+### Active-prospect duplicate preflight
+
+`20260812_0003` creates `uq_prospect_org_active_email` before the later
+reconciliation revision. Before upgrading, run:
+
+```sql
+SELECT organization_id, LOWER(TRIM(email)) AS normalized_email, COUNT(*) AS active_rows
+FROM prospective_members
+WHERE status = 'active' AND email IS NOT NULL
+GROUP BY organization_id, LOWER(TRIM(email))
+HAVING COUNT(*) > 1;
+```
+
+A non-empty result is a hard stop. Choose the earliest `created_at` (then lowest
+`id`) as keeper after reviewing linked application data, mark the other rows
+`inactive`, and require a zero-row recheck. Otherwise the unique-index migration
+fails before `20260814_0003` can reconcile anything.

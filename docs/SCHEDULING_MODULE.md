@@ -1689,7 +1689,7 @@ review.
 
 ## August 12–14, 2026 scheduling/apparatus connections
 
-Shift settings now travel through organization-scoped GET/PUT/DELETE settings
+Shift settings now travel through organization-scoped `GET/PUT/DELETE /api/v1/scheduling/shift-settings`
 endpoints and persist in `SchedulingModuleConfig`; frontend state and caches must
 be keyed by organization. Shift templates can reference vehicle fields and
 apparatus crew positions use rank IDs as canonical data, retaining legacy names

@@ -1051,3 +1051,30 @@ Validate — the refusal appears]**
 - When capturing the candidate search, use a demo org with enough members that
   the 15-result cap is visible — the cap silently truncating is the part viewers
   need to see, not be told.
+
+## AUGUST 14 RELEASE INSERTS — POINTS, RESUME, AND RESULT VISIBILITY
+
+### Add to “SCORING ON A PHONE” — 0:45
+
+> "A failed step can deduct its configured points without independently forcing
+> the whole test to fail. Critical criteria and the template's overall passing
+> rule still decide the final result. Show the score breakdown, not just the red
+> step, before explaining why the result passed or failed."
+
+### Add to “THE TIMER” / “TWO PEOPLE, ONE TEST” — 0:35
+
+> "Resume count belongs to this test. A conflict response is not permission to
+> blindly retry against another evaluator's newer state: refresh this test,
+> reconcile the saved attempt, and then continue. Official-test policy fields
+> remain server-enforced even if a stale client sends different values."
+
+### Add to “WHO SEES THE RESULT” — 0:40
+
+> "Result visibility applies to the member screen and to a newly generated
+> personal-data export. Hiding officer-only evaluation fields is not hiding the
+> underlying completion history, and changing the setting does not recall an
+> export already downloaded."
+
+**[SCREEN: one point-deduction result; resume-conflict state; member result; export field summary. Never show private notes.]**
+
+**EDITOR:** Add 2:00, re-time Chapters 3 onward and shorts references. Update Short 15E narration to say resume is per-test and conflict requires refresh, not automatic retry.

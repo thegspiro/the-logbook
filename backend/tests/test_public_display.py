@@ -90,7 +90,7 @@ class TestPublicDisplayWindow:
         _patch_location_service(monkeypatch, [event])
         result = await _call()
         reported = datetime.fromisoformat(result.current_events[0]["check_in_start"])
-        expected = event.start_datetime - timedelta(minutes=30)
+        expected = event.start_datetime - timedelta(minutes=60)
         assert abs((reported - expected).total_seconds()) < 1
 
     async def test_invalid_display_code_404s(self, monkeypatch):

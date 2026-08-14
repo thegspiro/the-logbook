@@ -20,7 +20,7 @@ confirmation; invalid/duplicate item IDs and voting methods are rejected;
 count quorum can exceed 100 but percentage quorum cannot. Manual paper ballots
 must be entered as an attested count and cannot exceed the eligible roster.
 
-> **[SCREENSHOT NEEDED — Ballot Builder → Your saved ballots, showing the saved election settings; seed one organization-owned template and no candidate/vote data.]**
+> **[SCREENSHOT NEEDED — Ballot Builder → Your saved ballots, showing the visible template name, item count, replacement warning, and action buttons; seed one organization-owned template and no candidate/vote data. Follow with a before/apply/after election-settings capture because preserved settings are applied silently and are not summarized in the picker.]**
 >
 > **[SCREENSHOT NEEDED — closed election results showing manual paper-ballot count and its roster-bound validation.]**
 
@@ -85,7 +85,16 @@ rank or settings cache; finalization resolves apparatus labels in batches.
 
 > **[SCREENSHOT NEEDED — apparatus form crew-position rank picker, including one legacy read-only position in the demo data.]**
 
-## Events and outreach forms
+## Events, reminders, check-in, and outreach forms
+
+Event and template Notifications now store a reminder audience: `going` for
+members who RSVP Going, `all` for every active member in the organization, or
+`none` to disable reminders. Optional events default to `going`; mandatory
+events default to `all` until explicitly edited. Flexible check-in now defaults
+to 60 minutes before start, with the full workflow, delivery caveats, early
+member/guest distinction, and screenshot requirements in
+[Events & Meetings](./04-events-meetings.md#reminder-audience-and-one-hour-check-in-default-august-14-2026).
+
 
 The Event Settings outreach picker discovers only related public-outreach forms
 and only for event administrators. Mandatory-event eligibility uses the
@@ -140,4 +149,9 @@ from `alembic heads`, and run `alembic upgrade head`. Production transport TLS
 is fail-closed unless the operator explicitly acknowledges a plaintext
 configuration. The active-prospect reconciliation may consolidate duplicate
 active emails within an organization; review migration logs before and after.
-Never downgrade merely to repair a migration fork.
+Before upgrading, run the active-prospect duplicate query in the
+[technical audit](../CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).
+A non-empty result is a hard stop: review linked applications, keep the earliest
+record, mark the remaining duplicate active rows inactive, and re-run the query.
+The unique index otherwise fails before the later reconciliation can run. Never
+downgrade merely to repair a migration fork.

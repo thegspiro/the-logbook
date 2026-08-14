@@ -674,3 +674,40 @@ and tables.]**
 | What's Expiring on Your Trucks | 20:15–21:30 | "What's About to Expire on Your Apparatus"      |
 | Generating Reports             | 22:15–23:45 | "Generating Reports for Officer Meetings"       |
 | Chief's Daily Routine          | 25:15–26:45 | "The Chief's Daily Routine on The Logbook"      |
+
+## AUGUST 14 RELEASE INSERTS — DASHBOARD, EVENTS, AND ELECTION BOUNDARIES
+
+### Replace “DASHBOARD OVERVIEW”
+
+**[SCREEN: Personal tab, then Organization tab. Keep the same leader signed in.]**
+
+> "The dashboard is two deliberate data scopes. Personal is my equipment,
+> training, activity, and attention items. Organization loads department-wide
+> reporting only when an authorized leader opens it. A summary card can be
+> visible without granting its management action, and conditional cards stay
+> absent when their module or data is unavailable."
+
+### Add to “CREATING AN EVENT”
+
+**[SCREEN: Notifications → Who should receive reminders? Show all three choices; then Check-In Settings.]**
+
+> "Choose who receives reminders separately from when they go out. Members who
+> sign up means RSVP Going—not Maybe, waitlisted, or no response. All active
+> members stays inside this department. No reminders disables delivery. Optional
+> events default to sign-ups; mandatory events default to all active members
+> until I make an explicit choice. Email still follows each member's preference."
+>
+> "Flexible self-check-in now opens sixty minutes early. Strict opens at the
+> actual or scheduled start; Window defaults to fifteen minutes on either side.
+> If a prior meeting overlaps that hour, the create flow can shorten the lead to
+> fifteen minutes. A known member may receive an early informational notice;
+> anonymous guests remain blocked until the configured window."
+
+### Add to Elections
+
+> "The voter roll freezes when voting opens. Ballot email issuance and token
+> redemption both enforce that snapshot. A secretary override is the explicit
+> way to admit a late eligibility change; a legacy election with no snapshot is
+> the compatibility exception."
+
+**EDITOR:** Add 2:30 and fix the pre-existing 17:30–18:00 / 17:45–18:00 overlap while re-timing every later chapter.

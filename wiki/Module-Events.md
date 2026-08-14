@@ -455,3 +455,19 @@ The `custom_category` field is available on all event create/update/list endpoin
 ---
 
 **See also:** [Scheduling Module](Module-Scheduling) | [Training Module](Module-Training) | [Public Programs How-To](Public-Programs)
+
+
+## Reminder audience and check-in defaults (August 14, 2026)
+
+Event and template forms persist `reminder_target` separately from the reminder
+schedule: `going` targets active members who RSVP Going, `all` targets all active
+members in the organization, and `none` disables delivery. Optional events
+default to `going`; mandatory events default to `all` until an organizer makes
+an explicit choice. Legacy null values resolve with the same mandatory/optional
+fallback. Email still follows each recipient's notification preference.
+
+Flexible self-check-in now defaults to 60 minutes before start through actual or
+scheduled end. Strict opens at actual/scheduled start; Window defaults to 15
+minutes on each side. An overlapping prior meeting can reduce the new event's
+lead time to 15 minutes. Guest early check-in remains blocked; a known member on
+a Flexible event can be admitted early with a localized informational notice.

@@ -244,3 +244,11 @@ In addition to the system-wide audit log, each member has a dedicated audit hist
 ---
 
 **See also:** [Security Overview](Security-Overview) | [Encryption](Security-Encryption) | [HIPAA Security Features](Security-HIPAA)
+
+## Archive file permissions (August 14, 2026)
+
+New archive directories use `0700` and files use `0600`, created through an
+exclusive file descriptor so audit data is never briefly published with a
+permissive mode. Historical archives are not changed automatically; operators
+must inspect and remediate them during upgrade without weakening the live
+archive path for backup convenience.
