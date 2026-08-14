@@ -26,6 +26,7 @@ const settings = (overrides: Record<string, unknown> = {}) => ({
   isEnabled: true,
   storeName: 'Department Store',
   currency: 'USD',
+  showOpenOrderBanner: true,
   acceptedPaymentMethods: ['cash'],
   paymentPolicy: 'none',
   taxRate: '0',
@@ -155,6 +156,27 @@ describe('StoreSettingsTab notification switches', () => {
           sendWindowClosed: true,
           sendWindowClosingReminder: true,
           sendPaymentReceipts: true,
+        })
+      )
+    );
+  });
+
+  it('lets an always-open store hide the ordering banner', async () => {
+    const user = userEvent.setup();
+    render(<StoreSettingsTab onChanged={vi.fn()} />);
+
+    const banner = await screen.findByRole('checkbox', {
+      name: /Show prominent store status banner/,
+    });
+    expect(banner).toBeChecked();
+
+    await user.click(banner);
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          showOpenOrderBanner: false,
         })
       )
     );

@@ -103,6 +103,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
+    ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store' } as NavItem] : []),
     ...(isModuleOn('training')
       ? [
           {
@@ -130,7 +131,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Inventory', path: '/inventory' },
             ]
           : []),
-        ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store' }] : []),
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus' }]
           : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
