@@ -287,6 +287,60 @@ class NotificationsService:
         )
         return result.scalar() or 0
 
+    async def archive_related_notifications(
+        self,
+        organization_id: UUID | str,
+        category: str,
+        resource_key: str,
+        resource_id: UUID | str,
+    ) -> int:
+        """Archive in-app prompts whose related action has been completed.
+
+        Action-producing notifications already carry resource identifiers in
+        their metadata.  Keeping the lookup here gives completion endpoints a
+        common, idempotent way to remove stale prompts without coupling the
+        notification table to every resource table in the application.
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            result = await self.db.execute(
+                select(NotificationLog)
+                .where(NotificationLog.organization_id == str(organization_id))
+                .where(NotificationLog.channel == NotificationChannel.IN_APP)
+                .where(NotificationLog.category == category)
+                .where(
+                    or_(
+                        NotificationLog.expires_at.is_(None),
+                        NotificationLog.expires_at > now,
+                    )
+                )
+            )
+            matched = []
+            for log in result.scalars().all():
+                metadata = log.notification_metadata or {}
+                if str(metadata.get(resource_key, "")) != str(resource_id):
+                    continue
+                # expires_at powers the active/archive split used by the inbox.
+                # Marking it read at the same time keeps historical unread
+                # totals accurate when an administrator includes archives.
+                log.expires_at = now
+                log.read = True
+                log.read_at = log.read_at or now
+                matched.append(log)
+
+            if matched:
+                await self.db.commit()
+            return len(matched)
+        except Exception:
+            await self.db.rollback()
+            logger.exception(
+                "Failed to archive %s notification for %s=%s",
+                category,
+                resource_key,
+                resource_id,
+            )
+            return 0
+
     async def mark_all_user_notifications_read(
         self, organization_id: UUID, user_id: UUID
     ) -> int:

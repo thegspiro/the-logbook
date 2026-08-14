@@ -7,6 +7,7 @@ which returns a generic message for non-validation exceptions and logs the real
 error. DB mocked; no MySQL.
 """
 
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 from app.core.utils import _GENERIC_ERROR
@@ -62,3 +63,57 @@ class TestNotificationLogEagerRelationships:
         mapper = NotificationLog.__mapper__
         assert mapper.relationships["rule"].lazy == "joined"
         assert mapper.relationships["recipient"].lazy == "joined"
+
+
+class TestRelatedActionArchiving:
+    async def test_archives_only_notification_for_completed_resource(self):
+        matching = MagicMock(
+            notification_metadata={"event_id": "event-1"},
+            read=False,
+            read_at=None,
+            expires_at=None,
+        )
+        other = MagicMock(
+            notification_metadata={"event_id": "event-2"},
+            read=False,
+            read_at=None,
+            expires_at=None,
+        )
+        scalars = MagicMock()
+        scalars.all.return_value = [matching, other]
+        result = MagicMock()
+        result.scalars.return_value = scalars
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        count = await NotificationsService(db).archive_related_notifications(
+            "org-1", "event_validation", "event_id", "event-1"
+        )
+
+        assert count == 1
+        assert matching.read is True
+        assert isinstance(matching.read_at, datetime)
+        assert matching.expires_at == matching.read_at
+        assert other.read is False
+        assert other.expires_at is None
+        db.commit.assert_awaited_once()
+        db.rollback.assert_not_awaited()
+
+    async def test_no_match_is_idempotent_without_a_commit(self):
+        scalars = MagicMock()
+        scalars.all.return_value = []
+        result = MagicMock()
+        result.scalars.return_value = scalars
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        count = await NotificationsService(db).archive_related_notifications(
+            "org-1", "shift_validation", "shift_id", "shift-1"
+        )
+
+        assert count == 0
+        db.commit.assert_not_awaited()
