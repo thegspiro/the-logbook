@@ -15,6 +15,8 @@ class ApplicationReviewRotationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.config = load_config(Path(".github/application-review-rotation.json"))
+        cls.first_id = cls.config["features"][0]["id"]
+        cls.second_id = cls.config["features"][1]["id"]
 
     def issue(self, feature_id, state="closed"):
         return {"body": feature_marker(feature_id), "state": state}
@@ -23,11 +25,11 @@ class ApplicationReviewRotationTest(unittest.TestCase):
         state, feature = select_next_feature(self.config, [])
 
         assert state == "create"
-        assert feature["id"] == "inventory"
+        assert feature["id"] == self.first_id
 
     def test_open_issue_blocks_advancement(self):
         state, feature = select_next_feature(
-            self.config, [self.issue("inventory", state="open")]
+            self.config, [self.issue(self.first_id, state="open")]
         )
 
         assert state == "waiting"
@@ -48,22 +50,22 @@ class ApplicationReviewRotationTest(unittest.TestCase):
         )
 
         assert state == "create"
-        assert feature["id"] == "inventory"
+        assert feature["id"] == self.first_id
 
     def test_closed_issue_advances_queue(self):
-        state, feature = select_next_feature(self.config, [self.issue("inventory")])
+        state, feature = select_next_feature(self.config, [self.issue(self.first_id)])
 
         assert state == "create"
-        assert feature["id"] == "facilities"
+        assert feature["id"] == self.second_id
 
     def test_pull_requests_do_not_count_as_review_issues(self):
-        issue = self.issue("inventory")
+        issue = self.issue(self.first_id)
         issue["pull_request"] = {"url": "https://example.invalid"}
 
         state, feature = select_next_feature(self.config, [issue])
 
         assert state == "create"
-        assert feature["id"] == "inventory"
+        assert feature["id"] == self.first_id
 
     def test_all_closed_completes_rotation(self):
         issues = [self.issue(feature["id"]) for feature in self.config["features"]]
