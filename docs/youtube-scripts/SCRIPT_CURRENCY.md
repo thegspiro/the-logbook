@@ -1,5 +1,23 @@
 # Script currency
 
+## Flagged by the 2026-08-12 → 08-14 changes
+
+Nothing has been recorded yet, so make these edits **before** production:
+
+| Script     | Required update                                                                                                                                                                         | Disposition                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| **01, 03** | Production transport TLS is fail-closed; explain the explicit plaintext override, single-head Alembic check, reconciliation review, audit legacy boundary, and reset privilege ceiling. | Narration + terminal B-roll |
+| **04, 06** | Replace the old dashboard tour with the station-board layout; call out conditional panels, pending/persistent messages, calendar-year admin-hours totals, and mobile targets.           | Rewrite + B-roll            |
+| **07**     | Explain action-related notification auto-archive and retain the corrected rule that every targeted department message gets best-effort email.                                           | Add beat                    |
+| **08**     | Add a Room QR short covering search, print/PNG download, rotation invalidating the previous code, and directory permission boundaries.                                                  | New short                   |
+| **12**     | Add saved template election settings, fresh item IDs, physical ballot count, and rejected legacy/invalid ballot edge cases.                                                             | Rewrite template beat       |
+| **13**     | Add admin activity/status counts, order filters, configurable open banner, own payment-method change, and recipient privacy.                                                            | Add chapter + B-roll        |
+| **14, 16** | Add session-to-requirement/program linkage, failed-step point behavior, resume/result visibility rules, and officer-only sign-off boundaries.                                           | Add beat                    |
+
+Inserting chapters moves every later timestamp. Re-time the chapter table and
+clip list in the same edit. The full cross-module source is the
+[`three-day change audit`](../CHANGE_AUDIT_2026-08-12_TO_14.md).
+
 Which YouTube scripts still describe the application, and which have gone out of
 date. Companion to
 [`docs/training/SCREENSHOT_CURRENCY.md`](../training/SCREENSHOT_CURRENCY.md),
@@ -79,13 +97,13 @@ left edge** of the header on every signed-in page.
 **Section: the `SECURITY_REQUIRE_TLS` beat (~35:00, script lines 595–610)** ·
 **Wrong.**
 
-The callout — *"Defaults to false so upgrading can't refuse to boot your
-instance"* — is no longer true for the stack this series installs.
+The callout — _"Defaults to false so upgrading can't refuse to boot your
+instance"_ — is no longer true for the stack this series installs.
 `docker-compose.prod.yml` now defaults `SECURITY_REQUIRE_TLS` to **true**, so
 an upgrade of the documented production stack running the bundled plaintext
 MySQL/Redis **will** refuse to start until the operator either configures
 `DB_SSL`/`REDIS_SSL` or writes an explicit `SECURITY_REQUIRE_TLS=false` into
-`.env`. The *application* default is still `false` — the compose file is what
+`.env`. The _application_ default is still `false` — the compose file is what
 changed — but the narration is delivered over that compose file, so as
 recorded it would promise the opposite of what the viewer experiences.
 Rewrite the beat as: "the production compose ships fail-closed; here is the
@@ -124,7 +142,7 @@ wants: build the slate once, click **Save as Template**, and next year apply
 it instead of rebuilding. Two things worth saying on camera, because they are
 the two questions a secretary will ask: applying one **replaces** the current
 ballot (it confirms twice for that reason), and a template carries the
-ballot's *structure only* — never candidates, voters, votes, or attendance,
+ballot's _structure only_ — never candidates, voters, votes, or attendance,
 so last year's nominees do not haunt this year's ballot. Budget ~45 seconds;
 it also makes a natural short ("Never rebuild your officer ballot again").
 
@@ -134,7 +152,7 @@ election** / **Keep it open** — any capture of the old browser popup is
 stale, and the narration ("confirm") still holds.
 
 **Section: `PAPER BALLOTS, ATTESTATION` (43:00 – 49:00)** · **No change —
-recorded here because the narration got *truer*.** The line "No unverified
+recorded here because the narration got _truer_.** The line "No unverified
 paper ever slides into a certified total" was written before 2026-08-12,
 when a pending batch — excluded from published results — could still steer
 **runoff advancement** and **membership-package outcomes** at close. That

@@ -2622,3 +2622,15 @@ For questions or issues with the Training Programs module:
 ---
 
 _Last Updated: July 14, 2026_
+
+## August 12–14, 2026 session and requirement connections
+
+Training sessions can be retrieved by event and patched with requirement,
+course, and program linkage. Approval feeds progress only when those records
+belong to the organization and form a valid program relationship. Requirement
+ownership is preserved when deleting programs. Official skill-test policy,
+resume count, and result visibility are server enforced; undated training does
+not satisfy recency, and member responses exclude officer-only checklist and
+sign-off state. A failed skill step may deduct points without independently
+forcing the entire evaluation to fail. See
+[training lesson 19](./training/19-august-2026-release-changes.md#training-sessions-programs-and-skills-tests).

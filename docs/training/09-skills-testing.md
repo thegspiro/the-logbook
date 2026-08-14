@@ -1325,3 +1325,7 @@ Competency Matrix reflects new scores
 ---
 
 **Previous:** [Administration & Reports](./08-admin-reports.md) | **Next:** [Mobile & PWA Usage](./10-mobile-pwa.md)
+
+## August 12–14, 2026 update
+
+Point deductions, resume conflicts, result visibility, and officer-only state from August 12–14 are covered with a screenshot marker in [the release workflow lesson](./19-august-2026-release-changes.md#training-sessions-programs-and-skills-tests).
