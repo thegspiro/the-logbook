@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { Home, Calendar, Clock, GraduationCap, Menu, Users, FileText } from 'lucide-react';
+import { Home, Calendar, Clock, GraduationCap, Menu, Users, FileText, Store } from 'lucide-react';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { prefetchRoute } from '../../utils/routePrefetch';
 
@@ -29,6 +29,7 @@ interface TabDef {
 const TAB_CANDIDATES: TabDef[] = [
   { label: 'Home', path: '/dashboard', icon: Home },
   { label: 'Events', path: '/events', icon: Calendar },
+  { label: 'Store', path: '/store', icon: Store, module: 'storefront' },
   { label: 'Schedule', path: '/scheduling', icon: Clock, module: 'scheduling' },
   { label: 'Training', path: '/training/my-training', icon: GraduationCap, module: 'training' },
   { label: 'Members', path: '/members', icon: Users },

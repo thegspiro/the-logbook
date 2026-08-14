@@ -64,6 +64,7 @@ class StoreSettingsUpdate(BaseModel):
     tagline: Optional[str] = Field(None, max_length=300)
     description: Optional[str] = None
     currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    show_open_order_banner: Optional[bool] = None
 
     accepted_payment_methods: Optional[List[StorePaymentMethod]] = None
     payment_policy: Optional[StorePaymentPolicy] = None
@@ -158,6 +159,7 @@ class StoreSettingsResponse(UTCResponseBase):
     tagline: Optional[str] = None
     description: Optional[str] = None
     currency: str
+    show_open_order_banner: bool
 
     accepted_payment_methods: List[str] = Field(default_factory=list)
     payment_policy: StorePaymentPolicy = StorePaymentPolicy.NONE
@@ -539,6 +541,7 @@ class StorefrontResponse(UTCResponseBase):
     tagline: Optional[str] = None
     description: Optional[str] = None
     currency: str
+    show_open_order_banner: bool
     terms_text: Optional[str] = None
     allow_pickup: bool
     allow_shipping: bool

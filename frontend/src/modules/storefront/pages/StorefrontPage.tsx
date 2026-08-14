@@ -8,7 +8,18 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { CalendarClock, Loader2, Minus, Package, Plus, ShoppingBag, ShoppingCart, Store, Trash2 } from 'lucide-react';
+import {
+  CalendarClock,
+  CheckCircle2,
+  Loader2,
+  Minus,
+  Package,
+  Plus,
+  ShoppingBag,
+  ShoppingCart,
+  Store,
+  Trash2,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { Modal } from '../../../components/Modal';
@@ -259,6 +270,25 @@ const StorefrontPage: React.FC = () => {
             <span className="hidden sm:inline">My orders</span>
           </Link>
         </div>
+
+        {storefront.showOpenOrderBanner && (
+          <div
+            className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-emerald-800 dark:text-emerald-200"
+            role="status"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="font-semibold">Ordering is open</p>
+              <p className="text-sm">
+                {storefront.window.closesAt
+                  ? `Place your order by ${formatDateTime(storefront.window.closesAt, tz)}.`
+                  : 'Browse the available items and place your order now.'}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="card mb-6 p-4">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">

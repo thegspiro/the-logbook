@@ -38,8 +38,8 @@ describe('BottomNavigation', () => {
     renderBar();
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getByText('Events')).toBeInTheDocument();
+    expect(screen.getByText('Store')).toBeInTheDocument();
     expect(screen.getByText('Schedule')).toBeInTheDocument();
-    expect(screen.getByText('Training')).toBeInTheDocument();
     expect(screen.getByText('More')).toBeInTheDocument();
   });
 
