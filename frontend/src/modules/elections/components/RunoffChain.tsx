@@ -10,7 +10,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowRight, CheckCircle2, Circle, Loader2, RotateCcw, Vote, XCircle } from 'lucide-react';
 import { electionService } from '../../../services/api';
-import type { Election } from '../../../types/election';
+import type { Election, ElectionListItem } from '../../../types/election';
 import { ElectionStatus } from '../../../constants/enums';
 import { getStatusBadgeClass } from '../../../utils/electionHelpers';
 
@@ -50,11 +50,11 @@ export const RunoffChain: React.FC<RunoffChainProps> = ({ election }) => {
 
       // The list response carries the runoff relationship, so building the
       // chain stays one request regardless of how many elections exist.
-      const details = new Map<string, Election>(elections.map((item) => [item.id, item]));
+      const details = new Map<string, Election | ElectionListItem>(elections.map((item) => [item.id, item]));
       details.set(election.id, election);
 
       // Climb to the root, guarding against a cycle in the parent links.
-      let root: Election = election;
+      let root: Election | ElectionListItem = election;
       const climbed = new Set<string>([root.id]);
       while (root.parent_election_id) {
         const parent = details.get(root.parent_election_id);
@@ -63,7 +63,7 @@ export const RunoffChain: React.FC<RunoffChainProps> = ({ election }) => {
         root = parent;
       }
 
-      const toNode = (e: Election): ChainNode => ({
+      const toNode = (e: Election | ElectionListItem): ChainNode => ({
         id: e.id,
         title: e.title,
         status: e.status,
