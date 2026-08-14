@@ -60,8 +60,6 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
     return `${format(summary.periodStart)} – ${format(summary.periodEnd)}`;
   }, [summary]);
 
-  const largestCategoryHours = Math.max(0, ...(summary?.byCategory.map((category) => category.totalHours) ?? []));
-
   return (
     <div className="space-y-6">
       <section className="bg-theme-surface border-theme-surface-border rounded-lg border p-5 shadow-sm">
@@ -206,9 +204,11 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                 {[...summary.byCategory]
                   .sort((a, b) => b.totalHours - a.totalHours)
                   .map((category) => {
-                    const share =
-                      summary.totalHours > 0 ? Math.round((category.totalHours / summary.totalHours) * 100) : 0;
-                    const width = largestCategoryHours > 0 ? (category.totalHours / largestCategoryHours) * 100 : 0;
+                    const exactShare =
+                      summary.totalHours > 0
+                        ? Math.min(100, Math.max(0, (category.totalHours / summary.totalHours) * 100))
+                        : 0;
+                    const share = Math.round(exactShare);
                     return (
                       <div key={category.categoryId}>
                         <div className="mb-1.5 flex items-baseline justify-between gap-4">
@@ -226,10 +226,17 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                             </span>
                           </span>
                         </div>
-                        <div className="bg-theme-surface-hover h-2 overflow-hidden rounded-full">
+                        <div
+                          className="bg-theme-surface-hover h-2 overflow-hidden rounded-full"
+                          role="progressbar"
+                          aria-label={`${category.categoryName}: ${share}% of counted hours`}
+                          aria-valuenow={share}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                        >
                           <div
                             className="h-full rounded-full"
-                            style={{ width: `${width}%`, backgroundColor: category.categoryColor ?? '#6B7280' }}
+                            style={{ width: `${exactShare}%`, backgroundColor: category.categoryColor ?? '#6B7280' }}
                           />
                         </div>
                       </div>
