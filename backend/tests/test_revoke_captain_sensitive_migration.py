@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 import sqlalchemy as sa
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
@@ -27,6 +28,18 @@ def _run(engine, direction="upgrade"):
         context = MigrationContext.configure(connection)
         with Operations.context(context):
             getattr(_migration_module(), direction)()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ('["facilities.view"]', ["facilities.view"]),
+        (["facilities.view"], ["facilities.view"]),
+        (None, []),
+    ],
+)
+def test_load_permissions_accepts_driver_json_shapes(raw, expected):
+    assert _migration_module()._load_permissions(raw) == expected
 
 
 def test_upgrade_revokes_only_the_system_captain_grant():
@@ -75,6 +88,7 @@ def test_upgrade_revokes_only_the_system_captain_grant():
         "custom": [PERMISSION],
         "treasurer": [PERMISSION],
     }
+    engine.dispose()
 
 
 def test_upgrade_and_downgrade_are_safe_without_positions_table():
@@ -84,3 +98,4 @@ def test_upgrade_and_downgrade_are_safe_without_positions_table():
     _run(engine, "downgrade")
 
     assert not sa.inspect(engine).has_table("positions")
+    engine.dispose()

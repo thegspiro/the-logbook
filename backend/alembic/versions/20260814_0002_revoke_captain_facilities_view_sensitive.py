@@ -18,6 +18,13 @@ depends_on = None
 _PERMISSION = "facilities.view_sensitive"
 
 
+def _load_permissions(raw):
+    """Normalize JSON values returned by different database drivers."""
+    if isinstance(raw, str):
+        raw = json.loads(raw or "[]")
+    return list(raw or [])
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     if "positions" not in sa.inspect(bind).get_table_names():
@@ -31,10 +38,7 @@ def upgrade() -> None:
         {"slug": "captain", "is_system": True},
     ).fetchall()
     for row in rows:
-        permissions = row.permissions
-        if isinstance(permissions, str):
-            permissions = json.loads(permissions or "[]")
-        permissions = list(permissions or [])
+        permissions = _load_permissions(row.permissions)
         if _PERMISSION not in permissions:
             continue
         permissions = [item for item in permissions if item != _PERMISSION]
