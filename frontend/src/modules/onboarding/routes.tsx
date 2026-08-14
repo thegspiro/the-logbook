@@ -1,25 +1,25 @@
 import React from 'react';
 import { Route, Navigate } from 'react-router';
-import {
-  Welcome,
-  OnboardingCheck,
-  OrganizationSetup,
-  StationSetup,
-  ApparatusSetup,
-  NavigationChoice,
-  EmailPlatformChoice,
-  EmailConfiguration,
-  FileStorageChoice,
-  FileStorageConfiguration,
-  AuthenticationChoice,
-  ITTeamBackupAccess,
-  PositionSetup,
-  ModuleOverview,
-  ModuleConfigTemplate,
-  SystemOwnerCreation,
-  SetupComplete,
-} from './pages';
 import { SecurityCheckPlaceholder } from './components/PlaceholderPages';
+import { lazyWithRetry } from '../../utils/lazyWithRetry';
+
+const Welcome = lazyWithRetry(() => import('./pages/Welcome'));
+const OnboardingCheck = lazyWithRetry(() => import('./pages/OnboardingCheck'));
+const OrganizationSetup = lazyWithRetry(() => import('./pages/OrganizationSetup'));
+const StationSetup = lazyWithRetry(() => import('./pages/StationSetup'));
+const ApparatusSetup = lazyWithRetry(() => import('./pages/ApparatusSetup'));
+const NavigationChoice = lazyWithRetry(() => import('./pages/NavigationChoice'));
+const EmailPlatformChoice = lazyWithRetry(() => import('./pages/EmailPlatformChoice'));
+const EmailConfiguration = lazyWithRetry(() => import('./pages/EmailConfiguration'));
+const FileStorageChoice = lazyWithRetry(() => import('./pages/FileStorageChoice'));
+const FileStorageConfiguration = lazyWithRetry(() => import('./pages/FileStorageConfiguration'));
+const AuthenticationChoice = lazyWithRetry(() => import('./pages/AuthenticationChoice'));
+const ITTeamBackupAccess = lazyWithRetry(() => import('./pages/ITTeamBackupAccess'));
+const PositionSetup = lazyWithRetry(() => import('./pages/RoleSetup'));
+const ModuleOverview = lazyWithRetry(() => import('./pages/ModuleOverview'));
+const ModuleConfigTemplate = lazyWithRetry(() => import('./pages/ModuleConfigTemplate'));
+const SystemOwnerCreation = lazyWithRetry(() => import('./pages/AdminUserCreation'));
+const SetupComplete = lazyWithRetry(() => import('./pages/SetupComplete'));
 
 /**
  * Onboarding Module Routes

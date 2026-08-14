@@ -24,33 +24,33 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppLayout } from './components/layout';
 
 // Modules — each exports a get*Routes() function
-import { getOnboardingRoutes } from './modules/onboarding';
-import { getApparatusRoutes } from './modules/apparatus';
-import { getMembershipRoutes } from './modules/membership';
-import { getProspectiveMembersRoutes, getProspectiveMembersPublicRoutes } from './modules/prospective-members';
-import { getAdminHoursRoutes } from './modules/admin-hours';
-import { getCommunicationsRoutes } from './modules/communications';
-import { getPublicPortalRoutes } from './modules/public-portal';
-import { getSchedulingRoutes } from './modules/scheduling';
-import { getEventsRoutes, getEventsPublicRoutes } from './modules/events';
-import { getTrainingRoutes } from './modules/training';
-import { getInventoryRoutes } from './modules/inventory';
-import { getStorefrontRoutes } from './modules/storefront';
-import { getElectionsRoutes, getElectionsPublicRoutes } from './modules/elections';
-import { getMinutesRoutes } from './modules/minutes';
-import { getFacilitiesRoutes, getFacilitiesPublicRoutes } from './modules/facilities';
-import { getDocumentsRoutes } from './modules/documents';
-import { getActionItemsRoutes } from './modules/action-items';
-import { getNotificationsRoutes } from './modules/notifications';
-import { getFormsRoutes, getFormsPublicRoutes } from './modules/forms';
-import { getIntegrationsRoutes } from './modules/integrations';
-import { getAdminRoutes } from './modules/admin';
-import { getSettingsRoutes } from './modules/settings';
-import { getReportsRoutes } from './modules/reports';
-import { getGrantsFundraisingRoutes } from './modules/grants-fundraising';
-import { getIPSecurityRoutes } from './modules/ip-security';
-import { getFinanceRoutes } from './modules/finance';
-import { getMedicalScreeningRoutes } from './modules/medical-screening';
+import { getOnboardingRoutes } from './modules/onboarding/routes';
+import { getApparatusRoutes } from './modules/apparatus/routes';
+import { getMembershipRoutes } from './modules/membership/routes';
+import { getProspectiveMembersRoutes, getProspectiveMembersPublicRoutes } from './modules/prospective-members/routes';
+import { getAdminHoursRoutes } from './modules/admin-hours/routes';
+import { getCommunicationsRoutes } from './modules/communications/routes';
+import { getPublicPortalRoutes } from './modules/public-portal/routes';
+import { getSchedulingRoutes } from './modules/scheduling/routes';
+import { getEventsRoutes, getEventsPublicRoutes } from './modules/events/routes';
+import { getTrainingRoutes } from './modules/training/routes';
+import { getInventoryRoutes } from './modules/inventory/routes';
+import { getStorefrontRoutes } from './modules/storefront/routes';
+import { getElectionsRoutes, getElectionsPublicRoutes } from './modules/elections/routes';
+import { getMinutesRoutes } from './modules/minutes/routes';
+import { getFacilitiesRoutes, getFacilitiesPublicRoutes } from './modules/facilities/routes';
+import { getDocumentsRoutes } from './modules/documents/routes';
+import { getActionItemsRoutes } from './modules/action-items/routes';
+import { getNotificationsRoutes } from './modules/notifications/routes';
+import { getFormsRoutes, getFormsPublicRoutes } from './modules/forms/routes';
+import { getIntegrationsRoutes } from './modules/integrations/routes';
+import { getAdminRoutes } from './modules/admin/routes';
+import { getSettingsRoutes } from './modules/settings/routes';
+import { getReportsRoutes } from './modules/reports/routes';
+import { getGrantsFundraisingRoutes } from './modules/grants-fundraising/routes';
+import { getIPSecurityRoutes } from './modules/ip-security/routes';
+import { getFinanceRoutes } from './modules/finance/routes';
+import { getMedicalScreeningRoutes } from './modules/medical-screening/routes';
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -70,8 +70,8 @@ const PageLoadingFallback = () => (
   </div>
 );
 
-// Critical pages - loaded immediately for fast initial navigation
-import Dashboard from './pages/Dashboard';
+// Authentication pages stay in the shell; the dashboard is large enough to
+// delay login/reset first paint and is loaded only after session routing.
 import { LoginPage } from './pages/LoginPage';
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 
@@ -83,6 +83,7 @@ import { FinanceApprovalPage } from './pages/FinanceApprovalPage';
 // Public legal pages (privacy policy / terms of service)
 const LegalPage = lazyWithRetry(() => import('./pages/legal/LegalPage'));
 const LearningCenterPage = lazyWithRetry(() => import('./pages/LearningCenterPage'));
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 
 /**
  * Main Application Component

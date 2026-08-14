@@ -83,7 +83,7 @@ configuration is incompatible with Vite's forthcoming native config loader.
 Both config files now use `import.meta.dirname`, which is the ESM-native
 equivalent.
 
-## Finding BASE-01 — application entry chunk exceeds its budget
+## Finding BASE-01 — application entry chunk exceeds its budget — ✅ Resolved
 
 - **Classification:** Performance improvement
 - **Priority:** P2
@@ -91,29 +91,33 @@ equivalent.
 - **Reach:** Application-wide initial navigation and PWA installation
 - **Effort:** Medium
 
-The production build emitted a 692.60 kB minified entry chunk against the
-explicit 600 kB warning threshold. The shell is intentionally precached for PWA
-use, so entry growth affects both first-load transfer and the cold installation
-download. Raising the warning threshold would hide the regression rather than
-improve it.
+The production build initially emitted a 692.60 kB minified entry chunk against
+the explicit 600 kB warning threshold. `Dashboard` was imported into the shell
+even though it is only reachable after session routing, pulling its broad data
+and component graph into login, OAuth, and password-recovery first paint.
+
+The dashboard now uses the same deployment-safe `lazyWithRetry` route loading as
+other feature pages. Authentication and password-recovery pages remain eager.
+The route registry now imports route modules directly rather than their broad
+feature barrels, and onboarding steps use `lazyWithRetry` instead of entering
+the shell through the onboarding pages barrel. The production entry chunk is
+now 226.85 kB minified (52.01 kB gzip), and the dashboard is a separate 43.33 kB
+chunk (10.27 kB gzip). The PWA shell dropped from 1,854.99 KiB to 1,398.14 KiB
+and the build no longer emits a chunk-size warning.
 
 ### Recommended follow-up
 
-1. Generate and inspect a bundle visualization for the entry chunk.
-2. Identify libraries and pages pulled into the shell through eager imports.
-3. Preserve the deliberately eager login and dashboard path, but lazy-load
-   secondary dashboard panels or heavy dependencies that are not required for
-   first paint.
-4. Add a CI-enforced entry-chunk budget instead of relying only on Vite's
+1. Add a CI-enforced entry-chunk budget instead of relying only on Vite's
    console warning.
+2. Monitor the dashboard chunk separately as panels are added.
 
 ### Acceptance criteria
 
-- The production entry chunk is no larger than 600 kB minified.
-- Login and dashboard first paint remain directly reachable without a route
-  chunk retry.
+- The production entry chunk is no larger than 600 kB minified. ✅
+- Login and password recovery remain directly reachable from the shell. ✅
+- Dashboard loading uses the stale-deployment retry path. ✅
 - The offline PWA shell remains functional after a cold install.
-- A repeatable CI check fails if the entry chunk crosses the agreed budget.
+- A repeatable CI check fails if the entry chunk crosses the agreed budget. 🚩
 
 ## Remaining baseline work
 
