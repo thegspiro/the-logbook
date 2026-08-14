@@ -31,6 +31,7 @@ def test_uniqueness_migration_reconciles_legacy_duplicates_first():
     reconcile = migration.index("SET duplicate.status = 'inactive'")
     create_index = migration.index("op.create_index(")
     assert "LOWER(TRIM(email))" in migration
+    assert "COALESCE(keeper.created_at" in migration
     assert reconcile < create_index
 
 
@@ -43,4 +44,5 @@ def test_pending_original_revision_also_repairs_before_creating_its_index():
     reconcile = released.index("SET duplicate.status = 'inactive'")
     create_index = released.index("op.create_index(")
     assert "LOWER(TRIM(email))" in released
+    assert "COALESCE(keeper.created_at" in released
     assert reconcile < create_index

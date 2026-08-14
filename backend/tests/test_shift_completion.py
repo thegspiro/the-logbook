@@ -94,7 +94,7 @@ class TestReportCreation:
             organization_id=uuid.UUID(org_id),
             officer_id=uuid.UUID(officer_id),
             trainee_id=trainee_id,
-            shift_date=date.today(),
+            start_date=date.today(),
             hours_on_shift=12.0,
             calls_responded=3,
             call_types=["medical", "fire", "medical"],
@@ -1042,7 +1042,7 @@ class TestTraineeReportReleaseBoundary:
         await ShiftCompletionService(db).get_reports_for_trainee(
             organization_id=uuid.uuid4(),
             trainee_id="trainee-1",
-            shift_date=date.today(),
+            start_date=date.today(),
             released_only=True,
         )
 
@@ -1154,6 +1154,7 @@ class TestTrainingCreditReleaseBoundary:
             organization_id=str(org_id),
             officer_id="filing-officer",
             trainee_id="trainee-1",
+            shift_date=date.today(),
             review_status="pending_review",
             review_history=[],
         )

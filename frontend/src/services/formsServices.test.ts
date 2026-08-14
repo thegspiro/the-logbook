@@ -400,5 +400,18 @@ describe('publicFormsService', () => {
       await expect(publicFormsService.submitForm('members-only', {})).rejects.toBe(unauthorized);
       expect(mockPerformSharedRefresh).not.toHaveBeenCalled();
     });
+
+    it('clears the session marker when authenticated refresh fails', async () => {
+      localStorage.setItem('has_session', '1');
+      const unauthorized = { response: { status: 401 } };
+      const refreshFailure = new Error('refresh expired');
+      mockAxiosPost.mockRejectedValueOnce(unauthorized);
+      mockPerformSharedRefresh.mockRejectedValueOnce(refreshFailure);
+
+      await expect(publicFormsService.submitForm('members-only', {})).rejects.toBe(refreshFailure);
+
+      expect(localStorage.getItem('has_session')).toBeNull();
+      expect(mockAxiosPost).toHaveBeenCalledTimes(1);
+    });
   });
 });

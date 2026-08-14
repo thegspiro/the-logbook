@@ -487,8 +487,12 @@ async def connect_integration(
         and "refresh_token" in config
         and config["refresh_token"] == ""
     )
-    # Validate config schema
-    config = _validate_config(integration.integration_type, config)
+    # PATCH validation must include already-stored public settings because
+    # integration schemas may have required fields (for example Salesforce's
+    # instance_url). This also lets callers clear one secret without having to
+    # resend unrelated configuration.
+    validation_config = {**(integration.config or {}), **config}
+    config = _validate_config(integration.integration_type, validation_config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
     # Split secrets from public config
