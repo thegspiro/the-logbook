@@ -7,7 +7,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  BarChart3,
   ClipboardCheck,
   AlertTriangle,
   TrendingUp,
@@ -15,11 +14,9 @@ import {
   FileText,
   Loader2,
   Search,
-  ArrowLeft,
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import { useNavigate } from 'react-router';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type {
   ComplianceReport,
@@ -34,6 +31,7 @@ import { DateRangePicker } from '../../components/ux/DateRangePicker';
 import { Pagination } from '../../components/ux/Pagination';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import SchedulingHeader from './SchedulingHeader';
 
 type ReportTab = 'compliance' | 'failures' | 'trends';
 
@@ -60,7 +58,6 @@ function defaultDateRange(tz: string): { start: string; end: string } {
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 const EquipmentCheckReportsPage: React.FC = () => {
-  const navigate = useNavigate();
   const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<ReportTab>('compliance');
   const defaults = defaultDateRange(tz);
@@ -70,19 +67,7 @@ const EquipmentCheckReportsPage: React.FC = () => {
   return (
     <div className="bg-theme-bg min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        {/* Header */}
-        <div className="mb-6 flex items-center gap-3">
-          <button
-            onClick={() => void navigate('/scheduling')}
-            className="hover:bg-theme-surface-hover text-theme-text-muted rounded-lg p-1.5"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-violet-500" />
-            <h1 className="text-theme-text-primary text-xl font-bold">Equipment Check Reports</h1>
-          </div>
-        </div>
+        <SchedulingHeader backTo="/scheduling" description="Check reports · Review compliance and deficiencies" />
 
         {/* Tabs */}
         <div className="bg-theme-surface border-theme-surface-border mb-5 flex gap-1 rounded-xl border p-1">

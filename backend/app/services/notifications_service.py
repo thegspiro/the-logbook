@@ -10,7 +10,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import safe_error_detail
@@ -286,6 +286,57 @@ class NotificationsService:
             )
         )
         return result.scalar() or 0
+
+    async def archive_related_notifications(
+        self,
+        organization_id: UUID | str,
+        category: str,
+        resource_key: str,
+        resource_id: UUID | str,
+    ) -> int:
+        """Archive in-app prompts whose related action has been completed.
+
+        Action-producing notifications already carry resource identifiers in
+        their metadata.  Keeping the lookup here gives completion endpoints a
+        common, idempotent way to remove stale prompts without coupling the
+        notification table to every resource table in the application.
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            result = await self.db.execute(
+                update(NotificationLog)
+                .where(NotificationLog.organization_id == str(organization_id))
+                .where(NotificationLog.channel == NotificationChannel.IN_APP)
+                .where(NotificationLog.category == category)
+                .where(
+                    or_(
+                        NotificationLog.expires_at.is_(None),
+                        NotificationLog.expires_at > now,
+                    )
+                )
+                .where(
+                    NotificationLog.notification_metadata[resource_key].as_string()
+                    == str(resource_id)
+                )
+                .values(
+                    expires_at=now,
+                    read=True,
+                    read_at=func.coalesce(NotificationLog.read_at, now),
+                )
+            )
+            matched = result.rowcount or 0
+            if matched > 0:
+                await self.db.commit()
+            return matched
+        except Exception:
+            await self.db.rollback()
+            logger.exception(
+                "Failed to archive %s notification for %s=%s",
+                category,
+                resource_key,
+                resource_id,
+            )
+            return 0
 
     async def mark_all_user_notifications_read(
         self, organization_id: UUID, user_id: UUID

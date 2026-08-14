@@ -573,6 +573,7 @@ class EventService:
             max_attendees=source_event.max_attendees,
             allowed_rsvp_statuses=copy.deepcopy(source_event.allowed_rsvp_statuses),
             is_mandatory=source_event.is_mandatory,
+            mandatory_membership_types=source_event.mandatory_membership_types,
             allow_guests=source_event.allow_guests,
             send_reminders=source_event.send_reminders,
             reminder_schedule=copy.deepcopy(source_event.reminder_schedule),

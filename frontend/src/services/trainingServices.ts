@@ -5,6 +5,7 @@
 import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
+import { toAppError } from '../utils/errorHandling';
 import type {
   SkillTemplate,
   SkillTemplateCreate,
@@ -104,7 +105,12 @@ import type {
   UserTrainingStats,
 } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
-import type { TrainingSessionResponse, TrainingSessionCreate, RecurringTrainingSessionCreate } from './adminServices';
+import type {
+  TrainingSessionResponse,
+  TrainingSessionCreate,
+  TrainingSessionLinkageUpdate,
+  RecurringTrainingSessionCreate,
+} from './adminServices';
 
 export const trainingService = {
   /**
@@ -1028,6 +1034,35 @@ export const trainingSessionService = {
   async createRecurringSessions(data: RecurringTrainingSessionCreate): Promise<TrainingSessionResponse[]> {
     const response = await api.post<TrainingSessionResponse[]>('/training/sessions/recurring', data);
     return asArray(response.data);
+  },
+
+  /**
+   * The training session attached to an event, or null when the event has
+   * none (a plain event, or one created before training sessions existed).
+   */
+  async getSessionByEvent(eventId: string): Promise<TrainingSessionResponse | null> {
+    try {
+      const response = await api.get<TrainingSessionResponse>(`/training/sessions/by-event/${eventId}`);
+      return response.data;
+    } catch (err: unknown) {
+      if (toAppError(err).status === 404) return null;
+      throw err;
+    }
+  },
+
+  /**
+   * Update a session's requirement/program links.
+   *
+   * An update payload, so blanks must travel as explicit `null` to clear a
+   * link — an omitted key means "leave this alone" on the backend. Callers
+   * should send every linkage field the form owns on each save.
+   */
+  async updateSessionLinkage(
+    sessionId: string,
+    updates: TrainingSessionLinkageUpdate
+  ): Promise<TrainingSessionResponse> {
+    const response = await api.patch<TrainingSessionResponse>(`/training/sessions/${sessionId}`, updates);
+    return response.data;
   },
 
   async finalizeSession(sessionId: string): Promise<{ message: string; approval_id: string }> {

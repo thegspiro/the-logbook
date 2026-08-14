@@ -322,10 +322,14 @@ def _extract_secrets(
     public: dict[str, Any] = {}
     secrets: dict[str, str] = {}
     for k, v in config.items():
-        if k in SECRET_CONFIG_KEYS and isinstance(v, str) and v:
-            secrets[k] = v
-        else:
-            public[k] = v
+        if k in SECRET_CONFIG_KEYS:
+            # Secret-shaped keys must never fall through into plaintext config.
+            # Empty strings are control values and are intentionally omitted;
+            # the endpoint handles the requested deletion.
+            if isinstance(v, str) and v:
+                secrets[k] = v
+            continue
+        public[k] = v
     return public, secrets
 
 
@@ -477,6 +481,11 @@ async def connect_integration(
         )
 
     config = body.config
+    clear_salesforce_refresh_token = (
+        integration.integration_type == "salesforce"
+        and "refresh_token" in config
+        and config["refresh_token"] == ""
+    )
     # Validate config schema
     config = _validate_config(integration.integration_type, config)
     # Validate URLs for SSRF
@@ -490,6 +499,14 @@ async def connect_integration(
     # Store secrets encrypted
     for key, value in secrets.items():
         integration.set_secret(key, value)
+    if clear_salesforce_refresh_token:
+        # An explicit blank switches Salesforce from the interactive refresh
+        # grant to client credentials. Discard the cached access token as well
+        # so the next sync obtains client credentials immediately rather than
+        # continuing as the previous OAuth user until that token expires.
+        # Omission still means "leave unchanged."
+        integration.clear_secret("refresh_token")
+        integration.clear_secret("access_token")
     await db.commit()
     await db.refresh(integration)
 
@@ -575,8 +592,15 @@ async def update_integration(
         )
 
     config = body.config
-    # Validate config schema
-    config = _validate_config(integration.integration_type, config)
+    clear_salesforce_refresh_token = (
+        integration.integration_type == "salesforce"
+        and "refresh_token" in config
+        and config["refresh_token"] == ""
+    )
+    # PATCH validation includes stored public settings so callers can update or
+    # clear one secret without resending unrelated required configuration.
+    validation_config = {**(integration.config or {}), **config}
+    config = _validate_config(integration.integration_type, validation_config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
     # Split secrets from public config
@@ -585,6 +609,9 @@ async def update_integration(
     integration.config = {**(integration.config or {}), **public_config}
     for key, value in secrets.items():
         integration.set_secret(key, value)
+    if clear_salesforce_refresh_token:
+        integration.clear_secret("refresh_token")
+        integration.clear_secret("access_token")
     await db.commit()
     await db.refresh(integration)
 

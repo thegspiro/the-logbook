@@ -2155,7 +2155,12 @@ If your device loses connectivity while submitting a batch of shift reports, the
 
 This uses the same IndexedDB-backed architecture as the equipment check offline queue, ensuring reliable offline-to-online synchronization.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot showing the offline indicator banner at the top of the shift reports page, a "Queued for sync" badge on a pending report, and the count of pending reports._
+![The Shift Reports tab offline banner — reports will be saved locally and submitted when connectivity returns](./images/03-63-offline-banner.png)
+
+There is no per-report "queued" badge — queued reports live in IndexedDB and are
+not listed individually. What the screen shows is the banner above, carrying
+`(N pending)` once something is queued, and a second banner reading "Syncing N
+queued reports…" while the queue drains after connectivity returns.
 
 ### Edge Cases
 

@@ -627,6 +627,14 @@ class TestBallotItemIdStrictnessIsInputOnly:
         with pytest.raises(ValidationError, match="pattern"):
             SavedBallotTemplateCreate(name="Legacy", ballot_items=[LEGACY_ITEM])
 
+    def test_saved_template_rejects_unknown_voting_method(self):
+        with pytest.raises(ValidationError, match="voting method"):
+            SavedBallotTemplateCreate(
+                name="Unsupported method",
+                ballot_items=[{**LEGACY_ITEM, "id": "budget-2026"}],
+                voting_method="plurality_plus",
+            )
+
     def test_input_still_requires_supermajority_percentage(self):
         item = {
             "id": "budget-2026",

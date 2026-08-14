@@ -215,6 +215,10 @@ class FormCreate(FormBase):
     fields: Optional[List[FormFieldCreate]] = None
     integration_type: Optional[str] = None
 
+    _check_integration_type = field_validator("integration_type")(
+        _enum_check(_INTEGRATION_TYPES, "integration_type")
+    )
+
 
 class FormUpdate(BaseModel):
     """Schema for updating a form"""
@@ -234,6 +238,9 @@ class FormUpdate(BaseModel):
         _enum_check(_FORM_CATEGORIES, "category")
     )
     _check_status = field_validator("status")(_enum_check(_FORM_STATUSES, "status"))
+    _check_integration_type = field_validator("integration_type")(
+        _enum_check(_INTEGRATION_TYPES, "integration_type")
+    )
 
 
 class FormResponse(FormBase):

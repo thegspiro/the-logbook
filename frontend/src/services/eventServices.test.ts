@@ -398,6 +398,7 @@ describe('eventService', () => {
         visible_event_types: ['training', 'meeting'],
         custom_event_categories: [{ value: 'drill', label: 'Drill', color: 'bg-blue-100 text-blue-800' }],
         visible_custom_categories: ['drill'],
+        membership_types: [{ value: 'active', label: 'Active Member' }],
       };
       mockGet.mockResolvedValueOnce({ data });
 
@@ -448,6 +449,18 @@ describe('eventService', () => {
 // eventRequestService
 // ============================================
 describe('eventRequestService', () => {
+  describe('getForms', () => {
+    it('should GET the event-scoped outreach forms endpoint', async () => {
+      const forms = { forms: [], total: 0, skip: 0, limit: 50 };
+      mockGet.mockResolvedValueOnce({ data: forms });
+
+      const result = await eventRequestService.getForms({ limit: 50 });
+
+      expect(mockGet).toHaveBeenCalledWith('/event-requests/forms', { params: { limit: 50 } });
+      expect(result).toEqual(forms);
+    });
+  });
+
   describe('listRequests', () => {
     it('should GET /event-requests with params', async () => {
       const requests = [{ id: 'r1', status: 'pending' }];

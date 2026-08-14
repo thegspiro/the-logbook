@@ -43,9 +43,7 @@ async def get_compliance_config(
     # compliance.manage listed explicitly: manage does not imply view in this
     # permission model, and a custom position holding only compliance.manage
     # passes the write gates but could not hydrate the config page without it.
-    current_user=Depends(
-        require_permission("training.manage", "compliance.view", "compliance.manage")
-    ),
+    current_user=Depends(require_permission("training.manage", "compliance.manage")),
 ):
     """Get the compliance requirements configuration for the organization."""
     async with handle_service_errors("Failed to fetch compliance config"):
@@ -105,9 +103,7 @@ async def initialize_compliance_config(
 @router.get("/config/requirements")
 async def get_available_requirements(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(
-        require_permission("training.manage", "compliance.view", "compliance.manage")
-    ),
+    current_user=Depends(require_permission("training.manage", "compliance.manage")),
 ):
     """Get all training requirements available for compliance configuration."""
     async with handle_service_errors("Failed to fetch requirements"):
@@ -189,10 +185,7 @@ async def delete_compliance_profile(
 async def generate_compliance_report(
     data: ComplianceReportGenerate,
     db: AsyncSession = Depends(get_db),
-    # reports.manage: generating/distributing stored compliance reports is a
-    # reports action — elected officers hold reports.manage without
-    # training.manage, and the report tab renders these actions for them.
-    current_user=Depends(require_permission("training.manage", "reports.manage")),
+    current_user=Depends(require_permission("training.manage")),
 ):
     """Generate a new compliance report (monthly or yearly)."""
     async with handle_service_errors("Failed to generate report"):
@@ -217,9 +210,7 @@ async def list_compliance_reports(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(
-        require_permission("training.manage", "reports.view", "compliance.view")
-    ),
+    current_user=Depends(require_permission("training.manage", "reports.view")),
 ):
     """List stored compliance reports."""
     async with handle_service_errors("Failed to list reports"):

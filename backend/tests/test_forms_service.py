@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.models.forms import IntegrationType
 from app.services.forms_service import FormsService
 
 
@@ -46,6 +47,51 @@ class TestIsEmptyValue:
 
     def test_nonempty_list_is_not_empty(self):
         assert FormsService._is_empty_value(["a"]) is False
+
+
+@pytest.mark.asyncio
+async def test_get_forms_filters_direct_and_related_integrations():
+    """The module filter must include both current and legacy form storage."""
+    count_result = MagicMock()
+    count_result.scalar.return_value = 0
+    forms_result = MagicMock()
+    forms_result.scalars.return_value.all.return_value = []
+    db = AsyncMock()
+    db.execute.side_effect = [count_result, forms_result]
+
+    await FormsService(db).get_forms(
+        organization_id="00000000-0000-0000-0000-000000000001",
+        integration_type=IntegrationType.EVENT_REQUEST,
+    )
+
+    count_statement = db.execute.await_args_list[0].args[0]
+    sql = str(count_statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "forms.integration_type = 'event_request'" in sql
+    assert "EXISTS" in sql
+    assert "form_integrations.integration_type = 'event_request'" in sql
+
+
+@pytest.mark.asyncio
+async def test_create_form_persists_direct_integration_marker_without_fields():
+    """An integration form remains discoverable when no mapping row is made."""
+    db = MagicMock()
+    db.flush = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    query_result = MagicMock()
+    query_result.scalar_one.return_value = SimpleNamespace(id="form-id")
+    db.execute = AsyncMock(return_value=query_result)
+
+    result, error = await FormsService(db).create_form(
+        organization_id="00000000-0000-0000-0000-000000000001",
+        form_data={"name": "Outreach", "integration_type": "event_request"},
+        created_by="00000000-0000-0000-0000-000000000002",
+    )
+
+    created_form = db.add.call_args.args[0]
+    assert error is None
+    assert result.id == "form-id"
+    assert created_form.integration_type == "event_request"
 
 
 @pytest.mark.asyncio

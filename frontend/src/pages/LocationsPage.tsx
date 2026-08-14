@@ -37,6 +37,7 @@ import { locationsService, organizationService } from '../services/api';
 import type { Location, LocationCreate } from '../services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useAuthStore } from '../stores/authStore';
 import { copyToClipboard } from '../utils/clipboard';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
@@ -905,6 +906,8 @@ function RoomCard({
 
 export default function LocationsPage() {
   const { confirm } = useConfirm();
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canExportQRCodes = checkPermission('locations.manage') || checkPermission('facilities.manage');
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1283,12 +1286,14 @@ export default function LocationsPage() {
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
-          <Link
-            to="/locations/qr-codes"
-            className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors max-md:min-h-11"
-          >
-            <QrCode className="h-4 w-4" aria-hidden="true" /> Check-In QR Codes
-          </Link>
+          {canExportQRCodes && (
+            <Link
+              to="/locations/qr-codes"
+              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors max-md:min-h-11"
+            >
+              <QrCode className="h-4 w-4" aria-hidden="true" /> Check-In QR Codes
+            </Link>
+          )}
           {(!isSingleStation || stations.length === 0) && (
             <button onClick={openCreateStation} className="btn-primary flex items-center gap-2 py-2.5">
               <Plus className="h-4 w-4" /> {isSingleStation ? 'Set Up Location' : 'Add Station'}

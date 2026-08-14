@@ -51,6 +51,7 @@ from app.schemas.storefront import (
     StoreOrderListResponse,
     StoreOrderMarkPaid,
     StoreOrderMessage,
+    StoreOrderPaymentMethodUpdate,
     StoreOrderPaymentRecord,
     StoreOrderPaymentReport,
     StoreOrderRefund,
@@ -312,6 +313,7 @@ async def get_storefront(
         "tagline": settings.tagline,
         "description": settings.description,
         "currency": settings.currency,
+        "show_open_order_banner": settings.show_open_order_banner,
         "terms_text": settings.terms_text,
         "allow_pickup": settings.allow_pickup,
         "allow_shipping": settings.allow_shipping,
@@ -401,6 +403,30 @@ async def get_my_order(
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    settings = await service.get_settings(str(current_user.organization_id))
+    return _order_payload(order, service, settings, include_internal=False)
+
+
+@router.patch(
+    "/orders/mine/{order_id}/payment-method", response_model=StoreOrderResponse
+)
+async def update_my_payment_method(
+    order_id: str,
+    payload: StoreOrderPaymentMethodUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.view")),
+) -> Any:
+    """Change the planned payment method on one of the member's unpaid orders."""
+    service = StorefrontService(db)
+    try:
+        order = await service.update_member_payment_method(
+            order_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            payload.payment_method,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
     settings = await service.get_settings(str(current_user.organization_id))
     return _order_payload(order, service, settings, include_internal=False)
 
@@ -1074,9 +1100,19 @@ async def get_dashboard(
     data = await service.get_dashboard(str(current_user.organization_id))
     settings = await service.get_settings(str(current_user.organization_id))
     active_window = data["active_window"]
+    active_rollup = data["active_window_rollup"]
     return {
-        **data,
-        "active_window": _window_payload(active_window) if active_window else None,
+        **{key: value for key, value in data.items() if key != "active_window_rollup"},
+        "active_window": (
+            _window_payload(
+                active_window,
+                order_count=active_rollup["order_count"],
+                total_sales=active_rollup["gross_sales"],
+                outstanding=active_rollup["outstanding"],
+            )
+            if active_window
+            else None
+        ),
         "recent_orders": [
             _order_payload(order, service, settings, include_internal=True)
             for order in data["recent_orders"]
@@ -1091,6 +1127,8 @@ async def list_orders(
     payment_status: Optional[str] = Query(None),
     payment_method: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    submitted_within_hours: Optional[int] = Query(None, ge=1, le=168),
+    open_only: bool = Query(False),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -1105,6 +1143,8 @@ async def list_orders(
         payment_status=payment_status,
         payment_method=payment_method,
         search=search,
+        submitted_within_hours=submitted_within_hours,
+        open_only=open_only,
         page=page,
         page_size=page_size,
     )
@@ -1406,7 +1446,7 @@ async def add_order_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("storefront.manage")),
 ) -> Any:
-    """Post an update to the order timeline, optionally emailing the member."""
+    """Post an update, optionally notifying the member by email and in-app."""
     service = StorefrontService(db)
     try:
         order = await service.add_order_message(
@@ -1416,6 +1456,8 @@ async def add_order_message(
             payload.message,
             is_member_visible=payload.is_member_visible,
             notify_member=payload.notify_member,
+            notify_email=payload.notify_email,
+            notify_in_app=payload.notify_in_app,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))

@@ -409,11 +409,13 @@ export const eventService = {
     visible_event_types: import('../types/event').EventType[];
     custom_event_categories: import('../types/event').EventCategoryConfig[];
     visible_custom_categories: string[];
+    membership_types: { value: string; label: string }[];
   }> {
     const response = await api.get<{
       visible_event_types: import('../types/event').EventType[];
       custom_event_categories: import('../types/event').EventCategoryConfig[];
       visible_custom_categories: string[];
+      membership_types: { value: string; label: string }[];
     }>('/events/visible-event-types');
     return response.data;
   },
@@ -518,6 +520,10 @@ export const eventService = {
 // ============================================
 
 export const eventRequestService = {
+  async getForms(params?: { skip?: number; limit?: number }): Promise<import('./formTypes').FormsListResponse> {
+    const response = await api.get<import('./formTypes').FormsListResponse>('/event-requests/forms', { params });
+    return response.data;
+  },
   async listRequests(params?: {
     status?: string;
     outreach_type?: string;

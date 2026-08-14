@@ -247,6 +247,62 @@
   }
 }
 
+/*
+ * Application page spacing
+ * ------------------------
+ * Protected routes all pass through PageTransition, making this the single
+ * CSS-owned boundary for page gutters and vertical breathing room. Individual
+ * pages may still choose their content width, but they must not have to repeat
+ * viewport padding utilities to remain usable at each breakpoint.
+ */
+:root {
+  --page-gutter-inline: 1rem;
+  --page-gutter-block: 1.5rem;
+  --page-section-gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --page-gutter-inline: 1.5rem;
+    --page-gutter-block: 2rem;
+    --page-section-gap: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --page-gutter-inline: 2rem;
+  }
+}
+
+[data-page-layout='application'] {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: var(--page-gutter-block) var(--page-gutter-inline);
+  padding-bottom: calc(var(--page-gutter-block) + var(--bottom-nav-height, 0px));
+}
+
+/* Existing routes historically put their viewport padding on either the page
+ * root or its immediate <main>. Remove only that outer padding so the shared
+ * boundary does not double it; component/card padding remains untouched. */
+[data-page-layout='application'] > :first-child,
+[data-page-layout='application'] > :first-child > main {
+  padding: 0;
+}
+
+/* A reusable width boundary for new and gradually simplified pages. */
+@utility page-container {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+}
+
+@utility page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-section-gap);
+}
+
 @utility scrollbar-thin {
   &::-webkit-scrollbar {
     width: 8px;

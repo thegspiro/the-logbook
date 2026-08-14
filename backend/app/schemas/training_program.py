@@ -521,6 +521,9 @@ class RequirementProgressUpdate(BaseModel):
     # idempotent, so a retry or two officers on the same record cannot leave a
     # step half-applied.
     checklist_done: Optional[List[str]] = None
+    # Member-reported steps awaiting officer validation. Only steps explicitly
+    # configured for self-reporting are accepted.
+    checklist_claimed: Optional[List[str]] = None
 
 
 class RequirementProgressResponse(RequirementProgressBase, UTCResponseBase):

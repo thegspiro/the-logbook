@@ -899,7 +899,9 @@ class MembershipPipelineService:
             pipeline_id=pipeline_id,
             first_name=data["first_name"],
             last_name=data["last_name"],
-            email=data["email"],
+            # Store the same canonical value used by duplicate detection and
+            # the active-email uniqueness constraint.
+            email=email,
             phone=data.get("phone"),
             mobile=data.get("mobile"),
             date_of_birth=data.get("date_of_birth"),
@@ -919,8 +921,22 @@ class MembershipPipelineService:
             status_token=secrets.token_urlsafe(32),
             status_token_created_at=datetime.now(timezone.utc),
         )
-        self.db.add(prospect)
-        await self.db.flush()
+        try:
+            # Scope a duplicate-key race to this insert so unrelated caller
+            # work survives in the surrounding transaction.
+            async with self.db.begin_nested():
+                self.db.add(prospect)
+                await self.db.flush()
+        except IntegrityError:
+            # The preflight lookup is intentionally only a friendly fast path;
+            # the unique index is the concurrency boundary. A simultaneous
+            # public submission may win after our SELECT, in which case return
+            # that durable application rather than surfacing a database 500.
+            existing = await self._find_active_prospect_by_email(organization_id, email)
+            if existing:
+                await self._notify_duplicate_application(existing, organization_id)
+                return existing
+            raise
 
         # Initialize step progress records for all steps in the pipeline
         if pipeline_id:
@@ -1172,6 +1188,51 @@ class MembershipPipelineService:
                         f"Medical screenings not yet passed: " f"{', '.join(missing)}."
                     )
 
+    async def _authorized_multi_approval_result(
+        self,
+        organization_id: str,
+        completed_by: str,
+        action_result: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Replace client-claimed approval identities with the authenticated signer."""
+        if not action_result or "approvals" not in action_result:
+            return action_result
+
+        approvals = action_result.get("approvals")
+        if not isinstance(approvals, list) or not approvals:
+            raise ValueError("At least one approval role must be supplied")
+        if len(approvals) != 1:
+            raise ValueError("Each approval must be submitted by its own signer")
+
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.id == completed_by,
+                User.organization_id == organization_id,
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
+            .options(selectinload(User.positions))
+        )
+        signer = result.scalar_one_or_none()
+        if signer is None:
+            raise ValueError("The approval signer is not an active organization member")
+
+        signer_roles = {
+            value.casefold()
+            for position in signer.positions
+            for value in (position.slug, position.name)
+            if value
+        }
+        authorized: List[Dict[str, str]] = []
+        for approval in approvals:
+            role = approval.get("role") if isinstance(approval, dict) else None
+            if not isinstance(role, str) or role.casefold() not in signer_roles:
+                raise ValueError("You may only approve for a role you currently hold")
+            authorized.append({"role": role, "approved_by": str(signer.id)})
+
+        return {**action_result, "approvals": authorized}
+
     async def complete_step(
         self,
         prospect_id: str,
@@ -1207,6 +1268,14 @@ class MembershipPipelineService:
             raise ValueError("Step does not belong to this prospect's pipeline")
         if str(prospect.current_step_id) != str(step_id):
             raise ValueError("Only the prospect's current step can be completed")
+
+        # Approval evidence is a server-authenticated sign-off, not arbitrary
+        # audit data supplied by the client.  In particular, never accept a
+        # claimed approver identity or a role the current user does not hold.
+        if not skip_requirements and step.step_type == PipelineStepType.MULTI_APPROVAL:
+            action_result = await self._authorized_multi_approval_result(
+                organization_id, completed_by, action_result
+            )
 
         # Only the dedicated coordinator skip path may bypass a stage gate.
         # Keeping this server-side avoids accepting a client-controlled

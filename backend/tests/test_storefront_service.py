@@ -11,9 +11,12 @@ the schema has to exist for any of this to run.
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy import select
 
+from app.models.notification import NotificationChannel, NotificationLog
 from app.models.storefront import (
     StoreFulfillmentMethod,
     StoreOrderStatus,
@@ -401,6 +404,112 @@ class TestLimits:
         assert order.items[0].product_id == product.id
 
 
+class TestOrderMessages:
+    async def test_member_message_creates_an_in_app_notification(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, store_name="Station Store")
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        await service.add_order_message(
+            order.id,
+            org.id,
+            None,
+            "Your job shirt is ready for pickup.",
+        )
+
+        result = await db_session.execute(
+            select(NotificationLog).where(
+                NotificationLog.organization_id == org.id,
+                NotificationLog.recipient_id == member.id,
+                NotificationLog.category == "storefront",
+            )
+        )
+        notification = result.scalar_one()
+        assert notification.channel == NotificationChannel.IN_APP
+        assert notification.subject == "Station Store: order update"
+        assert notification.message == (
+            f"Order {order.order_number}: Your job shirt is ready for pickup."
+        )
+        assert notification.action_url == "/store/orders"
+        assert notification.notification_metadata == {
+            "order_id": order.id,
+            "order_number": order.order_number,
+        }
+
+    async def test_message_channels_can_be_selected_independently(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        service.notifications.send_order_update = AsyncMock()
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        await service.add_order_message(
+            order.id,
+            org.id,
+            None,
+            "This should only appear in the app.",
+            notify_email=False,
+        )
+
+        service.notifications.send_order_update.assert_not_awaited()
+        result = await db_session.execute(
+            select(NotificationLog).where(
+                NotificationLog.organization_id == org.id,
+                NotificationLog.category == "storefront",
+            )
+        )
+        assert len(result.scalars().all()) == 1
+
+        await service.add_order_message(
+            order.id,
+            org.id,
+            None,
+            "This should only be emailed.",
+            notify_in_app=False,
+        )
+
+        service.notifications.send_order_update.assert_awaited_once()
+        result = await db_session.execute(
+            select(NotificationLog).where(
+                NotificationLog.organization_id == org.id,
+                NotificationLog.category == "storefront",
+            )
+        )
+        assert len(result.scalars().all()) == 1
+
+    async def test_internal_message_does_not_notify_member(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        await service.add_order_message(
+            order.id,
+            org.id,
+            None,
+            "Manager-only note",
+            is_member_visible=False,
+        )
+
+        result = await db_session.execute(
+            select(NotificationLog).where(
+                NotificationLog.organization_id == org.id,
+                NotificationLog.category == "storefront",
+            )
+        )
+        assert result.scalars().all() == []
+
+
 # ======================================================================
 # Personalization
 # ======================================================================
@@ -658,6 +767,36 @@ class TestPayments:
         assert updated.payment_status == StorePaymentStatus.PENDING_VERIFICATION
         # Self-reported means "please check", not "paid".
         assert updated.amount_paid == Decimal("0.00")
+
+    async def test_member_can_change_payment_method_before_settlement(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, accepted_payment_methods=["venmo", "cash"])
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        updated = await service.update_member_payment_method(
+            order.id, org.id, str(member.id), StorePaymentMethod.CASH
+        )
+
+        assert updated.payment_method == StorePaymentMethod.CASH
+        assert updated.payment_status == StorePaymentStatus.UNPAID
+
+    async def test_member_cannot_choose_an_unaccepted_payment_method(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, accepted_payment_methods=["venmo"])
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        with pytest.raises(ValueError, match="not accepted"):
+            await service.update_member_payment_method(
+                order.id, org.id, str(member.id), StorePaymentMethod.CASH
+            )
 
     async def test_mark_paid_settles_the_whole_balance(self, db_session):
         org = await _make_org(db_session)

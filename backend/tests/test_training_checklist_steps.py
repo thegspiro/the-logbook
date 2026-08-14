@@ -49,7 +49,12 @@ class TestNormalization:
             [{"id": "s1", "text": "References called", "member_visible": False}]
         )
         assert items == [
-            {"id": "s1", "text": "References called", "member_visible": False}
+            {
+                "id": "s1",
+                "text": "References called",
+                "member_visible": False,
+                "member_can_complete": False,
+            }
         ]
 
     def test_a_mixed_list_normalizes(self):
@@ -217,7 +222,12 @@ def _svc(progress):
 
 class TestCheckingOffSteps:
     ITEMS = [
-        {"id": "s1", "text": "Gear issued", "member_visible": True},
+        {
+            "id": "s1",
+            "text": "Gear issued",
+            "member_visible": True,
+            "member_can_complete": True,
+        },
         {"id": "s2", "text": "References called", "member_visible": False},
     ]
 
@@ -236,6 +246,37 @@ class TestCheckingOffSteps:
         assert out.status == RequirementProgressStatus.IN_PROGRESS
         assert out.completed_at is None
         assert out.progress_notes["checklist_done"] == ["s1"]
+
+    async def test_member_can_report_enabled_step_for_officer_validation(self):
+        progress = _progress(self.ITEMS, owner="me")
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(checklist_claimed=["s1"]),
+            acting_user_id="me",
+            can_manage=False,
+        )
+
+        assert error is None
+        assert out.progress_notes["checklist_claimed"] == ["s1"]
+        assert out.progress_percentage == 0.0
+
+    async def test_member_cannot_report_officer_only_step(self):
+        progress = _progress(self.ITEMS, owner="me")
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(checklist_claimed=["s2"]),
+            acting_user_id="me",
+            can_manage=False,
+        )
+
+        assert out is None
+        assert "cannot be completed by a member" in error
 
     async def test_every_step_completes_the_requirement(self):
         progress = _progress(self.ITEMS)

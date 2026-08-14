@@ -18,11 +18,12 @@ export const emptyChecklistItem = (): ChecklistItem => ({
   id: '',
   text: '',
   member_visible: true,
+  member_can_complete: false,
 });
 
 /** Plain strings as steps — for starter templates authored in code. */
 export const toChecklistItems = (texts: string[]): ChecklistItem[] =>
-  texts.map((text) => ({ id: '', text, member_visible: true }));
+  texts.map((text) => ({ id: '', text, member_visible: true, member_can_complete: false }));
 
 /** The steps a member is allowed to see. */
 export const visibleChecklistItems = (items?: ChecklistItem[]): ChecklistItem[] =>
@@ -36,6 +37,9 @@ export const hiddenChecklistCount = (items?: ChecklistItem[]): number =>
 /** The ids an officer has ticked on this progress record. */
 export const checklistDoneIds = (record: RequirementProgressRecord): string[] =>
   record.progress_notes?.checklist_done ?? [];
+
+export const checklistClaimedIds = (record: RequirementProgressRecord): string[] =>
+  record.progress_notes?.checklist_claimed ?? [];
 
 /** Whether a given step is ticked on this record. */
 export const isChecklistItemDone = (record: RequirementProgressRecord, itemId: string): boolean =>

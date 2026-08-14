@@ -104,6 +104,7 @@ const DEFAULT_FORM_DATA: EventCreate = {
   max_attendees: undefined,
   allowed_rsvp_statuses: [RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING],
   is_mandatory: false,
+  mandatory_membership_types: undefined,
   allow_guests: false,
   send_reminders: true,
   reminder_target: 'going',
@@ -141,6 +142,14 @@ const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
 ];
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const DEFAULT_MEMBERSHIP_TYPES = [
+  { value: 'active', label: 'Active' },
+  { value: 'probationary', label: 'Probationary' },
+  { value: 'administrative', label: 'Administrative' },
+  { value: 'life', label: 'Life' },
+  { value: 'retired', label: 'Retired' },
+];
 
 /** Format a file size in bytes to a human-readable string. */
 const formatAttachmentSize = (bytes: number): string => {
@@ -214,6 +223,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
   const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
   const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
+  const [membershipTypes, setMembershipTypes] = useState(DEFAULT_MEMBERSHIP_TYPES);
   const [isRecurring, setIsRecurring] = useState(initialRecurrence?.is_recurring || false);
   const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>(
     initialRecurrence?.recurrence_pattern || 'weekly'
@@ -316,6 +326,7 @@ export const EventForm: React.FC<EventFormProps> = ({
         setVisibleTypes(data.visible_event_types);
         setCustomCategories(data.custom_event_categories || []);
         setVisibleCustomCategories(data.visible_custom_categories || []);
+        if (data.membership_types?.length) setMembershipTypes(data.membership_types);
       })
       .catch(() => {
         /* fall back to showing all types */
@@ -387,6 +398,15 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
   };
 
+  const toggleMandatoryMembershipType = (membershipType: string, checked: boolean) => {
+    const selected = formData.mandatory_membership_types || [];
+    update({
+      mandatory_membership_types: checked
+        ? [...selected, membershipType]
+        : selected.filter((type) => type !== membershipType),
+    });
+  };
+
   const handleLocationSelect = (value: string) => {
     if (value === '__other__') {
       setLocationMode('other');
@@ -437,6 +457,11 @@ export const EventForm: React.FC<EventFormProps> = ({
         setError('RSVP deadline must be before event start');
         return;
       }
+    }
+
+    if (formData.is_mandatory && !formData.mandatory_membership_types?.length) {
+      setError('Select at least one member type for mandatory attendance');
+      return;
     }
 
     // Clean up data before submit
@@ -1087,6 +1112,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 const isMandatory = e.target.checked;
                 update({
                   is_mandatory: isMandatory,
+                  mandatory_membership_types: isMandatory ? formData.mandatory_membership_types : undefined,
                   ...(!reminderAudienceEdited.current
                     ? { reminder_target: isMandatory ? 'all' : 'going', send_reminders: true }
                     : {}),
@@ -1098,6 +1124,27 @@ export const EventForm: React.FC<EventFormProps> = ({
               Mandatory attendance
             </label>
           </div>
+
+          {formData.is_mandatory && (
+            <fieldset className="space-y-2 border-l-2 border-red-500/30 pl-4">
+              <legend className={labelClass}>Mandatory for</legend>
+              <p className="text-theme-text-muted text-xs">Select one or more member types required to attend.</p>
+              {membershipTypes.map((membershipType) => (
+                <div key={membershipType.value} className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id={`mandatory-${membershipType.value}`}
+                    checked={(formData.mandatory_membership_types || []).includes(membershipType.value)}
+                    onChange={(e) => toggleMandatoryMembershipType(membershipType.value, e.target.checked)}
+                    className={checkboxClass}
+                  />
+                  <label htmlFor={`mandatory-${membershipType.value}`} className="text-theme-text-secondary text-sm">
+                    {membershipType.label}
+                  </label>
+                </div>
+              ))}
+            </fieldset>
+          )}
         </section>
 
         {/* RSVP Settings */}

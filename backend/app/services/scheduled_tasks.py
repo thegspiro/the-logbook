@@ -1100,6 +1100,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                         subject=subject,
                         message=message,
                         action_url=event_url,
+                        notification_metadata={"event_id": str(event.id)},
                         delivered=True,
                     )
                     db.add(in_app_log)

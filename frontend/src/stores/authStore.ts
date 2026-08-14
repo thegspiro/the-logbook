@@ -19,6 +19,7 @@ import { clearCache } from '../utils/apiCache';
 import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import type { PurgeResult } from '../utils/purgeLocalMemberData';
 import { clearQueuedReports } from '../services/errorReporting';
+import { invalidateRanksCache } from '../hooks/ranksCache';
 
 /** Number of failed attempts before client-side lockout kicks in. */
 const LOGIN_LOCKOUT_THRESHOLD = 5;
@@ -192,6 +193,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // SEC: Start the new session with a clean cache in case a prior user's
       // session ended without a clean logout (crash/tab-close on a shared tab).
       clearCache();
+      invalidateRanksCache();
 
       // Wait for auth cookies to be stored before navigating to the
       // dashboard.  Without this, the dashboard can fire API calls
@@ -276,6 +278,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       localStorage.setItem('has_session', '1');
       clearCache(); // SEC: fresh session starts with a clean cache
+      invalidateRanksCache();
       await waitForLoginCookies(csrfBefore);
       markLoginComplete();
       if (resp?.user) {
@@ -309,6 +312,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // SEC: Tokens are stored in httpOnly cookies by the backend response.
       localStorage.setItem('has_session', '1');
       clearCache(); // SEC: fresh session starts with a clean cache
+      invalidateRanksCache();
 
       await get().loadUser();
 
@@ -338,6 +342,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // cache key carries no user identity, so a stale entry would otherwise be
       // served to the next user who logs in on the same tab without a reload.
       clearCache();
+      invalidateRanksCache();
       clearQueuedReports();
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');

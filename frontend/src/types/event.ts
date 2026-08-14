@@ -26,6 +26,7 @@ export interface Event {
   max_attendees?: number;
   allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory: boolean;
+  mandatory_membership_types?: string[];
 
   allow_guests: boolean;
   send_reminders: boolean;
@@ -101,6 +102,7 @@ export interface EventCreate {
   max_attendees?: number | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   is_mandatory?: boolean | undefined;
+  mandatory_membership_types?: string[] | undefined;
 
   allow_guests?: boolean | undefined;
   send_reminders?: boolean | undefined;
@@ -132,6 +134,7 @@ export interface EventUpdate {
   max_attendees?: number | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   is_mandatory?: boolean | undefined;
+  mandatory_membership_types?: string[] | undefined;
 
   allow_guests?: boolean | undefined;
   send_reminders?: boolean | undefined;
@@ -381,6 +384,7 @@ export interface RecurringEventCreate {
   rsvp_deadline?: string | undefined;
   max_attendees?: number | undefined;
   is_mandatory?: boolean | undefined;
+  mandatory_membership_types?: string[] | undefined;
 
   allow_guests?: boolean | undefined;
   send_reminders?: boolean | undefined;

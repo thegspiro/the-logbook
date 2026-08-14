@@ -1487,7 +1487,9 @@ class ShiftCompletionService:
         if not was_released and review_status == "approved":
             await self._trigger_deferred_progress(
                 report,
-                reviewer_id,
+                # The filing officer observed the work. The reviewer merely
+                # authorizes release and must not become its evaluator.
+                str(report.officer_id),
             )
 
         await self.db.commit()

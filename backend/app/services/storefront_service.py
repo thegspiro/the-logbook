@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.utils import generate_uuid
 from app.models.inventory import InventoryItem
+from app.models.notification import NotificationChannel
 from app.models.storefront import (
     StoreFulfillmentMethod,
     StoreOrder,
@@ -48,6 +49,7 @@ from app.models.storefront import (
     StoreWindowStatus,
 )
 from app.models.user import Organization, User
+from app.services.notifications_service import NotificationsService
 from app.services.separation_of_duties import assert_different_person
 from app.services.storefront_notification_service import StorefrontNotificationService
 from app.utils.csv_export import SafeCsvWriter
@@ -65,6 +67,7 @@ _CENTS = Decimal("0.01")
 # that a typical window is one query, small enough not to hold a whole
 # department's order history in memory at once.
 _EXPORT_PAGE_SIZE = 200
+_DASHBOARD_ACTIVITY_LIMIT = 100
 
 # Order numbers are allocated as ORD-YYYY-NNNN. Matching a payment reference
 # looks for that exact shape rather than any digit run, so a payer typing their
@@ -227,6 +230,7 @@ class StorefrontService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.notifications = StorefrontNotificationService(db)
+        self.in_app_notifications = NotificationsService(db)
 
     # ==================================================================
     # Settings
@@ -1356,7 +1360,7 @@ class StorefrontService:
         stable order because two carts holding the same pair of products in
         opposite orders would otherwise deadlock.
         """
-        ordered_ids = sorted({str(pid) for pid in product_ids if pid})
+        ordered_ids = sorted({str(pid).lower() for pid in product_ids if pid})
         if not ordered_ids:
             return
         await self.db.execute(
@@ -1568,6 +1572,8 @@ class StorefrontService:
         payment_method: Optional[str] = None,
         user_id: Optional[str] = None,
         search: Optional[str] = None,
+        submitted_within_hours: Optional[int] = None,
+        open_only: bool = False,
         page: int = 1,
         page_size: int = 25,
     ) -> Tuple[List[StoreOrder], int]:
@@ -1585,6 +1591,17 @@ class StorefrontService:
             filters.append(StoreOrder.payment_method == payment_method)
         if user_id:
             filters.append(StoreOrder.user_id == str(user_id))
+        if submitted_within_hours is not None:
+            filters.append(
+                StoreOrder.submitted_at
+                >= _utcnow() - timedelta(hours=int(submitted_within_hours))
+            )
+        if open_only:
+            filters.append(
+                StoreOrder.status.notin_(
+                    [StoreOrderStatus.FULFILLED, StoreOrderStatus.CANCELLED]
+                )
+            )
         if search:
             pattern = like_pattern(search)
             filters.append(
@@ -1907,6 +1924,11 @@ class StorefrontService:
         if order.payment_status in (StorePaymentStatus.PAID, StorePaymentStatus.WAIVED):
             return order
 
+        settings = await self.get_settings(organization_id)
+        accepted = settings.accepted_payment_methods or []
+        if accepted and payment_method.value not in accepted:
+            raise ValueError("That payment method is not accepted by this store")
+
         order.payment_method = payment_method
         order.payment_reference = reference
         order.payment_reported_at = _utcnow()
@@ -1925,10 +1947,38 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        settings = await self.get_settings(organization_id)
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and settings.notify_admins_on_order:
             await self.notifications.send_admin_new_order(refreshed, settings)
+        return refreshed or order
+
+    async def update_member_payment_method(
+        self,
+        order_id: str,
+        organization_id: str,
+        user_id: str,
+        payment_method: StorePaymentMethod,
+    ) -> StoreOrder:
+        """Let a member change the planned method before payment is verified."""
+        order = await self.get_order(order_id, organization_id, user_id=user_id)
+        if not order:
+            raise ValueError("Order not found")
+        if order.status == StoreOrderStatus.CANCELLED:
+            raise ValueError("This order was cancelled")
+        if order.payment_status in (StorePaymentStatus.PAID, StorePaymentStatus.WAIVED):
+            raise ValueError(
+                "The payment method cannot be changed after the order is settled"
+            )
+
+        settings = await self.get_settings(organization_id)
+        accepted = settings.accepted_payment_methods or []
+        method = _as_enum(StorePaymentMethod, payment_method, None, "payment method")
+        if accepted and method.value not in accepted:
+            raise ValueError("That payment method is not accepted by this store")
+
+        order.payment_method = method
+        await self.db.commit()
+        refreshed = await self.get_order(order_id, organization_id, user_id=user_id)
         return refreshed or order
 
     async def refund_order(
@@ -2043,6 +2093,8 @@ class StorefrontService:
         message: str,
         is_member_visible: bool = True,
         notify_member: bool = True,
+        notify_email: bool = True,
+        notify_in_app: bool = True,
     ) -> StoreOrder:
         order = await self.get_order(order_id, organization_id)
         if not order:
@@ -2071,7 +2123,32 @@ class StorefrontService:
             # a quartermaster typed to one member and asked to send. The
             # switches govern the notices the module raises on its own.
             settings = await self.get_settings(organization_id)
-            await self.notifications.send_order_update(refreshed, message, settings)
+            if notify_in_app and refreshed.user_id:
+                _, notification_error = (
+                    await self.in_app_notifications.log_notification(
+                        organization_id,
+                        {
+                            "recipient_id": refreshed.user_id,
+                            "channel": NotificationChannel.IN_APP,
+                            "subject": f"{settings.store_name}: order update",
+                            "message": f"Order {refreshed.order_number}: {message}",
+                            "category": "storefront",
+                            "action_url": "/store/orders",
+                            "notification_metadata": {
+                                "order_id": refreshed.id,
+                                "order_number": refreshed.order_number,
+                            },
+                        },
+                    )
+                )
+                if notification_error:
+                    logger.error(
+                        "Could not create in-app notification for store order {}: {}",
+                        refreshed.id,
+                        notification_error,
+                    )
+            if notify_email:
+                await self.notifications.send_order_update(refreshed, message, settings)
         return refreshed or order
 
     async def set_admin_notes(
@@ -2699,6 +2776,7 @@ class StorefrontService:
         }
 
     async def get_dashboard(self, organization_id: str) -> Dict[str, Any]:
+        now = _utcnow()
         settings = await self.get_settings(organization_id)
         open_windows = await self.get_open_windows(organization_id)
         active_window = open_windows[0] if open_windows else None
@@ -2718,11 +2796,12 @@ class StorefrontService:
                 combined["outstanding"] + rollup["outstanding"]
             )
 
-        collected = Decimal("0.00")
+        active_window_rollup = self._empty_rollup()
         if active_window is not None:
-            collected = org_totals.get(active_window.id, self._empty_rollup())[
-                "collected"
-            ]
+            active_window_rollup = org_totals.get(
+                active_window.id, self._empty_rollup()
+            )
+        collected = active_window_rollup["collected"]
 
         product_count = await self.db.scalar(
             select(func.count(StoreProduct.id)).where(
@@ -2731,11 +2810,61 @@ class StorefrontService:
             )
         )
 
+        # "New" is deliberately time-based rather than tied to SUBMITTED.
+        # Paid and unpaid checkouts immediately enter different workflow
+        # statuses, so counting SUBMITTED would report zero for most stores.
+        new_order_count = await self.db.scalar(
+            select(func.count(StoreOrder.id)).where(
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.submitted_at >= now - timedelta(hours=24),
+            )
+        )
+
+        status_rows = await self.db.execute(
+            select(StoreOrder.status, func.count(StoreOrder.id))
+            .where(StoreOrder.organization_id == str(organization_id))
+            .group_by(StoreOrder.status)
+        )
+        status_counts = {status.value: 0 for status in StoreOrderStatus}
+        for status, count in status_rows.all():
+            status_counts[status.value if hasattr(status, "value") else str(status)] = (
+                int(count or 0)
+            )
+
+        activity_rows = await self.db.execute(
+            select(StoreOrderEvent, StoreOrder.order_number, StoreOrder.customer_name)
+            .join(StoreOrder, StoreOrder.id == StoreOrderEvent.order_id)
+            .options(selectinload(StoreOrderEvent.author))
+            .where(
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrderEvent.created_at >= now - timedelta(days=7),
+            )
+            .order_by(StoreOrderEvent.created_at.desc())
+            .limit(_DASHBOARD_ACTIVITY_LIMIT)
+        )
+        recent_activity = [
+            {
+                "id": event.id,
+                "order_id": event.order_id,
+                "order_number": order_number,
+                "customer_name": customer_name,
+                "event_type": event.event_type,
+                "from_status": event.from_status,
+                "to_status": event.to_status,
+                "message": event.message,
+                "author_name": event.author.full_name if event.author else None,
+                "created_at": event.created_at,
+            }
+            for event, order_number, customer_name in activity_rows.all()
+        ]
+
         recent_orders, _ = await self.list_orders(organization_id, page=1, page_size=10)
 
         return {
             "is_enabled": settings.is_enabled,
             "active_window": active_window,
+            "active_window_rollup": active_window_rollup,
+            "new_order_count": int(new_order_count or 0),
             "open_order_count": combined["open_order_count"],
             "awaiting_payment_count": combined["unpaid_order_count"],
             "pending_verification_count": combined["pending_verification_count"],
@@ -2743,6 +2872,8 @@ class StorefrontService:
             "outstanding_balance": combined["outstanding"],
             "collected_this_window": collected,
             "active_product_count": int(product_count or 0),
+            "status_counts": status_counts,
+            "recent_activity": recent_activity,
             "recent_orders": recent_orders,
         }
 

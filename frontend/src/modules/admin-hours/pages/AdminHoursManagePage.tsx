@@ -94,7 +94,7 @@ const AdminHoursManagePage: React.FC = () => {
       {activeTab === 'active' && <ActiveSessionsTab />}
       {activeTab === 'pending' && <PendingReviewTab />}
       {activeTab === 'all' && <AllEntriesTab />}
-      {activeTab === 'summary' && <SummaryTab />}
+      {activeTab === 'summary' && <SummaryTab onNavigate={setActiveTab} />}
     </div>
   );
 };

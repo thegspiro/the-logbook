@@ -15,7 +15,7 @@ function versionJsonPlugin(): Plugin {
     name: 'version-json',
     apply: 'build',
     closeBundle() {
-      const outDir = path.resolve(__dirname, 'dist');
+      const outDir = path.resolve(import.meta.dirname, 'dist');
       fs.writeFileSync(path.join(outDir, 'version.json'), JSON.stringify({ buildId: BUILD_ID }) + '\n');
     },
   };
@@ -199,7 +199,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   server: {

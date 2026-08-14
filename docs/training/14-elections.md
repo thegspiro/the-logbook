@@ -349,7 +349,12 @@ When you click **Send Ballots**, the system:
 3. Sends an email with a link to the public ballot page (`/ballot#token=...` — the token rides in the URL fragment, which browsers never send to any server, so the credential stays out of access logs; the page also removes it from the address bar once loaded)
 4. Reports how many ballots were sent and which members were skipped (with reasons)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ballot send confirmation showing "42 ballots sent, 3 skipped" with a list of skipped members and reasons (e.g., "No email address", "Ineligible tier")._
+![The banner after a ballot send, naming each member who was skipped and why](./images/14-24-ballot-send-skipped.png)
+
+Two things report the result. A **toast** gives the counts — "Ballots sent to N
+voter(s)", plus "M failed" and "M skipped (see banner below)" when either
+applies — and it disappears. A **banner** stays on the page and names each
+skipped member with the reason, which is the part you act on.
 
 > **Hint:** Ballot links are built from the server-configured `FRONTEND_URL`, not the address of the request that triggers the send. Your administrator should set `FRONTEND_URL` to the department's real public site URL (e.g. `https://app.yourdept.org`) so members receive working ballot links — if it is misconfigured, the emailed link points to the wrong host even though the send still reports success.
 

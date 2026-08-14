@@ -196,6 +196,7 @@ export {
 export type {
   TrainingSessionResponse,
   TrainingSessionCreate,
+  TrainingSessionLinkageUpdate,
   ErrorLogRecord,
   ErrorLogStats,
   ErrorCodeEntry,

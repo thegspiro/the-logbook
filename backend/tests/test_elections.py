@@ -1065,6 +1065,18 @@ class TestElectionBallotDefinitionValidation:
 
         with pytest.raises(pydantic.ValidationError):
             SavedBallotTemplateCreate(name="Empty", ballot_items=[])
+        with pytest.raises(pydantic.ValidationError, match="Invalid voting method"):
+            SavedBallotTemplateCreate(
+                name="Bad method",
+                ballot_items=[
+                    {
+                        "id": "question_1",
+                        "type": "general_vote",
+                        "title": "Question",
+                    }
+                ],
+                voting_method="plurality-ish",
+            )
         with pytest.raises(pydantic.ValidationError, match="votes"):
             SavedBallotTemplateCreate(
                 name="Tampered",
