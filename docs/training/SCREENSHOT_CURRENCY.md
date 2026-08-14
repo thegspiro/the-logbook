@@ -20,6 +20,9 @@ checked against its guide caption.
 - Room QR Codes directory (search, print, PNG), the regeneration warning, and
   rank-backed apparatus crew positions.
 - Event create/template reminder audience and Flexible 60-minute check-in state.
+- Personal versus Organization dashboard tabs, directory-versus-scanner
+  navigation, and personal-export field visibility before/after the Training
+  setting changes.
 - Event Settings outreach-form picker, training-session requirement/program
   linkage, and a related notification before and after automatic archive.
 

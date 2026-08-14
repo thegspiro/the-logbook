@@ -20,6 +20,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   15-minute exception. Added exact screenshot and YouTube B-roll requirements.
 
 
+### Security, privacy, permissions, and dashboard follow-up (2026-08-14)
+
+**Changed**
+
+- **Audit archives are private on disk.** Archive directories are created with
+  mode `0700` and files with `0600`; creation uses an exclusive file descriptor
+  rather than writing permissively and tightening permissions afterwards.
+- **Frozen election rolls are enforced at both connection points.** Ballot email
+  issuance and token redemption reject members outside the snapshot captured
+  when voting opened. Secretary overrides remain the explicit admission path;
+  legacy elections with a null snapshot retain their prior live-roll behavior.
+- **Personal data exports respect training visibility.** Officer-only
+  `ShiftCompletionReport` evaluation fields are omitted when the organization's
+  Training result-visibility setting does not expose them to the trainee.
+- **Member-directory and scanner permissions are distinct.** `members.view`
+  reaches the redacted colleague directory/profile; ID-card scanning requires
+  `users.view` or `members.manage`. Navigation uses the same OR permission rules
+  as the protected routes.
+- **Dashboard views separate personal and organization data.** Leaders can
+  switch to the Organization view while the personal view retains the member's
+  own equipment and activity; management affordances remain permission-gated.
+- Event and series duplication deep-copy mutable JSON, preserve reminder
+  audience/check-in configuration, and remove lifecycle markers so copied or
+  extended events cannot mutate or inherit the source's processing state.
+
+**Security / compatibility notes**
+
+- Existing archives are not chmod-migrated; operators should audit and repair
+  permissions on historical archive directories separately.
+- A member removed from a frozen election roll cannot redeem an already issued
+  token unless a secretary override admits them. Null legacy snapshots are the
+  intentional compatibility exception.
+- Export visibility affects newly generated exports; previously downloaded
+  files remain the recipient's responsibility under department retention rules.
+
 ### Three-day release documentation handoff (2026-08-14)
 
 **Documentation**
