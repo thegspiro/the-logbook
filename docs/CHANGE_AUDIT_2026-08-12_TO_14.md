@@ -55,14 +55,14 @@ filename alone. The window adds or materially changes these revisions:
 11. `20260813_0011_add_event_mandatory_membership_types` — configured event
     eligibility tiers.
 12. `20260814_0001_add_store_open_banner_setting` — banner visibility.
-13. `20260814_0002_revoke_captain_facilities_view_sensitive` — removes the
-    unintended sensitive-facilities grant from the system Captain position.
-14. `20260814_0003_saved_ballot_election_settings` — completes template
-    snapshots with election settings.
-15. `20260814_0004_reconcile_active_prospect_emails` — moves destructive
-    reconciliation out of the previously released uniqueness revision.
-16. `20260814_0005_merge_event_reminder_and_release_heads` — joins the event
-    reminder branch and this release branch so `alembic heads` is singular.
+13. `20260814_0002_saved_ballot_election_settings` — completes template
+    snapshots with election settings while preserving its published identity.
+14. `20260814_0003_reconcile_active_prospect_emails` — moves destructive
+    reconciliation out of the previously released uniqueness revision while
+    preserving its published identity.
+15. `20260814_0004_revoke_captain_facilities_view_sensitive` — removes the
+    unintended system Captain grant and joins the event-reminder branch with
+    the published saved-ballot/reconciliation chain, leaving one head.
 
 **Required duplicate preflight before `alembic upgrade head`:** revision
 `20260812_0003` creates the active-email unique index before the later
@@ -81,7 +81,7 @@ If this returns rows, stop the upgrade. For each organization/email group,
 select the canonical record with the earliest `created_at` (then lowest `id`),
 review linked application data, and set every other row to `inactive`. Re-run
 the query and require zero rows before upgrading. Do not delete prospects or
-assume `20260814_0004` can repair the collision after the index creation has
+assume `20260814_0003` can repair the collision after the index creation has
 already failed.
 
 **Upgrade edges:** take a database backup; run `alembic heads` and require one

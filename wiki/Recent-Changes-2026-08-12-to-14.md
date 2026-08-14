@@ -28,7 +28,7 @@ uniqueness/reconciliation, public portal key/timestamp hardening, shift vehicle
 and crew data, training-result visibility, sensitive-facility permission,
 manual paper-ballot counts, scheduling settings, mandatory membership types,
 and the store-open banner. Active-email reconciliation is in
-`20260814_0004`. **Before upgrading**, query active prospects grouped by
+`20260814_0003`. **Before upgrading**, query active prospects grouped by
 organization plus `LOWER(TRIM(email))`. If any group has more than one row, stop,
 review linked applications, keep the earliest `created_at` (then lowest `id`),
 mark the others inactive, and require a zero-row recheck. Otherwise the earlier

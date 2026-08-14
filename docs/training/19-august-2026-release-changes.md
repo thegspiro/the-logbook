@@ -85,7 +85,16 @@ rank or settings cache; finalization resolves apparatus labels in batches.
 
 > **[SCREENSHOT NEEDED — apparatus form crew-position rank picker, including one legacy read-only position in the demo data.]**
 
-## Events and outreach forms
+## Events, reminders, check-in, and outreach forms
+
+Event and template Notifications now store a reminder audience: `going` for
+members who RSVP Going, `all` for every active member in the organization, or
+`none` to disable reminders. Optional events default to `going`; mandatory
+events default to `all` until explicitly edited. Flexible check-in now defaults
+to 60 minutes before start, with the full workflow, delivery caveats, early
+member/guest distinction, and screenshot requirements in
+[Events & Meetings](./04-events-meetings.md#reminder-audience-and-one-hour-check-in-default-august-14-2026).
+
 
 The Event Settings outreach picker discovers only related public-outreach forms
 and only for event administrators. Mandatory-event eligibility uses the

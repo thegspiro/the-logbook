@@ -19,6 +19,7 @@ checked against its guide caption.
   why on-hand and available differ.
 - Room QR Codes directory (search, print, PNG), the regeneration warning, and
   rank-backed apparatus crew positions.
+- Event create/template reminder audience and Flexible 60-minute check-in state.
 - Event Settings outreach-form picker, training-session requirement/program
   linkage, and a related notification before and after automatic archive.
 

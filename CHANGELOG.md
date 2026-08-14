@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: reminder audience and check-in teaching update (2026-08-14)
+
+**Changed**
+
+- Documented the `going` / `all` / `none` reminder audience across the event and
+  template workflows, including mandatory/optional legacy defaults, recipient
+  preferences, organization boundaries, series copies, and disabled reminders.
+- Corrected the Flexible check-in default from 30 to 60 minutes throughout the
+  training/schema references and documented Strict/Window behavior, early-member
+  notices, guest blocking, actual-time boundaries, and the overlapping-meeting
+  15-minute exception. Added exact screenshot and YouTube B-roll requirements.
+
+
 ### Three-day release documentation handoff (2026-08-14)
 
 **Documentation**
