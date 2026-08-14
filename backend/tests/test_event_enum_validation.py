@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from app.schemas.event import (
     EventCreate,
+    EventDefaultsUpdate,
     EventTemplateCreate,
     EventUpdate,
     ManagerAddAttendee,
@@ -52,9 +53,50 @@ class TestEventEnumValidation:
     def test_update_allows_omitted(self):
         assert EventUpdate(title="x").event_type is None
 
+    @pytest.mark.parametrize(
+        "field", ["check_in_minutes_before", "check_in_minutes_after"]
+    )
+    def test_event_rejects_negative_check_in_windows(self, field):
+        with pytest.raises(ValidationError):
+            _event(**{field: -1})
+
+    @pytest.mark.parametrize(
+        "field", ["check_in_minutes_before", "check_in_minutes_after"]
+    )
+    def test_update_rejects_negative_check_in_windows(self, field):
+        with pytest.raises(ValidationError):
+            EventUpdate(**{field: -1})
+
     def test_template_rejects_bad_type(self):
         with pytest.raises(ValidationError):
             EventTemplateCreate(name="X", event_type="bogus")
+
+    def test_event_defaults_reject_bad_reminder_target(self):
+        with pytest.raises(ValidationError):
+            EventDefaultsUpdate(reminder_target="mandatory")
+
+    def test_new_mandatory_events_default_to_all_member_reminders(self):
+        assert _event(is_mandatory=True).reminder_target == "all"
+
+    def test_explicit_mandatory_event_target_is_preserved(self):
+        assert (
+            _event(is_mandatory=True, reminder_target="going").reminder_target
+            == "going"
+        )
+
+    def test_mandatory_templates_default_to_all_member_reminders(self):
+        assert EventTemplateCreate(name="X", is_mandatory=True).reminder_target == "all"
+
+    def test_mandatory_recurring_events_default_to_all_member_reminders(self):
+        event = RecurringEventCreate(
+            title="T",
+            recurrence_pattern="weekly",
+            rolling_recurrence=True,
+            start_datetime=_START,
+            end_datetime=_END,
+            is_mandatory=True,
+        )
+        assert event.reminder_target == "all"
 
     def test_recurring_rejects_bad_pattern(self):
         with pytest.raises(ValidationError):
@@ -65,6 +107,23 @@ class TestEventEnumValidation:
                 start_datetime=_START,
                 end_datetime=_END,
             )
+
+    def test_recurring_preserves_reminder_and_guest_check_in_options(self):
+        event = RecurringEventCreate(
+            title="T",
+            event_type="training",
+            recurrence_pattern="weekly",
+            rolling_recurrence=True,
+            start_datetime=_START,
+            end_datetime=_END,
+            reminder_target="all",
+            allow_guest_check_in=True,
+            guest_check_in_creates_prospect=True,
+        )
+
+        assert event.reminder_target == "all"
+        assert event.allow_guest_check_in is True
+        assert event.guest_check_in_creates_prospect is True
 
 
 class TestRsvpStatusValidation:
