@@ -193,7 +193,14 @@ const COMMANDS: CommandItem[] = [
     section: 'Admin',
     permission: 'settings.manage',
   },
-  { id: 'reports', label: 'Reports', path: '/reports', icon: BarChart3, section: 'Admin' },
+  {
+    id: 'reports',
+    label: 'Reports',
+    path: '/reports',
+    icon: BarChart3,
+    section: 'Admin',
+    permission: 'reports.view',
+  },
   { id: 'account', label: 'My Account', path: '/account', icon: Settings, section: 'Admin' },
 ];
 

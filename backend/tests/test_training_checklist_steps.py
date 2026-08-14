@@ -13,12 +13,15 @@ signed off one at a time. Covers:
 DB mocked; no MySQL.
 """
 
+import copy
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+from app.api.v1.endpoints.training import _member_requirement_response
 from app.api.v1.endpoints.training_programs import (
+    _member_program_requirement,
     _member_progress,
     _member_requirement,
 )
@@ -46,7 +49,12 @@ class TestNormalization:
             [{"id": "s1", "text": "References called", "member_visible": False}]
         )
         assert items == [
-            {"id": "s1", "text": "References called", "member_visible": False}
+            {
+                "id": "s1",
+                "text": "References called",
+                "member_visible": False,
+                "member_can_complete": False,
+            }
         ]
 
     def test_a_mixed_list_normalizes(self):
@@ -138,6 +146,42 @@ class TestVisibilityAndProgress:
         assert [item.id for item in response.requirement.checklist_items] == ["s1"]
         assert response.progress_notes["checklist_done"] == ["s1"]
 
+    def test_program_requirement_link_omits_officer_only_steps(self):
+        # GET /programs/{id}/requirements nests the full requirement inside
+        # each link row; the member view must strip hidden steps there too.
+        now = datetime.now(timezone.utc)
+        response = _member_program_requirement(
+            {
+                "id": uuid4(),
+                "program_id": uuid4(),
+                "requirement_id": uuid4(),
+                "created_at": now,
+                "requirement": self._requirement_response_data(),
+            }
+        )
+
+        assert [item.id for item in response.requirement.checklist_items] == ["s1"]
+
+    def test_program_requirement_link_without_nested_requirement(self):
+        now = datetime.now(timezone.utc)
+        response = _member_program_requirement(
+            {
+                "id": uuid4(),
+                "program_id": uuid4(),
+                "requirement_id": uuid4(),
+                "created_at": now,
+            }
+        )
+
+        assert response.requirement is None
+
+    def test_flat_requirement_list_omits_officer_only_steps(self):
+        # GET /training/requirements serves the same checklist through a
+        # different schema; the member view strips hidden steps there too.
+        response = _member_requirement_response(self._requirement_response_data())
+
+        assert [item.id for item in response.checklist_items] == ["s1"]
+
 
 def _progress(items, owner="u1", notes=None):
     return SimpleNamespace(
@@ -178,7 +222,12 @@ def _svc(progress):
 
 class TestCheckingOffSteps:
     ITEMS = [
-        {"id": "s1", "text": "Gear issued", "member_visible": True},
+        {
+            "id": "s1",
+            "text": "Gear issued",
+            "member_visible": True,
+            "member_can_complete": True,
+        },
         {"id": "s2", "text": "References called", "member_visible": False},
     ]
 
@@ -197,6 +246,37 @@ class TestCheckingOffSteps:
         assert out.status == RequirementProgressStatus.IN_PROGRESS
         assert out.completed_at is None
         assert out.progress_notes["checklist_done"] == ["s1"]
+
+    async def test_member_can_report_enabled_step_for_officer_validation(self):
+        progress = _progress(self.ITEMS, owner="me")
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(checklist_claimed=["s1"]),
+            acting_user_id="me",
+            can_manage=False,
+        )
+
+        assert error is None
+        assert out.progress_notes["checklist_claimed"] == ["s1"]
+        assert out.progress_percentage == 0.0
+
+    async def test_member_cannot_report_officer_only_step(self):
+        progress = _progress(self.ITEMS, owner="me")
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(checklist_claimed=["s2"]),
+            acting_user_id="me",
+            can_manage=False,
+        )
+
+        assert out is None
+        assert "cannot be completed by a member" in error
 
     async def test_every_step_completes_the_requirement(self):
         progress = _progress(self.ITEMS)
@@ -288,3 +368,90 @@ class TestCheckingOffSteps:
         assert error is None
         assert out.progress_notes["checklist_done"] == ["s1"]
         assert out.progress_percentage == 50.0
+
+
+class TestMemberNotesMerge:
+    """A member's progress_notes update must not touch officer-recorded keys.
+
+    progress_notes is a whole-dict replacement on the wire, so without a merge
+    a member sending any notes payload (even one without ``checklist_done``)
+    silently wiped officer sign-off and test state.
+    """
+
+    ITEMS = [
+        {"id": "s1", "text": "Gear issued", "member_visible": True},
+        {"id": "s2", "text": "References called", "member_visible": False},
+    ]
+
+    STORED = {
+        "checklist_done": ["s1", "s2"],
+        "test_attempts": [{"score": 88.0, "passed": True}],
+        "latest_score": 88.0,
+        "passing_score": 70.0,
+        "passed": True,
+        "member_note": "old",
+    }
+
+    async def test_member_note_update_keeps_officer_recorded_state(self):
+        stored = copy.deepcopy(self.STORED)
+        progress = _progress(self.ITEMS, owner="me", notes=stored)
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(progress_notes={"member_note": "new"}),
+            acting_user_id="me",
+            can_manage=False,
+        )
+
+        assert error is None
+        assert out.progress_notes["member_note"] == "new"
+        assert out.progress_notes["checklist_done"] == ["s1", "s2"]
+        assert out.progress_notes["test_attempts"] == stored["test_attempts"]
+        assert out.progress_notes["latest_score"] == 88.0
+        assert out.progress_notes["passing_score"] == 70.0
+        assert out.progress_notes["passed"] is True
+        # New objects, not the stored ones re-assigned — a shared nested
+        # reference would let SQLAlchemy see old == new and skip the UPDATE.
+        assert out.progress_notes is not stored
+        assert out.progress_notes["checklist_done"] is not stored["checklist_done"]
+
+    async def test_member_cannot_forge_officer_keys_through_notes(self):
+        progress = _progress(self.ITEMS, owner="me", notes={"member_note": "old"})
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(
+                progress_notes={
+                    "member_note": "new",
+                    "test_attempts": [{"score": 100.0, "passed": True}],
+                    "latest_score": 100.0,
+                    "passed": True,
+                }
+            ),
+            acting_user_id="me",
+            can_manage=False,
+        )
+
+        assert error is None
+        assert out.progress_notes == {"member_note": "new"}
+
+    async def test_officer_notes_update_replaces_wholesale(self):
+        progress = _progress(
+            self.ITEMS, owner="member", notes=copy.deepcopy(self.STORED)
+        )
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(progress_notes={"member_note": "reset"}),
+            acting_user_id="officer",
+            can_manage=True,
+        )
+
+        assert error is None
+        assert out.progress_notes == {"member_note": "reset"}

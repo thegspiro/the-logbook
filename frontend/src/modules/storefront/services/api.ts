@@ -90,6 +90,11 @@ export const storefrontService = {
     return response.data;
   },
 
+  async updateMyPaymentMethod(orderId: string, paymentMethod: string): Promise<StoreOrder> {
+    const response = await api.patch<StoreOrder>(`/store/orders/mine/${orderId}/payment-method`, { paymentMethod });
+    return response.data;
+  },
+
   async cancelMyOrder(orderId: string, reason?: string): Promise<StoreOrder> {
     const response = await api.post<StoreOrder>(`/store/orders/mine/${orderId}/cancel`, {
       reason,
@@ -358,6 +363,8 @@ export const storefrontService = {
       message: string;
       isMemberVisible: boolean;
       notifyMember: boolean;
+      notifyEmail: boolean;
+      notifyInApp: boolean;
     }
   ): Promise<StoreOrder> {
     const response = await api.post<StoreOrder>(`/store/orders/${orderId}/messages`, payload);

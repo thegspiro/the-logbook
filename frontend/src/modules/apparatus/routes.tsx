@@ -23,7 +23,7 @@ export const getApparatusRoutes = () => {
         path="/apparatus/print-labels"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="apparatus.view">
+            <ProtectedRoute requiredAnyPermission={['apparatus.view', 'apparatus.manage']}>
               <ApparatusLabelPrintPage />
             </ProtectedRoute>
           </Suspense>
@@ -34,7 +34,9 @@ export const getApparatusRoutes = () => {
         path="/apparatus"
         element={
           <Suspense fallback={null}>
-            <ApparatusListPage />
+            <ProtectedRoute requiredAnyPermission={['apparatus.view', 'apparatus.manage']}>
+              <ApparatusListPage />
+            </ProtectedRoute>
           </Suspense>
         }
       />
@@ -43,7 +45,7 @@ export const getApparatusRoutes = () => {
       <Route
         path="/apparatus/new"
         element={
-          <ProtectedRoute requiredPermission="apparatus.manage">
+          <ProtectedRoute requiredAnyPermission={['apparatus.create', 'apparatus.manage']}>
             <Suspense fallback={null}>
               <ApparatusFormPage />
             </Suspense>
@@ -56,7 +58,9 @@ export const getApparatusRoutes = () => {
         path="/apparatus/:id"
         element={
           <Suspense fallback={null}>
-            <ApparatusDetailPage />
+            <ProtectedRoute requiredAnyPermission={['apparatus.view', 'apparatus.manage']}>
+              <ApparatusDetailPage />
+            </ProtectedRoute>
           </Suspense>
         }
       />
@@ -65,7 +69,7 @@ export const getApparatusRoutes = () => {
       <Route
         path="/apparatus/:id/edit"
         element={
-          <ProtectedRoute requiredPermission="apparatus.manage">
+          <ProtectedRoute requiredAnyPermission={['apparatus.edit', 'apparatus.manage']}>
             <Suspense fallback={null}>
               <ApparatusFormPage />
             </Suspense>

@@ -161,6 +161,83 @@ class TestUnreadCount:
         assert await MessagingService(db).get_unread_count("org-1", "u1") == 0
 
 
+class TestInboxQuery:
+    async def _queries(self):
+        user = SimpleNamespace(roles=[], status=SimpleNamespace(value="active"))
+        user_result = MagicMock(scalar_one_or_none=MagicMock(return_value=user))
+        messages_result = MagicMock()
+        messages_result.scalars.return_value.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[user_result, messages_result])
+
+        await MessagingService(db).get_inbox("org-1", "u1", limit=10)
+
+        return [call.args[0] for call in db.execute.await_args_list]
+
+    async def test_scopes_user_lookup_to_the_requested_organization(self):
+        user_query, _ = await self._queries()
+
+        sql = str(user_query)
+        assert "users.id = :id_1" in sql
+        assert "users.organization_id = :organization_id_1" in sql
+
+    async def test_uses_stable_persistent_first_ordering(self):
+        _, messages_query = await self._queries()
+
+        assert (
+            "department_messages.is_pinned DESC, "
+            "department_messages.is_persistent DESC, "
+            "department_messages.created_at DESC, "
+            "department_messages.id DESC"
+        ) in str(messages_query)
+
+    async def test_paginates_before_loading_org_scoped_author_names(self):
+        user = SimpleNamespace(roles=[], status=SimpleNamespace(value="active"))
+        messages = [
+            SimpleNamespace(
+                id=f"m-{number}",
+                title=f"Message {number}",
+                body="Body",
+                priority="normal",
+                target_type="all",
+                target_roles=None,
+                target_statuses=None,
+                target_member_ids=None,
+                is_pinned=False,
+                is_persistent=False,
+                requires_acknowledgment=False,
+                posted_by=f"author-{number}",
+                created_at=None,
+                expires_at=None,
+            )
+            for number in range(2)
+        ]
+        user_result = MagicMock(scalar_one_or_none=MagicMock(return_value=user))
+        messages_result = MagicMock()
+        messages_result.scalars.return_value.all.return_value = messages
+        reads_result = MagicMock()
+        reads_result.scalars.return_value.all.return_value = []
+        authors_result = MagicMock(
+            all=MagicMock(
+                return_value=[
+                    SimpleNamespace(id="author-0", first_name=None, last_name=None)
+                ]
+            )
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[user_result, messages_result, reads_result, authors_result]
+        )
+
+        inbox = await MessagingService(db).get_inbox("org-1", "u1", limit=1)
+
+        assert [message["id"] for message in inbox] == ["m-0"]
+        assert inbox[0]["author_name"] == "Unknown"
+        author_query = db.execute.await_args_list[3].args[0]
+        assert author_query.compile().params["id_1"] == ["author-0"]
+        assert "users.organization_id = :organization_id_1" in str(author_query)
+
+
 class TestReadAckVisibilityGate:
     """mark_as_read / acknowledge_message must only record against a message
     the user can actually see (in-org and targeted), or a user could pollute
@@ -183,6 +260,24 @@ class TestReadAckVisibilityGate:
         assert ok is False
         assert err == "Message not found"
         db.add.assert_not_called()
+
+    async def test_visibility_query_rejects_non_live_messages(self):
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+
+        message = await MessagingService(db)._visible_message_or_none(
+            "m1", "u1", "org-1"
+        )
+
+        assert message is None
+        query = db.execute.await_args.args[0]
+        sql = str(query)
+        assert "department_messages.is_active IS true" in sql
+        assert "department_messages.deleted_at IS NULL" in sql
+        assert "department_messages.expires_at >" in sql
+        assert "department_messages.scheduled_at <=" in sql
 
     async def test_mark_as_read_rejects_untargeted_message(self):
         message = _msg("m1", "roles", roles=["chief"])
@@ -231,6 +326,23 @@ class TestReadAckVisibilityGate:
         db.add = MagicMock()
         ok, _ = await MessagingService(db).acknowledge_message("m1", "u1", "org-1")
         assert ok is False
+        db.add.assert_not_called()
+
+    async def test_acknowledge_rejects_message_that_does_not_require_it(self):
+        message = _msg("m1", "all", requires_acknowledgment=False)
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
+            ]
+        )
+        db.add = MagicMock()
+
+        ok, error = await MessagingService(db).acknowledge_message("m1", "u1", "org-1")
+
+        assert ok is False
+        assert error == "Message does not require acknowledgment"
         db.add.assert_not_called()
 
 
@@ -416,6 +528,20 @@ class TestRescheduleGuard:
         )
         assert err is None
 
+    async def test_unrelated_edit_does_not_revalidate_legacy_audience(self):
+        published = SimpleNamespace(scheduled_at=None, title="Old title")
+        db = self._db_with(published)
+        service = MessagingService(db)
+        service._validate_targeting = AsyncMock()
+
+        message, err = await service.update_message(
+            "m1", "org-1", {"title": "New title"}
+        )
+
+        assert err is None
+        assert message.title == "New title"
+        service._validate_targeting.assert_not_awaited()
+
 
 class TestValidateTargeting:
     """MSG-2: create/update reject target member/role ids not in the caller's
@@ -438,32 +564,75 @@ class TestValidateTargeting:
 
     async def test_empty_lists_issue_no_query(self):
         svc, db = self._svc([])
-        await svc._validate_targeting("org1", None, None)
-        await svc._validate_targeting("org1", [], [])
+        await svc._validate_targeting("org1", "all", None, None, None)
+        await svc._validate_targeting("org1", "all", [], [], [])
         db.execute.assert_not_called()
+
+    def test_normalizes_irrelevant_audience_lists(self):
+        assert MessagingService._audience_for_type(
+            "roles", ["r1"], ["active"], ["u1"]
+        ) == (["r1"], None, None)
+        assert MessagingService._audience_for_type(
+            "all", ["r1"], ["active"], ["u1"]
+        ) == (None, None, None)
 
     async def test_in_org_member_ids_pass(self):
         svc, _ = self._svc([self._members_result(["u1", "u2"])])
-        await svc._validate_targeting("org1", ["u1", "u2"], None)
+        await svc._validate_targeting("org1", "members", ["u1", "u2"], None, None)
 
     async def test_foreign_member_id_rejected(self):
         # Only u1 is in-org; the foreign id is not returned by the query.
         svc, _ = self._svc([self._members_result(["u1"])])
         with pytest.raises(ValueError, match="target members"):
-            await svc._validate_targeting("org1", ["u1", "u2-foreign"], None)
+            await svc._validate_targeting(
+                "org1", "members", ["u1", "u2-foreign"], None, None
+            )
 
     async def test_role_id_and_name_both_pass(self):
         row = SimpleNamespace(id="r1", name="Officer")
         svc, _ = self._svc([self._roles_result([row])])
-        await svc._validate_targeting("org1", None, ["r1"])  # by id
+        await svc._validate_targeting("org1", "roles", None, ["r1"], None)  # by id
         svc2, _ = self._svc([self._roles_result([row])])
-        await svc2._validate_targeting("org1", None, ["Officer"])  # rename-safe
+        await svc2._validate_targeting(
+            "org1", "roles", None, ["Officer"], None
+        )  # rename-safe
 
     async def test_foreign_role_rejected(self):
         row = SimpleNamespace(id="r1", name="Officer")
         svc, _ = self._svc([self._roles_result([row])])
         with pytest.raises(ValueError, match="target roles"):
-            await svc._validate_targeting("org1", None, ["r2-foreign"])
+            await svc._validate_targeting("org1", "roles", None, ["r2-foreign"], None)
+
+    async def test_targeted_audience_cannot_be_empty(self):
+        svc, db = self._svc([])
+
+        with pytest.raises(ValueError, match="At least one target role is required"):
+            await svc._validate_targeting("org1", "roles", None, [], None)
+
+        db.execute.assert_not_called()
+
+    async def test_irrelevant_stale_audience_values_are_ignored(self):
+        svc, db = self._svc([])
+
+        await svc._validate_targeting(
+            "org1",
+            "all",
+            ["foreign-member"],
+            ["deleted-role"],
+            ["invalid-status"],
+        )
+
+        db.execute.assert_not_called()
+
+    async def test_invalid_status_rejected_without_query(self):
+        svc, db = self._svc([])
+
+        with pytest.raises(ValueError, match="target statuses"):
+            await svc._validate_targeting(
+                "org1", "statuses", None, None, ["not-a-real-status"]
+            )
+
+        db.execute.assert_not_called()
 
 
 if __name__ == "__main__":  # pragma: no cover

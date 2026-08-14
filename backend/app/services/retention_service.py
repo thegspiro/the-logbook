@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.email_template import MessageHistory
 from app.models.error_log import ErrorLog
+from app.models.event import EventExternalAttendee
 from app.models.forms import FormSubmission
 from app.models.ip_security import BlockedAccessAttempt
 from app.models.notification import NotificationLog
@@ -111,6 +112,21 @@ RECORD_CLASSES: list[RecordClass] = [
         min_days=90,
     ),
     RecordClass(
+        key="guest_check_ins",
+        description=(
+            "External (non-member) event attendees — guest check-in and "
+            "public outreach sign-in rows holding name/email/phone submitted "
+            "by the public. Kept forever by default, like form submissions — "
+            "configure per your records schedule. A prospective-member record "
+            "opened from a check-in lives in the recruitment pipeline and is "
+            "never touched by this sweep."
+        ),
+        model=EventExternalAttendee,
+        timestamp_attr="created_at",
+        default_days=None,
+        min_days=90,
+    ),
+    RecordClass(
         key="practice_skill_tests",
         description=(
             "Practice skills-test attempts — drill runs a member and a peer "
@@ -138,7 +154,24 @@ class RetentionService:
 
     @staticmethod
     def _org_config(org: Organization) -> dict:
-        return (org.settings or {}).get("retention", {})
+        org_settings = org.settings if isinstance(org.settings, dict) else {}
+        config = org_settings.get("retention", {})
+        return config if isinstance(config, dict) else {}
+
+    @staticmethod
+    def _effective_days(config: dict, rc: RecordClass) -> int | None:
+        """Return a safe retention period even for legacy/untyped JSON."""
+        configured = config.get(rc.key, rc.default_days)
+        if configured is None:
+            return None
+        try:
+            return max(int(configured), rc.min_days)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Ignoring invalid retention setting for record class {}",
+                rc.key,
+            )
+            return rc.default_days
 
     def get_policy(self, org: Organization) -> list[dict[str, Any]]:
         """Effective policy per record class for the admin UI/API."""
@@ -229,12 +262,11 @@ class RetentionService:
             for rc in RECORD_CLASSES:
                 if only_class is not None and rc.key != only_class:
                     continue
-                days = config.get(rc.key, rc.default_days)
+                days = self._effective_days(config, rc)
                 if days is None:
                     continue
                 # Defense in depth: a floor also applies at enforcement
                 # time, in case settings were edited outside the API.
-                days = max(int(days), rc.min_days)
                 deleted = await self._delete_expired(
                     rc.model,
                     rc.timestamp_attr,

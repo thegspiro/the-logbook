@@ -432,10 +432,10 @@ appears — ten advanced, two named and skipped with reasons.]**
 **[SCREEN: Navigate to Communications → Messages]**
 
 > "When you need to reach the whole department fast, use Communications →
-> Messages. Set the priority: a normal post shows up in the app, but mark it
-> Urgent and it also goes out by email and text message, so a mandatory callback
-> or a station closure reaches people who aren't logged in. Target everyone, a
-> specific role, or individual members."
+> Messages. Every post shows up in the app and goes out by email — that email is
+> your record that members were notified. Mark it Urgent and it also goes out by
+> text message, so a mandatory callback or a station closure reaches people who
+> aren't logged in. Target everyone, a specific role, or individual members."
 
 > "For anything members must confirm — a policy change, an inspection deadline —
 > turn on Require acknowledgment. You'll get a report of exactly who has and

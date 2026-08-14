@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
     _collect_user_permissions,
+    can_view_officer_training_data,
     get_current_user,
     require_permission,
 )
@@ -67,13 +68,6 @@ from app.services.training_program_service import TrainingProgramService
 router = APIRouter()
 
 
-def _can_view_officer_training_data(user: User) -> bool:
-    permissions = _collect_user_permissions(user)
-    return permission_matches("training.view_all", permissions) or permission_matches(
-        "training.manage", permissions
-    )
-
-
 def _member_requirement(requirement) -> TrainingRequirementEnhancedResponse:
     """Return a requirement without checklist steps reserved for officers."""
     response = TrainingRequirementEnhancedResponse.model_validate(requirement)
@@ -104,8 +98,24 @@ def _member_progress(progress) -> RequirementProgressResponse:
             for item_id in notes["checklist_done"]
             if str(item_id) in visible_ids
         ]
+    if isinstance(notes.get("checklist_claimed"), list):
+        notes["checklist_claimed"] = [
+            item_id
+            for item_id in notes["checklist_claimed"]
+            if str(item_id) in visible_ids
+        ]
     return response.model_copy(
         update={"requirement": visible_requirement, "progress_notes": notes or None}
+    )
+
+
+def _member_program_requirement(program_requirement) -> ProgramRequirementResponse:
+    """Return a program-requirement link without officer-only checklist steps."""
+    response = ProgramRequirementResponse.model_validate(program_requirement)
+    if response.requirement is None:
+        return response
+    return response.model_copy(
+        update={"requirement": _member_requirement(response.requirement)}
     )
 
 
@@ -184,7 +194,7 @@ async def get_training_requirements(
         position=position,
     )
 
-    if _can_view_officer_training_data(current_user):
+    if can_view_officer_training_data(current_user):
         return requirements
     return [_member_requirement(requirement) for requirement in requirements]
 
@@ -361,7 +371,7 @@ async def get_training_requirement(
             detail="Training requirement not found",
         )
 
-    if _can_view_officer_training_data(current_user):
+    if can_view_officer_training_data(current_user):
         return requirement
     return _member_requirement(requirement)
 
@@ -641,7 +651,7 @@ async def get_training_program(
         program_id, current_user.organization_id
     )
     requirements = [pr.requirement for pr in program_requirements]
-    if not _can_view_officer_training_data(current_user):
+    if not can_view_officer_training_data(current_user):
         requirements = [
             _member_requirement(requirement) for requirement in requirements
         ]
@@ -1036,7 +1046,11 @@ async def get_program_requirements(
         phase_id=phase_id,
     )
 
-    return requirements
+    # The nested requirement carries the full checklist; members must not see
+    # steps flagged member_visible=False (same rule as the other program views).
+    if can_view_officer_training_data(current_user):
+        return requirements
+    return [_member_program_requirement(pr) for pr in requirements]
 
 
 # ==================== Program Milestone Endpoints ====================
@@ -1326,7 +1340,7 @@ async def get_enrollment_progress(
         if str(getattr(rp.status, "value", rp.status)) in done_statuses
     )
 
-    can_view_officer_data = _can_view_officer_training_data(current_user)
+    can_view_officer_data = can_view_officer_training_data(current_user)
     requirement_progress = enrollment.requirement_progress
     if not can_view_officer_data:
         requirement_progress = [

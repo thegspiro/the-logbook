@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import {
   LogOut,
-  Menu,
-  X,
   Sun,
   Moon,
   Monitor,
@@ -24,6 +22,7 @@ import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { hasAdministrationAccess } from './adminNavigation';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -93,17 +92,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  const hasAnyAdminPermission =
-    checkPermission('members.manage') ||
-    checkPermission('prospective_members.manage') ||
-    checkPermission('events.manage') ||
-    checkPermission('training.manage') ||
-    checkPermission('inventory.manage') ||
-    checkPermission('admin_hours.manage') ||
-    checkPermission('positions.manage_permissions') ||
-    checkPermission('settings.manage') ||
-    checkPermission('forms.view') ||
-    checkPermission('analytics.view');
+  const hasAnyAdminPermission = hasAdministrationAccess(checkPermission);
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
@@ -114,6 +103,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
+    ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store' } as NavItem] : []),
     ...(isModuleOn('training')
       ? [
           {
@@ -141,7 +131,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Inventory', path: '/inventory' },
             ]
           : []),
-        ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store' }] : []),
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus' }]
           : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
@@ -194,7 +183,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Scan Member ID', path: '/members/scan', permission: 'members.manage' },
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
               DIV,
-              { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
+              { label: 'Manage Events', path: '/events', permission: 'events.manage' },
               ...(isModuleOn('training')
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
@@ -206,11 +195,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 : []),
               { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
               DIV,
-              ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.view' }] : []),
+              ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.manage' }] : []),
               ...(isModuleOn('integrations')
                 ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }]
                 : []),
-              ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports' }] : []),
+              ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports', permission: 'reports.view' }] : []),
               DIV,
               { label: 'Organization', path: '/settings', permission: 'settings.manage' },
               { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
@@ -505,21 +494,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               </button>
             </div>
           </nav>
-
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-theme-text-primary hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2.5 transition-colors focus:ring-2 focus:outline-hidden md:hidden"
-            aria-expanded={mobileMenuOpen}
-            aria-controls="mobile-menu"
-            aria-label={mobileMenuOpen ? 'Close main menu' : 'Open main menu'}
-          >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" aria-hidden="true" />
-            ) : (
-              <Menu className="h-6 w-6" aria-hidden="true" />
-            )}
-          </button>
         </div>
 
         {/* Mobile Navigation */}

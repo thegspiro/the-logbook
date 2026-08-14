@@ -182,8 +182,8 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
-      const tabBar = await screen.findByRole('navigation', { name: /Scheduling tabs/i });
-      await user.click(within(tabBar).getByRole('button', { name: /Equipment Checks/i }));
+      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
+      await user.click(within(tabBar).getByRole('tab', { name: /Equipment Checks/i }));
 
       expect(await screen.findByText('My Equipment Checklists')).toBeInTheDocument();
       expect(window.location.search).toContain('tab=equipment-checks');
@@ -193,16 +193,30 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
-      const tabBar = await screen.findByRole('navigation', { name: /Scheduling tabs/i });
-      await user.click(within(tabBar).getByRole('button', { name: /Equipment Checks/i }));
+      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
+      await user.click(within(tabBar).getByRole('tab', { name: /Equipment Checks/i }));
       await screen.findByText('My Equipment Checklists');
 
-      await user.click(within(tabBar).getByRole('button', { name: /Schedule/i }));
+      await user.click(within(tabBar).getByRole('tab', { name: /Schedule/i }));
 
       await waitFor(() => {
         expect(screen.queryByText('My Equipment Checklists')).not.toBeInTheDocument();
       });
       expect(window.location.search).not.toContain('tab=');
+    });
+
+    it('supports arrow-key navigation between scheduling views', async () => {
+      renderWithRouter(<SchedulingPage />);
+      const user = userEvent.setup();
+
+      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
+      const scheduleTab = within(tabBar).getByRole('tab', { name: 'Schedule' });
+      scheduleTab.focus();
+      await user.keyboard('{ArrowRight}');
+
+      const myShiftsTab = within(tabBar).getByRole('tab', { name: 'My Shifts' });
+      expect(myShiftsTab).toHaveAttribute('aria-selected', 'true');
+      expect(window.location.search).toContain('tab=my-shifts');
     });
 
     it('should honour a ?tab= deep link on first render', async () => {
@@ -211,6 +225,18 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       expect(await screen.findByText('My Equipment Checklists')).toBeInTheDocument();
+    });
+
+    it('restores and preserves the selected calendar view and date in the URL', async () => {
+      window.history.replaceState({}, '', '/scheduling?view=month&date=2026-08-13');
+
+      renderWithRouter(<SchedulingPage />);
+
+      const viewPicker = await screen.findByRole('tablist', { name: 'Calendar view mode' });
+      expect(within(viewPicker).getByRole('tab', { name: 'Month' })).toHaveAttribute('aria-selected', 'true');
+      expect(await screen.findByRole('heading', { name: 'August 2026' })).toBeInTheDocument();
+      expect(window.location.search).toContain('view=month');
+      expect(window.location.search).toContain('date=2026-08-13');
     });
   });
 

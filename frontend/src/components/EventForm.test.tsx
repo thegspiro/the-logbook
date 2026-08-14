@@ -37,6 +37,10 @@ vi.mock('../services/api', () => ({
       ],
       custom_event_categories: [],
       visible_custom_categories: [],
+      membership_types: [
+        { value: 'cadet', label: 'Cadet' },
+        { value: 'active', label: 'Active Member' },
+      ],
     }),
   },
   locationsService: {
@@ -292,6 +296,39 @@ describe('EventForm', () => {
       const heading = screen.getAllByRole('heading', { level: 2 }).find((h) => h.textContent?.includes('Attendance'));
       expect(heading).toBeInTheDocument();
       expect(screen.getByLabelText(/mandatory attendance/i)).toBeInTheDocument();
+    });
+
+    it('allows multiple mandatory member types to be selected', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const user = userEvent.setup();
+      expect(screen.queryByText('Mandatory for')).not.toBeInTheDocument();
+
+      await user.click(screen.getByLabelText(/mandatory attendance/i));
+
+      expect(screen.getByText('Mandatory for')).toBeInTheDocument();
+      expect(screen.getByLabelText('Active Member')).toBeInTheDocument();
+      expect(screen.getByLabelText('Cadet')).toBeInTheDocument();
+
+      await user.click(screen.getByLabelText('Active Member'));
+      await user.click(screen.getByLabelText('Cadet'));
+
+      expect(screen.getByLabelText('Active Member')).toBeChecked();
+      expect(screen.getByLabelText('Cadet')).toBeChecked();
+    });
+
+    it('requires a member type for mandatory attendance', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const user = userEvent.setup();
+      await user.click(screen.getByLabelText(/mandatory attendance/i));
+      await user.type(screen.getByLabelText(/title/i), 'Required drill');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Select at least one member type');
+      expect(mockOnSubmit).not.toHaveBeenCalled();
     });
   });
 

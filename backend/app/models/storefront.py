@@ -185,6 +185,9 @@ class StoreSettings(Base):
     tagline = Column(String(300), nullable=True)
     description = Column(Text, nullable=True)
     currency = Column(String(3), nullable=False, default="USD", server_default="USD")
+    show_open_order_banner = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
 
     # --- Payment configuration -------------------------------------------
     accepted_payment_methods = Column(JSON, nullable=True)  # list[StorePaymentMethod]

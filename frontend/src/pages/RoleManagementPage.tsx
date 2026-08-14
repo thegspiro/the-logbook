@@ -9,6 +9,7 @@ import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 export const RoleManagementPage: React.FC = () => {
   const { confirm } = useConfirm();
@@ -18,6 +19,7 @@ export const RoleManagementPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const roleModalRef = useFocusTrap<HTMLDivElement>(showCreateModal);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -231,6 +233,7 @@ export const RoleManagementPage: React.FC = () => {
         {/* Create/Edit Role Modal */}
         {showCreateModal && (
           <div
+            ref={roleModalRef}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
             role="dialog"
             aria-modal="true"
@@ -239,14 +242,17 @@ export const RoleManagementPage: React.FC = () => {
               if (e.key === 'Escape') setShowCreateModal(false);
             }}
           >
-            <div className="bg-theme-surface-modal mx-4 max-h-[90dvh] w-full max-w-4xl overflow-y-auto rounded-lg shadow-xl">
-              <div className="border-theme-surface-border border-b px-6 py-4">
+            <div className="bg-theme-surface-modal mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-lg shadow-xl">
+              <div className="border-theme-surface-border shrink-0 border-b px-6 py-4">
                 <h3 id="role-modal-title" className="text-theme-text-primary text-lg font-medium">
                   {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
                 </h3>
               </div>
 
-              <div className="space-y-4 px-6 py-4">
+              <div
+                className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4"
+                data-testid="role-modal-scroll-area"
+              >
                 {editingRole?.is_system && (
                   <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
                     <p className="text-sm text-yellow-800 dark:text-yellow-400">
@@ -349,7 +355,10 @@ export const RoleManagementPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="border-theme-surface-border flex justify-end gap-3 border-t px-6 py-4">
+              <div
+                className="bg-theme-surface-modal border-theme-surface-border flex shrink-0 justify-end gap-3 border-t px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]"
+                data-testid="role-modal-actions"
+              >
                 <button
                   onClick={() => setShowCreateModal(false)}
                   className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium"

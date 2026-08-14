@@ -286,6 +286,7 @@ from app.models.public_portal import (
     PublicPortalConfig,
     PublicPortalDataWhitelist,
 )
+from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
 from app.models.skills_testing import SkillTemplate, SkillTest
 from app.models.storefront import (
@@ -500,6 +501,8 @@ __all__ = [
     # Shift equipment check models
     "ShiftEquipmentCheck",
     "ShiftEquipmentCheckItem",
+    # Scheduling module config
+    "SchedulingModuleConfig",
     # Security alert models
     "SecurityAlertRecord",
     "AlertType",

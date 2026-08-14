@@ -21,7 +21,6 @@ import { useStorefrontStore } from '../store/storefrontStore';
 import {
   ORDER_STATUS_BADGES,
   ORDER_STATUS_LABELS,
-  PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_BADGES,
   PAYMENT_STATUS_LABELS,
   type StoreOrder,
@@ -34,6 +33,8 @@ const MyOrdersPage: React.FC = () => {
   const [reportOrder, setReportOrder] = useState<StoreOrder | null>(null);
   const [reportMethod, setReportMethod] = useState('');
   const [reportReference, setReportReference] = useState('');
+  const [methodOrder, setMethodOrder] = useState<StoreOrder | null>(null);
+  const [newPaymentMethod, setNewPaymentMethod] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -63,6 +64,21 @@ const MyOrdersPage: React.FC = () => {
       setSubmitting(false);
     }
   }, [loadMyOrders, reportMethod, reportOrder, reportReference]);
+
+  const changePaymentMethod = useCallback(async () => {
+    if (!methodOrder || !newPaymentMethod) return;
+    setSubmitting(true);
+    try {
+      await storefrontService.updateMyPaymentMethod(methodOrder.id, newPaymentMethod);
+      toast.success('Payment method updated');
+      setMethodOrder(null);
+      void loadMyOrders();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not update the payment method'));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [loadMyOrders, methodOrder, newPaymentMethod]);
 
   const cancelOrder = useCallback(
     async (order: StoreOrder) => {
@@ -187,6 +203,19 @@ const MyOrdersPage: React.FC = () => {
                     </div>
                   )}
 
+                  {balance > 0 && order.paymentStatus !== 'pending_verification' && (
+                    <button
+                      type="button"
+                      className="text-theme-text-muted hover:text-theme-text-primary mt-2 text-xs underline"
+                      onClick={() => {
+                        setMethodOrder(order);
+                        setNewPaymentMethod(order.paymentMethod ?? '');
+                      }}
+                    >
+                      Change payment method
+                    </button>
+                  )}
+
                   {order.events.length > 0 && (
                     <details className="mt-4">
                       <summary className="text-theme-text-muted cursor-pointer text-sm">
@@ -267,9 +296,9 @@ const MyOrdersPage: React.FC = () => {
               className="form-input"
             >
               <option value="">Select…</option>
-              {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
+              {(reportOrder?.paymentInstructions?.options ?? []).map((option) => (
+                <option key={option.method} value={option.method}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -287,6 +316,47 @@ const MyOrdersPage: React.FC = () => {
               placeholder="Venmo note, check number, …"
             />
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={methodOrder !== null}
+        onClose={() => setMethodOrder(null)}
+        title="Change payment method"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn-secondary btn-md" onClick={() => setMethodOrder(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary btn-md"
+              disabled={submitting || !newPaymentMethod}
+              onClick={() => void changePaymentMethod()}
+            >
+              {submitting ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        }
+      >
+        <div className="modal-body">
+          <label htmlFor="new-payment-method" className="form-label">
+            Payment method
+          </label>
+          <select
+            id="new-payment-method"
+            value={newPaymentMethod}
+            onChange={(event) => setNewPaymentMethod(event.target.value)}
+            className="form-input"
+          >
+            <option value="">Select…</option>
+            {(methodOrder?.paymentInstructions?.options ?? []).map((option) => (
+              <option key={option.method} value={option.method}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
       </Modal>
     </div>

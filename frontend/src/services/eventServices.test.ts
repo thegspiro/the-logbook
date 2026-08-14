@@ -398,6 +398,7 @@ describe('eventService', () => {
         visible_event_types: ['training', 'meeting'],
         custom_event_categories: [{ value: 'drill', label: 'Drill', color: 'bg-blue-100 text-blue-800' }],
         visible_custom_categories: ['drill'],
+        membership_types: [{ value: 'active', label: 'Active Member' }],
       };
       mockGet.mockResolvedValueOnce({ data });
 

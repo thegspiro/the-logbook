@@ -349,7 +349,12 @@ When you click **Send Ballots**, the system:
 3. Sends an email with a link to the public ballot page (`/ballot#token=...` — the token rides in the URL fragment, which browsers never send to any server, so the credential stays out of access logs; the page also removes it from the address bar once loaded)
 4. Reports how many ballots were sent and which members were skipped (with reasons)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ballot send confirmation showing "42 ballots sent, 3 skipped" with a list of skipped members and reasons (e.g., "No email address", "Ineligible tier")._
+![The banner after a ballot send, naming each member who was skipped and why](./images/14-24-ballot-send-skipped.png)
+
+Two things report the result. A **toast** gives the counts — "Ballots sent to N
+voter(s)", plus "M failed" and "M skipped (see banner below)" when either
+applies — and it disappears. A **banner** stays on the page and names each
+skipped member with the reason, which is the part you act on.
 
 > **Hint:** Ballot links are built from the server-configured `FRONTEND_URL`, not the address of the request that triggers the send. Your administrator should set `FRONTEND_URL` to the department's real public site URL (e.g. `https://app.yourdept.org`) so members receive working ballot links — if it is misconfigured, the emailed link points to the wrong host even though the send still reports success.
 
@@ -840,7 +845,12 @@ When a prospective member reaches the **Election Vote** stage of their pipeline,
 4. Members vote to approve or deny
 5. Results flow back: package status → `elected` or `not_elected`
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the election detail page showing a membership approval ballot item with an applicant's name, supporting statement, and Approve/Deny voting options._
+![The ballot preview's membership approval item — the applicant named in the title, the coordinator's supporting statement, and the Approve and Deny options](./images/14-23-membership-ballot-item.png)
+
+The election detail page lists the item; **Preview Ballot** is what shows it as a
+voter will see it — Approve, Deny, and **Abstain (Do not vote on this item)**,
+which every approval item carries. The options are inert in the preview: it is a
+rendering of the ballot, not a ballot.
 
 See [Membership Management > Prospective Members](./01-membership.md#prospective-members-pipeline) for the full pipeline workflow.
 

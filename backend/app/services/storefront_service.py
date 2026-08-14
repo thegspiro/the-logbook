@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.utils import generate_uuid
 from app.models.inventory import InventoryItem
+from app.models.notification import NotificationChannel
 from app.models.storefront import (
     StoreFulfillmentMethod,
     StoreOrder,
@@ -48,6 +49,7 @@ from app.models.storefront import (
     StoreWindowStatus,
 )
 from app.models.user import Organization, User
+from app.services.notifications_service import NotificationsService
 from app.services.separation_of_duties import assert_different_person
 from app.services.storefront_notification_service import StorefrontNotificationService
 from app.utils.csv_export import SafeCsvWriter
@@ -227,6 +229,7 @@ class StorefrontService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.notifications = StorefrontNotificationService(db)
+        self.in_app_notifications = NotificationsService(db)
 
     # ==================================================================
     # Settings
@@ -1356,7 +1359,7 @@ class StorefrontService:
         stable order because two carts holding the same pair of products in
         opposite orders would otherwise deadlock.
         """
-        ordered_ids = sorted({str(pid) for pid in product_ids if pid})
+        ordered_ids = sorted({str(pid).lower() for pid in product_ids if pid})
         if not ordered_ids:
             return
         await self.db.execute(
@@ -1907,6 +1910,11 @@ class StorefrontService:
         if order.payment_status in (StorePaymentStatus.PAID, StorePaymentStatus.WAIVED):
             return order
 
+        settings = await self.get_settings(organization_id)
+        accepted = settings.accepted_payment_methods or []
+        if accepted and payment_method.value not in accepted:
+            raise ValueError("That payment method is not accepted by this store")
+
         order.payment_method = payment_method
         order.payment_reference = reference
         order.payment_reported_at = _utcnow()
@@ -1925,10 +1933,38 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        settings = await self.get_settings(organization_id)
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and settings.notify_admins_on_order:
             await self.notifications.send_admin_new_order(refreshed, settings)
+        return refreshed or order
+
+    async def update_member_payment_method(
+        self,
+        order_id: str,
+        organization_id: str,
+        user_id: str,
+        payment_method: StorePaymentMethod,
+    ) -> StoreOrder:
+        """Let a member change the planned method before payment is verified."""
+        order = await self.get_order(order_id, organization_id, user_id=user_id)
+        if not order:
+            raise ValueError("Order not found")
+        if order.status == StoreOrderStatus.CANCELLED:
+            raise ValueError("This order was cancelled")
+        if order.payment_status in (StorePaymentStatus.PAID, StorePaymentStatus.WAIVED):
+            raise ValueError(
+                "The payment method cannot be changed after the order is settled"
+            )
+
+        settings = await self.get_settings(organization_id)
+        accepted = settings.accepted_payment_methods or []
+        method = _as_enum(StorePaymentMethod, payment_method, None, "payment method")
+        if accepted and method.value not in accepted:
+            raise ValueError("That payment method is not accepted by this store")
+
+        order.payment_method = method
+        await self.db.commit()
+        refreshed = await self.get_order(order_id, organization_id, user_id=user_id)
         return refreshed or order
 
     async def refund_order(
@@ -2043,6 +2079,8 @@ class StorefrontService:
         message: str,
         is_member_visible: bool = True,
         notify_member: bool = True,
+        notify_email: bool = True,
+        notify_in_app: bool = True,
     ) -> StoreOrder:
         order = await self.get_order(order_id, organization_id)
         if not order:
@@ -2071,7 +2109,32 @@ class StorefrontService:
             # a quartermaster typed to one member and asked to send. The
             # switches govern the notices the module raises on its own.
             settings = await self.get_settings(organization_id)
-            await self.notifications.send_order_update(refreshed, message, settings)
+            if notify_in_app and refreshed.user_id:
+                _, notification_error = (
+                    await self.in_app_notifications.log_notification(
+                        organization_id,
+                        {
+                            "recipient_id": refreshed.user_id,
+                            "channel": NotificationChannel.IN_APP,
+                            "subject": f"{settings.store_name}: order update",
+                            "message": f"Order {refreshed.order_number}: {message}",
+                            "category": "storefront",
+                            "action_url": "/store/orders",
+                            "notification_metadata": {
+                                "order_id": refreshed.id,
+                                "order_number": refreshed.order_number,
+                            },
+                        },
+                    )
+                )
+                if notification_error:
+                    logger.error(
+                        "Could not create in-app notification for store order {}: {}",
+                        refreshed.id,
+                        notification_error,
+                    )
+            if notify_email:
+                await self.notifications.send_order_update(refreshed, message, settings)
         return refreshed or order
 
     async def set_admin_notes(

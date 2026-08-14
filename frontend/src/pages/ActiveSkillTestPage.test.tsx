@@ -1,7 +1,32 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+
+// Officer-only controls are gated on training.manage. Selector-aware, because
+// useTimezone also reads this store with a selector.
+let mockIsOfficer = false;
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: vi.fn((selector?: (s: unknown) => unknown) => {
+    const state = { user: null, checkPermission: () => mockIsOfficer };
+    return typeof selector === 'function' ? selector(state) : state;
+  }),
+}));
+
+// The draft→in_progress retry fetches the current version through the service
+// rather than loadTest, so the store's local scoring is not overwritten.
+const mockGetTest = vi.fn();
+vi.mock('../services/api', async () => {
+  const actual = await vi.importActual<typeof import('../services/api')>('../services/api');
+  return {
+    ...actual,
+    skillsTestingService: {
+      ...actual.skillsTestingService,
+      getTest: (id: string) => mockGetTest(id) as Promise<unknown>,
+    },
+  };
+});
+
 import ActiveSkillTestPage from './ActiveSkillTestPage';
 
 // Mock the store
@@ -70,6 +95,13 @@ const mockVoidedTest = {
   voided_at: '2026-01-16T09:00:00Z',
   voided_by_name: 'Chief Adams',
   void_reason: 'Scored against the wrong candidate',
+};
+
+/** Completed after being resumed — the recorded time is not a stopwatch reading. */
+const mockUnverifiedTimingTest = {
+  ...mockCompletedTest,
+  resume_count: 2,
+  timing_verified: false,
 };
 
 /** A two-section scorecard: a statement that marks itself, then scoreable steps. */
@@ -187,6 +219,7 @@ let currentMockTest:
   | typeof mockFullyScoredTest
   | typeof mockVoidedTest
   | typeof mockCancelledTest
+  | typeof mockUnverifiedTimingTest
   | null = null;
 // The page reads the running flag through getState() as well as through the
 // hook, so the mock has to hold it like the real store does.
@@ -251,6 +284,7 @@ describe('ActiveSkillTestPage', () => {
     currentMockTest = null;
     mockTimerRunning = false;
     mockSectionIndex = 0;
+    mockIsOfficer = false;
     mockSetActiveTestRunning.mockImplementation((running: boolean) => {
       mockTimerRunning = running;
     });
@@ -868,6 +902,33 @@ describe('ActiveSkillTestPage', () => {
   // loadTest resets the section index, so returning to an interrupted
   // evaluation dropped the examiner at section 1 to hunt for where they got to.
   describe('Resuming an interrupted test', () => {
+    it('does not report a resume against a different test after navigation', async () => {
+      const user = userEvent.setup();
+      currentMockTest = {
+        ...mockTestWithSections,
+        id: 'resumed-test',
+        status: 'in_progress' as const,
+        elapsed_seconds: 180,
+      };
+      const { rerender } = renderWithRouter(<ActiveSkillTestPage />);
+
+      currentMockTest = {
+        ...mockTestWithSections,
+        id: 'unrelated-test',
+        status: 'in_progress' as const,
+        elapsed_seconds: 0,
+      };
+      rerender(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      await waitFor(() =>
+        expect(mockUpdateTest).toHaveBeenLastCalledWith(
+          'unrelated-test',
+          expect.not.objectContaining({ resumed: true })
+        )
+      );
+    });
+
     it('should open at the first section that still has blank steps', () => {
       currentMockTest = {
         ...mockFullyScoredTest,
@@ -972,6 +1033,210 @@ describe('ActiveSkillTestPage', () => {
       await user.click(screen.getByRole('button', { name: /leave this test/i }));
 
       expect(mockNavigate).toHaveBeenCalledWith('/training/skills-testing');
+    });
+  });
+
+  // The email endpoint requires training.manage, so for a member examiner the
+  // button could only ever 403.
+  describe('Emailing practice results', () => {
+    it('should offer the email button to an officer', () => {
+      mockIsOfficer = true;
+      currentMockTest = mockCompletedPracticeTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByRole('button', { name: /email results to candidate/i })).toBeInTheDocument();
+    });
+
+    it('should not offer it to a member examiner', () => {
+      currentMockTest = mockCompletedPracticeTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.queryByRole('button', { name: /email results to candidate/i })).not.toBeInTheDocument();
+      // The rest of the practice bar is still theirs.
+      expect(screen.getByRole('button', { name: /retake/i })).toBeInTheDocument();
+    });
+  });
+
+  // A resumed test's clock carried on from the last save, so the recorded
+  // seconds are not a stopwatch reading. The live screen already said so; the
+  // completed view — the one the validating officer reads — showed the figure
+  // as ordinary "Total Time".
+  describe('Unverified timing on the completed view', () => {
+    it('should mark the total time when the timing is unverified', () => {
+      currentMockTest = mockUnverifiedTimingTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByText('Total Time')).toBeInTheDocument();
+      expect(screen.getByText(/Not verified — scoring was resumed/)).toBeInTheDocument();
+    });
+
+    it('should leave a straight-through test unmarked', () => {
+      currentMockTest = mockCompletedTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByText('Total Time')).toBeInTheDocument();
+      expect(screen.queryByText(/Not verified/)).not.toBeInTheDocument();
+    });
+  });
+
+  // The draft→in_progress transition shares the optimistic-concurrency version
+  // with every other save. Fired-and-forgotten it raced the autosave: losing
+  // meant the clock ran locally against a stuck draft, winning meant the next
+  // autosave carried a consumed version and raised a conflict that wasn't one.
+  describe('Draft start racing the autosave', () => {
+    it('should make a save wait for the transition and use the refreshed version', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+
+      let resolveTransition!: () => void;
+      mockUpdateTest.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveTransition = () => {
+              // The store adopts the server response: in_progress, version bumped.
+              currentMockTest = { ...mockTestWithSections, status: 'in_progress' as const, version: 8 };
+              resolve(currentMockTest);
+            };
+          })
+      );
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      // Scoring the first step starts the clock and fires the transition.
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+      expect(mockUpdateTest).toHaveBeenCalledWith('test-1', expect.objectContaining({ expected_version: 7 }));
+
+      // A save issued while the transition is still in flight must not race it.
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+      expect(mockUpdateTest).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveTransition();
+      });
+
+      await waitFor(() => expect(mockUpdateTest).toHaveBeenCalledTimes(2));
+      expect(mockUpdateTest).toHaveBeenLastCalledWith('test-1', expect.objectContaining({ expected_version: 8 }));
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
+    it('should refetch and retry once when the transition hits a conflict', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      // AppError-shaped, as the store rethrows an axios 409 the page inspects.
+      mockUpdateTest.mockRejectedValueOnce({ message: 'conflict', status: 409 });
+      // An officer edited the draft's details in between; still a draft.
+      mockGetTest.mockResolvedValue({ ...mockTestWithSections, version: 9 });
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+
+      await waitFor(() => expect(mockUpdateTest).toHaveBeenCalledTimes(2));
+      expect(mockGetTest).toHaveBeenCalledWith('test-1');
+      expect(mockUpdateTest).toHaveBeenLastCalledWith(
+        'test-1',
+        expect.objectContaining({ status: 'in_progress', expected_version: 9 })
+      );
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
+    // The retry re-sends this screen's scoring against a version the server
+    // will accept. If the concurrent write changed a criterion, that write is
+    // exactly what the retry would flatten — the data loss optimistic
+    // concurrency exists to prevent — so it must not be attempted at all.
+    it('should refuse to retry when the concurrent write changed a score', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockFullyScoredTest;
+      mockUpdateTest.mockRejectedValueOnce({ message: 'conflict', status: 409 });
+      // Another examiner flipped the second step to a fail while this screen
+      // still holds it as a pass.
+      mockGetTest.mockResolvedValue({
+        ...mockFullyScoredTest,
+        version: 9,
+        section_results: [
+          {
+            section_id: 'section-0',
+            section_name: 'Donning',
+            criteria_results: [
+              { criterion_id: 'criterion-0-0', passed: true },
+              { criterion_id: 'criterion-0-1', passed: false },
+            ],
+          },
+        ],
+      });
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+
+      await waitFor(() => expect(mockGetTest).toHaveBeenCalledWith('test-1'));
+      // One write only: the failed transition. No retry carried the stale copy.
+      expect(mockUpdateTest).toHaveBeenCalledTimes(1);
+      expect(await screen.findByText(/Someone else changed this test/)).toBeInTheDocument();
+    });
+
+    // A step scored elsewhere that this screen has never seen would be dropped
+    // just as surely as one that was changed.
+    it('should refuse to retry when the concurrent write added a score', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      mockUpdateTest.mockRejectedValueOnce({ message: 'conflict', status: 409 });
+      mockGetTest.mockResolvedValue({
+        ...mockTestWithSections,
+        version: 9,
+        section_results: [
+          {
+            section_id: 'section-1',
+            section_name: 'Doffing',
+            criteria_results: [{ criterion_id: 'criterion-1-0', passed: true }],
+          },
+        ],
+      });
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+
+      await waitFor(() => expect(mockGetTest).toHaveBeenCalledWith('test-1'));
+      expect(mockUpdateTest).toHaveBeenCalledTimes(1);
+      expect(await screen.findByText(/Someone else changed this test/)).toBeInTheDocument();
+    });
+
+    // The common 409: an officer edited the draft's details, leaving every
+    // recorded result alone. Re-sending the local scoring overwrites nobody,
+    // so the clock still starts.
+    it('should still retry when the concurrent write left every score untouched', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockFullyScoredTest;
+      mockUpdateTest.mockRejectedValueOnce({ message: 'conflict', status: 409 });
+      mockGetTest.mockResolvedValue({
+        ...mockFullyScoredTest,
+        version: 9,
+        notes: 'Rescheduled to Tuesday',
+      });
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'FAIL' }));
+
+      await waitFor(() => expect(mockUpdateTest).toHaveBeenCalledTimes(2));
+      expect(mockUpdateTest).toHaveBeenLastCalledWith(
+        'test-1',
+        expect.objectContaining({
+          status: 'in_progress',
+          expected_version: 9,
+          section_results: mockFullyScoredTest.section_results,
+        })
+      );
+      expect(screen.queryByText(/Someone else changed this test/)).not.toBeInTheDocument();
+    });
+
+    it('should give up visibly when the retry conflicts too', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      mockUpdateTest.mockRejectedValue({ message: 'conflict', status: 409 });
+      mockGetTest.mockResolvedValue({ ...mockTestWithSections, version: 9 });
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+
+      // A second 409 is a genuine concurrent edit — the banner, not silence.
+      expect(await screen.findByText(/Someone else changed this test/)).toBeInTheDocument();
     });
   });
 });

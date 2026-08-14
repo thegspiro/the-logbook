@@ -21,6 +21,7 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { inputCls, labelCls } from '../constants';
 import { enumLabel } from '../types';
 import { formatNumber } from '../../../utils/dateFormatting';
+import { blankToNull, numberOrNull } from '../../../utils/formValues';
 
 interface FieldDefinition {
   key: string;
@@ -33,8 +34,12 @@ interface FieldDefinition {
 interface ResourceSectionProps<T extends { id: string }> {
   title: string;
   emptyMessage: string;
-  canManage: boolean;
+  /** Create/update affordances — backend accepts facilities.edit or facilities.manage. */
+  canEdit: boolean;
+  /** Delete affordance — backend accepts facilities.manage only. */
+  canDelete: boolean;
   fields: FieldDefinition[];
+  /** Must be referentially stable (useCallback) — the fetch effect keys on it. */
   load: () => Promise<T[]>;
   create: (values: Record<string, string>) => Promise<unknown>;
   update: (id: string, values: Record<string, string>) => Promise<unknown>;
@@ -46,7 +51,8 @@ interface ResourceSectionProps<T extends { id: string }> {
 function ResourceSection<T extends { id: string }>({
   title,
   emptyMessage,
-  canManage,
+  canEdit,
+  canDelete,
   fields,
   load,
   create,
@@ -122,7 +128,7 @@ function ResourceSection<T extends { id: string }>({
         <h2 className="text-theme-text-primary text-sm font-semibold">
           {title} {!isLoading && `(${items.length})`}
         </h2>
-        {canManage && (
+        {canEdit && (
           <button
             onClick={() => {
               setEditingId(null);
@@ -138,7 +144,7 @@ function ResourceSection<T extends { id: string }>({
       </header>
 
       <div className="p-5">
-        {canManage && showForm && (
+        {canEdit && showForm && (
           <div className="bg-theme-surface-hover/50 mb-5 grid grid-cols-1 gap-3 rounded-lg p-4 sm:grid-cols-2">
             {fields.map((field) => (
               <div key={field.key}>
@@ -185,26 +191,30 @@ function ResourceSection<T extends { id: string }>({
             {items.map((item) => (
               <div key={item.id} className="group flex items-center justify-between gap-4 py-3">
                 <div className="min-w-0 flex-1">{renderSummary(item)}</div>
-                {canManage && (
+                {(canEdit || canDelete) && (
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        setEditingId(item.id);
-                        setValues(toForm(item));
-                        setShowForm(true);
-                      }}
-                      className="text-theme-text-muted hover:bg-theme-surface-hover rounded-lg p-2"
-                      aria-label={`Edit ${title.replace(/s$/, '').toLowerCase()}`}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => void handleDelete(item)}
-                      className="text-theme-text-muted rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500"
-                      aria-label={`Delete ${title.replace(/s$/, '').toLowerCase()}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => {
+                          setEditingId(item.id);
+                          setValues(toForm(item));
+                          setShowForm(true);
+                        }}
+                        className="text-theme-text-muted hover:bg-theme-surface-hover rounded-lg p-2"
+                        aria-label={`Edit ${title.replace(/s$/, '').toLowerCase()}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => void handleDelete(item)}
+                        className="text-theme-text-muted rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500"
+                        aria-label={`Delete ${title.replace(/s$/, '').toLowerCase()}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -251,14 +261,26 @@ const PROJECT_STATUSES = options([
   'completed',
   'cancelled',
 ]);
-const POLICY_TYPES = options(['property', 'liability', 'flood', 'earthquake', 'workers_comp', 'umbrella', 'other']);
+const POLICY_TYPES = options([
+  'property',
+  'liability',
+  'flood',
+  'earthquake',
+  'workers_comp',
+  'umbrella',
+  'equipment',
+  'other',
+]);
 
 interface SectionProps {
   facilityId: string;
+  /** facilities.manage — delete affordances. */
   canManage: boolean;
+  /** facilities.edit or facilities.manage — create/update affordances (mirrors backend gates). */
+  canEdit: boolean;
 }
 
-function UtilityReadings({ accountId, canManage }: { accountId: string; canManage: boolean }) {
+function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: boolean }) {
   const [readings, setReadings] = useState<UtilityReading[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [readingDate, setReadingDate] = useState('');
@@ -282,11 +304,17 @@ function UtilityReadings({ accountId, canManage }: { accountId: string; canManag
       toast.error('Reading date is required');
       return;
     }
-    await facilitiesService.createUtilityReading(accountId, {
-      reading_date: readingDate,
-      ...(amount ? { amount: Number(amount) } : {}),
-      ...(usage ? { usage_quantity: Number(usage) } : {}),
-    });
+    try {
+      await facilitiesService.createUtilityReading(accountId, {
+        utility_account_id: accountId,
+        reading_date: readingDate,
+        ...(amount ? { amount: Number(amount) } : {}),
+        ...(usage ? { usage_quantity: Number(usage) } : {}),
+      });
+    } catch {
+      toast.error('Failed to add reading');
+      return;
+    }
     setReadingDate('');
     setAmount('');
     setUsage('');
@@ -300,7 +328,7 @@ function UtilityReadings({ accountId, canManage }: { accountId: string; canManag
         <span className="text-theme-text-muted">
           {readings.length ? `${readings.length} recent readings` : 'No readings'}
         </span>
-        {canManage && (
+        {canEdit && (
           <button onClick={() => setShowForm((value) => !value)} className="text-red-600 dark:text-red-400">
             {showForm ? 'Cancel' : 'Add reading'}
           </button>
@@ -340,29 +368,33 @@ function UtilityReadings({ accountId, canManage }: { accountId: string; canManag
   );
 }
 
-export function UtilitiesSection({ facilityId, canManage }: SectionProps) {
+export function UtilitiesSection({ facilityId, canManage, canEdit }: SectionProps) {
+  // Stable per facilityId — an inline closure would re-trigger the section's
+  // fetch effect on every completed request (infinite refetch loop).
+  const load = useCallback(() => facilitiesService.getUtilityAccounts({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<UtilityAccount>
       title="Utilities"
       emptyMessage="No utility accounts have been added."
-      canManage={canManage}
-      load={() => facilitiesService.getUtilityAccounts({ facility_id: facilityId })}
+      canEdit={canEdit}
+      canDelete={canManage}
+      load={load}
       create={(v) =>
         facilitiesService.createUtilityAccount({
           facility_id: facilityId,
           utility_type: v.utility_type,
           provider_name: v.provider_name,
-          account_number: v.account_number,
-          meter_number: v.meter_number,
+          account_number: v.account_number || undefined,
+          meter_number: v.meter_number || undefined,
         } as UtilityAccountCreate)
       }
       update={(id, v) =>
         facilitiesService.updateUtilityAccount(id, {
           utility_type: v.utility_type,
           provider_name: v.provider_name,
-          account_number: v.account_number,
-          meter_number: v.meter_number,
-        } as Partial<UtilityAccountCreate>)
+          account_number: blankToNull(v.account_number),
+          meter_number: blankToNull(v.meter_number),
+        })
       }
       toForm={(item) => ({
         utility_type: item.utilityType,
@@ -383,36 +415,38 @@ export function UtilitiesSection({ facilityId, canManage }: SectionProps) {
           <p className="text-theme-text-muted text-xs">
             {text(item.providerName)} · Account {text(item.accountNumber)}
           </p>
-          <UtilityReadings accountId={item.id} canManage={canManage} />
+          <UtilityReadings accountId={item.id} canEdit={canEdit} />
         </>
       )}
     />
   );
 }
 
-export function AccessKeysSection({ facilityId, canManage }: SectionProps) {
+export function AccessKeysSection({ facilityId, canManage, canEdit }: SectionProps) {
+  const load = useCallback(() => facilitiesService.getAccessKeys({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<AccessKey>
       title="Access Keys"
       emptyMessage="No keys or credentials are tracked."
-      canManage={canManage}
-      load={() => facilitiesService.getAccessKeys({ facility_id: facilityId })}
+      canEdit={canEdit}
+      canDelete={canManage}
+      load={load}
       create={(v) =>
         facilitiesService.createAccessKey({
           facility_id: facilityId,
           key_type: v.key_type,
-          key_identifier: v.key_identifier,
-          description: v.description,
-          assigned_to_name: v.assigned_to_name,
+          key_identifier: v.key_identifier || undefined,
+          description: v.description || undefined,
+          assigned_to_name: v.assigned_to_name || undefined,
         } as AccessKeyCreate)
       }
       update={(id, v) =>
         facilitiesService.updateAccessKey(id, {
           key_type: v.key_type,
-          key_identifier: v.key_identifier,
-          description: v.description,
-          assigned_to_name: v.assigned_to_name,
-        } as Partial<AccessKeyCreate>)
+          key_identifier: blankToNull(v.key_identifier),
+          description: blankToNull(v.description),
+          assigned_to_name: blankToNull(v.assigned_to_name),
+        })
       }
       toForm={(item) => ({
         key_type: item.keyType,
@@ -441,13 +475,15 @@ export function AccessKeysSection({ facilityId, canManage }: SectionProps) {
   );
 }
 
-export function ShutoffsSection({ facilityId, canManage }: SectionProps) {
+export function ShutoffsSection({ facilityId, canManage, canEdit }: SectionProps) {
+  const load = useCallback(() => facilitiesService.getShutoffLocations({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<ShutoffLocation>
       title="Shutoff Locations"
       emptyMessage="No utility shutoffs are documented."
-      canManage={canManage}
-      load={() => facilitiesService.getShutoffLocations({ facility_id: facilityId })}
+      canEdit={canEdit}
+      canDelete={canManage}
+      load={load}
       create={(v) =>
         facilitiesService.createShutoffLocation({
           facility_id: facilityId,
@@ -460,8 +496,9 @@ export function ShutoffsSection({ facilityId, canManage }: SectionProps) {
         facilitiesService.updateShutoffLocation(id, {
           shutoff_type: v.shutoff_type,
           location_description: v.location_description,
-          floor: numberValue(v.floor),
-        } as Partial<ShutoffLocationCreate>)
+          // Explicit null so a cleared floor persists (Pitfall #1 update rule)
+          floor: numberOrNull(v.floor),
+        })
       }
       toForm={(item) => ({
         shutoff_type: item.shutoffType,
@@ -487,13 +524,15 @@ export function ShutoffsSection({ facilityId, canManage }: SectionProps) {
   );
 }
 
-export function CapitalProjectsSection({ facilityId, canManage }: SectionProps) {
+export function CapitalProjectsSection({ facilityId, canManage, canEdit }: SectionProps) {
+  const load = useCallback(() => facilitiesService.getCapitalProjects({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<CapitalProject>
       title="Capital Projects"
       emptyMessage="No capital projects are tracked."
-      canManage={canManage}
-      load={() => facilitiesService.getCapitalProjects({ facility_id: facilityId })}
+      canEdit={canEdit}
+      canDelete={canManage}
+      load={load}
       create={(v) =>
         facilitiesService.createCapitalProject({
           facility_id: facilityId,
@@ -501,17 +540,20 @@ export function CapitalProjectsSection({ facilityId, canManage }: SectionProps) 
           project_name: v.name,
           project_status: v.status || 'planning',
           estimated_cost: numberValue(v.estimated_budget),
-          start_date: v.start_date,
+          // Blank date must be omitted on create — '' fails Pydantic date parsing
+          start_date: v.start_date || undefined,
         } as CapitalProjectCreate)
       }
       update={(id, v) =>
         facilitiesService.updateCapitalProject(id, {
           project_name: v.name,
           project_type: v.project_type,
-          project_status: v.status,
-          estimated_cost: numberValue(v.estimated_budget),
-          start_date: v.start_date,
-        } as Partial<CapitalProjectCreate>)
+          // Status is a non-nullable enum server-side — omit rather than clear
+          project_status: v.status || undefined,
+          // Explicit nulls so cleared fields persist (Pitfall #1 update rule)
+          estimated_cost: numberOrNull(v.estimated_budget),
+          start_date: blankToNull(v.start_date),
+        })
       }
       toForm={(item) => ({
         name: item.projectName,
@@ -541,31 +583,35 @@ export function CapitalProjectsSection({ facilityId, canManage }: SectionProps) 
   );
 }
 
-export function InsuranceSection({ facilityId, canManage }: SectionProps) {
+export function InsuranceSection({ facilityId, canManage, canEdit }: SectionProps) {
+  const load = useCallback(() => facilitiesService.getInsurancePolicies({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<InsurancePolicy>
       title="Insurance"
       emptyMessage="No insurance policies are tracked."
-      canManage={canManage}
-      load={() => facilitiesService.getInsurancePolicies({ facility_id: facilityId })}
+      canEdit={canEdit}
+      canDelete={canManage}
+      load={load}
       create={(v) =>
         facilitiesService.createInsurancePolicy({
           facility_id: facilityId,
           policy_type: v.policy_type,
-          policy_number: v.policy_number,
+          policy_number: v.policy_number || undefined,
           carrier_name: v.provider,
           coverage_amount: numberValue(v.coverage_amount),
-          expiration_date: v.expiration_date,
+          // Blank date must be omitted on create — '' fails Pydantic date parsing
+          expiration_date: v.expiration_date || undefined,
         } as InsurancePolicyCreate)
       }
       update={(id, v) =>
         facilitiesService.updateInsurancePolicy(id, {
           policy_type: v.policy_type,
-          policy_number: v.policy_number,
+          policy_number: blankToNull(v.policy_number),
           carrier_name: v.provider,
-          coverage_amount: numberValue(v.coverage_amount),
-          expiration_date: v.expiration_date,
-        } as Partial<InsurancePolicyCreate>)
+          // Explicit nulls so cleared fields persist (Pitfall #1 update rule)
+          coverage_amount: numberOrNull(v.coverage_amount),
+          expiration_date: blankToNull(v.expiration_date),
+        })
       }
       toForm={(item) => ({
         policy_type: item.policyType,
@@ -597,27 +643,31 @@ export function InsuranceSection({ facilityId, canManage }: SectionProps) {
   );
 }
 
-export function OccupantsSection({ facilityId, canManage }: SectionProps) {
+export function OccupantsSection({ facilityId, canManage, canEdit }: SectionProps) {
+  const load = useCallback(() => facilitiesService.getOccupants({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<Occupant>
       title="Occupants"
       emptyMessage="No occupants or units are assigned."
-      canManage={canManage}
-      load={() => facilitiesService.getOccupants({ facility_id: facilityId })}
+      canEdit={canEdit}
+      canDelete={canManage}
+      load={load}
       create={(v) =>
         facilitiesService.createOccupant({
           facility_id: facilityId,
           unit_name: v.name,
-          description: v.occupant_type,
-          effective_date: v.start_date,
+          description: v.occupant_type || undefined,
+          // Blank date must be omitted on create — '' fails Pydantic date parsing
+          effective_date: v.start_date || undefined,
         } as OccupantCreate)
       }
       update={(id, v) =>
         facilitiesService.updateOccupant(id, {
           unit_name: v.name,
-          description: v.occupant_type,
-          effective_date: v.start_date,
-        } as Partial<OccupantCreate>)
+          description: blankToNull(v.occupant_type),
+          // Explicit null so a cleared date persists (Pitfall #1 update rule)
+          effective_date: blankToNull(v.start_date),
+        })
       }
       toForm={(item) => ({
         name: item.unitName,

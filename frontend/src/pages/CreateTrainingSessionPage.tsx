@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Calendar,
@@ -13,14 +13,7 @@ import {
   Repeat,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type {
-  TrainingSessionCreate,
-  TrainingCourse,
-  TrainingCategory,
-  TrainingProgram,
-  TrainingRequirement,
-  ProgramPhase,
-} from '../types/training';
+import type { TrainingSessionCreate, TrainingCourse } from '../types/training';
 import type { RecurrencePattern } from '../types/event';
 import type { User } from '../types/user';
 import type { Location } from '../services/api';
@@ -28,16 +21,12 @@ import { TRAINING_TYPE_LABELS } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
-import {
-  userService,
-  locationsService,
-  trainingSessionService,
-  trainingService,
-  trainingProgramService,
-} from '../services/api';
+import { userService, locationsService, trainingSessionService, trainingService } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
 import { useRanks } from '../hooks/useRanks';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
+import { TrainingLinkageFields } from '../components/training/TrainingLinkageFields';
+import { useTrainingLinkageData } from '../hooks/useTrainingLinkageData';
 
 const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -98,12 +87,6 @@ const CreateTrainingSessionPage: React.FC = () => {
   const [apparatusId, setApparatusId] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>('select');
-
-  // Requirement/program linkage pickers
-  const [categories, setCategories] = useState<TrainingCategory[]>([]);
-  const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
-  const [programs, setPrograms] = useState<TrainingProgram[]>([]);
-  const [phases, setPhases] = useState<ProgramPhase[]>([]);
 
   // Recurrence state
   const [isRecurring, setIsRecurring] = useState(false);
@@ -180,37 +163,10 @@ const CreateTrainingSessionPage: React.FC = () => {
       .catch(() => {
         setLocationMode('other');
       });
-    trainingService
-      .getCategories()
-      .then(setCategories)
-      .catch(() => {
-        /* non-critical */
-      });
-    trainingService
-      .getRequirements({ active_only: true })
-      .then(setRequirements)
-      .catch(() => {
-        /* non-critical */
-      });
-    trainingProgramService
-      .getPrograms({ is_template: false })
-      .then((data) => setPrograms(data.filter((p) => p.active)))
-      .catch(() => {
-        /* non-critical */
-      });
   }, []);
 
-  // Phases belong to a program, so the picker reloads whenever the program changes
-  useEffect(() => {
-    if (!formData.program_id) {
-      setPhases([]);
-      return;
-    }
-    trainingProgramService
-      .getProgramPhases(formData.program_id)
-      .then(setPhases)
-      .catch(() => setPhases([]));
-  }, [formData.program_id]);
+  const linkageData = useTrainingLinkageData(formData.program_id);
+  const { categories, requirements, programs, phases } = linkageData;
 
   const updateField = (
     field: keyof TrainingSessionCreate,
@@ -223,47 +179,10 @@ const CreateTrainingSessionPage: React.FC = () => {
     ? availableCourses.find((c) => c.id === formData.course_id)
     : undefined;
 
-  // Requirements this session likely satisfies, so the officer can link one in
-  // a single tap instead of hunting through the full list: requirements that
-  // explicitly list the selected course, plus hour/category requirements that
-  // share a category with the course or the chosen session category.
-  const suggestedRequirements = useMemo(() => {
-    if (requirements.length === 0) return [];
-    const courseCategoryIds = new Set(selectedCourse?.category_ids ?? []);
-    return requirements.filter((req) => {
-      if (selectedCourse && req.required_courses?.includes(selectedCourse.id)) return true;
-      if (courseCategoryIds.size > 0 && req.category_ids?.some((id) => courseCategoryIds.has(id))) return true;
-      if (formData.category_id && req.category_ids?.includes(formData.category_id)) return true;
-      return false;
-    });
-  }, [requirements, selectedCourse, formData.category_id]);
-
-  const suggestedRequirementIds = useMemo(
-    () => new Set(suggestedRequirements.map((r) => r.id)),
-    [suggestedRequirements]
-  );
-
   const categoryName = categories.find((c) => c.id === formData.category_id)?.name;
   const programName = programs.find((p) => p.id === formData.program_id)?.name;
   const phaseName = phases.find((p) => p.id === formData.phase_id)?.name;
   const requirementName = requirements.find((r) => r.id === formData.requirement_id)?.name;
-
-  // Plain-language preview of what the chosen links will do at check-in
-  const linkageSummary = ((): string | null => {
-    if (formData.program_id && formData.requirement_id) {
-      return `Attendance will advance "${requirementName}" for members enrolled in ${programName}.`;
-    }
-    if (formData.program_id && formData.category_id) {
-      return `Attendance hours will advance ${programName}'s hour-based requirements in the "${categoryName}" category for enrolled members.`;
-    }
-    if (formData.requirement_id) {
-      return `Linked to "${requirementName}". Also select a training program to automatically advance enrolled members' pipeline progress.`;
-    }
-    if (formData.category_id) {
-      return `Attendees' training records will be tagged "${categoryName}" and count toward department requirements linked to that category.`;
-    }
-    return null;
-  })();
 
   const getRecurrenceLabel = (): string => {
     const match = RECURRENCE_PATTERNS.find((p) => p.value === recurrencePattern);
@@ -1018,141 +937,12 @@ const CreateTrainingSessionPage: React.FC = () => {
                   training pipeline progress.
                 </p>
 
-                {suggestedRequirements.length > 0 && !formData.requirement_id && (
-                  <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-3">
-                    <p className="text-sm font-semibold text-green-700">
-                      {selectedCourse ? 'This course counts toward:' : 'Requirements in this category:'}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {suggestedRequirements.map((req) => (
-                        <button
-                          key={req.id}
-                          type="button"
-                          onClick={() => updateField('requirement_id', req.id)}
-                          className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring bg-theme-surface rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
-                        >
-                          + {req.name}
-                          {req.registry_code ? ` (${req.registry_code})` : ''}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-theme-text-muted mt-2 text-xs">Tap a requirement to link it to this session.</p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                      Training Category
-                    </label>
-                    <select
-                      value={formData.category_id || ''}
-                      onChange={(e) => updateField('category_id', e.target.value || undefined)}
-                      className="form-input py-3"
-                    >
-                      <option value="">No category</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                          {cat.code ? ` (${cat.code})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-theme-text-muted mt-1 text-xs">
-                      Hours count toward requirements linked to this category
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Requirement</label>
-                    <select
-                      value={formData.requirement_id || ''}
-                      onChange={(e) => updateField('requirement_id', e.target.value || undefined)}
-                      className="form-input py-3"
-                    >
-                      <option value="">No specific requirement</option>
-                      {suggestedRequirements.length > 0 ? (
-                        <>
-                          <optgroup label="Suggested">
-                            {suggestedRequirements.map((req) => (
-                              <option key={req.id} value={req.id}>
-                                {req.name}
-                                {req.registry_code ? ` (${req.registry_code})` : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                          <optgroup label="All requirements">
-                            {requirements
-                              .filter((req) => !suggestedRequirementIds.has(req.id))
-                              .map((req) => (
-                                <option key={req.id} value={req.id}>
-                                  {req.name}
-                                  {req.registry_code ? ` (${req.registry_code})` : ''}
-                                </option>
-                              ))}
-                          </optgroup>
-                        </>
-                      ) : (
-                        requirements.map((req) => (
-                          <option key={req.id} value={req.id}>
-                            {req.name}
-                            {req.registry_code ? ` (${req.registry_code})` : ''}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    <p className="text-theme-text-muted mt-1 text-xs">Attendance credits this requirement directly</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Training Program</label>
-                    <select
-                      value={formData.program_id || ''}
-                      onChange={(e) => {
-                        const programId = e.target.value || undefined;
-                        // Phases belong to a program, so a stale phase must not survive a program change
-                        setFormData((prev) => ({ ...prev, program_id: programId, phase_id: undefined }));
-                      }}
-                      className="form-input py-3"
-                    >
-                      <option value="">No program</option>
-                      {programs.map((program) => (
-                        <option key={program.id} value={program.id}>
-                          {program.name}
-                          {program.code ? ` (${program.code})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-theme-text-muted mt-1 text-xs">
-                      Pipeline this session advances (e.g., Recruit School, Driver Training)
-                    </p>
-                  </div>
-                  {formData.program_id && phases.length > 0 && (
-                    <div>
-                      <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Program Phase</label>
-                      <select
-                        value={formData.phase_id || ''}
-                        onChange={(e) => updateField('phase_id', e.target.value || undefined)}
-                        className="form-input py-3"
-                      >
-                        <option value="">Any phase</option>
-                        {phases.map((phase) => (
-                          <option key={phase.id} value={phase.id}>
-                            Phase {phase.phase_number}: {phase.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                {linkageSummary && (
-                  <div className="mt-4 flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
-                    <p className="text-theme-text-secondary text-sm">{linkageSummary}</p>
-                  </div>
-                )}
+                <TrainingLinkageFields
+                  data={linkageData}
+                  value={formData}
+                  onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+                  selectedCourse={selectedCourse}
+                />
               </div>
 
               {/* Certification Settings */}

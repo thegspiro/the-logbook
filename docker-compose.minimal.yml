@@ -59,6 +59,10 @@ services:
     environment:
       WORKERS: 1
       WEB_CONCURRENCY: 1
+      # Restated from the base file so the audit-chain legacy boundary survives
+      # even if this override is applied to a base without the passthrough
+      # (upgraded installs need their pre-HMAC row ID honored, not the 0 default).
+      AUDIT_LOG_LEGACY_MAX_ID: ${AUDIT_LOG_LEGACY_MAX_ID:-0}
     deploy:
       resources:
         limits:

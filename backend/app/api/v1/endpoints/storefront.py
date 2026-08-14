@@ -51,6 +51,7 @@ from app.schemas.storefront import (
     StoreOrderListResponse,
     StoreOrderMarkPaid,
     StoreOrderMessage,
+    StoreOrderPaymentMethodUpdate,
     StoreOrderPaymentRecord,
     StoreOrderPaymentReport,
     StoreOrderRefund,
@@ -312,6 +313,7 @@ async def get_storefront(
         "tagline": settings.tagline,
         "description": settings.description,
         "currency": settings.currency,
+        "show_open_order_banner": settings.show_open_order_banner,
         "terms_text": settings.terms_text,
         "allow_pickup": settings.allow_pickup,
         "allow_shipping": settings.allow_shipping,
@@ -401,6 +403,30 @@ async def get_my_order(
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    settings = await service.get_settings(str(current_user.organization_id))
+    return _order_payload(order, service, settings, include_internal=False)
+
+
+@router.patch(
+    "/orders/mine/{order_id}/payment-method", response_model=StoreOrderResponse
+)
+async def update_my_payment_method(
+    order_id: str,
+    payload: StoreOrderPaymentMethodUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.view")),
+) -> Any:
+    """Change the planned payment method on one of the member's unpaid orders."""
+    service = StorefrontService(db)
+    try:
+        order = await service.update_member_payment_method(
+            order_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            payload.payment_method,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
     settings = await service.get_settings(str(current_user.organization_id))
     return _order_payload(order, service, settings, include_internal=False)
 
@@ -1406,7 +1432,7 @@ async def add_order_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("storefront.manage")),
 ) -> Any:
-    """Post an update to the order timeline, optionally emailing the member."""
+    """Post an update, optionally notifying the member by email and in-app."""
     service = StorefrontService(db)
     try:
         order = await service.add_order_message(
@@ -1416,6 +1442,8 @@ async def add_order_message(
             payload.message,
             is_member_visible=payload.is_member_visible,
             notify_member=payload.notify_member,
+            notify_email=payload.notify_email,
+            notify_in_app=payload.notify_in_app,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))

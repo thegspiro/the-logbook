@@ -16,11 +16,20 @@ introspection, so it runs in the sandbox):
    the router does.
 """
 
+from datetime import date, datetime, timezone
+from types import SimpleNamespace
+
 from fastapi.routing import APIRoute
 
 from app.api.dependencies import PermissionChecker
-from app.api.v1.endpoints.facilities import router
-from app.core.permissions import DEFAULT_POSITIONS, get_permissions_by_category
+from app.api.v1.endpoints.facilities import _facility_response_for, router
+from app.core.permissions import (
+    DEFAULT_POSITIONS,
+    OPERATIONAL_RANKS,
+    get_permissions_by_category,
+    permission_matches,
+)
+from app.models.user import Position, User
 
 SENSITIVE_PREFIXES = (
     "/access-keys",
@@ -149,6 +158,71 @@ def test_view_sensitive_is_offered_by_the_role_editor_catalog():
         p.name for p in get_permissions_by_category().get("facilities", [])
     }
     assert "facilities.view_sensitive" in facilities_perms
+
+
+def test_chief_ranks_can_grant_captain_within_the_rank_ceiling():
+    """A chief's facilities.manage satisfies the sensitive-read endpoints, but
+    the rank grant ceiling compares permission names via permission_matches
+    (exact / "*" / "module.*" only). Captain's defaults include
+    facilities.view_sensitive, so without the explicit grant in the chief rank
+    sets every Fire/Deputy/Assistant Chief got a 403 promoting a member to
+    captain."""
+    captain_perms = OPERATIONAL_RANKS["captain"]["default_permissions"]
+    for chief in ("fire_chief", "deputy_chief", "assistant_chief"):
+        chief_perms = set(OPERATIONAL_RANKS[chief]["default_permissions"])
+        assert "facilities.view_sensitive" in chief_perms, chief
+        missing = [
+            perm for perm in captain_perms if not permission_matches(perm, chief_perms)
+        ]
+        assert not missing, f"{chief} cannot grant captain's defaults: {missing}"
+
+
+def _user_with_permissions(perms: list[str]) -> User:
+    user = User()
+    user.positions.append(Position(permissions=perms))
+    return user
+
+
+def _facility_stub() -> SimpleNamespace:
+    now = datetime.now(timezone.utc)
+    return SimpleNamespace(
+        id="facility-1",
+        organization_id="org-1",
+        name="Station 1",
+        is_archived=False,
+        created_at=now,
+        updated_at=now,
+        lease_expiration=date(2030, 1, 1),
+        property_tax_id="TAX-123",
+    )
+
+
+def test_facility_response_redacts_lease_fields_for_baseline_view():
+    """lease_expiration/property_tax_id live on the main facility record
+    (readable with facilities.view) but are lease terms — the sensitive tier's
+    own boundary. Baseline viewers must get them blanked."""
+    response = _facility_response_for(
+        _facility_stub(), _user_with_permissions(["facilities.view"])
+    )
+    assert response.lease_expiration is None
+    assert response.property_tax_id is None
+    # The rest of the record stays intact for baseline viewers.
+    assert response.name == "Station 1"
+
+
+def test_facility_response_keeps_lease_fields_for_privileged_readers():
+    for grant in (
+        "facilities.view_sensitive",
+        "facilities.edit",
+        "facilities.manage",
+        "facilities.*",
+        "*",
+    ):
+        response = _facility_response_for(
+            _facility_stub(), _user_with_permissions(["facilities.view", grant])
+        )
+        assert response.lease_expiration == date(2030, 1, 1), grant
+        assert response.property_tax_id == "TAX-123", grant
 
 
 def test_operational_reads_stay_available_to_facilities_view():

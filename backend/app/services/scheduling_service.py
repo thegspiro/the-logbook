@@ -54,6 +54,7 @@ from app.services.member_leave_service import MemberLeaveService
 from app.utils.apparatus_ref import (
     apparatus_ref_exists,
     resolve_apparatus_display_map,
+    resolve_apparatus_ref,
 )
 
 
@@ -675,10 +676,25 @@ class SchedulingService:
             # department on the Apparatus module could not assign an apparatus to
             # a shift at all. See utils/apparatus_ref.
             apparatus_id = shift_data.get("apparatus_id")
-            if apparatus_id and not await apparatus_ref_exists(
-                self.db, apparatus_id, organization_id
-            ):
-                return None, "Apparatus not found"
+            if apparatus_id:
+                apparatus_ref = await resolve_apparatus_ref(
+                    self.db, apparatus_id, organization_id
+                )
+                if not apparatus_ref.exists:
+                    return None, "Apparatus not found"
+                apparatus = apparatus_ref.full or apparatus_ref.basic
+                positions = getattr(apparatus, "crew_positions", None) or getattr(
+                    apparatus, "positions", None
+                )
+                if apparatus:
+                    if not shift_data.get("positions") and positions:
+                        shift_data["positions"] = self.normalize_positions(positions)
+                    apparatus_min_staffing = getattr(apparatus, "min_staffing", None)
+                    if (
+                        shift_data.get("min_staffing") is None
+                        and apparatus_min_staffing is not None
+                    ):
+                        shift_data["min_staffing"] = apparatus_min_staffing
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
             )
@@ -1242,10 +1258,22 @@ class SchedulingService:
 
             # SCH-6: validate a (re)set apparatus_id is in-org (see create_shift).
             new_apparatus = update_data.get("apparatus_id")
-            if new_apparatus and not await apparatus_ref_exists(
-                self.db, new_apparatus, organization_id
-            ):
-                return None, "Apparatus not found"
+            if new_apparatus:
+                apparatus_ref = await resolve_apparatus_ref(
+                    self.db, new_apparatus, organization_id
+                )
+                if not apparatus_ref.exists:
+                    return None, "Apparatus not found"
+                apparatus = apparatus_ref.full or apparatus_ref.basic
+                positions = getattr(apparatus, "crew_positions", None) or getattr(
+                    apparatus, "positions", None
+                )
+                if "positions" not in update_data and positions:
+                    update_data["positions"] = self.normalize_positions(positions)
+                if "min_staffing" not in update_data:
+                    apparatus_min_staffing = getattr(apparatus, "min_staffing", None)
+                    if apparatus_min_staffing is not None:
+                        update_data["min_staffing"] = apparatus_min_staffing
 
             old_officer_id = shift.shift_officer_id
 
@@ -4013,10 +4041,11 @@ class SchedulingService:
         """Per-member hours for a date range, worked and scheduled.
 
         Hours come from attendance (``ShiftAttendance.duration_minutes``,
-        derived from check-in/check-out), because an assignment is a plan and
-        not a measurement: a shift can run short or long, and a member can be
-        rostered for one they never work. Anything that credits or pays a
-        member has to be the measured figure.
+        derived from check-in/check-out) on finalized shifts, because an
+        assignment is a plan and not a measurement: a shift can run short or
+        long, and a member can be rostered for one they never work. Requiring
+        finalization keeps member-controlled, pending attendance out of a
+        report used for credit and payroll conversations.
 
         The scheduled totals stay alongside rather than being dropped, so the
         difference between plan and actual is visible in the report instead of
@@ -4071,6 +4100,7 @@ class SchedulingService:
             .join(User, ShiftAttendance.user_id == User.id)
             .where(Shift.organization_id == str(organization_id))
             .where(User.organization_id == str(organization_id))
+            .where(Shift.is_finalized.is_(True))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
             .group_by(

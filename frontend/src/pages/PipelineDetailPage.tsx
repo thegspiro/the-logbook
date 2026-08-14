@@ -41,7 +41,7 @@ import { enumLabel } from '../utils/displayValue';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
-import { checklistDoneIds } from '../utils/checklistItems';
+import { checklistClaimedIds, checklistDoneIds } from '../utils/checklistItems';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ENROLLMENT_STATUSES } from '../types/training';
 import type {
@@ -651,6 +651,7 @@ const RequirementProgressRow: React.FC<{
 
   const checklistItems = req?.requirement_type === 'checklist' ? (req.checklist_items ?? []) : [];
   const doneIds = checklistDoneIds(record);
+  const claimedIds = checklistClaimedIds(record);
 
   const toggleChecklistItem = (itemId: string) => {
     // The whole set goes back, not a single toggle — a retry or a second
@@ -744,6 +745,11 @@ const RequirementProgressRow: React.FC<{
                   className="form-checkbox mt-0.5 shrink-0"
                 />
                 <span className={checked ? 'text-theme-text-muted line-through' : ''}>{item.text}</span>
+                {!checked && claimedIds.includes(item.id) && (
+                  <span className="rounded-sm bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-700 dark:text-blue-400">
+                    Member reported complete — validate
+                  </span>
+                )}
                 {!item.member_visible && (
                   <span
                     title="Officer-only — the member does not see this step"
@@ -1497,9 +1503,13 @@ const PipelineDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Matches TrainingProgramsPage: members without training.manage cannot
+            open /training/admin, so the Admin crumb only renders for users who
+            can actually follow it. */}
         <Breadcrumbs
           items={[
             { label: 'Training', path: '/training' },
+            ...(canManage ? [{ label: 'Admin', path: '/training/admin' }] : []),
             { label: 'Programs', path: '/training/programs' },
             { label: program.name },
           ]}

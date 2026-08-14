@@ -322,7 +322,17 @@ describe('EventsPage', () => {
       renderWithRouter(<EventsPage />);
 
       const createLink = await screen.findByRole('link', { name: /create event/i });
-      expect(createLink).toHaveAttribute('href', '/events/new');
+      expect(createLink).toHaveAttribute('href', '/events/admin?tab=create');
+    });
+
+    it('should link managers directly to event module settings', async () => {
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      const settingsLink = await screen.findByRole('link', { name: /event module settings/i });
+      expect(settingsLink).toHaveAttribute('href', '/events/admin?tab=settings');
     });
 
     it('should not show Create Event button for non-managers', async () => {

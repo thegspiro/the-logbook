@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -676,6 +676,26 @@ class ElectionSettingsUpdate(BaseModel):
         ),
     )
 
+    @field_validator(
+        "nominations_enabled",
+        "paper_ballots_enabled",
+        "reminders_enabled",
+        "auto_open_enabled",
+        mode="before",
+    )
+    @classmethod
+    def feature_flags_must_be_boolean(cls, value):
+        """Allow omitted feature flags, but reject an explicit JSON null."""
+        if value is None:
+            raise ValueError("feature flags must be true or false")
+        return value
+
+
+def _feature_flag(features: dict, name: str) -> bool:
+    """Resolve persisted flags consistently, including legacy null values."""
+    value = features.get(name, True)
+    return value if isinstance(value, bool) else True
+
 
 @router.get("/settings", response_model=ElectionSettingsResponse)
 async def get_election_settings(
@@ -705,6 +725,8 @@ async def get_election_settings(
     election_defaults = org_settings.get("election_defaults", {})
     proxy_config = org_settings.get("proxy_voting", {})
     features = org_settings.get("election_features", {})
+    if not isinstance(features, dict):
+        features = {}
 
     from app.core.config import settings as app_settings
 
@@ -725,10 +747,10 @@ async def get_election_settings(
         "default_quorum_value": election_defaults.get("quorum_value"),
         "proxy_voting_enabled": proxy_config.get("enabled", False),
         "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
-        "nominations_enabled": features.get("nominations_enabled", True),
-        "paper_ballots_enabled": features.get("paper_ballots_enabled", True),
-        "reminders_enabled": features.get("reminders_enabled", True),
-        "auto_open_enabled": features.get("auto_open_enabled", True),
+        "nominations_enabled": _feature_flag(features, "nominations_enabled"),
+        "paper_ballots_enabled": _feature_flag(features, "paper_ballots_enabled"),
+        "reminders_enabled": _feature_flag(features, "reminders_enabled"),
+        "auto_open_enabled": _feature_flag(features, "auto_open_enabled"),
         "paper_ballot_attestations_required": features.get(
             "paper_ballot_attestations_required", 2
         ),
@@ -771,6 +793,8 @@ async def update_election_settings(
     election_defaults = org_settings.get("election_defaults", {})
     proxy_config = org_settings.get("proxy_voting", {})
     features = org_settings.get("election_features", {})
+    if not isinstance(features, dict):
+        features = {}
 
     update_data = settings_update.model_dump(exclude_unset=True)
 
@@ -835,10 +859,10 @@ async def update_election_settings(
         "default_quorum_value": election_defaults.get("quorum_value"),
         "proxy_voting_enabled": proxy_config.get("enabled", False),
         "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
-        "nominations_enabled": features.get("nominations_enabled", True),
-        "paper_ballots_enabled": features.get("paper_ballots_enabled", True),
-        "reminders_enabled": features.get("reminders_enabled", True),
-        "auto_open_enabled": features.get("auto_open_enabled", True),
+        "nominations_enabled": _feature_flag(features, "nominations_enabled"),
+        "paper_ballots_enabled": _feature_flag(features, "paper_ballots_enabled"),
+        "reminders_enabled": _feature_flag(features, "reminders_enabled"),
+        "auto_open_enabled": _feature_flag(features, "auto_open_enabled"),
         "paper_ballot_attestations_required": features.get(
             "paper_ballot_attestations_required", 2
         ),
@@ -1052,22 +1076,27 @@ async def update_election(
     # PATCH validation must consider the stored half of a partial update.
     # Validating each field in isolation would allow, for example, switching
     # quorum_type to percentage while retaining no value (or a count > 100).
-    effective_quorum_type = update_data.get("quorum_type", election.quorum_type)
-    effective_quorum_value = update_data.get("quorum_value", election.quorum_value)
-    if effective_quorum_type != "none" and effective_quorum_value is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="quorum_value is required when quorum is enabled",
-        )
-    if (
-        effective_quorum_type == "percentage"
-        and effective_quorum_value is not None
-        and effective_quorum_value > 100
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Percentage quorum cannot exceed 100",
-        )
+    # Enforced only when the PATCH touches quorum config: legacy rows can
+    # hold quorum_type != none with a NULL quorum_value, and checking on
+    # every update made such elections uneditable (even a title-only PATCH
+    # was rejected until the caller also repaired the quorum fields).
+    if "quorum_type" in update_data or "quorum_value" in update_data:
+        effective_quorum_type = update_data.get("quorum_type", election.quorum_type)
+        effective_quorum_value = update_data.get("quorum_value", election.quorum_value)
+        if effective_quorum_type != "none" and effective_quorum_value is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="quorum_value is required when quorum is enabled",
+            )
+        if (
+            effective_quorum_type == "percentage"
+            and effective_quorum_value is not None
+            and effective_quorum_value > 100
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Percentage quorum cannot exceed 100",
+            )
 
     for field, value in update_data.items():
         if field in ALLOWED_ELECTION_UPDATE_FIELDS:
@@ -1448,6 +1477,7 @@ async def record_manual_ballots(
         ],
         notes=payload.notes,
         allow_over_count=payload.allow_over_count,
+        ballots_cast=payload.ballots_cast,
     )
     if error:
         status_code = (

@@ -11,10 +11,11 @@ _rules_ and the member notification inbox are covered under
 
 - **Department Messages** — leadership announcements targeted to everyone, to
   specific roles, to member statuses, or to hand-picked members.
-- **Priority-based escalation** — every targeted member gets an in-app
-  notification (bell inbox, dashboard card, Messages page); **important /
-  acknowledgment-required** messages are also emailed; **urgent** messages add
-  SMS (when Twilio is configured and the member has a mobile number).
+- **Multi-channel delivery** — every targeted member gets an in-app
+  notification (bell inbox, dashboard card, Messages page) **and an email**
+  (the record-of-notice channel, sent for every priority); **urgent** messages
+  add SMS (when Twilio is configured, the member has a mobile number, and the
+  member has granted express SMS consent).
 - **Required acknowledgment** — messages that members must confirm they've read.
   They stay "pending" until acknowledged, and officers get a per-recipient
   report of who has and has not acknowledged (with an audience denominator).
@@ -25,8 +26,11 @@ _rules_ and the member notification inbox are covered under
   members but preserves read/acknowledgment records as compliance evidence.
 - **Rename-safe role targeting** — role-targeted messages follow the role's
   identity, so renaming a role never silently stops delivery.
-- **Member controls** — members opt out of email or urgent-SMS escalation under
-  Settings → Notifications; the in-app notification is always delivered.
+- **Member controls** — members opt out of urgent-SMS texts under
+  Settings → Notifications (SMS also requires express consent under My Account →
+  Security → Privacy Choices); the in-app notification is always delivered, and
+  the department-message **email cannot be opted out of** — it is the record
+  that the member was notified.
 
 ## Pages
 
@@ -37,8 +41,9 @@ _rules_ and the member notification inbox are covered under
 | Email Templates             | `/communications/email-templates`             | Admins      | `settings.manage`                                                                           |
 | ↳ **Footers** tab           | `/communications/email-templates?tab=footers` | Admins      | `settings.manage` **or** `organization.update_settings` _(2026-08-10; linkable 2026-08-11)_ |
 
-Members also see recent messages on the **dashboard** "Department Messages" card
-and in the notification **bell**.
+Members also see messages needing their attention (unread, unacknowledged, or
+persistent) on the **dashboard** "Department Messages" card and in the
+notification **bell**.
 
 ## API Endpoints
 
@@ -64,9 +69,13 @@ POST   /api/v1/messages/{id}/acknowledge         # Acknowledge (ack-required mes
 
 | Priority / flag         | In-app | Email | SMS |
 | ----------------------- | :----: | :---: | :-: |
-| Normal / Important      |   ✅   |   —   |  —  |
+| Normal / Important      |   ✅   |  ✅   |  —  |
 | Requires acknowledgment |   ✅   |  ✅   |  —  |
 | Urgent                  |   ✅   |  ✅   | ✅  |
+
+Email goes out for **every** message — it is the record-of-notice channel and is
+not filtered by the member's email preference or consent. Important/urgent
+messages carry an `[IMPORTANT]`/`[URGENT]` subject prefix.
 
 Escalation runs as a background task (posting stays instant) and is
 **rate-limited per organization** on the email/SMS channels so a runaway or
