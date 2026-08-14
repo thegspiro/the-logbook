@@ -308,6 +308,34 @@ class TestLinkInventoryItems:
         assert item.inventory_item_id == "inv-1"
         mock_db.commit.assert_awaited_once()
 
+    async def test_audits_each_link_in_the_same_transaction(self, service, mock_db):
+        item = _item(id="a", name="Air pack", inventory_item_id="old-inv")
+        service._get_template_row = AsyncMock(return_value=MagicMock())
+        service._linkable_items = AsyncMock(return_value=[item])
+        self._known_inventory(mock_db, ["new-inv"])
+        service.log_template_change = AsyncMock()
+
+        await service.link_inventory_items(
+            "tmpl-1",
+            "org-1",
+            {"a": "new-inv"},
+            user_id="user-1",
+            user_name="Alex Rivera",
+        )
+
+        service.log_template_change.assert_awaited_once_with(
+            organization_id="org-1",
+            template_id="tmpl-1",
+            user_id="user-1",
+            user_name="Alex Rivera",
+            action="update",
+            entity_type="item",
+            entity_id="a",
+            entity_name="Air pack",
+            changes={"inventory_item_id": {"old": "old-inv", "new": "new-inv"}},
+        )
+        mock_db.commit.assert_awaited_once()
+
     async def test_an_explicit_null_unlinks(self, service, mock_db):
         item = _item(id="a", inventory_item_id="inv-1")
         service._get_template_row = AsyncMock(return_value=MagicMock())
@@ -421,18 +449,15 @@ class TestLinkInventoryItemsEndpoint:
         )
 
         assert response["linked"] == 2
-        service.log_template_change.assert_awaited_once_with(
-            organization_id="org-1",
-            template_id="tmpl-1",
+        service.link_inventory_items.assert_awaited_once_with(
+            "tmpl-1",
+            "org-1",
+            links,
             user_id="user-1",
             user_name="Alex Rivera",
-            action="update",
-            entity_type="template",
-            entity_id="tmpl-1",
-            changes={"inventory_links": links, "changed_count": 2},
         )
-        # The service commits link mutations; this commit persists the audit row.
-        mock_db.commit.assert_awaited_once()
+        service.log_template_change.assert_not_awaited()
+        mock_db.commit.assert_not_awaited()
 
     async def test_does_not_record_history_for_a_no_op(self, monkeypatch, mock_db):
         service = MagicMock()

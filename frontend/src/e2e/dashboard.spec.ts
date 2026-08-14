@@ -88,6 +88,7 @@ test.describe('Dashboard', () => {
     test('should have a "Full Schedule" control for the scheduling page', async ({ page }) => {
       const fullSchedule = page.getByRole('button', { name: /full schedule/i });
       await expect(fullSchedule.first()).toBeVisible({ timeout: 10000 });
+      await expect(fullSchedule.first()).toHaveCSS('min-height', '44px');
     });
   });
 
@@ -110,6 +111,7 @@ test.describe('Dashboard', () => {
     test('should have an "Older Items" control for the notifications page', async ({ page }) => {
       const olderItems = page.getByRole('button', { name: /older items/i }).first();
       await expect(olderItems).toBeVisible({ timeout: 10000 });
+      await expect(olderItems).toHaveCSS('min-height', '44px');
     });
   });
 

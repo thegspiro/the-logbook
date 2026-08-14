@@ -30,3 +30,9 @@ def test_policy_rejects_active_trivy_entry():
     assert active_trivy_entries("# rationale\nCVE-2026-1234\n") == ["CVE-2026-1234"]
     errors = policy_errors("pip-audit -r requirements.txt", "CVE-2026-1234\n")
     assert any(".trivyignore" in error for error in errors)
+
+
+def test_policy_does_not_accept_pip_audit_text_in_a_comment():
+    errors = policy_errors("# pip-audit -r requirements.txt\necho no scan\n", "")
+
+    assert any("must run pip-audit" in error for error in errors)

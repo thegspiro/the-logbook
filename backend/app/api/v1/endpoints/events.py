@@ -1875,6 +1875,13 @@ async def finalize_attendance(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
+    await NotificationsService(db).archive_related_notifications(
+        current_user.organization_id,
+        "event_validation",
+        "event_id",
+        event_id,
+    )
+
     return FinalizeAttendanceResponse(updated_count=updated_count)
 
 

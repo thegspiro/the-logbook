@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { BookOpenCheck, CheckCircle2, Circle, ExternalLink, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router';
+import { useEnabledModules } from '../hooks/useEnabledModules';
 
 type LearningStep = {
   id: string;
@@ -16,6 +17,7 @@ type LearningPath = {
   outcome: string;
   steps: LearningStep[];
   guideUrl: string;
+  module?: string;
 };
 
 const STORAGE_KEY = 'logbook.learning-progress.v1';
@@ -36,6 +38,7 @@ const learningPaths: LearningPath[] = [
   },
   {
     id: 'training',
+    module: 'training',
     title: 'Training: Submission to Credit',
     audience: 'Members and training officers',
     duration: '15–30 minutes',
@@ -49,6 +52,7 @@ const learningPaths: LearningPath[] = [
   },
   {
     id: 'scheduling',
+    module: 'scheduling',
     title: 'Scheduling: Cover a Vacancy',
     audience: 'Members and scheduling officers',
     duration: '15–30 minutes',
@@ -81,10 +85,13 @@ function readProgress(): Record<string, boolean> {
 }
 
 export default function LearningCenterPage() {
+  const { isModuleOn } = useEnabledModules();
   const [progress, setProgress] = useState<Record<string, boolean>>(readProgress);
 
-  const completed = useMemo(() => Object.values(progress).filter(Boolean).length, [progress]);
-  const total = learningPaths.reduce((sum, path) => sum + path.steps.length, 0);
+  const visiblePaths = learningPaths.filter((path) => !path.module || isModuleOn(path.module));
+  const visibleStepKeys = new Set(visiblePaths.flatMap((path) => path.steps.map((step) => `${path.id}.${step.id}`)));
+  const completed = Object.entries(progress).filter(([key, done]) => done && visibleStepKeys.has(key)).length;
+  const total = visiblePaths.reduce((sum, path) => sum + path.steps.length, 0);
 
   const setComplete = (pathId: string, stepId: string, checked: boolean) => {
     const key = `${pathId}.${stepId}`;
@@ -150,7 +157,7 @@ export default function LearningCenterPage() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {learningPaths.map((path) => {
+        {visiblePaths.map((path) => {
           const pathCompleted = path.steps.filter((step) => progress[`${path.id}.${step.id}`]).length;
           return (
             <section

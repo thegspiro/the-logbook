@@ -6,17 +6,37 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Truck, Save, ArrowLeft } from 'lucide-react';
+import { Truck, Save, ArrowLeft, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { useRanks } from '@/hooks/useRanks';
+import { POSITION_LABELS } from '@/constants/enums';
 import { useApparatusStore } from '../store/apparatusStore';
 import { apparatusService, evocLevelService } from '../services/api';
 import type { ApparatusCreate, ApparatusUpdate, EvocLevel, FuelType } from '../types';
+
+const CREW_POSITION_CODES = [
+  'officer',
+  'driver',
+  'firefighter',
+  'ems',
+  'captain',
+  'lieutenant',
+  'probationary',
+  'volunteer',
+  'other',
+] as const;
 
 export const ApparatusFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
+  const { ranks, loading: ranksLoading } = useRanks();
+  const crewPositionOptions = CREW_POSITION_CODES.map((code) => ({
+    code,
+    label: POSITION_LABELS[code] ?? code,
+    eligibleRanks: ranks.filter((rank) => rank.eligible_positions?.includes(code)).map((rank) => rank.display_name),
+  }));
 
   const {
     currentApparatus,
@@ -31,10 +51,6 @@ export const ApparatusFormPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [evocLevels, setEvocLevels] = useState<EvocLevel[]>([]);
-  // Keep the user's in-progress commas and spaces intact. Parsing this into an
-  // array on every keystroke made it impossible to type a second seat because
-  // a trailing comma was immediately removed by the controlled input.
-  const [crewPositionsText, setCrewPositionsText] = useState('');
 
   // Form state
   const [formData, setFormData] = useState<ApparatusCreate>({
@@ -116,7 +132,6 @@ export const ApparatusFormPage: React.FC = () => {
   // Populate form when editing
   useEffect(() => {
     if (isEditing && currentApparatus) {
-      setCrewPositionsText((currentApparatus.crewPositions ?? []).join(', '));
       setFormData({
         unitNumber: currentApparatus.unitNumber,
         name: currentApparatus.name || '',
@@ -200,6 +215,26 @@ export const ApparatusFormPage: React.FC = () => {
     }
   };
 
+  const addCrewPosition = () => {
+    setFormData((prev) => ({ ...prev, crewPositions: [...(prev.crewPositions ?? []), ''] }));
+  };
+
+  const updateCrewPosition = (index: number, rankCode: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      crewPositions: (prev.crewPositions ?? []).map((position, positionIndex) =>
+        positionIndex === index ? rankCode : position
+      ),
+    }));
+  };
+
+  const removeCrewPosition = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      crewPositions: (prev.crewPositions ?? []).filter((_, positionIndex) => positionIndex !== index),
+    }));
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
@@ -231,10 +266,7 @@ export const ApparatusFormPage: React.FC = () => {
       // Clean up empty strings to undefined
       const cleanedData: ApparatusCreate | ApparatusUpdate = {
         ...formData,
-        crewPositions: crewPositionsText
-          .split(',')
-          .map((position) => position.trim().toLowerCase())
-          .filter(Boolean),
+        crewPositions: (formData.crewPositions ?? []).filter(Boolean),
       };
       Object.keys(cleanedData).forEach((key) => {
         const k = key as keyof typeof cleanedData;
@@ -570,17 +602,60 @@ export const ApparatusFormPage: React.FC = () => {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="text-theme-text-secondary mb-1 block text-sm">Crew Positions / Seats</label>
-                <input
-                  type="text"
-                  value={crewPositionsText}
-                  onChange={(e) => setCrewPositionsText(e.target.value)}
-                  className="form-input"
-                  placeholder="officer, driver, firefighter, firefighter"
-                />
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-theme-text-secondary block text-sm">Crew Positions / Seats</label>
+                  <button
+                    type="button"
+                    onClick={addCrewPosition}
+                    className="text-theme-accent-blue hover:bg-theme-accent-blue/10 flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-colors"
+                  >
+                    <Plus className="h-3 w-3" aria-hidden="true" /> Add Seat
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {(formData.crewPositions ?? []).map((position, index) => {
+                    const isLegacyPosition =
+                      position !== '' &&
+                      !CREW_POSITION_CODES.includes(position as (typeof CREW_POSITION_CODES)[number]);
+                    return (
+                      <div key={`${index}-${position}`} className="flex items-center gap-2">
+                        <span className="text-theme-text-muted w-6 text-right text-xs">{index + 1}.</span>
+                        <select
+                          aria-label={`Crew seat ${index + 1} position`}
+                          value={position}
+                          onChange={(event) => updateCrewPosition(index, event.target.value)}
+                          className="form-input flex-1"
+                          disabled={ranksLoading}
+                        >
+                          <option value="">Select a crew position</option>
+                          {isLegacyPosition && <option value={position}>{position} (legacy position)</option>}
+                          {crewPositionOptions.map((option) => (
+                            <option key={option.code} value={option.code}>
+                              {option.label}
+                              {option.eligibleRanks.length > 0 ? ` — ${option.eligibleRanks.join(', ')}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => removeCrewPosition(index)}
+                          aria-label={`Remove crew seat ${index + 1}`}
+                          className="text-theme-text-muted rounded-sm p-1.5 transition-colors hover:text-red-500"
+                        >
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {(formData.crewPositions ?? []).length === 0 && (
+                    <p className="border-theme-surface-border text-theme-text-muted rounded-lg border border-dashed px-3 py-2 text-sm">
+                      No crew seats configured. Add a seat to select a position backed by your department ranks.
+                    </p>
+                  )}
+                </div>
                 <p className="text-theme-text-muted mt-1 text-xs">
-                  Enter seats in riding order, separated by commas. Repeated roles create multiple seats and are
-                  imported into shifts.
+                  Select positions in riding order. Each option shows the configured ranks eligible to fill it. Add the
+                  same position more than once for repeated seats; these positions are imported into shifts.
                 </p>
               </div>
               <div>

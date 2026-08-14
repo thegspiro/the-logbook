@@ -520,6 +520,10 @@ export const eventService = {
 // ============================================
 
 export const eventRequestService = {
+  async getForms(params?: { skip?: number; limit?: number }): Promise<import('./formTypes').FormsListResponse> {
+    const response = await api.get<import('./formTypes').FormsListResponse>('/event-requests/forms', { params });
+    return response.data;
+  },
   async listRequests(params?: {
     status?: string;
     outreach_type?: string;
