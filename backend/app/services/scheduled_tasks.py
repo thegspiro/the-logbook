@@ -90,6 +90,7 @@ Recommended crontab (add to host or container cron):
 -----------------------------------------------------
 """
 
+import copy
 import html as _html
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -834,14 +835,15 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # Determine recipients once for all due intervals
                 recipients = []
-                if event.is_mandatory:
+                reminder_target = getattr(event, "reminder_target", "going")
+                if reminder_target == "all":
                     users_result = await db.execute(
                         select(User)
                         .where(User.organization_id == str(org.id))
                         .where(User.is_active == True)  # noqa: E712
                     )
                     recipients = list(users_result.scalars().all())
-                else:
+                elif reminder_target == "going":
                     going_user_ids = [
                         str(rsvp.user_id)
                         for rsvp in event.rsvps
@@ -4325,16 +4327,31 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 "allow_guests",
                 "send_reminders",
                 "reminder_schedule",
+                "reminder_target",
                 "check_in_window_type",
                 "check_in_minutes_before",
                 "check_in_minutes_after",
                 "require_checkout",
+                "allow_guest_check_in",
+                "guest_check_in_creates_prospect",
                 "allowed_rsvp_statuses",
+                "attachments",
+                "template_id",
                 "is_draft",
             ):
                 val = getattr(parent, field, None)
                 if val is not None:
-                    child_fields[field] = val
+                    child_fields[field] = copy.deepcopy(val)
+
+            custom_fields = copy.deepcopy(parent.custom_fields)
+            if custom_fields:
+                for lifecycle_key in (
+                    "reminders_sent",
+                    "validation_notification_sent",
+                    "series_end_reminder_sent",
+                ):
+                    custom_fields.pop(lifecycle_key, None)
+                child_fields["custom_fields"] = custom_fields
 
             for start, end in new_occurrences:
                 child = Event(

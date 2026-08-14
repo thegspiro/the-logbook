@@ -80,6 +80,7 @@ const mockEvent: Event = {
   is_mandatory: false,
   allow_guests: true,
   send_reminders: true,
+  reminder_target: 'all',
   reminder_schedule: [24],
   is_cancelled: false,
   created_at: '2026-01-20T10:00:00Z',

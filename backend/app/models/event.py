@@ -124,6 +124,9 @@ class Event(Base):
     reminder_schedule = Column(
         JSON, nullable=False, default=lambda: [24]
     )  # List of hours before event to send reminders
+    reminder_target = Column(
+        String(20), nullable=False, default="going", server_default="going"
+    )  # going (RSVPs), all active members, or none
 
     # Check-in window settings
     check_in_window_type = Column(
@@ -133,7 +136,7 @@ class Event(Base):
         server_default="flexible",
     )
     check_in_minutes_before = Column(
-        Integer, nullable=True, default=30
+        Integer, nullable=True, default=60
     )  # Minutes before start to allow check-in
     check_in_minutes_after = Column(
         Integer, nullable=True, default=15
@@ -378,7 +381,7 @@ class EventTemplate(Base):
         SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
-    check_in_minutes_before = Column(Integer, nullable=True, default=30)
+    check_in_minutes_before = Column(Integer, nullable=True, default=60)
     check_in_minutes_after = Column(Integer, nullable=True, default=15)
     require_checkout = Column(
         Boolean, nullable=False, default=False, server_default="0"
@@ -387,6 +390,9 @@ class EventTemplate(Base):
     # Notification defaults
     send_reminders = Column(Boolean, nullable=False, default=True, server_default="1")
     reminder_schedule = Column(JSON, nullable=False, default=lambda: [24])
+    reminder_target = Column(
+        String(20), nullable=False, default="going", server_default="going"
+    )
 
     # Custom fields template (structure for custom data fields)
     custom_fields_template = Column(JSON, nullable=True)

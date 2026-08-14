@@ -33,6 +33,7 @@ import {
   BarChart3,
   Zap,
   Settings,
+  Pencil,
 } from 'lucide-react';
 import { eventService } from '../services/api';
 import { eventService as eventServiceDirect } from '../services/eventServices';
@@ -938,6 +939,29 @@ export const EventsPage: React.FC = () => {
                       )}
                     </button>
                   )}
+                  {canManage && (
+                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
+                      <Link
+                        to={`/events/${event.id}/edit`}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 shadow-sm transition-colors hover:bg-blue-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30"
+                        aria-label={`Edit ${event.title}`}
+                      >
+                        <Pencil className="h-3 w-3" aria-hidden="true" />
+                        Edit
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          void handleDuplicate(event.id, e);
+                        }}
+                        className="bg-theme-surface-modal text-theme-text-muted hover:bg-theme-surface-hover rounded-full p-1.5 shadow-sm transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+                        title="Duplicate event"
+                        aria-label={`Duplicate ${event.title}`}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                   <Link
                     to={`/events/${event.id}`}
                     className={`card block transition-all hover:border-red-300 hover:shadow-md ${
@@ -947,7 +971,7 @@ export const EventsPage: React.FC = () => {
                     <div className={`p-5 ${canManage ? 'pl-10' : ''}`}>
                       <div className="flex items-start justify-between">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className={`flex items-center gap-2 ${canManage ? 'pr-24' : ''}`}>
                             {event.event_type === EventTypeEnum.TRAINING && (
                               <svg
                                 className="h-5 w-5 shrink-0 text-purple-600"
@@ -998,18 +1022,6 @@ export const EventsPage: React.FC = () => {
                           </div>
                         </div>
                         <div className="ml-2 flex shrink-0 items-center gap-1">
-                          {canManage && (
-                            <button
-                              onClick={(e) => {
-                                void handleDuplicate(event.id, e);
-                              }}
-                              className="text-theme-text-muted hover:bg-theme-surface-hover rounded p-1 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
-                              title="Duplicate event"
-                              aria-label={`Duplicate ${event.title}`}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </button>
-                          )}
                           {event.is_cancelled && (
                             <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
                               Cancelled
