@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import _get_audit_signing_key, audit_logger
 from app.core.config import settings
 from app.models.audit import AuditLog, AuditShipState
+from app.utils.url_validator import assert_outbound_url_safe
 
 # Bound one run's work so a huge backlog (first enablement on an old
 # install) drains across runs instead of blocking the scheduler loop.
@@ -100,6 +101,10 @@ async def ship_new_audit_logs(
                 + "\n"
             ).encode("utf-8")
 
+            # Re-resolve and validate immediately before every delivery.  This
+            # fails closed for private/internal destinations and limits the DNS
+            # rebinding window for long-running, multi-batch shipments.
+            assert_outbound_url_safe(url)
             response = await client.post(
                 url,
                 content=payload,
@@ -121,6 +126,9 @@ async def ship_new_audit_logs(
             await db.commit()
             results["shipped_entries"] += len(rows)
             results["batches"] += 1
+    except ValueError as exc:
+        results["error"] = f"unsafe collector URL: {exc}"
+        logger.warning(f"Audit shipping blocked unsafe collector URL: {exc}")
     except httpx.HTTPError as exc:
         results["error"] = f"delivery failed: {exc.__class__.__name__}"
         logger.warning(f"Audit shipping delivery failed: {exc!r}")
