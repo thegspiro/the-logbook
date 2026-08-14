@@ -166,23 +166,22 @@ class TestRecordedPhysicalBallotCounts:
             == 6
         )
 
-    def test_batches_sharing_a_position_add_up(self):
-        # A physical ballot marks a GIVEN position at most once, so two
-        # batches that both hold Chief votes cannot be the same ballots.
-        # Taking the max here reported 10 for 20 ballots in the room, which
-        # a percentage quorum then failed.
+    def test_split_approval_batches_do_not_inflate_turnout(self):
+        # The same five physical ballots may be keyed in one batch per
+        # approved candidate. Adding the attestations would report ten voters
+        # and could incorrectly satisfy quorum.
         election = _election(voting_method="approval")
-        votes = [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(10)] + [
-            _paper_in_batch("Chief", "b", batch_id="b2") for _ in range(10)
+        votes = [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(5)] + [
+            _paper_in_batch("Chief", "b", batch_id="b2") for _ in range(5)
         ]
         assert (
-            ElectionService._count_ballots_cast(election, votes, {"b1": 10, "b2": 10})
-            == 20
+            ElectionService._count_ballots_cast(election, votes, {"b1": 5, "b2": 5})
+            == 5
         )
 
     def test_shared_position_adds_while_disjoint_positions_do_not(self):
-        # b1 and b2 share Chief, so they add (20); b3's Deputy-only stack
-        # could be either of them re-keyed, so it does not.
+        # Without ballot-level grouping, all three approval batches may
+        # describe the same stack, so only the largest attestation is safe.
         election = _election(voting_method="approval")
         votes = (
             [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(10)]
@@ -193,12 +192,12 @@ class TestRecordedPhysicalBallotCounts:
             ElectionService._count_ballots_cast(
                 election, votes, {"b1": 10, "b2": 10, "b3": 10}
             )
-            == 20
+            == 10
         )
 
     def test_a_batch_spanning_positions_counts_once_per_position(self):
-        # b1 is one stack whose ballots marked both positions; b2 is a
-        # second Chief stack. Chief proves 10 + 10; Deputy only proves 10.
+        # b1 and b2 may be the same approval stack keyed by candidate, even
+        # though b1 also contains another position.
         election = _election(voting_method="approval")
         votes = (
             [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(6)]
@@ -207,7 +206,7 @@ class TestRecordedPhysicalBallotCounts:
         )
         assert (
             ElectionService._count_ballots_cast(election, votes, {"b1": 10, "b2": 10})
-            == 20
+            == 10
         )
 
     def test_positionless_batches_share_one_bucket(self):
@@ -220,7 +219,19 @@ class TestRecordedPhysicalBallotCounts:
         ]
         assert (
             ElectionService._count_ballots_cast(election, votes, {"b1": 5, "b2": 6})
-            == 11
+            == 6
+        )
+
+    def test_single_choice_batches_sharing_a_position_still_add_up(self):
+        # A single-choice ballot cannot appear in per-candidate batches for
+        # one position, so separate same-position batches prove distinct
+        # physical ballots.
+        votes = [_paper_in_batch("Chief", "a", batch_id="b1") for _ in range(5)] + [
+            _paper_in_batch("Chief", "b", batch_id="b2") for _ in range(4)
+        ]
+        assert (
+            ElectionService._count_ballots_cast(_election(), votes, {"b1": 5, "b2": 4})
+            == 9
         )
 
     def test_unrecorded_batches_do_not_contribute_a_phantom_zero(self):
