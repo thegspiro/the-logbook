@@ -921,15 +921,17 @@ class MembershipPipelineService:
             status_token=secrets.token_urlsafe(32),
             status_token_created_at=datetime.now(timezone.utc),
         )
-        self.db.add(prospect)
         try:
-            await self.db.flush()
+            # Scope a duplicate-key race to this insert so unrelated caller
+            # work survives in the surrounding transaction.
+            async with self.db.begin_nested():
+                self.db.add(prospect)
+                await self.db.flush()
         except IntegrityError:
             # The preflight lookup is intentionally only a friendly fast path;
             # the unique index is the concurrency boundary. A simultaneous
             # public submission may win after our SELECT, in which case return
             # that durable application rather than surfacing a database 500.
-            await self.db.rollback()
             existing = await self._find_active_prospect_by_email(organization_id, email)
             if existing:
                 await self._notify_duplicate_application(existing, organization_id)

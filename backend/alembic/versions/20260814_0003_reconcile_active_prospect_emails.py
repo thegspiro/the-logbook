@@ -39,8 +39,10 @@ def upgrade() -> None:
             " AND keeper.status = 'active' "
             " AND duplicate.status = 'active' "
             " AND keeper.email = duplicate.email "
-            " AND (keeper.created_at < duplicate.created_at "
-            "      OR (keeper.created_at = duplicate.created_at "
+            " AND (COALESCE(keeper.created_at, '1000-01-01') "
+            "      < COALESCE(duplicate.created_at, '1000-01-01') "
+            "      OR (COALESCE(keeper.created_at, '1000-01-01') "
+            "          = COALESCE(duplicate.created_at, '1000-01-01') "
             "          AND keeper.id < duplicate.id)) "
             "SET duplicate.status = 'inactive'"
         )

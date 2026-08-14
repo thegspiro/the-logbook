@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 
+import httpx
 from loguru import logger
 
 from app.services.integration_services.base import create_integration_client
@@ -107,7 +108,13 @@ class SalesforceService:
         async with create_integration_client() as client:
             response = None
             for attempt in range(_MAX_REQUEST_RETRIES + 1):
-                response = await client.post(self._token_url, data=token_request)
+                try:
+                    response = await client.post(self._token_url, data=token_request)
+                except httpx.TransportError:
+                    if attempt >= _MAX_REQUEST_RETRIES:
+                        raise
+                    await asyncio.sleep(min(2**attempt, _MAX_RETRY_DELAY_SECONDS))
+                    continue
                 if response.status_code not in _RETRYABLE_READ_STATUSES:
                     break
                 if attempt < _MAX_REQUEST_RETRIES:
