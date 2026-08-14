@@ -63,6 +63,8 @@ interface SubNavItem {
   path: string;
   icon: React.ElementType;
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
 }
 
 interface NavItem {
@@ -70,6 +72,8 @@ interface NavItem {
   path: string;
   icon: React.ElementType;
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
   subItems?: SubNavItem[];
   /** If true, this item is a visual section divider label */
   isSectionLabel?: boolean;
@@ -147,7 +151,20 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   // Determine if user has any admin permission (to show/hide Administration section)
-  const hasAnyAdminPermission = hasAdministrationAccess(checkPermission);
+  const hasAnyAdminPermission =
+    // users.view alone opens the section: the member ID scanner lives here,
+    // and validating a scanned card only needs users.view (see /members/scan).
+    checkPermission('users.view') ||
+    checkPermission('members.manage') ||
+    checkPermission('prospective_members.manage') ||
+    checkPermission('events.manage') ||
+    checkPermission('training.manage') ||
+    checkPermission('inventory.manage') ||
+    checkPermission('admin_hours.manage') ||
+    checkPermission('positions.manage_permissions') ||
+    checkPermission('settings.manage') ||
+    checkPermission('forms.view') ||
+    checkPermission('analytics.view');
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
@@ -289,7 +306,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             label: 'Members',
             path: '#',
             icon: Users,
-            permission: 'members.manage',
+            // users.view holders (e.g. the quartermaster) get this group for
+            // the ID scanner; the manage-only entries below stay gated.
+            anyPermission: ['users.view', 'members.manage'],
             subItems: [
               ...(isModuleOn('prospective_members')
                 ? [
@@ -317,7 +336,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 label: 'Scan Member ID',
                 path: '/members/scan',
                 icon: ScanLine,
-                permission: 'members.manage',
+                // Scanning resolves a card to a member profile, which the
+                // backend serves to users.view or members.manage holders.
+                anyPermission: ['users.view', 'members.manage'],
               },
               {
                 label: 'Waivers',
@@ -649,11 +670,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
 
                 // Filter sub-items by permission
                 const visibleSubItems = item.subItems?.filter(
-                  (sub) => !sub.permission || checkPermission(sub.permission)
+                  (sub) =>
+                    (!sub.permission || checkPermission(sub.permission)) &&
+                    (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p)))
                 );
 
                 // Skip top-level permission-gated items
                 if (item.permission && !checkPermission(item.permission)) return null;
+                if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return null;
 
                 // Skip parent groups where all sub-items are hidden
                 if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;

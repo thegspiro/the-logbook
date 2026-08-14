@@ -315,6 +315,28 @@ describe('EventsPage', () => {
   });
 
   describe('Manager Actions', () => {
+    it('should show an edit badge on each event for managers', async () => {
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      expect(await screen.findByRole('link', { name: 'Edit Monthly Business Meeting' })).toHaveAttribute(
+        'href',
+        '/events/evt-1/edit'
+      );
+      expect(screen.getByRole('link', { name: 'Edit CPR Training' })).toHaveAttribute('href', '/events/evt-2/edit');
+    });
+
+    it('should not show edit badges to members without event management permission', async () => {
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByText('Monthly Business Meeting');
+      expect(screen.queryByRole('link', { name: /edit monthly business meeting/i })).not.toBeInTheDocument();
+    });
+
     it('should show Create Event button for managers', async () => {
       mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
       vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);

@@ -138,6 +138,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         mandatory_membership_types=event.mandatory_membership_types,
         allow_guests=event.allow_guests,
         send_reminders=event.send_reminders,
+        reminder_target=event.reminder_target,
         reminder_schedule=event.reminder_schedule or [24],
         check_in_window_type=(
             (
@@ -504,7 +505,7 @@ EVENT_SETTINGS_DEFAULTS = {
     "defaults": {
         "event_type": "other",
         "check_in_window_type": "flexible",
-        "check_in_minutes_before": 30,
+        "check_in_minutes_before": 60,
         "check_in_minutes_after": 15,
         "require_checkout": False,
         "requires_rsvp": False,
@@ -512,6 +513,7 @@ EVENT_SETTINGS_DEFAULTS = {
         "allow_guests": False,
         "is_mandatory": False,
         "send_reminders": True,
+        "reminder_target": "going",
         "reminder_schedule": [24],
         "default_reminder_time": "12:00",
         "default_duration_minutes": 60,

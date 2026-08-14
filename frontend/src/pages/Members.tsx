@@ -32,7 +32,10 @@ import { UserStatus } from '../constants/enums';
 const Members: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, checkPermission } = useAuthStore();
+  // The directory itself is open to every member (members.view), but the
+  // add/import/delete controls call members.manage-gated pages/endpoints.
+  const canManageMembers = checkPermission('members.manage');
   const [members, setMembers] = useState<User[]>([]);
   const [stats, setStats] = useState<MemberStats>({
     total: 0,
@@ -340,24 +343,26 @@ const Members: React.FC = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex w-full items-center space-x-2 sm:space-x-3 md:w-auto">
-              <button
-                onClick={() => void navigate('/members/import')}
-                className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 max-md:min-h-[44px] sm:px-4 md:flex-none"
-              >
-                <Upload className="h-4 w-4" />
-                <span className="hidden sm:inline">Import CSV</span>
-                <span className="sm:hidden">Import</span>
-              </button>
-              <button
-                onClick={() => void navigate('/members/add')}
-                className="btn-info flex flex-1 items-center justify-center space-x-2 px-3 sm:px-4 md:flex-none"
-              >
-                <UserPlus className="h-4 w-4" />
-                <span className="hidden sm:inline">Add Member</span>
-                <span className="sm:hidden">Add</span>
-              </button>
-            </div>
+            {canManageMembers && (
+              <div className="flex w-full items-center space-x-2 sm:space-x-3 md:w-auto">
+                <button
+                  onClick={() => void navigate('/members/import')}
+                  className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 max-md:min-h-[44px] sm:px-4 md:flex-none"
+                >
+                  <Upload className="h-4 w-4" />
+                  <span className="hidden sm:inline">Import CSV</span>
+                  <span className="sm:hidden">Import</span>
+                </button>
+                <button
+                  onClick={() => void navigate('/members/add')}
+                  className="btn-info flex flex-1 items-center justify-center space-x-2 px-3 sm:px-4 md:flex-none"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Add Member</span>
+                  <span className="sm:hidden">Add</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -385,7 +390,7 @@ const Members: React.FC = () => {
                   : 'Get started by adding your first member or importing from CSV'
               }
               actions={
-                !(searchQuery || filterStatus !== 'all')
+                canManageMembers && !(searchQuery || filterStatus !== 'all')
                   ? [
                       {
                         label: 'Import CSV',
@@ -446,11 +451,11 @@ const Members: React.FC = () => {
                       <button
                         onClick={() => void navigate(`/members/${member.id}`)}
                         className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-400"
-                        title="View/Edit Profile"
+                        title={canManageMembers ? 'View/Edit Profile' : 'View Profile'}
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      {currentUser?.id !== member.id && (
+                      {canManageMembers && currentUser?.id !== member.id && (
                         <button
                           onClick={() => handleDeleteMember(member)}
                           className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
@@ -646,11 +651,11 @@ const Members: React.FC = () => {
                             <button
                               onClick={() => void navigate(`/members/${member.id}`)}
                               className="rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                              title="View/Edit Profile"
+                              title={canManageMembers ? 'View/Edit Profile' : 'View Profile'}
                             >
                               <Edit className="h-4 w-4" />
                             </button>
-                            {currentUser?.id !== member.id && (
+                            {canManageMembers && currentUser?.id !== member.id && (
                               <button
                                 onClick={() => handleDeleteMember(member)}
                                 className="rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"

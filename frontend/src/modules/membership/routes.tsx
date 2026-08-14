@@ -65,7 +65,12 @@ export const getMembershipRoutes = () => {
         path="/members/scan"
         element={
           <Suspense fallback={null}>
-            <MemberScanPage />
+            {/* Deliberately narrower than the directory (members.view): the
+                scanner is a validation tool for positions that check people
+                in (quartermaster etc.), not a general lookup surface. */}
+            <ProtectedRoute requiredAnyPermission={['users.view', 'members.manage']}>
+              <MemberScanPage />
+            </ProtectedRoute>
           </Suspense>
         }
       />

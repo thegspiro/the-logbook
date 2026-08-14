@@ -1615,6 +1615,7 @@ export const EventDetailPage: React.FC = () => {
                     allow_guests: event.allow_guests,
                     require_checkout: event.require_checkout || false,
                     send_reminders: event.send_reminders,
+                    reminder_target: event.reminder_target,
                     reminder_schedule: event.reminder_schedule,
                   };
                   const descTrimmed = templateDescription.trim();

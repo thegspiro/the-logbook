@@ -87,7 +87,12 @@ async def _rate_limit_admin_reset(request: Request) -> None:
 @router.get("", response_model=list[UserListResponse])
 async def list_users(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.view", "members.manage")),
+    current_user: User = Depends(
+        # members.view ("View member list") is the baseline grant every default
+        # position carries — this is the member directory, and RPT-3 already
+        # settled members.view as the roster-read permission for reports.
+        require_permission("users.view", "members.view", "members.manage")
+    ),
 ):
     """
     List all members in the organization
@@ -1073,7 +1078,9 @@ async def get_user_with_roles(
 
     This endpoint is for the member profile page and digital ID card.
     Users can always view their own record; viewing another member's record
-    requires `users.view` or `members.manage` permission.
+    requires `users.view`, `members.view`, or `members.manage` — members.view
+    is the directory permission every default position carries, so any
+    department member can open a colleague's (redacted) profile.
 
     Contact information is redacted against the organization's
     `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
@@ -1088,12 +1095,15 @@ async def get_user_with_roles(
     is_self = str(current_user.id) == str(user_id)
 
     # Self-access needs no permission grant: MemberIdCardPage, MemberProfilePage
-    # and UserSettingsPage all load the caller's own record through here, and
-    # the default Member position carries neither users.view nor members.manage.
-    # The redaction below already treats the subject as exempt on the same
-    # is_self basis, so this gate and that exemption stay in agreement.
+    # and UserSettingsPage all load the caller's own record through here, and a
+    # user can be stripped of every position without losing their own record.
+    # For other members' records, members.view (the directory permission) is
+    # enough — the redaction below withholds contact info per org settings and
+    # keeps DOB/emergency contacts leadership-only, so the profile a plain
+    # member sees matches what the roster already shows them.
     if not is_self and not (
         _has_permission("users.view", user_permissions)
+        or _has_permission("members.view", user_permissions)
         or _has_permission("members.manage", user_permissions)
     ):
         raise HTTPException(

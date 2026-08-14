@@ -246,6 +246,22 @@ class TestEventCRUD:
                 event_type="social",
                 description="Party",
                 location="Firehouse",
+                allow_guests=True,
+                reminder_schedule=[168, 24, 1],
+                reminder_target="all",
+                check_in_window_type="window",
+                check_in_minutes_before=45,
+                check_in_minutes_after=20,
+                require_checkout=True,
+                allow_guest_check_in=True,
+                guest_check_in_creates_prospect=True,
+                custom_category="Community",
+                custom_fields={
+                    "dress_code": "uniform",
+                    "reminders_sent": [24],
+                    "validation_notification_sent": True,
+                },
+                attachments=[{"name": "agenda.pdf", "url": "/agenda.pdf"}],
             ),
             organization_id=uuid.UUID(org_id),
             created_by=uuid.UUID(user_id),
@@ -263,6 +279,18 @@ class TestEventCRUD:
         assert duplicate.event_type == original.event_type
         assert duplicate.description == original.description
         assert duplicate.location == original.location
+        assert duplicate.allow_guests is True
+        assert duplicate.reminder_schedule == [168, 24, 1]
+        assert duplicate.reminder_target == "all"
+        assert duplicate.check_in_window_type == original.check_in_window_type
+        assert duplicate.check_in_minutes_before == 45
+        assert duplicate.check_in_minutes_after == 20
+        assert duplicate.require_checkout is True
+        assert duplicate.allow_guest_check_in is True
+        assert duplicate.guest_check_in_creates_prospect is True
+        assert duplicate.custom_category == "Community"
+        assert duplicate.custom_fields == {"dress_code": "uniform"}
+        assert duplicate.attachments == [{"name": "agenda.pdf", "url": "/agenda.pdf"}]
         assert duplicate.is_cancelled is False
 
 

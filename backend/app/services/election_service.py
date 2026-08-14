@@ -1326,6 +1326,35 @@ class ElectionService:
             digestmod=hashlib.sha256,
         ).hexdigest()
 
+    def _token_voter_is_on_frozen_roll(
+        self, election: Election, voting_token: VotingToken
+    ) -> bool:
+        """Return whether an anonymous token represents a frozen-roll voter.
+
+        Tokens retain only the voter's keyed hash, so compare it with hashes
+        derived from the frozen roster and any secretary overrides.  A NULL
+        snapshot preserves the documented live-roster behavior for legacy
+        elections.
+        """
+        snapshot = getattr(election, "eligible_roster_snapshot", None)
+        if snapshot is None:
+            return True
+
+        permitted_ids = {str(user_id) for user_id in snapshot}
+        permitted_ids.update(
+            str(override["user_id"])
+            for override in (election.voter_overrides or [])
+            if override.get("user_id")
+        )
+        salt = election.voter_anonymity_salt or ""
+        return any(
+            hmac.compare_digest(
+                voting_token.voter_hash,
+                self._generate_voter_hash(user_id, election.id, salt),
+            )
+            for user_id in permitted_ids
+        )
+
     # ------------------------------------------------------------------
     # Vote security helpers
     # ------------------------------------------------------------------
@@ -5782,6 +5811,34 @@ Best regards,
         pending_emails: List[Dict] = []
 
         for recipient in recipients:
+            # Do not issue a live ballot credential to someone added after
+            # the voter roll was frozen. Secretary overrides remain valid.
+            frozen_roster = getattr(election, "eligible_roster_snapshot", None)
+            override_ids = {
+                str(override["user_id"])
+                for override in (election.voter_overrides or [])
+                if override.get("user_id")
+            }
+            if (
+                frozen_roster is not None
+                and str(recipient.id) not in {str(uid) for uid in frozen_roster}
+                and str(recipient.id) not in override_ids
+            ):
+                skipped_count += 1
+                reason = "Not on the voter roll frozen when the election opened"
+                skipped_details.append(
+                    {
+                        "user_id": str(recipient.id),
+                        "name": recipient.full_name or recipient.username,
+                        "reason": reason,
+                    }
+                )
+                logger.info(
+                    f"Skipping ballot email for user={recipient.id} "
+                    f"({reason}) | election={election_id}"
+                )
+                continue
+
             # Empty ballot prevention: skip members who have zero eligible
             # ballot items so they don't receive a confusing empty ballot.
             eligible_items: List[Dict] = []
@@ -6911,6 +6968,19 @@ Best regards,
 
         if not election:
             return None, None, "Election not found"
+
+        # Defense in depth for tokens issued before the roll was frozen (or
+        # by an older application node): a credential cannot bypass the same
+        # frozen-roll boundary enforced by authenticated voting.
+        if not self._token_voter_is_on_frozen_roll(election, voting_token):
+            return (
+                None,
+                None,
+                (
+                    "You are not on the voter roll that was frozen when this "
+                    "election opened"
+                ),
+            )
 
         # Check if election is still open
         now = datetime.now(timezone.utc)

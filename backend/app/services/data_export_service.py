@@ -48,6 +48,7 @@ from app.models.training import (
     TrainingWaiver,
 )
 from app.models.user import MemberLeaveOfAbsence, User
+from app.services.training_module_config_service import TrainingModuleConfigService
 
 # Never exported, regardless of model: credentials, second factors, and
 # unguessable tokens are security material, not personal data the subject
@@ -96,6 +97,14 @@ _EXPORT_SECTIONS: list[tuple[str, type, str]] = [
 # subject, and stay out of the export.
 _SHIFT_REPORT_EXCLUDED = frozenset({"reviewer_notes", "review_history"})
 
+_SHIFT_REPORT_VISIBILITY_COLUMNS = {
+    "show_performance_rating": "performance_rating",
+    "show_officer_narrative": "officer_narrative",
+    "show_areas_of_strength": "areas_of_strength",
+    "show_areas_for_improvement": "areas_for_improvement",
+    "show_skills_observed": "skills_observed",
+}
+
 
 def _serialize_value(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
@@ -140,13 +149,27 @@ class DataExportService:
             )
             export[section] = [_row_to_dict(row) for row in result.scalars().all()]
 
+        # An export must not provide a second path around the trainee-facing
+        # report policy. Only officer-released reports are visible, and fields
+        # disabled by the organization's visibility configuration stay hidden.
+        config = await TrainingModuleConfigService(self.db).get_config(
+            user.organization_id
+        )
+        visibility = config.to_visibility_dict()
+        hidden_report_columns = frozenset(
+            column
+            for setting, column in _SHIFT_REPORT_VISIBILITY_COLUMNS.items()
+            if not visibility.get(setting, setting != "show_officer_narrative")
+        )
         report_result = await self.db.execute(
             select(ShiftCompletionReport).where(
-                ShiftCompletionReport.trainee_id == user.id
+                ShiftCompletionReport.organization_id == str(user.organization_id),
+                ShiftCompletionReport.trainee_id == user.id,
+                ShiftCompletionReport.review_status == "approved",
             )
         )
         export["shift_completion_reports"] = [
-            _row_to_dict(row, _SHIFT_REPORT_EXCLUDED)
+            _row_to_dict(row, _SHIFT_REPORT_EXCLUDED | hidden_report_columns)
             for row in report_result.scalars().all()
         ]
 

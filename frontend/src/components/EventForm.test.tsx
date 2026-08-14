@@ -237,6 +237,33 @@ describe('EventForm', () => {
       expect(checkinSelect).toBeInTheDocument();
     });
 
+    it('should show the standard 60-minute lead time for flexible check-in', () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      expect(screen.getByLabelText(/minutes before/i)).toHaveValue(60);
+    });
+
+    it('should shorten the lead time when a business meeting immediately precedes it', async () => {
+      renderWithRouter(
+        <EventForm
+          initialData={{ start_datetime: '2026-08-13T18:00:00Z' }}
+          userEvents={[
+            {
+              id: 'previous-meeting',
+              title: 'Previous meeting',
+              event_type: 'business_meeting',
+              start_datetime: '2026-08-13T16:45:00Z',
+              end_datetime: '2026-08-13T17:45:00Z',
+            },
+          ]}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await waitFor(() => expect(screen.getByLabelText(/minutes before/i)).toHaveValue(15));
+    });
+
     it('should show window options when Window type is selected', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
@@ -258,11 +285,19 @@ describe('EventForm', () => {
   });
 
   describe('Notifications Section', () => {
-    it('should have send reminders checked by default', () => {
+    it('defaults mandatory events to all-member reminders', async () => {
+      const user = userEvent.setup();
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
-      const remindersCheckbox = screen.getByLabelText(/send event reminders/i);
-      expect(remindersCheckbox).toBeChecked();
+      await user.click(screen.getByLabelText(/mandatory attendance/i));
+
+      expect(screen.getByLabelText(/who should receive reminders/i)).toHaveValue('all');
+    });
+
+    it('should remind signed-up members by default', () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      expect(screen.getByLabelText(/who should receive reminders/i)).toHaveValue('going');
     });
 
     it('should show reminder schedule when reminders enabled', () => {
@@ -275,7 +310,7 @@ describe('EventForm', () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
-      await user.click(screen.getByLabelText(/send event reminders/i));
+      await user.selectOptions(screen.getByLabelText(/who should receive reminders/i), 'none');
 
       await waitFor(() => {
         expect(screen.queryByText(/reminder schedule/i)).not.toBeInTheDocument();

@@ -46,10 +46,11 @@ function templateToInitialData(template: EventTemplate): Partial<EventCreate> {
     is_mandatory: template.is_mandatory,
     allow_guests: template.allow_guests,
     check_in_window_type: template.check_in_window_type || undefined,
-    check_in_minutes_before: template.check_in_minutes_before || undefined,
-    check_in_minutes_after: template.check_in_minutes_after || undefined,
+    check_in_minutes_before: template.check_in_minutes_before ?? undefined,
+    check_in_minutes_after: template.check_in_minutes_after ?? undefined,
     require_checkout: template.require_checkout,
     send_reminders: template.send_reminders,
+    reminder_target: template.reminder_target,
     reminder_schedule: template.reminder_schedule,
     custom_fields:
       (template.custom_fields_template as Record<string, string | number | boolean | null> | undefined) || undefined,
@@ -67,7 +68,7 @@ export const EventCreatePage: React.FC = () => {
 
   useEffect(() => {
     void eventService
-      .getEvents({ end_after: new Date().toISOString() })
+      .getEvents({ end_after: new Date().toISOString(), limit: 500 })
       .then((data) => {
         setUserEvents(
           data.map((e) => ({
@@ -75,6 +76,7 @@ export const EventCreatePage: React.FC = () => {
             title: e.title,
             start_datetime: e.start_datetime,
             end_datetime: e.end_datetime,
+            event_type: e.event_type,
           }))
         );
       })
