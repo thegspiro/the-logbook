@@ -21,7 +21,12 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.utils.label_renderer import LabelSpec, is_known_label_format, render_labels
+from app.utils.label_renderer import (
+    LabelSpec,
+    is_known_label_format,
+    render_labels,
+    sanitize_barcode_value,
+)
 
 # A builder fetches the module's records (org-scoped) for the given ids and
 # returns (label specs, count of records whose barcode was auto-populated).
@@ -33,6 +38,14 @@ SpecBuilder = Callable[
 
 def _short_id(value: str, length: int = 12) -> str:
     return value.replace("-", "")[:length].upper()
+
+
+def _first_scannable_identifier(*values: Optional[str], fallback: str) -> str:
+    """Choose the first identifier that can actually be encoded as Code 128."""
+    for value in values:
+        if value and sanitize_barcode_value(value):
+            return value.strip()
+    return fallback
 
 
 def _filter_ids(ids: List[str], exclude_ids: Optional[Set[str]]) -> List[str]:
@@ -73,7 +86,9 @@ async def _build_apparatus_specs(db, org_id, ids, extra_lines):
     )
     specs = []
     for a in rows.all():
-        barcode = a.asset_tag or a.unit_number or _short_id(a.id)
+        barcode = _first_scannable_identifier(
+            a.asset_tag, a.unit_number, fallback=_short_id(a.id)
+        )
         specs.append(
             LabelSpec(
                 name=a.name or a.unit_number or "Apparatus",
@@ -115,7 +130,9 @@ async def _build_facility_specs(db, org_id, ids, extra_lines):
     )
     specs = []
     for f in rows.all():
-        barcode = f.facility_number or _short_id(f.id)
+        barcode = _first_scannable_identifier(
+            f.facility_number, fallback=_short_id(f.id)
+        )
         specs.append(
             LabelSpec(
                 name=f.name or "Facility",
@@ -138,7 +155,9 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
     specs = []
     for u in rows.all():
         name = " ".join(filter(None, [u.first_name, u.last_name])) or "Member"
-        barcode = u.membership_number or _short_id(u.id)
+        barcode = _first_scannable_identifier(
+            u.membership_number, fallback=_short_id(u.id)
+        )
         specs.append(
             LabelSpec(
                 name=name,

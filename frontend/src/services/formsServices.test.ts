@@ -5,8 +5,10 @@ const mockGet = vi.fn();
 const mockPost = vi.fn();
 const mockPatch = vi.fn();
 const mockDelete = vi.fn();
+const mockPerformSharedRefresh = vi.fn();
 
 vi.mock('./apiClient', () => ({
+  performSharedRefresh: (...args: unknown[]) => mockPerformSharedRefresh(...args) as unknown,
   default: {
     get: (...args: unknown[]) => mockGet(...args) as unknown,
     post: (...args: unknown[]) => mockPost(...args) as unknown,
@@ -31,6 +33,7 @@ import { formsService, publicFormsService } from './formsServices';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 // ============================================
@@ -374,6 +377,28 @@ describe('publicFormsService', () => {
 
       const payload = mockAxiosPost.mock.calls[0]?.[1] as Record<string, unknown>;
       expect(payload.website).toBeUndefined();
+    });
+
+    it('refreshes and retries an authenticated submission after a 401', async () => {
+      localStorage.setItem('has_session', '1');
+      mockAxiosPost
+        .mockRejectedValueOnce({ response: { status: 401 } })
+        .mockResolvedValueOnce({ data: { id: 'saved' } });
+      mockPerformSharedRefresh.mockResolvedValueOnce(undefined);
+
+      const result = await publicFormsService.submitForm('annual-report', { calls: 4 });
+
+      expect(mockPerformSharedRefresh).toHaveBeenCalledTimes(1);
+      expect(mockAxiosPost).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({ id: 'saved' });
+    });
+
+    it('does not attempt refresh for an anonymous 401', async () => {
+      const unauthorized = { response: { status: 401 } };
+      mockAxiosPost.mockRejectedValueOnce(unauthorized);
+
+      await expect(publicFormsService.submitForm('members-only', {})).rejects.toBe(unauthorized);
+      expect(mockPerformSharedRefresh).not.toHaveBeenCalled();
     });
   });
 });

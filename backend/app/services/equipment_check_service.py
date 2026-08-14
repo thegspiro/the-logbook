@@ -2851,6 +2851,9 @@ class EquipmentCheckService:
         template_id: str,
         organization_id: str,
         links: Dict[str, Optional[str]],
+        *,
+        user_id: Optional[str] = None,
+        user_name: Optional[str] = None,
     ) -> Optional[int]:
         """Apply a reviewed set of catalog links in one transaction.
 
@@ -2904,7 +2907,25 @@ class EquipmentCheckService:
             new_value = str(inventory_item_id) if inventory_item_id else None
             if item.inventory_item_id == new_value:
                 continue
+            old_value = item.inventory_item_id
             item.inventory_item_id = new_value
+            if user_id and user_name:
+                await self.log_template_change(
+                    organization_id=organization_id,
+                    template_id=template_id,
+                    user_id=user_id,
+                    user_name=user_name,
+                    action="update",
+                    entity_type="item",
+                    entity_id=item_id,
+                    entity_name=item.name,
+                    changes={
+                        "inventory_item_id": {
+                            "old": old_value,
+                            "new": new_value,
+                        }
+                    },
+                )
             changed += 1
 
         await self.db.commit()

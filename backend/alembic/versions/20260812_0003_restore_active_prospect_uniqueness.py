@@ -33,6 +33,23 @@ def upgrade() -> None:
 
     indexes = {index["name"] for index in inspector.get_indexes("prospective_members")}
     if "uq_prospect_org_active_email" not in indexes:
+        # Some installations accumulated duplicate active prospects before this
+        # guard was released. Reconcile exact duplicates before creating the
+        # index so those databases can continue through the migration chain.
+        op.execute(
+            sa.text(
+                "UPDATE prospective_members AS duplicate "
+                "JOIN prospective_members AS keeper "
+                "  ON keeper.organization_id = duplicate.organization_id "
+                " AND keeper.status = 'active' "
+                " AND duplicate.status = 'active' "
+                " AND keeper.email = duplicate.email "
+                " AND (keeper.created_at < duplicate.created_at "
+                "      OR (keeper.created_at = duplicate.created_at "
+                "          AND keeper.id < duplicate.id)) "
+                "SET duplicate.status = 'inactive'"
+            )
+        )
         op.create_index(
             "uq_prospect_org_active_email",
             "prospective_members",

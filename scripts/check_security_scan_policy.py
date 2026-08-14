@@ -26,9 +26,18 @@ def active_trivy_entries(content: str) -> list[str]:
 def policy_errors(ci_content: str, trivy_content: str) -> list[str]:
     """Return scanner-policy violations found in supplied configuration text."""
     errors: list[str] = []
-    if "pip-audit -r requirements.txt" not in ci_content:
+    # Inspect executable YAML only.  A comment mentioning the expected command
+    # must not be enough to satisfy this policy gate.
+    ci_commands = "\n".join(
+        line for line in ci_content.splitlines() if not line.lstrip().startswith("#")
+    )
+    pip_audit_command = re.compile(
+        r"^\s*(?:run:\s*)?pip-audit\s+(?:[^\n]*\s)?-r\s+requirements\.txt(?:\s|$)",
+        re.MULTILINE,
+    )
+    if not pip_audit_command.search(ci_commands):
         errors.append("CI must run pip-audit against backend/requirements.txt")
-    if "--ignore-vuln" in ci_content:
+    if "--ignore-vuln" in ci_commands:
         errors.append("pip-audit must not suppress advisories with --ignore-vuln")
 
     trivy_entries = active_trivy_entries(trivy_content)
@@ -39,9 +48,6 @@ def policy_errors(ci_content: str, trivy_content: str) -> list[str]:
 
     # Catch IDs hidden in scanner command continuations even if a flag spelling
     # changes. Comments are excluded so the policy can explain retired findings.
-    ci_commands = "\n".join(
-        line for line in ci_content.splitlines() if not line.lstrip().startswith("#")
-    )
     ids = sorted(set(VULNERABILITY_ID.findall(ci_commands)))
     if ids:
         errors.append("CI scanner commands contain advisory IDs: " + ", ".join(ids))
