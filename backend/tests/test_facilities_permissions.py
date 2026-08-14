@@ -161,12 +161,7 @@ def test_view_sensitive_is_offered_by_the_role_editor_catalog():
 
 
 def test_chief_ranks_can_grant_captain_within_the_rank_ceiling():
-    """A chief's facilities.manage satisfies the sensitive-read endpoints, but
-    the rank grant ceiling compares permission names via permission_matches
-    (exact / "*" / "module.*" only). Captain's defaults include
-    facilities.view_sensitive, so without the explicit grant in the chief rank
-    sets every Fire/Deputy/Assistant Chief got a 403 promoting a member to
-    captain."""
+    """Chief permission sets cover every safe Captain rank default."""
     captain_perms = OPERATIONAL_RANKS["captain"]["default_permissions"]
     for chief in ("fire_chief", "deputy_chief", "assistant_chief"):
         chief_perms = set(OPERATIONAL_RANKS[chief]["default_permissions"])

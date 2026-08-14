@@ -5,14 +5,13 @@ accounts, capital projects, insurance policies, occupants, lease terms)
 behind facilities.view_sensitive/edit/manage and added the new
 permission to DEFAULT_POSITIONS — but positions are seeded at org
 creation, so only newly created organizations receive the grant. On
-existing organizations the captain / vice president / treasurer
-positions would lose access to data they could read before the deploy.
+existing organizations the vice president / treasurer positions would lose
+access to data they could read before the deploy.
 
 Two grant rules, applied idempotently:
 
 1. The system positions DEFAULT_POSITIONS now grants the permission to
-   (captain, vice_president, treasurer, and the chief positions, whose
-   rank permission lists carry it for the rank grant ceiling), matched
+   (vice_president, treasurer, and the chief positions), matched
    the same way seeding matches them: slug + is_system.
 2. Any position already holding facilities.manage — those holders can
    already edit the sensitive data, so viewing it must not regress if a
@@ -45,7 +44,6 @@ _PERMISSION = "facilities.view_sensitive"
 # the registry as it stood when the migration was written, not as it
 # reads at some future upgrade time.
 _GRANTED_SLUGS = (
-    "captain",
     "vice_president",
     "treasurer",
     "fire_chief",
