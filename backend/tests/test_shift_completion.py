@@ -94,7 +94,7 @@ class TestReportCreation:
             organization_id=uuid.UUID(org_id),
             officer_id=uuid.UUID(officer_id),
             trainee_id=trainee_id,
-            start_date=date.today(),
+            shift_date=date.today(),
             hours_on_shift=12.0,
             calls_responded=3,
             call_types=["medical", "fire", "medical"],
@@ -1043,6 +1043,7 @@ class TestTraineeReportReleaseBoundary:
             organization_id=uuid.uuid4(),
             trainee_id="trainee-1",
             start_date=date.today(),
+            end_date=date.today(),
             released_only=True,
         )
 

@@ -156,6 +156,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
+    ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store', icon: Store } as NavItem] : []),
     ...(isModuleOn('training')
       ? [
           {
@@ -217,7 +218,6 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               { label: 'Inventory', path: '/inventory', icon: Package },
             ]
           : []),
-        ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store', icon: Store }] : []),
         // Full apparatus module or lightweight version
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus', icon: Truck }]

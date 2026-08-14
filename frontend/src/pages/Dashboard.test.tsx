@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import Dashboard from './Dashboard';
 import type { ShiftRecord } from '../modules/scheduling/services/api';
+import { getTodayLocalDate, addCalendarDays } from '../utils/dateFormatting';
 
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
@@ -24,12 +25,24 @@ vi.mock('react-router', async () => {
 });
 
 // Mock API services
-const { mockGetMyShifts, mockGetOpenShifts, mockSignupForShift, mockGetInbox, mockGetUnreadCount } = vi.hoisted(() => ({
+const {
+  mockGetMyShifts,
+  mockGetOpenShifts,
+  mockSignupForShift,
+  mockGetInbox,
+  mockGetUnreadCount,
+  mockAcknowledge,
+  mockGetMyTraining,
+  mockGetEvents,
+} = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
   mockSignupForShift: vi.fn(),
   mockGetInbox: vi.fn(),
   mockGetUnreadCount: vi.fn(),
+  mockAcknowledge: vi.fn(),
+  mockGetMyTraining: vi.fn(),
+  mockGetEvents: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -46,20 +59,22 @@ vi.mock('../modules/scheduling/services/api', () => ({
 
 vi.mock('../services/api', () => ({
   notificationsService: {
-    getLogs: vi.fn().mockResolvedValue({ logs: [], total: 0 }),
+    getMyNotifications: vi.fn().mockResolvedValue({ logs: [], total: 0 }),
+    markMyNotificationRead: vi.fn().mockResolvedValue(undefined),
   },
   messagesService: {
     getInbox: mockGetInbox,
     getUnreadCount: mockGetUnreadCount,
     markAsRead: vi.fn().mockResolvedValue(undefined),
-    acknowledge: vi.fn().mockResolvedValue(undefined),
+    acknowledge: mockAcknowledge,
     updateMessage: vi.fn().mockResolvedValue({}),
   },
   trainingProgramService: {
-    getMyEnrollments: vi.fn().mockResolvedValue({ items: [] }),
+    getMyEnrollments: vi.fn().mockResolvedValue([]),
+    getEnrollmentProgress: vi.fn().mockResolvedValue({}),
   },
   trainingModuleConfigService: {
-    getMyTraining: vi.fn().mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 } }),
+    getMyTraining: mockGetMyTraining,
   },
   organizationService: {
     getSetupChecklist: vi.fn().mockResolvedValue({ completed_count: 0, total_count: 0 }),
@@ -73,6 +88,9 @@ vi.mock('../services/api', () => ({
       maintenance_due_count: 0,
     }),
     getLowStockItems: vi.fn().mockResolvedValue([]),
+  },
+  eventService: {
+    getEvents: mockGetEvents,
   },
   dashboardService: {
     getStats: vi.fn().mockResolvedValue({}),
@@ -112,13 +130,20 @@ vi.mock('../hooks/useRelativeTime', () => ({
   formatRelativeTime: (date: string) => date,
 }));
 
+/** Inside the seven-day window the timeline covers, whatever day the suite runs. */
+const inWindow = (offsetDays: number) => addCalendarDays(getTodayLocalDate('America/New_York'), offsetDays);
+/** Past the window, so it only counts toward the "more open shifts" footer. */
+const pastWindow = addCalendarDays(getTodayLocalDate('America/New_York'), 20);
+
 const makeShift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 'shift-1',
   organization_id: 'org-1',
-  shift_date: '2026-03-15',
+  shift_date: inWindow(1),
   start_time: '08:00',
   end_time: '16:00',
   attendee_count: 2,
+  call_count: 0,
+  is_finalized: false,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   ...overrides,
@@ -132,170 +157,118 @@ describe('Dashboard', () => {
     mockSignupForShift.mockResolvedValue({});
     mockGetInbox.mockResolvedValue([]);
     mockGetUnreadCount.mockResolvedValue({ unread_count: 0 });
+    mockAcknowledge.mockResolvedValue(undefined);
+    mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
+    mockGetEvents.mockResolvedValue([]);
   });
 
-  describe('My Upcoming Shifts', () => {
-    it('should display "My Upcoming Shifts" heading', async () => {
-      renderWithRouter(<Dashboard />);
-
-      await waitFor(() => {
-        expect(screen.getByText('My Upcoming Shifts')).toBeInTheDocument();
-      });
-    });
-
-    it('should show empty state when no shifts are assigned', async () => {
-      mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
-
-      renderWithRouter(<Dashboard />);
-
-      await waitFor(() => {
-        expect(screen.getByText('No upcoming shifts scheduled')).toBeInTheDocument();
-      });
-    });
-
-    it("should render user's assigned shifts", async () => {
+  describe('Next 7 Days', () => {
+    it('merges my shifts, open shifts and events into one list', async () => {
       mockGetMyShifts.mockResolvedValue({
-        shifts: [
-          makeShift({
-            id: 'my-1',
-            shift_date: '2026-03-15',
-            start_time: '08:00',
-            end_time: '16:00',
-            shift_officer_name: 'Capt. Smith',
-          }),
-        ],
+        shifts: [makeShift({ id: 'my-1', shift_date: inWindow(1), apparatus_name: 'Engine 1' })],
+        total: 1,
+      });
+      mockGetOpenShifts.mockResolvedValue([
+        makeShift({ id: 'open-1', shift_date: inWindow(2), min_staffing: 4, attendee_count: 1 }),
+      ]);
+      mockGetEvents.mockResolvedValue([
+        {
+          id: 'evt-1',
+          title: 'Ladder Ops Drill',
+          event_type: 'training',
+          start_datetime: `${inWindow(3)}T14:00:00Z`,
+          end_datetime: `${inWindow(3)}T17:00:00Z`,
+          requires_rsvp: true,
+          is_mandatory: false,
+          is_cancelled: false,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('heading', { name: 'Next 7 Days' })).toBeInTheDocument();
+      expect(screen.getByText('Shift · Engine 1')).toBeInTheDocument();
+      expect(screen.getByText('Open Shift')).toBeInTheDocument();
+      expect(screen.getByText('Ladder Ops Drill')).toBeInTheDocument();
+    });
+
+    it('marks the member’s own shifts as theirs', async () => {
+      mockGetMyShifts.mockResolvedValue({ shifts: [makeShift({ id: 'my-1' })], total: 1 });
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Yours')).toBeInTheDocument();
+    });
+
+    // formatTime() parses an instant; a shift's "08:00" is a time of day and
+    // comes back Invalid Date, so every row read "N/A – N/A".
+    it('renders shift times rather than N/A', async () => {
+      mockGetMyShifts.mockResolvedValue({
+        shifts: [makeShift({ id: 'my-1', start_time: '18:00', end_time: '06:00' })],
         total: 1,
       });
 
       renderWithRouter(<Dashboard />);
 
-      await waitFor(() => {
-        expect(screen.getAllByText('Officer: Capt. Smith').length).toBeGreaterThan(0);
-      });
+      expect(await screen.findByText(/6:00 PM–6:00 AM/)).toBeInTheDocument();
     });
 
-    it('should call getMyShifts, not getShifts', async () => {
+    it('says nothing is scheduled when the week is empty', async () => {
       renderWithRouter(<Dashboard />);
 
       await waitFor(() => {
-        expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
-      });
-    });
-  });
-
-  describe('Open Shifts', () => {
-    it('should display "Open Shifts" heading', async () => {
-      renderWithRouter(<Dashboard />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Open Shifts')).toBeInTheDocument();
+        expect(screen.getByText(/Nothing scheduled through/)).toBeInTheDocument();
       });
     });
 
-    it('should show empty state when no open shifts are available', async () => {
-      mockGetOpenShifts.mockResolvedValue([]);
-
-      renderWithRouter(<Dashboard />);
-
-      await waitFor(() => {
-        expect(screen.getByText('No open shifts available')).toBeInTheDocument();
-      });
-    });
-
-    it('should render open shifts with sign up buttons', async () => {
+    it('counts open shifts that fall beyond the window instead of listing them', async () => {
       mockGetOpenShifts.mockResolvedValue([
-        makeShift({ id: 'open-1', shift_date: '2026-03-20', min_staffing: 4, attendee_count: 1 }),
+        makeShift({ id: 'open-late-1', shift_date: pastWindow }),
+        makeShift({ id: 'open-late-2', shift_date: pastWindow }),
       ]);
 
       renderWithRouter(<Dashboard />);
 
-      await waitFor(() => {
-        expect(screen.getByText('1/4 filled')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /sign up/i })).toBeInTheDocument();
-      });
+      expect(await screen.findByRole('button', { name: /2 more open shifts/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Sign Up$/ })).not.toBeInTheDocument();
     });
 
-    // The panel used to render every open shift in the next 30 days. On a
-    // department running two platoons that is ~60 rows, and the dashboard
-    // became one long list with events, training and equipment pushed off the
-    // bottom of a 7,000px page.
-    it('should list at most five open shifts', async () => {
+    it('caps the list at six rows', async () => {
       mockGetOpenShifts.mockResolvedValue(
-        Array.from({ length: 12 }, (_, i) => makeShift({ id: `open-${i}`, shift_date: `2026-03-${10 + i}` }))
+        Array.from({ length: 7 }, (_, i) => makeShift({ id: `open-${i}`, shift_date: inWindow(i) }))
       );
 
       renderWithRouter(<Dashboard />);
 
       await waitFor(() => {
-        expect(screen.getAllByRole('button', { name: /sign up/i })).toHaveLength(5);
+        expect(screen.getAllByRole('button', { name: /sign up/i })).toHaveLength(6);
       });
+      expect(screen.getByText(/1 more through/)).toBeInTheDocument();
     });
 
-    it('should say how many open shifts it is not showing', async () => {
-      mockGetOpenShifts.mockResolvedValue(
-        Array.from({ length: 12 }, (_, i) => makeShift({ id: `open-${i}`, shift_date: `2026-03-${10 + i}` }))
-      );
-
-      renderWithRouter(<Dashboard />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/7 more open shifts in the next 30 days/)).toBeInTheDocument();
-      });
-    });
-
-    it('should not add a "more" line when everything fits', async () => {
+    it('signs the member up for an open shift', async () => {
       mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1' })]);
-
-      renderWithRouter(<Dashboard />);
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /sign up/i })).toBeInTheDocument();
-      });
-      expect(screen.queryByText(/more open shift/)).not.toBeInTheDocument();
-    });
-
-    it('should call signupForShift when sign up button is clicked', async () => {
-      mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1', shift_date: '2026-03-20' })]);
-      mockSignupForShift.mockResolvedValue(undefined);
 
       const user = userEvent.setup();
       renderWithRouter(<Dashboard />);
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /sign up/i })).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByRole('button', { name: /sign up/i }));
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /confirm/i })).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByRole('button', { name: /confirm/i }));
+      await user.click(await screen.findByRole('button', { name: /sign up/i }));
+      await user.click(await screen.findByRole('button', { name: /confirm/i }));
 
       await waitFor(() => {
         expect(mockSignupForShift).toHaveBeenCalledWith('open-1', { position: 'firefighter' });
       });
     });
 
-    it('should refresh both lists after successful signup', async () => {
-      mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1', shift_date: '2026-03-20' })]);
-      mockSignupForShift.mockResolvedValue(undefined);
+    it('refreshes both shift lists after a successful signup', async () => {
+      mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1' })]);
 
       const user = userEvent.setup();
       renderWithRouter(<Dashboard />);
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /sign up/i })).toBeInTheDocument();
-      });
+      await user.click(await screen.findByRole('button', { name: /sign up/i }));
+      await screen.findByRole('button', { name: /confirm/i });
 
-      await user.click(screen.getByRole('button', { name: /sign up/i }));
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /confirm/i })).toBeInTheDocument();
-      });
-
-      // Clear initial load call counts
       mockGetMyShifts.mockClear();
       mockGetOpenShifts.mockClear();
 
@@ -312,16 +285,17 @@ describe('Dashboard', () => {
       });
     });
 
-    it('should call getOpenShifts on mount', async () => {
+    it('loads shifts from the member-scoped endpoint', async () => {
       renderWithRouter(<Dashboard />);
 
       await waitFor(() => {
+        expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
         expect(mockGetOpenShifts).toHaveBeenCalledTimes(1);
       });
     });
   });
 
-  describe('Department Messages', () => {
+  describe('Needs you', () => {
     const makeMessage = (overrides: Record<string, unknown> = {}) => ({
       id: 'msg-1',
       title: 'Station 2 Bay Doors Out of Service',
@@ -342,10 +316,88 @@ describe('Dashboard', () => {
       ...overrides,
     });
 
-    // MSG2-6: the card must request only pending + persistent messages —
+    it('stays hidden when nothing needs the member', async () => {
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(mockGetInbox).toHaveBeenCalledWith({ include_read: false, limit: 10 });
+      });
+      expect(screen.queryByRole('heading', { name: 'Needs you' })).not.toBeInTheDocument();
+    });
+
+    it('lists an expiring certification with a renewal action', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        hours_summary: { total_hours: 0, hours_this_month: 0 },
+        certifications: [
+          {
+            id: 'cert-1',
+            course_name: 'EMT-B Recertification',
+            expiration_date: '2026-09-05',
+            is_expired: false,
+            days_until_expiry: 24,
+          },
+        ],
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const panel = await screen.findByRole('region', { name: 'Needs you' });
+      expect(within(panel).getByText('EMT-B Recertification expires in 24 days')).toBeInTheDocument();
+      expect(within(panel).getByRole('button', { name: 'Start Renewal' })).toBeInTheDocument();
+    });
+
+    it('acknowledges a message that requires it', async () => {
+      mockGetInbox.mockResolvedValue([
+        makeMessage({ id: 'msg-ack', title: 'Hydrant flow testing Saturday', requires_acknowledgment: true }),
+      ]);
+      mockGetUnreadCount.mockResolvedValue({ unread_count: 1 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: 'Acknowledge' }));
+
+      await waitFor(() => {
+        expect(mockAcknowledge).toHaveBeenCalledWith('msg-ack');
+      });
+    });
+
+    // The old dashboard stated the same message twice — once as a card to
+    // acknowledge, once as an activity row. Anything with a button here is
+    // deliberately kept out of the feed.
+    it('does not repeat an acknowledgement-pending message in the feed', async () => {
+      mockGetInbox.mockResolvedValue([
+        makeMessage({ id: 'msg-ack', title: 'Hydrant flow testing Saturday', requires_acknowledgment: true }),
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Hydrant flow testing Saturday')).toBeInTheDocument();
+      expect(screen.getAllByText('Hydrant flow testing Saturday')).toHaveLength(1);
+    });
+  });
+
+  describe('Department Feed', () => {
+    const makeMessage = (overrides: Record<string, unknown> = {}) => ({
+      id: 'msg-1',
+      title: 'Station 2 Bay Doors Out of Service',
+      body: 'Use the rear bay until further notice.',
+      priority: 'normal',
+      target_type: 'all',
+      is_pinned: false,
+      is_persistent: false,
+      requires_acknowledgment: false,
+      author_name: 'Chief Test',
+      created_at: '2026-08-01T12:00:00Z',
+      is_read: false,
+      is_acknowledged: false,
+      ...overrides,
+    });
+
+    // MSG2-6: the feed must request only pending + persistent messages —
     // include_read: true would let already-read messages page a persistent
     // standing notice out of the 10-item window.
-    it('requests only pending and persistent messages for the card', async () => {
+    it('requests only pending and persistent messages', async () => {
       renderWithRouter(<Dashboard />);
 
       await waitFor(() => {
@@ -363,23 +415,34 @@ describe('Dashboard', () => {
           is_read: true,
         }),
       ]);
-      mockGetUnreadCount.mockResolvedValue({ unread_count: 1 });
 
       renderWithRouter(<Dashboard />);
 
-      expect(await screen.findByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
-      expect(screen.getByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
-      expect(screen.getByText('Persistent')).toBeInTheDocument();
-      expect(screen.getByText('1 new')).toBeInTheDocument();
+      const feed = await screen.findByRole('region', { name: 'Department Feed' });
+      expect(within(feed).getByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
+      expect(within(feed).getByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
+      expect(within(feed).getByText('Persistent')).toBeInTheDocument();
     });
 
-    it('hides the card entirely when nothing is pending', async () => {
+    it('shows an empty state rather than a card full of nothing', async () => {
+      renderWithRouter(<Dashboard />);
+
+      const feed = await screen.findByRole('region', { name: 'Department Feed' });
+      await waitFor(() => {
+        expect(within(feed).getByText('Nothing new')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Overview tab', () => {
+    it('is hidden from members without settings.manage', async () => {
       renderWithRouter(<Dashboard />);
 
       await waitFor(() => {
-        expect(mockGetInbox).toHaveBeenCalledTimes(1);
+        expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
       });
-      expect(screen.queryByText('Department Messages')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Overview' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Department Overview')).not.toBeInTheDocument();
     });
   });
 });

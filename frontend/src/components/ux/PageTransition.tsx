@@ -111,6 +111,7 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
     <>
       <div
         ref={contentRef}
+        data-page-layout="application"
         className={`transition-opacity duration-150 ease-in-out ${transitioning ? 'opacity-0' : 'opacity-100'}`}
       >
         {displayedChildren}

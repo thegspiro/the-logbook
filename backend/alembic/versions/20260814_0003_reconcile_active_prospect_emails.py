@@ -1,14 +1,14 @@
 """Reconcile active prospect emails without rewriting released history.
 
-Revision ID: 20260814_0002
-Revises: 20260814_0001
+Revision ID: 20260814_0003
+Revises: 20260814_0002
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260814_0002"
-down_revision = "20260814_0001"
+revision = "20260814_0003"
+down_revision = "20260814_0002"
 branch_labels = None
 depends_on = None
 

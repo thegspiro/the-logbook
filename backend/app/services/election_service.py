@@ -1871,7 +1871,7 @@ class ElectionService:
         When the recording officer attested the physical ballot count for a
         batch (``recorded_ballots``, keyed by batch id), that exact count is
         preferred over the estimate — see the inline note for how counts from
-        several batches combine.
+        several batches combine conservatively.
         """
         if election.anonymous_voting:
             identified = {v.voter_hash for v in all_votes if v.voter_hash}
@@ -1908,19 +1908,20 @@ class ElectionService:
         # Prefer counts the recording officer attested (ManualBallotBatch.
         # ballots_cast) over the tally-derived estimate. Each recorded count
         # is exact for its own stack, but two batches may or may not be the
-        # same physical ballots, so they combine per position:
+        # same physical ballots. In a single-choice election they combine per
+        # position:
         #
         #   sum ballots_cast over the batches that recorded votes for a
         #   position, then take the max across positions.
         #
-        # A physical ballot marks any GIVEN position at most once, so two
-        # batches that both hold votes for the same position cannot be the
-        # same ballots — their attested counts add. Batches covering
-        # disjoint positions may well be one stack recorded position by
-        # position (a ballot can mark several positions), so across
-        # positions only the max is provable. Both halves are therefore
-        # lower bounds, and so is the result — it can understate a genuinely
-        # split box but can never certify a quorum that was not met.
+        # A single-choice physical ballot marks any GIVEN position at most
+        # once, so two such batches that both hold votes for the same position
+        # cannot be the same ballots — their attested counts add. In a
+        # multi-vote election, however, one stack may be entered in separate
+        # per-candidate batches for the same position. Without ballot-level
+        # grouping, only the largest attested batch is then a safe turnout
+        # lower bound. This can understate a genuinely split box, but cannot
+        # inflate turnout and certify a quorum that was not met.
         #
         # Votes with no position share the None bucket, exactly as the
         # estimate above buckets them, so an unpositioned batch is compared
@@ -1938,15 +1939,23 @@ class ElectionService:
                 if batch_id in recorded_ballots:
                     positions_by_batch.setdefault(batch_id, set()).add(vote.position)
 
-            recorded_by_position: Dict[Optional[str], int] = {}
-            for batch_id, positions in positions_by_batch.items():
-                for position in positions:
-                    recorded_by_position[position] = (
-                        recorded_by_position.get(position, 0)
-                        + recorded_ballots[batch_id]
+            if is_single_choice:
+                recorded_by_position: Dict[Optional[str], int] = {}
+                for batch_id, positions in positions_by_batch.items():
+                    for position in positions:
+                        recorded_by_position[position] = (
+                            recorded_by_position.get(position, 0)
+                            + recorded_ballots[batch_id]
+                        )
+                if recorded_by_position:
+                    paper_ballots = max(
+                        paper_ballots, max(recorded_by_position.values())
                     )
-            if recorded_by_position:
-                paper_ballots = max(paper_ballots, max(recorded_by_position.values()))
+            elif positions_by_batch:
+                paper_ballots = max(
+                    paper_ballots,
+                    max(recorded_ballots[batch_id] for batch_id in positions_by_batch),
+                )
 
         return len(identified) + paper_ballots
 

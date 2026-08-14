@@ -4,11 +4,13 @@ import hashlib
 import hmac
 import json
 import uuid
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
 from sqlalchemy import select
 
+import app.services.audit_ship_service as audit_ship_module
 from app.core.audit import _get_audit_signing_key, audit_logger
 from app.core.config import settings
 from app.models.audit import AuditShipState
@@ -17,6 +19,12 @@ from app.services.audit_ship_service import ship_new_audit_logs
 pytestmark = pytest.mark.integration
 
 _URL = "https://collector.example/ingest"
+
+
+@pytest.fixture(autouse=True)
+def _public_collector(monkeypatch):
+    """Keep shipping tests independent of external DNS resolution."""
+    monkeypatch.setattr(audit_ship_module, "assert_outbound_url_safe", MagicMock())
 
 
 async def _write_logs(db, count: int) -> list:
@@ -97,6 +105,25 @@ class TestAuditShipping:
         assert result["shipped_entries"] == 0
         assert result["error"] == "collector returned HTTP 500"
         assert len(captured) == 1
+        assert await _watermark(db_session) == before
+
+    async def test_unsafe_collector_is_blocked_before_delivery(
+        self, db_session, monkeypatch
+    ):
+        url = "https://127.0.0.1/internal-collector"
+        monkeypatch.setattr(settings, "AUDIT_SHIP_WEBHOOK_URL", url)
+        await _write_logs(db_session, 1)
+        before = await _watermark(db_session)
+        guard = MagicMock(side_effect=ValueError("private/internal IP address"))
+        monkeypatch.setattr(audit_ship_module, "assert_outbound_url_safe", guard)
+        client, captured = _collector()
+
+        result = await ship_new_audit_logs(db_session, client=client)
+
+        assert result["shipped_entries"] == 0
+        assert result["error"] == ("unsafe collector URL: private/internal IP address")
+        guard.assert_called_once_with(url)
+        assert captured == []
         assert await _watermark(db_session) == before
 
     async def test_second_run_ships_only_new_rows(self, db_session, monkeypatch):

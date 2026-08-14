@@ -681,15 +681,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Only chromium: the specs stub every /api/v1 call through
+      # Only Chromium's headless shell: the specs stub every /api/v1 call through
       # page.route(), so they need the Vite dev server and nothing else, and
       # a single engine covers the behaviour under test. The config's other
       # projects (firefox, webkit, and the two mobile viewports) are for
       # local cross-browser runs — the mobile ones deliberately fail the
       # navigation specs, whose destinations sit behind a hamburger menu at
-      # that width.
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      # that width. Installing the shell directly avoids also downloading the
+      # full headed Chromium build, which this CI job never launches.
+      - name: Install Playwright Chromium headless shell
+        run: npx playwright install --with-deps chromium-headless-shell
 
       # playwright.config.ts starts `npm run dev` itself via webServer.
       #

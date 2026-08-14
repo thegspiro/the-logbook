@@ -25,7 +25,7 @@ def test_active_prospect_email_has_database_uniqueness_guard():
 def test_uniqueness_migration_reconciles_legacy_duplicates_first():
     migration = (
         Path(__file__).parents[1]
-        / "alembic/versions/20260814_0002_reconcile_active_prospect_emails.py"
+        / "alembic/versions/20260814_0003_reconcile_active_prospect_emails.py"
     ).read_text()
 
     reconcile = migration.index("SET duplicate.status = 'inactive'")
@@ -35,14 +35,11 @@ def test_uniqueness_migration_reconciles_legacy_duplicates_first():
     assert reconcile < create_index
 
 
-def test_pending_original_revision_also_repairs_before_creating_its_index():
+def test_released_uniqueness_migration_is_not_rewritten_with_data_repairs():
     released = (
         Path(__file__).parents[1]
         / "alembic/versions/20260812_0003_restore_active_prospect_uniqueness.py"
     ).read_text()
 
-    reconcile = released.index("SET duplicate.status = 'inactive'")
-    create_index = released.index("op.create_index(")
-    assert "LOWER(TRIM(email))" in released
-    assert "COALESCE(keeper.created_at" in released
-    assert reconcile < create_index
+    assert "LOWER(TRIM(email))" not in released
+    assert "SET duplicate.status" not in released

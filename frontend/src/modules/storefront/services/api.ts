@@ -259,6 +259,8 @@ export const storefrontService = {
     paymentStatus?: string | undefined;
     paymentMethod?: string | undefined;
     search?: string | undefined;
+    submittedWithinHours?: number | undefined;
+    openOnly?: boolean | undefined;
     page?: number;
     pageSize?: number;
   }): Promise<StoreOrderListResponse> {
@@ -269,6 +271,8 @@ export const storefrontService = {
         payment_status: params?.paymentStatus,
         payment_method: params?.paymentMethod,
         search: params?.search,
+        submitted_within_hours: params?.submittedWithinHours,
+        open_only: params?.openOnly,
         page: params?.page ?? 1,
         page_size: params?.pageSize ?? 25,
       },

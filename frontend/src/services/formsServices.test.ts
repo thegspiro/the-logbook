@@ -6,9 +6,11 @@ const mockPost = vi.fn();
 const mockPatch = vi.fn();
 const mockDelete = vi.fn();
 const mockPerformSharedRefresh = vi.fn();
+const mockHandleExpiredSession = vi.fn();
 
 vi.mock('./apiClient', () => ({
   performSharedRefresh: (...args: unknown[]) => mockPerformSharedRefresh(...args) as unknown,
+  handleExpiredSession: (...args: unknown[]) => mockHandleExpiredSession(...args) as unknown,
   default: {
     get: (...args: unknown[]) => mockGet(...args) as unknown,
     post: (...args: unknown[]) => mockPost(...args) as unknown,
@@ -401,16 +403,15 @@ describe('publicFormsService', () => {
       expect(mockPerformSharedRefresh).not.toHaveBeenCalled();
     });
 
-    it('clears the session marker when authenticated refresh fails', async () => {
+    it('clears an expired session when refresh fails', async () => {
       localStorage.setItem('has_session', '1');
-      const unauthorized = { response: { status: 401 } };
-      const refreshFailure = new Error('refresh expired');
-      mockAxiosPost.mockRejectedValueOnce(unauthorized);
-      mockPerformSharedRefresh.mockRejectedValueOnce(refreshFailure);
+      const refreshError = new Error('refresh expired');
+      mockAxiosPost.mockRejectedValueOnce({ response: { status: 401 } });
+      mockPerformSharedRefresh.mockRejectedValueOnce(refreshError);
 
-      await expect(publicFormsService.submitForm('members-only', {})).rejects.toBe(refreshFailure);
+      await expect(publicFormsService.submitForm('members-only', {})).rejects.toBe(refreshError);
 
-      expect(localStorage.getItem('has_session')).toBeNull();
+      expect(mockHandleExpiredSession).toHaveBeenCalledTimes(1);
       expect(mockAxiosPost).toHaveBeenCalledTimes(1);
     });
   });

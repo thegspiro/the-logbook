@@ -3,7 +3,7 @@
  */
 
 import axios from 'axios';
-import api, { performSharedRefresh } from './apiClient';
+import api, { handleExpiredSession, performSharedRefresh } from './apiClient';
 import type {
   FormsSummary,
   FormsListResponse,
@@ -200,7 +200,7 @@ export const publicFormsService = {
       try {
         await performSharedRefresh();
       } catch (refreshError) {
-        localStorage.removeItem('has_session');
+        handleExpiredSession();
         throw refreshError;
       }
       response = await axios.post<PublicFormSubmissionResponse>(url, payload, publicRequestConfig('POST'));

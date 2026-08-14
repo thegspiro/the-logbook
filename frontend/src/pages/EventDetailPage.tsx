@@ -30,7 +30,7 @@ import { useRSVPForm } from '../hooks/useRSVPForm';
 import { useEventNotifications } from '../hooks/useEventNotifications';
 import { useOverrideAttendance } from '../hooks/useOverrideAttendance';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { Bell, Repeat, CalendarPlus, Clock, ChevronDown, MapPin, StopCircle } from 'lucide-react';
+import { Bell, Repeat, CalendarPlus, CheckCircle, Clock, ChevronDown, MapPin, StopCircle } from 'lucide-react';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
@@ -95,6 +95,7 @@ export const EventDetailPage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEndEventConfirm, setShowEndEventConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [finalizingAttendance, setFinalizingAttendance] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [eligibleMembers, setEligibleMembers] = useState<
     Array<{ id: string; first_name: string; last_name: string; email: string }>
@@ -449,7 +450,7 @@ export const EventDetailPage: React.FC = () => {
     if (!eventId) return;
 
     try {
-      setSubmitting(true);
+      setFinalizingAttendance(true);
       const result = await eventService.finalizeAttendance(eventId);
       if (result.updated_count > 0) {
         toast.success(
@@ -463,7 +464,7 @@ export const EventDetailPage: React.FC = () => {
     } catch (err) {
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to finalize attendance');
     } finally {
-      setSubmitting(false);
+      setFinalizingAttendance(false);
     }
   };
 
@@ -560,6 +561,7 @@ export const EventDetailPage: React.FC = () => {
   }
 
   const isPastEvent = new Date(event.end_datetime) < new Date();
+  const isEventOver = isPastEvent || Boolean(event.actual_end_time);
   const hasStarted = new Date(event.start_datetime) <= new Date();
   const isOngoing = hasStarted && !isPastEvent && !event.is_cancelled && !event.actual_end_time;
   const canRSVP =
@@ -845,6 +847,17 @@ export const EventDetailPage: React.FC = () => {
                       </button>
                     )}
 
+                    {isEventOver && (
+                      <button
+                        onClick={() => void handleFinalizeAttendance()}
+                        disabled={finalizingAttendance}
+                        className="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+                      >
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        {finalizingAttendance ? 'Finalizing...' : 'Finalize Attendance'}
+                      </button>
+                    )}
+
                     {/* "More" dropdown for secondary actions */}
                     <div className="relative" ref={actionsMenuRef}>
                       <button
@@ -889,18 +902,6 @@ export const EventDetailPage: React.FC = () => {
                             >
                               Record Times
                             </button>
-                            {isPastEvent && (
-                              <button
-                                onClick={() => {
-                                  setShowActionsMenu(false);
-                                  void handleFinalizeAttendance();
-                                }}
-                                disabled={submitting}
-                                className="hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm text-emerald-700 disabled:opacity-50 dark:text-emerald-400"
-                              >
-                                Finalize Attendance
-                              </button>
-                            )}
                             <button
                               onClick={() => {
                                 setShowActionsMenu(false);

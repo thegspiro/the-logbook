@@ -1,14 +1,14 @@
 """Store election-wide settings in saved ballot templates.
 
-Revision ID: 20260814_0001
-Revises: 20260813_0011
+Revision ID: 20260814_0002
+Revises: 20260814_0001
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260814_0001"
-down_revision = "20260813_0011"
+revision = "20260814_0002"
+down_revision = "20260814_0001"
 branch_labels = None
 depends_on = None
 
