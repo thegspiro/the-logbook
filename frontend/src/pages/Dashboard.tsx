@@ -228,6 +228,19 @@ const Dashboard: React.FC = () => {
     else next.delete('tab');
     setSearchParams(next, { replace: true });
   };
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    let nextTab: 'department' | 'organization' | null = null;
+    if (event.key === 'Home') nextTab = 'department';
+    else if (event.key === 'End') nextTab = 'organization';
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      nextTab = activeTab === 'department' ? 'organization' : 'department';
+    }
+
+    if (!nextTab) return;
+    event.preventDefault();
+    selectTab(nextTab);
+    window.requestAnimationFrame(() => document.getElementById(`dashboard-tab-${nextTab}`)?.focus());
+  };
 
   useEffect(() => {
     const savedDepartmentName = sessionStorage.getItem('departmentName');
@@ -905,7 +918,9 @@ const Dashboard: React.FC = () => {
                     id={`dashboard-tab-${tab.id}`}
                     aria-selected={activeTab === tab.id}
                     aria-controls={`dashboard-panel-${tab.id}`}
+                    tabIndex={activeTab === tab.id ? 0 : -1}
                     onClick={() => selectTab(tab.id)}
+                    onKeyDown={handleTabKeyDown}
                     className={`focus:ring-theme-focus-ring min-h-[44px] flex-1 rounded-full px-4 text-sm font-semibold transition-colors focus:ring-2 focus:outline-hidden sm:flex-none ${
                       activeTab === tab.id
                         ? 'bg-theme-surface text-theme-text-primary shadow-sm'
@@ -1429,26 +1444,26 @@ const Dashboard: React.FC = () => {
                 <ul className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
                   {deptMessages.slice(0, 4).map((message) => (
                     <li key={message.id} className="bg-theme-surface-secondary rounded-lg p-4">
-                      <button
-                        type="button"
-                        onClick={() => void navigate('/messages')}
-                        className="focus:ring-theme-focus-ring w-full rounded-sm text-left focus:ring-2 focus:outline-hidden"
-                      >
-                        <span className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => void navigate('/messages')}
+                          className="text-theme-text-primary focus:ring-theme-focus-ring flex w-full items-center gap-2 rounded-sm text-left text-sm font-semibold focus:ring-2 focus:outline-hidden"
+                        >
                           {message.is_pinned && (
                             <Pin className="text-theme-accent-yellow h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                           )}
                           <span className="line-clamp-1">{message.title}</span>
-                        </span>
-                        <span className="text-theme-text-secondary mt-1 line-clamp-2 block text-[13px]">
+                        </button>
+                        <p className="text-theme-text-secondary mt-1 line-clamp-2 text-[13px]">
                           <LinkifiedText text={message.body} />
-                        </span>
-                        <span className="text-theme-text-muted mt-2 block text-xs">
+                        </p>
+                        <p className="text-theme-text-muted mt-2 text-xs">
                           {[message.author_name, message.created_at ? formatDate(message.created_at, tz) : '']
                             .filter(Boolean)
                             .join(' · ')}
-                        </span>
-                      </button>
+                        </p>
+                      </div>
                     </li>
                   ))}
                 </ul>

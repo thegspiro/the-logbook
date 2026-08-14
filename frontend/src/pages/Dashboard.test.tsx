@@ -494,5 +494,24 @@ describe('Dashboard', () => {
       expect(await screen.findByRole('tab', { name: 'Organization' })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
     });
+
+    it('supports keyboard navigation between leadership views', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const personalTab = await screen.findByRole('tab', { name: 'My Department' });
+      const organizationTab = screen.getByRole('tab', { name: 'Organization' });
+      expect(personalTab).toHaveAttribute('tabindex', '0');
+      expect(organizationTab).toHaveAttribute('tabindex', '-1');
+
+      personalTab.focus();
+      await user.keyboard('{ArrowRight}');
+
+      expect(organizationTab).toHaveAttribute('aria-selected', 'true');
+      expect(organizationTab).toHaveAttribute('tabindex', '0');
+      expect(personalTab).toHaveAttribute('tabindex', '-1');
+      await waitFor(() => expect(organizationTab).toHaveFocus());
+    });
   });
 });
