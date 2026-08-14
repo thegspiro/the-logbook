@@ -1,5 +1,7 @@
 """Regression tests for active prospect email uniqueness."""
 
+from pathlib import Path
+
 from app.models.membership_pipeline import ProspectiveMember
 
 
@@ -18,3 +20,27 @@ def test_active_prospect_email_has_database_uniqueness_guard():
         "organization_id",
         "active_email",
     ]
+
+
+def test_uniqueness_migration_reconciles_legacy_duplicates_first():
+    migration = (
+        Path(__file__).parents[1]
+        / "alembic/versions/20260814_0002_reconcile_active_prospect_emails.py"
+    ).read_text()
+
+    reconcile = migration.index("SET duplicate.status = 'inactive'")
+    create_index = migration.index("op.create_index(")
+    assert "LOWER(TRIM(email))" in migration
+    assert reconcile < create_index
+
+
+def test_pending_original_revision_also_repairs_before_creating_its_index():
+    released = (
+        Path(__file__).parents[1]
+        / "alembic/versions/20260812_0003_restore_active_prospect_uniqueness.py"
+    ).read_text()
+
+    reconcile = released.index("SET duplicate.status = 'inactive'")
+    create_index = released.index("op.create_index(")
+    assert "LOWER(TRIM(email))" in released
+    assert reconcile < create_index

@@ -38,6 +38,7 @@ describe('DashboardStatCard', () => {
 
     const card = screen.getByRole('button', { name: 'Open standby hours' });
     expect(card).toHaveAttribute('type', 'button');
+    expect(card).toHaveAttribute('data-print');
     card.focus();
     await user.keyboard('{Enter}');
 

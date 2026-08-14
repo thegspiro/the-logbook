@@ -129,6 +129,10 @@ export interface ElectionListItem {
   meeting_id?: string;
   meeting_title?: string;
   meeting_date?: string;
+  is_runoff: boolean;
+  parent_election_id?: string;
+  runoff_round: number;
+  enable_runoffs: boolean;
 }
 
 export interface ElectionCreate {
@@ -493,6 +497,8 @@ export interface SavedBallotTemplate {
   name: string;
   description?: string;
   ballot_items: BallotItem[];
+  voting_method: VotingMethod;
+  allow_write_ins: boolean;
   created_by?: string;
   created_at: string;
   updated_at: string;

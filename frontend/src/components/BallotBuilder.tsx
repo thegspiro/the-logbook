@@ -625,6 +625,8 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
       await electionService.saveBallotTemplate({
         name: savedTemplateName.trim(),
         ballot_items: ballotItems,
+        voting_method: election.voting_method,
+        allow_write_ins: election.allow_write_ins,
       });
       await loadTemplates();
       setSavedTemplateName('');
@@ -641,7 +643,12 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
     // Generate fresh IDs so applying a snapshot never carries identifiers
     // that may already be referenced by this draft's local UI state.
     const items = template.ballot_items.map((item) => ({ ...item, id: generateId() }));
-    if (await saveItems(items)) {
+    if (
+      await saveItems(items, {
+        voting_method: template.voting_method,
+        allow_write_ins: template.allow_write_ins,
+      })
+    ) {
       setShowTemplatePopover(false);
       setPendingSavedTemplateId(null);
       toast.success(`Applied "${template.name}"`);
@@ -660,11 +667,12 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
   };
 
   const saveItems = useCallback(
-    async (items: BallotItem[]) => {
+    async (items: BallotItem[], settings?: Pick<Election, 'voting_method' | 'allow_write_ins'>) => {
       try {
         setSaving(true);
         const updated = await electionService.updateElection(electionId, {
           ballot_items: items,
+          ...settings,
         });
         setBallotItems(items);
         onUpdate(updated);

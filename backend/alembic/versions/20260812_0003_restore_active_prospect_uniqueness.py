@@ -23,6 +23,32 @@ def upgrade() -> None:
     columns = {
         column["name"] for column in inspector.get_columns("prospective_members")
     }
+
+    # This revision may still be pending on an upgrade that contains rows
+    # created while the uniqueness guard was absent. Repair those rows before
+    # creating the index; the later reconciliation revision repeats this for
+    # databases that had already stamped this revision before the repair was
+    # published.
+    op.execute(
+        sa.text(
+            "UPDATE prospective_members SET email = LOWER(TRIM(email)) "
+            "WHERE email IS NOT NULL"
+        )
+    )
+    op.execute(
+        sa.text(
+            "UPDATE prospective_members AS duplicate "
+            "JOIN prospective_members AS keeper "
+            "  ON keeper.organization_id = duplicate.organization_id "
+            " AND keeper.status = 'active' "
+            " AND duplicate.status = 'active' "
+            " AND keeper.email = duplicate.email "
+            " AND (keeper.created_at < duplicate.created_at "
+            "      OR (keeper.created_at = duplicate.created_at "
+            "          AND keeper.id < duplicate.id)) "
+            "SET duplicate.status = 'inactive'"
+        )
+    )
     if "active_email" not in columns:
         op.execute(
             "ALTER TABLE prospective_members "

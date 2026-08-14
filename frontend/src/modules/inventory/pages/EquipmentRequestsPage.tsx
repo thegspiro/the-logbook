@@ -75,6 +75,14 @@ const EquipmentRequestsPage: React.FC = () => {
     void loadRequests();
   }, [loadRequests]);
 
+  useEffect(() => {
+    // A review/delete can remove the only row on the current page. Return to
+    // the new last page instead of leaving the user on an empty stale offset.
+    if (page > 0 && page * pageSize >= total) {
+      setPage(Math.max(0, Math.ceil(total / pageSize) - 1));
+    }
+  }, [page, total]);
+
   const handleReview = async (decision: 'approved' | 'denied') => {
     if (!reviewModal.request) return;
     setSubmitting(true);
