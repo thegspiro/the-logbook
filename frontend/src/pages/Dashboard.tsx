@@ -1011,7 +1011,7 @@ const Dashboard: React.FC = () => {
                   </span>
                   <button
                     onClick={() => void navigate('/scheduling')}
-                    className="text-theme-accent-red ml-auto inline-flex shrink-0 items-center gap-1 py-2 pl-2 text-sm font-semibold lg:ml-4"
+                    className="text-theme-accent-red ml-auto inline-flex min-h-11 shrink-0 items-center gap-1 py-2 pl-2 text-sm font-semibold lg:ml-4"
                   >
                     Full Schedule
                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -1181,7 +1181,7 @@ const Dashboard: React.FC = () => {
                 <div className="border-theme-surface-border bg-theme-surface-secondary border-t px-4 py-2">
                   <button
                     onClick={() => void navigate('/notifications?tab=inbox')}
-                    className="text-theme-accent-red inline-flex items-center gap-1 py-1 text-[13px] font-semibold"
+                    className="text-theme-accent-red inline-flex min-h-11 items-center gap-1 py-1 text-[13px] font-semibold"
                   >
                     Older Items
                     <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1198,7 +1198,7 @@ const Dashboard: React.FC = () => {
                     </h3>
                     <button
                       onClick={() => void navigate('/training/my-training')}
-                      className="text-theme-accent-red inline-flex items-center gap-1 py-1 text-[13px] font-semibold"
+                      className="text-theme-accent-red inline-flex min-h-11 items-center gap-1 py-1 text-[13px] font-semibold"
                     >
                       View All
                       <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1291,7 +1291,7 @@ const Dashboard: React.FC = () => {
                     </h3>
                     <button
                       onClick={() => void navigate('/inventory/my-equipment')}
-                      className="text-theme-accent-red inline-flex items-center gap-1 py-1 text-[13px] font-semibold"
+                      className="text-theme-accent-red inline-flex min-h-11 items-center gap-1 py-1 text-[13px] font-semibold"
                     >
                       View All
                       <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
