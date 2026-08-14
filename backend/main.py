@@ -474,7 +474,9 @@ def _cleanup_duplicate_revisions(versions_dir):
             logger.debug(f"Could not remove versions __pycache__: {e}")
 
     revision_re = re.compile(r"^revision\b.*?=\s*['\"](.+?)['\"]", re.MULTILINE)
-    down_revision_re = re.compile(r"^down_revision\b.*?=\s*(.+)$", re.MULTILINE)
+    down_revision_re = re.compile(
+        r"^down_revision\b.*?=\s*(.+?)(?=^\w|\Z)", re.MULTILINE | re.DOTALL
+    )
 
     def parse_down_revisions(content):
         """Return every parent from string and tuple Alembic declarations."""
