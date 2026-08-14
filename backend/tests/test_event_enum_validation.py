@@ -52,6 +52,20 @@ class TestEventEnumValidation:
     def test_update_allows_omitted(self):
         assert EventUpdate(title="x").event_type is None
 
+    @pytest.mark.parametrize(
+        "field", ["check_in_minutes_before", "check_in_minutes_after"]
+    )
+    def test_event_rejects_negative_check_in_windows(self, field):
+        with pytest.raises(ValidationError):
+            _event(**{field: -1})
+
+    @pytest.mark.parametrize(
+        "field", ["check_in_minutes_before", "check_in_minutes_after"]
+    )
+    def test_update_rejects_negative_check_in_windows(self, field):
+        with pytest.raises(ValidationError):
+            EventUpdate(**{field: -1})
+
     def test_template_rejects_bad_type(self):
         with pytest.raises(ValidationError):
             EventTemplateCreate(name="X", event_type="bogus")

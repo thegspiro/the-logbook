@@ -192,10 +192,16 @@ class EventBase(BaseModel):
         default="flexible", description="Check-in window type: flexible, strict, window"
     )
     check_in_minutes_before: Optional[int] = Field(
-        default=60, description="Minutes before event start to allow check-in"
+        default=60,
+        ge=0,
+        le=1440,
+        description="Minutes before event start to allow check-in",
     )
     check_in_minutes_after: Optional[int] = Field(
-        default=15, description="For 'window' type: minutes after event start"
+        default=15,
+        ge=0,
+        le=1440,
+        description="For 'window' type: minutes after event start",
     )
     require_checkout: bool = Field(
         default=False, description="Require manual check-out"
@@ -277,8 +283,8 @@ class EventUpdate(BaseModel):
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
     check_in_window_type: Optional[str] = None
-    check_in_minutes_before: Optional[int] = None
-    check_in_minutes_after: Optional[int] = None
+    check_in_minutes_before: Optional[int] = Field(None, ge=0, le=1440)
+    check_in_minutes_after: Optional[int] = Field(None, ge=0, le=1440)
     require_checkout: Optional[bool] = None
     allow_guest_check_in: Optional[bool] = None
     guest_check_in_creates_prospect: Optional[bool] = None
