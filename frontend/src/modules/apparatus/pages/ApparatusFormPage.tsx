@@ -10,15 +10,33 @@ import { Truck, Save, ArrowLeft, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useRanks } from '@/hooks/useRanks';
+import { POSITION_LABELS } from '@/constants/enums';
 import { useApparatusStore } from '../store/apparatusStore';
 import { apparatusService, evocLevelService } from '../services/api';
 import type { ApparatusCreate, ApparatusUpdate, EvocLevel, FuelType } from '../types';
+
+const CREW_POSITION_CODES = [
+  'officer',
+  'driver',
+  'firefighter',
+  'ems',
+  'captain',
+  'lieutenant',
+  'probationary',
+  'volunteer',
+  'other',
+] as const;
 
 export const ApparatusFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
   const { ranks, loading: ranksLoading } = useRanks();
+  const crewPositionOptions = CREW_POSITION_CODES.map((code) => ({
+    code,
+    label: POSITION_LABELS[code] ?? code,
+    eligibleRanks: ranks.filter((rank) => rank.eligible_positions?.includes(code)).map((rank) => rank.display_name),
+  }));
 
   const {
     currentApparatus,
@@ -596,22 +614,25 @@ export const ApparatusFormPage: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   {(formData.crewPositions ?? []).map((position, index) => {
-                    const isLegacyPosition = position !== '' && !ranks.some((rank) => rank.rank_code === position);
+                    const isLegacyPosition =
+                      position !== '' &&
+                      !CREW_POSITION_CODES.includes(position as (typeof CREW_POSITION_CODES)[number]);
                     return (
                       <div key={`${index}-${position}`} className="flex items-center gap-2">
                         <span className="text-theme-text-muted w-6 text-right text-xs">{index + 1}.</span>
                         <select
-                          aria-label={`Crew seat ${index + 1} rank`}
+                          aria-label={`Crew seat ${index + 1} position`}
                           value={position}
                           onChange={(event) => updateCrewPosition(index, event.target.value)}
                           className="form-input flex-1"
                           disabled={ranksLoading}
                         >
-                          <option value="">Select a rank</option>
+                          <option value="">Select a crew position</option>
                           {isLegacyPosition && <option value={position}>{position} (legacy position)</option>}
-                          {ranks.map((rank) => (
-                            <option key={rank.id} value={rank.rank_code}>
-                              {rank.display_name}
+                          {crewPositionOptions.map((option) => (
+                            <option key={option.code} value={option.code}>
+                              {option.label}
+                              {option.eligibleRanks.length > 0 ? ` — ${option.eligibleRanks.join(', ')}` : ''}
                             </option>
                           ))}
                         </select>
@@ -628,13 +649,13 @@ export const ApparatusFormPage: React.FC = () => {
                   })}
                   {(formData.crewPositions ?? []).length === 0 && (
                     <p className="border-theme-surface-border text-theme-text-muted rounded-lg border border-dashed px-3 py-2 text-sm">
-                      No crew seats configured. Add a seat to assign one of your department ranks.
+                      No crew seats configured. Add a seat to select a position backed by your department ranks.
                     </p>
                   )}
                 </div>
                 <p className="text-theme-text-muted mt-1 text-xs">
-                  Select ranks in riding order. Add the same rank more than once for repeated seats; these positions are
-                  imported into shifts.
+                  Select positions in riding order. Each option shows the configured ranks eligible to fill it. Add the
+                  same position more than once for repeated seats; these positions are imported into shifts.
                 </p>
               </div>
               <div>
