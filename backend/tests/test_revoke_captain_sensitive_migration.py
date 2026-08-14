@@ -8,10 +8,10 @@ import sqlalchemy as sa
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
 
-MIGRATION = (
-    Path(__file__).resolve().parents[1]
-    / "alembic/versions/20260814_0002_revoke_captain_facilities_view_sensitive.py"
-)
+VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+MATCHES = sorted(VERSIONS.glob("*_revoke_captain_facilities_view_sensitive.py"))
+assert len(MATCHES) == 1, f"expected exactly one corrective migration, found {MATCHES}"
+MIGRATION = MATCHES[0]
 PERMISSION = "facilities.view_sensitive"
 
 
@@ -60,6 +60,9 @@ def test_upgrade_revokes_only_the_system_captain_grant():
             ],
         )
 
+    _run(engine)
+    # Startup can retry migrations after an interrupted deployment. Applying
+    # the data correction again must not disturb the remaining permissions.
     _run(engine)
 
     with engine.connect() as connection:
