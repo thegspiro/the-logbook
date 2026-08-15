@@ -948,7 +948,7 @@ Events support three check-in window modes that control when QR and manual check
 
 | Window Type            | Check-In Opens                                                 | Check-In Closes                                                                 |
 | ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| **Flexible** (default) | N minutes before event start (default 30)                      | When the event ends (uses actual end time if recorded, otherwise scheduled end) |
+| **Flexible** (default) | N minutes before event start (default 60)                      | When the event ends (uses actual end time if recorded, otherwise scheduled end) |
 | **Strict**             | At exact event start time (uses actual start time if recorded) | At exact event end time (uses actual end time if recorded)                      |
 | **Window**             | N minutes before start (default 15)                            | N minutes after end (default 15)                                                |
 
@@ -1460,4 +1460,61 @@ This replaces the previous workaround of reusing the `sendBallotEmail` endpoint 
 
 ## August 12–14, 2026 update
 
-Event outreach-form discovery, configured membership tiers, and early-end attendance behavior from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#events-and-outreach-forms), including the required event-admin screenshot.
+Event outreach-form discovery, configured membership tiers, and early-end attendance behavior from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#events-reminders-check-in-and-outreach-forms), including the required event-admin screenshot.
+
+## Reminder Audience and One-Hour Check-In Default (August 14, 2026)
+
+Event and event-template forms now separate **when** reminders are sent from
+**who** receives them. In **Notifications → Who should receive reminders?**,
+choose:
+
+| Choice | In-app reminder audience | Email behavior |
+| --- | --- | --- |
+| **Members who sign up** | Active members whose RSVP is `going` | Email follows each recipient's event-notification preference |
+| **All active members** | Every active member in the event's organization | Email follows each recipient's event-notification preference |
+| **No reminders** | Nobody; saving also disables scheduled reminders | No reminder email |
+
+New optional events and templates default to **Members who sign up**. New
+mandatory events default to **All active members** unless the organizer has
+already selected an audience. Legacy records that do not yet have a stored
+value resolve the same way: mandatory → all, optional → going. Copying an event,
+creating recurring children, or extending a series preserves the chosen
+audience without sharing the source record's mutable JSON.
+
+> **[SCREENSHOT NEEDED — Create Event → Notifications with all three “Who should receive reminders?” choices visible; seed an optional event and caption that “Members who sign up” is its default.]**
+>
+> **[SCREENSHOT NEEDED — mandatory-event form after the Mandatory switch is enabled, showing “All active members”; then show a template with its independently saved audience.]**
+
+### Check-in lead time
+
+A new Flexible event opens member self-check-in **60 minutes before** the
+scheduled start and closes at the actual end time when recorded, otherwise the
+scheduled end. Organizers can set another non-negative lead time. Strict still
+opens at the actual/scheduled start; Window still defaults to 15 minutes before
+and after. When an earlier meeting overlaps the standard lead time, the create
+flow may shorten the new event's lead time to 15 minutes rather than opening
+check-in during the prior meeting.
+
+A member arriving before a Flexible window may be admitted with an informational
+notice so an officer can correct the time later. Strict/Window early arrivals
+remain blocked, and anonymous guest check-in remains blocked until the configured
+window because an unidentified early entry cannot be corrected reliably.
+
+**Edge cases**
+
+- Changing Mandatory automatically selects **All active members** only until the
+  organizer edits the audience; an explicit choice is never silently overwritten.
+- `none` disables reminder delivery even if old reminder hours remain in stored
+  data; re-enabling requires an audience plus schedule.
+- “All active members” never crosses organizations and excludes inactive users.
+- “Members who sign up” means `going`, not `maybe`, waitlisted, declined, or no
+  response.
+- Reminder email remains preference-aware; selecting an audience is not a
+  delivery guarantee.
+- Actual start/end timestamps override scheduled boundaries where the selected
+  check-in mode calls for them; all displayed opening times use the organization
+  timezone.
+
+> **[SCREENSHOT NEEDED — Check-In Settings showing Flexible and 60 minutes before; caption Strict and Window differences rather than implying 60 applies to every mode.]**
+>
+> **[SCREENSHOT NEEDED — early Flexible member notice with the localized official opening time; do not use a guest account for this capture.]**

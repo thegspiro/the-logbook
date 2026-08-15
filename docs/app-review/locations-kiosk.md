@@ -98,7 +98,7 @@ check_in_end = event.actual_end_time or event.end_datetime
 
 **Impact:** the canonical window is `EventService._get_check_in_window`, and it
 is **per-event configurable**: `check_in_window_type` (FLEXIBLE / STRICT) and
-`check_in_minutes_before`, which defaults to **30 minutes**. So this copy was
+`check_in_minutes_before`, which defaults to **60 minutes**. So this copy was
 wrong in two distinct ways — it opened the window **twice as early** as the
 default for FLEXIBLE events, and for a STRICT event it ignored the rule entirely
 (STRICT opens at `actual_start_time`, not "start minus an hour"). A display

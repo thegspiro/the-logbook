@@ -2360,7 +2360,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_mandatory` | BOOL | no |  | `0` |  |
 | `allow_guests` | BOOL | no |  | `0` |  |
 | `check_in_window_type` | ENUM(`flexible`, `strict`, `window`) | yes |  |  |  |
-| `check_in_minutes_before` | INTEGER | yes |  | `30` |  |
+| `check_in_minutes_before` | INTEGER | yes |  | `60` |  |
 | `check_in_minutes_after` | INTEGER | yes |  | `15` |  |
 | `require_checkout` | BOOL | no |  | `0` |  |
 | `send_reminders` | BOOL | no |  | `1` |  |
@@ -2406,7 +2406,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `send_reminders` | BOOL | no |  | `1` |  |
 | `reminder_schedule` | JSON | no |  | generated |  |
 | `check_in_window_type` | ENUM(`flexible`, `strict`, `window`) | no |  | `flexible` |  |
-| `check_in_minutes_before` | INTEGER | yes |  | `30` |  |
+| `check_in_minutes_before` | INTEGER | yes |  | `60` |  |
 | `check_in_minutes_after` | INTEGER | yes |  | `15` |  |
 | `require_checkout` | BOOL | no |  | `0` |  |
 | `allow_guest_check_in` | BOOL | no |  | `0` |  |

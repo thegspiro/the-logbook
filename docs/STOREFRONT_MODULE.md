@@ -567,7 +567,7 @@ the UPDATE. See CLAUDE.md pitfall 12.
 The admin dashboard now consumes organization-scoped activity and status counts
 from the storefront summary response and applies the same status vocabulary to
 order-list filters. `show_store_open_banner` is persisted in store settings and
-controls navigation/banner presentation. Members may PATCH the payment method
+controls navigation/banner presentation. Members may PATCH `/api/v1/store/orders/mine/{order_id}/payment-method`
 on their own order; this records an external method and does not settle payment.
 Canonical product locks prevent option/variant spellings from creating distinct
 locks. Notification and test-send responses never include recipient addresses.

@@ -184,9 +184,9 @@ Coordinators can link upcoming department events to individual applicants in the
 ### API Endpoints
 
 ```
-GET    /api/v1/membership-pipeline/prospects/{id}/events       # List linked events
-POST   /api/v1/membership-pipeline/prospects/{id}/events       # Link an event
-DELETE /api/v1/membership-pipeline/prospects/{id}/events/{eid}  # Unlink an event
+GET    /api/v1/prospective-members/prospects/{id}/events       # List linked events
+POST   /api/v1/prospective-members/prospects/{id}/events       # Link an event
+DELETE /api/v1/prospective-members/prospects/{id}/events/{eid}  # Unlink an event
 ```
 
 ### Edge Cases
@@ -521,7 +521,7 @@ The `useProspectiveMembersStore` manages all module state:
 | `GET`   | `/api/v1/prospective-members/applicants/{id}`                  | `view`     | Get applicant details                        |
 | `PATCH` | `/api/v1/prospective-members/applicants/{id}`                  | `manage`   | Update applicant                             |
 | `POST`  | `/api/v1/prospective-members/applicants/{id}/advance`          | `manage`   | Advance to next stage                        |
-| `POST`  | `/api/v1/membership-pipeline/prospects/{id}/regress`           | `manage`   | Move back to previous stage                  |
+| `POST`  | `/api/v1/prospective-members/prospects/{id}/regress`           | `manage`   | Move back to previous stage                  |
 | `POST`  | `/api/v1/prospective-members/applicants/{id}/hold`             | `manage`   | Put on hold                                  |
 | `POST`  | `/api/v1/prospective-members/applicants/{id}/reject`           | `manage`   | Reject applicant                             |
 | `POST`  | `/api/v1/prospective-members/applicants/{id}/withdraw`         | `manage`   | Withdraw applicant from pipeline             |
@@ -574,12 +574,12 @@ prefix is `/prospective-members`, so the full paths are as shown.
 
 > The endpoint tables above are the module's design sketch and use
 > `/applicants` paths. The **shipped** router is
-> `/api/v1/membership-pipeline` and addresses applicants as `/prospects`. The
+> `/api/v1/prospective-members` and addresses applicants as `/prospects`. The
 > endpoints in this section are verified against the code.
 
 ### The Kanban Board Endpoint
 
-`GET /api/v1/membership-pipeline/pipelines/{pipeline_id}/kanban`
+`GET /api/v1/prospective-members/pipelines/{pipeline_id}/kanban`
 (`prospective_members.view` | `prospective_members.manage`)
 
 **It now declares a response model.** It previously returned a bare `dict`, so
@@ -621,8 +621,8 @@ Past the 200 ceiling the board **states how many applicants it is not showing**.
 
 | Method | Path                                                 | Permission                                       | Description                               |
 | ------ | ---------------------------------------------------- | ------------------------------------------------ | ----------------------------------------- |
-| `POST` | `/api/v1/membership-pipeline/prospects/bulk-advance` | `members.manage` \| `prospective_members.manage` | Advance several applicants in one request |
-| `POST` | `/api/v1/membership-pipeline/prospects/bulk-status`  | `members.manage` \| `prospective_members.manage` | Set status on several applicants          |
+| `POST` | `/api/v1/prospective-members/prospects/bulk-advance` | `members.manage` \| `prospective_members.manage` | Advance several applicants in one request |
+| `POST` | `/api/v1/prospective-members/prospects/bulk-status`  | `members.manage` \| `prospective_members.manage` | Set status on several applicants          |
 
 Before these existed the UI looped client-side, one request per applicant,
 sequentially, discarding every error. Thirty selected applicants meant thirty
@@ -798,7 +798,7 @@ Coordinators can move a prospect back to the previous pipeline stage using the "
 ### API
 
 ```
-POST /api/v1/membership-pipeline/prospects/{prospect_id}/regress
+POST /api/v1/prospective-members/prospects/{prospect_id}/regress
 Body: { "notes": "optional reason" }
 Response: ProspectResponse
 ```
