@@ -2268,7 +2268,12 @@ class InventoryService:
                     "condition": a.item.condition.value,
                     "assigned_date": a.assigned_date,
                     "category_name": a.item.category.name if a.item.category else None,
-                    "quantity": a.item.quantity,
+                    # ItemAssignment has no per-assignment quantity column: a
+                    # permanent assignment is one physical unit (serialized
+                    # gear). a.item.quantity is the catalog's on-hand stock,
+                    # which inflated dashboard counts — one assignment of an
+                    # item with 50 units in stock displayed as 50.
+                    "quantity": 1,
                 }
                 for a in assignments
             ],
