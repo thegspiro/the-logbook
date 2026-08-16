@@ -238,8 +238,15 @@ class LocationService:
         from app.services.event_service import EventService
 
         now = datetime.now(timezone.utc)
-        # Generous prefilter to bound the rows; the exact window is applied below.
-        prefilter_horizon = now + timedelta(hours=1)
+        # Generous prefilter to bound the rows; the exact window is applied
+        # below. The horizon must cover the maximum configurable check-in lead
+        # (check_in_minutes_before validates up to 1440 = 24h), otherwise a
+        # FLEXIBLE event opening check-in more than an hour early is
+        # check-in-open via direct check-in but invisible on the kiosk until
+        # T-60 — the same LOC-1 drift again. The wider horizon only enlarges
+        # the candidate set (a bounded per-location slice of upcoming events);
+        # the canonical per-event window below still filters precisely.
+        prefilter_horizon = now + timedelta(hours=24)
 
         query = (
             select(Event)
