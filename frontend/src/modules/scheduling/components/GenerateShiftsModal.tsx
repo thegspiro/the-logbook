@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { X, RefreshCw, Play } from 'lucide-react';
@@ -13,6 +14,8 @@ interface GenerateShiftsModalProps {
 }
 
 const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClose, pattern }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
+
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -46,7 +49,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="generate-modal-title"
@@ -54,7 +57,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal w-full max-w-md rounded-lg">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="generate-modal-title" className="text-theme-text-primary text-xl font-bold">
             Generate Shifts
@@ -70,7 +73,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
           }}
           className="space-y-4 p-6"
         >
-          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3">
+          <div className="card p-3">
             <p className="text-theme-text-muted text-sm">Pattern</p>
             <p className="text-theme-text-primary font-medium">{pattern.name}</p>
             <p className="text-theme-text-muted mt-1 text-xs">

@@ -499,10 +499,7 @@ const EventRequestsTab: React.FC = () => {
               const taskProgress = getTaskProgress(req.task_completions);
 
               return (
-                <div
-                  key={req.id}
-                  className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border"
-                >
+                <div key={req.id} className="card overflow-hidden">
                   {/* Summary row */}
                   <button
                     onClick={() => void toggleExpand(req.id)}
@@ -635,7 +632,7 @@ const EventRequestsTab: React.FC = () => {
                           </div>
 
                           {/* Assignment */}
-                          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+                          <div className="card p-4">
                             <div className="mb-2 flex items-center justify-between">
                               <h4 className="text-theme-text-secondary flex items-center gap-2 text-sm font-semibold tracking-wider uppercase">
                                 <UserCheck className="h-4 w-4" />
@@ -681,7 +678,7 @@ const EventRequestsTab: React.FC = () => {
                           </div>
 
                           {/* Date preferences */}
-                          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+                          <div className="card p-4">
                             <h4 className="text-theme-text-secondary mb-2 text-sm font-semibold tracking-wider uppercase">
                               Date Preference
                             </h4>
@@ -731,7 +728,7 @@ const EventRequestsTab: React.FC = () => {
                             <h4 className="text-theme-text-secondary mb-2 text-sm font-semibold tracking-wider uppercase">
                               Description
                             </h4>
-                            <p className="text-theme-text-primary bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-sm whitespace-pre-wrap">
+                            <p className="card text-theme-text-primary p-3 text-sm whitespace-pre-wrap">
                               {expandedDetail.description}
                             </p>
                           </div>
@@ -741,7 +738,7 @@ const EventRequestsTab: React.FC = () => {
                               <h4 className="text-theme-text-secondary mb-2 text-sm font-semibold tracking-wider uppercase">
                                 Special Requests
                               </h4>
-                              <p className="text-theme-text-primary bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-sm whitespace-pre-wrap">
+                              <p className="card text-theme-text-primary p-3 text-sm whitespace-pre-wrap">
                                 {expandedDetail.special_requests}
                               </p>
                             </div>
@@ -809,7 +806,7 @@ const EventRequestsTab: React.FC = () => {
 
                           {/* Send email template */}
                           {emailTemplates.length > 0 && isActiveStatus(expandedDetail.status) && (
-                            <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3">
+                            <div className="card p-3">
                               <h4 className="text-theme-text-secondary mb-2 flex items-center gap-2 text-sm font-semibold tracking-wider uppercase">
                                 <Mail className="h-4 w-4" />
                                 Send Email
@@ -930,7 +927,7 @@ const EventRequestsTab: React.FC = () => {
 
                               {/* Schedule form */}
                               {showScheduleForm && (
-                                <div className="bg-theme-surface space-y-3 rounded-lg border border-purple-200 p-4 dark:border-purple-500/30">
+                                <div className="card space-y-3 border-purple-200 p-4 dark:border-purple-500/30">
                                   <h5 className="text-sm font-semibold text-purple-700 dark:text-purple-400">
                                     Schedule Event
                                   </h5>
@@ -1003,7 +1000,7 @@ const EventRequestsTab: React.FC = () => {
 
                               {/* Postpone form */}
                               {showPostponeForm && (
-                                <div className="bg-theme-surface space-y-3 rounded-lg border border-orange-200 p-4 dark:border-orange-500/30">
+                                <div className="card space-y-3 border-orange-200 p-4 dark:border-orange-500/30">
                                   <h5 className="text-sm font-semibold text-orange-700 dark:text-orange-400">
                                     Postpone Event
                                   </h5>

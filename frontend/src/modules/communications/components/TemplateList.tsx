@@ -259,7 +259,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter templates..."
-            className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-focus-ring w-full rounded-md border py-1.5 pr-2 pl-7 text-xs focus:outline-hidden"
+            className="form-input py-1.5 pr-2 pl-7 text-xs"
           />
         </div>
       )}

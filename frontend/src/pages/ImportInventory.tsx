@@ -188,7 +188,7 @@ const ImportInventory: React.FC = () => {
 
         {/* File Upload */}
         {!importResult && (
-          <div className="bg-theme-surface border-theme-surface-border mb-8 rounded-lg border p-8">
+          <div className="card mb-8 p-8">
             <h2 className="text-theme-text-primary mb-4 font-bold">Step 1: Upload CSV File</h2>
 
             <div
@@ -241,7 +241,7 @@ const ImportInventory: React.FC = () => {
 
         {/* Preview */}
         {previewData.length > 0 && !importResult && (
-          <div className="bg-theme-surface border-theme-surface-border mb-8 rounded-lg border p-8">
+          <div className="card mb-8 p-8">
             <h2 className="text-theme-text-primary mb-4 font-bold">Step 2: Preview Data</h2>
             <p className="text-theme-text-secondary mb-4 text-sm">
               Showing first {previewData.length} of {totalRows} item{totalRows === 1 ? '' : 's'} from the file
@@ -318,7 +318,7 @@ const ImportInventory: React.FC = () => {
 
         {/* Import Results */}
         {importResult && (
-          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-8">
+          <div className="card p-8">
             <div className="mb-6 text-center">
               <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-700 dark:text-green-400" />
               <h2 className="text-theme-text-primary mb-2 text-2xl font-bold">Import Complete!</h2>

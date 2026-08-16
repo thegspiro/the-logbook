@@ -212,9 +212,7 @@ const InputField: React.FC<{
       onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 focus:outline-hidden ${
-        error ? 'border-theme-accent-red' : 'border-theme-surface-border'
-      }`}
+      className={`form-input px-3 focus:border-transparent ${error ? 'border-theme-accent-red' : 'border-theme-surface-border'}`}
       aria-required={required}
       aria-invalid={!!error}
     />
@@ -242,9 +240,7 @@ const SelectField: React.FC<{
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`bg-theme-surface-secondary text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 focus:outline-hidden ${
-        error ? 'border-theme-accent-red' : 'border-theme-surface-border'
-      }`}
+      className={`form-input px-3 focus:border-transparent ${error ? 'border-theme-accent-red' : 'border-theme-surface-border'}`}
       aria-required={required}
       aria-invalid={!!error}
     >

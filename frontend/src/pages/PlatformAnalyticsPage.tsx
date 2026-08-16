@@ -123,7 +123,7 @@ const PlatformAnalyticsPage: React.FC = () => {
             onClick={() => {
               void loadData();
             }}
-            className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium"
+            className="btn-secondary text-theme-text-secondary flex items-center gap-2 text-sm font-medium"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -132,7 +132,7 @@ const PlatformAnalyticsPage: React.FC = () => {
             onClick={() => {
               void exportData();
             }}
-            className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-400"
+            className="btn-secondary flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400"
           >
             <Download className="h-4 w-4" />
             Export

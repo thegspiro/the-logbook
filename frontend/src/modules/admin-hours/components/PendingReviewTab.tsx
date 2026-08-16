@@ -337,7 +337,7 @@ const PendingReviewTab: React.FC = () => {
                         <>
                           <button
                             onClick={() => startEditEntry(entry)}
-                            className="text-theme-text-secondary bg-theme-surface-secondary hover:bg-theme-surface-hover border-theme-surface-border flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm transition"
+                            className="card-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 px-3 py-1.5 text-sm transition"
                           >
                             <Pencil className="h-3.5 w-3.5" /> Edit
                           </button>

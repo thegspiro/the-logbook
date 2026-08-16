@@ -746,6 +746,71 @@
   }
 }
 
+/* --- Modals & Overlays --- */
+@utility modal-overlay {
+  /* The scrim behind a dialog. This lived at the call site and had drifted into
+     two different opacities for the same thing (bg-black/50 at 43 sites,
+     bg-black/60 at 47); it settles here on the shared <Modal> component's /50.
+     Layout — flex centring, padding, a raised z-index for a dialog stacked over
+     another — stays at the call site. */
+  @apply fixed inset-0 z-50 bg-black/50;
+}
+
+@utility modal-panel {
+  /* The dialog surface itself. Hand-rolled copies disagreed about whether the
+     panel carried a border (60 sites) or an elevation (46); it carries both.
+     Width caps (max-w-*) and scroll behaviour (see modal-body) are per-dialog
+     and stay at the call site. */
+  @apply bg-theme-surface-modal border-theme-surface-border rounded-lg border shadow-xl;
+}
+
+@utility modal-header {
+  /* The standard dialog header block, as rendered by components/Modal.tsx. The
+     same string was copied into nine sibling modals verbatim. */
+  @apply bg-theme-surface-modal px-4 pt-5 pb-4;
+  @media (min-width: 640px) {
+    padding: 1.5rem 1.5rem 1rem;
+  }
+}
+
+@utility modal-header-sticky {
+  /* Header that stays put while a tall dialog body scrolls under it. Padding is
+     per-dialog and stays at the call site. */
+  @apply bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b;
+}
+
+@utility modal-footer-sticky {
+  /* Pinned action bar for a scrolling dialog. action-bar-safe is what keeps the
+     buttons clear of the iPhone home indicator — the reason this must not be
+     re-typed per page, since dropping it is invisible on a desktop browser. */
+  @apply bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t;
+}
+
+@utility popover-panel {
+  /* Floating surface anchored to a trigger — dropdown menus, autocomplete
+     results, action menus. Shares the modal surface token but is deliberately
+     NOT modal-panel: a popover is dismissed by clicking away and must not take
+     the focus trap, scroll lock or dialog semantics a dialog needs. */
+  @apply bg-theme-surface-modal border-theme-surface-border rounded-lg border shadow-lg;
+}
+
+/* --- Drag & Drop Surfaces --- */
+@utility drop-surface {
+  /* Resting state of a droppable target — kanban columns and reorderable rows. */
+  @apply bg-theme-input-bg border-theme-surface-border rounded-lg border transition-all;
+}
+
+@utility drop-surface-active {
+  /* Pointer is over a valid drop target. Shared with FileDropzone, which keeps
+     its own dashed resting border but signals acceptance the same way. */
+  @apply border-red-500 bg-red-500/5;
+}
+
+@utility drop-surface-dragging {
+  /* The row currently being dragged, as distinct from the target under it. */
+  @apply bg-theme-surface border-red-500/50 opacity-50;
+}
+
 @utility shimmer-skeleton {
   /* #13 Shimmer effect skeleton loader */
   background: linear-gradient(90deg, var(--surface-hover) 25%, var(--surface-secondary) 50%, var(--surface-hover) 75%);
