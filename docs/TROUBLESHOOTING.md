@@ -8629,9 +8629,24 @@ It prints both `.env` lines already filled in, in the exact encoding each consum
 
 ### Problem: The public form, ballot voting or application-status page renders white-on-white
 
-**Status (Fixed):** The dark-mode surface tokens are **translucent white** (`--surface-bg` is white/10, `--surface-secondary` is white/5) by design — they composite over `AppLayout`'s gradient. Public routes sit **outside** `AppLayout`, so those tokens composited over the browser's bare white canvas: a white page with white-on-white labels and slate-800 inputs. `body` now carries the themed gradient so no route can render over the browser's default canvas, and `/f/:slug`, ballot voting and `/application-status/:token` use the same gradient utility as `LoginPage`.
+**Status (Fixed):** The dark-mode surface tokens are **translucent white** (`--surface-bg` is white/10, `--surface-secondary` is white/5) by design — they composite over `AppLayout`'s gradient. Public routes sit **outside** `AppLayout`, so those tokens composited over the browser's bare white canvas: a white page with white-on-white labels and slate-800 inputs. The themed gradient now sits on the **root element (`html`)** so no route can render over the browser's default canvas, and `/f/:slug`, ballot voting and `/application-status/:token` use the same gradient utility as `LoginPage`.
 
-**Edge Case:** Print styles already force a white body background, so printed output is unaffected. **Any new public route must use the gradient utility, not `bg-theme-surface-secondary`** — the token is correct only inside `AppLayout`.
+> **Updated 2026-08-15 — the canvas moved from `body` to `html`.** The first fix
+> painted `body`, which left one strip unpainted: `scrollbar-gutter: stable`
+> reserves its gutter on `html`, **outside the body box**, so in dark mode a
+> bright seam ran down the right edge of every page. The root owns the canvas
+> because the root owns the gutter, and `scrollbar-gutter` now folds into the same
+> rule. Painting the gutter a flat fallback colour was the alternative and was
+> rejected — it trades the seam for a different seam beside the gradient.
+
+**Edge Case:** `overscroll-behavior: none` deliberately stayed on `body` — iOS bounce suppression is a body concern, not a canvas one. **Any new public route must use the gradient utility, not `bg-theme-surface-secondary`** — the token is correct only inside `AppLayout`.
+
+> **Follow-up, 2026-08-16 — moving the canvas broke two things, both since fixed.** CSS propagates a `body` background to the window **only** while the root's `background-image` is `none` and its `background-color` is `transparent`. Once `html` is painted, nothing on `body` propagates, and two things were relying on that:
+>
+> 1. **Six in-app print routes lost their screen backdrop.** Each injected `@media screen { body { background: #f3f4f6 } }` for a grey "desk" behind a white sheet, which then painted the body box alone while the app gradient framed it. They now render `components/print/PrintPageStyles`, which marks the root so the `html.print-preview` rule in `index.css` supplies the desk. (`InventoryBarcodePrintPage` / `LabelPrintPage` were never affected — they `document.write` into a fresh iframe, so the app stylesheet never reaches them.)
+> 2. **The `@media print` reset missed `html` in light mode.** It reset `body, main, .dark`; because `ThemeContext` puts `dark` on `document.documentElement`, dark mode was covered _by accident_ and light mode was not, so printing with "Background graphics" enabled could put the gradient behind a scorecard, label or QR sign. `html` is now named explicitly.
+>
+> **Debugging note:** if a print route shows the app gradient again, first check that `PrintPageStyles` is mounted — it adds `print-preview` to `<html>` — before looking anywhere else. `PrintPageStyles.test.tsx` guards all three invariants: canvas on the root, the print-preview override on the root, and `html` in the print reset.
 
 ---
 

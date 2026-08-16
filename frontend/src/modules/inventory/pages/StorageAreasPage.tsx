@@ -4,7 +4,7 @@
  * Manages hierarchical storage locations within rooms. Storage areas belong to
  * rooms (locations) and can nest inside each other (e.g., Room > Rack > Shelf > Box).
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -22,7 +22,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Link } from 'react-router';
-import { inventoryService, locationsService } from '../../../services/api';
+import { facilitiesService, inventoryService, locationsService } from '../../../services/api';
 import type { StorageAreaResponse, StorageAreaCreate, Location, InventoryItem } from '../types';
 import { STORAGE_TYPES, getStatusStyle, getStatusLabel, getConditionColor } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -40,7 +40,6 @@ interface AreaFormData {
   storage_type: string;
   parent_id: string;
   location_id: string;
-  barcode: string;
   sort_order: string;
 }
 const EMPTY_FORM: AreaFormData = {
@@ -50,11 +49,29 @@ const EMPTY_FORM: AreaFormData = {
   storage_type: 'rack',
   parent_id: '',
   location_id: '',
-  barcode: '',
   sort_order: '0',
 };
 
 type TreeNode = StorageAreaResponse & { treeChildren: TreeNode[] };
+
+/** A facility the rooms can be grouped under in the picker. */
+interface FacilityOption {
+  id: string;
+  name: string;
+}
+
+/**
+ * Which facility a room belongs to.
+ *
+ * Rooms created through the Facilities module carry `facility_id`. Locations
+ * entered by hand never do, so they group under their building name instead —
+ * without the fallback those rooms have no facility to filter by and drop out
+ * of the picker entirely.
+ */
+function facilityKeyOf(location: Location): string | null {
+  if (location.facility_id) return location.facility_id;
+  return location.building ? `building:${location.building}` : null;
+}
 
 function getTypeLabel(v: string): string {
   return STORAGE_TYPES.find((t) => t.value === v)?.label ?? v;
@@ -281,14 +298,13 @@ const TreeRow: React.FC<TreeRowProps> = ({
 /* ---------- Main page ---------- */
 const StorageAreasPage: React.FC = () => {
   const [locations, setLocations] = useState<Location[]>([]);
+  const [facilityNames, setFacilityNames] = useState<Map<string, string>>(new Map());
   const [storageAreas, setStorageAreas] = useState<StorageAreaResponse[]>([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<StorageAreaResponse[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingAreas, setIsLoadingAreas] = useState(false);
+  const [isLoadingAreas, setIsLoadingAreas] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
   const [editingArea, setEditingArea] = useState<StorageAreaResponse | null>(null);
@@ -307,17 +323,69 @@ const StorageAreasPage: React.FC = () => {
     });
   };
 
-  const facilities = locations.filter((l) => l.building && !l.facility_room_id);
-  const rooms = locations.filter((l) => !!l.facility_room_id || !!l.room_number);
-  const selectedFacility = facilities.find((f) => f.id === selectedFacilityId);
-  const filteredRooms = selectedFacility
-    ? rooms.filter((r) => r.building === selectedFacility.building || r.facility_id === selectedFacilityId)
-    : rooms;
-  const tree = buildTree(storageAreas);
-  const searchTree = buildTree(searchResults);
+  // Every location is a candidate home for a storage area: filtering the list
+  // down to rooms would hide the areas parked on a plain location, which the
+  // picker then has no way to reach.
+  const rooms = locations;
+
+  // Facilities that actually hold a room. A facility with none can't scope the
+  // list to anything, so offering it would only ever empty the page.
+  const facilities = useMemo<FacilityOption[]>(() => {
+    const byKey = new Map<string, string>();
+    for (const loc of locations) {
+      const key = facilityKeyOf(loc);
+      if (!key || byKey.has(key)) continue;
+      const name = (loc.facility_id ? facilityNames.get(loc.facility_id) : undefined) ?? loc.building ?? 'Unnamed';
+      byKey.set(key, name);
+    }
+    return [...byKey.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [locations, facilityNames]);
+
+  const filteredRooms = useMemo(
+    () => (selectedFacilityId ? rooms.filter((r) => facilityKeyOf(r) === selectedFacilityId) : rooms),
+    [rooms, selectedFacilityId]
+  );
+
   const isShowingSearch = searchQuery.trim().length > 0;
+
+  // Areas in scope. With nothing picked that is everything the organization
+  // has — a member landing here sees their storage rather than an empty page
+  // asking them to guess which room to open. Descendants come along with a
+  // matching area even when they carry no room of their own (the model treats
+  // a child's room as inherited from its parent).
+  const scopedAreas = useMemo(() => {
+    if (!selectedFacilityId && !selectedRoomId) return storageAreas;
+    const roomIds = new Set(selectedRoomId ? [selectedRoomId] : filteredRooms.map((r) => r.id));
+    const kept = new Set(storageAreas.filter((a) => a.location_id && roomIds.has(a.location_id)).map((a) => a.id));
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const area of storageAreas) {
+        if (!kept.has(area.id) && area.parent_id && kept.has(area.parent_id)) {
+          kept.add(area.id);
+          grew = true;
+        }
+      }
+    }
+    return storageAreas.filter((a) => kept.has(a.id));
+  }, [storageAreas, selectedFacilityId, selectedRoomId, filteredRooms]);
+
+  // Search reaches across every room, so it reads from the full set rather
+  // than the current scope.
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return storageAreas.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        (a.label ?? '').toLowerCase().includes(q) ||
+        (a.barcode ?? '').toLowerCase().includes(q)
+    );
+  }, [storageAreas, searchQuery]);
+
+  const tree = useMemo(() => buildTree(scopedAreas), [scopedAreas]);
+  const searchTree = useMemo(() => buildTree(searchResults), [searchResults]);
   const displayTree = isShowingSearch ? searchTree : tree;
-  const displayLoading = isShowingSearch ? isSearching : isLoadingAreas;
 
   const loadLocations = useCallback(async () => {
     setIsLoading(true);
@@ -330,14 +398,24 @@ const StorageAreasPage: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    void loadLocations();
-  }, [loadLocations]);
+  // Facility names for the picker. Best-effort: reading facilities needs the
+  // facilities permission, which an inventory manager may not hold — without
+  // it the rooms still group correctly, they just label by building name.
+  const loadFacilityNames = useCallback(async () => {
+    try {
+      const facilityList = await facilitiesService.getFacilities({ is_archived: false });
+      setFacilityNames(new Map(facilityList.map((f) => [f.id, f.name])));
+    } catch {
+      /* non-critical — the building-name fallback covers the label */
+    }
+  }, []);
 
-  const loadStorageAreas = useCallback(async (locationId: string) => {
+  const loadStorageAreas = useCallback(async () => {
     setIsLoadingAreas(true);
     try {
-      setStorageAreas(await inventoryService.getStorageAreas({ location_id: locationId, flat: true }));
+      // The whole set, filtered in the browser: the tree needs children whose
+      // own room is unset, and search spans rooms the picker isn't showing.
+      setStorageAreas(await inventoryService.getStorageAreas({ flat: true }));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load storage areas'));
     } finally {
@@ -346,33 +424,10 @@ const StorageAreasPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedRoomId) void loadStorageAreas(selectedRoomId);
-    else setStorageAreas([]);
-  }, [selectedRoomId, loadStorageAreas]);
-
-  const handleSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    setIsSearching(true);
-    try {
-      const all = await inventoryService.getStorageAreas({ flat: true });
-      const lower = q.toLowerCase();
-      setSearchResults(all.filter((a) => a.name.toLowerCase().includes(lower)));
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Search failed'));
-    } finally {
-      setIsSearching(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      void handleSearch(searchQuery);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [searchQuery, handleSearch]);
+    void loadLocations();
+    void loadFacilityNames();
+    void loadStorageAreas();
+  }, [loadLocations, loadFacilityNames, loadStorageAreas]);
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -385,7 +440,6 @@ const StorageAreasPage: React.FC = () => {
   const handleFacilityChange = (id: string) => {
     setSelectedFacilityId(id);
     setSelectedRoomId('');
-    setStorageAreas([]);
   };
 
   const openCreateModal = () => {
@@ -402,7 +456,6 @@ const StorageAreasPage: React.FC = () => {
       storage_type: area.storage_type,
       parent_id: area.parent_id ?? '',
       location_id: area.location_id ?? selectedRoomId,
-      barcode: area.barcode ?? '',
       sort_order: String(area.sort_order),
     });
     setShowModal(true);
@@ -429,18 +482,19 @@ const StorageAreasPage: React.FC = () => {
         storage_type: formData.storage_type,
         parent_id: formData.parent_id || undefined,
         location_id: formData.location_id || undefined,
-        barcode: formData.barcode.trim() || undefined,
         sort_order: isNaN(sortNum) ? undefined : sortNum,
       };
       if (editingArea) {
         await inventoryService.updateStorageArea(editingArea.id, payload);
         toast.success('Storage area updated');
       } else {
+        // The backend assigns the barcode, so the new row has to come back
+        // from the server before it can be shown with one.
         await inventoryService.createStorageArea(payload);
         toast.success('Storage area created');
       }
       closeModal();
-      if (selectedRoomId) void loadStorageAreas(selectedRoomId);
+      await loadStorageAreas();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save storage area'));
     } finally {
@@ -455,7 +509,7 @@ const StorageAreasPage: React.FC = () => {
       await inventoryService.deleteStorageArea(deleteTarget.id);
       toast.success(`"${deleteTarget.name}" deleted`);
       setDeleteTarget(null);
-      if (selectedRoomId) void loadStorageAreas(selectedRoomId);
+      await loadStorageAreas();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to delete storage area'));
     } finally {
@@ -519,7 +573,6 @@ const StorageAreasPage: React.FC = () => {
               {facilities.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
-                  {f.building ? ` (${f.building})` : ''}
                 </option>
               ))}
             </select>
@@ -536,47 +589,46 @@ const StorageAreasPage: React.FC = () => {
               className={selectClass}
               disabled={isLoading || filteredRooms.length === 0}
             >
-              <option value="">Select a room...</option>
+              <option value="">All Rooms</option>
               {filteredRooms.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.name} &mdash; {r.building ?? ''} {r.floor ? `Floor ${r.floor}` : ''} Room {r.room_number ?? ''}
+                  {r.name}
+                  {r.room_number ? ` — Room ${r.room_number}` : ''}
+                  {r.floor ? ` (Floor ${r.floor})` : ''}
                 </option>
               ))}
             </select>
           </div>
-          {selectedRoomId && (
-            <div className="flex items-end">
-              <button
-                onClick={() => void loadStorageAreas(selectedRoomId)}
-                aria-label="Refresh storage areas"
-                className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border p-2.5 transition-colors"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </button>
-            </div>
-          )}
+          <div className="flex items-end">
+            <button
+              onClick={() => void loadStorageAreas()}
+              aria-label="Refresh storage areas"
+              className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border p-2.5 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
 
       {/* Content */}
-      {isLoading ? (
+      {isLoading || isLoadingAreas ? (
         <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
-      ) : !isShowingSearch && !selectedRoomId ? (
-        <div className="card-secondary py-16 text-center">
-          <Package className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-          <p className="text-theme-text-muted">Select a facility and room above to view storage areas.</p>
-        </div>
-      ) : displayLoading ? (
-        <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
-          <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
-        </div>
       ) : displayTree.length === 0 ? (
         <div className="card-secondary py-16 text-center">
-          <Box className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+          {isShowingSearch ? (
+            <Box className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+          ) : (
+            <Package className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+          )}
           <p className="text-theme-text-muted mb-4">
-            {isShowingSearch ? 'No storage areas match your search.' : 'No storage areas in this room yet.'}
+            {isShowingSearch
+              ? 'No storage areas match your search.'
+              : storageAreas.length === 0
+                ? 'No storage areas yet.'
+                : 'No storage areas in this part of the department yet.'}
           </p>
           {!isShowingSearch && (
             <button onClick={openCreateModal} className="btn-info btn-md inline-flex items-center gap-2">
@@ -739,7 +791,8 @@ const StorageAreasPage: React.FC = () => {
               <option value="">No room assigned</option>
               {rooms.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.name} &mdash; Room {r.room_number ?? ''}
+                  {r.name}
+                  {r.room_number ? ` — Room ${r.room_number}` : ''}
                 </option>
               ))}
             </select>
@@ -749,16 +802,16 @@ const StorageAreasPage: React.FC = () => {
               Barcode
             </label>
             <input
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
               id="sa-barcode"
               type="text"
-              value={formData.barcode}
-              onChange={(e) => set({ barcode: e.target.value })}
-              className={inputClass}
-              placeholder="Optional barcode"
+              readOnly
+              value={editingArea?.barcode ?? ''}
+              className={inputClass + ' font-mono'}
+              placeholder="Assigned automatically"
             />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Every storage area gets a barcode automatically so it can be scanned.
+            </p>
           </div>
         </form>
       </Modal>

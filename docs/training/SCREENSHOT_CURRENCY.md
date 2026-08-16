@@ -1,5 +1,74 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-15 → 08-16 changes
+
+### REPLACE — one image now; 38 more only when they are next re-shot
+
+The themed background gradient moved from `body` to `html` so that it also
+covers the browser's stable scrollbar gutter. Before that, the gutter showed the
+browser's default canvas — against dark content, **a 15px white strip down the
+right edge**.
+
+All 429 images were checked with
+[`scripts/screenshots/audit_images.py`](../../scripts/screenshots/audit_images.py)
+(`--check edges`). **39 carry the strip**, and they split cleanly by how much it
+matters:
+
+| Tier                                     | Count | What changed                                                                     | Action                                                            |
+| ---------------------------------------- | ----- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Stark** — `10-11-public-form-dark.png` | 1     | Dark page: the white strip becomes a **dark** gradient. Plainly visible          | **Re-shoot.** It is the only `theme: "dark"` shot in the manifest |
+| **Subtle** — 38 modal captures           | 38    | Light page under a dark modal overlay: white becomes a **pale** gradient at 15px | Leave. Fold in whenever the shot is re-taken for another reason   |
+
+**The 38 are the instructive part.** They are light-mode pages; what darkens the
+right edge is the **modal overlay**, which dims the viewport but sits inside
+`body`, leaving the gutter — reserved on `html` — white behind it. So the trigger
+is _dark content at the right edge_, not a dark page.
+
+> **Correction (2026-08-16).** This section first said "exactly three, measured".
+> That was wrong, and wrong in an instructive way: the first scan pre-filtered on
+> **whole-image** brightness before looking at the edge, which quietly assumed the
+> defect was a dark-mode one. Every modal capture is bright overall and dark
+> exactly where it matters, so 36 of them were filtered out before the real check
+> ran. **A filter that encodes the assumption you are testing will confirm it.**
+> The script now compares the edge with the content beside it and never with the
+> page average; run it rather than re-deriving the check by hand.
+
+Cropped per-control shots never included the edge and are unaffected. **There is
+still no set-wide re-shoot here** — the actionable list is one file.
+
+Nothing else about the rendering changed — no layout, no spacing, no colour
+inside the content area — so these three need only re-capture, not re-caption.
+
+### SCREENSHOT NEEDED
+
+- **Onboarding session expired, in two frames.** (1) The wizard reopened after a
+  browser restart, showing previously typed answers repainted; (2) the
+  session-expired error raised by the next step. Demo data: begin an onboarding
+  run through the stations step, close the browser, reopen `/onboarding`, and try
+  to continue. **Both frames are required** — either one alone teaches the wrong
+  lesson, because the whole point is that a filled-in form does not mean a live
+  session. Used by `08-admin-reports.md` and
+  `19-august-2026-release-changes.md`.
+- **A public page in dark mode at full window width**, on a page long enough to
+  scroll (`/f/{slug}` or an application-status link). This is the standing proof
+  that the canvas covers routes rendered outside the app shell, which is the
+  reason the rule exists at all. Used by `19-august-2026-release-changes.md`.
+- **Skills-testing printing, three shots** (added by the 2026-08-11 print pages,
+  documented 2026-08-16 — the guide had no printing section until then):
+  - The Templates tab row actions with **Print** visible, plus the resulting
+    blank sheet in print preview. Demo data: one published template with at
+    least two sections and a mix of criterion types (pass/fail, scored, timed),
+    so the differing marking boxes appear in one frame.
+  - A completed scorecard print preview showing per-step marks, the score
+    arithmetic, and the validating officer's sign-off. Demo data: one validated
+    official result with at least one failed step, so the deduction is visible.
+  - The same scorecard as a candidate under `scores` disclosure sees it, with
+    the examiner's notes absent. **Capture beside the officer version** — the
+    pair is the teaching point; either alone is not.
+
+The reason, data path, and edge cases for each are recorded in
+[`../CHANGE_AUDIT_2026-08-10_TO_16.md`](../CHANGE_AUDIT_2026-08-10_TO_16.md#documentation-and-media-disposition).
+
 ## Flagged by the 2026-08-12 → 08-14 changes
 
 The three-day connection audit identified the following capture work. These
@@ -461,7 +530,7 @@ Okafor's election package was still `draft`, so the item type the whole
 prospective-member pipeline exists to produce had never reached a ballot.
 
 **The item had to go on a draft election, and that is correct.** An open
-election refuses ballot edits — "Only end_date can be updated while voting is
+election refuses ballot edits — "Only `end_date` can be updated while voting is
 active" — because a cast vote references an item id. So the seeder now creates a
 draft _Membership Vote — August Business Meeting_ carrying the item, which is
 also the order the guide's own workflow describes: package marked ready,

@@ -1,6 +1,6 @@
 # Welcome to The Logbook Wiki
 
-> **Release handoff:** [Changes from August 12–14, 2026](Recent-Changes-2026-08-12-to-14)
+> **Release handoff:** [Changes from August 10–16, 2026](Recent-Changes-2026-08-10-to-16) — the six-day rollup, including the new pages and their permissions, the upgrade route, and the August 15–16 onboarding and dark-mode changes. For the middle of that window in per-area detail, see [August 12–14](Recent-Changes-2026-08-12-to-14).
 > maps new pages, APIs, data, migrations, sharing boundaries, edge cases, and
 > documentation/media follow-up.
 
@@ -92,7 +92,7 @@ docker compose up -d
 
 ### 🛠️ Troubleshooting
 
-- **[Error Codes](Error-Codes)** - What an on-screen LB-* code means and how to resolve it
+- **[Error Codes](Error-Codes)** - What an on-screen LB-\* code means and how to resolve it
 - **[Common Issues](Troubleshooting)** - Solutions to common problems
 - **[Container Diagnostics](Troubleshooting#container--docker-diagnostics)** - Docker container issues
 - **[Frontend Diagnostics](Troubleshooting#frontend--browser-diagnostics)** - Frontend not loading
