@@ -737,13 +737,11 @@ SHIFT_REVIEW_TASKS = [
 
 # Per rig class, so an engine crew is not asked about aerial placement and a
 # medic crew is not asked about pump pressures.
-# Keyed by the slug the product actually matches on — the *lowercased type
-# name* ("ladder/aerial"), which is what shift responses, apparatus-options
-# and the settings editor all carry. A bare "ladder" key looked right, counted
-# right in the settings chips, and matched no ladder shift ever: the batch
-# report form fell back to the generic sample skills on the one apparatus the
-# ladder vocabulary exists for. Engine and ambulance never showed it because
-# their type names equal their codes.
+# Keyed by the apparatus-type *code* ("ladder"), which is what
+# ApparatusRef.type_slug now resolves for shifts and templates alike. It
+# briefly matched nothing while the slug was the lowercased display name
+# ("ladder/aerial") — fixed on the backend rather than by renaming these keys,
+# since every UI-configured department already keys on the code.
 APPARATUS_TYPE_SKILLS = {
     "engine": [
         "Pump operations",
@@ -752,7 +750,7 @@ APPARATUS_TYPE_SKILLS = {
         "Nozzle technique",
         "SCBA donning/doffing",
     ],
-    "ladder/aerial": [
+    "ladder": [
         "Aerial placement",
         "Ground ladder throw",
         "Ventilation",
@@ -775,7 +773,7 @@ APPARATUS_TYPE_TASKS = {
         "Hydrant survey",
         "Foam level check",
     ],
-    "ladder/aerial": [
+    "ladder": [
         "Aerial inspection",
         "Ground ladder inventory",
         "Saw and fan service",
@@ -5014,6 +5012,104 @@ class Seeder:
             )
         return logged
 
+    def seed_scheduling_requests(self) -> None:
+        """A pending swap and a pending time-off request for the Requests tab.
+
+        The tab renders both tables, and the long-lived demo database showed
+        rows in them only as leftovers of old manual runs — nothing seeded
+        either, so a fresh database rendered two empty states under a caption
+        describing populated tables.
+        """
+        swaps = items(
+            self.api.get("/scheduling/swap-requests"), "requests", "swap_requests"
+        )
+        time_off = items(self.api.get("/scheduling/time-off"), "requests", "time_off")
+        if swaps and time_off:
+            return
+        member = Api(self.base_url)
+        member.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+        if not swaps:
+            upcoming = [
+                s
+                for s in items(member.get("/scheduling/my-shifts?limit=50"), "shifts")
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") > str(TODAY)
+            ]
+            upcoming.sort(key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""))
+            if upcoming:
+                # The furthest-out assignment, so the member's first upcoming
+                # card — the one the swap-dialog screenshot opens — keeps its
+                # plain Swap button rather than a pending-swap state.
+                member.post(
+                    "/scheduling/swap-requests",
+                    {
+                        "offering_shift_id": pick(upcoming[-1], "id"),
+                        "reason": (
+                            "Family commitment that evening — happy to take "
+                            "any weekday shift in trade."
+                        ),
+                    },
+                )
+            else:
+                self.blocked.append(
+                    "scheduling requests: member has no upcoming shift to offer"
+                )
+        if not time_off:
+            member.post(
+                "/scheduling/time-off",
+                {
+                    "start_date": str(TODAY + timedelta(days=18)),
+                    "end_date": str(TODAY + timedelta(days=21)),
+                    "reason": "Out of town for a family wedding.",
+                },
+            )
+
+        # The dashboard's Next 7 Days list shows only its first handful of
+        # rows, chronologically. The rotation can park the demo member's next
+        # shift days out, which pushes every "Yours" row below the cut — and
+        # 03-60 pictures that pill. Seat them on one of the window's first
+        # shifts when nothing already does.
+        mine = items(member.get("/scheduling/my-shifts?limit=50"), "shifts")
+        soon = str(TODAY + timedelta(days=1))
+        if not any(
+            str(TODAY) <= str(pick(s, "shift_date", "shiftDate") or "") <= soon
+            for s in mine
+        ):
+            member_id = next(
+                (
+                    str(pick(m, "id"))
+                    for m in items(self.api.get("/users?limit=100"), "users")
+                    if pick(m, "username") == DEMO_MEMBER_USERNAME
+                ),
+                "",
+            )
+            shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+            near = sorted(
+                (
+                    s
+                    for s in shifts
+                    if pick(s, "id")
+                    and str(TODAY)
+                    <= str(pick(s, "shift_date", "shiftDate") or "")
+                    <= soon
+                ),
+                key=lambda s: str(pick(s, "start_time", "startTime") or ""),
+            )
+            for shift in near:
+                try:
+                    self.api.post(
+                        f"/scheduling/shifts/{pick(shift, 'id')}/assignments",
+                        {"user_id": member_id, "position": "firefighter"},
+                    )
+                    break
+                except ApiError as exc:
+                    if exc.code not in (400, 409):
+                        raise
+            else:
+                self.blocked.append(
+                    "scheduling requests: no near-term seat for the demo member"
+                )
+
     def seed_shift_reports(self, members: list[dict]) -> list[dict]:
         """Filed, draft, pending-review and flagged shift completion reports.
 
@@ -5166,6 +5262,25 @@ class Seeder:
             self.blocked.append("shift reports: no past shift to file against")
             return []
 
+        # One ladder shift with an evaluable program trainee is reserved: the
+        # batch-report-form screenshots need a crew member whose Evaluate
+        # panel can still be opened, and this loop files newest-first — which
+        # is exactly where the trainee-carrying ladder shifts sit. Without the
+        # reservation, a re-seed quietly consumes the last evaluable trainee
+        # and the two batch-form shots fail on a crew of "Already reported".
+        reserved_shift_id = None
+        for shift in past:
+            if "Ladder" not in str(pick(shift, "apparatus_name", "apparatusName")):
+                continue
+            crew = items(
+                self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
+            )
+            if any(
+                c.get("program_name") and not c.get("has_existing_report") for c in crew
+            ):
+                reserved_shift_id = pick(shift, "id")
+                break
+
         # A report can only be filed about someone who was actually on the
         # shift — the create rejects anyone else with "Trainee has no
         # attendance or assignment record for this shift" — so the trainees
@@ -5198,6 +5313,8 @@ class Seeder:
             # near-empty — and its batch bar needs several pending rows.
             if len(pairs) >= 9:
                 break
+            if pick(shift, "id") == reserved_shift_id:
+                continue
             crew = items(
                 self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
             )
@@ -5393,112 +5510,6 @@ class Seeder:
                 f"/training/shift-reports/{pick(report, 'id')}/review",
                 {"review_status": "flagged", "reviewer_notes": note},
             )
-
-    def seed_scheduling_requests(self) -> None:
-        """A pending swap request and a time-off request, from the demo member.
-
-        The Requests tab lists both kinds and `03-11` captions it that way,
-        but nothing seeded either — the tab rendered "No swap requests" on
-        every fresh database and the shot was held back as an empty state.
-        Members create these through their own session (there is no admin
-        on-behalf-of endpoint), which the seeder already signs into for RSVPs.
-        """
-        member_api = Api(self.base_url)
-        member_api.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
-
-        swaps = items(member_api.get("/scheduling/swap-requests"), "requests")
-        if not swaps:
-            mine = items(
-                member_api.get("/scheduling/my-shifts?limit=50"), "shifts"
-            )
-            upcoming = next(
-                (
-                    s
-                    for s in mine
-                    if str(pick(s, "shift_date", "shiftDate") or "") >= str(TODAY)
-                ),
-                None,
-            )
-            if upcoming is None:
-                self.blocked.append(
-                    "scheduling requests: demo member has no upcoming shift "
-                    "to offer for swap"
-                )
-            else:
-                try:
-                    member_api.post(
-                        "/scheduling/swap-requests",
-                        {
-                            "offering_shift_id": pick(upcoming, "id"),
-                            "reason": (
-                                "Family commitment that evening — happy to "
-                                "take a weekend shift in return."
-                            ),
-                        },
-                    )
-                except ApiError as exc:
-                    self.blocked.append(f"scheduling requests (swap): {exc}")
-
-        # The dashboard's Next 7 Days list shows only its first handful of
-        # rows, chronologically. The rotation parks the demo member's next
-        # shift days out, which pushed every "Yours" row below the cut —
-        # 03-60 pictures that pill, so the member needs a seat on one of the
-        # first shifts of the window.
-        mine = items(member_api.get("/scheduling/my-shifts?limit=50"), "shifts")
-        soon = str(TODAY + timedelta(days=1))
-        if not any(
-            str(pick(s, "shift_date", "shiftDate") or "") <= soon
-            and str(pick(s, "shift_date", "shiftDate") or "") >= str(TODAY)
-            for s in mine
-        ):
-            member_id = next(
-                (
-                    str(pick(m, "id"))
-                    for m in items(self.api.get("/users?limit=100"), "users")
-                    if pick(m, "username") == DEMO_MEMBER_USERNAME
-                ),
-                "",
-            )
-            shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
-            upcoming = sorted(
-                (
-                    s
-                    for s in shifts
-                    if pick(s, "id")
-                    and str(TODAY)
-                    <= str(pick(s, "shift_date", "shiftDate") or "")
-                    <= soon
-                ),
-                key=lambda s: str(pick(s, "start_time", "startTime") or ""),
-            )
-            for shift in upcoming:
-                try:
-                    self.api.post(
-                        f"/scheduling/shifts/{pick(shift, 'id')}/assignments",
-                        {"user_id": member_id, "position": "firefighter"},
-                    )
-                    break
-                except ApiError as exc:
-                    if exc.code not in (400, 409):
-                        raise
-            else:
-                self.blocked.append(
-                    "scheduling requests: no near-term seat for the demo member"
-                )
-
-        time_off = items(member_api.get("/scheduling/time-off"), "requests")
-        if not time_off:
-            try:
-                member_api.post(
-                    "/scheduling/time-off",
-                    {
-                        "start_date": str(TODAY + timedelta(days=21)),
-                        "end_date": str(TODAY + timedelta(days=25)),
-                        "reason": "Out of town for a family wedding.",
-                    },
-                )
-            except ApiError as exc:
-                self.blocked.append(f"scheduling requests (time off): {exc}")
 
     def seed_batch_report_trainee(self) -> None:
         """Crew a program trainee onto the first past Ladder 4 shift.
@@ -9488,9 +9499,7 @@ class Seeder:
                         ),
                     },
                 )
-                self.api.post(
-                    f"/prospective-members/prospects/{prospect_id}/advance"
-                )
+                self.api.post(f"/prospective-members/prospects/{prospect_id}/advance")
                 return True
             except ApiError as inner:
                 self.blocked.append(f"{label} applicant: {inner}")
@@ -9868,9 +9877,7 @@ class Seeder:
         packages = items(
             self.api.get("/prospective-members/election-packages"), "packages"
         )
-        package = next(
-            (p for p in packages if pick(p, "status") != "withdrawn"), None
-        )
+        package = next((p for p in packages if pick(p, "status") != "withdrawn"), None)
         if not package:
             self.blocked.append("membership vote outcome: no election package")
             return
@@ -10999,6 +11006,7 @@ class Seeder:
             lambda: self.seed_scheduling(stations, apparatus, members),
         )
         self.step("shift calls", self.seed_shift_calls)
+        self.step("scheduling requests", self.seed_scheduling_requests)
         training = self.step("training", self.seed_training) or {}
         self.step("course cohort", lambda: self.seed_course_cohort(members))
         self.step(
