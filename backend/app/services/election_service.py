@@ -4735,6 +4735,8 @@ class ElectionService:
         # Determine the rollback action based on current status
         from_status = election.status.value
         to_status = None
+        salt_regenerated = False
+        tokens_invalidated = 0
 
         if election.status == ElectionStatus.CLOSED:
             # Rollback from closed to open.
@@ -4744,13 +4746,14 @@ class ElectionService:
             # recorded votes, so every prior voter could vote a second time
             # (both the app checks and the dedup hash would miss them).
             # Refuse the rollback in that case — a new election is the safe path.
-            if election.anonymous_voting and election.voter_anonymity_salt is None:
+            if election.voter_anonymity_salt is None:
                 votes_count_result = await self.db.execute(
                     select(func.count(Vote.id))
                     .where(Vote.election_id == str(election_id))
                     .where(Vote.deleted_at.is_(None))
                 )
-                if (votes_count_result.scalar() or 0) > 0:
+                votes_count = votes_count_result.scalar() or 0
+                if election.anonymous_voting and votes_count > 0:
                     return (
                         None,
                         0,
@@ -4761,6 +4764,27 @@ class ElectionService:
                             "instead."
                         ),
                     )
+                if votes_count == 0:
+                    # With zero votes the destroyed salt protects nothing, but
+                    # already-emailed ballot tokens carry voter hashes keyed to
+                    # the old salt — _token_voter_is_on_frozen_roll would reject
+                    # every one of them against a missing (or fresh) salt, so
+                    # those links are dead either way. Mint a new salt the same
+                    # way election creation does, and expire the issued tokens
+                    # so admins can re-send ballots keyed to the new salt.
+                    election.voter_anonymity_salt = secrets.token_hex(32)
+                    salt_regenerated = True
+                    now = datetime.now(timezone.utc)
+                    invalidate_result = await self.db.execute(
+                        sql_update(VotingToken)
+                        .where(VotingToken.election_id == str(election_id))
+                        .where(VotingToken.expires_at > now)
+                        # Floor to the second: MySQL DATETIME(0) ROUNDS
+                        # fractional seconds, so expiring at now=:56.9 would
+                        # store :57 and leave the token briefly valid.
+                        .values(expires_at=now.replace(microsecond=0))
+                    )
+                    tokens_invalidated = invalidate_result.rowcount or 0
             to_status = "open"
             new_status = ElectionStatus.OPEN
         elif election.status == ElectionStatus.OPEN:
@@ -4778,6 +4802,13 @@ class ElectionService:
             "to_status": to_status,
             "reason": reason,
         }
+        if salt_regenerated:
+            # Surface to admins that previously issued ballot links are now
+            # dead and ballots must be re-sent (re-sending mints tokens keyed
+            # to the regenerated salt).
+            rollback_record["anonymity_salt_regenerated"] = True
+            rollback_record["voting_tokens_invalidated"] = tokens_invalidated
+            rollback_record["ballots_must_be_resent"] = True
 
         # Deep copy to avoid SQLAlchemy JSON mutation detection issue
         history = copy.deepcopy(election.rollback_history or [])
@@ -4793,7 +4824,9 @@ class ElectionService:
 
         logger.warning(
             f"Election rolled back | election={election_id} "
-            f"{from_status} -> {to_status} by={performed_by} reason={reason!r}"
+            f"{from_status} -> {to_status} by={performed_by} reason={reason!r} "
+            f"salt_regenerated={salt_regenerated} "
+            f"tokens_invalidated={tokens_invalidated}"
         )
         await self._audit(
             "election_rollback",
@@ -4803,6 +4836,8 @@ class ElectionService:
                 "from_status": from_status,
                 "to_status": to_status,
                 "reason": reason,
+                "anonymity_salt_regenerated": salt_regenerated,
+                "voting_tokens_invalidated": tokens_invalidated,
             },
             severity="warning",
             user_id=str(performed_by),
@@ -5810,18 +5845,30 @@ Best regards,
         skipped_details: List[Dict] = []
         pending_emails: List[Dict] = []
 
+        # Frozen-roll sets are loop-invariant — build them once, not per
+        # recipient. None means the roll was never frozen (legacy election).
+        frozen_roster = getattr(election, "eligible_roster_snapshot", None)
+        frozen_roster_ids = (
+            {str(uid) for uid in frozen_roster} if frozen_roster is not None else None
+        )
+        override_ids = {
+            str(override["user_id"])
+            for override in (election.voter_overrides or [])
+            if override.get("user_id")
+        }
+
         for recipient in recipients:
             # Do not issue a live ballot credential to someone added after
             # the voter roll was frozen. Secretary overrides remain valid.
-            frozen_roster = getattr(election, "eligible_roster_snapshot", None)
-            override_ids = {
-                str(override["user_id"])
-                for override in (election.voter_overrides or [])
-                if override.get("user_id")
-            }
+            # Test sends are exempt: their tokens (and any votes cast with
+            # them) are flagged is_test, use a namespaced dedup hash, and are
+            # excluded from results/stats/rosters, so a test ballot is never
+            # a live credential — and admins must be able to preview ballots
+            # without being on the frozen roll.
             if (
-                frozen_roster is not None
-                and str(recipient.id) not in {str(uid) for uid in frozen_roster}
+                not is_test
+                and frozen_roster_ids is not None
+                and str(recipient.id) not in frozen_roster_ids
                 and str(recipient.id) not in override_ids
             ):
                 skipped_count += 1
@@ -6971,8 +7018,13 @@ Best regards,
 
         # Defense in depth for tokens issued before the roll was frozen (or
         # by an older application node): a credential cannot bypass the same
-        # frozen-roll boundary enforced by authenticated voting.
-        if not self._token_voter_is_on_frozen_roll(election, voting_token):
+        # frozen-roll boundary enforced by authenticated voting. Test tokens
+        # are exempt — they only ever produce is_test votes (excluded from
+        # results/stats/rosters), and test previews are deliberately sendable
+        # to admins who are not on the frozen roll.
+        if not voting_token.is_test and not self._token_voter_is_on_frozen_roll(
+            election, voting_token
+        ):
             return (
                 None,
                 None,
