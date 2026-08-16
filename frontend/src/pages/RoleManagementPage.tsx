@@ -361,7 +361,7 @@ export const RoleManagementPage: React.FC = () => {
               >
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium"
+                  className="btn-secondary text-theme-text-secondary text-sm font-medium"
                 >
                   Cancel
                 </button>

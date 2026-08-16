@@ -1534,7 +1534,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:ring-theme-focus-ring rounded-lg border px-6 py-3 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+            className="btn-secondary text-theme-text-secondary hover:bg-theme-surface-secondary px-6 py-3 text-sm font-medium focus:ring-offset-2"
           >
             Cancel
           </button>

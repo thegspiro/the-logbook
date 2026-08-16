@@ -525,11 +525,7 @@ export const ReportsPage: React.FC = () => {
             return (
               <div
                 key={report.id}
-                className={`card-secondary p-6 backdrop-blur-xs transition-all ${
-                  report.available
-                    ? 'hover:bg-theme-surface hover:border-theme-surface-border cursor-pointer'
-                    : 'cursor-not-allowed opacity-60'
-                }`}
+                className={`card-secondary p-6 backdrop-blur-xs transition-all ${report.available ? 'hover:bg-theme-surface hover:border-theme-surface-border cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
               >
                 <div className="mb-4 flex items-start justify-between">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-600/20">

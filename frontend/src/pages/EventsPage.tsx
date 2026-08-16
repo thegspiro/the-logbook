@@ -686,7 +686,7 @@ export const EventsPage: React.FC = () => {
 
         {/* Upcoming / Past Toggle + View Mode + Search + My Events + Sort */}
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="border-theme-surface-border bg-theme-surface inline-flex rounded-lg border p-1">
+          <div className="card inline-flex p-1">
             <button
               onClick={() => setShowPastEvents(false)}
               className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
@@ -708,7 +708,7 @@ export const EventsPage: React.FC = () => {
               Past
             </button>
           </div>
-          <div className="border-theme-surface-border bg-theme-surface inline-flex rounded-lg border p-1">
+          <div className="card inline-flex p-1">
             <button
               onClick={() => setViewMode('list')}
               className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
@@ -786,7 +786,7 @@ export const EventsPage: React.FC = () => {
                 setShowSavePresetInput(false);
                 setPresetName('');
               }}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] max-md:min-w-[44px]"
+              className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 text-sm font-medium max-md:min-h-[44px] max-md:min-w-[44px]"
               title="Filter presets"
             >
               <Bookmark className="h-4 w-4" aria-hidden="true" />
@@ -964,9 +964,7 @@ export const EventsPage: React.FC = () => {
                   )}
                   <Link
                     to={`/events/${event.id}`}
-                    className={`card block transition-all hover:border-red-300 hover:shadow-md ${
-                      selectedEvents.has(event.id) ? 'border-red-300 ring-2 ring-red-500/50' : ''
-                    }`}
+                    className={`card block transition-all hover:border-red-300 hover:shadow-md ${selectedEvents.has(event.id) ? 'border-red-300 ring-2 ring-red-500/50' : ''}`}
                   >
                     <div className={`p-5 ${canManage ? 'pl-10' : ''}`}>
                       <div className="flex items-start justify-between">
@@ -1176,7 +1174,7 @@ export const EventsPage: React.FC = () => {
 
       {/* Floating Bulk Action Bar */}
       {selectedEvents.size > 0 && (
-        <div className="bg-theme-surface-modal border-theme-surface-border fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-xl border px-6 py-3 shadow-lg">
+        <div className="bg-theme-surface-modal border-theme-surface-border fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-lg border px-6 py-3 shadow-lg">
           <span className="text-theme-text-primary text-sm font-medium">{selectedEvents.size} selected</span>
           <div className="bg-theme-surface-border h-5 w-px" />
           <button
@@ -1258,7 +1256,7 @@ export const EventsPage: React.FC = () => {
                   <div className="flex gap-3">
                     <button
                       onClick={handleCloseImportModal}
-                      className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium"
+                      className="btn-secondary text-theme-text-secondary text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -1383,7 +1381,7 @@ export const EventsPage: React.FC = () => {
               <button
                 onClick={() => setShowCancelConfirm(false)}
                 disabled={bulkActionLoading}
-                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium"
+                className="btn-secondary text-theme-text-secondary text-sm font-medium"
               >
                 Go Back
               </button>

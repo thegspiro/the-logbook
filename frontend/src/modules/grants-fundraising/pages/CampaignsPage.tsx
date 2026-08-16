@@ -202,10 +202,7 @@ const CampaignsPage: React.FC = () => {
 
       {/* Inline Create Form */}
       {showCreateForm && (
-        <form
-          onSubmit={(e) => void handleCreateSubmit(e)}
-          className="border-theme-surface-border bg-theme-surface space-y-4 rounded-lg border p-5"
-        >
+        <form onSubmit={(e) => void handleCreateSubmit(e)} className="card space-y-4 p-5">
           <h2 className="text-theme-text-primary text-lg font-semibold">Create New Campaign</h2>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -415,10 +412,7 @@ const CampaignsPage: React.FC = () => {
                 : 0;
 
             return (
-              <div
-                key={campaign.id}
-                className="border-theme-surface-border bg-theme-surface space-y-3 rounded-lg border p-5"
-              >
+              <div key={campaign.id} className="card space-y-3 p-5">
                 {/* Campaign Name & Badges */}
                 <div>
                   <h3 className="text-theme-text-primary text-lg font-bold">{campaign.name}</h3>

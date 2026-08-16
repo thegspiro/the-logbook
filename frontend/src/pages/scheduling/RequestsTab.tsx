@@ -198,7 +198,7 @@ export const RequestsTab: React.FC = () => {
             {swapRequests.map((req) => {
               const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
               return (
-                <div key={req.id} className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 sm:p-5">
+                <div key={req.id} className="card p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-3 sm:items-center">
                     <div className="flex min-w-0 items-start gap-3 sm:items-center">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 sm:h-10 sm:w-10">
@@ -345,7 +345,7 @@ export const RequestsTab: React.FC = () => {
           {timeOffRequests.map((req) => {
             const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
             return (
-              <div key={req.id} className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 sm:p-5">
+              <div key={req.id} className="card p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3 sm:items-center">
                   <div className="flex min-w-0 items-start gap-3 sm:items-center">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 sm:h-10 sm:w-10">
@@ -458,7 +458,7 @@ export const RequestsTab: React.FC = () => {
         >
           <div
             ref={reviewModalRef}
-            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border"
+            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border"
           >
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Review Request</h2>

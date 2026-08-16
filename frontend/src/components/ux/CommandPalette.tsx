@@ -316,7 +316,7 @@ export const CommandPalette: React.FC = () => {
       <div className="fixed inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setIsOpen(false)} aria-hidden="true" />
       <div className="relative flex min-h-screen items-start justify-center px-4 pt-[15dvh]">
         <div
-          className="bg-theme-surface-modal border-theme-surface-border w-full max-w-lg overflow-hidden rounded-xl border shadow-2xl"
+          className="bg-theme-surface-modal border-theme-surface-border w-full max-w-lg overflow-hidden rounded-lg border shadow-2xl"
           role="dialog"
           aria-modal="true"
           aria-label="Command palette"

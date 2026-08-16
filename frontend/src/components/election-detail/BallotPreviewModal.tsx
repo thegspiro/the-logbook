@@ -68,10 +68,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
               const isApprovalType = item.vote_type === VoteType.APPROVAL;
 
               return (
-                <div
-                  key={item.id}
-                  className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border"
-                >
+                <div key={item.id} className="card overflow-hidden">
                   <div className="bg-theme-surface-secondary border-theme-surface-border border-b px-6 py-4">
                     <div className="flex items-start gap-3">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-sm font-bold text-red-700 dark:bg-red-500/20 dark:text-red-400">
@@ -252,7 +249,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
           <button
             type="button"
             onClick={onClose}
-            className="bg-theme-surface-secondary text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-6 py-2"
+            className="card-secondary text-theme-text-primary hover:bg-theme-surface-hover px-6 py-2"
           >
             Close Preview
           </button>

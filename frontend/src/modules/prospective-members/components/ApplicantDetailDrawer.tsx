@@ -302,7 +302,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* Withdrawn Notice */}
             {applicant.status === ApplicantStatus.WITHDRAWN && (
-              <div className="bg-theme-surface-secondary border-theme-surface-border mx-4 mt-4 rounded-lg border p-3">
+              <div className="card-secondary mx-4 mt-4 p-3">
                 <div className="mb-1 flex items-center gap-2">
                   <Archive className="text-theme-text-muted h-4 w-4" />
                   <span className="text-theme-text-secondary text-sm font-medium">Application Withdrawn</span>
@@ -546,7 +546,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
                   Current Stage
                 </h3>
-                <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3">
+                <div className="card p-3">
                   <div className="mb-1 flex items-center gap-2">
                     {applicant.current_stage_type &&
                       (() => {
@@ -684,10 +684,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                           {references.length} of {requiredCount || '?'} references received
                         </p>
                         {references.map((ref, idx) => (
-                          <div
-                            key={idx}
-                            className="bg-theme-surface border-theme-surface-border flex items-center justify-between rounded-lg border p-2 text-xs"
-                          >
+                          <div key={idx} className="card flex items-center justify-between p-2 text-xs">
                             <span className="text-theme-text-primary">{ref.name ?? `Reference ${idx + 1}`}</span>
                             <span className={ref.status === 'completed' ? 'text-emerald-500' : 'text-amber-500'}>
                               {ref.status ?? 'pending'}
@@ -757,10 +754,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               const screening = screenings.find((s) => s.type === type);
                               const isPassed = screening?.status === 'passed' || screening?.status === 'completed';
                               return (
-                                <div
-                                  key={type}
-                                  className="bg-theme-surface border-theme-surface-border flex items-center justify-between rounded-lg border p-2 text-xs"
-                                >
+                                <div key={type} className="card flex items-center justify-between p-2 text-xs">
                                   <span className="text-theme-text-primary capitalize">{type.replace(/_/g, ' ')}</span>
                                   {screening ? (
                                     <span

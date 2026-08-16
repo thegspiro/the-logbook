@@ -302,7 +302,7 @@ function LocationSetupWizard({
       role="dialog"
       aria-modal="true"
     >
-      <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border">
+      <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-lg border">
         {/* Progress bar */}
         <div className="px-6 pt-5 pb-2">
           <div className="mb-2 flex items-center justify-between">
@@ -709,7 +709,7 @@ function LocationSetupWizard({
                           {stationRooms.map((room, rIdx) => (
                             <span
                               key={rIdx}
-                              className="bg-theme-surface border-theme-surface-border text-theme-text-secondary inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs"
+                              className="card text-theme-text-secondary inline-flex items-center gap-1 px-2 py-0.5 text-xs"
                             >
                               <DoorOpen className="h-3 w-3" /> {room.name}
                             </span>
@@ -832,7 +832,7 @@ function RoomCard({
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border group flex flex-col rounded-lg border p-3">
+    <div className="card group flex flex-col p-3">
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <DoorOpen className="text-theme-text-muted h-4 w-4 shrink-0" />
@@ -1358,10 +1358,7 @@ export default function LocationsPage() {
             const address = [station.address, station.city, station.state, station.zip].filter(Boolean).join(', ');
 
             return (
-              <div
-                key={station.id}
-                className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border"
-              >
+              <div key={station.id} className="card overflow-hidden">
                 {/* Station Header */}
                 <div className="flex flex-wrap items-center gap-4 p-5">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
@@ -1446,7 +1443,7 @@ export default function LocationsPage() {
 
           {/* Orphan rooms (rooms without a station) */}
           {rooms.has('__other__') && (
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+            <div className="card p-5">
               <h3 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {(rooms.get('__other__') || []).map((room) => (
@@ -1475,7 +1472,7 @@ export default function LocationsPage() {
             if (e.key === 'Escape') setShowStationModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingStation ? 'Edit Station' : 'Add Station'}
@@ -1583,7 +1580,7 @@ export default function LocationsPage() {
             if (e.key === 'Escape') setShowRoomModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}

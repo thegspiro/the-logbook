@@ -603,7 +603,7 @@ const CriterionNotes: React.FC<{
           aria-label={`Note for ${criterionLabel}`}
           placeholder="What happened? This is what explains the mark later."
           rows={2}
-          className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+          className="form-input resize-none px-3 text-sm"
           autoFocus
         />
       )}
@@ -902,7 +902,7 @@ const ReviewSection: React.FC<{
   const tally = computeSectionTally(section.criteria, criteriaResults, scorePassFailCriteria ?? false);
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
+    <div className="card overflow-hidden">
       {/* Section header */}
       <div className="border-theme-surface-border bg-theme-surface-hover/50 border-b px-4 py-3">
         <div className="flex items-start justify-between gap-2">
@@ -963,7 +963,7 @@ export const ReadOnlySectionView: React.FC<{
     : computeSectionTally(section.criteria, actualCriteria, scorePassFailCriteria ?? false);
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
+    <div className="card overflow-hidden">
       {/* Section header */}
       <div className="border-theme-surface-border bg-theme-surface-hover/50 border-b px-4 py-3">
         <div className="flex items-start justify-between gap-2">
@@ -1944,7 +1944,7 @@ export const ActiveSkillTestPage: React.FC = () => {
             /* Closed out before it was finished. Whatever was scored stays on
                display as the record of how far the evaluation got, but there is
                no outcome here — it was never completed, so nothing was decided. */
-            <div className="bg-theme-surface border-theme-surface-border mb-4 flex items-center gap-3 rounded-xl border p-4">
+            <div className="card mb-4 flex items-center gap-3 p-4">
               <CircleSlash className="text-theme-text-muted h-10 w-10 shrink-0" />
               <div className="flex-1">
                 <p className="text-theme-text-primary text-lg font-bold">Cancelled</p>
@@ -1986,14 +1986,14 @@ export const ActiveSkillTestPage: React.FC = () => {
 
           {/* Test details grid */}
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-3">
+            <div className="card p-3">
               <div className="mb-1 flex items-center gap-1.5">
                 <User className="text-theme-text-muted h-3 w-3" />
                 <p className="text-theme-text-muted text-xs">Candidate</p>
               </div>
               <p className="text-theme-text-primary text-sm font-medium">{currentTest.candidate_name}</p>
             </div>
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-3">
+            <div className="card p-3">
               <div className="mb-1 flex items-center gap-1.5">
                 <ClipboardCheck className="text-theme-text-muted h-3 w-3" />
                 <p className="text-theme-text-muted text-xs">Examiner</p>
@@ -2001,7 +2001,7 @@ export const ActiveSkillTestPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm font-medium">{currentTest.examiner_name}</p>
             </div>
             {currentTest.elapsed_seconds != null && (
-              <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-3">
+              <div className="card p-3">
                 <div className="mb-1 flex items-center gap-1.5">
                   <Timer className="text-theme-text-muted h-3 w-3" />
                   <p className="text-theme-text-muted text-xs">Total Time</p>
@@ -2024,7 +2024,7 @@ export const ActiveSkillTestPage: React.FC = () => {
               </div>
             )}
             {currentTest.completed_at && (
-              <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-3">
+              <div className="card p-3">
                 <div className="mb-1 flex items-center gap-1.5">
                   <Calendar className="text-theme-text-muted h-3 w-3" />
                   <p className="text-theme-text-muted text-xs">Completed</p>
@@ -2064,7 +2064,7 @@ export const ActiveSkillTestPage: React.FC = () => {
 
           {/* Test notes */}
           {currentTest.notes && (
-            <div className="bg-theme-surface border-theme-surface-border mt-4 rounded-xl border p-4">
+            <div className="card mt-4 p-4">
               <p className="text-theme-text-muted mb-2 flex items-center gap-1.5 text-xs font-medium">
                 <FileText className="h-3 w-3" />
                 Test Notes
@@ -2210,11 +2210,11 @@ export const ActiveSkillTestPage: React.FC = () => {
 
           {/* Summary stats */}
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 text-center">
+            <div className="card p-4 text-center">
               <p className="text-theme-text-muted text-xs">Candidate</p>
               <p className="text-theme-text-primary mt-1 text-sm font-bold">{currentTest.candidate_name}</p>
             </div>
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 text-center">
+            <div className="card p-4 text-center">
               <p className="text-theme-text-muted text-xs">Total Time</p>
               <p className="text-theme-text-primary mt-1 font-mono text-sm font-bold">
                 {Math.floor(activeTestTimer / 60)}:{String(activeTestTimer % 60).padStart(2, '0')}
@@ -2317,7 +2317,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           </div>
           <button
             onClick={() => void handleSaveProgress()}
-            className="bg-theme-surface border-theme-surface-border mobile-touch-target rounded-lg border px-3 text-xs font-medium"
+            className="btn-secondary mobile-touch-target px-3 text-xs font-medium"
           >
             Save
           </button>
@@ -2471,7 +2471,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           <button
             onClick={() => goToSection(activeSectionIndex - 1)}
             disabled={!canGoBack}
-            className="bg-theme-surface border-theme-surface-border flex min-h-[52px] items-center justify-center gap-1 rounded-xl border px-4 font-medium transition-colors disabled:opacity-30"
+            className="btn-secondary flex min-h-[52px] items-center justify-center gap-1 font-medium disabled:opacity-30"
           >
             <ChevronLeft className="h-5 w-5" />
             Prev

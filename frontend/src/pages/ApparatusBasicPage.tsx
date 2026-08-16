@@ -298,10 +298,7 @@ export default function ApparatusBasicPage() {
           {filtered.map((apparatus) => {
             const typeInfo = getTypeInfo(apparatus.apparatus_type);
             return (
-              <div
-                key={apparatus.id}
-                className="bg-theme-surface border-theme-surface-border group hover:border-theme-text-muted/30 rounded-xl border p-5 transition-colors"
-              >
+              <div key={apparatus.id} className="card group hover:border-theme-text-muted/30 p-5">
                 <div className="mb-3 flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-lg">
@@ -371,7 +368,7 @@ export default function ApparatusBasicPage() {
             if (e.key === 'Escape') setShowModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl border">
+          <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg border">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editing ? 'Edit Apparatus' : 'Add Apparatus'}

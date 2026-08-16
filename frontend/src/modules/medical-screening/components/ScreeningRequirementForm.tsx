@@ -73,7 +73,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal border-theme-surface-border modal-body w-full max-w-lg rounded-xl border">
+      <div className="bg-theme-surface-modal border-theme-surface-border modal-body w-full max-w-lg rounded-lg border">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 className="text-theme-text-primary text-lg font-bold">
             {requirement ? 'Edit Requirement' : 'Add Screening Requirement'}

@@ -130,7 +130,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
         if (e.key === 'Escape' && !isConverting) onClose();
       }}
     >
-      <div className="bg-theme-surface-modal border-theme-surface-border modal-body w-full max-w-lg rounded-xl border">
+      <div className="bg-theme-surface-modal border-theme-surface-border modal-body w-full max-w-lg rounded-lg border">
         {/* Header */}
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <div className="flex items-center gap-3">

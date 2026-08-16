@@ -511,7 +511,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+          className="btn-secondary text-theme-text-secondary text-sm font-medium"
         >
           Cancel
         </button>

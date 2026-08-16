@@ -2589,7 +2589,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           ref={sortableRef}
           style={sortableStyle}
           {...(sortableAttributes ?? {})}
-          className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border"
+          className="card overflow-hidden"
         >
           <div className="flex items-center gap-1.5 px-2 py-3 sm:gap-2 sm:px-4">
             <button
@@ -2665,7 +2665,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
            rest whatever z-index it carried. Every child sits on the same
            surface colour as the card, so the rounded corners stay clean
            without one — the header just rounds its own top corners. */
-        className="border-theme-surface-border bg-theme-surface rounded-lg border"
+        className="card"
       >
         {/* Compartment header */}
         <div className="bg-theme-surface flex items-center gap-1.5 rounded-t-lg px-2 py-3 sm:gap-2 sm:px-4">
@@ -2900,7 +2900,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                           </span>
                           {/* Bulk edit: set check type */}
                           <select
-                            className="bg-theme-surface rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-600 dark:border-blue-700 dark:text-blue-400"
+                            className="form-input border-blue-300 px-2 py-1 text-xs font-medium text-blue-600 dark:border-blue-700 dark:text-blue-400"
                             value=""
                             onChange={(e) => {
                               if (e.target.value) {
@@ -3008,7 +3008,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         key={presetKey}
                         type="button"
                         onClick={() => void addEquipmentPreset(idx, presetKey)}
-                        className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-md border px-2 py-1.5 text-left text-xs transition-colors hover:border-green-500/40 hover:bg-green-500/10"
+                        className="btn-secondary px-2 py-1.5 text-left text-xs hover:border-green-500/40 hover:bg-green-500/10"
                       >
                         <span className="font-medium">{preset.label}</span>
                         <span className="text-theme-text-muted block text-[10px]">{preset.items.length} items</span>
@@ -3290,7 +3290,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void handleClone()}
               disabled={cloning}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+              className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
               title="Clone this template"
             >
               {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
@@ -3301,7 +3301,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={exportTemplateJson}
             disabled={compartments.length === 0}
-            className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+            className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
             title="Export template as JSON"
           >
             <Download className="h-4 w-4" />
@@ -3311,7 +3311,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => importFileRef.current?.click()}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+              className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
               title="Import template from JSON"
             >
               <Upload className="h-4 w-4" />
@@ -3323,7 +3323,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => csvImportRef.current?.click()}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+              className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
               title="Import items from CSV spreadsheet"
             >
               <Upload className="h-4 w-4" />
@@ -3334,7 +3334,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <a
             href={schedulingService.getCsvSampleUrl()}
             download
-            className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+            className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
             title="Download a sample CSV file for import"
           >
             <Download className="h-4 w-4" />
@@ -3371,7 +3371,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 setShowChangelog(true);
                 void loadChangelog();
               }}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+              className="btn-secondary flex items-center gap-2 px-3 text-sm font-medium"
               title="View change history (admin only)"
             >
               <Clock className="h-4 w-4" />
@@ -3382,7 +3382,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={() => setShowPreview(true)}
             disabled={compartments.length === 0}
-            className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+            className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
           >
             <Eye className="h-4 w-4" />
             <span className="hidden sm:inline">Preview</span>
@@ -3405,7 +3405,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         <div
           className={`flex-shrink-0 transition-all duration-200 ${sidebarOpen ? 'w-full lg:w-72' : 'w-0'} overflow-hidden`}
         >
-          <div className="border-theme-surface-border bg-theme-surface w-full rounded-lg border p-4 lg:sticky lg:top-4 lg:w-72">
+          <div className="card w-full p-4 lg:sticky lg:top-4 lg:w-72">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase">
                 Template Details
@@ -3495,7 +3495,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     key={key}
                     type="button"
                     onClick={() => void loadVehiclePreset(key)}
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:border-orange-500/40 hover:bg-orange-500/10"
+                    className="btn-secondary px-3 text-left text-sm hover:border-orange-500/40 hover:bg-orange-500/10"
                   >
                     <span className="font-medium">{preset.label}</span>
                     <span className="text-theme-text-muted mt-0.5 block text-xs">
@@ -3509,7 +3509,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           )}
 
           {compartments.length === 0 && (
-            <div className="border-theme-surface-border bg-theme-surface rounded-lg border border-dashed p-8 text-center">
+            <div className="card border-dashed p-8 text-center">
               <p className="text-theme-text-muted text-sm">
                 No compartments yet.
                 {form.templateType === 'vehicle' || form.templateType === 'combined'

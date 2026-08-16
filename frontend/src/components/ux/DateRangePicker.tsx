@@ -102,7 +102,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     <div className={`relative ${className}`}>
       {label && <label className="form-label">{label}</label>}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="bg-theme-input-bg border-theme-input-border flex w-full min-w-0 items-center gap-1 rounded-lg border sm:w-auto">
+        <div className="card bg-theme-input-bg border-theme-input-border flex w-full min-w-0 items-center gap-1 sm:w-auto">
           <div className="flex items-center pl-3">
             <Calendar className="text-theme-text-muted h-4 w-4" />
           </div>

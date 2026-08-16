@@ -310,10 +310,7 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
             formMode === call.id ? (
               <div key={call.id}>{renderForm()}</div>
             ) : (
-              <div
-                key={call.id}
-                className="bg-theme-surface border-theme-surface-border flex items-start justify-between gap-3 rounded-lg border p-2.5"
-              >
+              <div key={call.id} className="card flex items-start justify-between gap-3 p-2.5">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-theme-text-primary text-sm font-medium capitalize">{call.incident_type}</span>

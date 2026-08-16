@@ -70,7 +70,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
           }}
           className="space-y-4 p-6"
         >
-          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3">
+          <div className="card p-3">
             <p className="text-theme-text-muted text-sm">Pattern</p>
             <p className="text-theme-text-primary font-medium">{pattern.name}</p>
             <p className="text-theme-text-muted mt-1 text-xs">

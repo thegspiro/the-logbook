@@ -980,28 +980,28 @@ const FormsPage: React.FC = () => {
 
               {/* Builder Tab */}
               {detailTab === 'builder' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <FormBuilder formId={editingForm.id} />
                 </div>
               )}
 
               {/* Preview & Submit Tab */}
               {detailTab === 'preview' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <FormRenderer formId={editingForm.id} submitLabel="Submit Form" allowResubmit />
                 </div>
               )}
 
               {/* Submissions Tab */}
               {detailTab === 'submissions' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <SubmissionViewer formId={editingForm.id} allowDelete={canManage} />
                 </div>
               )}
 
               {/* Results Tab */}
               {detailTab === 'results' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <FormResultsPanel formId={editingForm.id} />
                 </div>
               )}

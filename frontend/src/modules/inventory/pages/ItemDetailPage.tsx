@@ -592,10 +592,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ events, tz }) => {
   return (
     <ul className="space-y-3">
       {events.map((evt) => (
-        <li
-          key={evt.id}
-          className="bg-theme-surface border-theme-surface-border flex items-start gap-3 rounded-lg border p-3"
-        >
+        <li key={evt.id} className="card flex items-start gap-3 p-3">
           <span className="mt-0.5">
             {HISTORY_ICONS[evt.type] ?? <Clock className="text-theme-text-muted h-4 w-4" />}
           </span>

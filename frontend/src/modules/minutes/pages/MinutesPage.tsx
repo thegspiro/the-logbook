@@ -485,10 +485,7 @@ const MinutesPage: React.FC = () => {
                       ) : (
                         <div className="space-y-2">
                           {waivers[meeting.id]?.map((waiver, wIdx) => (
-                            <div
-                              key={wIdx}
-                              className="bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-sm"
-                            >
+                            <div key={wIdx} className="card p-3 text-sm">
                               <div className="flex items-center justify-between">
                                 <span className="text-theme-text-primary font-medium">
                                   {toDisplayString(waiver.user_name ?? waiver.user_id ?? 'Unknown')}

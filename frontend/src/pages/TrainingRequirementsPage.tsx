@@ -969,7 +969,7 @@ const TemplateModal: React.FC<{
             <button
               key={idx}
               onClick={() => onSelect(template)}
-              className="card hover:bg-theme-surface-hover p-4 text-left transition-colors"
+              className="card hover:bg-theme-surface-hover p-4 text-left"
             >
               <h4 className="text-theme-text-primary mb-2 font-semibold">{template.name}</h4>
               <p className="text-theme-text-muted mb-3 text-sm">{template.description}</p>

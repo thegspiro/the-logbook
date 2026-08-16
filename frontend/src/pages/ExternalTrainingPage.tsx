@@ -456,7 +456,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-6">
+    <div className="card p-6">
       <div className="mb-4 flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="bg-theme-surface-secondary rounded-lg p-2">
@@ -1251,7 +1251,7 @@ const ExternalTrainingPage: React.FC = () => {
         ) : activeTab === 'providers' ? (
           <div className="grid gap-6 md:grid-cols-2" role="tabpanel">
             {providers.length === 0 ? (
-              <div className="bg-theme-surface border-theme-surface-border col-span-2 rounded-lg border py-12 text-center">
+              <div className="card col-span-2 py-12 text-center">
                 <Link2 className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Integrations Yet</h3>
                 <p className="text-theme-text-muted mb-4">
@@ -1289,10 +1289,7 @@ const ExternalTrainingPage: React.FC = () => {
             )}
           </div>
         ) : activeTab === 'imports' ? (
-          <div
-            className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center"
-            role="tabpanel"
-          >
+          <div className="card p-8 text-center" role="tabpanel">
             <Download className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Import Queue</h3>
             <p className="text-theme-text-muted">
@@ -1300,10 +1297,7 @@ const ExternalTrainingPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div
-            className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center"
-            role="tabpanel"
-          >
+          <div className="card p-8 text-center" role="tabpanel">
             <FolderTree className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">All Mappings</h3>
             <p className="text-theme-text-muted">View and manage all category and user mappings across providers</p>

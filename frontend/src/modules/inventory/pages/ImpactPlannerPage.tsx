@@ -72,7 +72,7 @@ const CheckGroup: React.FC<CheckGroupProps> = ({ label, options, selected, onTog
     {options.length === 0 ? (
       <p className="text-theme-text-muted text-xs italic">None available</p>
     ) : (
-      <div className="border-theme-surface-border bg-theme-surface max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2 pr-1">
+      <div className="card max-h-40 space-y-1 overflow-y-auto p-2 pr-1">
         {options.map((opt) => (
           <label
             key={opt.value}
@@ -906,7 +906,7 @@ const ImpactPlannerPage: React.FC = () => {
                           value={memberSearch}
                           onChange={(e) => setMemberSearch(e.target.value)}
                           placeholder="Filter list…"
-                          className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border py-1.5 pr-3 pl-8 text-sm focus:ring-2 focus:ring-blue-500/40 focus:outline-none"
+                          className="form-input py-1.5 pr-3 pl-8 text-sm focus:ring-blue-500/40"
                         />
                       </div>
                       <button onClick={exportCsv} className="btn-secondary btn-sm" title="Export to CSV">

@@ -102,18 +102,18 @@ const ReturnRequestsPanel: React.FC = () => {
 
       {/* List */}
       {loading ? (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center">
+        <div className="card p-8 text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-500" />
         </div>
       ) : requests.length === 0 ? (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center">
+        <div className="card p-8 text-center">
           <ArrowDownToLine className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-secondary">No return requests found.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {requests.map((req) => (
-            <div key={req.id} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+            <div key={req.id} className="card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center gap-2">

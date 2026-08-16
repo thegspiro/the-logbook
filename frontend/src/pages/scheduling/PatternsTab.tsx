@@ -789,10 +789,7 @@ export const PatternsTab: React.FC = () => {
             const patternPlatoons = config.platoons as string[] | undefined;
 
             return (
-              <div
-                key={pattern.id}
-                className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border"
-              >
+              <div key={pattern.id} className="card overflow-hidden">
                 {/* A pattern row used to be one big button with a bare chevron:
                     everything a pattern is for — generating the shifts — was
                     behind a glyph that said nothing about what it hid. The

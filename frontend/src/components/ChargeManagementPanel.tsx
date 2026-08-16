@@ -126,11 +126,11 @@ const ChargeManagementPanel: React.FC = () => {
 
       {/* Table */}
       {loading ? (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center">
+        <div className="card p-8 text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-500" />
         </div>
       ) : items.length === 0 ? (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center">
+        <div className="card p-8 text-center">
           <DollarSign className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-secondary">No charge records found.</p>
         </div>
@@ -139,10 +139,7 @@ const ChargeManagementPanel: React.FC = () => {
           {/* Mobile cards */}
           <div className="space-y-3 sm:hidden">
             {items.map((item) => (
-              <div
-                key={item.issuance_id}
-                className="bg-theme-surface border-theme-surface-border rounded-lg border p-4"
-              >
+              <div key={item.issuance_id} className="card p-4">
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div>
                     <h4 className="text-theme-text-primary text-sm font-medium">{item.item_name}</h4>
@@ -183,7 +180,7 @@ const ChargeManagementPanel: React.FC = () => {
             ))}
           </div>
           {/* Desktop table */}
-          <div className="bg-theme-surface border-theme-surface-border hidden overflow-hidden overflow-x-auto rounded-lg border sm:block">
+          <div className="card hidden overflow-hidden overflow-x-auto sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface-secondary border-b">

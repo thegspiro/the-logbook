@@ -134,7 +134,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
       {/* Stage List */}
       <div className="space-y-2">
         {stages.length === 0 ? (
-          <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border border-dashed py-12 text-center">
+          <div className="card bg-theme-input-bg border-dashed py-12 text-center">
             <p className="text-theme-text-muted mb-2">No stages configured yet.</p>
             <p className="text-theme-text-muted text-sm">Add stages to define the prospective member journey.</p>
           </div>

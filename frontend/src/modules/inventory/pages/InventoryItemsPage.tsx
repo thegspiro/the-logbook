@@ -723,7 +723,7 @@ const InventoryItemsPage: React.FC = () => {
               onClick={() => {
                 setFLoc(loc.location_id ?? '');
               }}
-              className={`card-secondary hover:bg-theme-surface-hover p-3 text-left transition-colors ${fLoc === (loc.location_id ?? '') ? 'ring-2 ring-blue-500' : ''}`}
+              className={`card-secondary hover:bg-theme-surface-hover p-3 text-left ${fLoc === (loc.location_id ?? '') ? 'ring-2 ring-blue-500' : ''}`}
             >
               <div className="mb-1 flex items-center gap-1.5">
                 <MapPin className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />

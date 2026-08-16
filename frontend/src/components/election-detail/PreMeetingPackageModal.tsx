@@ -144,7 +144,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
                   void loadPrefill('leadership');
                 }}
                 disabled={prefillLoading !== null}
-                className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                className="btn-secondary text-theme-text-secondary px-3 py-1.5 text-sm"
               >
                 {prefillLoading === 'leadership' ? 'Loading…' : 'Leadership'}
               </button>
@@ -154,14 +154,14 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
                   void loadPrefill('eligible_voters');
                 }}
                 disabled={prefillLoading !== null}
-                className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                className="btn-secondary text-theme-text-secondary px-3 py-1.5 text-sm"
               >
                 {prefillLoading === 'eligible_voters' ? 'Loading…' : 'All eligible voters'}
               </button>
               <button
                 type="button"
                 onClick={() => setRecipients([])}
-                className="bg-theme-surface text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm"
+                className="btn-secondary text-theme-text-muted px-3 py-1.5 text-sm"
               >
                 Clear list
               </button>
@@ -218,7 +218,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
               <button
                 type="button"
                 onClick={addRecipient}
-                className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm"
+                className="btn-secondary text-theme-text-secondary px-3 py-1.5 text-sm"
               >
                 Add
               </button>

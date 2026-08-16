@@ -386,7 +386,7 @@ const FieldRenderer = ({
       case FieldType.MULTISELECT: {
         const selected = value ? value.split(',').filter(Boolean) : [];
         return (
-          <div className="bg-theme-input-bg border-theme-input-border space-y-2 rounded-lg border p-3">
+          <div className="card bg-theme-input-bg border-theme-input-border space-y-2 p-3">
             {field.options?.map((opt) => {
               const checked = selected.includes(opt.value);
               return (

@@ -734,7 +734,7 @@ export const EventDetailPage: React.FC = () => {
                 )}
                 <button
                   onClick={() => void navigate(`/events/${eventId}/qr-code`)}
-                  className="bg-theme-surface inline-flex items-center rounded-md border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 shadow-xs hover:bg-blue-500/20 dark:text-blue-400"
+                  className="btn-secondary inline-flex items-center border-blue-300 text-sm font-medium text-blue-700 shadow-xs hover:bg-blue-500/20 dark:text-blue-400"
                 >
                   <svg
                     className="mr-2 h-5 w-5"
@@ -763,7 +763,7 @@ export const EventDetailPage: React.FC = () => {
                   <>
                     <button
                       onClick={() => void navigate(`/events/${eventId}/edit`)}
-                      className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium shadow-xs"
+                      className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                     >
                       <svg
                         className="mr-2 h-5 w-5"
@@ -783,7 +783,7 @@ export const EventDetailPage: React.FC = () => {
                     </button>
                     <button
                       onClick={openCheckInModal}
-                      className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium shadow-xs"
+                      className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                     >
                       <svg
                         className="mr-2 h-5 w-5"
@@ -808,7 +808,7 @@ export const EventDetailPage: React.FC = () => {
                         <button
                           onClick={() => notifications.setShowReminderMenu(!notifications.showReminderMenu)}
                           disabled={notifications.sendingReminders}
-                          className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium shadow-xs disabled:opacity-50"
+                          className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                         >
                           <Bell className="mr-2 h-4 w-4" />
                           {notifications.sendingReminders ? 'Sending...' : 'Send Reminders'}
@@ -862,7 +862,7 @@ export const EventDetailPage: React.FC = () => {
                     <div className="relative" ref={actionsMenuRef}>
                       <button
                         onClick={() => setShowActionsMenu(!showActionsMenu)}
-                        className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium shadow-xs"
+                        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                       >
                         <svg
                           className="h-5 w-5"

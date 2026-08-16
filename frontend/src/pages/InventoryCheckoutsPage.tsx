@@ -154,7 +154,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             onClick={() => {
               void fetchCheckouts();
             }}
-            className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary border-theme-surface-border flex shrink-0 items-center space-x-2 rounded-lg border px-3 py-2 transition-colors sm:px-4"
+            className="btn-secondary flex shrink-0 items-center space-x-2 px-3 sm:px-4"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">Refresh</span>

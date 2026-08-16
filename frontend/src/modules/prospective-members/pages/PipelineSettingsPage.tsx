@@ -334,7 +334,7 @@ export const PipelineSettingsPage: React.FC = () => {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Pipeline List Sidebar */}
         <div className="space-y-4 lg:col-span-4">
-          <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border">
+          <div className="card bg-theme-input-bg">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
               <h2 className="text-theme-text-primary text-sm font-medium">Pipelines</h2>
               <div className="flex items-center gap-1">
@@ -412,7 +412,7 @@ export const PipelineSettingsPage: React.FC = () => {
               <span className="sr-only">Loading pipeline...</span>
             </div>
           ) : !currentPipeline ? (
-            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border border-dashed py-20 text-center">
+            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
               <Settings className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-medium">
                 {visiblePipelines.length === 0 ? 'Create your first pipeline' : 'Select a pipeline'}
@@ -469,7 +469,7 @@ export const PipelineSettingsPage: React.FC = () => {
               )}
 
               {/* Pipeline Name & Controls */}
-              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+              <div className="card bg-theme-input-bg p-4">
                 {editingPipelineName ? (
                   <div className="space-y-3">
                     <input
@@ -606,7 +606,7 @@ export const PipelineSettingsPage: React.FC = () => {
 
               {/* Pipeline Stats Dashboard */}
               {pipelineStats && !isLoadingStats && (
-                <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+                <div className="card bg-theme-input-bg p-4">
                   <div className="mb-3 flex items-center gap-2">
                     <BarChart3 className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
                     <h3 className="text-theme-text-secondary text-sm font-medium">Pipeline Statistics</h3>
@@ -649,7 +649,7 @@ export const PipelineSettingsPage: React.FC = () => {
 
               {/* Pipeline Flow Visualization */}
               {currentPipeline.stages.length > 0 && (
-                <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+                <div className="card bg-theme-input-bg p-4">
                   <h3 className="text-theme-text-secondary mb-3 text-sm font-medium">Pipeline Flow</h3>
                   <div className="flex items-center gap-1 overflow-x-auto pb-2">
                     {[...currentPipeline.stages]
@@ -683,13 +683,13 @@ export const PipelineSettingsPage: React.FC = () => {
               )}
 
               {/* Stage Builder */}
-              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+              <div className="card bg-theme-input-bg p-4">
                 <h3 className="text-theme-text-secondary mb-4 text-sm font-medium">Pipeline Stages</h3>
                 <PipelineBuilder pipeline={currentPipeline} onPipelineUpdated={handlePipelineUpdated} />
               </div>
 
               {/* Inactivity Configuration */}
-              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+              <div className="card bg-theme-input-bg p-4">
                 <div className="mb-1 flex items-center gap-2">
                   <Clock className="h-4 w-4 text-amber-700 dark:text-amber-400" aria-hidden="true" />
                   <h3 className="text-theme-text-secondary text-sm font-medium">Inactivity Timeout</h3>
@@ -915,7 +915,7 @@ export const PipelineSettingsPage: React.FC = () => {
               </div>
 
               {/* Public Status Page Settings */}
-              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-5">
+              <div className="card bg-theme-input-bg p-5">
                 <div className="mb-3 flex items-center gap-2">
                   <Globe className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
                   <h3 className="text-theme-text-primary text-sm font-semibold">Public Application Status Page</h3>
@@ -938,7 +938,7 @@ export const PipelineSettingsPage: React.FC = () => {
               </div>
 
               {/* Report Stage Groups */}
-              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-5">
+              <div className="card bg-theme-input-bg p-5">
                 <ReportStageGroupsEditor pipeline={currentPipeline} onSaved={handlePipelineUpdated} />
               </div>
             </div>
@@ -975,7 +975,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowCloneModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="clone-pipeline-title"
@@ -1043,7 +1043,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowSaveTemplateModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="save-template-title"
@@ -1111,7 +1111,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowTemplateGallery(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[80dvh] w-full max-w-lg flex-col rounded-xl border">
+          <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[80dvh] w-full max-w-lg flex-col rounded-lg border">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="template-gallery-title"
@@ -1185,7 +1185,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowCreateModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 id="create-pipeline-title" className="text-theme-text-primary text-lg font-bold">
                 Create Pipeline

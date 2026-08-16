@@ -703,7 +703,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                   className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
                     cameraActive
                       ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-400'
-                      : 'border-theme-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary'
+                      : 'border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary'
                   }`}
                 >
                   <Camera className="h-4 w-4" />
@@ -722,7 +722,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                         if (searchResults.length > 0) setShowDropdown(true);
                       }}
                       placeholder="Search by name, barcode, serial, or asset tag..."
-                      className="border-theme-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border py-2 pr-8 pl-9 text-sm focus:border-transparent focus:ring-2"
+                      className="form-input pr-8 pl-9 text-sm focus:border-transparent"
                       autoComplete="off"
                       autoFocus
                     />
@@ -744,7 +744,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                               type="button"
                               disabled={isAlreadyAdded}
                               onClick={() => !isAlreadyAdded && addItemFromResult(result)}
-                              className={`border-theme-border flex w-full items-center justify-between gap-2 border-b px-3 py-2.5 text-left transition-colors last:border-b-0 ${
+                              className={`border-theme-surface-border flex w-full items-center justify-between gap-2 border-b px-3 py-2.5 text-left transition-colors last:border-b-0 ${
                                 isAlreadyAdded
                                   ? 'bg-theme-surface-secondary cursor-not-allowed opacity-50'
                                   : i === activeDropdownIndex
@@ -854,10 +854,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               ) : (
                 <div className="max-h-64 space-y-2 overflow-y-auto">
                   {scannedItems.map((si) => (
-                    <div
-                      key={si.itemId}
-                      className="border-theme-border bg-theme-surface flex items-center justify-between rounded-lg border p-3"
-                    >
+                    <div key={si.itemId} className="card flex items-center justify-between p-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <p className="text-theme-text-primary truncate text-sm font-medium">{si.itemName}</p>
@@ -890,7 +887,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                               min={1}
                               value={si.quantity}
                               onChange={(e) => updateQuantity(si.itemId, parseInt(e.target.value) || 1)}
-                              className="border-theme-border bg-theme-surface text-theme-text-primary w-16 rounded-sm border px-2 py-1 text-center text-sm"
+                              className="form-input w-16 px-2 py-1 text-center text-sm"
                               title={mode === 'return' ? 'Quantity to return (partial return supported)' : 'Quantity'}
                             />
                           </div>
@@ -901,7 +898,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                           <select
                             value={si.returnCondition}
                             onChange={(e) => updateCondition(si.itemId, e.target.value)}
-                            className="border-theme-border bg-theme-surface text-theme-text-primary rounded-sm border px-2 py-1 text-sm"
+                            className="form-input px-2 py-1 text-sm"
                             title="Return condition"
                           >
                             {RETURN_CONDITION_OPTIONS.map((c) => (
@@ -929,11 +926,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
             {/* Submit */}
             {scannedItems.length > 0 && (
-              <div className="border-theme-border flex justify-end gap-3 border-t pt-2">
-                <button
-                  onClick={onClose}
-                  className="border-theme-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg border px-4 py-2 text-sm"
-                >
+              <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-2">
+                <button onClick={onClose} className="btn-secondary text-sm">
                   Cancel
                 </button>
                 <button
@@ -965,7 +959,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowConfirm(false)}
-                  className="border-theme-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded-lg border px-3 py-1.5 text-sm"
+                  className="btn-secondary text-theme-text-secondary px-3 py-1.5 text-sm"
                 >
                   Cancel
                 </button>

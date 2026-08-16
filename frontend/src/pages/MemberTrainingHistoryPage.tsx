@@ -349,7 +349,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 aria-label="Export period"
                 value={exportPeriod}
                 onChange={(e) => setExportPeriod(e.target.value as TrainingExportPeriod)}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-2 text-sm"
+                className="form-input px-3 text-sm"
               >
                 {Object.values(TrainingExportPeriod).map((p) => (
                   <option key={p} value={p}>

@@ -1681,7 +1681,7 @@ const PipelineDetailPage: React.FC = () => {
                   const isExpanded = expandedPhases.has(phase.id);
 
                   return (
-                    <div key={phase.id} className="bg-theme-surface border-theme-surface-border rounded-lg border">
+                    <div key={phase.id} className="card">
                       {/* Phase header */}
                       <div className="flex items-center justify-between p-4">
                         <button
@@ -1818,7 +1818,7 @@ const PipelineDetailPage: React.FC = () => {
                 Always shown to an officer so a phase-less pipeline is editable;
                 shown to everyone else only when it actually has some. */}
             {(canManage || programLevelReqs.length > 0) && (
-              <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+              <div className="card p-4">
                 <div className="mb-3">
                   <h3 className="text-theme-text-primary flex items-center gap-2 font-medium">
                     <ListChecks className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Requirements outside any phase
@@ -1843,7 +1843,7 @@ const PipelineDetailPage: React.FC = () => {
             )}
 
             {/* Milestones */}
-            <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+            <div className="card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-theme-text-primary flex items-center gap-2 font-medium">
                   <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" /> Milestones

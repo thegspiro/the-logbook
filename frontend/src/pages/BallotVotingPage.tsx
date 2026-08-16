@@ -392,10 +392,7 @@ export const BallotVotingPage: React.FC = () => {
               isMultiSelect && selectionCap !== null && (itemChoice?.candidate_ids.length ?? 0) >= selectionCap;
 
             return (
-              <div
-                key={item.id}
-                className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border shadow-xs"
-              >
+              <div key={item.id} className="card overflow-hidden shadow-xs">
                 {/* Item Header */}
                 <div className="bg-theme-surface-secondary border-theme-surface-border border-b px-6 py-4">
                   <div className="flex items-start gap-3">

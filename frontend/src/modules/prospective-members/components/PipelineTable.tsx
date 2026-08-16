@@ -202,7 +202,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     <div>
       {/* Bulk Actions Bar */}
       {selected.size > 0 && (
-        <div className="bg-theme-surface border-theme-surface-border mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3">
+        <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
           <span className="text-theme-text-secondary text-sm">{selected.size} selected</span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
@@ -265,7 +265,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       )}
 
       {/* Table */}
-      <div className="bg-theme-input-bg border-theme-surface-border overflow-hidden rounded-lg border">
+      <div className="card bg-theme-input-bg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>

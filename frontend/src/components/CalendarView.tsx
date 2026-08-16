@@ -177,14 +177,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
         </div>
         <button
           onClick={goToToday}
-          className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors"
+          className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm font-medium"
         >
           Today
         </button>
       </div>
 
       {/* Calendar grid */}
-      <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
+      <div className="card overflow-hidden">
         {/* Day-of-week headers */}
         <div className="border-theme-surface-border grid grid-cols-7 border-b">
           {DAYS_OF_WEEK.map((day) => (
@@ -247,7 +247,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
 
       {/* Selected day events panel */}
       {selectedDate && (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div className="card p-4">
           <h3 className="text-theme-text-primary mb-3 text-sm font-semibold">
             {formatDateCustom(
               selectedDate + 'T12:00:00',

@@ -122,7 +122,7 @@ const CriterionEditor: React.FC<{
   const mode = criterion.score_mode;
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+    <div className="card p-4">
       <div className="flex items-start gap-3">
         <div className="text-theme-text-muted mt-2 flex cursor-grab items-center">
           <GripVertical className="h-4 w-4" />
@@ -140,7 +140,7 @@ const CriterionEditor: React.FC<{
               value={criterion.label}
               onChange={(e) => onChange({ ...criterion, label: e.target.value })}
               placeholder="e.g., Dons SCBA within 60 seconds"
-              className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+              className="form-input px-3 text-sm"
             />
           </div>
 
@@ -150,7 +150,7 @@ const CriterionEditor: React.FC<{
             <select
               value={criterion.type}
               onChange={(e) => onChange({ ...criterion, type: e.target.value as CriterionType })}
-              className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+              className="form-input px-3 text-sm"
             >
               {CRITERION_TYPE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -173,7 +173,7 @@ const CriterionEditor: React.FC<{
                     onChange({ ...criterion, max_score: e.target.value ? Number(e.target.value) : undefined })
                   }
                   placeholder="3"
-                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input px-3 text-sm"
                 />
                 {/* A scored step with no maximum carries no points at all —
                     the percentage is computed from max_score, so the step is
@@ -203,7 +203,7 @@ const CriterionEditor: React.FC<{
                       onChange({ ...criterion, passing_score: e.target.value ? Number(e.target.value) : undefined })
                     }
                     placeholder="2"
-                    className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input px-3 text-sm"
                   />
                 </div>
               )}
@@ -221,7 +221,7 @@ const CriterionEditor: React.FC<{
                   onChange({ ...criterion, time_limit_seconds: e.target.value ? Number(e.target.value) : undefined })
                 }
                 placeholder="60"
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input px-3 text-sm"
               />
             </div>
           )}
@@ -242,7 +242,7 @@ const CriterionEditor: React.FC<{
                 }}
                 rows={3}
                 placeholder="Check airway&#10;Assess breathing&#10;Check pulse"
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input resize-none px-3 text-sm"
               />
             </div>
           )}
@@ -257,7 +257,7 @@ const CriterionEditor: React.FC<{
                 onChange={(e) => onChange({ ...criterion, statement_text: e.target.value || undefined })}
                 rows={3}
                 placeholder="Enter the statement the evaluator must read or announce..."
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input resize-none px-3 text-sm"
               />
               {/* Sheets differ on this and the difference is invisible from the
                   scorecard afterwards: an opening brief read before the
@@ -304,7 +304,7 @@ const CriterionEditor: React.FC<{
                       deduction_points: next === CriterionScoreMode.DEDUCT ? criterion.deduction_points : undefined,
                     });
                   }}
-                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input min-w-0 flex-1 px-3 text-sm"
                 >
                   <option value="">
                     {criterion.type === 'pass_fail'
@@ -328,7 +328,7 @@ const CriterionEditor: React.FC<{
                       onChange({ ...criterion, max_score: e.target.value ? Number(e.target.value) : undefined })
                     }
                     placeholder="1"
-                    className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-20 shrink-0 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input w-20 shrink-0 px-3 text-sm"
                   />
                 )}
                 {mode === CriterionScoreMode.DEDUCT && (
@@ -342,7 +342,7 @@ const CriterionEditor: React.FC<{
                       onChange({ ...criterion, deduction_points: e.target.value ? Number(e.target.value) : undefined })
                     }
                     placeholder="1"
-                    className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-20 shrink-0 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input w-20 shrink-0 px-3 text-sm"
                   />
                 )}
               </div>
@@ -386,7 +386,7 @@ const CriterionEditor: React.FC<{
             value={criterion.description ?? ''}
             onChange={(e) => onChange({ ...criterion, description: e.target.value || undefined })}
             placeholder="Optional notes"
-            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+            className="form-input px-3 text-sm"
           />
         </div>
 
@@ -435,7 +435,7 @@ const SectionEditor: React.FC<{
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
+    <div className="card overflow-hidden">
       {/* Section Header */}
       <div className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center gap-3 border-b px-4 py-3">
         <GripVertical className="text-theme-text-muted h-5 w-5 cursor-grab" />
@@ -447,14 +447,14 @@ const SectionEditor: React.FC<{
             value={section.name}
             onChange={(e) => onChange({ ...section, name: e.target.value })}
             placeholder="Section name (e.g., SCBA Operations)"
-            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 flex-1 rounded-lg border px-3 py-1.5 text-sm font-medium focus:ring-2 focus:outline-hidden"
+            className="form-input flex-1 px-3 py-1.5 text-sm font-medium"
           />
           <input
             type="text"
             value={section.description ?? ''}
             onChange={(e) => onChange({ ...section, description: e.target.value || undefined })}
             placeholder="Description (optional)"
-            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 hidden flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden lg:block"
+            className="form-input hidden flex-1 px-3 py-1.5 text-sm lg:block"
           />
         </div>
 
@@ -898,7 +898,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               <button
                 onClick={() => void handleSave()}
                 disabled={isSaving}
-                className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-primary flex items-center gap-2 rounded-lg border px-4 py-2 font-medium transition-colors disabled:opacity-50"
+                className="btn-secondary flex items-center gap-2 font-medium"
               >
                 <Save className="h-4 w-4" />
                 {isSaving ? 'Saving...' : 'Save Draft'}
@@ -945,7 +945,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         )}
 
         {/* Template Settings */}
-        <div className="bg-theme-surface border-theme-surface-border mb-6 rounded-lg border p-6">
+        <div className="card mb-6 p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Template Settings</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -957,7 +957,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., SCBA Proficiency Evaluation"
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
+                className="form-input px-3"
               />
             </div>
             <div>
@@ -967,16 +967,12 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="e.g., Fire Operations, EMS, Hazmat"
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
+                className="form-input px-3"
               />
             </div>
             <div className="md:col-span-2">
               <label className="text-theme-text-muted mb-1 block text-sm font-medium">Visibility</label>
-              <select
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value)}
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
-              >
+              <select value={visibility} onChange={(e) => setVisibility(e.target.value)} className="form-input px-3">
                 <option value="all_members">All Members</option>
                 <option value="officers_only">Officers Only</option>
                 <option value="assigned_only">Assigned Members Only</option>
@@ -992,7 +988,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               <select
                 value={requirementId}
                 onChange={(e) => setRequirementId(e.target.value)}
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
+                className="form-input px-3"
               >
                 <option value="">None — not linked to a pipeline requirement</option>
                 {requirements.map((r) => (
@@ -1012,7 +1008,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 the labels name the inherited value so an officer can see what
                 that means without leaving the page. */}
             <div className="md:col-span-2">
-              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+              <div className="card p-4">
                 <p className="text-theme-text-primary text-sm font-medium">Result Disclosure</p>
                 <p className="text-theme-text-muted mt-0.5 mb-3 text-xs">
                   What the person tested sees of their own result, and when. Officers always see everything. Individual
@@ -1031,7 +1027,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                       id="template-result-disclosure"
                       value={resultDisclosure}
                       onChange={(e) => setResultDisclosure(e.target.value)}
-                      className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input px-3 text-sm"
                     >
                       <option value="">
                         Inherit — {labelFor(DISCLOSURE_CHOICES, orgConfig?.skills_result_disclosure ?? 'full')}
@@ -1057,7 +1053,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                         id="template-result-release"
                         value={resultRelease}
                         onChange={(e) => setResultRelease(e.target.value)}
-                        className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input px-3 text-sm"
                       >
                         <option value="">
                           Inherit — {labelFor(RELEASE_CHOICES, orgConfig?.skills_result_release ?? 'on_completion')}
@@ -1115,7 +1111,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
                 placeholder="Brief description of the evaluation..."
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
+                className="form-input resize-none px-3"
               />
             </div>
             <div>
@@ -1129,7 +1125,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={timeLimitMinutes ?? ''}
                 onChange={(e) => setTimeLimitMinutes(e.target.value ? Number(e.target.value) : undefined)}
                 placeholder="e.g., 30"
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
+                className="form-input px-3"
               />
             </div>
             <div>
@@ -1141,7 +1137,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={passingPercentage ?? ''}
                 onChange={(e) => setPassingPercentage(e.target.value ? Number(e.target.value) : undefined)}
                 placeholder="e.g., 70"
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
+                className="form-input px-3"
               />
             </div>
             <div>
@@ -1151,7 +1147,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="e.g., NFPA 1001, Probationary"
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
+                className="form-input px-3"
               />
             </div>
             <div className="flex items-end">

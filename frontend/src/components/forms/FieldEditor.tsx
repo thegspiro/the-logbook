@@ -267,7 +267,7 @@ const FieldEditor = ({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
-      <div className="bg-theme-surface-modal border-theme-surface-border relative max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl border shadow-2xl">
+      <div className="bg-theme-surface-modal border-theme-surface-border relative max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg border shadow-2xl">
         {/* Header */}
         <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 flex items-center justify-between border-b px-6 py-4">
           <h3 id="field-editor-title" className="text-theme-text-primary text-lg font-semibold">

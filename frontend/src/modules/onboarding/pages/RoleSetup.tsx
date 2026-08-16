@@ -905,9 +905,7 @@ const PositionSetup: React.FC = () => {
                     return (
                       <div
                         key={position.id}
-                        className={`bg-theme-surface rounded-lg border transition-all ${
-                          isEditing ? 'border-theme-accent-orange' : 'border-theme-surface-border'
-                        }`}
+                        className={`card transition-all ${isEditing ? 'border-theme-accent-orange' : 'border-theme-surface-border'}`}
                       >
                         <div
                           className="flex cursor-pointer items-center justify-between p-4"
