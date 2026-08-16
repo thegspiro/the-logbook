@@ -80,7 +80,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border">
+      <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-lg border">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="create-facility-title" className="text-theme-text-primary text-lg font-bold">
             Add Facility

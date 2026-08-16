@@ -147,7 +147,7 @@ export default function InspectionsListPage() {
           {filtered.map((insp) => (
             <div
               key={insp.id}
-              className="bg-theme-surface border-theme-surface-border hover:border-theme-surface-border group flex items-center gap-4 rounded-lg border p-4 transition-all"
+              className="card hover:border-theme-surface-border group flex items-center gap-4 p-4 transition-all"
             >
               <div
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -235,7 +235,7 @@ export default function InspectionsListPage() {
             if (e.key === 'Escape') setShowModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl border">
+          <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg border">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingInspection ? 'Edit Inspection' : 'New Inspection'}

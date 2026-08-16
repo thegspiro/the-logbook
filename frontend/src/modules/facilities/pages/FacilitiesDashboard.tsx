@@ -398,9 +398,7 @@ function FacilityCard({ facility, onClick }: FacilityCardProps) {
   return (
     <button
       onClick={() => onClick(facility)}
-      className={`bg-theme-surface rounded-lg border p-4 text-left shadow-sm backdrop-blur-xs transition-shadow duration-200 hover:shadow-md ${
-        facility.isArchived ? 'border-amber-500/20 opacity-60' : 'border-theme-surface-border'
-      }`}
+      className={`card p-4 text-left transition-shadow duration-200 hover:shadow-md ${facility.isArchived ? 'border-amber-500/20 opacity-60' : 'border-theme-surface-border'}`}
     >
       <div className="mb-3 flex items-start justify-between">
         <div className="flex items-center gap-2.5">
