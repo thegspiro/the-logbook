@@ -406,7 +406,9 @@ const ItemDetailPage: React.FC = () => {
             <Field label="Current Value" value={fmtCurrency(item.current_value)} />
             <Field label="Replacement Cost" value={fmtCurrency(item.replacement_cost)} />
             <Field label="Purchase Date" value={formatDate(item.purchase_date, tz)} />
-            <Field label="Vendor" value={item.vendor || '--'} />
+            {/* The tracked vendor is the answer when the item has one; the
+                free-text name only stands in for items never linked. */}
+            <Field label="Vendor" value={item.vendor_name || item.vendor || '--'} />
             <Field label="Warranty Exp." value={formatDate(item.warranty_expiration, tz)} />
           </Card>
         )}

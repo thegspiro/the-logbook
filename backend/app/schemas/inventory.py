@@ -174,6 +174,142 @@ GarmentStyleLiteral = Literal[
 ]
 
 # ============================================
+# Vendor Schemas
+# ============================================
+
+
+class InventoryVendorContactBase(BaseModel):
+    """Shared fields for a named person at a vendor"""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    title: Optional[str] = Field(None, max_length=150)
+    email: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    phone_extension: Optional[str] = Field(None, max_length=20)
+    notes: Optional[FreeText] = None
+    is_primary: bool = False
+
+
+class InventoryVendorContactCreate(InventoryVendorContactBase):
+    """Schema for adding a contact to a vendor"""
+
+
+class InventoryVendorContactUpdate(BaseModel):
+    """Schema for updating a vendor contact"""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    title: Optional[str] = Field(None, max_length=150)
+    email: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    phone_extension: Optional[str] = Field(None, max_length=20)
+    notes: Optional[FreeText] = None
+    is_primary: Optional[bool] = None
+
+
+class InventoryVendorContactResponse(UTCResponseBase):
+    """Schema for a vendor contact response"""
+
+    id: UUID
+    organization_id: UUID
+    vendor_id: UUID
+    name: str
+    title: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    phone_extension: Optional[str] = None
+    notes: Optional[str] = None
+    is_primary: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+class InventoryVendorBase(BaseModel):
+    """Shared vendor fields"""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    account_number: Optional[str] = Field(None, max_length=100)
+    website: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[str] = Field(None, max_length=255)
+    fax: Optional[str] = Field(None, max_length=50)
+    address_line1: Optional[str] = Field(None, max_length=255)
+    address_line2: Optional[str] = Field(None, max_length=255)
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    postal_code: Optional[str] = Field(None, max_length=20)
+    country: Optional[str] = Field(None, max_length=100)
+    payment_terms: Optional[str] = Field(None, max_length=100)
+    notes: Optional[FreeText] = None
+    is_preferred: bool = False
+
+
+class InventoryVendorCreate(InventoryVendorBase):
+    """Schema for creating a vendor, optionally with its contacts in one pass"""
+
+    contacts: List[InventoryVendorContactCreate] = Field(
+        default_factory=list, max_length=50
+    )
+
+
+class InventoryVendorUpdate(BaseModel):
+    """Schema for updating a vendor"""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    account_number: Optional[str] = Field(None, max_length=100)
+    website: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[str] = Field(None, max_length=255)
+    fax: Optional[str] = Field(None, max_length=50)
+    address_line1: Optional[str] = Field(None, max_length=255)
+    address_line2: Optional[str] = Field(None, max_length=255)
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    postal_code: Optional[str] = Field(None, max_length=20)
+    country: Optional[str] = Field(None, max_length=100)
+    payment_terms: Optional[str] = Field(None, max_length=100)
+    notes: Optional[FreeText] = None
+    is_preferred: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class InventoryVendorResponse(UTCResponseBase):
+    """Schema for a vendor response"""
+
+    id: UUID
+    organization_id: UUID
+    name: str
+    account_number: Optional[str] = None
+    website: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    fax: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    payment_terms: Optional[str] = None
+    notes: Optional[str] = None
+    is_preferred: bool = False
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[UUID] = None
+
+    contacts: List[InventoryVendorContactResponse] = []
+    # Populated by the API: how much of the catalog came from this vendor, and
+    # what is still on order with them.
+    item_count: int = 0
+    open_reorder_count: int = 0
+    total_purchase_value: Optional[Decimal] = None
+
+    model_config = _response_config
+
+
+# ============================================
 # Category Schemas
 # ============================================
 
@@ -247,7 +383,10 @@ class InventoryItemBase(BaseModel):
     purchase_date: Optional[date] = None
     purchase_price: Optional[Decimal] = Field(None, ge=0)
     purchase_order: Optional[str] = Field(None, max_length=255)
+    # Legacy free-text name; `vendor_id` is the tracked link and takes priority
+    # in the UI wherever both are set.
     vendor: Optional[str] = Field(None, max_length=255)
+    vendor_id: Optional[UUID] = None
     warranty_expiration: Optional[date] = None
     expected_lifetime_years: Optional[int] = Field(None, ge=0)
     current_value: Optional[Decimal] = Field(None, ge=0)
@@ -331,6 +470,7 @@ class InventoryItemUpdate(BaseModel):
     purchase_price: Optional[Decimal] = Field(None, ge=0)
     purchase_order: Optional[str] = Field(None, max_length=255)
     vendor: Optional[str] = Field(None, max_length=255)
+    vendor_id: Optional[UUID] = None
     warranty_expiration: Optional[date] = None
     expected_lifetime_years: Optional[int] = Field(None, ge=0)
     current_value: Optional[Decimal] = Field(None, ge=0)
@@ -372,6 +512,9 @@ class InventoryItemResponse(InventoryItemBase):
     # Set by the detail endpoint, which eager-loads the holder. The list
     # endpoints leave it None rather than joining a user per row.
     assigned_to_name: Optional[str] = None
+    # Name of the linked vendor, filled in by the endpoints that eager-load it.
+    # Falls back to the legacy free-text `vendor` in the UI when unset.
+    vendor_name: Optional[str] = None
     assigned_date: Optional[datetime] = None
     quantity_issued: int = 0
     last_inspection_date: Optional[date] = None
@@ -1606,6 +1749,7 @@ class ReorderRequestCreate(BaseModel):
     quantity_requested: int = Field(default=1, ge=1)
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_contact: Optional[str] = Field(None, max_length=255)
+    vendor_id: Optional[UUID] = None
     estimated_unit_cost: Optional[Decimal] = Field(None, ge=0)
     expected_delivery_date: Optional[date] = None
     urgency: ReorderUrgencyLiteral = "normal"
@@ -1620,6 +1764,7 @@ class ReorderRequestUpdate(BaseModel):
     quantity_received: Optional[int] = Field(None, ge=0)
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_contact: Optional[str] = Field(None, max_length=255)
+    vendor_id: Optional[UUID] = None
     estimated_unit_cost: Optional[Decimal] = Field(None, ge=0)
     actual_unit_cost: Optional[Decimal] = Field(None, ge=0)
     purchase_order_number: Optional[str] = Field(None, max_length=255)
@@ -1641,6 +1786,10 @@ class ReorderRequestResponse(UTCResponseBase):
     quantity_received: Optional[int] = None
     vendor: Optional[str] = None
     vendor_contact: Optional[str] = None
+    vendor_id: Optional[UUID] = None
+    # Name of the linked vendor; the endpoints fill this in so the list does not
+    # have to resolve every id itself.
+    vendor_name: Optional[str] = None
     estimated_unit_cost: Optional[Decimal] = None
     actual_unit_cost: Optional[Decimal] = None
     purchase_order_number: Optional[str] = None
@@ -2027,6 +2176,7 @@ class ImpactPlannerReorderRequest(ImpactPlannerRequest):
     """
 
     vendor: Optional[str] = Field(None, max_length=255)
+    vendor_id: Optional[UUID] = None
     urgency: ReorderUrgencyLiteral = "normal"
     notes: Optional[FreeText] = None
 

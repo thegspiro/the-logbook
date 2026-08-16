@@ -2,13 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import type { ReorderRequest } from '../../../services/eventServices';
+import type { InventoryVendor, ReorderRequest } from '../../../services/eventServices';
 
 const mockGetReorderRequests = vi.fn();
 const mockGetCategories = vi.fn();
 const mockGetLowStockItems = vi.fn();
 const mockCreateReorderRequest = vi.fn();
 const mockUpdateReorderRequest = vi.fn();
+const mockGetVendors = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -17,6 +18,7 @@ vi.mock('../../../services/api', () => ({
     getLowStockItems: (...a: unknown[]) => mockGetLowStockItems(...a) as unknown,
     createReorderRequest: (...a: unknown[]) => mockCreateReorderRequest(...a) as unknown,
     updateReorderRequest: (...a: unknown[]) => mockUpdateReorderRequest(...a) as unknown,
+    getVendors: (...a: unknown[]) => mockGetVendors(...a) as unknown,
   },
 }));
 
@@ -46,6 +48,31 @@ const makeReq = (overrides: Partial<ReorderRequest> = {}): ReorderRequest => ({
   urgency: 'high',
   created_at: '2026-02-01T00:00:00Z',
   updated_at: '2026-02-01T00:00:00Z',
+  ...overrides,
+});
+
+const makeVendor = (overrides: Partial<InventoryVendor> = {}): InventoryVendor => ({
+  id: 'v-1',
+  organization_id: 'org-1',
+  name: 'Galls',
+  is_preferred: false,
+  is_active: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  contacts: [
+    {
+      id: 'c-1',
+      organization_id: 'org-1',
+      vendor_id: 'v-1',
+      name: 'Dana Reyes',
+      email: 'dana@galls.test',
+      is_primary: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    },
+  ],
+  item_count: 0,
+  open_reorder_count: 0,
   ...overrides,
 });
 
@@ -80,6 +107,7 @@ describe('ReorderRequestsPage', () => {
     mockGetLowStockItems.mockResolvedValue([]);
     mockCreateReorderRequest.mockResolvedValue({});
     mockUpdateReorderRequest.mockResolvedValue({});
+    mockGetVendors.mockResolvedValue([]);
   });
 
   it('shows the empty state when there are no requests', async () => {
@@ -142,6 +170,48 @@ describe('ReorderRequestsPage', () => {
     await waitFor(() => expect(mockUpdateReorderRequest).toHaveBeenCalledTimes(1));
     expect(mockUpdateReorderRequest.mock.calls[0]?.[0]).toBe('r-1');
     expect(mockToastSuccess).toHaveBeenCalledWith('Status updated');
+  });
+
+  it('shows the linked vendor name in preference to the free-text one', async () => {
+    mockGetReorderRequests.mockResolvedValue([makeReq({ vendor: 'galls inc', vendor_name: 'Galls' })]);
+    renderWithRouter(<ReorderRequestsPage />);
+
+    expect((await screen.findAllByText('Galls')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('galls inc')).not.toBeInTheDocument();
+  });
+
+  it('links a new request to the picked vendor and prefills its contact', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([makeVendor()]);
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findByText('No reorder requests found');
+
+    await user.click(screen.getByRole('button', { name: /New Request/ }));
+    await user.type(await screen.findByPlaceholderText('e.g. SCBA Air Cylinders'), 'Hose Couplings');
+    await user.selectOptions(screen.getByLabelText('Vendor'), 'v-1');
+    await user.click(screen.getByRole('button', { name: 'Create Request' }));
+
+    await waitFor(() => expect(mockCreateReorderRequest).toHaveBeenCalledTimes(1));
+    expect(mockCreateReorderRequest.mock.calls[0]?.[0]).toMatchObject({
+      vendor_id: 'v-1',
+      vendor_contact: 'dana@galls.test',
+    });
+  });
+
+  it('sends an explicit null when an edit unlinks the vendor', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([makeVendor()]);
+    mockGetReorderRequests.mockResolvedValue([makeReq({ vendor_id: 'v-1', vendor_name: 'Galls' })]);
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findAllByText('SCBA Cylinders');
+
+    await user.click(firstButton('Edit'));
+    await screen.findByText('Edit Reorder Request');
+    await user.selectOptions(screen.getByLabelText('Vendor'), '');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateReorderRequest).toHaveBeenCalledTimes(1));
+    expect(mockUpdateReorderRequest.mock.calls[0]?.[1]).toMatchObject({ vendor_id: null });
   });
 
   it('refetches with the selected status filter', async () => {

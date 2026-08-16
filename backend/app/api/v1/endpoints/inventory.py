@@ -43,6 +43,7 @@ from app.models.inventory import (
     EquipmentRequest,
     InventoryCategory,
     InventoryItem,
+    InventoryVendor,
     IssuanceAllowance,
     ItemCondition,
     ItemIssuance,
@@ -104,6 +105,12 @@ from app.schemas.inventory import (
     InventoryLotResponse,
     InventoryLotUpdate,
     InventorySummary,
+    InventoryVendorContactCreate,
+    InventoryVendorContactResponse,
+    InventoryVendorContactUpdate,
+    InventoryVendorCreate,
+    InventoryVendorResponse,
+    InventoryVendorUpdate,
     IssuanceAllowanceCreate,
     IssuanceAllowanceResponse,
     IssuanceAllowanceUpdate,
@@ -397,6 +404,21 @@ async def delete_category(
 # ============================================
 
 
+def _item_response(item: InventoryItem) -> InventoryItemResponse:
+    """Serialize an item, resolving the linked vendor's name when it is loaded.
+
+    ``__dict__`` rather than attribute access: an item that was fetched without
+    the vendor eager-loaded would otherwise trigger a lazy load, which raises
+    under asyncio. A missing key just means "no name to show", and the UI falls
+    back to the legacy free-text ``vendor``.
+    """
+    payload = InventoryItemResponse.model_validate(item)
+    vendor = item.__dict__.get("vendor_record")
+    if vendor is not None:
+        payload.vendor_name = vendor.name
+    return payload
+
+
 @router.get("/items", response_model=ItemsListResponse)
 async def list_items(
     category_id: UUID | None = None,
@@ -406,6 +428,7 @@ async def list_items(
     assigned_to: UUID | None = None,
     location_id: UUID | None = None,
     storage_area_id: UUID | None = None,
+    vendor_id: UUID | None = None,
     search: str | None = None,
     size: str | None = None,
     color: str | None = None,
@@ -468,6 +491,7 @@ async def list_items(
         assigned_to=assigned_to,
         location_id=location_id,
         storage_area_id=storage_area_id,
+        vendor_id=vendor_id,
         search=search,
         size=size,
         color=color,
@@ -480,7 +504,7 @@ async def list_items(
     )
 
     return ItemsListResponse(
-        items=items,
+        items=[_item_response(item) for item in items],
         total=total,
         skip=skip,
         limit=limit,
@@ -655,6 +679,9 @@ async def export_items_csv(
     )
     for item in items:
         cat_name = item.category.name if item.category else ""
+        # The tracked vendor is the answer when the item has one; the legacy
+        # free-text column is only a fallback for rows never linked.
+        linked_vendor = item.__dict__.get("vendor_record")
         writer.writerow(
             [
                 item.name,
@@ -689,7 +716,8 @@ async def export_items_csv(
                 ),
                 str(item.purchase_date) if item.purchase_date else "",
                 str(item.purchase_price) if item.purchase_price else "",
-                item.vendor or "",
+                (linked_vendor.name if linked_vendor is not None else item.vendor)
+                or "",
                 str(item.warranty_expiration) if item.warranty_expiration else "",
                 item.notes or "",
             ]
@@ -1104,6 +1132,16 @@ async def import_items_csv(
     cat_by_name: Dict[str, str] = {
         cat.name.strip().lower(): str(cat.id) for cat in categories
     }
+    # A "Vendor" cell that names a vendor already on file is linked to it, so an
+    # import lands in the same purchase history as items entered by hand. An
+    # unrecognized name stays in the free-text column rather than silently
+    # creating vendors nobody reviewed.
+    vendors = await service.list_vendors(
+        organization_id=current_user.organization_id, active_only=True
+    )
+    vendor_by_name: Dict[str, str] = {
+        vendor.name.strip().lower(): str(vendor.id) for vendor in vendors
+    }
 
     imported = 0
     failed = 0
@@ -1140,6 +1178,12 @@ async def import_items_csv(
             )
         if cat_id:
             item_data["category_id"] = cat_id
+
+        vendor_raw = (item_data.get("vendor") or "").strip()
+        if vendor_raw:
+            vendor_id = vendor_by_name.get(vendor_raw.lower())
+            if vendor_id:
+                item_data["vendor_id"] = vendor_id
 
         item_data.pop("barcode", None)
         new_item, error = await service.create_item(
@@ -1207,7 +1251,7 @@ async def get_item(
             detail="Item not found",
         )
 
-    payload = InventoryItemResponse.model_validate(item)
+    payload = _item_response(item)
     if item.assigned_to_user:
         # The detail page's Assignment card prints who holds the item; without
         # a name it showed the raw user id.
@@ -1295,7 +1339,7 @@ async def update_item(
         {"item_id": str(item_id)},
     )
 
-    return updated_item
+    return _item_response(updated_item)
 
 
 @router.post("/items/{item_id}/retire", status_code=status.HTTP_200_OK)
@@ -2413,10 +2457,11 @@ async def create_reorder_from_impact_plan(
     service = InventoryService(db)
     reorder_meta = {
         "vendor": payload.vendor,
+        "vendor_id": payload.vendor_id,
         "urgency": payload.urgency,
         "notes": payload.notes,
     }
-    filters = payload.model_dump(exclude={"vendor", "urgency", "notes"})
+    filters = payload.model_dump(exclude={"vendor", "vendor_id", "urgency", "notes"})
     try:
         result = await service.create_reorder_from_plan(
             organization_id=current_user.organization_id,
@@ -3739,6 +3784,283 @@ async def delete_storage_area(
 
 
 # ============================================
+# Vendor Endpoints
+# ============================================
+
+
+def _vendor_response(
+    vendor: InventoryVendor, stats: dict | None = None
+) -> InventoryVendorResponse:
+    """Serialize a vendor with its contacts and purchasing totals."""
+    payload = InventoryVendorResponse.model_validate(vendor)
+    if stats:
+        payload.item_count = stats.get("item_count", 0)
+        payload.open_reorder_count = stats.get("open_reorder_count", 0)
+        payload.total_purchase_value = stats.get("total_purchase_value")
+    return payload
+
+
+@router.get("/vendors", response_model=list[InventoryVendorResponse])
+async def list_vendors(
+    search: str | None = Query(None, description="Search name, account, or contact"),
+    active_only: bool = Query(True, description="Exclude deactivated vendors"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    List vendors for the organization, preferred ones first.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    vendors = await service.list_vendors(
+        organization_id=current_user.organization_id,
+        search=search,
+        active_only=active_only,
+    )
+    stats = await service.get_vendor_stats(
+        current_user.organization_id, [v.id for v in vendors]
+    )
+    return [_vendor_response(v, stats.get(v.id)) for v in vendors]
+
+
+@router.get("/vendors/{vendor_id}", response_model=InventoryVendorResponse)
+async def get_vendor(
+    vendor_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get one vendor with its contacts and purchasing totals.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    vendor = await service.get_vendor(vendor_id, current_user.organization_id)
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    stats = await service.get_vendor_stats(current_user.organization_id, [vendor.id])
+    return _vendor_response(vendor, stats.get(vendor.id))
+
+
+@router.post(
+    "/vendors",
+    response_model=InventoryVendorResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_vendor(
+    data: InventoryVendorCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create a vendor, optionally with its contacts in the same call.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    vendor, error = await service.create_vendor(
+        organization_id=current_user.organization_id,
+        data=data.model_dump(exclude_unset=True),
+        created_by=current_user.id,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_vendor_created",
+        event_category="inventory",
+        severity="info",
+        event_data={"vendor_id": str(vendor.id), "name": vendor.name},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    return _vendor_response(vendor)
+
+
+@router.patch("/vendors/{vendor_id}", response_model=InventoryVendorResponse)
+async def update_vendor(
+    vendor_id: UUID,
+    data: InventoryVendorUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update a vendor's details.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    vendor, error = await service.update_vendor(
+        vendor_id=vendor_id,
+        organization_id=current_user.organization_id,
+        data=data.model_dump(exclude_unset=True),
+    )
+    if error:
+        status_code = 404 if error == "Vendor not found" else 400
+        raise HTTPException(
+            status_code=status_code, detail=sanitize_error_message(error)
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_vendor_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "vendor_id": str(vendor_id),
+            "fields_updated": list(data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    stats = await service.get_vendor_stats(current_user.organization_id, [vendor.id])
+    return _vendor_response(vendor, stats.get(vendor.id))
+
+
+@router.delete("/vendors/{vendor_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deactivate_vendor(
+    vendor_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Deactivate a vendor. Items and reorders keep their link, so the purchase
+    history of equipment still in service stays readable.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.deactivate_vendor(
+        vendor_id, current_user.organization_id
+    )
+    if not success:
+        status_code = 404 if error == "Vendor not found" else 400
+        raise HTTPException(
+            status_code=status_code, detail=sanitize_error_message(error)
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_vendor_deactivated",
+        event_category="inventory",
+        severity="info",
+        event_data={"vendor_id": str(vendor_id)},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+
+@router.post(
+    "/vendors/{vendor_id}/contacts",
+    response_model=InventoryVendorContactResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_vendor_contact(
+    vendor_id: UUID,
+    data: InventoryVendorContactCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Add a named contact to a vendor.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    contact, error = await service.add_vendor_contact(
+        vendor_id=vendor_id,
+        organization_id=current_user.organization_id,
+        data=data.model_dump(exclude_unset=True),
+    )
+    if error:
+        status_code = 404 if error == "Vendor not found" else 400
+        raise HTTPException(
+            status_code=status_code, detail=sanitize_error_message(error)
+        )
+    return InventoryVendorContactResponse.model_validate(contact)
+
+
+@router.patch(
+    "/vendors/{vendor_id}/contacts/{contact_id}",
+    response_model=InventoryVendorContactResponse,
+)
+async def update_vendor_contact(
+    vendor_id: UUID,
+    contact_id: UUID,
+    data: InventoryVendorContactUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update a vendor contact.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    existing = await service.get_vendor_contact(
+        contact_id, current_user.organization_id
+    )
+    if existing is None or existing.vendor_id != str(vendor_id):
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    contact, error = await service.update_vendor_contact(
+        contact_id=contact_id,
+        organization_id=current_user.organization_id,
+        data=data.model_dump(exclude_unset=True),
+    )
+    if error:
+        status_code = 404 if error == "Contact not found" else 400
+        raise HTTPException(
+            status_code=status_code, detail=sanitize_error_message(error)
+        )
+    return InventoryVendorContactResponse.model_validate(contact)
+
+
+@router.delete(
+    "/vendors/{vendor_id}/contacts/{contact_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_vendor_contact(
+    vendor_id: UUID,
+    contact_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Remove a contact from a vendor.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    existing = await service.get_vendor_contact(
+        contact_id, current_user.organization_id
+    )
+    if existing is None or existing.vendor_id != str(vendor_id):
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    error = await service.delete_vendor_contact(
+        contact_id, current_user.organization_id
+    )
+    if error:
+        status_code = 404 if error == "Contact not found" else 400
+        raise HTTPException(
+            status_code=status_code, detail=sanitize_error_message(error)
+        )
+
+
+# ============================================
 # Write-Off Endpoints
 # ============================================
 
@@ -4952,6 +5274,31 @@ async def get_user_issuance_history(
 # ------------------------------------------------------------------
 
 
+def _reorder_response(req) -> ReorderRequestResponse:
+    """Serialize a reorder request with the names behind its ids.
+
+    Relationships are read out of ``__dict__`` rather than by attribute: a
+    just-created request has none of them loaded, and touching one would
+    trigger a lazy load, which raises under asyncio. A missing key means the
+    caller did not eager-load it, so the name is simply left unset.
+    """
+    resp = ReorderRequestResponse.model_validate(req)
+    requester = req.__dict__.get("requester")
+    if requester is not None:
+        resp.requester_name = (
+            f"{requester.first_name or ''} {requester.last_name or ''}".strip()
+        )
+    approver = req.__dict__.get("approver")
+    if approver is not None:
+        resp.approver_name = (
+            f"{approver.first_name or ''} {approver.last_name or ''}".strip()
+        )
+    vendor = req.__dict__.get("vendor_record")
+    if vendor is not None:
+        resp.vendor_name = vendor.name
+    return resp
+
+
 @router.get("/reorder-requests", response_model=list[ReorderRequestResponse])
 async def list_reorder_requests(
     status: str | None = Query(None, description="Filter by status"),
@@ -4973,15 +5320,7 @@ async def list_reorder_requests(
         urgency=urgency,
         search=search,
     )
-    results = []
-    for req in requests:
-        resp = ReorderRequestResponse.model_validate(req)
-        if req.requester:
-            resp.requester_name = f"{req.requester.first_name or ''} {req.requester.last_name or ''}".strip()
-        if req.approver:
-            resp.approver_name = f"{req.approver.first_name or ''} {req.approver.last_name or ''}".strip()
-        results.append(resp)
-    return results
+    return [_reorder_response(req) for req in requests]
 
 
 @router.get("/reorder-requests/{request_id}", response_model=ReorderRequestResponse)
@@ -5000,16 +5339,7 @@ async def get_reorder_request(
     req = await service.get_reorder_request(request_id, current_user.organization_id)
     if not req:
         raise HTTPException(status_code=404, detail="Reorder request not found")
-    resp = ReorderRequestResponse.model_validate(req)
-    if req.requester:
-        resp.requester_name = (
-            f"{req.requester.first_name or ''} {req.requester.last_name or ''}".strip()
-        )
-    if req.approver:
-        resp.approver_name = (
-            f"{req.approver.first_name or ''} {req.approver.last_name or ''}".strip()
-        )
-    return resp
+    return _reorder_response(req)
 
 
 @router.post(
@@ -5053,7 +5383,7 @@ async def create_reorder_request(
         organization_id=str(current_user.organization_id),
     )
 
-    return ReorderRequestResponse.model_validate(reorder)
+    return _reorder_response(reorder)
 
 
 @router.patch("/reorder-requests/{request_id}", response_model=ReorderRequestResponse)
@@ -5098,12 +5428,7 @@ async def update_reorder_request(
         organization_id=str(current_user.organization_id),
     )
 
-    resp = ReorderRequestResponse.model_validate(reorder)
-    if reorder.requester:
-        resp.requester_name = f"{reorder.requester.first_name or ''} {reorder.requester.last_name or ''}".strip()
-    if reorder.approver:
-        resp.approver_name = f"{reorder.approver.first_name or ''} {reorder.approver.last_name or ''}".strip()
-    return resp
+    return _reorder_response(reorder)
 
 
 @router.delete("/reorder-requests/{request_id}", status_code=status.HTTP_204_NO_CONTENT)

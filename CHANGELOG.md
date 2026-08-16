@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: vendors are records, not a typed-in name (2026-08-16)
+
+**Added**
+
+- **Vendor tracking.** `inventory_vendors` gives each supplier one row per
+  organization — account number, main line, orders inbox, website, remit-to
+  address, payment terms, a preferred flag — and `inventory_vendor_contacts`
+  holds the named people at it (rep, service desk, accounts receivable) with
+  title, email, phone and extension. Exactly one contact is primary: flagging
+  one demotes the rest, and a vendor left with none promotes its first, so a
+  vendor card always names someone to call.
+- **Vendors screen** (`/inventory/admin/vendors`, `inventory.view` to read and
+  `inventory.manage` to change). Each card shows the contact details, the
+  primary contact, and live purchasing history: items bought from that vendor,
+  open reorders, and total purchased. The item count links to the catalog
+  filtered to that vendor (`/inventory/admin/items?vendor_id=…`).
+- **Items and reorder requests link to a vendor.** The item form and the reorder
+  form pick from the tracked list; picking a vendor on a reorder prefills its
+  primary contact. A name that is not on file can still be typed, exactly as
+  before.
+
+**Changed**
+
+- The CSV export and the item detail page now name the linked vendor, falling
+  back to the free-text value only for rows never linked. A CSV import whose
+  `Vendor` cell matches a vendor already on file links to it; an unrecognized
+  name stays free text rather than silently creating suppliers nobody reviewed.
+- Deactivating a vendor keeps every item and reorder pointing at it. Purchase
+  history for equipment still in service is the reason the record exists.
+
+**Migration**
+
+- `20260816_0001` adds both tables and the `vendor_id` columns, then backfills:
+  every distinct free-text vendor name already on file becomes a vendor
+  (case-folded per organization, first spelling wins) and the items and reorder
+  requests that named it are linked to it. The free-text columns are left in
+  place and unread where a link exists.
+
 ### YouTube scripts: August release changes are written into the takes (2026-08-14)
 
 **Documentation**
@@ -22,7 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   intentionally a recording-production task because narration pacing determines
   them; no behavioral content remains only in `SCRIPT_CURRENCY.md`.
 
-
 ### Events: reminder audience and check-in teaching update (2026-08-14)
 
 **Changed**
@@ -34,7 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   training/schema references and documented Strict/Window behavior, early-member
   notices, guest blocking, actual-time boundaries, and the overlapping-meeting
   15-minute exception. Added exact screenshot and YouTube B-roll requirements.
-
 
 ### Security, privacy, permissions, and dashboard follow-up (2026-08-14)
 

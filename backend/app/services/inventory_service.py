@@ -30,6 +30,8 @@ from app.models.inventory import (
     InventoryImpactPlan,
     InventoryItem,
     InventoryLot,
+    InventoryVendor,
+    InventoryVendorContact,
     IssuanceAllowance,
     ItemAssignment,
     ItemCondition,
@@ -66,6 +68,7 @@ from app.models.user import (
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_value
+from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 
@@ -553,6 +556,371 @@ class InventoryService:
             return False, str(e)
 
     # ============================================
+    # Vendor Management
+    # ============================================
+
+    async def _vendor_name_taken(
+        self,
+        organization_id: UUID,
+        name: str,
+        exclude_vendor_id: Optional[UUID] = None,
+    ) -> Optional[InventoryVendor]:
+        """Return the vendor already holding this name in the org, if any.
+
+        Matched case-insensitively: "Galls" and "galls" are the same supplier,
+        and the unique constraint that backs this would otherwise let both in
+        (MySQL collations aside) and leave the picker showing two of them.
+        """
+        query = select(InventoryVendor).where(
+            InventoryVendor.organization_id == str(organization_id),
+            func.lower(InventoryVendor.name) == name.strip().lower(),
+        )
+        if exclude_vendor_id:
+            query = query.where(InventoryVendor.id != str(exclude_vendor_id))
+        result = await self.db.execute(query.limit(1))
+        return result.scalars().first()
+
+    async def get_vendor_stats(
+        self, organization_id: UUID, vendor_ids: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Per-vendor catalog and purchasing totals, keyed by vendor id.
+
+        Two grouped queries rather than three per vendor: the vendor list is
+        the landing screen and renders every vendor's counts at once.
+        """
+        stats: Dict[str, Dict[str, Any]] = {
+            vid: {
+                "item_count": 0,
+                "open_reorder_count": 0,
+                "total_purchase_value": None,
+            }
+            for vid in vendor_ids
+        }
+        if not vendor_ids:
+            return stats
+
+        item_rows = await self.db.execute(
+            select(
+                InventoryItem.vendor_id,
+                func.count(InventoryItem.id),
+                func.sum(InventoryItem.purchase_price),
+            )
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.vendor_id.in_(vendor_ids),
+                InventoryItem.active.is_(True),
+            )
+            .group_by(InventoryItem.vendor_id)
+        )
+        for vendor_id, count, spend in item_rows.all():
+            entry = stats.get(vendor_id)
+            if entry is None:
+                continue
+            entry["item_count"] = count or 0
+            entry["total_purchase_value"] = spend
+
+        reorder_rows = await self.db.execute(
+            select(ReorderRequest.vendor_id, func.count(ReorderRequest.id))
+            .where(
+                ReorderRequest.organization_id == str(organization_id),
+                ReorderRequest.vendor_id.in_(vendor_ids),
+                ReorderRequest.status.in_(
+                    [
+                        ReorderStatus.PENDING,
+                        ReorderStatus.APPROVED,
+                        ReorderStatus.ORDERED,
+                    ]
+                ),
+            )
+            .group_by(ReorderRequest.vendor_id)
+        )
+        for vendor_id, count in reorder_rows.all():
+            entry = stats.get(vendor_id)
+            if entry is None:
+                continue
+            entry["open_reorder_count"] = count or 0
+
+        return stats
+
+    async def list_vendors(
+        self,
+        organization_id: UUID,
+        search: Optional[str] = None,
+        active_only: bool = True,
+    ) -> List[InventoryVendor]:
+        """List vendors for an organization, preferred ones first."""
+        query = (
+            select(InventoryVendor)
+            .where(InventoryVendor.organization_id == str(organization_id))
+            .options(selectinload(InventoryVendor.contacts))
+            .order_by(InventoryVendor.is_preferred.desc(), InventoryVendor.name)
+        )
+        if active_only:
+            query = query.where(InventoryVendor.is_active.is_(True))
+        if search:
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
+            term = f"%{safe_search}%"
+            query = query.where(
+                or_(
+                    InventoryVendor.name.ilike(term),
+                    InventoryVendor.account_number.ilike(term),
+                    InventoryVendor.email.ilike(term),
+                    InventoryVendor.phone.ilike(term),
+                )
+            )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_vendor(
+        self, vendor_id: UUID, organization_id: UUID
+    ) -> Optional[InventoryVendor]:
+        """Get one vendor with its contacts, scoped to the caller's org."""
+        result = await self.db.execute(
+            select(InventoryVendor)
+            .where(InventoryVendor.id == str(vendor_id))
+            .where(InventoryVendor.organization_id == str(organization_id))
+            .options(selectinload(InventoryVendor.contacts))
+        )
+        return result.scalars().first()
+
+    async def create_vendor(
+        self,
+        organization_id: UUID,
+        data: Dict[str, Any],
+        created_by: Optional[UUID] = None,
+    ) -> Tuple[Optional[InventoryVendor], Optional[str]]:
+        """Create a vendor, optionally with its contacts in the same call."""
+        try:
+            contacts = data.pop("contacts", None) or []
+            name = (data.get("name") or "").strip()
+            if not name:
+                return None, "Vendor name is required"
+            data["name"] = name
+
+            existing = await self._vendor_name_taken(organization_id, name)
+            if existing is not None:
+                if not existing.is_active:
+                    return None, (
+                        f"'{existing.name}' already exists but is inactive. "
+                        "Reactivate it instead of creating a duplicate."
+                    )
+                return None, f"A vendor named '{existing.name}' already exists"
+
+            vendor = InventoryVendor(
+                organization_id=str(organization_id),
+                created_by=str(created_by) if created_by else None,
+                **data,
+            )
+            self.db.add(vendor)
+            await self.db.flush()
+
+            # The first contact entered is the one to call unless the form said
+            # otherwise — a vendor whose only contact is not flagged primary
+            # would otherwise show none on its card.
+            if contacts and not any(c.get("is_primary") for c in contacts):
+                contacts[0]["is_primary"] = True
+            for contact in contacts:
+                self.db.add(
+                    InventoryVendorContact(
+                        organization_id=str(organization_id),
+                        vendor_id=vendor.id,
+                        **contact,
+                    )
+                )
+
+            await self.db.flush()
+            await self._normalize_primary_contact(vendor.id, str(organization_id))
+            await self.db.commit()
+            refreshed = await self.get_vendor(vendor.id, organization_id)
+            return refreshed, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error creating vendor: {e}")
+            return None, str(e)
+
+    async def update_vendor(
+        self,
+        vendor_id: UUID,
+        organization_id: UUID,
+        data: Dict[str, Any],
+    ) -> Tuple[Optional[InventoryVendor], Optional[str]]:
+        """Update a vendor. Explicit nulls clear the field (see CLAUDE.md #1)."""
+        try:
+            vendor = await self.get_vendor(vendor_id, organization_id)
+            if not vendor:
+                return None, "Vendor not found"
+
+            if data.get("name"):
+                name = data["name"].strip()
+                clash = await self._vendor_name_taken(
+                    organization_id, name, exclude_vendor_id=vendor_id
+                )
+                if clash is not None:
+                    return None, f"A vendor named '{clash.name}' already exists"
+                data["name"] = name
+
+            apply_updates(vendor, data, skip={"id", "organization_id", "created_by"})
+            await self.db.commit()
+            refreshed = await self.get_vendor(vendor_id, organization_id)
+            return refreshed, None
+        except ValueError as e:
+            await self.db.rollback()
+            return None, str(e)
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error updating vendor: {e}")
+            return None, str(e)
+
+    async def deactivate_vendor(
+        self, vendor_id: UUID, organization_id: UUID
+    ) -> Tuple[bool, Optional[str]]:
+        """Deactivate a vendor, keeping its purchase history intact.
+
+        Items and reorder requests keep pointing at it: "we don't buy from them
+        anymore" must not erase where a helmet in service came from.
+        """
+        try:
+            vendor = await self.get_vendor(vendor_id, organization_id)
+            if not vendor:
+                return False, "Vendor not found"
+            vendor.is_active = False
+            await self.db.commit()
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deactivating vendor: {e}")
+            return False, str(e)
+
+    async def _normalize_primary_contact(
+        self,
+        vendor_id: str,
+        organization_id: str,
+        keep_contact_id: Optional[str] = None,
+    ) -> None:
+        """Leave at most one primary contact on a vendor.
+
+        ``keep_contact_id`` is the contact just flagged primary; every other
+        contact on the vendor is demoted. With no id given, the flag is left
+        alone unless nothing is flagged, in which case the first contact by
+        name is promoted so a vendor card always has someone to call.
+        """
+        result = await self.db.execute(
+            select(InventoryVendorContact)
+            .where(InventoryVendorContact.vendor_id == vendor_id)
+            .where(InventoryVendorContact.organization_id == organization_id)
+            .order_by(InventoryVendorContact.name)
+        )
+        contacts = list(result.scalars().all())
+        if not contacts:
+            return
+
+        if keep_contact_id:
+            for contact in contacts:
+                contact.is_primary = contact.id == keep_contact_id
+            return
+
+        flagged = [c for c in contacts if c.is_primary]
+        if not flagged:
+            contacts[0].is_primary = True
+        elif len(flagged) > 1:
+            for contact in flagged[1:]:
+                contact.is_primary = False
+
+    async def add_vendor_contact(
+        self,
+        vendor_id: UUID,
+        organization_id: UUID,
+        data: Dict[str, Any],
+    ) -> Tuple[Optional[InventoryVendorContact], Optional[str]]:
+        """Add a named contact to a vendor."""
+        try:
+            vendor = await self.get_vendor(vendor_id, organization_id)
+            if not vendor:
+                return None, "Vendor not found"
+
+            contact = InventoryVendorContact(
+                organization_id=str(organization_id),
+                vendor_id=str(vendor_id),
+                **data,
+            )
+            self.db.add(contact)
+            await self.db.flush()
+            await self._normalize_primary_contact(
+                str(vendor_id),
+                str(organization_id),
+                keep_contact_id=contact.id if contact.is_primary else None,
+            )
+            await self.db.commit()
+            await self.db.refresh(contact)
+            return contact, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error adding vendor contact: {e}")
+            return None, str(e)
+
+    async def get_vendor_contact(
+        self, contact_id: UUID, organization_id: UUID
+    ) -> Optional[InventoryVendorContact]:
+        """Get one vendor contact, scoped to the caller's org."""
+        result = await self.db.execute(
+            select(InventoryVendorContact)
+            .where(InventoryVendorContact.id == str(contact_id))
+            .where(InventoryVendorContact.organization_id == str(organization_id))
+        )
+        return result.scalars().first()
+
+    async def update_vendor_contact(
+        self,
+        contact_id: UUID,
+        organization_id: UUID,
+        data: Dict[str, Any],
+    ) -> Tuple[Optional[InventoryVendorContact], Optional[str]]:
+        """Update a vendor contact."""
+        try:
+            contact = await self.get_vendor_contact(contact_id, organization_id)
+            if not contact:
+                return None, "Contact not found"
+
+            apply_updates(contact, data, skip={"id", "organization_id", "vendor_id"})
+            await self.db.flush()
+            await self._normalize_primary_contact(
+                contact.vendor_id,
+                str(organization_id),
+                keep_contact_id=contact.id if contact.is_primary else None,
+            )
+            await self.db.commit()
+            await self.db.refresh(contact)
+            return contact, None
+        except ValueError as e:
+            await self.db.rollback()
+            return None, str(e)
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error updating vendor contact: {e}")
+            return None, str(e)
+
+    async def delete_vendor_contact(
+        self, contact_id: UUID, organization_id: UUID
+    ) -> Optional[str]:
+        """Delete a vendor contact, promoting another to primary if needed."""
+        try:
+            contact = await self.get_vendor_contact(contact_id, organization_id)
+            if not contact:
+                return "Contact not found"
+            vendor_id = contact.vendor_id
+            await self.db.delete(contact)
+            await self.db.flush()
+            await self._normalize_primary_contact(vendor_id, str(organization_id))
+            await self.db.commit()
+            return None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deleting vendor contact: {e}")
+            return str(e)
+
+    # ============================================
     # Item Management
     # ============================================
 
@@ -586,6 +954,7 @@ class InventoryService:
         ("storage_area_id", StorageArea, "storage area"),
         ("variant_group_id", ItemVariantGroup, "variant group"),
         ("assigned_to_user_id", User, "assignee"),
+        ("vendor_id", InventoryVendor, "vendor"),
     )
 
     async def _assert_item_fks_in_org(
@@ -678,6 +1047,7 @@ class InventoryService:
         assigned_to: Optional[UUID] = None,
         location_id: Optional[UUID] = None,
         storage_area_id: Optional[UUID] = None,
+        vendor_id: Optional[UUID] = None,
         search: Optional[str] = None,
         size: Optional[str] = None,
         color: Optional[str] = None,
@@ -695,6 +1065,7 @@ class InventoryService:
             .options(
                 selectinload(InventoryItem.category),
                 selectinload(InventoryItem.assigned_to_user),
+                selectinload(InventoryItem.vendor_record),
             )
         )
 
@@ -732,6 +1103,9 @@ class InventoryService:
 
         if storage_area_id:
             query = query.where(InventoryItem.storage_area_id == str(storage_area_id))
+
+        if vendor_id:
+            query = query.where(InventoryItem.vendor_id == str(vendor_id))
 
         if size:
             query = query.where(
@@ -825,6 +1199,7 @@ class InventoryService:
                 selectinload(InventoryItem.category),
                 selectinload(InventoryItem.location),
                 selectinload(InventoryItem.assigned_to_user),
+                selectinload(InventoryItem.vendor_record),
                 selectinload(InventoryItem.checkout_records),
                 selectinload(InventoryItem.maintenance_records),
                 selectinload(InventoryItem.assignment_history),
@@ -4512,6 +4887,7 @@ class InventoryService:
         q = q.options(
             selectinload(ReorderRequest.requester),
             selectinload(ReorderRequest.approver),
+            selectinload(ReorderRequest.vendor_record),
         )
         result = await self.db.execute(q)
         return list(result.scalars().all())
@@ -4527,6 +4903,7 @@ class InventoryService:
             .options(
                 selectinload(ReorderRequest.requester),
                 selectinload(ReorderRequest.approver),
+                selectinload(ReorderRequest.vendor_record),
             )
         )
         return result.scalars().first()
@@ -4554,6 +4931,15 @@ class InventoryService:
                 organization_id,
                 allow_none=True,
                 label="category",
+            )
+        if "vendor_id" in data:
+            await assert_in_org(
+                self.db,
+                InventoryVendor,
+                data.get("vendor_id"),
+                organization_id,
+                allow_none=True,
+                label="vendor",
             )
 
     async def create_reorder_request(
@@ -4610,7 +4996,10 @@ class InventoryService:
                 setattr(reorder, key, value)
 
             await self.db.flush()
-            await self.db.refresh(reorder)
+            # Re-fetch rather than refresh: refresh expires the relationships
+            # the response needs (requester, approver, vendor), and reloading
+            # them lazily is not an option under asyncio.
+            reorder = await self.get_reorder_request(request_id, organization_id)
             return reorder, None
         except Exception as e:
             logger.error(f"Error updating reorder request: {e}")
@@ -5892,6 +6281,17 @@ class InventoryService:
         size_label = self._SIZE_FIELD_LABELS.get(filters.get("size_field"), "")
 
         vendor = reorder_meta.get("vendor")
+        vendor_id = reorder_meta.get("vendor_id")
+        # XC-1: the vendor id comes from the client, so it must be in-org before
+        # it is stamped onto every generated reorder.
+        await assert_in_org(
+            self.db,
+            InventoryVendor,
+            vendor_id,
+            organization_id,
+            allow_none=True,
+            label="vendor",
+        )
         urgency = reorder_meta.get("urgency") or "normal"
         extra_notes = reorder_meta.get("notes")
 
@@ -5920,6 +6320,7 @@ class InventoryService:
                 item_name=f"{base_name} — {entry['size']}"[:255],
                 quantity_requested=shortfall,
                 vendor=vendor,
+                vendor_id=str(vendor_id) if vendor_id else None,
                 # Carry the plan's per-size cost estimate onto the PO so the
                 # reorder is pre-priced when it lands in the reorder queue.
                 estimated_unit_cost=entry.get("unit_cost"),

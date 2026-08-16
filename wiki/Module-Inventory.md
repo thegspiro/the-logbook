@@ -23,67 +23,69 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **CSV Export** — Export filtered inventory data to CSV
 - **Sort & Filter** — Members tab supports sort by name, total items, overdue, or most assigned
 - **Mobile Member ID Scanning** — Camera-based member ID scanning for quick member lookup during checkout (scan QR/barcode from member ID card)
-- **Charges & Cost Recovery** — *(2026-03-05)* Attach damage fees or replacement costs to return/write-off events. Pool items support per-unit replacement cost tracking with automatic cost recovery calculation
-- **Return Requests** — *(2026-03-05)* Members can submit return requests that require admin approval before processing
-- **Stock Alerts & Quarantine** — *(2026-03-05)* Configurable low-stock email alerts. Quarantine status for items pending inspection before re-issue
-- **Pool Item Enhancements** — *(2026-03-05)* Size variants (S/M/L/XL with per-size stock), bulk issuance to multiple members, per-member issuance allowances with override capability
-- **Mobile Card Views & FAB** — *(2026-03-05)* Responsive card layouts on mobile with floating action button for quick actions (add item, scan barcode, import CSV)
-- **CSV Import** — *(2026-03-02)* Bulk import items via CSV upload with downloadable template, header validation, duplicate serial detection
-- **Variant Groups** — *(2026-03-07)* Link related items that differ by size/style (e.g., coat in S/M/L/XL). Each variant tracks its own stock while sharing a base product description
-- **Equipment Kits** — *(2026-03-07)* Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking
-- **Member Size Preferences** — *(2026-03-07)* Members record preferred sizes (coat, pants, gloves, boots, helmet) for auto-selection during kit issuance and ordering
-- **Reorder Requests** — *(2026-03-07)* Full workflow (pending → approved → ordered → received) with vendor/PO tracking and audit logging
-- **Item Reorder Points** — *(2026-03-07)* Per-item threshold for low-stock alerts. Triggers email and SMS (Twilio) notifications
-- **Low Stock SMS Alerts** — *(2026-03-07)* Twilio SMS notifications for low-stock items alongside existing email alerts
-- **Location Filter Dashboard** — *(2026-03-07)* Cascading Facility → Room → Storage Area filter on inventory dashboard
-- **Item Detail Page** — *(2026-03-06)* Dedicated detail page (`/inventory/items/:id`) with two-column layout: barcode sidebar + tabbed content (overview, history, maintenance, NFPA)
-- **Cost Data** — *(2026-03-06)* Purchase cost, replacement cost, and cost recovery tracking in item views and admin dashboard
-- **Size/Style Auto-Generation** — *(2026-03-14)* When creating a new uniform or PPE item, toggle "Generate Sizes & Styles" to select multiple standard sizes and garment styles. Backend creates one pool item per `size × color × style` combination, sets `standard_size` and `style` enum fields, and groups under a new `ItemVariantGroup`. Frontend includes chip-based multi-select for sizes and styles, comma-separated colors input, and live item count preview
-- **Issuance Allowances Admin Page** — *(2026-06-09)* Dedicated page (`/inventory/admin/allowances`) to configure per-category issue caps by role and period (`annual` / `career` / `one_time`). `role_id` NULL applies to all members; the most specific match (highest-priority position) wins. Enforced on pool issuance unless an admin sets `override_allowance`; all mutations are audit-logged. A category with no rule is unlimited
-- **Size Preferences Modal** — *(2026-06-09)* `SizePreferencesModal` lets members edit their own sizes (`/inventory/my/size-preferences`) and quartermasters edit any member's (`/inventory/members/{user_id}/size-preferences`). Nine fields (shirt size/style, pant waist/inseam, jacket, boot size/width, glove, hat) plus a `custom_sizes` JSON column; unset sizes return 404 and open the form blank
-- **Equipment Request Fulfillment** — *(2026-06-09)* `PUT /inventory/requests/{id}/fulfill` turns an approved request into a real issuance, checkout, or assignment (routed by tracking type) and records `fulfilled_by` / `fulfilled_at` / `fulfillment_type` / `fulfillment_reference_id`. Not idempotent — only `APPROVED` requests can be fulfilled
-- **Sequential Barcodes Assigned at Creation** — *(2026-06-10)* Item barcodes use one per-organization sequential scheme (`<prefix><zero-padded number>`, default `INV-000001`, `INV-000002`, …). The prefix and counter live in `organizations.settings["barcode"]`; the org row is locked `FOR UPDATE` for the read-increment so concurrent creates get distinct numbers. Assigned at item-creation time (no longer lazily on read); migration `20260610_0001` reassigned existing items and seeded each org's counter
-- **Taxonomy Soft-Delete** — *(2026-06-09)* `DELETE` endpoints for categories (blocked when active items reference them), variant groups, and equipment kits set `active = False` and audit-log rather than hard-deleting
-- **NFPA 1851 Inspection Detail** — *(2026-06-09)* Maintenance records can persist structured NFPA Ch. 6–8 inspection results (assessment booleans, contamination level, SCBA fields, recommendation) to `nfpa_inspection_details` when supplied
-- **Inventory Impact Planner** — *(2026-06-23)* Quartermaster planning tool (`/inventory/admin/impact-planner`) for scoping a prospective new issue. Filter the roster (status, membership type, rank, station, position) and see who is impacted, the size each needs (from member size preferences), and who already holds a comparable item. Optional layers: net per-size demand against on-hand stock for the exact quantity to buy, estimate cost from item prices, treat worn or NFPA-expired gear as needing replacement, and warn when members are over their issuance allowance. Acts on the result — draft pre-priced per-size **reorder requests**, **bulk-issue** matching on-hand pool stock, **request sizes** from members with none on file (in-app notification), export **PDF/CSV**, and **save/load named plans** (`inventory_impact_plans`). Member contact details honour the org's `contact_info_visibility` settings
-- **Dated Stock Lots** — *(2026-08-10)* Consumables are held as dated lots (`inventory_lots`) rather than one flat count. **On-hand comes from in-date lots** for any item that has them and from `InventoryItem.quantity` for the rest; expired lots count as zero, because the equipment-check swap refuses them and counting them would hide the shortage most in need of ordering. One shared helper backs the reorder alert, the items grid and the CSV export, so the three cannot disagree
-- **Receive Stock (bulk lots)** — *(2026-08-10)* Record a whole delivery in one pass: item, lot number, expiration and quantity per line, one received date for the lot of it. `POST /inventory/lots/bulk` validates every item is in the caller's org and **applies all lines or none** — a partly applied delivery is worse than a rejected one
-- **Add Several (bulk item create)** — *(2026-08-10)* Paste a list of catalog items. Names already in the catalog are **skipped and reported, not rejected**, so a list can be re-pasted after it grows; any validation failure writes nothing
-- **Shelf-to-Truck Link** — *(2026-08-10)* An inventory item's stock tab lists the apparatus checklist positions it fills and what each truck is carrying now (`GET /equipment-checks/supply/item-deployments/{id}`) — the direction a recall or an expiring lot is actually worked from, because the officer is holding the item. The forward direction lives in the [Scheduling module](Module-Scheduling)'s supply worklist
-- **RFC 4180 CSV Parsing** — *(2026-08-10)* CSV import and paste paths use a real parser. `"Gauze Pads, 4x4 Sterile"` is one field; the previous `split(',')` readers shifted every column after it, so the import preview disagreed with what the import would actually do
+- **Charges & Cost Recovery** — _(2026-03-05)_ Attach damage fees or replacement costs to return/write-off events. Pool items support per-unit replacement cost tracking with automatic cost recovery calculation
+- **Return Requests** — _(2026-03-05)_ Members can submit return requests that require admin approval before processing
+- **Stock Alerts & Quarantine** — _(2026-03-05)_ Configurable low-stock email alerts. Quarantine status for items pending inspection before re-issue
+- **Pool Item Enhancements** — _(2026-03-05)_ Size variants (S/M/L/XL with per-size stock), bulk issuance to multiple members, per-member issuance allowances with override capability
+- **Mobile Card Views & FAB** — _(2026-03-05)_ Responsive card layouts on mobile with floating action button for quick actions (add item, scan barcode, import CSV)
+- **CSV Import** — _(2026-03-02)_ Bulk import items via CSV upload with downloadable template, header validation, duplicate serial detection
+- **Variant Groups** — _(2026-03-07)_ Link related items that differ by size/style (e.g., coat in S/M/L/XL). Each variant tracks its own stock while sharing a base product description
+- **Equipment Kits** — _(2026-03-07)_ Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking
+- **Member Size Preferences** — _(2026-03-07)_ Members record preferred sizes (coat, pants, gloves, boots, helmet) for auto-selection during kit issuance and ordering
+- **Reorder Requests** — _(2026-03-07)_ Full workflow (pending → approved → ordered → received) with vendor/PO tracking and audit logging
+- **Item Reorder Points** — _(2026-03-07)_ Per-item threshold for low-stock alerts. Triggers email and SMS (Twilio) notifications
+- **Low Stock SMS Alerts** — _(2026-03-07)_ Twilio SMS notifications for low-stock items alongside existing email alerts
+- **Location Filter Dashboard** — _(2026-03-07)_ Cascading Facility → Room → Storage Area filter on inventory dashboard
+- **Item Detail Page** — _(2026-03-06)_ Dedicated detail page (`/inventory/items/:id`) with two-column layout: barcode sidebar + tabbed content (overview, history, maintenance, NFPA)
+- **Cost Data** — _(2026-03-06)_ Purchase cost, replacement cost, and cost recovery tracking in item views and admin dashboard
+- **Size/Style Auto-Generation** — _(2026-03-14)_ When creating a new uniform or PPE item, toggle "Generate Sizes & Styles" to select multiple standard sizes and garment styles. Backend creates one pool item per `size × color × style` combination, sets `standard_size` and `style` enum fields, and groups under a new `ItemVariantGroup`. Frontend includes chip-based multi-select for sizes and styles, comma-separated colors input, and live item count preview
+- **Issuance Allowances Admin Page** — _(2026-06-09)_ Dedicated page (`/inventory/admin/allowances`) to configure per-category issue caps by role and period (`annual` / `career` / `one_time`). `role_id` NULL applies to all members; the most specific match (highest-priority position) wins. Enforced on pool issuance unless an admin sets `override_allowance`; all mutations are audit-logged. A category with no rule is unlimited
+- **Size Preferences Modal** — _(2026-06-09)_ `SizePreferencesModal` lets members edit their own sizes (`/inventory/my/size-preferences`) and quartermasters edit any member's (`/inventory/members/{user_id}/size-preferences`). Nine fields (shirt size/style, pant waist/inseam, jacket, boot size/width, glove, hat) plus a `custom_sizes` JSON column; unset sizes return 404 and open the form blank
+- **Equipment Request Fulfillment** — _(2026-06-09)_ `PUT /inventory/requests/{id}/fulfill` turns an approved request into a real issuance, checkout, or assignment (routed by tracking type) and records `fulfilled_by` / `fulfilled_at` / `fulfillment_type` / `fulfillment_reference_id`. Not idempotent — only `APPROVED` requests can be fulfilled
+- **Sequential Barcodes Assigned at Creation** — _(2026-06-10)_ Item barcodes use one per-organization sequential scheme (`<prefix><zero-padded number>`, default `INV-000001`, `INV-000002`, …). The prefix and counter live in `organizations.settings["barcode"]`; the org row is locked `FOR UPDATE` for the read-increment so concurrent creates get distinct numbers. Assigned at item-creation time (no longer lazily on read); migration `20260610_0001` reassigned existing items and seeded each org's counter
+- **Taxonomy Soft-Delete** — _(2026-06-09)_ `DELETE` endpoints for categories (blocked when active items reference them), variant groups, and equipment kits set `active = False` and audit-log rather than hard-deleting
+- **NFPA 1851 Inspection Detail** — _(2026-06-09)_ Maintenance records can persist structured NFPA Ch. 6–8 inspection results (assessment booleans, contamination level, SCBA fields, recommendation) to `nfpa_inspection_details` when supplied
+- **Inventory Impact Planner** — _(2026-06-23)_ Quartermaster planning tool (`/inventory/admin/impact-planner`) for scoping a prospective new issue. Filter the roster (status, membership type, rank, station, position) and see who is impacted, the size each needs (from member size preferences), and who already holds a comparable item. Optional layers: net per-size demand against on-hand stock for the exact quantity to buy, estimate cost from item prices, treat worn or NFPA-expired gear as needing replacement, and warn when members are over their issuance allowance. Acts on the result — draft pre-priced per-size **reorder requests**, **bulk-issue** matching on-hand pool stock, **request sizes** from members with none on file (in-app notification), export **PDF/CSV**, and **save/load named plans** (`inventory_impact_plans`). Member contact details honour the org's `contact_info_visibility` settings
+- **Dated Stock Lots** — _(2026-08-10)_ Consumables are held as dated lots (`inventory_lots`) rather than one flat count. **On-hand comes from in-date lots** for any item that has them and from `InventoryItem.quantity` for the rest; expired lots count as zero, because the equipment-check swap refuses them and counting them would hide the shortage most in need of ordering. One shared helper backs the reorder alert, the items grid and the CSV export, so the three cannot disagree
+- **Receive Stock (bulk lots)** — _(2026-08-10)_ Record a whole delivery in one pass: item, lot number, expiration and quantity per line, one received date for the lot of it. `POST /inventory/lots/bulk` validates every item is in the caller's org and **applies all lines or none** — a partly applied delivery is worse than a rejected one
+- **Add Several (bulk item create)** — _(2026-08-10)_ Paste a list of catalog items. Names already in the catalog are **skipped and reported, not rejected**, so a list can be re-pasted after it grows; any validation failure writes nothing
+- **Shelf-to-Truck Link** — _(2026-08-10)_ An inventory item's stock tab lists the apparatus checklist positions it fills and what each truck is carrying now (`GET /equipment-checks/supply/item-deployments/{id}`) — the direction a recall or an expiring lot is actually worked from, because the officer is holding the item. The forward direction lives in the [Scheduling module](Module-Scheduling)'s supply worklist
+- **Vendor Tracking** — _(2026-08-16)_ Suppliers are rows (`inventory_vendors`), not a hand-typed name on each item. A vendor carries the company's own details (main line, orders inbox, remit-to address, account number, payment terms) plus a contact list (`inventory_vendor_contacts`) — the rep who quotes turnout gear is rarely the number to call about a warranty claim, so each vendor holds as many named people as it needs, exactly one flagged primary. Items and reorder requests link to a vendor (`vendor_id`), so a vendor card shows live purchasing history — items bought, open reorders, total purchased — and an item's detail page names the supplier to call. The old free-text `vendor` column is kept as a fallback for rows nobody has linked; migration `20260816_0001` turns each distinct name already on file into a vendor (case-folded per organization) and links the items and reorders that named it. Deactivating a vendor keeps those links: "we don't buy from them anymore" must not erase where a helmet in service came from
+- **RFC 4180 CSV Parsing** — _(2026-08-10)_ CSV import and paste paths use a real parser. `"Gauze Pads, 4x4 Sterile"` is one field; the previous `split(',')` readers shifted every column after it, so the import preview disagreed with what the import would actually do
 
 ---
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/inventory` | Inventory Items List | Authenticated |
-| `/inventory/my-equipment` | My Equipment | Authenticated |
-| `/inventory/items/:id` | Item Detail | Authenticated |
-| `/inventory/storage-areas` | Storage Areas | Authenticated |
-| `/inventory/admin` | Admin Dashboard | `inventory.manage` |
-| `/inventory/admin/items` | Manage Items | `inventory.manage` |
-| `/inventory/admin/pool` | Pool Items | `inventory.manage` |
-| `/inventory/admin/categories` | Categories | `inventory.manage` |
-| `/inventory/admin/maintenance` | Maintenance Records | `inventory.manage` |
-| `/inventory/admin/members` | Members Inventory | `inventory.manage` |
-| `/inventory/admin/charges` | Charges & Fees | `inventory.manage` |
-| `/inventory/admin/returns` | Return Requests | `inventory.manage` |
-| `/inventory/admin/requests` | Equipment Requests | `inventory.manage` |
-| `/inventory/admin/write-offs` | Write-Off Requests | `inventory.manage` |
-| `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
-| `/inventory/admin/allowances` | Issuance Allowances | `inventory.manage` |
-| `/inventory/admin/impact-planner` | Impact Planner | `inventory.manage` |
-| `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
+| URL                               | Page                      | Permission         |
+| --------------------------------- | ------------------------- | ------------------ |
+| `/inventory`                      | Inventory Items List      | Authenticated      |
+| `/inventory/my-equipment`         | My Equipment              | Authenticated      |
+| `/inventory/items/:id`            | Item Detail               | Authenticated      |
+| `/inventory/storage-areas`        | Storage Areas             | Authenticated      |
+| `/inventory/admin`                | Admin Dashboard           | `inventory.manage` |
+| `/inventory/admin/items`          | Manage Items              | `inventory.manage` |
+| `/inventory/admin/pool`           | Pool Items                | `inventory.manage` |
+| `/inventory/admin/categories`     | Categories                | `inventory.manage` |
+| `/inventory/admin/maintenance`    | Maintenance Records       | `inventory.manage` |
+| `/inventory/admin/members`        | Members Inventory         | `inventory.manage` |
+| `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage` |
+| `/inventory/admin/returns`        | Return Requests           | `inventory.manage` |
+| `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage` |
+| `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage` |
+| `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage` |
+| `/inventory/admin/vendors`        | Vendors                   | `inventory.view`   |
+| `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
+| `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
+| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
-| `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
-| `/inventory/import` | CSV Import | `inventory.manage` |
-| `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
+| `/inventory/checkouts`            | Active Checkouts          | `inventory.manage` |
+| `/inventory/import`               | CSV Import                | `inventory.manage` |
+| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
-| `/inventory/admin/allowances` | Issuance Allowances | `inventory.manage` |
-| `/inventory/admin/impact-planner` | Impact Planner | `inventory.manage` |
-| `/inventory/print-labels` | Barcode Label Printing | Authenticated |
+| `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
+| `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
+| `/inventory/print-labels`         | Barcode Label Printing    | Authenticated      |
 
 ---
 
@@ -91,51 +93,53 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 
 ### Core Tables
 
-| Table | Purpose |
-|-------|---------|
-| `inventory_categories` | Item categories with type, requirements, low-stock thresholds |
-| `inventory_items` | Items with serial/barcode/asset tag, condition, status, tracking type |
-| `inventory_lots` | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** *(documented 2026-08-10)* |
-| `item_assignments` | Permanent/temporary assignments of individual items to members |
-| `item_issuances` | Pool item issuance records (quantity tracking) |
-| `checkout_records` | Temporary checkout records with expected return dates |
-| `maintenance_records` | Maintenance history (inspection, repair, calibration, etc.) |
+| Table                       | Purpose                                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `inventory_categories`      | Item categories with type, requirements, low-stock thresholds                                                                                                                        |
+| `inventory_items`           | Items with serial/barcode/asset tag, condition, status, tracking type                                                                                                                |
+| `inventory_lots`            | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** _(documented 2026-08-10)_ |
+| `item_assignments`          | Permanent/temporary assignments of individual items to members                                                                                                                       |
+| `item_issuances`            | Pool item issuance records (quantity tracking)                                                                                                                                       |
+| `checkout_records`          | Temporary checkout records with expected return dates                                                                                                                                |
+| `maintenance_records`       | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                          |
+| `inventory_vendors`         | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                |
+| `inventory_vendor_contacts` | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                         |
 
 ### Workflow Tables
 
-| Table | Purpose |
-|-------|---------|
-| `departure_clearances` | Member departure property return pipeline |
-| `departure_clearance_items` | Per-item resolution within a clearance |
-| `equipment_requests` | Member equipment request/approval workflow |
-| `inventory_write_offs` | Write-off request/approval workflow for lost/damaged items |
-| `inventory_notification_queue` | Delayed notification consolidation queue |
-| `property_return_reminders` | Tracks reminder notices sent to departed members |
-| `inventory_impact_plans` | Saved impact-planner scenarios (named filter sets) *(2026-06-23)* |
+| Table                          | Purpose                                                           |
+| ------------------------------ | ----------------------------------------------------------------- |
+| `departure_clearances`         | Member departure property return pipeline                         |
+| `departure_clearance_items`    | Per-item resolution within a clearance                            |
+| `equipment_requests`           | Member equipment request/approval workflow                        |
+| `inventory_write_offs`         | Write-off request/approval workflow for lost/damaged items        |
+| `inventory_notification_queue` | Delayed notification consolidation queue                          |
+| `property_return_reminders`    | Tracks reminder notices sent to departed members                  |
+| `inventory_impact_plans`       | Saved impact-planner scenarios (named filter sets) _(2026-06-23)_ |
 
-### Variant & Kit Tables *(2026-03-07)*
+### Variant & Kit Tables _(2026-03-07)_
 
-| Table | Purpose |
-|-------|---------|
-| `variant_groups` | Groups related items that differ by size/style |
-| `equipment_kits` | Named bundles of items for single-operation issuance |
-| `equipment_kit_items` | Component items within a kit with per-component quantity |
+| Table                     | Purpose                                                              |
+| ------------------------- | -------------------------------------------------------------------- |
+| `variant_groups`          | Groups related items that differ by size/style                       |
+| `equipment_kits`          | Named bundles of items for single-operation issuance                 |
+| `equipment_kit_items`     | Component items within a kit with per-component quantity             |
 | `member_size_preferences` | Member garment size preferences (coat, pants, gloves, boots, helmet) |
-| `reorder_requests` | Reorder request workflow with status lifecycle |
+| `reorder_requests`        | Reorder request workflow with status lifecycle                       |
 
 ### Key Enums
 
-| Enum | Values |
-|------|--------|
-| ItemStatus | available, assigned, checked_out, in_maintenance, lost, stolen, retired |
-| ItemCondition | excellent, good, fair, poor, damaged, out_of_service, retired |
-| TrackingType | individual, pool |
-| MaintenanceType | inspection, repair, cleaning, testing, calibration, replacement, preventive |
-| ClearanceLineDisposition | pending, returned, returned_damaged, written_off, waived |
-| WriteOffStatus | pending, approved, denied |
-| StandardSize | xs, s, m, l, xl, 2xl, 3xl, 4xl, 5xl |
-| GarmentStyle | regular, long, short, tall |
-| ReorderRequestStatus | pending, approved, ordered, received |
+| Enum                     | Values                                                                      |
+| ------------------------ | --------------------------------------------------------------------------- |
+| ItemStatus               | available, assigned, checked_out, in_maintenance, lost, stolen, retired     |
+| ItemCondition            | excellent, good, fair, poor, damaged, out_of_service, retired               |
+| TrackingType             | individual, pool                                                            |
+| MaintenanceType          | inspection, repair, cleaning, testing, calibration, replacement, preventive |
+| ClearanceLineDisposition | pending, returned, returned_damaged, written_off, waived                    |
+| WriteOffStatus           | pending, approved, denied                                                   |
+| StandardSize             | xs, s, m, l, xl, 2xl, 3xl, 4xl, 5xl                                         |
+| GarmentStyle             | regular, long, short, tall                                                  |
+| ReorderRequestStatus     | pending, approved, ordered, received                                        |
 
 ---
 
@@ -162,7 +166,7 @@ POST   /api/v1/inventory/items/{id}/retire               # Retire item
 GET    /api/v1/inventory/items/export                    # Export items as CSV (carries a Ready Lot Stock column)
 ```
 
-### Stock Lots *(2026-08-10)*
+### Stock Lots _(2026-08-10)_
 
 ```
 GET    /api/v1/inventory/items/{item_id}/lots            # Lots held for an item
@@ -261,6 +265,22 @@ PUT    /api/v1/inventory/storage-areas/{id}              # Update storage area
 DELETE /api/v1/inventory/storage-areas/{id}              # Delete (deactivate) storage area
 ```
 
+### Vendors _(2026-08-16)_
+
+```
+GET    /api/v1/inventory/vendors                         # List vendors (search, active_only) — inventory.view
+GET    /api/v1/inventory/vendors/{id}                    # Vendor with contacts and purchasing totals
+POST   /api/v1/inventory/vendors                         # Create vendor (contacts optional, in one pass)
+PATCH  /api/v1/inventory/vendors/{id}                    # Update vendor
+DELETE /api/v1/inventory/vendors/{id}                    # Deactivate (items/reorders keep their link)
+
+POST   /api/v1/inventory/vendors/{id}/contacts               # Add a contact
+PATCH  /api/v1/inventory/vendors/{id}/contacts/{contact_id}  # Update a contact
+DELETE /api/v1/inventory/vendors/{id}/contacts/{contact_id}  # Remove a contact
+```
+
+Everything but the two read endpoints requires `inventory.manage`. `GET /api/v1/inventory/items?vendor_id=…` filters the catalog to one vendor — the link behind the item count on a vendor card.
+
 ### Write-Off Requests
 
 ```
@@ -269,7 +289,7 @@ GET    /api/v1/inventory/write-offs                      # List write-off reques
 PUT    /api/v1/inventory/write-offs/{id}/review           # Approve/deny write-off
 ```
 
-### Variant Groups & Equipment Kits *(2026-03-07)*
+### Variant Groups & Equipment Kits _(2026-03-07)_
 
 ```
 GET    /api/v1/inventory/variant-groups                    # List variant groups
@@ -287,7 +307,7 @@ GET    /api/v1/inventory/users/{id}/size-preferences       # Get member size pre
 PUT    /api/v1/inventory/users/{id}/size-preferences       # Upsert member size preferences
 ```
 
-### Reorder Requests *(2026-03-07)*
+### Reorder Requests _(2026-03-07)_
 
 ```
 POST   /api/v1/inventory/reorder-requests                  # Create reorder request
@@ -309,7 +329,7 @@ GET    /api/v1/inventory/nfpa/summary                    # NFPA compliance dashb
 GET    /api/v1/inventory/nfpa/retirement-due             # Items nearing 10-year retirement
 ```
 
-### Impact Planner *(2026-06-23)*
+### Impact Planner _(2026-06-23)_
 
 All endpoints require `inventory.manage`.
 
@@ -364,23 +384,25 @@ If Redis is unavailable, events are broadcast to local connections only (single-
 ### Shared Constants
 
 Condition options are centralized in `frontend/src/constants/enums.ts`:
+
 - `ITEM_CONDITION_OPTIONS` — All conditions including out_of_service (for admin forms)
 - `RETURN_CONDITION_OPTIONS` — Return-safe conditions (excludes out_of_service)
 
 ### Key Components
 
-| Component | Purpose |
-|-----------|---------|
-| `InventoryPage` | Main inventory management page with items/categories tabs |
-| `InventoryMembersTab` | Per-member inventory view with sorting and expandable details |
-| `MemberIdScannerModal` | Camera-based member ID scanning for quick member lookup |
-| `InventoryScanModal` | Barcode/QR scanning + live search for batch checkout/return (native BarcodeDetector with html5-qrcode fallback) |
-| `ReturnItemsModal` | List-based return workflow for a member's held items |
-| `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect |
+| Component               | Purpose                                                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `InventoryPage`         | Main inventory management page with items/categories tabs                                                       |
+| `InventoryMembersTab`   | Per-member inventory view with sorting and expandable details                                                   |
+| `MemberIdScannerModal`  | Camera-based member ID scanning for quick member lookup                                                         |
+| `InventoryScanModal`    | Barcode/QR scanning + live search for batch checkout/return (native BarcodeDetector with html5-qrcode fallback) |
+| `ReturnItemsModal`      | List-based return workflow for a member's held items                                                            |
+| `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect                                                        |
 
 ### Test Coverage
 
 Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/enums.test.ts` cover:
+
 - Loading, empty, and error states
 - Sort by name, total items, overdue, and assigned
 - Search filtering with debounce
@@ -413,7 +435,7 @@ A new Quartermaster planning tool (`/inventory/admin/impact-planner`, `inventory
 - **Storage area item link fix**: Item links from storage areas navigate to `/inventory/items/{id}` instead of incorrectly routing to dashboard
 - **Storage area name resolution**: Item detail page resolves and displays the storage area name instead of raw ID
 - **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback when empty, instead of hiding fields entirely
-- **Barcode generation**: Barcodes use one per-organization sequential scheme (`<prefix><zero-padded number>`, default `INV-000001`) assigned at item-creation time by `_next_sequential_barcode()` (shared by item creation, variant generation, and label backfill). The prefix/counter live in `organizations.settings["barcode"]`; migration `20260610_0001` reassigned existing items and seeded counters *(2026-06-10)*
+- **Barcode generation**: Barcodes use one per-organization sequential scheme (`<prefix><zero-padded number>`, default `INV-000001`) assigned at item-creation time by `_next_sequential_barcode()` (shared by item creation, variant generation, and label backfill). The prefix/counter live in `organizations.settings["barcode"]`; migration `20260610_0001` reassigned existing items and seeded counters _(2026-06-10)_
 - **Admin items page improvements**: InventoryItemsPage readability and display bug fixes
 - **WebSocket double-accept fix**: Guard `client_state` check before `accept()` in `websocket_manager.py` to prevent `RuntimeError` when early auth accept causes second accept call
 - **Equipment check template builder fix**: Removed `useBlocker` from `useUnsavedChanges` hook (incompatible with BrowserRouter). `beforeunload` handler retained for browser close/refresh
@@ -421,15 +443,15 @@ A new Quartermaster planning tool (`/inventory/admin/impact-planner`, `inventory
 
 ### Edge Cases (2026-03-24)
 
-| Scenario | Behavior |
-|----------|----------|
-| Item created before barcode auto-generation | Backfilled with a sequential `INV-000001`-style barcode by migration `20260610_0001` |
-| Storage area with no items | Shows empty state message in expandable panel |
-| Item with no barcode or asset tag | Fields display `--` placeholder (always visible) |
-| WebSocket connection already accepted | Guard prevents second `accept()` call |
+| Scenario                                         | Behavior                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Item created before barcode auto-generation      | Backfilled with a sequential `INV-000001`-style barcode by migration `20260610_0001` |
+| Storage area with no items                       | Shows empty state message in expandable panel                                        |
+| Item with no barcode or asset tag                | Fields display `--` placeholder (always visible)                                     |
+| WebSocket connection already accepted            | Guard prevents second `accept()` call                                                |
 | Template builder navigation with unsaved changes | `beforeunload` fires on browser close; no in-app blocking (BrowserRouter limitation) |
-| Storage area item link clicked | Navigates to `/inventory/items/{id}` (fixed from dashboard) |
-| Camera permission denied on desktop | Error message displayed; manual text entry available |
+| Storage area item link clicked                   | Navigates to `/inventory/items/{id}` (fixed from dashboard)                          |
+| Camera permission denied on desktop              | Error message displayed; manual text entry available                                 |
 
 ---
 
@@ -452,13 +474,13 @@ A new Quartermaster planning tool (`/inventory/admin/impact-planner`, `inventory
 
 ### Edge Cases (2026-03-22)
 
-| Scenario | Behavior |
-|----------|----------|
-| Barcode with insufficient quiet zone | ISO-compliant quiet zones enforced |
-| Thermal printer landscape label | Auto-rotated to correct orientation |
-| Label batch > limit | Capped with user warning |
-| Non-admin on inventory dashboard | Sees only personally assigned equipment |
-| Desktop barcode scanning | Falls back to user-facing camera if no environment camera |
+| Scenario                             | Behavior                                                  |
+| ------------------------------------ | --------------------------------------------------------- |
+| Barcode with insufficient quiet zone | ISO-compliant quiet zones enforced                        |
+| Thermal printer landscape label      | Auto-rotated to correct orientation                       |
+| Label batch > limit                  | Capped with user warning                                  |
+| Non-admin on inventory dashboard     | Sees only personally assigned equipment                   |
+| Desktop barcode scanning             | Falls back to user-facing camera if no environment camera |
 
 ---
 
@@ -496,11 +518,11 @@ A new Quartermaster planning tool (`/inventory/admin/impact-planner`, `inventory
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario                             | Behavior                                           |
+| ------------------------------------ | -------------------------------------------------- |
 | Item created before barcode auto-gen | Barcode lazily generated on first detail page load |
-| Storage area with no items | Shows empty state message |
-| Item without barcode or asset tag | Fields display `--` placeholder |
+| Storage area with no items           | Shows empty state message                          |
+| Item without barcode or asset tag    | Fields display `--` placeholder                    |
 
 ---
 
@@ -529,11 +551,11 @@ The VariantGroupsPage has been redesigned with a **stock matrix view** showing a
 
 `GET /api/v1/inventory/items` now accepts three new query parameters for variant-based filtering:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `size` | string | Filter items by size variant (e.g., "L", "XL") |
-| `color` | string | Filter items by color variant (e.g., "Navy") |
-| `style` | string | Filter items by style variant (e.g., "Regular") |
+| Parameter | Type   | Description                                     |
+| --------- | ------ | ----------------------------------------------- |
+| `size`    | string | Filter items by size variant (e.g., "L", "XL")  |
+| `color`   | string | Filter items by color variant (e.g., "Navy")    |
+| `style`   | string | Filter items by style variant (e.g., "Regular") |
 
 Filters are applied in the InventoryItemsPage as dropdown selectors alongside existing category, status, and location filters.
 
@@ -551,13 +573,13 @@ Filters are applied in the InventoryItemsPage as dropdown selectors alongside ex
 
 ### Edge Cases (2026-04-08)
 
-| Scenario | Behavior |
-|----------|----------|
-| Variant capsules on item with no variant attributes | Component returns null; no empty badges |
-| Stock matrix with zero stock across all variants | Group shows "Out of Stock" banner; individual zeros dimmed |
-| Size/color/style filter with no matches | Empty results; filter state preserved |
-| Label content with all optional fields unchecked | Minimum: barcode image + item name always included |
-| `category_name` null on older items | Falls back to empty string display |
+| Scenario                                            | Behavior                                                   |
+| --------------------------------------------------- | ---------------------------------------------------------- |
+| Variant capsules on item with no variant attributes | Component returns null; no empty badges                    |
+| Stock matrix with zero stock across all variants    | Group shows "Out of Stock" banner; individual zeros dimmed |
+| Size/color/style filter with no matches             | Empty results; filter state preserved                      |
+| Label content with all optional fields unchecked    | Minimum: barcode image + item name always included         |
+| `category_name` null on older items                 | Falls back to empty string display                         |
 
 ---
 
@@ -574,17 +596,17 @@ The Impact Planner at `/inventory/admin/impact-planner` allows quartermasters to
 
 ### Key Capabilities
 
-| Capability | Description |
-|------------|-------------|
-| **Stock-aware shortfall** | Compares member demand per size against on-hand pool stock to calculate purchase quantities |
-| **Cost estimation** | Multiplies shortfall × unit cost per size for a total projected purchase cost |
-| **One-click reorder** | Generates `ReorderRequest` records (PENDING status) for each size with shortfall > 0 |
-| **Replacement-aware targeting** | Flags members whose existing items are worn/expired (not just missing) |
-| **Bulk-issue** | Issues on-hand stock to members who need it, matching by size preference |
-| **Saved plans** | Save filter sets with names for reuse (annual refresh, seasonal cycles) |
-| **Allowance-aware warnings** | Flags members at or over their issuance allowance; bulk-issue skips them |
-| **Request sizes** | Sends in-app notifications to members without sizes, directing them to add preferences |
-| **PDF summary** | Branded printable PDF with size breakdown, filters, and optional contact columns |
+| Capability                      | Description                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Stock-aware shortfall**       | Compares member demand per size against on-hand pool stock to calculate purchase quantities |
+| **Cost estimation**             | Multiplies shortfall × unit cost per size for a total projected purchase cost               |
+| **One-click reorder**           | Generates `ReorderRequest` records (PENDING status) for each size with shortfall > 0        |
+| **Replacement-aware targeting** | Flags members whose existing items are worn/expired (not just missing)                      |
+| **Bulk-issue**                  | Issues on-hand stock to members who need it, matching by size preference                    |
+| **Saved plans**                 | Save filter sets with names for reuse (annual refresh, seasonal cycles)                     |
+| **Allowance-aware warnings**    | Flags members at or over their issuance allowance; bulk-issue skips them                    |
+| **Request sizes**               | Sends in-app notifications to members without sizes, directing them to add preferences      |
+| **PDF summary**                 | Branded printable PDF with size breakdown, filters, and optional contact columns            |
 
 ### API Endpoints
 
@@ -605,28 +627,28 @@ POST   /api/v1/inventory/impact-planner/pdf                   # Generate PDF sum
 
 **Table: `inventory_impact_plans`** (migration `20260622_0001`)
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `organization_id` | UUID (FK) | Organization scope |
-| `name` | String(255) | Human-readable scenario name |
-| `description` | Text | Optional narrative |
-| `filters` | JSON | Persisted filter set |
-| `created_by` | UUID (FK, nullable) | Who created the plan |
-| `created_at`, `updated_at` | DateTime(tz) | Timestamps |
+| Column                     | Type                | Description                  |
+| -------------------------- | ------------------- | ---------------------------- |
+| `id`                       | UUID                | Primary key                  |
+| `organization_id`          | UUID (FK)           | Organization scope           |
+| `name`                     | String(255)         | Human-readable scenario name |
+| `description`              | Text                | Optional narrative           |
+| `filters`                  | JSON                | Persisted filter set         |
+| `created_by`               | UUID (FK, nullable) | Who created the plan         |
+| `created_at`, `updated_at` | DateTime(tz)        | Timestamps                   |
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Member with no size preference | Bucketed as "Unknown"; skipped by bulk-issue and reorder |
-| Stock exhausted during bulk-issue | Issues what's available; remaining members skipped with reason |
-| All shortfalls are zero | Reorder generates nothing; returns `created_count: 0` |
-| Contact visibility set to "hidden" | Email/phone columns omitted from PDF |
-| Allowance exceeded for a member | Bulk-issue skips with "Allowance exceeded" reason |
-| Plan filters reference deleted rank | Deleted values silently ignored; remaining filters applied |
-| Replacement-aware with NFPA tracking | Uses NFPA retirement dates for serviceability |
-| Multiple items at different costs | Average unit cost used for estimation |
+| Scenario                             | Behavior                                                       |
+| ------------------------------------ | -------------------------------------------------------------- |
+| Member with no size preference       | Bucketed as "Unknown"; skipped by bulk-issue and reorder       |
+| Stock exhausted during bulk-issue    | Issues what's available; remaining members skipped with reason |
+| All shortfalls are zero              | Reorder generates nothing; returns `created_count: 0`          |
+| Contact visibility set to "hidden"   | Email/phone columns omitted from PDF                           |
+| Allowance exceeded for a member      | Bulk-issue skips with "Allowance exceeded" reason              |
+| Plan filters reference deleted rank  | Deleted values silently ignored; remaining filters applied     |
+| Replacement-aware with NFPA tracking | Uses NFPA retirement dates for serviceability                  |
+| Multiple items at different costs    | Average unit cost used for estimation                          |
 
 ---
 
