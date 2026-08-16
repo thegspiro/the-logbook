@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Facilities: rooms can sit inside other rooms (2026-08-16)
+
+**Added**
+
+- A room can now be placed inside another room in the same facility — the
+  quartermaster's storage space within the volunteer office — via a "Located
+  inside" picker on the room form and an add-a-room-inside action on each row.
+  The rooms list renders the resulting tree, and each room reports how many
+  sub-rooms it holds. Nesting is capped at five levels.
+- `GET /api/v1/facilities/rooms` returns `parentRoomId` on every room and
+  accepts `parent_room_id` / `top_level_only` to fetch a single level.
+- The cross-module room picker (events, training, scheduling) lists sub-rooms
+  indented under their container and shows the containment path for the
+  selected room. A nested room's linked Location now carries the same path, so
+  "Quartermaster's Storage — Volunteer Office — Station 1" is distinguishable
+  from a storage room elsewhere in the building.
+
+**Changed**
+
+- Deleting a room keeps its sub-rooms, re-parenting them onto the deleted
+  room's own container rather than cascading the delete through everything
+  stored below it. The confirmation says so before you commit.
+- The room form now sends explicit nulls on save, so clearing a field (floor,
+  capacity, description) persists instead of silently keeping the old value.
+
 ### YouTube scripts: August release changes are written into the takes (2026-08-14)
 
 **Documentation**
@@ -22,7 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   intentionally a recording-production task because narration pacing determines
   them; no behavioral content remains only in `SCRIPT_CURRENCY.md`.
 
-
 ### Events: reminder audience and check-in teaching update (2026-08-14)
 
 **Changed**
@@ -34,7 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   training/schema references and documented Strict/Window behavior, early-member
   notices, guest blocking, actual-time boundaries, and the overlapping-meeting
   15-minute exception. Added exact screenshot and YouTube B-roll requirements.
-
 
 ### Security, privacy, permissions, and dashboard follow-up (2026-08-14)
 

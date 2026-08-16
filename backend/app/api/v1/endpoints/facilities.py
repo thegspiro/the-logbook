@@ -2128,6 +2128,12 @@ async def list_facility_rooms(
     room_type: RoomTypeEnum | None = Query(None, description="Filter by room type"),
     floor: int | None = Query(None, description="Filter by floor number"),
     is_active: bool | None = Query(None, description="Filter by active status"),
+    parent_room_id: str | None = Query(
+        None, description="Filter to the direct sub-rooms of this room"
+    ),
+    top_level_only: bool = Query(
+        False, description="Only rooms that sit directly on the facility"
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -2137,6 +2143,10 @@ async def list_facility_rooms(
 ):
     """
     List facility rooms
+
+    Returns nested rooms alongside top-level ones; each carries its
+    `parentRoomId` so callers can assemble the tree. Pass `parent_room_id` or
+    `top_level_only` to fetch a single level instead.
 
     **Authentication required**
     **Permissions required:** facilities.view or facilities.manage
@@ -2148,6 +2158,8 @@ async def list_facility_rooms(
         room_type=room_type,
         floor=floor,
         is_active=is_active,
+        parent_room_id=parent_room_id,
+        top_level_only=top_level_only,
         skip=skip,
         limit=limit,
     )
