@@ -153,6 +153,61 @@ describe('apiCache', () => {
       expect(result).toEqual(expect.objectContaining({ data: { v: 2 }, fresh: true })); // Only 10s old
     });
 
+    // The TTL comparisons are inclusive/exclusive at exactly the boundary, and
+    // every other test here sits a second either side of it. Mutating `>` to
+    // `>=` (or `<=` to `<`) therefore changed nothing observable, so the
+    // boundary was free to drift. These two pin it to the millisecond.
+    it('still counts an entry as fresh at exactly the fresh TTL (30s)', () => {
+      setCache('/events', { items: [] });
+
+      vi.advanceTimersByTime(30_000);
+
+      expect(getCached('/events')).toEqual(expect.objectContaining({ fresh: true }));
+    });
+
+    it('still returns an entry at exactly the stale TTL (90s), expiring only past it', () => {
+      setCache('/events', { items: [] });
+
+      vi.advanceTimersByTime(90_000);
+      expect(getCached('/events')).toEqual(expect.objectContaining({ fresh: false }));
+
+      vi.advanceTimersByTime(1);
+      expect(getCached('/events')).toBeNull();
+    });
+
+    // setCache deletes before re-inserting so that overwriting a key moves it to
+    // the end of the Map's insertion order, which is what makes eviction
+    // least-recently-written rather than first-ever-written. Nothing observed
+    // that ordering, so the delete could be removed without a test noticing.
+    it('re-writing a key moves it to the back of the eviction queue', () => {
+      for (let i = 0; i < 200; i++) {
+        setCache(`/item/${i}`, { id: i });
+      }
+
+      // Re-write the oldest entry; it should now be the newest.
+      setCache('/item/0', { id: 0, updated: true });
+
+      // Push one over the limit — exactly one entry is evicted.
+      setCache('/item/200', { id: 200 });
+
+      expect(getCached('/item/0')).toEqual(expect.objectContaining({ data: { id: 0, updated: true } }));
+      // /item/1 is now the oldest, so it is the one that goes.
+      expect(getCached('/item/1')).toBeNull();
+    });
+
+    it('evicts exactly the overflow count, not one entry more', () => {
+      for (let i = 0; i < 203; i++) {
+        setCache(`/item/${i}`, { id: i });
+      }
+
+      // 203 written, cap is 200 — the three oldest go and nothing else.
+      expect(getCached('/item/0')).toBeNull();
+      expect(getCached('/item/1')).toBeNull();
+      expect(getCached('/item/2')).toBeNull();
+      expect(getCached('/item/3')).not.toBeNull();
+      expect(getCached('/item/202')).not.toBeNull();
+    });
+
     it('evicts oldest entries when exceeding MAX_CACHE_ENTRIES (200)', () => {
       // Fill cache with 200 entries
       for (let i = 0; i < 200; i++) {
@@ -260,6 +315,15 @@ describe('apiCache', () => {
 
     it('handles a URL with trailing slash', () => {
       expect(getResourcePrefix('/events/')).toBe('/events');
+    });
+
+    // The leading-slash strip is anchored (/^\//). Unanchored, it would eat the
+    // first slash found anywhere, so a relative URL would collapse to a single
+    // bogus segment ('events/123' -> 'events123') and silently invalidate the
+    // wrong prefix. Every other case here starts with a slash, where anchored
+    // and unanchored behave identically.
+    it('extracts the first segment from a URL with no leading slash', () => {
+      expect(getResourcePrefix('events/123')).toBe('/events');
     });
 
     it('handles deeply nested paths', () => {
