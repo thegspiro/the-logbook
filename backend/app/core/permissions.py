@@ -1521,7 +1521,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
     "apparatus_officer": {
         "name": "Apparatus Officer",
         "slug": "apparatus_officer",
-        "description": "Day-to-day fleet tracking, maintenance logging, and equipment checks",
+        "description": "Day-to-day fleet tracking, maintenance logging, and "
+        "equipment checks, including the medical stock carried on the rigs",
         "is_system": True,
         "priority": 50,
         "permissions": [
@@ -1533,9 +1534,27 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             INVENTORY_MANAGE.name,
+            # Stated rather than inherited. The broad INVENTORY_MANAGE above
+            # already satisfies every medical route's OR check, so this widens
+            # nothing — it makes the role editor honest, where a chief deciding
+            # who runs EMS stock would otherwise read this role's permission
+            # list and see no mention of medical supplies at all.
+            #
+            # Earned on the merits too: this officer builds the equipment-check
+            # templates that consume medical stock, and a template position is
+            # only as good as the lots behind it.
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             COMPLIANCE_VIEW.name,
             LOCATIONS_VIEW.name,
+            # The role has been described as covering equipment checks since it
+            # was written, and held none of these — lieutenants, captains and
+            # the scheduling officer could build a rig's checklist but the
+            # apparatus officer could not open one.
+            EQUIPMENT_CHECK_VIEW.name,
+            EQUIPMENT_CHECK_MANAGE.name,
+            EQUIPMENT_CHECK_SUBMIT.name,
             APPARATUS_VIEW.name,
             APPARATUS_CREATE.name,
             APPARATUS_EDIT.name,

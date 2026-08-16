@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ems_supply_officer` system role and matching email-signature office. It holds
   the medical permissions plus `equipment_check.*` — both halves of the
   shelf-to-truck loop — and no access to gear or uniforms.
+- `apparatus_officer` now states the medical permissions explicitly (it already
+  reached medical stock through the broad `inventory.manage`, so nothing is
+  widened — the role editor is simply honest about it now), and gains the
+  `equipment_check.*` set its description has always promised.
 - `medical_supplies` module toggle (off by default), so departments that do not
   run EMS never see the page.
 

@@ -208,7 +208,9 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manage: ['Add/edit supplies', 'Receive deliveries', 'Manage lots and expiration dates'],
       // Seeded to the quartermaster as well: a department that has not split
       // the role should not have to go find who owns this after enabling it.
-      defaultManagePositions: ['ems_supply_officer', 'quartermaster', 'fire_chief'],
+      // The apparatus officer is here because the rigs' checklists consume
+      // this stock, matching the seeded role in core/permissions.py.
+      defaultManagePositions: ['ems_supply_officer', 'quartermaster', 'apparatus_officer', 'fire_chief'],
     },
   },
   {
