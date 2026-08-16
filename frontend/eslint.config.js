@@ -169,7 +169,27 @@ export default tseslint.config(
       'vitest/no-focused-tests': 'error',
       'vitest/no-disabled-tests': 'warn',
       'vitest/no-standalone-expect': 'error',
-      'vitest/prefer-called-with': 'warn',
+      // DISABLED, and it must stay disabled. This rule is auto-fixable: it
+      // rewrites `expect(m).toHaveBeenCalled()` into
+      // `expect(m).toHaveBeenCalledWith()` — the ZERO-ARGUMENT form — without
+      // looking at how the mock was actually called. lint-staged runs
+      // `eslint --fix` on every commit, so the rewrite happened silently, and
+      // for any mock called with arguments it converts a passing assertion into
+      // a failing one:
+      //
+      //   const m = vi.fn(); m(1, 2);
+      //   expect(m).toHaveBeenCalled();      // passes
+      //   -- eslint --fix -->
+      //   expect(m).toHaveBeenCalledWith();  // FAILS: expected call with []
+      //
+      // That is the mechanism behind pitfall #13, which CLAUDE.md records as
+      // the single largest source of broken tests here (34 of 46). The cause
+      // was never developers choosing the wrong matcher — the toolchain was
+      // rewriting the right one on its way into the commit. It also directly
+      // contradicts the documented rule, which says to use
+      // `toHaveBeenCalled()` when arguments are not the point; with this rule
+      // on, that advice was impossible to follow.
+      'vitest/prefer-called-with': 'off',
       'vitest/no-restricted-matchers': [
         'error',
         {

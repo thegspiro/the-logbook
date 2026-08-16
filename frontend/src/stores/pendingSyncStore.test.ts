@@ -45,9 +45,9 @@ describe('pendingSyncStore', () => {
     it('queries all three queues, not just the first', async () => {
       await usePendingSyncStore.getState().refresh();
 
-      expect(mockGenericCount).toHaveBeenCalledWith();
-      expect(mockEquipmentCount).toHaveBeenCalledWith();
-      expect(mockReportCount).toHaveBeenCalledWith();
+      expect(mockGenericCount).toHaveBeenCalled();
+      expect(mockEquipmentCount).toHaveBeenCalled();
+      expect(mockReportCount).toHaveBeenCalled();
     });
 
     // The count drives a navigation pill, not a decision. One queue failing to
