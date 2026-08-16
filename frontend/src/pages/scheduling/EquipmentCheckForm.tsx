@@ -42,7 +42,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLot } from '../../services/eventServices';
-import { getErrorMessage } from '../../utils/errorHandling';
+import { getErrorMessage, isNetworkError } from '../../utils/errorHandling';
 import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -52,6 +52,7 @@ import {
   dequeueCheck,
   markRetry,
   pendingCount as getPendingCount,
+  CHECK_QUEUE_MAX_RETRIES,
   type SyncStatus,
 } from '../../utils/offlineQueue';
 import type {
@@ -349,6 +350,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     try {
       const pending = await listPendingChecks();
       let failed = 0;
+      let discarded = 0;
+      let photosLost = 0;
 
       for (const entry of pending) {
         try {
@@ -366,25 +369,43 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             try {
               await schedulingService.uploadCheckItemPhotos(record.id, itemId, files);
             } catch {
-              // Photo upload failure is non-fatal
+              // The check itself is recorded, so this is not fatal — but the
+              // entry (and with it the only copy of these blobs) is about to be
+              // dequeued. Count them so the loss is reported rather than
+              // discovered later by whoever went looking for the photo of the
+              // damaged item.
+              photosLost += files.length;
             }
           }
 
           await dequeueCheck(entry.id);
         } catch {
-          failed++;
-          await markRetry(entry.id);
+          const updated = await markRetry(entry.id);
+          if (updated && updated.retries >= CHECK_QUEUE_MAX_RETRIES) {
+            // Rejected on every attempt — keeping it would wedge the queue and
+            // keep promising a sync that cannot happen.
+            await dequeueCheck(entry.id);
+            discarded++;
+          } else {
+            failed++;
+          }
         }
       }
 
       const remaining = await getPendingCount();
       setPendingQueueCount(remaining);
-      setSyncStatus(failed > 0 ? 'error' : 'idle');
+      setSyncStatus(failed > 0 || discarded > 0 ? 'error' : 'idle');
 
-      if (pending.length > 0 && failed === 0) {
+      if (pending.length > 0 && failed === 0 && discarded === 0) {
         toast.success(`Synced ${pending.length} queued check(s)`);
       } else if (failed > 0) {
         toast.error(`${failed} check(s) failed to sync — will retry`);
+      }
+      if (discarded > 0) {
+        toast.error(`${discarded} queued check(s) were rejected repeatedly and have been discarded`);
+      }
+      if (photosLost > 0) {
+        toast.error(`${photosLost} photo(s) could not be uploaded and were not saved`);
       }
     } catch {
       setSyncStatus('error');
@@ -1081,8 +1102,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       }
       toast.success('Equipment check submitted successfully');
       onComplete?.();
-    } catch {
-      // Network error during submit — fall back to offline queue
+    } catch (err: unknown) {
+      // Only a transport failure may fall back to the offline queue. A server
+      // that answered has *rejected* this check — a validation error, a lost
+      // permission, a shift already checked — and the queue would re-send the
+      // identical body on every reconnect, failing every time, while the member
+      // was told it was safely queued and the draft was deleted underneath
+      // them. Surface the rejection and keep the draft so it can be corrected.
+      if (!isNetworkError(err)) {
+        toast.error(getErrorMessage(err, 'Failed to submit equipment check'));
+        return;
+      }
       try {
         const fallbackItems: CheckItemResultSubmit[] = [];
         const fallbackPhotos: { itemId: string; files: File[] }[] = [];

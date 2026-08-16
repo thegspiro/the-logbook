@@ -13,6 +13,7 @@ import { trainingProgramService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import type { ProgramWithDetails, ProgramEnrollment, ProgramRequirement } from '../../types/training';
+import PrintPageStyles from '../../components/print/PrintPageStyles';
 
 const ProgramPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -97,11 +98,7 @@ const ProgramPrintPage: React.FC = () => {
 
   return (
     <>
-      <style>{`
-        @page { size: letter; margin: 0.5in 0.6in; }
-        @media print { body { margin: 0; } }
-        @media screen { body { background: #f3f4f6; } }
-      `}</style>
+      <PrintPageStyles margin="0.5in 0.6in" />
 
       <div className="mx-auto my-8 max-w-[8.5in] bg-white shadow-lg print:my-0 print:shadow-none">
         <div

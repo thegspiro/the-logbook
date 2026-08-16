@@ -1,5 +1,114 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-15 → 08-16 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-15_TO_16.md`](../CHANGE_AUDIT_2026-08-15_TO_16.md#documentation-and-media-disposition).
+These are **not verified captures**; each remains open until the image is
+opened and checked against its guide caption.
+
+### SCREENSHOT NEEDED
+
+- **Nested facility rooms** (guide 06, lesson 19): the Rooms section rendering
+  a two/three-level tree with indented sub-rooms, per-room sub-room counts,
+  and the add-a-room-inside row action. Seed one nested branch (e.g.
+  Volunteer Office → Quartermaster's Storage).
+- Room form with the **"Located inside" picker** open, demonstrating the
+  room's own subtree is excluded from the options.
+- **Delete-room confirmation** for a container room, showing the
+  "sub-rooms move up a level" warning.
+- **Cross-module room picker** (an event form) with indented sub-rooms and
+  the containment path printed under a selected nested room.
+- **Candidate list, member vs. manager** (guides 14, 19): the same election
+  after nominations close from a member account (accepted only) and an
+  `elections.manage` account (pending visible). Caption which is which.
+- **Directory profile redaction** (guides 17, 19): the same colleague profile
+  with `members.view` only (no MFA/verification/last-login/notification
+  metadata, roles without permission lists) beside the `users.view` version.
+  Use a demo member with MFA enabled so the difference is visible.
+- **Hire-date restriction** (guide 19): profile edit rejecting a `hire_date`
+  change without leadership/secretary/membership-coordinator permission,
+  showing the explanation in the toast.
+
+### REPLACE / re-verify
+
+- `06-11-facility-detail.png` — re-verify: if the Rooms section is visible,
+  it now renders a tree with sub-room counts, not a flat list. Replace if the
+  old flat list shows.
+- Any existing capture of the **room form** without the "Located inside"
+  field, or of a **room picker** (events/training/scheduling captures) showing
+  a flat, un-indented list — the picker now indents sub-rooms and shows the
+  containment path.
+- Any capture of a colleague profile that shows the account-metadata block
+  (MFA, last login, timestamps) under a members-only viewing context.
+
+### REPLACE — one image now; 38 more only when they are next re-shot
+
+The themed background gradient moved from `body` to `html` so that it also
+covers the browser's stable scrollbar gutter. Before that, the gutter showed the
+browser's default canvas — against dark content, **a 15px white strip down the
+right edge**.
+
+All 429 images were checked with
+[`scripts/screenshots/audit_images.py`](../../scripts/screenshots/audit_images.py)
+(`--check edges`). **39 carry the strip**, and they split cleanly by how much it
+matters:
+
+| Tier                                     | Count | What changed                                                                     | Action                                                            |
+| ---------------------------------------- | ----- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Stark** — `10-11-public-form-dark.png` | 1     | Dark page: the white strip becomes a **dark** gradient. Plainly visible          | **Re-shoot.** It is the only `theme: "dark"` shot in the manifest |
+| **Subtle** — 38 modal captures           | 38    | Light page under a dark modal overlay: white becomes a **pale** gradient at 15px | Leave. Fold in whenever the shot is re-taken for another reason   |
+
+**The 38 are the instructive part.** They are light-mode pages; what darkens the
+right edge is the **modal overlay**, which dims the viewport but sits inside
+`body`, leaving the gutter — reserved on `html` — white behind it. So the trigger
+is _dark content at the right edge_, not a dark page.
+
+> **Correction (2026-08-16).** This section first said "exactly three, measured".
+> That was wrong, and wrong in an instructive way: the first scan pre-filtered on
+> **whole-image** brightness before looking at the edge, which quietly assumed the
+> defect was a dark-mode one. Every modal capture is bright overall and dark
+> exactly where it matters, so 36 of them were filtered out before the real check
+> ran. **A filter that encodes the assumption you are testing will confirm it.**
+> The script now compares the edge with the content beside it and never with the
+> page average; run it rather than re-deriving the check by hand.
+
+Cropped per-control shots never included the edge and are unaffected. **There is
+still no set-wide re-shoot here** — the actionable list is one file.
+
+Nothing else about the rendering changed — no layout, no spacing, no colour
+inside the content area — so these three need only re-capture, not re-caption.
+
+### SCREENSHOT NEEDED
+
+- **Onboarding session expired, in two frames.** (1) The wizard reopened after a
+  browser restart, showing previously typed answers repainted; (2) the
+  session-expired error raised by the next step. Demo data: begin an onboarding
+  run through the stations step, close the browser, reopen `/onboarding`, and try
+  to continue. **Both frames are required** — either one alone teaches the wrong
+  lesson, because the whole point is that a filled-in form does not mean a live
+  session. Used by `08-admin-reports.md` and
+  `19-august-2026-release-changes.md`.
+- **A public page in dark mode at full window width**, on a page long enough to
+  scroll (`/f/{slug}` or an application-status link). This is the standing proof
+  that the canvas covers routes rendered outside the app shell, which is the
+  reason the rule exists at all. Used by `19-august-2026-release-changes.md`.
+- **Skills-testing printing, three shots** (added by the 2026-08-11 print pages,
+  documented 2026-08-16 — the guide had no printing section until then):
+  - The Templates tab row actions with **Print** visible, plus the resulting
+    blank sheet in print preview. Demo data: one published template with at
+    least two sections and a mix of criterion types (pass/fail, scored, timed),
+    so the differing marking boxes appear in one frame.
+  - A completed scorecard print preview showing per-step marks, the score
+    arithmetic, and the validating officer's sign-off. Demo data: one validated
+    official result with at least one failed step, so the deduction is visible.
+  - The same scorecard as a candidate under `scores` disclosure sees it, with
+    the examiner's notes absent. **Capture beside the officer version** — the
+    pair is the teaching point; either alone is not.
+
+The reason, data path, and edge cases for each are recorded in
+[`../CHANGE_AUDIT_2026-08-10_TO_16.md`](../CHANGE_AUDIT_2026-08-10_TO_16.md#documentation-and-media-disposition).
+
 ## Flagged by the 2026-08-12 → 08-14 changes
 
 The three-day connection audit identified the following capture work. These
@@ -105,6 +214,46 @@ seeded twice.
 
 **All three remaining placeholders are now characterised** — none is a mystery,
 each is a bounded piece of demo-data work, and two of them share a fixture.
+
+### A currency survey after the main merges — the navigation is fine, guide 03 is not
+
+Code changed under six guides since their images were captured. Checked in
+order of blast radius:
+
+**The navigation refactor is not a problem.** `SideNavigation.tsx`,
+`TopNavigation.tsx` and a new `adminNavigation.ts` changed how admin
+permissions are computed, and one item's gate moved from `forms.view` to
+`forms.manage` — which could have altered the sidebar in every one of the ~420
+images. Re-captured a representative admin page and compared: **the sidebar
+renders identically** for the demo administrator. The only differences were
+time drift ("3d in stage" to "6d in stage", notification badge 12 to 11), so
+that capture was discarded rather than committed as churn.
+
+**Guide 03 is the real exposure.** `SchedulingPage.tsx` plus a **new**
+`SchedulingHeader.tsx` and the templates / patterns / platoons / settings /
+admin-reports pages all changed, across 80 shots. A `--only 03-6` re-capture
+produced 11 changed images out of 13.
+
+Shots on routes whose components changed, as an upper bound rather than a
+verified count:
+
+| Shots | Guide             | Changed underneath                                                                                                                 |
+| ----: | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+|    80 | 03 scheduling     | `SchedulingPage`, new `SchedulingHeader`, templates/patterns/platoons/settings/admin-reports, `shiftSettingsApi`                   |
+|    67 | 02 training       | `CreateTrainingSessionPage`, `SubmitTrainingPage`, `TrainingLinkageFields`, `TrainingSessionLinkageCard`, `useTrainingLinkageData` |
+|    22 | 04 events         | `EventForm`, `EventDetailPage`, `EventsPage`, `types/event.ts`                                                                     |
+|    17 | 09 skills testing | `ActiveSkillTestPage`, `ScoreBreakdownPanel`, `SkillTemplateBuilderPage`, `skillTestTallies`, both print pages                     |
+|    12 | 06 apparatus      | `ApparatusListPage`, `ApparatusDetailHeader`, `ApparatusFormPage`                                                                  |
+|     2 | 08 admin          | `ErrorMonitoringPage`, `RoleManagementPage`                                                                                        |
+
+`Breadcrumbs`, `PageTransition` and `CommandPalette` also changed, and they
+appear across many guides — if their rendered output moved at all the exposure
+is wider than the table.
+
+Of the 11 changed guide-03 images, **only `03-63-batch-report-form` was opened
+and is committed**; the other ten were reverted unopened. They are not wrong,
+they are unverified, and the rule that has caught every real defect this session
+is that those are not the same thing.
 
 ### Program phases carry no requirements, so the caption's counts come from elsewhere
 
@@ -306,7 +455,7 @@ Okafor's election package was still `draft`, so the item type the whole
 prospective-member pipeline exists to produce had never reached a ballot.
 
 **The item had to go on a draft election, and that is correct.** An open
-election refuses ballot edits — "Only end_date can be updated while voting is
+election refuses ballot edits — "Only `end_date` can be updated while voting is
 active" — because a cast vote references an item id. So the seeder now creates a
 draft _Membership Vote — August Business Meeting_ carrying the item, which is
 also the order the guide's own workflow describes: package marked ready,

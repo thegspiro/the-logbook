@@ -1050,9 +1050,10 @@ profile too, as `#021` beneath their name.
 > previously described it as a read-only field. It is a normal text input: an
 > officer can overwrite a generated number, which is what makes reassigning a
 > retired number possible. Two guardrails apply instead of read-only — the field
-> is one of the restricted ones (`rank`, `station`, `platoon`,
-> `membership_number`), so it takes leadership, secretary or membership
-> coordinator permission to change; and the number must be unique within your
+> is one of the restricted ones (`hire_date`, `rank`, `station`, `platoon`,
+> `membership_number` — hire date joined the set 2026-08-16 because it drives
+> automatic membership-tier advancement), so it takes leadership, secretary or
+> membership coordinator permission to change; and the number must be unique within your
 > department, so saving a number another active member already holds is refused
 > with "A member with this membership number already exists".
 

@@ -634,7 +634,8 @@ function requirementTarget(req?: TrainingRequirementEnhanced): { value: number; 
 
 const RequirementProgressRow: React.FC<{
   record: RequirementProgressRecord;
-  onUpdate: (progressId: string, updates: RequirementProgressUpdate) => Promise<void>;
+  /** Resolves true when the update was persisted, false when it was refused. */
+  onUpdate: (progressId: string, updates: RequirementProgressUpdate) => Promise<boolean>;
   onReset: (progressId: string, requirementName: string) => Promise<void>;
   saving: boolean;
 }> = ({ record, onUpdate, onReset, saving }) => {
@@ -676,7 +677,12 @@ const RequirementProgressRow: React.FC<{
       toast.error('Enter a score between 0 and 100');
       return;
     }
-    void onUpdate(record.id, { test_score: parsed }).then(() => setScore(''));
+    // Clearing the box unconditionally wiped the score the evaluator had just
+    // typed even when the save was refused, leaving them to read it off the
+    // toast and retype it. `saved` is false when handleUpdate caught the error.
+    void onUpdate(record.id, { test_score: parsed }).then((saved) => {
+      if (saved) setScore('');
+    });
   };
 
   return (
@@ -903,14 +909,16 @@ const EnrollmentProgressModal: React.FC<{
     }
   }, [isOpen, enrollmentId, load]);
 
-  const handleUpdate = async (progressId: string, updates: RequirementProgressUpdate) => {
+  const handleUpdate = async (progressId: string, updates: RequirementProgressUpdate): Promise<boolean> => {
     setSavingId(progressId);
     try {
       await trainingProgramService.updateProgress(progressId, updates);
       await load(); // pull recalculated percentages/status (may auto-advance the phase)
       onSaved(); // refresh the outer enrollments list (overall %, completion)
+      return true;
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update progress'));
+      return false;
     } finally {
       setSavingId(null);
     }

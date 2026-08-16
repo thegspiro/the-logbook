@@ -11,12 +11,14 @@ import toast from 'react-hot-toast';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { blankToNull } from '../../../utils/formValues';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import type {
   InventoryItem,
   InventoryCategory,
   InventoryItemCreate,
+  InventoryVendor,
   StorageAreaResponse,
   Location,
   SizeVariantCreate,
@@ -37,6 +39,7 @@ interface FD {
   current_value: string;
   purchase_date: string;
   vendor: string;
+  vendor_id: string;
   warranty_expiration: string;
   replacement_cost: string;
   location_id: string;
@@ -63,6 +66,7 @@ const EMPTY: FD = {
   current_value: '',
   purchase_date: '',
   vendor: '',
+  vendor_id: '',
   warranty_expiration: '',
   replacement_cost: '',
   location_id: '',
@@ -111,12 +115,30 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   const [f, setF] = useState<FD>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [showFin, setShowFin] = useState(false);
+  // Fetched here rather than threaded through every page that opens this modal.
+  // A failed load leaves the picker empty and the free-text name still usable,
+  // so it never blocks adding an item.
+  const [vendors, setVendors] = useState<InventoryVendor[]>([]);
 
   // Variant generation state (only for new items)
   const [generateVariants, setGenerateVariants] = useState(false);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [variantColors, setVariantColors] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void (async () => {
+      try {
+        // Inactive vendors are fetched too: an item linked to one before it was
+        // deactivated must still show that name rather than reading as unlinked
+        // while quietly submitting the old id. Only active ones are offered.
+        setVendors(await inventoryService.getVendors({ active_only: false }));
+      } catch {
+        setVendors([]);
+      }
+    })();
+  }, [isOpen]);
 
   useEffect(() => {
     if (editItem) {
@@ -134,6 +156,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         current_value: editItem.current_value != null ? String(editItem.current_value) : '',
         purchase_date: editItem.purchase_date ?? '',
         vendor: editItem.vendor ?? '',
+        vendor_id: editItem.vendor_id ?? '',
         warranty_expiration: editItem.warranty_expiration ?? '',
         replacement_cost: editItem.replacement_cost != null ? String(editItem.replacement_cost) : '',
         location_id: editItem.location_id ?? '',
@@ -256,7 +279,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         purchase_price: f.purchase_price ? Number(f.purchase_price) : undefined,
         current_value: f.current_value ? Number(f.current_value) : undefined,
         purchase_date: f.purchase_date || undefined,
-        vendor: f.vendor.trim() || undefined,
+        // On edit these go as explicit nulls so unlinking a vendor, or clearing
+        // the typed-in name, actually persists — an omitted key means "leave it
+        // alone" to the backend (CLAUDE.md pitfall #1).
+        vendor: editItem ? blankToNull(f.vendor) : f.vendor.trim() || undefined,
+        vendor_id: f.vendor_id || (editItem ? null : undefined),
         warranty_expiration: f.warranty_expiration || undefined,
         replacement_cost: f.replacement_cost ? Number(f.replacement_cost) : undefined,
         location_id: f.location_id || undefined,
@@ -541,8 +568,39 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 />
               </div>
               <div>
-                <label className={lbl}>Vendor</label>
-                <input className={inp} value={f.vendor} onChange={(e) => up('vendor', e.target.value)} />
+                <label className={lbl} htmlFor="item-vendor">
+                  Vendor
+                </label>
+                <select
+                  id="item-vendor"
+                  className={inp}
+                  value={f.vendor_id}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    // Linking wins over the typed-in name: keeping both would
+                    // leave two answers to "who did we buy this from".
+                    setF((p) => ({ ...p, vendor_id: id, vendor: id ? '' : p.vendor }));
+                  }}
+                >
+                  <option value="">— Not linked —</option>
+                  {vendors
+                    .filter((v) => v.is_active || v.id === f.vendor_id)
+                    .map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                        {v.is_active ? '' : ' (inactive)'}
+                      </option>
+                    ))}
+                </select>
+                {!f.vendor_id && (
+                  <input
+                    className={`${inp} mt-2`}
+                    value={f.vendor}
+                    onChange={(e) => up('vendor', e.target.value)}
+                    aria-label="Vendor name (not on file)"
+                    placeholder="Or type a name not on file"
+                  />
+                )}
               </div>
               <div>
                 <label className={lbl}>Warranty Expiration</label>

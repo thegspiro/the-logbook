@@ -49,6 +49,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
+import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
@@ -281,8 +282,12 @@ export const EventsPage: React.FC = () => {
         )
       );
       setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
-    } catch {
-      // Silently fail — user can retry
+    } catch (err: unknown) {
+      // The card is only updated on success, so without this the tap looks
+      // exactly like a tap that never registered — the member re-taps and
+      // assumes the button is broken rather than that the RSVP was refused
+      // (event locked, roster full, session expired).
+      toast.error(getErrorMessage(err, 'Could not save your RSVP'));
     } finally {
       setRsvpLoading((prev) => ({ ...prev, [eventId]: false }));
     }
@@ -468,6 +473,7 @@ export const EventsPage: React.FC = () => {
     try {
       setBulkActionLoading(true);
       let cancelled = 0;
+      let failed = 0;
       for (const evt of selected) {
         try {
           await eventService.cancelEvent(evt.id, {
@@ -476,10 +482,14 @@ export const EventsPage: React.FC = () => {
           });
           cancelled++;
         } catch {
-          // Continue with remaining events
+          // Keep going so one rejected event doesn't strand the rest, but count
+          // it — reporting only the successes made a run where every cancel was
+          // refused read as "Cancelled 0 events" in a success toast.
+          failed++;
         }
       }
-      toast.success(`Cancelled ${cancelled} event${cancelled !== 1 ? 's' : ''}`);
+      if (cancelled > 0) toast.success(`Cancelled ${cancelled} event${cancelled !== 1 ? 's' : ''}`);
+      if (failed > 0) toast.error(`${failed} event${failed !== 1 ? 's' : ''} could not be cancelled`);
       setSelectedEvents(new Set());
       setShowCancelConfirm(false);
       void fetchEvents();

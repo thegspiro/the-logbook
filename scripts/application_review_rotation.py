@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -16,6 +17,12 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / ".github" / "application-review-rotation.json"
 MARKER_PREFIX = "<!-- application-review-rotation:"
+# Feature ids are interpolated straight into the issue marker, so restricting
+# them to a slug keeps the marker unambiguous and safe to match with a regex.
+FEATURE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+FEATURE_MARKER_PATTERN = re.compile(
+    rf"{re.escape(MARKER_PREFIX)}([a-z0-9]+(?:-[a-z0-9]+)*) -->"
+)
 
 
 class GitHubApiError(RuntimeError):
@@ -39,6 +46,11 @@ def load_config(path: Path) -> dict[str, Any]:
                 raise ValueError(f"feature {index} must have a non-empty {field}")
         if feature["id"] in ids:
             raise ValueError(f"duplicate feature id: {feature['id']}")
+        if not FEATURE_ID_PATTERN.fullmatch(feature["id"]):
+            raise ValueError(
+                f"feature {index} id must contain lowercase letters, numbers, "
+                "and single hyphens"
+            )
         ids.add(feature["id"])
 
     for field in ("label", "title_prefix"):
@@ -89,10 +101,23 @@ class GitHubClient:
             )
 
     def issues(self, label: str) -> list[dict[str, Any]]:
+        # The rotation reads every past issue to decide what is already done, so
+        # a single unpaginated page would silently restart the queue from the
+        # top once the label passes 100 issues.
         encoded_label = urllib.parse.quote(label, safe="")
-        return self.request(
-            "GET", f"/issues?state=all&labels={encoded_label}&per_page=100"
-        )
+        issues: list[dict[str, Any]] = []
+        page = 1
+        while True:
+            batch = self.request(
+                "GET",
+                f"/issues?state=all&labels={encoded_label}&per_page=100&page={page}",
+            )
+            if not isinstance(batch, list):
+                raise RuntimeError("GitHub issues response must be a list")
+            issues.extend(batch)
+            if len(batch) < 100:
+                return issues
+            page += 1
 
     def create_issue(self, title: str, body: str, label: str) -> dict[str, Any]:
         return self.request(
@@ -104,12 +129,16 @@ def feature_marker(feature_id: str) -> str:
     return f"{MARKER_PREFIX}{feature_id} -->"
 
 
-def issue_feature_id(issue: dict[str, Any], valid_ids: set[str]) -> str | None:
+def issue_feature_id(issue: dict[str, Any]) -> str | None:
+    """Return the rotation feature an issue tracks, including retired ids.
+
+    Reading the marker rather than testing against the current config is what
+    lets an issue for a feature since removed from the queue still block the
+    rotation while it is open.
+    """
     body = issue.get("body") or ""
-    for feature_id in valid_ids:
-        if feature_marker(feature_id) in body:
-            return feature_id
-    return None
+    match = FEATURE_MARKER_PATTERN.search(body)
+    return match.group(1) if match else None
 
 
 def issue_body(feature: dict[str, str], position: int, total: int) -> str:
@@ -140,15 +169,19 @@ def select_next_feature(
 ) -> tuple[str, dict[str, str] | None]:
     features = config["features"]
     valid_ids = {feature["id"] for feature in features}
-    rotation_issues = [
-        (issue, issue_feature_id(issue, valid_ids))
-        for issue in issues
-        if "pull_request" not in issue
-    ]
+    rotation_issues: list[tuple[dict[str, Any], str]] = []
+    for issue in issues:
+        if "pull_request" in issue:
+            continue
+        feature_id = issue_feature_id(issue)
+        if feature_id is not None:
+            rotation_issues.append((issue, feature_id))
+    # Any open rotation issue holds the queue, even one for a retired feature —
+    # the point of the gate is that only one review runs at a time.
     open_ids = {
         feature_id
         for issue, feature_id in rotation_issues
-        if feature_id and issue.get("state") == "open"
+        if issue.get("state") == "open"
     }
     if open_ids:
         return "waiting", None
@@ -156,7 +189,7 @@ def select_next_feature(
     completed_ids = {
         feature_id
         for issue, feature_id in rotation_issues
-        if feature_id and issue.get("state") == "closed"
+        if feature_id in valid_ids and issue.get("state") == "closed"
     }
     for feature in features:
         if feature["id"] not in completed_ids:
