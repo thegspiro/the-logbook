@@ -355,14 +355,17 @@
 
 @utility form-checkbox {
   @apply bg-theme-input-bg border-theme-input-border focus:ring-theme-focus-ring h-4 w-4 rounded-sm text-blue-700 dark:text-blue-500;
-  /* A 16px box is the smallest thing on any form. The box stays 16px so
-     layouts are unchanged, but outline-style padding grows the hit area to
-     44px on touch; the negative margin keeps it from displacing neighbours. */
-  @media (max-width: 767px) {
-    padding: 14px;
-    margin: -14px;
-    background-clip: content-box;
-  }
+  /* No padding/negative-margin trick here. A checkbox is a *replaced* element
+     — `appearance: auto` — and every browser discards padding on it, so the
+     `padding: 14px; margin: -14px` pair that used to sit in a max-width:767px
+     block grew no hit area at all while the negative margin stayed fully in
+     effect, pulling the next flex item 14px left. Measured on a 390px
+     viewport, that turned a `gap-3` beside a checkbox into a 2px *overlap*,
+     at every one of the ~100 call sites at once.
+
+     The 44px touch target comes from the <label> the checkbox is paired with,
+     which is what was actually absorbing these taps all along. Give a bare
+     checkbox `mobile-touch-target` on its label, not padding on the box. */
 }
 
 @utility form-label {
