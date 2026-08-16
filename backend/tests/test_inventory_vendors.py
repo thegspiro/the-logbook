@@ -274,6 +274,9 @@ class TestVendorUpdateAndDeactivate:
 
 
 class TestVendorStats:
+    """The card's two numbers count different rows on purpose: "items" is the
+    catalog as it stands, spend is every item ever bought from the vendor."""
+
     async def test_counts_and_spend_are_grouped_per_vendor(
         self, service, mock_db, org_id
     ):

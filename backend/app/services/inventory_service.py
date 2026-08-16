@@ -599,16 +599,19 @@ class InventoryService:
         if not vendor_ids:
             return stats
 
+        # The two figures deliberately count different rows. "Items" means what
+        # is in the catalog now, matching the filtered list the count links to.
+        # Money spent does not un-spend when a coat is retired, so the total
+        # sums every item ever bought from the vendor, active or not.
         item_rows = await self.db.execute(
             select(
                 InventoryItem.vendor_id,
-                func.count(InventoryItem.id),
+                func.sum(case((InventoryItem.active.is_(True), 1), else_=0)),
                 func.sum(InventoryItem.purchase_price),
             )
             .where(
                 InventoryItem.organization_id == str(organization_id),
                 InventoryItem.vendor_id.in_(vendor_ids),
-                InventoryItem.active.is_(True),
             )
             .group_by(InventoryItem.vendor_id)
         )

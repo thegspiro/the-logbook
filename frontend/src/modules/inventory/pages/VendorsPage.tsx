@@ -1033,7 +1033,10 @@ export const VendorsPage: React.FC = () => {
                       {vendor.open_reorder_count} open reorder{vendor.open_reorder_count === 1 ? '' : 's'}
                     </Link>
                     {vendor.total_purchase_value != null && Number(vendor.total_purchase_value) > 0 && (
-                      <span className="text-theme-text-muted">
+                      <span
+                        className="text-theme-text-muted"
+                        title="Purchase price of every item bought from this vendor, retired ones included"
+                      >
                         {formatCurrency(Number(vendor.total_purchase_value))} purchased
                       </span>
                     )}
