@@ -531,6 +531,11 @@ class TestProfileEndpointAccessControl:
         result = await _call_endpoint(subject, caller)
 
         assert result.username == "jsmith"
+        # members.manage is the leadership grant: contact info, emergency
+        # contacts and account metadata all come through unredacted.
+        assert result.phone == "555-0100"
+        assert result.emergency_contacts != []
+        assert result.email_verified is True
 
     async def test_users_view_retains_account_metadata(self):
         subject = _member()

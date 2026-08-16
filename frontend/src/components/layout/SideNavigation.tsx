@@ -45,7 +45,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
-import { hasAdministrationAccess } from './adminNavigation';
+import { canOpenAdministrationSection } from './adminNavigation';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -151,9 +151,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   // Determine if user has any admin permission (to show/hide Administration section).
-  // users.view alone opens the section: the member ID scanner lives here, and
-  // validating a scanned card only needs users.view (see /members/scan).
-  const hasAnyAdminPermission = checkPermission('users.view') || hasAdministrationAccess(checkPermission);
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
