@@ -1586,67 +1586,6 @@ export const SHOTS = [
     selector: "div.fixed.inset-0 > div",
   },
   {
-    // NOT YET CAPTURABLE — four approaches tried on 2026-08-10, all timing out
-    // on the pencil: a hasText row filter, a two-`has` filter, walking up 6
-    // then 12 ancestors from the button, and restricting to `:visible`. The
-    // page itself is fine (a full-page shot shows the row, its "8 items"
-    // subtitle and the pencil), so the next attempt should skip the list
-    // entirely and open the editor by URL if the modal is addressable, or
-    // click the pencil by bounding box from the row's text node. Left in place
-    // rather than deleted so the reconnaissance is not repeated.
-    id: "02-89-officer-only-steps",
-    doc: "02-training.md",
-    line: 347,
-    anchor: "The requirement editor's checklist steps editor",
-    alt: "The checklist steps editor, with two steps toggled to officer-only",
-    route: "/training/programs",
-    prepare: async (page) => {
-      await openFirstFromApi(
-        "/training/programs/programs",
-        (id) => `/training/programs/${id}`,
-        "programs",
-        (program) => /Probationary/i.test(program.name || ""),
-      )(page);
-      await page.waitForTimeout(1500);
-      // The checklist requirement is the only one with steps to hide.
-      // Walk up from the pencil to whichever ancestor names the requirement.
-      // Locator filters could not express this: the name and the action
-      // buttons sit in sibling subtrees, so no single div both contains the
-      // exact text and the button.
-      const index = await page
-        .locator('button[aria-label="Edit requirement"]:visible')
-        .evaluateAll((buttons) =>
-          buttons.findIndex((button) => {
-            let node = button;
-            for (let up = 0; up < 12 && node; up += 1) {
-              if (
-                (node.textContent || "").includes("Station Duties Checklist")
-              ) {
-                return true;
-              }
-              node = node.parentElement;
-            }
-            return false;
-          }),
-        );
-      if (index < 0) throw new Error("02-89: no checklist requirement row");
-      const pencil = page
-        .locator('button[aria-label="Edit requirement"]:visible')
-        .nth(index);
-      await pencil.scrollIntoViewIfNeeded({ timeout: 15_000 });
-      await pencil.click({ timeout: 15_000 });
-      await page.waitForTimeout(1200);
-      // Scroll to the last step rather than the section heading: the two
-      // officer-only rows are at the foot of the list.
-      await page
-        .getByText("Background check returned")
-        .first()
-        .scrollIntoViewIfNeeded({ timeout: 15_000 });
-      await page.waitForTimeout(600);
-    },
-    fullPage: false,
-  },
-  {
     id: "02-90-phase-prerequisites",
     doc: "02-training.md",
     line: 401,
@@ -1695,6 +1634,12 @@ export const SHOTS = [
         "/training/programs/enrollments/me",
         (id) => `/training/my-progress/${id}`,
         "enrollments",
+        // The probationary pipeline is where the checklist with hidden
+        // steps lives; the member's first enrollment is a program without
+        // one, and "first" quietly changed when a second enrollment was
+        // seeded.
+        (enrollment) =>
+          /Probationary/i.test(enrollment.program?.name || ""),
       )(page);
       await page.waitForTimeout(1500);
       // Scrolled to the "+N more steps your officer records" line rather than
@@ -2301,7 +2246,7 @@ export const SHOTS = [
     line: 365,
     anchor:
       "The checklist steps editor, with one step kept off the member's view",
-    alt: "The requirement editor's checklist steps — each with its own eye toggle, one switched to officer-only",
+    alt: "The requirement editor's checklist steps — each with its own eye toggle, the officer-recorded ones switched to officer-only",
     route: "/training/admin?page=setup&tab=requirements",
     prepare: async (page) => {
       await page.waitForTimeout(3000);
@@ -2414,16 +2359,40 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 452,
     anchor: "The member's view of a requirement held back by the gate",
-    alt: "A member's progression view — the gated requirement greyed out and reading 'Locked until you finish Hose Deployment'",
+    alt: "A member's progression view — the gated requirement greyed out and reading 'Locked until you finish Firefighter I Written Exam'",
     // The member's own: the progression view is reachable only as the member
     // whose enrollment it is.
     auth: "member",
     route: "/training/my-training",
     prepare: async (page) => {
-      await page
-        .getByText(/View full progress/)
-        .first()
-        .click({ timeout: 20_000 });
+      // Straight to the Probationary enrollment rather than the first "View
+      // full progress" link: the member carries several enrollments, the
+      // list's first is a program with no gates, and the lock this pictures
+      // lives on the probationary pipeline. The gate is the written exam —
+      // hour auto-credit quietly completed the old Hose Deployment gate, and
+      // a satisfied gate locks nothing.
+      const enrollments = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/programs/enrollments/me?status=active",
+          { credentials: "include" },
+        );
+        return response.ok ? response.json() : [];
+      });
+      const list = Array.isArray(enrollments) ? enrollments : [];
+      const probationary = list.find(
+        (enrollment) =>
+          enrollment.program?.name === "Probationary Firefighter Pipeline",
+      );
+      if (!probationary?.id) {
+        throw new Error("02-99: no active probationary enrollment");
+      }
+      await page.goto(
+        new URL(
+          `/training/my-progress/${probationary.id}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
       await page
         .getByText(/You are here/)
         .first()
@@ -2436,7 +2405,7 @@ export const SHOTS = [
     },
     // The phase the gate belongs to: the locked row means nothing without the
     // requirement it is waiting on in the same frame.
-    selector: "div.rounded-lg:has(> div > h2:text-is('Phase 2: Basic Skills'))",
+    selector: "div.rounded-lg:has(> div > h2:text-is('Phase 3: Certification'))",
   },
   {
     id: "02-97-manual-entry-apparatus",
