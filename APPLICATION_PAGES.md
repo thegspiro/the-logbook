@@ -36,36 +36,43 @@ Complete reference of all pages in the application, organized by module.
 
 ## Onboarding
 
-| URL                                    | Page                  | Description                                                                              |
-| -------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------- |
-| `/onboarding`                          | Onboarding Check      | Entry point / status check                                                               |
-| `/onboarding/start`                    | Organization Setup    | Step 1 - create organization                                                             |
-| `/onboarding/navigation-choice`        | Navigation Choice     | Choose navigation layout                                                                 |
-| `/onboarding/email-platform`           | Email Platform        | Select email provider (Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other/Skip)   |
-| `/onboarding/email-config`             | Email Configuration   | Configure email settings (platform-specific: OAuth, SMTP, or Cloudflare API credentials) |
-| `/onboarding/file-storage`             | File Storage          | Choose file storage provider                                                             |
-| `/onboarding/file-storage-config`      | File Storage Config   | Configure file storage                                                                   |
-| `/onboarding/authentication`           | Authentication        | Choose auth method                                                                       |
-| `/onboarding/it-team`                  | IT Team & Backup      | IT team & backup access setup                                                            |
-| `/onboarding/positions`                | Position Setup        | Configure positions (formerly roles)                                                     |
-| `/onboarding/modules`                  | Module Selection      | Choose which modules to enable                                                           |
-| `/onboarding/modules/:moduleId/config` | Module Config         | Configure individual module                                                              |
-| `/onboarding/system-owner`             | System Owner Creation | Create initial system owner account                                                      |
-| `/onboarding/security-check`           | Security Check        | Security verification                                                                    |
-| `/onboarding/stations`                 | Station Setup         | Create the department's stations                                                         |
-| `/onboarding/apparatus`                | Apparatus Setup       | Create the department's apparatus                                                        |
-| `/onboarding/complete`                 | Setup Complete        | Confirmation / hand-off into the app                                                     |
+| URL                                    | Page                     | Description                                                                                    |
+| -------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `/onboarding`                          | Onboarding Check         | Entry point / status check                                                                     |
+| `/onboarding/start`                    | Organization Setup       | Step 1 - create organization                                                                   |
+| `/onboarding/navigation-choice`        | Navigation Choice        | Choose navigation layout                                                                       |
+| `/onboarding/email-platform`           | Email Platform           | Select email provider (Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other/Skip)         |
+| `/onboarding/email-config`             | Email Configuration      | Configure email settings (platform-specific: OAuth, SMTP, or Cloudflare API credentials)       |
+| `/onboarding/file-storage`             | File Storage             | Choose file storage provider                                                                   |
+| `/onboarding/file-storage-config`      | File Storage Config      | Configure file storage                                                                         |
+| `/onboarding/authentication`           | Authentication           | Choose auth method                                                                             |
+| `/onboarding/it-team`                  | IT Team & Backup         | IT team & backup access setup                                                                  |
+| `/onboarding/positions`                | Position Setup           | Configure positions (formerly roles)                                                           |
+| `/onboarding/modules`                  | Module Selection         | Choose which modules to enable                                                                 |
+| `/onboarding/module-selection`         | Module Selection (alias) | Renders the same page as `/onboarding/modules` — **not** a redirect, so the URL stays as typed |
+| `/onboarding/modules/:moduleId/config` | Module Config            | Configure individual module                                                                    |
+| `/onboarding/system-owner`             | System Owner Creation    | Create initial system owner account                                                            |
+| `/onboarding/security-check`           | Security Check           | Security verification                                                                          |
+| `/onboarding/stations`                 | Station Setup            | Create the department's stations                                                               |
+| `/onboarding/apparatus`                | Apparatus Setup          | Create the department's apparatus                                                              |
+| `/onboarding/complete`                 | Setup Complete           | Confirmation / hand-off into the app                                                           |
 
 > **Completed setup cannot be replayed** _(2026-08-08)_. Once onboarding is
 > finished, the station and apparatus setup endpoints refuse further writes, so a
 > retained link cannot be used to add stations or apparatus after the fact.
+
+> **`/onboarding/module-selection` is an alias, not a redirect**
+> _(corrected 2026-08-16)_. It was listed below as redirecting to
+> `/onboarding/modules`; in fact both routes render `<ModuleOverview />`
+> directly, so a member who follows an old link stays on the old URL rather than
+> being moved to the current one. Found by
+> `scripts/check_route_permissions.py`.
 
 **Legacy redirects:**
 
 - `/onboarding/department` → `/onboarding/start`
 - `/onboarding/roles` → `/onboarding/positions`
 - `/onboarding/admin-user` → `/onboarding/system-owner`
-- `/onboarding/module-selection` → `/onboarding/modules`
 
 ---
 
@@ -141,13 +148,13 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 ## Apparatus
 
-| URL                   | Page             | Permission    |
-| --------------------- | ---------------- | ------------- |
-| `/apparatus`          | Apparatus List   | Authenticated |
-| `/apparatus/new`      | Add Apparatus    | Authenticated |
-| `/apparatus/:id`      | Apparatus Detail | Authenticated |
-| `/apparatus/:id/edit` | Edit Apparatus   | Authenticated |
-| `/apparatus-basic`    | Apparatus Basic  | Authenticated |
+| URL                   | Page             | Permission                                   |
+| --------------------- | ---------------- | -------------------------------------------- |
+| `/apparatus`          | Apparatus List   | `apparatus.view` **OR** `apparatus.manage`   |
+| `/apparatus/new`      | Add Apparatus    | `apparatus.create` **OR** `apparatus.manage` |
+| `/apparatus/:id`      | Apparatus Detail | `apparatus.view` **OR** `apparatus.manage`   |
+| `/apparatus/:id/edit` | Edit Apparatus   | `apparatus.edit` **OR** `apparatus.manage`   |
+| `/apparatus-basic`    | Apparatus Basic  | Authenticated                                |
 
 > `/apparatus-basic` is a lightweight alternative used when the full Apparatus module is disabled.
 
@@ -361,13 +368,13 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Member-Facing Pages
 
-| URL                        | Page                         | Permission    |
-| -------------------------- | ---------------------------- | ------------- |
-| `/inventory`               | Inventory Items List         | Authenticated |
-| `/inventory/items`         | Inventory Items List (alias) | Authenticated |
-| `/inventory/my-equipment`  | My Equipment                 | Authenticated |
-| `/inventory/items/:id`     | Item Detail                  | Authenticated |
-| `/inventory/storage-areas` | Storage Areas                | Authenticated |
+| URL                        | Page                         | Permission         |
+| -------------------------- | ---------------------------- | ------------------ |
+| `/inventory`               | Inventory Items List         | Authenticated      |
+| `/inventory/items`         | Inventory Items List (alias) | Authenticated      |
+| `/inventory/my-equipment`  | My Equipment                 | Authenticated      |
+| `/inventory/items/:id`     | Item Detail                  | Authenticated      |
+| `/inventory/storage-areas` | Storage Areas                | `inventory.manage` |
 
 ### Inventory Admin Hub (`/inventory/admin`)
 
@@ -438,15 +445,15 @@ Tab-based interface with the following views:
 
 ### Scheduling Admin Pages (2026-03-19)
 
-| URL                           | Page                       | Permission          |
-| ----------------------------- | -------------------------- | ------------------- |
-| `/scheduling/templates`       | Shift Templates Management | `scheduling.manage` |
-| `/scheduling/patterns`        | Shift Pattern Management   | `scheduling.manage` |
-| `/scheduling/reports`         | Scheduling Reports         | `scheduling.manage` |
-| `/scheduling/settings`        | Scheduling Settings        | `scheduling.manage` |
-| `/scheduling/platoons`        | Platoon Management         | Authenticated       |
-| `/scheduling/checkin`         | Shift Check-In             | Authenticated       |
-| `/scheduling/supply/expiring` | Expiring Supply Items      | Authenticated       |
+| URL                           | Page                       | Permission                                                                |
+| ----------------------------- | -------------------------- | ------------------------------------------------------------------------- |
+| `/scheduling/templates`       | Shift Templates Management | `scheduling.manage`                                                       |
+| `/scheduling/patterns`        | Shift Pattern Management   | `scheduling.manage`                                                       |
+| `/scheduling/reports`         | Scheduling Reports         | `scheduling.manage`                                                       |
+| `/scheduling/settings`        | Scheduling Settings        | `scheduling.manage`                                                       |
+| `/scheduling/platoons`        | Platoon Management         | `scheduling.manage`                                                       |
+| `/scheduling/checkin`         | Shift Check-In             | Authenticated                                                             |
+| `/scheduling/supply/expiring` | Expiring Supply Items      | `equipment_check.view` **OR** `inventory.view` **OR** `scheduling.manage` |
 
 > Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
 
@@ -633,9 +640,9 @@ permissions.
 
 ## Forms
 
-| URL      | Page             | Permission    |
-| -------- | ---------------- | ------------- |
-| `/forms` | Forms Management | Authenticated |
+| URL      | Page             | Permission     |
+| -------- | ---------------- | -------------- |
+| `/forms` | Forms Management | `forms.manage` |
 
 ---
 
@@ -660,17 +667,17 @@ permissions.
 
 ## Reports
 
-| URL        | Page    | Permission    |
-| ---------- | ------- | ------------- |
-| `/reports` | Reports | Authenticated |
+| URL        | Page    | Permission     |
+| ---------- | ------- | -------------- |
+| `/reports` | Reports | `reports.view` |
 
 ---
 
 ## Integrations
 
-| URL             | Page         | Permission    |
-| --------------- | ------------ | ------------- |
-| `/integrations` | Integrations | Authenticated |
+| URL             | Page         | Permission        |
+| --------------- | ------------ | ----------------- |
+| `/integrations` | Integrations | `settings.manage` |
 
 > _(2026-04-11)_ The Integrations page now includes **Salesforce CRM** as a connectable integration. Configuration requires `integrations.manage` permission. Features: OAuth 2.0 connection, bidirectional sync (members↔contacts, training→tasks, events→events), configurable field mappings, webhook-based real-time updates, and sync history dashboard. Supports both production and sandbox Salesforce environments.
 
@@ -816,20 +823,20 @@ permissions.
 Print-optimized routes. They render a print layout rather than an app screen, and
 are opened from the corresponding module's list view.
 
-| URL                                 | Prints                  | Permission        |
-| ----------------------------------- | ----------------------- | ----------------- |
-| `/members/print-labels`             | Member labels           | Authenticated     |
-| `/members/:userId/id-card`          | Member ID card          | Authenticated     |
-| `/members/scan`                     | Member badge scanner    | Authenticated     |
-| `/prospective-members/print-labels` | Applicant badges        | Authenticated     |
-| `/inventory/print-labels`           | Inventory labels        | Authenticated     |
-| `/apparatus/print-labels`           | Apparatus labels        | Authenticated     |
-| `/facilities/print-labels`          | Facility / room labels  | Authenticated     |
-| `/training/print/member`            | Member training history | Authenticated     |
-| `/training/print/program`           | Training program        | Authenticated     |
-| `/training/print/compliance`        | Compliance matrix       | `training.manage` |
-| `/scheduling/checkin/print`         | Shift check-in sheet    | Authenticated     |
-| `/scheduling/shift-reports/print`   | Shift report            | Authenticated     |
+| URL                                 | Prints                  | Permission                                   |
+| ----------------------------------- | ----------------------- | -------------------------------------------- |
+| `/members/print-labels`             | Member labels           | `members.view`                               |
+| `/members/:userId/id-card`          | Member ID card          | Authenticated                                |
+| `/members/scan`                     | Member badge scanner    | `users.view` **OR** `members.manage`         |
+| `/prospective-members/print-labels` | Applicant badges        | `prospective_members.view`                   |
+| `/inventory/print-labels`           | Inventory labels        | Authenticated                                |
+| `/apparatus/print-labels`           | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`   |
+| `/facilities/print-labels`          | Facility / room labels  | `facilities.view` **OR** `facilities.manage` |
+| `/training/print/member`            | Member training history | Authenticated                                |
+| `/training/print/program`           | Training program        | Authenticated                                |
+| `/training/print/compliance`        | Compliance matrix       | `training.manage`                            |
+| `/scheduling/checkin/print`         | Shift check-in sheet    | Authenticated                                |
+| `/scheduling/shift-reports/print`   | Shift report            | Authenticated                                |
 
 ---
 

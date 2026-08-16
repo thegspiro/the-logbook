@@ -31,6 +31,14 @@ WARN    unlisted      the route is described in prose or a heading, but has no
 WARN    understated   the code enforces a permission; the document says only
                       "Authenticated"
 
+Redirect routes — those whose element is `<Navigate>` — are skipped. A redirect
+has no permission of its own; whatever it forwards to does the gating, so there
+is nothing for a permission table to state. The count is printed so the
+exclusion is visible rather than silent.
+
+The document is at zero errors and zero warnings as of 2026-08-16, and CI runs
+this with --strict to keep it there.
+
 Usage:
     python3 scripts/check_route_permissions.py
     python3 scripts/check_route_permissions.py --list-warnings
@@ -52,6 +60,12 @@ ROUTE_FILES = ["frontend/src/App.tsx", "frontend/src/modules/*/routes.tsx"]
 
 PATH_RE = re.compile(r'path="(/[^"]*)"')
 PROTECTED_RE = re.compile(r"<ProtectedRoute\b")
+# A route whose element is <Navigate> is a redirect, not a page. It has no
+# permission of its own — whatever it forwards to does the gating — so it has
+# nothing to state in a permission table and is excluded from the comparison.
+# APPLICATION_PAGES.md lists these under "Legacy redirects" bullets instead,
+# which is the right place for them.
+REDIRECT_RE = re.compile(r"<Navigate\b")
 PERM_ONE_RE = re.compile(r'requiredPermission="([^"]+)"')
 PERM_ANY_RE = re.compile(r"requiredAnyPermission=\{\[([^\]]*)\]\}")
 PERM_TOKEN_RE = re.compile(r"[a-z_]+\.(?:\*|[a-z_]+)")
@@ -60,6 +74,20 @@ PERM_TOKEN_RE = re.compile(r"[a-z_]+\.(?:\*|[a-z_]+)")
 DOC_ROW_RE = re.compile(r"^\|\s*`?(/[^ |`]*)`?\s*\|([^|]*)\|([^|\n]*)", re.M)
 # Any inline-code route mention, for the "described but not tabulated" tier.
 DOC_MENTION_RE = re.compile(r"`(/[^`\s]*)`")
+# The admin hubs state their permission in prose under the heading rather than
+# in a row, because their tables list tabs rather than routes:
+#
+#     ### Training Admin Hub (`/training/admin`)
+#     Requires `training.manage` permission. Tab-based admin interface.
+#
+# That is a perfectly good way to document a page, so read it rather than
+# demanding a redundant row.
+DOC_HEADING_PERM_RE = re.compile(
+    # The capture runs to end of line, not to the first period: a permission
+    # contains one (`training.manage`), so stopping at "." truncates every token.
+    r"^#+[^\n]*\(`(/[^`\s]*)`\)[^\n]*\n+[^\n]*?Requires? ([^\n]*)",
+    re.M,
+)
 
 AUTH_ONLY_RE = re.compile(r"authenticat", re.I)
 
@@ -109,9 +137,10 @@ def gate_for(window: str) -> set[str]:
     return perms
 
 
-def collect_routes() -> dict[str, tuple[set[str], str]]:
-    """Map normalized route -> (enforced permissions, defining file)."""
+def collect_routes() -> tuple[dict[str, tuple[set[str], str]], set[str]]:
+    """Map normalized route -> (enforced permissions, file), plus redirects."""
     routes: dict[str, tuple[set[str], str]] = {}
+    redirects: set[str] = set()
     for pattern in ROUTE_FILES:
         for file in sorted(glob.glob(str(REPO_ROOT / pattern))):
             text = Path(file).read_text()
@@ -120,10 +149,14 @@ def collect_routes() -> dict[str, tuple[set[str], str]]:
             for i, m in enumerate(matches):
                 end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
                 key = normalize(m.group(1))
-                # First definition wins; a later duplicate is a redirect or a
-                # nested index route, not a second page.
-                routes.setdefault(key, (gate_for(text[m.start() : end]), rel))
-    return routes
+                window = text[m.start() : end]
+                if REDIRECT_RE.search(window):
+                    redirects.add(key)
+                    continue
+                # First definition wins; a later duplicate is a nested index
+                # route, not a second page.
+                routes.setdefault(key, (gate_for(window), rel))
+    return {k: v for k, v in routes.items() if k not in redirects}, redirects
 
 
 def collect_doc() -> tuple[dict[str, set[str]], set[str]]:
@@ -141,12 +174,14 @@ def collect_doc() -> tuple[dict[str, set[str]], set[str]]:
         if not perms and AUTH_ONLY_RE.search(perm_cell):
             perms = set()
         rows.setdefault(key, perms)
+    for route, sentence in DOC_HEADING_PERM_RE.findall(text):
+        rows.setdefault(normalize(route), set(PERM_TOKEN_RE.findall(sentence)))
     mentions = {normalize(m) for m in DOC_MENTION_RE.findall(text)}
     return rows, mentions
 
 
-def analyze() -> tuple[list[Finding], int]:
-    routes = collect_routes()
+def analyze() -> tuple[list[Finding], int, int]:
+    routes, redirects = collect_routes()
     rows, mentions = collect_doc()
     findings: list[Finding] = []
 
@@ -165,10 +200,10 @@ def analyze() -> tuple[list[Finding], int]:
             findings.append(Finding("undocumented", route, source, enforced))
 
     for route, documented in sorted(rows.items()):
-        if route not in routes:
+        if route not in routes and route not in redirects:
             findings.append(Finding("stale", route, str(DOC.name), set(), documented))
 
-    return findings, len(routes)
+    return findings, len(routes), len(redirects)
 
 
 ERROR_KINDS = {"undocumented", "mismatch", "stale"}
@@ -186,7 +221,7 @@ def main() -> int:
     )
     opts = ap.parse_args()
 
-    findings, checked = analyze()
+    findings, checked, redirects = analyze()
     errors = [f for f in findings if f.kind in ERROR_KINDS]
     warnings = [f for f in findings if f.kind not in ERROR_KINDS]
 
@@ -206,6 +241,7 @@ def main() -> int:
             )
 
     print(f"Checked {checked} routes against {DOC.name}.")
+    print(f"  redirects skipped: {redirects}")
     print(f"  errors:   {len(errors)}")
     print(f"  warnings: {len(warnings)}")
 
