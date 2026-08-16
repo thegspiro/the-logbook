@@ -7,6 +7,15 @@
 revisions, 5 new authenticated routes, **3** new models, 37 new endpoint
 handlers in 1 new endpoint module plus existing ones.
 
+> **How the commit count is derived**, since the obvious alternatives disagree:
+> `git log --since="2026-08-10 00:00" --no-merges` reachable from the audited
+> head — **504**. Filtering the same range by _committer_ date instead gives the
+> same 504. The unfiltered range `baseline..head` contains **508** non-merge
+> commits; the four extra carry author dates before the window (rebased or
+> cherry-picked work that landed inside it). Counting merges as well gives 802.
+> 504 is the figure for _authored-in-window, non-merge_ work, which is what the
+> rest of this document describes.
+
 This is the six-day rollup the release asked for. It **supersedes nothing** — it
 is the wider frame around the
 [three-day audit](./CHANGE_AUDIT_2026-08-12_TO_14.md), which remains the

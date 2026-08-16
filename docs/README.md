@@ -15,7 +15,8 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 **[Six-day change and connection audit — 2026-08-10 through 2026-08-16](./CHANGE_AUDIT_2026-08-10_TO_16.md)**
 is the current release handoff. It carries what the three-day frame could not
 show: every route added across the window with its real permission gate, the
-full 26-revision Alembic route to the single head `20260814_0004` with its
+full 28-revision Alembic route from `20260809_0002` to the then-head
+`20260814_0004` with its
 required preflight, the supply-loop and restock data paths, a client-side
 storage map, and the 2026-08-15 → 08-16 onboarding and canvas changes.
 

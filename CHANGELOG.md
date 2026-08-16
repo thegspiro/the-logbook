@@ -159,11 +159,15 @@ regression it guards.
 
 **Screenshot impact**
 
-- Because this is a global rule, **every full-window dark-mode capture taken
-  before 2026-08-15 may show the unpainted gutter**, in every guide rather than
-  one module's. Triage by looking at the right edge of each image — light-mode
-  captures and captures cropped inside the content column are unaffected. Queued
-  in `docs/training/SCREENSHOT_CURRENCY.md`.
+- **39 captured images show the unpainted gutter**, found with
+  `scripts/screenshots/audit_images.py --check edges`. Only one is a dark-mode
+  page; the other 38 are **light-mode captures of modal dialogs**, where the
+  overlay darkens the viewport but sits inside `body`, leaving the gutter white
+  behind it. The trigger is dark content at the right edge, not the theme — do
+  not skip light-mode captures on the assumption that this is a dark-mode defect.
+  Only the dark page (`10-11-public-form-dark`) is worth re-shooting on its own;
+  the rest change by a pale 15px strip. Queued in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
 
 ### YouTube scripts: August release changes are written into the takes (2026-08-14)
 

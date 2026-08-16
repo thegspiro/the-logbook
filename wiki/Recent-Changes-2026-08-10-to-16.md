@@ -89,8 +89,10 @@ _outside_ the body, so it was showing the browser's default white. In dark mode
 that read as a bright seam down the right edge of every page.
 
 This affects **every screen, signed-in and public**, which is why it matters for
-documentation: any full-window dark-mode screenshot or video B-roll captured
-before August 15 may show the old seam.
+documentation: 39 captured training images show the old seam. Only one is a
+dark-mode page — the other 38 are **light-mode captures of modal dialogs**, where
+the overlay darkens the page but leaves the gutter white behind it. Do not assume
+a light-mode screenshot is safe because this began as a dark-mode symptom.
 
 **This caused two problems, both already fixed** (2026-08-16). Moving the
 background to the root element stopped the page body's background from reaching

@@ -846,7 +846,7 @@ Automated monitoring for:
    - Google Workspace
    - SAML and LDAP/Active Directory are **not implemented** _(clarified
      2026-07-31 — the unused `pysaml2`/`python-ldap` dependencies were
-     removed; the `LDAP\__` settings are inert placeholders)\*
+     removed; the `LDAP_*` settings are inert placeholders)_
 
 ### Session Management
 

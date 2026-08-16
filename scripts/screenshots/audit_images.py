@@ -164,7 +164,15 @@ def main() -> int:
             if detail:
                 findings.append((path.name, name, detail))
 
-    print(f"Checked {len(files)} images in {args.dir.relative_to(REPO_ROOT)}")
+    # `--dir` is documented as taking any directory, so it may well sit outside
+    # the repository — relative_to() raises for those, and raising *after* every
+    # check has run would throw away the whole audit.
+    try:
+        shown = args.dir.relative_to(REPO_ROOT)
+    except ValueError:
+        shown = args.dir
+
+    print(f"Checked {len(files)} images in {shown}")
     for name in selected:
         print(f"  - {name}: {CHECKS[name][1]}")
 

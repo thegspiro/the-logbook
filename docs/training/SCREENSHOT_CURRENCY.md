@@ -375,9 +375,9 @@ Okafor's election package was still `draft`, so the item type the whole
 prospective-member pipeline exists to produce had never reached a ballot.
 
 **The item had to go on a draft election, and that is correct.** An open
-election refuses ballot edits — "Only end*date can be updated while voting is
+election refuses ballot edits — "Only `end_date` can be updated while voting is
 active" — because a cast vote references an item id. So the seeder now creates a
-draft \_Membership Vote — August Business Meeting* carrying the item, which is
+draft _Membership Vote — August Business Meeting_ carrying the item, which is
 also the order the guide's own workflow describes: package marked ready,
 secretary adds it, then the election opens.
 
