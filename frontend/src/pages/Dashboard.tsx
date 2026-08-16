@@ -8,6 +8,9 @@ import DashboardNeedsYou from '../components/dashboard/DashboardNeedsYou';
 import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
+import DashboardReadiness from '../components/dashboard/DashboardReadiness';
+import { READINESS_WINDOW_DAYS } from '../utils/readiness';
+import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
 import {
   Calendar,
@@ -182,15 +185,10 @@ const Dashboard: React.FC = () => {
   });
   const [loadingHours, setLoadingHours] = useState(true);
 
-  // Expiring certifications for the current user (feeds the "Needs you" panel)
-  type MyCert = {
-    id: string;
-    course_name: string;
-    expiration_date: string | null;
-    is_expired: boolean;
-    days_until_expiry: number | null;
-  };
-  const [myCerts, setMyCerts] = useState<MyCert[]>([]);
+  // Certifications for the current user. One source for both the readiness
+  // verdict and the "Needs you" rows, so the summary and the detail below it
+  // cannot disagree about what is expiring.
+  const [myCerts, setMyCerts] = useState<ReadinessCert[]>([]);
 
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
@@ -666,7 +664,7 @@ const Dashboard: React.FC = () => {
   const urgentCerts = useMemo(
     () =>
       myCerts
-        .filter((c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= 60))
+        .filter((c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= READINESS_WINDOW_DAYS))
         .sort((a, b) => (a.days_until_expiry ?? -Infinity) - (b.days_until_expiry ?? -Infinity)),
     [myCerts]
   );
@@ -979,6 +977,11 @@ const Dashboard: React.FC = () => {
           >
             {/* ── Main column ── */}
             <div className="flex min-w-0 flex-col gap-5">
+              {/* Both carry the default flex order, so source order puts the
+                  verdict above the panel it summarises — on phones too, where
+                  the actions and timeline swap around them. */}
+              <DashboardReadiness certs={myCerts} onOpen={() => void navigate('/training/my-training')} />
+
               <DashboardNeedsYou items={needsYouItems} />
 
               {/* Three actions, not one. The page's own data says taking a

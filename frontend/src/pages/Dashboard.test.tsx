@@ -312,6 +312,80 @@ describe('Dashboard', () => {
     });
   });
 
+  describe('Readiness verdict', () => {
+    const withCerts = (certs: unknown[]) =>
+      mockGetMyTraining.mockResolvedValue({
+        hours_summary: { total_hours: 0, hours_this_month: 0 },
+        certifications: certs,
+      });
+
+    it('stays absent when the member has no tracked certifications', async () => {
+      renderWithRouter(<Dashboard />);
+
+      // Wait for the page to settle rather than for the call, so the absence
+      // below is a rendered absence and not a race.
+      await waitFor(() => {
+        expect(screen.getByText(/Nothing scheduled through/)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/clear to respond/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Certifications only/)).not.toBeInTheDocument();
+    });
+
+    it('reports a clear member', async () => {
+      withCerts([
+        {
+          id: 'c1',
+          course_name: 'Firefighter I',
+          expiration_date: '2028-01-01',
+          is_expired: false,
+          days_until_expiry: 500,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+    });
+
+    it('sits above the panel it summarises', async () => {
+      withCerts([
+        {
+          id: 'c1',
+          course_name: 'EMT-B Recertification',
+          expiration_date: '2026-09-05',
+          is_expired: false,
+          days_until_expiry: 24,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      const verdict = await screen.findByText('Clear, with conditions');
+      const panel = screen.getByRole('heading', { name: 'Needs you' });
+      const panelFollowsVerdict = Boolean(verdict.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(panelFollowsVerdict).toBe(true);
+    });
+
+    // The verdict and the rows beneath it read the same list, so an expiry
+    // can never be urgent in one and fine in the other.
+    it('agrees with the Needs you row about the same certification', async () => {
+      withCerts([
+        {
+          id: 'c1',
+          course_name: 'EMT-B Recertification',
+          expiration_date: '2026-09-05',
+          is_expired: true,
+          days_until_expiry: -2,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Not clear to respond')).toBeInTheDocument();
+      expect(screen.getByText('EMT-B Recertification is expired')).toBeInTheDocument();
+    });
+  });
+
   describe('Needs you', () => {
     const makeMessage = (overrides: Record<string, unknown> = {}) => ({
       id: 'msg-1',

@@ -46,6 +46,21 @@ test.describe('Dashboard', () => {
     });
   });
 
+  test.describe('Readiness verdict', () => {
+    // The fixtures return no certification data, and "no data" is not "clear".
+    // A green verdict derived from an empty set would assert a clearance the
+    // department has no basis for, so the line must stay off the page entirely.
+    test('should stay off the page when there is no certification data', async ({ page }) => {
+      await gotoDashboard(page);
+
+      await expect(page.getByRole('heading', { name: /next 7 days/i }).first()).toBeVisible({
+        timeout: 10000,
+      });
+      await expect(page.getByText(/clear to respond/i)).toHaveCount(0);
+      await expect(page.getByText(/certifications only/i)).toHaveCount(0);
+    });
+  });
+
   test.describe('Quick Actions', () => {
     test.beforeEach(async ({ page }) => {
       await gotoDashboard(page);
