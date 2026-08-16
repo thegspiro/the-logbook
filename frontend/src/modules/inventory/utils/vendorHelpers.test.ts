@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatVendorAddress, primaryContact, vendorDisplayName } from './vendorHelpers';
+import { formatVendorAddress, primaryContact, vendorDisplay } from './vendorHelpers';
 import type { InventoryVendor, InventoryVendorContact } from '../types';
 
 const makeContact = (overrides: Partial<InventoryVendorContact> = {}): InventoryVendorContact => ({
@@ -71,16 +71,31 @@ describe('primaryContact', () => {
   });
 });
 
-describe('vendorDisplayName', () => {
+describe('vendorDisplay', () => {
   it('prefers the linked vendor name over the free-text one', () => {
-    expect(vendorDisplayName({ vendor_name: 'Galls', vendor: 'galls inc' })).toBe('Galls');
+    expect(vendorDisplay({ vendor_name: 'Galls', vendor: 'galls inc' })).toEqual({ name: 'Galls', linked: true });
   });
 
-  it('falls back to the free-text name for rows never linked', () => {
-    expect(vendorDisplayName({ vendor: 'Corner Hardware' })).toBe('Corner Hardware');
+  it('reports a free-text-only name as unlinked', () => {
+    expect(vendorDisplay({ vendor: 'Corner Hardware' })).toEqual({ name: 'Corner Hardware', linked: false });
   });
 
-  it('returns undefined when neither is set', () => {
-    expect(vendorDisplayName({})).toBeUndefined();
+  it('has no name when neither is set', () => {
+    expect(vendorDisplay({})).toEqual({ linked: false });
+  });
+
+  it('treats a whitespace-only name as no name at all', () => {
+    expect(vendorDisplay({ vendor_name: '  ', vendor: '  ' })).toEqual({ linked: false });
+  });
+
+  it('falls through to the typed name when the linked one is blank', () => {
+    expect(vendorDisplay({ vendor_name: '   ', vendor: 'Corner Hardware' })).toEqual({
+      name: 'Corner Hardware',
+      linked: false,
+    });
+  });
+
+  it('trims the name it returns', () => {
+    expect(vendorDisplay({ vendor_name: ' Galls ' })).toEqual({ name: 'Galls', linked: true });
   });
 });

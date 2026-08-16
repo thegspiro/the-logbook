@@ -20,16 +20,32 @@ export function primaryContact(vendor: InventoryVendor): InventoryVendorContact 
   return vendor.contacts?.find((c) => c.is_primary) ?? vendor.contacts?.[0];
 }
 
+/** A record that names a supplier either by link or by typed-in text. */
+export interface VendorNamed {
+  vendor_name?: string | undefined;
+  vendor?: string | undefined;
+}
+
+export interface VendorDisplay {
+  /** The name to print. Absent when the record names no supplier at all. */
+  name?: string;
+  /** Whether that name came from a vendor record rather than a typed string. */
+  linked: boolean;
+}
+
 /**
- * How a vendor should be named on an item or reorder row.
+ * How a vendor should be named on an item or reorder row, and whether that
+ * name is backed by a record.
  *
  * The linked vendor wins over the free-text name: rows carrying both are the
  * ones the backfill linked, where the free text is the older, unreviewed
- * spelling of the same supplier.
+ * spelling of the same supplier. `linked` is what lets a list mute the rows
+ * that are still only text — the ones with no contact and no purchase history
+ * behind them.
  */
-export function vendorDisplayName(record: {
-  vendor_name?: string | undefined;
-  vendor?: string | undefined;
-}): string | undefined {
-  return record.vendor_name || record.vendor || undefined;
+export function vendorDisplay(record: VendorNamed): VendorDisplay {
+  const linkedName = record.vendor_name?.trim();
+  if (linkedName) return { name: linkedName, linked: true };
+  const typed = record.vendor?.trim();
+  return typed ? { name: typed, linked: false } : { linked: false };
 }

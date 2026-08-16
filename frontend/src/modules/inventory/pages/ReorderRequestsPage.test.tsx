@@ -180,6 +180,14 @@ describe('ReorderRequestsPage', () => {
     expect(screen.queryByText('galls inc')).not.toBeInTheDocument();
   });
 
+  it('marks a row whose vendor was only typed in', async () => {
+    mockGetReorderRequests.mockResolvedValue([makeReq({ vendor: 'Corner Medical Supply' })]);
+    renderWithRouter(<ReorderRequestsPage />);
+
+    // Muted on screen; said out loud for anyone who cannot see the styling.
+    expect((await screen.findAllByText('(not on the vendor list)')).length).toBeGreaterThan(0);
+  });
+
   it('links a new request to the picked vendor and prefills its contact', async () => {
     const user = userEvent.setup();
     mockGetVendors.mockResolvedValue([makeVendor()]);

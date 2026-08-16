@@ -24,6 +24,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate as formatDateUtil } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Modal } from '../../../components/Modal';
+import { VendorName } from '../components/VendorName';
 import type {
   ReorderRequest,
   ReorderRequestCreate,
@@ -706,8 +707,8 @@ export const ReorderRequestsPage: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td data-label="Vendor" className="text-theme-text-muted px-4 py-3">
-                      {req.vendor_name ?? req.vendor ?? '—'}
+                    <td data-label="Vendor" className="px-4 py-3">
+                      <VendorName record={req} />
                     </td>
                     <td data-label="Est. Cost" className="text-theme-text-primary px-4 py-3">
                       {req.estimated_unit_cost != null
