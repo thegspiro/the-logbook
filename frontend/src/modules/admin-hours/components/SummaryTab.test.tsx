@@ -83,18 +83,33 @@ describe('SummaryTab', () => {
   it('requests the current calendar year and displays a bounded reporting period', async () => {
     summary = {
       ...populatedSummary,
-      periodStart: '2026-01-01T00:00:00Z',
-      periodEnd: '2026-08-14T23:59:59.999Z',
+      // Bounds as the fetch actually sends them: reporting-day edges in
+      // America/New_York converted to UTC instants.
+      periodStart: '2026-01-01T05:00:00Z',
+      periodEnd: '2026-08-15T03:59:59.999Z',
     };
     render(<SummaryTab />);
 
-    expect(screen.getByText(/2026.*–.*2026/)).toBeInTheDocument();
+    expect(screen.getByText('Jan 1, 2026 – Aug 14, 2026')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Reporting period'), { target: { value: 'year' } });
 
     await waitFor(() => expect(fetchSummary).toHaveBeenCalledTimes(2));
     // Jan 1 local in a UTC-5 zone is 05:00Z on Jan 1, not midnight Dec 31.
     expect(lastSummaryParams?.startDate).toMatch(/^\d{4}-01-01T05:00:00\.000Z$/);
     expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.999Z$/);
+  });
+
+  it('renders the period label in the reporting timezone, not UTC', () => {
+    summary = {
+      ...populatedSummary,
+      // The end bound is Mar 31 23:59:59.999 in America/New_York, which is
+      // already Apr 1 in UTC — the label must still read Mar 31.
+      periodStart: '2026-03-10T05:00:00Z',
+      periodEnd: '2026-04-01T03:59:59.999Z',
+    };
+    render(<SummaryTab />);
+
+    expect(screen.getByText('Mar 10, 2026 – Mar 31, 2026')).toBeInTheDocument();
   });
 
   it('applies and validates a custom date range', () => {

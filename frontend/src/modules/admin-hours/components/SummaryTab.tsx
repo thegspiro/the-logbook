@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock3, Info, ListChecks } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { localToUTC } from '../../../utils/dateFormatting';
+import { formatDateCustom, localToUTC } from '../../../utils/dateFormatting';
 
 type DatePreset = 'all' | '30-days' | 'year' | 'custom';
 
@@ -77,12 +77,13 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
 
   const periodLabel = useMemo(() => {
     if (!summary?.periodStart && !summary?.periodEnd) return 'All recorded time';
+    // The echoed bounds are UTC instants converted from reporting-day edges,
+    // so they must be rendered back in the reporting timezone — in UTC, the
+    // end bound of "Mar 31" west of UTC lands on Apr 1.
     const format = (value: string | null) =>
-      value
-        ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value))
-        : 'first record';
+      value ? formatDateCustom(value, { dateStyle: 'medium' }, timezone) : 'first record';
     return `${format(summary.periodStart)} – ${format(summary.periodEnd)}`;
-  }, [summary]);
+  }, [summary, timezone]);
 
   return (
     <div className="space-y-6">
