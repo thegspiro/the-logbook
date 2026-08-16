@@ -11,6 +11,7 @@
 
 const DRAFT_KEY_PREFIX = 'shift-report-draft-';
 const DRAFT_INDEX_KEY = 'shift-report-draft-index';
+const EQUIPMENT_CHECK_DRAFT_KEY_PREFIX = 'equipment-check-draft-';
 const MAX_DRAFTS = 20;
 
 export interface ShiftReportDraft {
@@ -69,10 +70,10 @@ export function deleteDraft(shiftId: string): void {
 }
 
 /**
- * Remove every saved draft on this device.
+ * Remove every saved member-data draft on this device.
  *
- * SEC (FE-6): drafts hold member PII — crew names, trainee evaluations,
- * narrative remarks — in localStorage, which is shared by every user of the
+ * SEC (FE-6): shift-report and equipment-check drafts hold member PII and
+ * operational notes in localStorage, which is shared by every user of the
  * browser profile. Station computers are shared by whoever is on duty, so
  * drafts must not outlive the session that created them. Called from the
  * logout purge; returns how many were discarded so the UI can say so rather
@@ -89,7 +90,7 @@ export function clearAllDrafts(): number {
     let orphans = 0;
     for (let i = localStorage.length - 1; i >= 0; i -= 1) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(DRAFT_KEY_PREFIX)) {
+      if (key && (key.startsWith(DRAFT_KEY_PREFIX) || key.startsWith(EQUIPMENT_CHECK_DRAFT_KEY_PREFIX))) {
         localStorage.removeItem(key);
         orphans += 1;
       }

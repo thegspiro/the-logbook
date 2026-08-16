@@ -19,10 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_optional_current_user
 from app.api.public import responses as public_responses
-from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import (
-    daily_cap_exceeded,
     get_client_ip,
     public_rate_limit,
 )
@@ -186,15 +184,6 @@ async def submit_public_form(
             detail="Form not found or not available",
         )
 
-    # Check the shared quota only after authorization. Otherwise anonymous
-    # requests can exhaust an authenticated form's allowance and deny service
-    # to legitimate members without ever being eligible to submit it.
-    if await daily_cap_exceeded(f"pub_form:{slug}", settings.PUBLIC_FORM_DAILY_LIMIT):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="This form is not accepting further submissions today.",
-        )
-
     # Get IP and user agent for tracking
     ip_address = get_client_ip(request)
     user_agent = request.headers.get("user-agent", "")[:500]
@@ -208,6 +197,7 @@ async def submit_public_form(
         user_agent=user_agent,
         honeypot_value=submission.hp_website,
         submitted_by=str(current_user.id) if current_user else None,
+        enforce_daily_cap=True,
     )
 
     # Honeypot triggered - bot detected, return fake success
@@ -223,6 +213,11 @@ async def submit_public_form(
         )
 
     if error:
+        if error == FormsService.PUBLIC_DAILY_CAP_ERROR:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=error,
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,

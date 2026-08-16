@@ -1,7 +1,7 @@
 """add event reminder target
 
-Revision ID: 20260814_0005
-Revises: 20260814_0004
+Revision ID: 20260813_0020
+Revises: 20260813_0010
 """
 
 from typing import Sequence, Union
@@ -9,8 +9,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260814_0005"
-down_revision: Union[str, None] = "20260814_0004"
+revision: str = "20260813_0020"
+down_revision: Union[str, None] = "20260813_0010"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

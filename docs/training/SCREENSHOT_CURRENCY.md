@@ -106,6 +106,63 @@ seeded twice.
 **All three remaining placeholders are now characterised** — none is a mystery,
 each is a bounded piece of demo-data work, and two of them share a fixture.
 
+### A currency survey after the main merges — the navigation is fine, guide 03 is not
+
+Code changed under six guides since their images were captured. Checked in
+order of blast radius:
+
+**The navigation refactor is not a problem.** `SideNavigation.tsx`,
+`TopNavigation.tsx` and a new `adminNavigation.ts` changed how admin
+permissions are computed, and one item's gate moved from `forms.view` to
+`forms.manage` — which could have altered the sidebar in every one of the ~420
+images. Re-captured a representative admin page and compared: **the sidebar
+renders identically** for the demo administrator. The only differences were
+time drift ("3d in stage" to "6d in stage", notification badge 12 to 11), so
+that capture was discarded rather than committed as churn.
+
+**Guide 03 is the real exposure.** `SchedulingPage.tsx` plus a **new**
+`SchedulingHeader.tsx` and the templates / patterns / platoons / settings /
+admin-reports pages all changed, across 80 shots. A `--only 03-6` re-capture
+produced 11 changed images out of 13.
+
+Shots on routes whose components changed, as an upper bound rather than a
+verified count:
+
+| Shots | Guide             | Changed underneath                                                                                                                 |
+| ----: | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+|    80 | 03 scheduling     | `SchedulingPage`, new `SchedulingHeader`, templates/patterns/platoons/settings/admin-reports, `shiftSettingsApi`                   |
+|    67 | 02 training       | `CreateTrainingSessionPage`, `SubmitTrainingPage`, `TrainingLinkageFields`, `TrainingSessionLinkageCard`, `useTrainingLinkageData` |
+|    22 | 04 events         | `EventForm`, `EventDetailPage`, `EventsPage`, `types/event.ts`                                                                     |
+|    17 | 09 skills testing | `ActiveSkillTestPage`, `ScoreBreakdownPanel`, `SkillTemplateBuilderPage`, `skillTestTallies`, both print pages                     |
+|    12 | 06 apparatus      | `ApparatusListPage`, `ApparatusDetailHeader`, `ApparatusFormPage`                                                                  |
+|     2 | 08 admin          | `ErrorMonitoringPage`, `RoleManagementPage`                                                                                        |
+
+`Breadcrumbs`, `PageTransition` and `CommandPalette` also changed, and they
+appear across many guides — if their rendered output moved at all the exposure
+is wider than the table.
+
+Of the 11 changed guide-03 images, **only `03-63-batch-report-form` was opened
+and is committed**; the other ten were reverted unopened. They are not wrong,
+they are unverified, and the rule that has caught every real defect this session
+is that those are not the same thing.
+
+### Program phases carry no requirements, so the caption's counts come from elsewhere
+
+`01-membership.md:1282` wants Phase 1 (Complete, 4/4), Phase 2 (In Progress,
+0/6) and so on. A program's detail response — `GET
+/training/programs/programs/{id}` — returns phases with `name`,
+`phase_number`, `prerequisite_phase_ids`, `requires_manual_advancement` and
+`time_limit_days`, and **no requirements at all**. So the fractions in the
+caption cannot come from this screen; they belong to a member's enrolment view,
+which is guide 02's territory and where `02-90-phase-prerequisites` already
+looks.
+
+That makes this the same split as `09-18` and `01-membership.md:1156`: the
+program detail can show the phase structure and its gating, and the per-phase
+progress belongs to a cross-reference. Confirm against the enrolment view before
+rewriting the caption — this was established from the API shape alone, and the
+screen has not been opened yet.
+
 ### The skip banner is right; the toast beside it is a demo artifact
 
 The fixture works. `Operations Committee Seat — Restricted Ballot` is open with

@@ -1,7 +1,7 @@
 """Remove the sensitive facilities grant backfilled onto system Captains.
 
 Revision ID: 20260814_0004
-Revises: 20260814_0003
+Revises: 20260814_0003, 20260813_0020
 Create Date: 2026-08-14 00:02:00.000000
 """
 
