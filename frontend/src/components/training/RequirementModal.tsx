@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CourseLibraryPicker } from './CourseLibraryPicker';
@@ -49,6 +50,8 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const seed = requirement ?? template;
   const seedFrequency = seed?.frequency || 'annual';
   const [formData, setFormData] = useState({
@@ -218,7 +221,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel max-h-[90dvh] w-full max-w-3xl overflow-y-auto p-6">
+      <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-3xl overflow-y-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <h3 id="requirement-modal-title" className="text-theme-text-primary text-xl font-bold">
             {requirement ? 'Edit Requirement' : 'Create Requirement'}

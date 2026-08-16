@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import type { RSVP } from '../../types/event';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 
@@ -25,6 +26,8 @@ const EventOverrideAttendanceModal: React.FC<EventOverrideAttendanceModalProps> 
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -42,7 +45,10 @@ const EventOverrideAttendanceModal: React.FC<EventOverrideAttendanceModalProps> 
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+        <div
+          ref={dialogRef}
+          className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+        >
           <form onSubmit={onSubmit}>
             <div className="modal-header">
               <h3 id="override-modal-title" className="text-theme-text-primary mb-1 text-lg font-medium">

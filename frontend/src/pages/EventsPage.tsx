@@ -643,7 +643,7 @@ export const EventsPage: React.FC = () => {
                     <span className="hidden sm:inline">Quick Create</span>
                   </button>
                   {showQuickCreate && (
-                    <div className="modal-panel absolute right-0 z-50 mt-2 w-64">
+                    <div className="popover-panel absolute right-0 z-50 mt-2 w-64">
                       <div className="p-2">
                         <p className="text-theme-text-secondary px-3 py-1.5 text-xs font-semibold tracking-wider uppercase">
                           Create from Template
@@ -794,7 +794,7 @@ export const EventsPage: React.FC = () => {
             </button>
 
             {showPresetMenu && (
-              <div className="modal-panel absolute top-full right-0 z-40 mt-1 w-72">
+              <div className="popover-panel absolute top-full right-0 z-40 mt-1 w-72">
                 <div className="border-theme-surface-border border-b p-2">
                   {!showSavePresetInput ? (
                     <button

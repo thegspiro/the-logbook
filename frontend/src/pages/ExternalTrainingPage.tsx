@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
@@ -62,6 +63,8 @@ interface CreateProviderModalProps {
 }
 
 const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClose, onSuccess }) => {
+  const dialogRef1 = useDialog<HTMLDivElement>({ onClose });
+
   const [step, setStep] = useState<'type' | 'details'>('type');
   const [formData, setFormData] = useState<ExternalTrainingProviderCreate>({
     name: '',
@@ -122,7 +125,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
+      <div ref={dialogRef1} className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
         <div className="border-theme-surface-border border-b p-6">
           <h2 id="create-provider-title" className="text-theme-text-primary text-2xl font-bold">
             {step === 'type' ? 'Select Provider Type' : 'Configure Provider'}
@@ -582,6 +585,8 @@ interface EditProviderModalProps {
 }
 
 const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider, onClose, onSuccess }) => {
+  const dialogRef2 = useDialog<HTMLDivElement>({ onClose });
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -659,7 +664,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
+      <div ref={dialogRef2} className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
         <div className="border-theme-surface-border border-b p-6">
           <h2 id="edit-provider-title" className="text-theme-text-primary text-2xl font-bold">
             Edit Provider: {provider.name}
@@ -841,6 +846,8 @@ interface MappingsModalProps {
 }
 
 const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, providerId, providerName }) => {
+  const dialogRef3 = useDialog<HTMLDivElement>({ onClose });
+
   const [activeTab, setActiveTab] = useState<'categories' | 'users'>('categories');
   const [categoryMappings, setCategoryMappings] = useState<ExternalCategoryMapping[]>([]);
   const [userMappings, setUserMappings] = useState<ExternalUserMapping[]>([]);
@@ -908,7 +915,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden">
+      <div ref={dialogRef3} className="modal-panel flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden">
         <div className="border-theme-surface-border border-b p-6">
           <h2 id="mappings-modal-title" className="text-2xl font-bold text-white">
             Mappings - {providerName}

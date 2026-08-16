@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import type { RSVP } from '../../types/event';
 import { getRSVPStatusLabel, getRSVPStatusColor } from '../../utils/eventHelpers';
 import { formatTime } from '../../utils/dateFormatting';
@@ -33,6 +34,8 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
   onClose,
   timezone,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const filteredMembers = eligibleMembers.filter(
     (member) =>
       memberSearch === '' ||
@@ -55,7 +58,10 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:align-middle">
+        <div
+          ref={dialogRef}
+          className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:align-middle"
+        >
           <div className="modal-header">
             <div className="mb-4 flex items-center justify-between">
               <h3 id="checkin-modal-title" className="text-theme-text-primary text-lg font-medium">

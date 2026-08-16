@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import {
   Clock,
   CalendarDays,
@@ -585,6 +586,8 @@ const SchedulingPage: React.FC = () => {
 
   const hasShifts = shifts.length > 0;
 
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showCreateShift, onClose: () => setShowCreateShift(false) });
+
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -1158,7 +1161,7 @@ const SchedulingPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" onClick={() => setShowCreateShift(false)} aria-hidden="true" />
-              <div className="modal-panel relative w-full max-w-lg">
+              <div ref={dialogRef} className="modal-panel relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 id="create-schedule-title" className="text-theme-text-primary text-lg font-medium">

@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import type { Candidate } from '../../types/election';
 
 interface RecordPaperBallotsModalProps {
@@ -28,6 +29,8 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [allowOverCount, setAllowOverCount] = useState(false);
@@ -59,7 +62,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
       aria-labelledby="paper-ballots-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="paper-ballots-title" className="text-theme-text-primary text-lg font-medium">
             Record Paper Ballots

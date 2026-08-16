@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { X, RefreshCw, Play } from 'lucide-react';
@@ -13,6 +14,8 @@ interface GenerateShiftsModalProps {
 }
 
 const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClose, pattern }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
+
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -54,7 +57,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="generate-modal-title" className="text-theme-text-primary text-xl font-bold">
             Generate Shifts

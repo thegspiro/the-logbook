@@ -483,7 +483,7 @@ const FieldRenderer = ({
               )}
             </div>
             {memberResults.length > 0 && (
-              <div className="modal-panel absolute z-10 mt-1 max-h-48 w-full overflow-y-auto">
+              <div className="popover-panel absolute z-10 mt-1 max-h-48 w-full overflow-y-auto">
                 {memberResults.map((member) => (
                   <button
                     key={member.id}

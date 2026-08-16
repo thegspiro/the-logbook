@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import { Truck, Plus, Search, Pencil, Trash2, Loader2, X, Save, Shield, Users, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../modules/scheduling/services/api';
@@ -232,6 +233,8 @@ export default function ApparatusBasicPage() {
   const inputCls = 'form-input py-2.5';
   const labelCls = 'form-label';
 
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showModal, onClose: () => setShowModal(false) });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -367,7 +370,7 @@ export default function ApparatusBasicPage() {
             if (e.key === 'Escape') setShowModal(false);
           }}
         >
-          <div className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
+          <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editing ? 'Edit Apparatus' : 'Add Apparatus'}

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import { useNavigate } from 'react-router';
 import {
   Users,
@@ -720,6 +721,8 @@ const PositionSetup: React.FC = () => {
   const selectedCount = Object.keys(selectedPositions).length;
   const currentYear = new Date().getFullYear();
 
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showCustomModal, onClose: () => setShowCustomModal(false) });
+
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
@@ -1049,7 +1052,7 @@ const PositionSetup: React.FC = () => {
             if (e.key === 'Escape') setShowCustomModal(false);
           }}
         >
-          <div className="modal-panel w-full max-w-md p-6">
+          <div ref={dialogRef} className="modal-panel w-full max-w-md p-6">
             <h3 id="custom-position-modal-title" className="text-theme-text-primary mb-4 text-xl font-bold">
               Create Custom Position
             </h3>

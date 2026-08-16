@@ -3,6 +3,7 @@
  */
 
 import { useState } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import { X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
@@ -17,6 +18,8 @@ interface Props {
 }
 
 export default function CreateFacilityModal({ facilityTypes, facilityStatuses, onClose, onCreated }: Props) {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const { createFacility } = useFacilitiesStore();
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState({
@@ -79,7 +82,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel max-h-[90dvh] w-full max-w-md overflow-y-auto">
+      <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-md overflow-y-auto">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="create-facility-title" className="text-theme-text-primary text-lg font-bold">
             Add Facility

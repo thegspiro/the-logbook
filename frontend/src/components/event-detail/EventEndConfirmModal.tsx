@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import { StopCircle } from 'lucide-react';
 
 interface EventEndConfirmModalProps {
@@ -9,6 +10,8 @@ interface EventEndConfirmModalProps {
 }
 
 const EventEndConfirmModal: React.FC<EventEndConfirmModalProps> = ({ eventTitle, submitting, onConfirm, onClose }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -24,7 +27,10 @@ const EventEndConfirmModal: React.FC<EventEndConfirmModalProps> = ({ eventTitle,
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+        <div
+          ref={dialogRef}
+          className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+        >
           <div className="modal-header">
             <div className="sm:flex sm:items-start">
               <div className="mx-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10 dark:bg-red-500/20">

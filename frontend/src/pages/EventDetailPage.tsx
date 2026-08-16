@@ -815,7 +815,7 @@ export const EventDetailPage: React.FC = () => {
                           <ChevronDown className="ml-1 h-4 w-4" />
                         </button>
                         {notifications.showReminderMenu && (
-                          <div className="modal-panel absolute right-0 z-20 mt-2 w-56">
+                          <div className="popover-panel absolute right-0 z-20 mt-2 w-56">
                             <div className="py-1">
                               <button
                                 onClick={() => void notifications.handleSendReminders('non_respondents')}
@@ -881,7 +881,7 @@ export const EventDetailPage: React.FC = () => {
                         <span className="ml-1">More</span>
                       </button>
                       {showActionsMenu && (
-                        <div className="modal-panel absolute right-0 z-20 mt-2 w-56">
+                        <div className="popover-panel absolute right-0 z-20 mt-2 w-56">
                           <div className="py-1">
                             <button
                               onClick={() => {

@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import {
   X,
   FileText,
@@ -342,6 +343,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   editingStage,
   existingStageCount,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
+
   const tz = useTimezone();
   const { isConnected: isIntegrationConnected, loading: integrationsLoading } = useConnectedIntegrations();
   const [name, setName] = useState('');
@@ -698,7 +701,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel modal-body w-full max-w-2xl">
+      <div ref={dialogRef} className="modal-panel modal-body w-full max-w-2xl">
         {/* Header */}
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="stage-config-modal-title" className="text-theme-text-primary text-xl font-bold">

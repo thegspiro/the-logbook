@@ -146,7 +146,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           {showPresets && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowPresets(false)} aria-hidden="true" />
-              <div className="modal-panel absolute top-full left-0 z-20 mt-1 min-w-[140px] py-1" role="menu">
+              <div className="popover-panel absolute top-full left-0 z-20 mt-1 min-w-[140px] py-1" role="menu">
                 {presets.map((preset) => (
                   <button
                     key={preset.label}

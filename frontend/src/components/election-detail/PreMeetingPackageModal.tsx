@@ -10,6 +10,7 @@
  * attach the downloaded PDF to their own communication.
  */
 import React, { useCallback, useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import { electionService } from '../../services/api';
 import type { PackageVariant } from '../../types/election';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -38,6 +39,8 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [recipients, setRecipients] = useState<RecipientChip[]>([]);
   const [newEmail, setNewEmail] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
@@ -120,7 +123,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
       aria-labelledby="premeeting-package-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
+      <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="premeeting-package-modal-title" className="text-theme-text-primary text-lg font-medium">
             Email Pre-Meeting Package

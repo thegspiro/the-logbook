@@ -364,7 +364,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
                     {openDropdown === item.label && (
                       <div
-                        className={`modal-panel animate-scale-in absolute top-full z-50 mt-1 py-1 ${item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'}`}
+                        className={`popover-panel animate-scale-in absolute top-full z-50 mt-1 py-1 ${item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'}`}
                       >
                         {cleanedSubItems.map((subItem, idx) => {
                           if (subItem.isDivider) {

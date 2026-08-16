@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import { X } from 'lucide-react';
 import { ScreeningType, SCREENING_TYPE_LABELS } from '../types';
 import type { ScreeningRequirement, ScreeningRequirementCreate, ScreeningRequirementUpdate } from '../types';
@@ -19,6 +20,8 @@ const inputClass = 'form-input';
 const labelClass = 'form-label mb-2';
 
 export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> = ({ requirement, onSave, onClose }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [name, setName] = useState(requirement?.name ?? '');
   const [screeningType, setScreeningType] = useState<string>(
     requirement?.screening_type ?? ScreeningType.PHYSICAL_EXAM
@@ -73,7 +76,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel modal-body w-full max-w-lg">
+      <div ref={dialogRef} className="modal-panel modal-body w-full max-w-lg">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 className="text-theme-text-primary text-lg font-bold">
             {requirement ? 'Edit Requirement' : 'Add Screening Requirement'}

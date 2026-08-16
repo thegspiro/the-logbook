@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import {
   FileText,
   Plus,
@@ -935,6 +936,8 @@ const TemplateModal: React.FC<{
     },
   ];
 
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   return (
     <div
       className="modal-overlay flex items-center justify-center p-4"
@@ -945,7 +948,7 @@ const TemplateModal: React.FC<{
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel max-h-[80dvh] w-full max-w-4xl overflow-y-auto p-6">
+      <div ref={dialogRef} className="modal-panel max-h-[80dvh] w-full max-w-4xl overflow-y-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">

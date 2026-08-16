@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import { useNavigate } from 'react-router';
 import {
   ArrowLeft,
@@ -310,6 +311,20 @@ export const PipelineSettingsPage: React.FC = () => {
 
   // Non-template pipelines for sidebar display
   const visiblePipelines = useMemo(() => pipelines.filter((p) => !p.is_template), [pipelines]);
+
+  const dialogRef1 = useDialog<HTMLDivElement>({ isOpen: showCloneModal, onClose: () => setShowCloneModal(false) });
+
+  const dialogRef2 = useDialog<HTMLDivElement>({
+    isOpen: showSaveTemplateModal,
+    onClose: () => setShowSaveTemplateModal(false),
+  });
+
+  const dialogRef3 = useDialog<HTMLDivElement>({
+    isOpen: showTemplateGallery,
+    onClose: () => setShowTemplateGallery(false),
+  });
+
+  const dialogRef4 = useDialog<HTMLDivElement>({ isOpen: showCreateModal, onClose: () => setShowCreateModal(false) });
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -975,7 +990,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowCloneModal(false);
           }}
         >
-          <div className="modal-panel w-full max-w-md">
+          <div ref={dialogRef1} className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="clone-pipeline-title"
@@ -1043,7 +1058,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowSaveTemplateModal(false);
           }}
         >
-          <div className="modal-panel w-full max-w-md">
+          <div ref={dialogRef2} className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="save-template-title"
@@ -1111,7 +1126,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowTemplateGallery(false);
           }}
         >
-          <div className="modal-panel flex max-h-[80dvh] w-full max-w-lg flex-col">
+          <div ref={dialogRef3} className="modal-panel flex max-h-[80dvh] w-full max-w-lg flex-col">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="template-gallery-title"
@@ -1185,7 +1200,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowCreateModal(false);
           }}
         >
-          <div className="modal-panel w-full max-w-md">
+          <div ref={dialogRef4} className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 id="create-pipeline-title" className="text-theme-text-primary text-lg font-bold">
                 Create Pipeline

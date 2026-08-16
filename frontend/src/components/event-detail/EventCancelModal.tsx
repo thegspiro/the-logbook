@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 
 interface CancelEventPayload {
   cancellationReason: string;
@@ -13,6 +14,8 @@ interface EventCancelModalProps {
 }
 
 const EventCancelModal: React.FC<EventCancelModalProps> = ({ submitting, submitError, onSubmit, onClose }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [cancelReason, setCancelReason] = useState('');
   const [sendCancelNotifications, setSendCancelNotifications] = useState(false);
 
@@ -38,7 +41,10 @@ const EventCancelModal: React.FC<EventCancelModalProps> = ({ submitting, submitE
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+        <div
+          ref={dialogRef}
+          className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+        >
           <form onSubmit={handleSubmit}>
             <div className="modal-header">
               <h3 id="cancel-event-modal-title" className="text-theme-text-primary mb-4 text-lg font-medium">

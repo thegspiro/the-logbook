@@ -6,6 +6,7 @@
  * min/max for number, validation patterns, etc.) and conditional visibility.
  */
 import { useState, useEffect } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import { X, Plus, Trash2, GripVertical, GitBranch } from 'lucide-react';
 import type { FormFieldCreate, FormFieldOption } from '../../services/api';
 import { FieldType } from '../../constants/enums';
@@ -90,6 +91,8 @@ const FieldEditor = ({
   siblingFields = [],
   editingFieldId,
 }: FieldEditorProps) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const isEditing = !!field;
 
   const [fieldType, setFieldType] = useState(field?.field_type || 'text');
@@ -266,7 +269,7 @@ const FieldEditor = ({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
-      <div className="modal-panel relative max-h-[90dvh] w-full max-w-lg overflow-y-auto">
+      <div ref={dialogRef} className="modal-panel relative max-h-[90dvh] w-full max-w-lg overflow-y-auto">
         {/* Header */}
         <div className="modal-header-sticky flex items-center justify-between px-6 py-4">
           <h3 id="field-editor-title" className="text-theme-text-primary text-lg font-semibold">

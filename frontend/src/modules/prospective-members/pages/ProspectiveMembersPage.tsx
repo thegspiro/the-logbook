@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import {
   Users,
   UserPlus,
@@ -348,6 +349,12 @@ export const ProspectiveMembersPage: React.FC = () => {
     [currentPipeline]
   );
 
+  const dialogRef1 = useDialog<HTMLDivElement>({ isOpen: showFilters, onClose: () => setShowFilters(false) });
+
+  const dialogRef2 = useDialog<HTMLDivElement>({ isOpen: showPurgeConfirm, onClose: () => setShowPurgeConfirm(false) });
+
+  const dialogRef3 = useDialog<HTMLDivElement>({ isOpen: showAddModal, onClose: () => setShowAddModal(false) });
+
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
       {/* Header */}
@@ -556,7 +563,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               )}
             </button>
             {showFilters && (
-              <div className="modal-panel absolute top-full left-0 z-10 mt-2 w-48 py-1">
+              <div ref={dialogRef1} className="modal-panel absolute top-full left-0 z-10 mt-2 w-48 py-1">
                 {(['active', 'on_hold', 'withdrawn', 'converted', 'rejected'] as ApplicantStatus[]).map((status) => (
                   <button
                     key={status}
@@ -1137,7 +1144,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
         <div className="modal-overlay flex items-center justify-center p-4">
-          <div className="modal-panel w-full max-w-md">
+          <div ref={dialogRef2} className="modal-panel w-full max-w-md">
             <div className="p-6">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
@@ -1206,7 +1213,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Add Applicant Modal */}
       {showAddModal && (
         <div className="modal-overlay flex items-center justify-center p-4">
-          <div className="modal-panel w-full max-w-md">
+          <div ref={dialogRef3} className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Add Applicant</h2>
               <button

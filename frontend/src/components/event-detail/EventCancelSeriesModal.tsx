@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 
 interface CancelSeriesPayload {
   cancellationReason: string;
@@ -19,6 +20,8 @@ const EventCancelSeriesModal: React.FC<EventCancelSeriesModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [cancelReason, setCancelReason] = useState('');
   const [sendCancelNotifications, setSendCancelNotifications] = useState(false);
   const [futureOnly, setFutureOnly] = useState(false);
@@ -45,7 +48,10 @@ const EventCancelSeriesModal: React.FC<EventCancelSeriesModalProps> = ({
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+        <div
+          ref={dialogRef}
+          className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+        >
           <form onSubmit={handleSubmit}>
             <div className="modal-header">
               <h3 id="cancel-series-modal-title" className="text-theme-text-primary mb-4 text-lg font-medium">

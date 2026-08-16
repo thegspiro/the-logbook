@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 import { formatDateTime, formatForDateTimeInput } from '../../utils/dateFormatting';
 
@@ -17,6 +18,8 @@ const ExtendElectionModal: React.FC<ExtendElectionModalProps> = ({
   onClose,
   timezone,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [newEndDate, setNewEndDate] = useState('');
 
   const handleKeyDown = useCallback(
@@ -48,7 +51,7 @@ const ExtendElectionModal: React.FC<ExtendElectionModalProps> = ({
       aria-labelledby="extend-election-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="extend-election-modal-title" className="text-theme-text-primary text-lg font-medium">
             Extend Election Time

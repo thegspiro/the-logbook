@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 
 interface RemindNonVotersModalProps {
   nonVoterCount: number;
@@ -15,6 +16,8 @@ const RemindNonVotersModal: React.FC<RemindNonVotersModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [remindMessage, setRemindMessage] = useState('');
 
   const handleKeyDown = useCallback(
@@ -34,7 +37,7 @@ const RemindNonVotersModal: React.FC<RemindNonVotersModalProps> = ({
       aria-labelledby="remind-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="remind-modal-title" className="text-theme-text-primary text-lg font-medium">
             Remind Non-Voters

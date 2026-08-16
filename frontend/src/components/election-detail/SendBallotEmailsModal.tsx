@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import type { Election } from '../../types/election';
 import { formatDateTime } from '../../utils/dateFormatting';
 
@@ -25,6 +26,8 @@ const SendBallotEmailsModal: React.FC<SendBallotEmailsModalProps> = ({
   onClose,
   timezone,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [sendEligibilitySummary, setSendEligibilitySummary] = useState(true);
@@ -54,7 +57,7 @@ const SendBallotEmailsModal: React.FC<SendBallotEmailsModalProps> = ({
       aria-labelledby="send-email-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="send-email-modal-title" className="text-theme-text-primary text-lg font-medium">
             {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}

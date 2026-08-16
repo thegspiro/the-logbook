@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDialog } from '../../hooks/useDialog';
 
 interface EventSaveTemplateModalProps {
   templateName: string;
@@ -19,6 +20,8 @@ const EventSaveTemplateModal: React.FC<EventSaveTemplateModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -34,7 +37,10 @@ const EventSaveTemplateModal: React.FC<EventSaveTemplateModalProps> = ({
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+        <div
+          ref={dialogRef}
+          className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+        >
           <form onSubmit={onSubmit}>
             <div className="modal-header">
               <h3 id="save-template-modal-title" className="text-theme-text-primary mb-4 text-lg leading-6 font-medium">

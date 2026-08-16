@@ -9,6 +9,7 @@
  * 15-minute floor vote) before opening.
  */
 import React, { useState, useCallback } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 import { formatDateTime, formatForDateTimeInput } from '../../utils/dateFormatting';
 
@@ -34,6 +35,8 @@ const EditDatesModal: React.FC<EditDatesModalProps> = ({
   onClose,
   timezone,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [newStartDate, setNewStartDate] = useState(formatForDateTimeInput(new Date(currentStartDate), timezone));
   const [newEndDate, setNewEndDate] = useState(formatForDateTimeInput(new Date(currentEndDate), timezone));
 
@@ -72,7 +75,7 @@ const EditDatesModal: React.FC<EditDatesModalProps> = ({
       aria-labelledby="edit-dates-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="edit-dates-modal-title" className="text-theme-text-primary text-lg font-medium">
             Edit Voting Window

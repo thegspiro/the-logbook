@@ -9,8 +9,9 @@
  * - Returns focus to trigger element on close
  */
 
-import React, { useEffect, useRef, ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { useDialog } from '../hooks/useDialog';
 
 interface ModalProps {
   isOpen: boolean;
@@ -35,14 +36,7 @@ export const Modal: React.FC<ModalProps> = ({
   closeOnEscape = true,
   'aria-describedby': ariaDescribedBy,
 }) => {
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const onCloseRef = useRef(onClose);
-
-  // Keep the ref current without triggering the effect
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
+  const modalRef = useDialog<HTMLDivElement>({ isOpen, onClose, closeOnEscape });
 
   const sizeClasses = {
     sm: 'max-w-[calc(100vw-2rem)] sm:max-w-md',
@@ -50,65 +44,6 @@ export const Modal: React.FC<ModalProps> = ({
     lg: 'max-w-[calc(100vw-2rem)] sm:max-w-2xl',
     xl: 'max-w-[calc(100vw-2rem)] sm:max-w-4xl',
   };
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    // Store the currently focused element
-    previousFocusRef.current = document.activeElement as HTMLElement;
-
-    // Focus the first focusable child, or fall back to the modal container
-    const firstFocusable = modalRef.current?.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    if (firstFocusable) {
-      firstFocusable.focus();
-    } else {
-      modalRef.current?.focus();
-    }
-
-    // Handle escape key
-    const handleEscape = (e: KeyboardEvent) => {
-      if (closeOnEscape && e.key === 'Escape') {
-        onCloseRef.current();
-      }
-    };
-
-    // Trap focus within modal
-    const handleTab = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab' || !modalRef.current) return;
-
-      const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-
-      if (e.shiftKey && document.activeElement === firstElement) {
-        e.preventDefault();
-        lastElement?.focus();
-      } else if (!e.shiftKey && document.activeElement === lastElement) {
-        e.preventDefault();
-        firstElement?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    document.addEventListener('keydown', handleTab);
-
-    // Prevent body scroll when modal is open
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.removeEventListener('keydown', handleTab);
-      document.body.style.overflow = 'unset';
-
-      // Return focus to previous element
-      previousFocusRef.current?.focus();
-    };
-  }, [isOpen, closeOnEscape]);
 
   if (!isOpen) return null;
 
