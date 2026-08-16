@@ -85,15 +85,16 @@ This document describes the complete onboarding flow for The Logbook application
 > authentication choice — not at the end. The IT team, positions, and module
 > steps all run against an authenticated session.
 
-
 ## Page-by-Page Navigation Details
 
 ### 1. Welcome Page (`/`)
+
 **Purpose**: First landing page with animated introduction
 
 **Animation**: Title appears after 300ms, body content after 800ms (quick fade-in so users aren't waiting on a blank screen).
 
 **Navigation**:
+
 - Button: "Get Started" → `/onboarding`
 
 **No API calls**
@@ -101,9 +102,11 @@ This document describes the complete onboarding flow for The Logbook application
 ---
 
 ### 2. Onboarding Check (`/onboarding`)
+
 **Purpose**: Checks if onboarding is needed
 
 **API Call**:
+
 ```
 GET /api/v1/onboarding/status
 Response: {
@@ -115,6 +118,7 @@ Response: {
 ```
 
 **Navigation**:
+
 - If `needs_onboarding = true` → `/onboarding/start`
 - If `needs_onboarding = false` → `/login`
 
@@ -128,6 +132,7 @@ Response: {
 ---
 
 ### 3. Organization Setup (`/onboarding/start`)
+
 **Purpose**: Collect comprehensive organization information and commit to database
 
 **Form Sections** (collapsible):
@@ -168,6 +173,7 @@ Response: {
    - Supports PNG, JPG, WebP (max 5MB)
 
 **API Call**:
+
 ```
 POST /api/v1/onboarding/session/organization
 Body: {
@@ -213,29 +219,34 @@ Response: {
 **Important**: Organization is committed to database at this step (Step 1 of backend flow).
 
 **Navigation**:
+
 - Button: "Continue" → `/onboarding/stations`
 
 **Data Storage**:
+
 - Database (organization table, plus the HQ Facility and Location)
 - Zustand store (department name, logo for other components)
 
 ---
 
 ### 4. Stations (`/onboarding/stations`)
+
 **Purpose**: Capture stations beyond headquarters
 
 Headquarters is already created from the department address during
-Organization Setup, so this step collects the *other* stations. Without it, a
+Organization Setup, so this step collects the _other_ stations. Without it, a
 multi-station department has to find the Facilities module on its own after
 setup.
 
 **Form Fields** (per station, repeatable):
+
 - Station Name (required)
 - Station Number
 - Street Address, City, State, ZIP Code
 - Phone, Email
 
 **API Call**:
+
 ```
 POST /api/v1/onboarding/session/stations
 Body: {
@@ -257,6 +268,7 @@ the created facility ids, so returning to this step replaces its own rows
 instead of appending duplicates.
 
 **Navigation**:
+
 - Button: "Continue" → `/onboarding/apparatus`
 - Button: "Skip — one station only" → `/onboarding/apparatus` (clears any
   stations a previous pass created)
@@ -264,9 +276,11 @@ instead of appending duplicates.
 ---
 
 ### 5. Apparatus (`/onboarding/apparatus`)
+
 **Purpose**: Capture apparatus for shift staffing
 
 **Form Fields** (per apparatus, repeatable):
+
 - Unit Number (required)
 - Name
 - Type (engine, ladder, rescue, ambulance, tanker, brush, command, utility, other)
@@ -274,6 +288,7 @@ instead of appending duplicates.
 - Riding Positions (common ones offered as one-click adds; free text allowed)
 
 **API Call**:
+
 ```
 POST /api/v1/onboarding/session/apparatus
 Body: {
@@ -292,30 +307,37 @@ needs. Departments that enable the full Apparatus module later get maintenance
 history and inventory on top of these.
 
 **Navigation**:
+
 - Button: "Continue" → `/onboarding/navigation-choice`
 - Button: "Skip for now" → `/onboarding/navigation-choice`
 
 ---
 
 ### 6. Navigation Choice (`/onboarding/navigation-choice`)
+
 **Purpose**: Choose navigation layout
 
 **Options**:
+
 - Top Bar Navigation (horizontal)
 - Left Sidebar Navigation (vertical)
 
 **Navigation**:
+
 - Button: "Continue" → `/onboarding/email-platform`
 
 **Data Storage**: Zustand store (persisted to localStorage)
+
 - `navigationLayout` = "top" | "left"
 
 ---
 
 ### 7. Email Platform Choice (`/onboarding/email-platform`)
+
 **Purpose**: Select email service provider
 
 **Options**:
+
 - None (Skip email integration)
 - Google Workspace
 - Microsoft 365
@@ -323,31 +345,37 @@ history and inventory on top of these.
 - Cloudflare Email Service
 
 **Navigation**:
+
 - If "None" → `/onboarding/file-storage`
 - If service selected → `/onboarding/email-config`
 
 **Data Storage**: Zustand store (persisted to localStorage)
+
 - `emailPlatform` = "none" | "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other"
 
 ---
 
 ### 7a. Email Configuration (`/onboarding/email-config`)
+
 **Purpose**: Configure selected email service
 
 **Form Fields** (varies by platform):
 
 **Google Workspace**:
+
 - Client ID
 - Client Secret
 - OAuth Redirect URI
 - App Password (alternative to OAuth)
 
 **Microsoft 365**:
+
 - Tenant ID
 - Client ID
 - Client Secret
 
 **SMTP (Self-Hosted)**:
+
 - SMTP Host
 - SMTP Port
 - Encryption (TLS/SSL/None)
@@ -357,16 +385,19 @@ history and inventory on top of these.
 - From Name
 
 **Cloudflare Email Service**:
+
 - Account ID (32-character hex string from Cloudflare dashboard)
 - API Token (created with email sending permission)
 - From Email
 - From Name
 
 **Common fields** (all platforms):
+
 - From Email Address
 - From Name
 
 **API Call** (test connection):
+
 ```
 POST /api/v1/onboarding/test-email
 Body: {
@@ -376,6 +407,7 @@ Body: {
 ```
 
 **API Call** (save config):
+
 ```
 POST /api/v1/onboarding/save-email-config
 Body: {
@@ -387,30 +419,36 @@ Body: {
 **Data path**: Config is encrypted server-side (AES-256-GCM), stored in the onboarding session, and persisted to the organization's `settings.email_service` JSON column on completion. Secret fields (`cloudflare_api_token`, `smtp_password`, etc.) are prefixed with `enc:` before storage.
 
 **Navigation**:
+
 - Button: "Save & Continue" → `/onboarding/file-storage`
 - Button: "Skip for Now" → `/onboarding/file-storage`
 
 ---
 
 ### 8. File Storage Choice (`/onboarding/file-storage`)
+
 **Purpose**: Choose file storage backend
 
 **Options**:
+
 - Local Storage (server filesystem)
 - AWS S3
 - Azure Blob Storage
 - Google Cloud Storage
 
 **Navigation**:
+
 - If "Local Storage" → `/onboarding/authentication`
 - If cloud service → `/onboarding/file-storage-config`
 
 **Data Storage**: Zustand store (persisted to localStorage)
+
 - `fileStoragePlatform` = "local" | "s3" | "azure" | "gcs"
 
 ---
 
 ### 8a. File Storage Configuration (`/onboarding/file-storage-config`)
+
 **Purpose**: Collect cloud storage credentials
 
 Renders a per-platform credential form (Google Drive, OneDrive/SharePoint,
@@ -419,6 +457,7 @@ being written to the session, and are persisted into
 `Organization.settings.file_storage` at completion.
 
 **API Call**:
+
 ```
 POST /api/v1/onboarding/session/file-storage
 Body: {
@@ -428,6 +467,7 @@ Body: {
 ```
 
 **Navigation**:
+
 - Button: "Save & Continue" → `/onboarding/authentication`
 - Button: "I'll add these later" → `/onboarding/authentication` (stores the
   platform choice with no credentials, so Settings shows what is missing)
@@ -435,9 +475,11 @@ Body: {
 ---
 
 ### 9. Authentication Choice (`/onboarding/authentication`)
+
 **Purpose**: Choose authentication method
 
 **Options**:
+
 - Local (Username/Password)
 - OAuth 2.0 (Google, Microsoft) — **link-existing only** (see
   "OAuth Sign-In Buttons" below); OAuth never creates new accounts
@@ -445,14 +487,17 @@ Body: {
 - LDAP (Active Directory)
 
 **Navigation**:
+
 - Button: "Continue" → `/onboarding/it-team`
 
 **Data Storage**: Zustand store (persisted to localStorage)
+
 - `authPlatform` = "local" | "oauth" | "saml" | "ldap"
 
 ---
 
 ### 10. System Owner (`/onboarding/system-owner`)
+
 **Purpose**: Create the first administrator account
 
 This runs here — right after the authentication choice — not at the end of the
@@ -460,6 +505,7 @@ wizard. Everything after it (IT team, positions, modules, completion) executes
 against an authenticated session, because this endpoint sets the auth cookies.
 
 **Form Fields**:
+
 - Username (required, min 3 chars)
 - Email (required, valid email)
 - Password (required, min 12 chars)
@@ -469,11 +515,13 @@ against an authenticated session, because this endpoint sets the auth cookies.
 - Membership Number (optional)
 
 **Validation**:
+
 - Username: alphanumeric, hyphens, underscores only
 - Password: minimum 12 characters
 - Passwords must match
 
 **API Call**:
+
 ```
 POST /api/v1/onboarding/system-owner
 Body: {
@@ -491,20 +539,24 @@ Auth tokens are set as httpOnly cookies; the response's `authenticated` flag
 tells the frontend to set `has_session`.
 
 **Navigation**:
+
 - Button: "Continue" → `/onboarding/it-team`
 
 ---
 
 ### 11. IT Team & Backup Access (`/onboarding/it-team`)
+
 **Purpose**: Configure IT team contact and backup access
 
 **Form Fields**:
+
 - IT Contact Email (optional)
 - IT Contact Phone (optional)
 - Enable Backup Access (checkbox)
 - Backup Access Email (if enabled)
 
 **API Call**:
+
 ```
 POST /api/v1/onboarding/session/it-team
 Body: {
@@ -518,18 +570,22 @@ Body: {
 ```
 
 **Navigation**:
+
 - Button: "Continue" → `/onboarding/roles`
 
 ---
 
 ### 12. Positions (`/onboarding/positions`)
+
 **Purpose**: Configure roles and permissions using a two-tier model
 
 **Two-Tier Permission Model**:
+
 - **View Access**: Read-only access to module data (all members typically)
 - **Manage Access**: Full CRUD operations (selected roles only)
 
 **Role Categories** (16 system roles):
+
 - **Leadership**: IT Administrator, Chief, President, Assistant Chief, Vice President
 - **Administrative**: Secretary, Assistant Secretary, Quartermaster
 - **Operational**: Officers, Training Officer, Public Outreach Coordinator, Meeting Hall Coordinator
@@ -537,6 +593,7 @@ Body: {
 - **Base**: Member
 
 **Features**:
+
 - Pre-configured role templates by category
 - Permissions auto-generated from module registry
 - Custom role creation support
@@ -550,6 +607,7 @@ Body: {
 > default rank.
 
 **API Call**:
+
 ```
 POST /api/v1/onboarding/session/roles
 Body: {
@@ -565,36 +623,43 @@ Body: {
 ```
 
 **Navigation**:
+
 - Button: "Continue to Module Selection" → `/onboarding/modules`
 
 ---
 
 ### 13. Module Overview (`/onboarding/modules`)
+
 **Purpose**: Select and configure optional modules
 
 **Module Categories**:
 
 **Essential (Core)**:
+
 - Member Management
 - Events & RSVP
 - Documents & Files
 
 **Recommended (Operations)**:
+
 - Training & Certifications
 - Equipment & Inventory
 - Scheduling & Shifts
 
 **Recommended (Governance)**:
+
 - Elections & Voting
 - Compliance & Auditing
 
 **Optional (Communication)**:
+
 - Notifications & Alerts
 - Mobile App
 - Forms & Surveys
 - Integrations
 
 **Per-Module Actions**:
+
 - "Enable & Configure" → `/onboarding/modules/{moduleId}/config`
 - "Configure Later" → Mark as "skipped"
 - "Ignore" → Mark as "ignored"
@@ -606,6 +671,7 @@ Body: {
 > exposes `aria-pressed` for screen readers.
 
 **API Calls**:
+
 ```
 1. POST /api/v1/onboarding/session/modules
    Body: { modules: string[] }
@@ -619,27 +685,32 @@ team, email, file storage, auth, and module settings into
 `Organization.settings`, seeds default data, and marks setup done.
 
 **Navigation**:
+
 - Button: "Continue" → `/onboarding/complete` (after the auth store reloads,
   so the completion screen can link into the protected `/setup` route)
 
 ---
 
 ### 13a. Module Configuration Template (`/onboarding/modules/{moduleId}/config`)
+
 **Purpose**: Configure individual module settings with two-tier permissions
 
 **Features**:
+
 - View Access configuration (typically all members)
 - Manage Access role selection
 - Module-specific permission descriptions
 - Auto-populated from module registry
 
 **Navigation**:
+
 - Button: "Save Configuration" → `/onboarding/modules`
 - Button: "Skip Configuration" → `/onboarding/modules`
 
 ---
 
 ### 14. Setup Complete (`/onboarding/complete`)
+
 **Purpose**: Close the wizard and hand off to the department setup checklist
 
 Reached after `POST /api/v1/onboarding/complete` succeeds. The wizard used to
@@ -648,18 +719,21 @@ page — no members, no stations, no events — with nothing explaining what to 
 next.
 
 **Shows**:
+
 - What was configured: modules enabled, positions defined, sign-in method,
   email platform, file storage, IT contacts
 - What is left: roster and member sign-ins, stations and apparatus, SOPs and
   policies, first event
 
 **Navigation**:
+
 - Primary: "Go to Department Setup" → `/setup`
 - Secondary: "Skip to Dashboard" → `/dashboard`
 
 ---
 
 ### Department Setup (`/setup`)
+
 **Purpose**: Track the remaining setup work after the wizard
 
 Backed by `GET /api/v1/organization/setup-checklist`, which derives completion
@@ -690,36 +764,47 @@ the main application layout via sessionStorage keys `departmentName` and
 ## Backend API Endpoints
 
 ### Onboarding Status
+
 ```
 GET /api/v1/onboarding/status
 ```
+
 Returns current onboarding status and progress.
 
 ### Start Onboarding
+
 ```
 POST /api/v1/onboarding/start
 ```
+
 Initializes onboarding tracking.
 
 ### System Information
+
 ```
 GET /api/v1/onboarding/system-info
 ```
+
 Returns app version, security features, configuration.
 
 ### Security Check
+
 ```
 GET /api/v1/onboarding/security-check
 ```
+
 Verifies security configuration (SECRET_KEY, ENCRYPTION_KEY, etc.).
 
 ### Database Check
+
 ```
 GET /api/v1/onboarding/database-check
 ```
+
 Tests database connectivity.
 
 ### Create Organization (Legacy)
+
 ```
 POST /api/v1/onboarding/organization
 Body: {
@@ -730,9 +815,11 @@ Body: {
   description?: string
 }
 ```
+
 Creates the first organization with default roles (simple version).
 
 ### Create Organization (Comprehensive - Step 1)
+
 ```
 POST /api/v1/onboarding/session/organization
 Body: {
@@ -758,9 +845,11 @@ Body: {
   logo?: string
 }
 ```
+
 Creates organization with comprehensive details and commits to database immediately.
 
 ### Create Admin User
+
 ```
 POST /api/v1/onboarding/system-owner
 Body: {
@@ -773,18 +862,22 @@ Body: {
   membership_number?: string
 }
 ```
+
 Creates administrator user with Super Admin role.
 
 ### Configure Modules
+
 ```
 POST /api/v1/onboarding/session/modules
 Body: {
   modules: string[]
 }
 ```
+
 Saves enabled module configuration.
 
 ### Configure Roles
+
 ```
 POST /api/v1/onboarding/session/roles
 Body: {
@@ -798,9 +891,11 @@ Body: {
   }]
 }
 ```
+
 Configures roles with two-tier permissions during onboarding.
 
 ### Configure Notifications
+
 ```
 POST /api/v1/onboarding/notifications
 Body: {
@@ -814,18 +909,22 @@ Body: {
   twilio_phone_number?: string
 }
 ```
+
 Configures email and SMS settings.
 
 ### Complete Onboarding
+
 ```
 POST /api/v1/onboarding/complete
 Body: {
   notes?: string
 }
 ```
+
 Marks onboarding as finished.
 
 ### Configure Stations
+
 ```
 POST /api/v1/onboarding/session/stations
 Body: {
@@ -841,10 +940,12 @@ Body: {
   }]
 }
 ```
+
 Creates Facility + Location records for stations beyond headquarters.
 Re-submitting replaces the rows this step created rather than appending.
 
 ### Configure Apparatus
+
 ```
 POST /api/v1/onboarding/session/apparatus
 Body: {
@@ -857,14 +958,17 @@ Body: {
   }]
 }
 ```
+
 Creates BasicApparatus records for shift staffing. Same replace-my-own-rows
 behavior as stations.
 
 ### Department Setup Checklist (post-onboarding)
+
 ```
 GET  /api/v1/organization/setup-checklist
 POST /api/v1/organization/setup-checklist/{item_key}/acknowledge?acknowledged=true
 ```
+
 Lives in the organization API, not onboarding. Completion is derived from live
 entity counts; the `acknowledge` endpoint only accepts `kind: "review"` items
 (`org_settings`, `modules`), which have no measurable signal.
@@ -876,6 +980,7 @@ entity counts; the `acknowledge` endpoint only accepts `kind: "review"` items
 The onboarding flow uses a **Zustand store** persisted to `localStorage` (key: `onboarding-storage`). This replaced the earlier `sessionStorage` approach to support persistence across tabs and page refreshes.
 
 **Persisted state** (in localStorage under `onboarding-storage`):
+
 ```javascript
 {
   "state": {
@@ -952,8 +1057,11 @@ The `modulePermissionConfigs` field stores which roles can manage each module. W
 4. **Orphaned role filtering**: When restoring, role IDs are validated against current `availableRoles` — if a role was removed in the Role Setup step, its ID is filtered out to prevent "undefined" display
 
 **Not persisted** (excluded from localStorage for security):
-- `sessionId` — stored separately in localStorage as `onboarding_session_id`
-- `csrfToken` — stored separately in localStorage as `csrf_token`
+
+- `sessionId` — stored in `sessionStorage` as `onboarding_session_id`, limiting the
+  short-lived bearer identifier to the current tab and browser session
+- `csrfToken` — stored in a `SameSite=Strict` cookie as
+  `onboarding_csrf_token` for the double-submit check
 - `errors` — only kept in memory
 
 **Legacy compatibility**: The `syncWithSessionStorage()` function in the store reads from `sessionStorage` on first load if the Zustand store is empty, migrating any data from the older approach.
@@ -963,13 +1071,16 @@ The `modulePermissionConfigs` field stores which roles can manage each module. W
 ## Error Handling
 
 All onboarding pages include:
+
 - Form validation with clear error messages
 - API error handling with toast notifications
 - Redirect to `/onboarding/start` if department info is missing
 - Graceful fallbacks for API failures
 
 ### API Error Messages
+
 The API client maps HTTP status codes to user-friendly messages:
+
 - **429**: "Too many requests. Please wait a moment before trying again."
 - **403**: "Security validation failed. Please refresh the page and try again."
 - **422**: Shows the server's validation detail, or "Invalid data submitted. Please check your input and try again."
@@ -984,22 +1095,26 @@ The API client maps HTTP status codes to user-friendly messages:
 The following middleware and security features affect onboarding:
 
 **Access & Network:**
+
 - **GeoIP Blocking**: The `IPBlockingMiddleware` blocks requests from countries in the `BLOCKED_COUNTRIES` configuration. Onboarding endpoints (`/api/v1/onboarding/*`) are **exempt** from geo-blocking since first-time setup must be accessible before any configuration exists. Other API endpoints remain subject to geo-blocking.
 - **CSRF Protection**: Session endpoints require a valid `X-CSRF-Token` header that matches the token stored in the server-side session. The token is generated during `POST /start` and returned in the response header.
 - **Reset Protection**: The `POST /reset` endpoint is blocked after onboarding completes. It only works while onboarding is still in progress (`needs_onboarding` returns `True`).
 - **Email Test Timeout**: SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable or firewalled.
 
 **Data Protection:**
+
 - **Sensitive Data Encryption**: Email passwords, API keys, and file storage credentials submitted during onboarding are encrypted with **AES-256-GCM** authenticated encryption before being stored in the session database (values written under the legacy Fernet scheme remain readable). Only the platform type is stored in plain text.
 - **No Passwords in Logs**: Temporary passwords are never written to application logs. The `users.py` endpoint only logs that a welcome email was requested.
 - **Sanitized Error Responses**: API 500 errors return generic messages (`"Please check the server logs"`) instead of raw exception strings. This prevents leaking database schema, SQL queries, or internal paths to clients.
 - **Health Endpoint Sanitized**: The `/health` endpoint reports service status (`"connected"`, `"disconnected"`, `"error"`) without exposing raw error messages or infrastructure details.
 
 **Authentication Hardening:**
+
 - **Uniform Auth Failure Messages**: Authentication failure logs do not reveal whether the failure was due to "user not found", "invalid password", or "no password set". All pre-verification failures log `"Authentication failed for login attempt"` and post-verification failures log `"Authentication failed: invalid credentials"`. This prevents username enumeration via log analysis.
 - **Account lockout events** still log the username (needed for security incident response).
 
 **Frontend Security:**
+
 - **Production Console Logging**: The onboarding store's error logging is restricted in production — only the step name and error message are logged. Full details (error context, user information) are only visible in development mode (`import.meta.env.DEV`).
 - **Per-Session Obfuscation Key**: The frontend obfuscation utility generates a random per-session key via `crypto.getRandomValues()` instead of using a hardcoded default. This ensures each browser session has a unique key.
 - **Environment File Protection**: `.env` files are excluded from version control via `.gitignore`.
@@ -1009,16 +1124,19 @@ The following middleware and security features affect onboarding:
 ## Navigation Consistency
 
 ✅ **All "Next" buttons verified**:
+
 - Each page properly navigates to the next step
 - No broken links or undefined routes
 - Proper state validation before proceeding
 
 ✅ **All API endpoints verified**:
+
 - Backend has comprehensive onboarding API
 - Pydantic validation for all request bodies
 - Proper error responses with detailed messages
 
 ✅ **All data persistence verified**:
+
 - Zustand store (localStorage) for frontend state
 - Database for backend data (organization committed at Step 1)
 - Proper cleanup after onboarding complete
@@ -1030,11 +1148,12 @@ The following middleware and security features affect onboarding:
 To test the complete onboarding flow:
 
 1. **Start fresh**:
+
    ```bash
    # Clear onboarding data in browser console
    localStorage.removeItem('onboarding-storage')
-   localStorage.removeItem('onboarding_session_id')
-   localStorage.removeItem('csrf_token')
+   sessionStorage.removeItem('onboarding_session_id')
+   document.cookie = 'onboarding_csrf_token=; path=/; max-age=0'
 
    # Reset database (if testing backend)
    alembic downgrade base
@@ -1078,12 +1197,14 @@ Before deploying to production:
 ## Recent UX Improvements (February 8, 2026)
 
 ### Data Loss Prevention
+
 - **Unsaved Changes Warning**: Users are now warned before navigating away from forms with unsaved data
   - Browser refresh/close triggers confirmation dialog
   - In-app navigation blocked with user confirmation
   - Implemented via `useUnsavedChanges` hook
 
 ### Enhanced Form Experience
+
 - **Password Requirements Always Visible**: Requirements shown before user starts typing (AdminUserCreation page)
   - Eliminates confusion about password criteria
   - Real-time validation feedback with checkmarks
@@ -1097,11 +1218,13 @@ Before deploying to production:
   - Reduces user frustration by pinpointing exact issues
 
 ### Mobile Optimizations
+
 - **Sticky Continue Button**: Primary action button stays visible at bottom on mobile devices
   - Applied to NavigationChoice and OrganizationSetup pages
   - Improves mobile usability on long forms
 
 ### Input Enhancements
+
 - **URL Auto-HTTPS**: Website URLs automatically prepended with `https://` if protocol omitted
   - Prevents common user error
   - Triggers on field blur
@@ -1109,11 +1232,13 @@ Before deploying to production:
 - **Improved ZIP Code Errors**: Now shows expected format ("12345 or 12345-6789")
 
 ### Progress Standardization
+
 - **Consistent Step Indicators**: All pages now show "Step X of 10" format
   - Sets clear expectations about onboarding length
   - Previously had inconsistent numbering
 
 ### Startup Experience
+
 - **Enhanced Initialization Messaging**: OnboardingCheck page now explains 25-30 minute first-time startup (10-30 seconds on subsequent restarts)
   - Shows database connection retry attempts (up to 20 attempts)
   - Displays migration progress with detailed count (38 migrations)
@@ -1124,6 +1249,7 @@ Before deploying to production:
   - **Migration timeout protection**: 30-minute timeout prevents infinite hangs
 
 ### State Management Cleanup
+
 - **Removed Misleading Auto-save Indicators**: OrganizationSetup no longer shows "Last saved" timestamps
   - Zustand state changes aren't true backend saves
   - Prevents confusion about when data is actually persisted
@@ -1135,25 +1261,31 @@ Before deploying to production:
 ## Recent Fixes (February 9-12, 2026)
 
 ### Onboarding State Persistence
+
 - **Role Permissions Persistence**: `rolesConfig` added to Zustand store with localStorage persistence; icon serialization via `ICON_MAP` enables storing React components
 - **Module Permission Config Persistence**: `modulePermissionConfigs` replaces hardcoded role lists and fake save handlers with real store persistence
 - **Orphaned Role ID Filtering**: Role IDs validated against `availableRoles` on restore to prevent undefined entries when roles are removed
 - **Unified Role Initialization**: `DEFAULT_ROLES` in `permissions.py` is the single source of truth for all 16 system roles
 
 ### Authentication & Navigation Fixes
+
 - **Auth Token Key Fix**: AppLayout now checks `access_token` (not `auth_token`) in localStorage, fixing a critical redirect loop that caused hundreds of API requests per second
 - **Branding Transfer**: Organization name and logo transfer from onboarding to main app via sessionStorage, with API fallback
 - **Persistent Navigation**: Side and top navigation components added to all protected pages with submenu support
 
 ### Infrastructure
+
 - **Docker Graceful Shutdown**: Exec form CMD, `stop_grace_period: 15s`, and `init: true` across all Docker Compose configurations
 - **Apparatus Module Fix**: Fixed module slug mismatch for apparatus/public outreach in configuration whitelist
 
 ### New System Roles
+
 Eight new roles added to the default role set (total: 16 system roles):
+
 - Officers, Quartermaster, Training Officer, Public Outreach Coordinator, Meeting Hall Coordinator, Membership Coordinator, Communications Officer, Apparatus Manager
 
 ### Module UIs
+
 Fully built frontend pages for: Events, Inventory, Training, Documents, Scheduling, Reports, Minutes, Elections, with dashboard stats endpoint
 
 ---
@@ -1161,25 +1293,30 @@ Fully built frontend pages for: Events, Inventory, Training, Documents, Scheduli
 ## UX Improvements (February 10, 2026)
 
 ### Week 1: Core Usability
+
 - **Password Reset Flow**: New Forgot Password and Reset Password pages
 - **Live Dashboard Stats**: Dashboard values from API with skeleton loaders
 - **User Settings Page**: Account, password, and notification tabs
 - **Dead Navigation Links Fixed**: Reports and Settings links now route correctly
 
 ### Week 2: Safety
+
 - **Logout Confirmation Modal**: ARIA-compliant modal with Escape key, scroll lock, and unsaved changes warning
 
 ### Week 3: Onboarding Polish
+
 - **Module Features Visible**: First 3 features shown upfront on module cards with "+ X more" hint
 - **Breadcrumb Progress**: Step names with green checkmarks replace simple step counter
 - **Simplified Organization Setup**: Relaxed ZIP validation, sections expanded by default
 - **Focus Trap Hook**: Reusable `useFocusTrap` for WCAG-compliant mobile menus
 
 ### Week 4: Contextual Help
+
 - **Help Link Component**: 3 variants (icon/button/inline) with tooltip support
 - **Integrated Help Tooltips**: Dashboard, Organization Setup, and Reports pages
 
 ### Additional
+
 - **Membership Type Field**: Dropdown in admin user creation (prospective/probationary/regular/life/administrative)
 - **Administrator Terminology**: Clarified IT Administrator vs Administrative Member
 - **Validation Toast Fix**: `validateForm()` returns errors directly instead of reading stale state
@@ -1189,6 +1326,7 @@ Fully built frontend pages for: Events, Inventory, Training, Documents, Scheduli
 ## Authentication & Login (February 10-11, 2026)
 
 ### Login Flow Fixes
+
 - **Token Type Mismatch**: `get_user_from_token()` compared UUID object against String(36) column — fixed to query by string
 - **Account Lockout Persistence**: Failed login counter now commits correctly (was being rolled back on HTTPException)
 - **Session Creation**: Onboarding endpoint now uses `create_user_tokens()` which creates a proper UserSession row
@@ -1196,11 +1334,13 @@ Fully built frontend pages for: Events, Inventory, Training, Documents, Scheduli
 - **ProtectedRoute Race Condition**: Checks localStorage first, shows spinner while validating
 
 ### Auth UX
+
 - **Concurrent Token Refresh**: Multiple 401 responses share a single refresh promise — prevents replay detection logout
 - **Welcome Page Detection**: Redirects when onboarding is already completed
 - **Organization Branding**: `GET /auth/branding` endpoint (unauthenticated) serves org name and logo to login page
 
 ### Login Page Enhancements
+
 - Organization logo display with "Sign in to [Org Name]"
 - Rounded square logo shape (was circular)
 - Footer matching onboarding style
