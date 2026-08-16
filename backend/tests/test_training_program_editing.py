@@ -4,10 +4,13 @@ update program / phase / milestone, reorder phases & requirements, and the
 auto-clean destructive ops (delete phase, remove requirement). DB mocked.
 """
 
+import ast
+import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+from app.api.v1.endpoints import training_programs as training_program_endpoints
 from app.models.training import RequirementProgressStatus, RequirementType
 from app.schemas.training_program import (
     ProgramMilestoneUpdate,
@@ -15,6 +18,35 @@ from app.schemas.training_program import (
     TrainingProgramUpdate,
 )
 from app.services.training_program_service import TrainingProgramService
+
+
+class TestPipelineEditingAuditCoverage:
+    """Keep every integrity-sensitive pipeline edit on the audit trail."""
+
+    AUDITED_ENDPOINTS = (
+        "update_training_program",
+        "reorder_program_phases",
+        "update_program_phase",
+        "delete_program_phase",
+        "update_program_requirement",
+        "reorder_program_requirements",
+        "remove_requirement_from_program",
+        "update_program_milestone",
+        "delete_program_milestone",
+    )
+
+    def test_pipeline_edit_endpoints_log_audit_events(self):
+        for endpoint_name in self.AUDITED_ENDPOINTS:
+            endpoint = getattr(training_program_endpoints, endpoint_name)
+            tree = ast.parse(inspect.getsource(endpoint))
+            audit_calls = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "log_audit_event"
+            ]
+            assert len(audit_calls) == 1, endpoint_name
 
 
 def _one(obj):

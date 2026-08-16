@@ -319,14 +319,18 @@ async def import_registry_requirements(
 
     service = TrainingProgramService(db)
 
-    imported_count, categories_created, errors, last_updated, source_url = (
-        await service.import_registry_requirements(
-            registry_file_path=registry_file,
-            organization_id=current_user.organization_id,
-            created_by=current_user.id,
-            skip_existing=effective_skip,
-            selected_codes=selected_codes,
-        )
+    (
+        imported_count,
+        categories_created,
+        errors,
+        last_updated,
+        source_url,
+    ) = await service.import_registry_requirements(
+        registry_file_path=registry_file,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        skip_existing=effective_skip,
+        selected_codes=selected_codes,
     )
 
     return RegistryImportResult(
@@ -718,6 +722,15 @@ async def update_training_program(
             else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=code, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={"program_id": str(program_id), "action": "program_updated"},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return program
 
 
@@ -831,6 +844,15 @@ async def reorder_program_phases(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={"program_id": str(program_id), "action": "phases_reordered"},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return phases
 
 
@@ -860,6 +882,19 @@ async def update_program_phase(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program_id),
+            "phase_id": str(phase_id),
+            "action": "phase_updated",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return phase
 
 
@@ -888,6 +923,19 @@ async def delete_program_phase(
     )
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "program_id": str(program_id),
+            "phase_id": str(phase_id),
+            "action": "phase_deleted",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ==================== Program Requirement Endpoints ====================
@@ -966,6 +1014,20 @@ async def update_program_requirement(
             detail="Requirement does not belong to this program",
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program_id),
+            "program_requirement_id": str(program_requirement_id),
+            "action": "program_requirement_updated",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return program_requirement
 
 
@@ -993,6 +1055,18 @@ async def reorder_program_requirements(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program_id),
+            "action": "requirements_reordered",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return links
 
 
@@ -1021,6 +1095,19 @@ async def remove_requirement_from_program(
     )
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "program_id": str(program_id),
+            "program_requirement_id": str(program_requirement_id),
+            "action": "program_requirement_removed",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 @router.get(
@@ -1118,6 +1205,19 @@ async def update_program_milestone(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program_id),
+            "milestone_id": str(milestone_id),
+            "action": "milestone_updated",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return milestone
 
 
@@ -1144,6 +1244,19 @@ async def delete_program_milestone(
     )
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "program_id": str(program_id),
+            "milestone_id": str(milestone_id),
+            "action": "milestone_deleted",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ==================== Program Enrollment Endpoints ====================
