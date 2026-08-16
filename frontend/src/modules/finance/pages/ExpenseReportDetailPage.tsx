@@ -40,7 +40,7 @@ const APPROVAL_STEP_LABELS: Record<string, string> = {
 const DetailSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading expense report" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <div className="mb-4 flex items-center gap-3">
         <Skeleton className="h-10 w-10" rounded="lg" />
         <div className="space-y-2">
@@ -140,7 +140,7 @@ const ExpenseReportDetailPage: React.FC = () => {
         </div>
       )}
 
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-3">
@@ -213,7 +213,7 @@ const ExpenseReportDetailPage: React.FC = () => {
 
       {/* Line Items */}
       {er.lineItems.length > 0 && (
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Line Items</h2>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -260,7 +260,7 @@ const ExpenseReportDetailPage: React.FC = () => {
 
       {/* Approval Timeline */}
       {er.approvalSteps.length > 0 && (
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
           <div className="space-y-0">
             {[...er.approvalSteps]

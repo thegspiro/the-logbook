@@ -31,13 +31,21 @@ import {
   SlidersHorizontal,
   Target,
   Store,
+  Sparkles,
+  ArrowRight,
   Building2,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
-import type { InventorySummary, LowStockAlert, ReturnRequestItem, EquipmentRequestItem } from '../types';
+import type {
+  InventorySummary,
+  InventorySetupStatus,
+  LowStockAlert,
+  ReturnRequestItem,
+  EquipmentRequestItem,
+} from '../types';
 interface NavCardProps {
   to: string;
   icon: React.ReactNode;
@@ -51,7 +59,7 @@ interface NavCardProps {
 const NavCard: React.FC<NavCardProps> = ({ to, icon, title, description, badge, badgeColor, iconBg }) => (
   <Link
     to={to}
-    className="card-secondary hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex items-center gap-3 p-3 transition-colors sm:items-start sm:gap-4 sm:p-4"
+    className="card-secondary hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex items-center gap-3 p-3 sm:items-start sm:gap-4 sm:p-4"
   >
     <div
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors sm:h-10 sm:w-10 ${iconBg ?? 'bg-theme-surface-secondary text-theme-text-muted group-hover:text-theme-text-primary'}`}
@@ -123,6 +131,7 @@ export const InventoryAdminHub: React.FC = () => {
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [pendingReturns, setPendingReturns] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [setupStatus, setSetupStatus] = useState<InventorySetupStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Quick-assign flow: pick a member, then assign items to them via the scan modal.
@@ -132,18 +141,20 @@ export const InventoryAdminHub: React.FC = () => {
   const loadSummary = useCallback(async () => {
     setLoading(true);
     try {
-      const [summaryData, lowStock, returns, requests] = await Promise.all([
+      const [summaryData, lowStock, returns, requests, setup] = await Promise.all([
         inventoryService.getSummary(),
         inventoryService.getLowStockItems().catch(() => [] as LowStockAlert[]),
         inventoryService.getReturnRequests({ status: 'pending' }).catch(() => [] as ReturnRequestItem[]),
         inventoryService
           .getEquipmentRequests({ status: 'pending' })
           .catch(() => ({ requests: [] as EquipmentRequestItem[], total: 0 })),
+        inventoryService.getSetupStatus().catch(() => null),
       ]);
       setSummary(summaryData);
       setLowStockAlerts(lowStock);
       setPendingReturns(Array.isArray(returns) ? returns.length : 0);
       setPendingRequests(requests.total);
+      setSetupStatus(setup);
     } catch {
       // Non-critical — page still navigable
     } finally {
@@ -217,6 +228,36 @@ export const InventoryAdminHub: React.FC = () => {
               </span>
             )}
           </div>
+        )}
+
+        {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
+            Without it a new quartermaster meets the item form first and fills in
+            three dropdowns that have nothing in them. */}
+        {setupStatus && !setupStatus.is_complete && (
+          <Link
+            to="/inventory/admin/setup"
+            className="mb-8 flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 transition-colors hover:bg-blue-500/15 sm:p-4"
+          >
+            <div className="shrink-0 rounded-lg bg-blue-600 p-2">
+              <Sparkles className="h-5 w-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">Finish inventory setup</h3>
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                Still to set up:{' '}
+                {[
+                  setupStatus.rooms === 0 ? 'rooms' : null,
+                  setupStatus.storage_areas === 0 ? 'storage areas' : null,
+                  setupStatus.categories === 0 ? 'categories' : null,
+                  setupStatus.items === 0 ? 'items' : null,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+                . The guide walks through them in order.
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          </Link>
         )}
 
         {/* Low stock alerts */}
@@ -444,6 +485,13 @@ export const InventoryAdminHub: React.FC = () => {
           {/* Tools */}
           <Section title="Tools">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <NavCard
+                to="/inventory/admin/setup"
+                icon={<Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
+                title="Setup Guide"
+                description="Rooms, storage, categories, and first items in order"
+                iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+              />
               <NavCard
                 to="/inventory/import"
                 icon={<Upload className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}

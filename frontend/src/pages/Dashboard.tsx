@@ -846,7 +846,7 @@ const Dashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void navigate(`/events/${evt.id}`)}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] shrink-0 items-center rounded-lg border px-4 text-sm font-semibold transition-colors"
+                className="btn-secondary inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold"
               >
                 {evt.requires_rsvp ? 'RSVP' : 'Open'}
               </button>
@@ -1001,7 +1001,7 @@ const Dashboard: React.FC = () => {
 
                 <button
                   onClick={() => void navigate('/scheduling')}
-                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left transition-colors hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
                 >
                   <span className="bg-theme-accent-green-muted text-theme-accent-green flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
                     <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
@@ -1019,7 +1019,7 @@ const Dashboard: React.FC = () => {
 
                 <button
                   onClick={() => void navigate('/admin-hours')}
-                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left transition-colors hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
                 >
                   <span className="bg-theme-accent-purple-muted text-theme-accent-purple flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
                     <ClipboardCheck className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />

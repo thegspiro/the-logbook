@@ -55,8 +55,7 @@ const URGENCY_OPTIONS = [
 ] as const;
 
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2';
-const selectClass =
-  'w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40';
+const selectClass = 'form-input px-3 text-sm focus:ring-blue-500/40';
 
 /** A scrollable list of checkboxes for an OR-within-field filter. */
 interface CheckGroupProps {
@@ -72,7 +71,7 @@ const CheckGroup: React.FC<CheckGroupProps> = ({ label, options, selected, onTog
     {options.length === 0 ? (
       <p className="text-theme-text-muted text-xs italic">None available</p>
     ) : (
-      <div className="border-theme-surface-border bg-theme-surface max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2 pr-1">
+      <div className="card max-h-40 space-y-1 overflow-y-auto p-2 pr-1">
         {options.map((opt) => (
           <label
             key={opt.value}
@@ -906,7 +905,7 @@ const ImpactPlannerPage: React.FC = () => {
                           value={memberSearch}
                           onChange={(e) => setMemberSearch(e.target.value)}
                           placeholder="Filter list…"
-                          className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border py-1.5 pr-3 pl-8 text-sm focus:ring-2 focus:ring-blue-500/40 focus:outline-none"
+                          className="form-input py-1.5 pr-3 pl-8 text-sm focus:ring-blue-500/40"
                         />
                       </div>
                       <button onClick={exportCsv} className="btn-secondary btn-sm" title="Export to CSV">

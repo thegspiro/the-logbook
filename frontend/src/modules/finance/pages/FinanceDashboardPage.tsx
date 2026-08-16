@@ -40,7 +40,7 @@ interface KpiCardProps {
 
 const KpiCard: React.FC<KpiCardProps> = ({ label, value, icon, iconBgClass, linkTo }) => {
   const content = (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 transition-shadow hover:shadow-md">
+    <div className="card p-4 transition-shadow hover:shadow-md">
       <div className="flex items-center gap-3">
         <div className={`rounded-lg p-2 ${iconBgClass}`}>{icon}</div>
         <div className="min-w-0 flex-1">
@@ -100,10 +100,7 @@ interface QuickLinkProps {
 }
 
 const QuickLinkCard: React.FC<QuickLinkProps> = ({ to, icon, title, description }) => (
-  <Link
-    to={to}
-    className="group border-theme-surface-border bg-theme-surface flex items-center gap-3 rounded-lg border p-4 transition-all hover:border-red-200 hover:shadow-md"
-  >
+  <Link to={to} className="card group flex items-center gap-3 p-4 transition-all hover:border-red-200 hover:shadow-md">
     <div className="rounded-lg bg-red-50 p-2 text-red-600 group-hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:group-hover:bg-red-500/20">
       {icon}
     </div>
@@ -124,7 +121,7 @@ const DashboardSkeleton: React.FC = () => (
     <span className="sr-only">Loading...</span>
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={`kpi-${String(i)}`} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+        <div key={`kpi-${String(i)}`} className="card p-4">
           <div className="flex items-center gap-3">
             <Skeleton className="h-10 w-10" rounded="lg" />
             <div className="flex-1 space-y-2">
@@ -135,7 +132,7 @@ const DashboardSkeleton: React.FC = () => (
         </div>
       ))}
     </div>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <Skeleton className="mb-4 h-5 w-32" />
       <div className="space-y-4">
         <Skeleton className="h-8 w-full" />
@@ -145,7 +142,7 @@ const DashboardSkeleton: React.FC = () => (
     </div>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={`ql-${String(i)}`} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+        <div key={`ql-${String(i)}`} className="card p-4">
           <div className="flex items-center gap-3">
             <Skeleton className="h-10 w-10" rounded="lg" />
             <div className="flex-1 space-y-2">
@@ -236,7 +233,7 @@ const FinanceDashboardPage: React.FC = () => {
       </div>
 
       {/* Budget Health Gauges */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <h2 className="text-theme-text-primary mb-4 text-sm font-semibold">Budget Health</h2>
         <div className="space-y-4">
           <BudgetGauge label="Spent" amount={totalSpent} total={totalBudgeted} colorClass="bg-blue-500" />
@@ -249,7 +246,7 @@ const FinanceDashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Link
           to="/finance/purchase-requests"
-          className="border-theme-surface-border bg-theme-surface flex items-center justify-between rounded-lg border p-4 transition-shadow hover:shadow-md"
+          className="card flex items-center justify-between p-4 transition-shadow hover:shadow-md"
         >
           <div className="flex items-center gap-3">
             <FileText className="h-5 w-5 text-indigo-500" />
@@ -259,7 +256,7 @@ const FinanceDashboardPage: React.FC = () => {
         </Link>
         <Link
           to="/finance/expenses"
-          className="border-theme-surface-border bg-theme-surface flex items-center justify-between rounded-lg border p-4 transition-shadow hover:shadow-md"
+          className="card flex items-center justify-between p-4 transition-shadow hover:shadow-md"
         >
           <div className="flex items-center gap-3">
             <Receipt className="h-5 w-5 text-orange-500" />
@@ -269,7 +266,7 @@ const FinanceDashboardPage: React.FC = () => {
         </Link>
         <Link
           to="/finance/check-requests"
-          className="border-theme-surface-border bg-theme-surface flex items-center justify-between rounded-lg border p-4 transition-shadow hover:shadow-md"
+          className="card flex items-center justify-between p-4 transition-shadow hover:shadow-md"
         >
           <div className="flex items-center gap-3">
             <CreditCard className="h-5 w-5 text-teal-500" />

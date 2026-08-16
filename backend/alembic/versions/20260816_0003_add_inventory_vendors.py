@@ -12,6 +12,11 @@ reviewed, and CSV imports still write them.
 
 Revision ID: 20260816_0003
 Revises: 20260816_0002
+
+(Renumbered from 20260816_0002: the storage-area barcode backfill on main
+already held that id — two branches numbered from 20260816_0001 the same day,
+the recurring collision ALEMBIC_MIGRATIONS.md warns about. Chained after the
+barcode backfill to keep the graph linear.)
 Create Date: 2026-08-16 00:00:00.000000
 """
 

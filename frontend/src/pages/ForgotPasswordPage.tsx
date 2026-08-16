@@ -140,7 +140,7 @@ export const ForgotPasswordPage: React.FC = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring block w-full rounded-md border py-2 pr-3 pl-10 focus:border-transparent focus:ring-2 focus:outline-hidden sm:text-sm"
+                  className="form-input bg-theme-surface-secondary placeholder-theme-text-muted block pr-3 pl-10 focus:border-transparent sm:text-sm"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

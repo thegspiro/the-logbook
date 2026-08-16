@@ -772,7 +772,7 @@ export const ShiftReportsTab: React.FC = () => {
     if (!traineeStats || traineeStats.total_reports === 0) return null;
     const maxHours = Math.max(...traineeStats.monthly.map((m) => m.hours), 1);
     return (
-      <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-xl border p-4 sm:p-5">
+      <div className="card space-y-4 p-4 sm:p-5">
         <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
           <TrendingUp className="h-4 w-4 text-violet-500" /> My Shift Progress
         </h3>
@@ -832,7 +832,7 @@ export const ShiftReportsTab: React.FC = () => {
     const draftCount = officerAnalytics?.status_counts?.['draft'] ?? 0;
     const pendingCount = officerAnalytics?.status_counts?.['pending_review'] ?? 0;
     return (
-      <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-xl border p-4 sm:p-5">
+      <div className="card space-y-4 p-4 sm:p-5">
         <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
           <BarChart3 className="h-4 w-4 text-violet-500" /> Shift Report Analytics
         </h3>
@@ -963,7 +963,7 @@ export const ShiftReportsTab: React.FC = () => {
     };
 
     return (
-      <div key={report.id} className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
+      <div key={report.id} className="card overflow-hidden">
         <button
           onClick={() => setExpandedId(isExpanded ? null : report.id)}
           className="hover:bg-theme-surface-hover flex w-full items-center justify-between p-4 text-left transition-colors sm:p-5"
@@ -1390,7 +1390,7 @@ export const ShiftReportsTab: React.FC = () => {
     <div className="space-y-6">
       {/* View Toggle */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="bg-theme-surface border-theme-surface-border hscroll flex flex-1 items-center gap-1 rounded-lg border p-1 sm:flex-none">
+        <div className="card hscroll flex flex-1 items-center gap-1 p-1 sm:flex-none">
           <button
             onClick={() => setViewMode('my-reports')}
             className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
@@ -1503,7 +1503,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Create Form — Shift-first batch workflow */}
       {viewMode === 'create' && (
-        <div className="bg-theme-surface border-theme-surface-border space-y-5 rounded-xl border p-4 sm:p-6">
+        <div className="card space-y-5 p-4 sm:p-6">
           <h3 className="text-theme-text-primary text-lg font-semibold">New Shift Completion Report</h3>
 
           {/* Step 1: Shift Selection */}
@@ -2154,7 +2154,7 @@ export const ShiftReportsTab: React.FC = () => {
                     if (age > oldestDays) oldestDays = age;
                   }
                   return (
-                    <div className="bg-theme-surface border-theme-surface-border mb-3 space-y-2 rounded-lg border p-3">
+                    <div className="card mb-3 space-y-2 p-3">
                       <div className="flex items-center justify-between">
                         <h4 className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
                           <BarChart3 className="h-4 w-4 text-violet-500" />
@@ -2191,7 +2191,7 @@ export const ShiftReportsTab: React.FC = () => {
 
               {/* Batch review toolbar */}
               {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
-                <div className="bg-theme-surface border-theme-surface-border mb-3 space-y-2 rounded-lg border p-3">
+                <div className="card mb-3 space-y-2 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
                       <input
@@ -2281,12 +2281,12 @@ export const ShiftReportsTab: React.FC = () => {
       {/* Acknowledge Modal */}
       {ackReportId && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Acknowledge Report"
         >
-          <div className="bg-theme-surface border-theme-surface-border w-full max-w-md space-y-4 rounded-xl border p-5 sm:p-6">
+          <div className="card w-full max-w-md space-y-4 p-5 sm:p-6">
             <h3 className="text-theme-text-primary text-lg font-semibold">Acknowledge Report</h3>
             <p className="text-theme-text-secondary text-sm">
               Acknowledging confirms you have reviewed this shift completion report.
@@ -2332,12 +2332,12 @@ export const ShiftReportsTab: React.FC = () => {
           const reviewReport = reports.find((r) => r.id === reviewReportId);
           return (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+              className="modal-overlay flex items-center justify-center p-4"
               role="dialog"
               aria-modal="true"
               aria-label="Review Report"
             >
-              <div className="bg-theme-surface border-theme-surface-border max-h-[90dvh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-xl border p-5 sm:p-6">
+              <div className="card max-h-[90dvh] w-full max-w-2xl space-y-4 overflow-y-auto p-5 sm:p-6">
                 <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
                   <ClipboardCheck className="h-5 w-5 text-violet-500" /> Review Report
                 </h3>

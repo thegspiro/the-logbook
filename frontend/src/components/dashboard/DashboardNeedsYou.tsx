@@ -43,7 +43,7 @@ const DashboardNeedsYou: React.FC<DashboardNeedsYouProps> = ({ items }) => {
   return (
     <section
       aria-labelledby="needs-you-heading"
-      className="border-theme-alert-danger-border border-l-theme-alert-danger-icon bg-theme-surface overflow-hidden rounded-lg border border-l-4 shadow-sm"
+      className="card border-theme-alert-danger-border border-l-theme-alert-danger-icon overflow-hidden border-l-4"
     >
       <div className="bg-theme-alert-danger-bg border-theme-alert-danger-border flex items-center gap-2.5 border-b px-4 py-3 sm:px-5">
         <ShieldAlert className="text-theme-alert-danger-icon h-4.5 w-4.5 shrink-0" aria-hidden="true" />

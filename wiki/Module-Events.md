@@ -34,7 +34,7 @@ The Events module manages department events with QR code check-in, recurring eve
 | `/events/:id/edit` | Edit Event | `events.manage` |
 | `/events/:id/monitoring` | Check-In Monitoring | `events.manage` |
 | `/events/:id/analytics` | Event Analytics | `analytics.view` |
-| `/events/admin` | Events Admin Hub | `events.manage` |
+| `/events/admin` | Events Admin Hub — the sidebar entry is labeled **Manage Events** and points at `/events` since 2026-08-13; Create/Settings deep-link here via `?tab=create` / `?tab=settings` | `events.manage` |
 
 ---
 

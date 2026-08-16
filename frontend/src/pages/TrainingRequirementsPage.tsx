@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import {
   FileText,
   Plus,
@@ -935,9 +936,11 @@ const TemplateModal: React.FC<{
     },
   ];
 
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="template-modal-title"
@@ -945,7 +948,7 @@ const TemplateModal: React.FC<{
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal max-h-[80dvh] w-full max-w-4xl overflow-y-auto rounded-lg p-6">
+      <div ref={dialogRef} className="modal-panel max-h-[80dvh] w-full max-w-4xl overflow-y-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">
@@ -969,7 +972,7 @@ const TemplateModal: React.FC<{
             <button
               key={idx}
               onClick={() => onSelect(template)}
-              className="card hover:bg-theme-surface-hover p-4 text-left transition-colors"
+              className="card hover:bg-theme-surface-hover p-4 text-left"
             >
               <h4 className="text-theme-text-primary mb-2 font-semibold">{template.name}</h4>
               <p className="text-theme-text-muted mb-3 text-sm">{template.description}</p>

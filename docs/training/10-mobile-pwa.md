@@ -230,16 +230,27 @@ The app uses an **autoUpdate** service worker strategy:
 3. The update is applied the next time you close and reopen the app
 4. You do not need to take any action — updates happen automatically
 
-In addition, the app includes a **proactive version detection** system:
+In addition, the app includes a **proactive version detection** system
+_(reworked 2026-08-12 so updates land on installed PWAs in one reload)_:
 
 1. A build timestamp is embedded in the app at build time
-2. The `useAppUpdate` hook periodically checks if a newer version has been deployed
+2. The `useAppUpdate` hook periodically checks if a newer version has been
+   deployed; the service worker is also re-checked when you return to the app
+   (and on a 30-minute fallback interval), not just on rare full navigations
 3. If a new version is detected, an **Update Available** notification bar appears
    — at the **top** of the screen on desktop and tablet, and at the **bottom** on
-   phones _(2026-08-07)_
-4. Click the notification to refresh and load the new version
+   phones _(2026-08-07)_ — and the new service worker is fetched in the
+   background so it is usually ready before you tap
+4. Tap **Reload now**: the app waits for the fresh worker to take control and
+   then reloads **once** with the new version. Previously the reload was often
+   served by the old worker's cached shell, so the update appeared to do
+   nothing until a second reload
 
-> **Hint:** If you don't see the update notification and suspect you're on an old version, you can always force a refresh with `Ctrl+Shift+R` (desktop) or by closing and reopening the app (mobile).
+> **Hint:** If you don't see the update notification and suspect you're on an
+> old version, you can always force a refresh with `Ctrl+Shift+R` (desktop) or
+> by closing and reopening the app (mobile). Since 2026-08-12 a stale-chunk
+> load after a deployment also self-heals through the same one-reload path
+> instead of landing on the error page.
 
 > **Fixed 2026-08-07:** on a phone the update banner was rendered _behind_ the
 > fixed mobile header and was therefore invisible. For an installed app that
@@ -296,8 +307,11 @@ This is a deliberate design decision for data integrity and HIPAA compliance —
 Station computers are shared: whoever is on duty signs in on the same browser.
 Anything left on the device is readable by the next person to sit down, so
 **signing out erases everything held locally** — queued equipment checks and
-their photos, queued shift reports, queued training submissions and RSVPs, and
-saved shift-report drafts.
+their photos, queued shift reports, queued training submissions and RSVPs,
+saved shift-report drafts, and **in-progress equipment-check drafts**
+_(added 2026-08-16; previously these drafts survived logout, so the next
+person at the terminal could read apparatus results and notes — flagged and
+fixed as red-team finding RT-08)_.
 
 **If you have queued work, get back online and let it sync before you sign
 out.** Anything still waiting is discarded. The app is not silent about it: if

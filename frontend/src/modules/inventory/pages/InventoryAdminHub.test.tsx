@@ -8,6 +8,7 @@ const mockGetLowStockItems = vi.fn();
 const mockGetReturnRequests = vi.fn();
 const mockGetEquipmentRequests = vi.fn();
 const mockGetMembersSummary = vi.fn();
+const mockGetSetupStatus = vi.fn();
 const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/api', () => ({
@@ -17,6 +18,7 @@ vi.mock('../../../services/api', () => ({
     getReturnRequests: (...args: unknown[]) => mockGetReturnRequests(...args) as unknown,
     getEquipmentRequests: (...args: unknown[]) => mockGetEquipmentRequests(...args) as unknown,
     getMembersSummary: (...args: unknown[]) => mockGetMembersSummary(...args) as unknown,
+    getSetupStatus: (...args: unknown[]) => mockGetSetupStatus(...args) as unknown,
   },
 }));
 
@@ -48,6 +50,13 @@ describe('InventoryAdminHub', () => {
     mockGetReturnRequests.mockResolvedValue([]);
     mockGetEquipmentRequests.mockResolvedValue({ requests: [], total: 0 });
     mockGetMembersSummary.mockResolvedValue({ members: [], total: 0 });
+    mockGetSetupStatus.mockResolvedValue({
+      rooms: 3,
+      storage_areas: 8,
+      categories: 6,
+      items: 150,
+      is_complete: true,
+    });
     mockCheckPermission.mockReturnValue(true);
   });
 
@@ -192,5 +201,39 @@ describe('InventoryAdminHub', () => {
       expect(screen.getByText('Items')).toBeInTheDocument();
     });
     expect(screen.getAllByText('7').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('prompts to finish setup and names what is still missing', async () => {
+    mockGetSetupStatus.mockResolvedValue({
+      rooms: 2,
+      storage_areas: 0,
+      categories: 0,
+      items: 0,
+      is_complete: false,
+    });
+    renderWithRouter(<InventoryAdminHub />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Finish inventory setup')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Still to set up: storage areas, categories, items/)).toBeInTheDocument();
+  });
+
+  it('hides the setup prompt once every step has records', async () => {
+    renderWithRouter(<InventoryAdminHub />);
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Finish inventory setup')).not.toBeInTheDocument();
+  });
+
+  it('still renders when the setup status call fails', async () => {
+    mockGetSetupStatus.mockRejectedValue(new Error('boom'));
+    renderWithRouter(<InventoryAdminHub />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Finish inventory setup')).not.toBeInTheDocument();
   });
 });

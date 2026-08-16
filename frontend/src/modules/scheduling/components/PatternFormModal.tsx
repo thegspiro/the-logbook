@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatTimeOfDay } from '../../../utils/dateFormatting';
@@ -23,6 +24,8 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
   title,
   templates,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
+
   const [formData, setFormData] = useState<PatternFormData>(initialData || emptyPatternForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -58,7 +61,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pattern-modal-title"
@@ -66,7 +69,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg">
+      <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="pattern-modal-title" className="text-theme-text-primary text-xl font-bold">
             {title}

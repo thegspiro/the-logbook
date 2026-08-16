@@ -410,6 +410,52 @@ class InventoryCategoryResponse(InventoryCategoryBase):
 
 
 # ============================================
+# Guided Setup Schemas
+# ============================================
+
+
+class InventorySetupStatus(BaseModel):
+    """Record counts backing the guided inventory setup workflow"""
+
+    rooms: int
+    storage_areas: int
+    categories: int
+    items: int
+    is_complete: bool
+
+
+class CategoryPresetResponse(BaseModel):
+    """A starter category the setup workflow can create in one step"""
+
+    key: str
+    name: str
+    description: str
+    item_type: ItemTypeLiteral
+    requires_assignment: bool
+    requires_serial_number: bool
+    requires_maintenance: bool
+    nfpa_tracking_enabled: bool
+    low_stock_threshold: Optional[int] = None
+    # True when the organization already has a category by this name, so the
+    # workflow can show it as done rather than offering a duplicate.
+    exists: bool = False
+
+
+class CategoryPresetApplyRequest(BaseModel):
+    """Schema for creating a batch of starter categories"""
+
+    keys: List[str] = Field(..., min_length=1, max_length=50)
+
+
+class CategoryPresetApplyResponse(BaseModel):
+    """Result of applying starter categories"""
+
+    created: List[InventoryCategoryResponse]
+    # Names that already existed and were left untouched.
+    skipped: List[str] = []
+
+
+# ============================================
 # Item Schemas
 # ============================================
 
