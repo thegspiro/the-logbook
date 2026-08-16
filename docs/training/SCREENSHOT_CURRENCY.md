@@ -2,33 +2,39 @@
 
 ## Flagged by the 2026-08-15 → 08-16 changes
 
-### REPLACE — three images, measured (not a set-wide triage)
+### REPLACE — one image now; 38 more only when they are next re-shot
 
 The themed background gradient moved from `body` to `html` so that it also
 covers the browser's stable scrollbar gutter. Before that, the gutter showed the
 browser's default canvas — against dark content, **a 15px white strip down the
 right edge**.
 
-**All 429 images in this directory were checked programmatically on 2026-08-16**
-(mean luminance to find dark captures, then right-edge luminance and strip width).
-Exactly three carry the strip, and all three measure 15px — the gutter width:
+All 429 images were checked with
+[`scripts/screenshots/audit_images.py`](../../scripts/screenshots/audit_images.py)
+(`--check edges`). **39 carry the strip**, and they split cleanly by how much it
+matters:
 
-| Image                        | Why it caught the strip            |
-| ---------------------------- | ---------------------------------- |
-| `10-11-public-form-dark.png` | a genuine dark-mode capture        |
-| `00-18-rsvp-modal.png`       | light page, **dark modal overlay** |
-| `04-09-rsvp-modal.png`       | light page, **dark modal overlay** |
+| Tier                                     | Count | What changed                                                                     | Action                                                            |
+| ---------------------------------------- | ----- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Stark** — `10-11-public-form-dark.png` | 1     | Dark page: the white strip becomes a **dark** gradient. Plainly visible          | **Re-shoot.** It is the only `theme: "dark"` shot in the manifest |
+| **Subtle** — 38 modal captures           | 38    | Light page under a dark modal overlay: white becomes a **pale** gradient at 15px | Leave. Fold in whenever the shot is re-taken for another reason   |
 
-**The two modal shots are the useful finding.** The trigger is not "dark mode" —
-it is _dark content at the right edge_. A modal overlay dims the page but sits
-inside `body`, so the gutter stayed white behind it. Anyone re-checking this later
-should look for dark pixels at the right edge, not for the theme setting.
+**The 38 are the instructive part.** They are light-mode pages; what darkens the
+right edge is the **modal overlay**, which dims the viewport but sits inside
+`body`, leaving the gutter — reserved on `html` — white behind it. So the trigger
+is _dark content at the right edge_, not a dark page.
 
-The remaining 426 are unaffected: light-mode captures showed white gutter against
-a light canvas, which is what they look like now, and cropped per-control shots
-never included the edge. **No set-wide re-shoot** — this replaced an earlier,
-vaguer instruction on this page to triage every guide, which would have spent the
-effort the 2026-08-11 pass was careful not to spend.
+> **Correction (2026-08-16).** This section first said "exactly three, measured".
+> That was wrong, and wrong in an instructive way: the first scan pre-filtered on
+> **whole-image** brightness before looking at the edge, which quietly assumed the
+> defect was a dark-mode one. Every modal capture is bright overall and dark
+> exactly where it matters, so 36 of them were filtered out before the real check
+> ran. **A filter that encodes the assumption you are testing will confirm it.**
+> The script now compares the edge with the content beside it and never with the
+> page average; run it rather than re-deriving the check by hand.
+
+Cropped per-control shots never included the edge and are unaffected. **There is
+still no set-wide re-shoot here** — the actionable list is one file.
 
 Nothing else about the rendering changed — no layout, no spacing, no colour
 inside the content area — so these three need only re-capture, not re-caption.

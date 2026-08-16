@@ -338,12 +338,18 @@ capture exists:
 
 **New to this pass (08-15 → 08-16):**
 
-- **REPLACE — three images, measured.** All 429 training images were checked
-  programmatically on 08-16. Exactly three carry the old 15px white gutter strip:
-  `10-11-public-form-dark`, `00-18-rsvp-modal` and `04-09-rsvp-modal`. The two
-  modal shots are the instructive ones — a modal overlay darkens a _light_ page
-  but sits inside `body`, so the gutter stayed white behind it. The trigger is
-  dark content at the right edge, not the theme setting. No set-wide re-shoot.
+- **REPLACE — 39 images carry the old gutter strip; one is worth re-shooting.**
+  All 429 training images were checked with
+  `scripts/screenshots/audit_images.py --check edges`. The single `theme: "dark"`
+  capture (`10-11-public-form-dark`) is **stark** — its white strip becomes a dark
+  gradient — and should be re-shot. The other 38 are light-mode pages under a
+  **dark modal overlay**: the overlay dims the viewport but sits inside `body`,
+  so the gutter stayed white behind it. On those the strip goes white to _pale_
+  gradient at 15px; fold them in whenever the shot is re-taken for another reason.
+  **Correction:** an earlier version of this bullet said "exactly three". That
+  scan pre-filtered on whole-image brightness, which assumed the defect was a
+  dark-mode one and hid every modal capture. The script compares the edge with the
+  content beside it instead — see `scripts/screenshots/README.md`.
 - **SCREENSHOT NEEDED — the onboarding session-expiry state.** The wizard
   reporting `ONBD_SESSION_INVALID` after a restart, so the guide can show the
   installer what "start over" looks like rather than describing it. Demo data:
