@@ -751,6 +751,10 @@ export interface InventoryItem {
   current_value?: number;
   replacement_cost?: number;
   vendor?: string;
+  /** Linked vendor record; takes priority over the free-text `vendor` for display. */
+  vendor_id?: string;
+  /** Resolved name of the linked vendor, sent by the item list and detail endpoints. */
+  vendor_name?: string;
   warranty_expiration?: string;
   location_id?: string;
   storage_location?: string;
@@ -938,7 +942,8 @@ export interface InventoryItemCreate {
   purchase_date?: string | undefined;
   purchase_price?: number | undefined;
   purchase_order?: string | undefined;
-  vendor?: string | undefined;
+  vendor?: string | null | undefined;
+  vendor_id?: string | null | undefined;
   warranty_expiration?: string | undefined;
   expected_lifetime_years?: number | undefined;
   current_value?: number | undefined;
@@ -1218,6 +1223,135 @@ export interface InventoryCategoryCreate {
   nfpa_tracking_enabled?: boolean | undefined;
 }
 
+// Vendor Types
+export interface InventoryVendorContact {
+  id: string;
+  organization_id: string;
+  vendor_id: string;
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  phone_extension?: string;
+  notes?: string;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryVendorContactCreate {
+  name: string;
+  title?: string | undefined;
+  email?: string | undefined;
+  phone?: string | undefined;
+  phone_extension?: string | undefined;
+  notes?: string | undefined;
+  is_primary?: boolean | undefined;
+}
+
+/** Partial update of a contact. Nulls clear the field; omitted keys are left alone. */
+export interface InventoryVendorContactUpdate {
+  name?: string | undefined;
+  title?: string | null | undefined;
+  email?: string | null | undefined;
+  phone?: string | null | undefined;
+  phone_extension?: string | null | undefined;
+  notes?: string | null | undefined;
+  is_primary?: boolean | undefined;
+}
+
+export interface InventoryVendor {
+  id: string;
+  organization_id: string;
+  name: string;
+  account_number?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  fax?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+  payment_terms?: string;
+  notes?: string;
+  is_preferred: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  contacts: InventoryVendorContact[];
+  /** Active catalog items purchased from this vendor. */
+  item_count: number;
+  /** Reorder requests with this vendor that are not received or cancelled. */
+  open_reorder_count: number;
+  /** Sum of purchase prices across this vendor's active items. */
+  total_purchase_value?: number | null;
+}
+
+export interface InventoryVendorCreate {
+  name: string;
+  account_number?: string | undefined;
+  website?: string | undefined;
+  phone?: string | undefined;
+  email?: string | undefined;
+  fax?: string | undefined;
+  address_line1?: string | undefined;
+  address_line2?: string | undefined;
+  city?: string | undefined;
+  state?: string | undefined;
+  postal_code?: string | undefined;
+  country?: string | undefined;
+  payment_terms?: string | undefined;
+  notes?: string | undefined;
+  is_preferred?: boolean | undefined;
+  contacts?: InventoryVendorContactCreate[] | undefined;
+}
+
+/** Partial update of a vendor. Nulls clear the field; omitted keys are left alone. */
+export interface InventoryVendorUpdate {
+  name?: string | undefined;
+  account_number?: string | null | undefined;
+  website?: string | null | undefined;
+  phone?: string | null | undefined;
+  email?: string | null | undefined;
+  fax?: string | null | undefined;
+  address_line1?: string | null | undefined;
+  address_line2?: string | null | undefined;
+  city?: string | null | undefined;
+  state?: string | null | undefined;
+  postal_code?: string | null | undefined;
+  country?: string | null | undefined;
+  payment_terms?: string | null | undefined;
+  notes?: string | null | undefined;
+  is_preferred?: boolean | undefined;
+  is_active?: boolean | undefined;
+}
+
+/** A supplier name typed onto rows that were never attached to a vendor. */
+export interface UnlinkedVendorName {
+  name: string;
+  item_count: number;
+  reorder_count: number;
+}
+
+export interface VendorAttachNameResult {
+  items_linked: number;
+  reorders_linked: number;
+}
+
+export interface VendorMergeResult {
+  items_moved: number;
+  reorders_moved: number;
+  contacts_moved: number;
+  /** The duplicate that was folded in and removed. */
+  merged_name: string;
+  /** The vendor everything moved to. */
+  vendor_name: string;
+}
+
 // Reorder Request Types
 export interface ReorderRequest {
   id: string;
@@ -1229,6 +1363,9 @@ export interface ReorderRequest {
   quantity_received?: number;
   vendor?: string;
   vendor_contact?: string;
+  vendor_id?: string;
+  /** Resolved name of the linked vendor, sent by the reorder endpoints. */
+  vendor_name?: string;
   estimated_unit_cost?: number;
   actual_unit_cost?: number;
   purchase_order_number?: string;
@@ -1254,6 +1391,7 @@ export interface ReorderRequestCreate {
   quantity_requested: number;
   vendor?: string | undefined;
   vendor_contact?: string | undefined;
+  vendor_id?: string | undefined;
   estimated_unit_cost?: number | undefined;
   expected_delivery_date?: string | undefined;
   urgency?: string | undefined;
@@ -1264,8 +1402,9 @@ export interface ReorderRequestUpdate {
   item_name?: string | undefined;
   quantity_requested?: number | undefined;
   quantity_received?: number | undefined;
-  vendor?: string | undefined;
-  vendor_contact?: string | undefined;
+  vendor?: string | null | undefined;
+  vendor_contact?: string | null | undefined;
+  vendor_id?: string | null | undefined;
   estimated_unit_cost?: number | undefined;
   actual_unit_cost?: number | undefined;
   purchase_order_number?: string | undefined;

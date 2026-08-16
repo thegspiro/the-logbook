@@ -14,8 +14,8 @@ whatever now sits fifth. Appending leaves every existing ordinal untouched.
 Fresh installs built by ``create_all()`` already carry the full value set, so
 the MODIFY below is a no-op there.
 
-Revision ID: 20260816_0003
-Revises: 20260816_0002
+Revision ID: 20260816_0004
+Revises: 20260816_0003
 Create Date: 2026-08-16 00:00:00.000000
 
 """
@@ -24,8 +24,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260816_0003"
-down_revision = "20260816_0002"
+revision = "20260816_0004"
+down_revision = "20260816_0003"
 branch_labels = None
 depends_on = None
 
