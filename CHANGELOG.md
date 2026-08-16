@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: vendor pricing is a purchasing matter, not a directory one (2026-08-16)
+
+**Changed**
+
+- **Account numbers, payment terms and vendor spend totals now require
+  `inventory.manage`.** They were readable by anyone holding `inventory.view` —
+  a broad, member-level grant whose job is answering "who do we buy this from
+  and how do I reach them". What the department pays a supplier, on what terms,
+  and under which account is a different question. `GET /inventory/vendors` and
+  `GET /inventory/vendors/{id}` now blank `accountNumber`, `paymentTerms` and
+  `totalPurchaseValue` unless the caller can manage inventory; names, phone,
+  email, fax, website, address, contacts and the item/reorder counts are
+  unchanged, so the directory still works. No UI changes: the vendors screen
+  already sits behind `inventory.manage`, and the item and reorder pickers only
+  ever read the name.
+
+  The serializer's clearance flag is keyword-only with no default, so a call
+  site that forgets it raises rather than falls open.
+
+**Fixed**
+
+- The schema-drift measurement recipe in `docs/DATABASE_SCHEMA_DRIFT.md` created
+  its two scratch databases without naming a collation, relying on the reader
+  having set `collation-server` to match docker-compose. On a stock server
+  (`utf8mb4_0900_ai_ci` on MySQL 8, `utf8mb4_general_ci` on MariaDB) the chain
+  dies at the first cross-table FK with errno 150, because some migrations
+  hardcode `COLLATE utf8mb4_unicode_ci` and the rest inherit the database
+  default. The `CREATE DATABASE` statements now name the collation themselves.
+
 ### Inventory: vendors get database-backed tests, and a second migration-id collision (2026-08-16)
 
 **Fixed**
