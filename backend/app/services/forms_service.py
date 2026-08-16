@@ -11,7 +11,7 @@ from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -92,9 +92,11 @@ class FormsService:
         "organization name": "organization_name",
         "org name": "organization_name",
         "company": "organization_name",
+        "your organization": "organization_name",
         "outreach type": "outreach_type",
         "type": "outreach_type",
         "request type": "outreach_type",
+        "type of event": "outreach_type",
         "description": "description",
         "event description": "description",
         "details": "description",
@@ -104,10 +106,14 @@ class FormsService:
         "preferred date": "preferred_timeframe",
         "time of day": "preferred_time_of_day",
         "preferred time": "preferred_time_of_day",
+        "preferred time of day": "preferred_time_of_day",
+        "earliest date": "preferred_date_start",
+        "latest date": "preferred_date_end",
         "audience size": "audience_size",
         "expected attendees": "audience_size",
         "number of attendees": "audience_size",
         "attendees": "audience_size",
+        "expected audience size": "audience_size",
         "age group": "age_group",
         "age range": "age_group",
         "venue preference": "venue_preference",
@@ -1261,7 +1267,37 @@ class FormsService:
             if not integration:
                 return False, "Integration not found"
 
+            int_type = integration.integration_type
+            if hasattr(int_type, "value"):
+                int_type = int_type.value
+
             await self.db.delete(integration)
+            await self.db.flush()
+
+            # The form-level integration_type marker triggers direct
+            # processing on every submission independently of this row.
+            # When the operator deletes the last integration of that type,
+            # clear the marker too — otherwise submissions keep creating
+            # prospects/assignments/registrations/requests with no visible
+            # integration left to explain (or disable) it.
+            remaining = await self.db.execute(
+                select(FormIntegration.id).where(
+                    FormIntegration.form_id == str(form_id),
+                    FormIntegration.organization_id == str(organization_id),
+                    FormIntegration.integration_type == int_type,
+                )
+            )
+            if remaining.first() is None:
+                await self.db.execute(
+                    update(Form)
+                    .where(
+                        Form.id == str(form_id),
+                        Form.organization_id == str(organization_id),
+                        Form.integration_type == int_type,
+                    )
+                    .values(integration_type=None)
+                )
+
             await self.db.commit()
             return True, None
         except Exception as e:
@@ -1292,34 +1328,54 @@ class FormsService:
         # ---- Direct path: form.integration_type ----
         int_type = getattr(form, "integration_type", None)
         if int_type:
-            try:
-                if int_type == IntegrationType.MEMBERSHIP_INTEREST:
-                    result = await self._process_membership_interest(
-                        submission, integration=None, form=form
-                    )
-                    results["membership_interest"] = result
-                elif int_type == IntegrationType.EQUIPMENT_ASSIGNMENT:
-                    result = await self._process_equipment_assignment(
-                        submission, integration=None, form=form
-                    )
-                    results["equipment_assignment"] = result
-                elif int_type == IntegrationType.EVENT_REGISTRATION:
-                    result = await self._process_event_registration(
-                        submission, integration=None, form=form
-                    )
-                    results["event_registration"] = result
-                elif int_type == IntegrationType.EVENT_REQUEST:
-                    result = await self._process_event_request(
-                        submission, integration=None, form=form
-                    )
-                    results["event_request"] = result
-                handled_types.add(int_type)
-            except Exception as e:
-                results[int_type] = {
-                    "success": False,
-                    "error": str(e),
-                }
-                handled_types.add(int_type)
+            # The form-level marker and a FormIntegration row of the same
+            # type can coexist — the event-request form generator creates
+            # both. The row stays authoritative: it carries the explicit
+            # field_mappings (the label fallback does not recognize every
+            # generated label, so ignoring the row silently drops answers)
+            # and the operator's enable/disable switch. Use the active row's
+            # mappings when one exists, and skip processing entirely when
+            # every same-type row was deactivated.
+            same_type_rows = [
+                i
+                for i in (form.integrations or [])
+                if (
+                    i.integration_type.value
+                    if hasattr(i.integration_type, "value")
+                    else i.integration_type
+                )
+                == int_type
+            ]
+            integration = next((i for i in same_type_rows if i.is_active), None)
+            disabled = bool(same_type_rows) and integration is None
+            if not disabled:
+                try:
+                    if int_type == IntegrationType.MEMBERSHIP_INTEREST:
+                        result = await self._process_membership_interest(
+                            submission, integration=integration, form=form
+                        )
+                        results["membership_interest"] = result
+                    elif int_type == IntegrationType.EQUIPMENT_ASSIGNMENT:
+                        result = await self._process_equipment_assignment(
+                            submission, integration=integration, form=form
+                        )
+                        results["equipment_assignment"] = result
+                    elif int_type == IntegrationType.EVENT_REGISTRATION:
+                        result = await self._process_event_registration(
+                            submission, integration=integration, form=form
+                        )
+                        results["event_registration"] = result
+                    elif int_type == IntegrationType.EVENT_REQUEST:
+                        result = await self._process_event_request(
+                            submission, integration=integration, form=form
+                        )
+                        results["event_request"] = result
+                except Exception as e:
+                    results[int_type] = {
+                        "success": False,
+                        "error": str(e),
+                    }
+            handled_types.add(int_type)
 
         # ---- Legacy path: FormIntegration records ----
         for integration in form.integrations or []:
@@ -2254,6 +2310,19 @@ class FormsService:
                 ),
             }
 
+        def _parse_request_date(value: Any) -> Optional[datetime]:
+            """Best-effort ISO parse for the requester's date preferences —
+            a malformed date must not fail the whole request."""
+            if not value:
+                return None
+            try:
+                parsed = datetime.fromisoformat(str(value))
+            except ValueError:
+                return None
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
+
         try:
             event_request = EventRequest(
                 organization_id=submission.organization_id,
@@ -2265,6 +2334,12 @@ class FormsService:
                 description=mapped_data.get("description", "Submitted via form"),
                 date_flexibility=mapped_data.get("date_flexibility", "flexible"),
                 preferred_timeframe=mapped_data.get("preferred_timeframe"),
+                preferred_date_start=_parse_request_date(
+                    mapped_data.get("preferred_date_start")
+                ),
+                preferred_date_end=_parse_request_date(
+                    mapped_data.get("preferred_date_end")
+                ),
                 preferred_time_of_day=mapped_data.get(
                     "preferred_time_of_day", "flexible"
                 ),
