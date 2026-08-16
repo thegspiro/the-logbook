@@ -27,7 +27,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -2477,13 +2477,38 @@ async def delete_event_attachment(
     if not attachment:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    # Remove file from disk
+    # Remove the file from disk — but only when no other event still
+    # references it. Recurring-occurrence generation and event duplication
+    # copy attachment metadata (same file_path) across events, so an
+    # unconditional remove would break downloads for the parent and every
+    # sibling occurrence.
     file_path = attachment["file_path"]
-    try:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-    except OSError as e:
-        logger.warning(f"Failed to remove attachment file {file_path}: {e}")
+    others = await db.execute(
+        select(func.count())
+        .select_from(Event)
+        .where(
+            Event.id != str(event_id),
+            cast(Event.attachments, String).contains(file_path, autoescape=True),
+        )
+    )
+    still_in_this_event = any(
+        a.get("file_path") == file_path
+        for a in attachments
+        if a.get("id") != attachment_id
+    )
+    if not still_in_this_event and (others.scalar() or 0) == 0:
+        # Same containment guard as the download endpoint: never remove a
+        # file outside the upload tree, even if the stored path was tampered
+        # with. The metadata row is removed regardless.
+        resolved_path = os.path.realpath(file_path)
+        allowed_base = os.path.realpath(ATTACHMENT_UPLOAD_DIR)
+        try:
+            if resolved_path.startswith(allowed_base + os.sep) and os.path.exists(
+                resolved_path
+            ):
+                os.remove(resolved_path)
+        except OSError as e:
+            logger.warning(f"Failed to remove attachment file {file_path}: {e}")
 
     # Remove from attachments list
     event.attachments = [a for a in attachments if a.get("id") != attachment_id]
