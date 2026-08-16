@@ -1434,9 +1434,7 @@ async def download_csv_sample(
 async def get_supply_expiring_items(
     days_ahead: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("equipment_check.view", "inventory.view")
-    ),
+    current_user: User = Depends(require_permission("equipment_check.view")),
 ):
     """Checklist items expiring soon on apparatus, with ready replacement
     stock the supply officer can prepare or swap in."""
