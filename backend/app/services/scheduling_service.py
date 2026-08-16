@@ -51,6 +51,7 @@ from app.models.user import (
     user_positions,
 )
 from app.services.member_leave_service import MemberLeaveService
+from app.services.notifications_service import NotificationsService
 from app.utils.apparatus_ref import (
     apparatus_ref_exists,
     resolve_apparatus_display_map,
@@ -5030,6 +5031,16 @@ class SchedulingService:
 
             await self.db.commit()
             await self.db.refresh(shift)
+
+            # Finalizing is the action the post-shift validation prompt asks
+            # for — archive it here so every finalize path clears it, not
+            # just the REST endpoint.
+            await NotificationsService(self.db).archive_related_notifications(
+                organization_id,
+                "shift_validation",
+                "shift_id",
+                shift_id,
+            )
 
             # Send post-finalization notification to the officer
             if draft_count > 0:

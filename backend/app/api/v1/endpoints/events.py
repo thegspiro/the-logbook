@@ -1877,12 +1877,8 @@ async def finalize_attendance(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
-    await NotificationsService(db).archive_related_notifications(
-        current_user.organization_id,
-        "event_validation",
-        "event_id",
-        event_id,
-    )
+    # finalize_event_attendance archives the related validation prompt itself,
+    # so every finalize path (end_event, auto-finalize, this endpoint) clears it.
 
     return FinalizeAttendanceResponse(updated_count=updated_count)
 

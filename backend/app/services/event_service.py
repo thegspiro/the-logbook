@@ -1594,6 +1594,7 @@ class EventService:
         rsvps = list(rsvp_result.scalars().all())
 
         if not rsvps:
+            await self._record_attendance_finalized(event, organization_id)
             return 0, None
 
         # Get linked training session if this is a training event
@@ -1665,7 +1666,38 @@ class EventService:
                 logger.exception("Failed to credit admin hours for RSVP {}", rsvp.id)
         await self.db.commit()
 
+        await self._record_attendance_finalized(event, organization_id)
+
         return updated_count, None
+
+    async def _record_attendance_finalized(
+        self,
+        event: Event,
+        organization_id: UUID,
+    ) -> None:
+        """Durably record that attendance finalization ran for this event.
+
+        The post-event validation reminder task only knows an event is handled
+        via markers in ``custom_fields`` — without this, finalizing before the
+        task ever runs (end_event, record_actual_times auto-finalize, or the
+        manual endpoint) still produces a stale "validate attendance" prompt
+        later. Also archives any validation prompt that was already sent.
+        """
+        # Deep copy before reassigning: a shallow copy of a JSON column shares
+        # nested references with SQLAlchemy's committed state, which can make
+        # the reassignment a silent no-op (see CLAUDE.md pitfall #12).
+        custom = copy.deepcopy(event.custom_fields or {})
+        if not custom.get("attendance_finalized"):
+            custom["attendance_finalized"] = True
+            event.custom_fields = custom
+            await self.db.commit()
+
+        await NotificationsService(self.db).archive_related_notifications(
+            organization_id,
+            "event_validation",
+            "event_id",
+            event.id,
+        )
 
     async def end_event(
         self,

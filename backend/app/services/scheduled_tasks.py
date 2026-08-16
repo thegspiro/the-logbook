@@ -1059,7 +1059,13 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
             for event in events:
                 custom = event.custom_fields or {}
-                if custom.get("validation_notification_sent"):
+                # attendance_finalized is stamped by the finalize flow itself
+                # (end_event / record_actual_times / manual finalize), so an
+                # event finalized before this task ever ran must not get a
+                # stale "validate attendance" prompt.
+                if custom.get("validation_notification_sent") or custom.get(
+                    "attendance_finalized"
+                ):
                     continue
 
                 # Find the event creator
@@ -1257,6 +1263,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 .where(Shift.end_time <= now)
                 .where(Shift.end_time >= lookback)
                 .where(Shift.shift_officer_id.isnot(None))
+                # A shift finalized after it ended but before this task runs
+                # has already been validated — never prompt for it.
+                .where(Shift.is_finalized.is_(False))
             )
             shifts = list(shifts_result.scalars().all())
 
