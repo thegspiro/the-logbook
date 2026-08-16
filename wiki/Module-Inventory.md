@@ -30,7 +30,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Mobile Card Views & FAB** — _(2026-03-05)_ Responsive card layouts on mobile with floating action button for quick actions (add item, scan barcode, import CSV)
 - **CSV Import** — _(2026-03-02)_ Bulk import items via CSV upload with downloadable template, header validation, duplicate serial detection
 - **Variant Groups** — _(2026-03-07)_ Link related items that differ by size/style (e.g., coat in S/M/L/XL). Each variant tracks its own stock while sharing a base product description
-- **Equipment Kits** — _(2026-03-07)_ Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking
+- **Equipment Kits** — _(2026-03-07)_ Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking. _(2026-08-11)_ Kit components can be flagged **optional** (`equipment_kit_items.optional`) — an optional component that is out of stock no longer blocks issuing the rest of the kit
 - **Member Size Preferences** — _(2026-03-07)_ Members record preferred sizes (coat, pants, gloves, boots, helmet) for auto-selection during kit issuance and ordering
 - **Reorder Requests** — _(2026-03-07)_ Full workflow (pending → approved → ordered → received) with vendor/PO tracking and audit logging
 - **Item Reorder Points** — _(2026-03-07)_ Per-item threshold for low-stock alerts. Triggers email and SMS (Twilio) notifications
@@ -289,6 +289,8 @@ order, and the id route would otherwise reject "unlinked-names" as a malformed
 UUID.
 
 The two read endpoints take `inventory.view`; everything that writes takes `inventory.manage`. The screen itself sits behind `inventory.manage`, like every other page under `/inventory/admin` — the read permission on the API is there for surfaces that only need to name a vendor. `GET /api/v1/inventory/items?vendor_id=…` filters the catalog to one vendor — the link behind the item count on a vendor card.
+
+`inventory.view` gets the directory, not the commercial terms: `accountNumber`, `paymentTerms` and `totalPurchaseValue` come back blank unless the caller also holds `inventory.manage` _(2026-08-16)_. Name, phone, email, fax, website, address, contacts and the item/reorder counts are unaffected — a member can see that the department buys from a vendor and how to reach them, but not what it pays. The screen is unaffected, being `inventory.manage`-gated already.
 
 ### Write-Off Requests
 
