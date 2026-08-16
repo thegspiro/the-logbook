@@ -55,7 +55,7 @@ describe('createApiClient response interceptor', () => {
 
     await expect(rejectionHandler?.(requestError)).rejects.toBe(requestError);
     expect(mocks.expireSession).toHaveBeenCalledExactlyOnceWith();
-    expect(mocks.reportApiError).toHaveBeenCalledExactlyOnceWith();
+    expect(mocks.reportApiError).toHaveBeenCalledTimes(1);
     expect(mocks.reportApiError).toHaveBeenCalledWith(requestError);
   });
 });
