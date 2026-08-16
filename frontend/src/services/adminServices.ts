@@ -73,10 +73,16 @@ export interface TrainingSessionResponse {
   training_type: string;
   credit_hours: number;
   instructor?: string;
+  instructor_id?: string;
+  co_instructors?: string[];
+  apparatus_id?: string;
   issues_certification: boolean;
   certification_number_prefix?: string;
   issuing_agency?: string;
   expiration_months?: number;
+  // False when the session's hours must not advance linked certificate
+  // requirements (delivery a certifying body wouldn't accept).
+  counts_toward_certification: boolean;
   auto_create_records: boolean;
   require_completion_confirmation: boolean;
   approval_deadline_days: number;
