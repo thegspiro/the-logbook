@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: vendor review fixes (2026-08-16)
+
+**Fixed**
+
+- **Merging a vendor no longer deletes the duplicate's contacts.** The source's
+  contacts were repointed with a bulk `UPDATE` while still sitting in the
+  loaded relationship, which cascades `delete-orphan` — so deleting the merged
+  vendor deleted the contacts the merge had just reported as moved. They are
+  re-parented through the ORM now, and the count comes from what actually
+  moved.
+- **A reorder's PATCH response named the previous vendor.** Re-reading the row
+  after an update returns the same identity-mapped instance and leaves loaded
+  relationships alone, so a changed `vendor_id` came back beside the old
+  vendor's name. The refresh asks for `populate_existing`.
+- **Linking a vendor on a reorder now clears the typed-in name and contact.**
+  They were serialized as omitted rather than null, so the stale supplier
+  survived behind the link and reappeared if it was ever unlinked.
+- **A vendor deactivated after being linked still shows in the edit pickers**,
+  marked "(inactive)", rather than dropping out and leaving the field reading
+  "Not linked" while it submitted the old id.
+- **Retired items count toward the cleanup list.** Attaching updates them and
+  vendor spend includes them, so a supplier named only on retired items was
+  stranded with no way to reach it from the screen.
+- The vendors screen sits behind `inventory.manage`, matching the rest of
+  `/inventory/admin`; it was reachable only by URL for anyone else.
+
+### Inventory: cleaning up duplicate and unattached suppliers (2026-08-16)
+
+**Added**
+
+- **Merging duplicate vendors.** A department that has been typing supplier
+  names for years ends up with "Galls" and "Galls Inc." as separate rows — the
+  migration folds case, not spelling. Merge moves the duplicate's items, reorder
+  requests and contacts to the vendor you chose and removes the duplicate, so
+  its name is free again rather than reserved by an inactive row nobody can see.
+  The target's own details are never overwritten.
+- **Attaching names that were never linked.** The vendors screen now counts the
+  supplier names typed onto items and reorder requests with no vendor behind
+  them, and offers each one as a new vendor or an attachment to an existing one
+  — linking every row carrying that name in a single pass. Rows already pointing
+  at a different vendor are left alone; that is a decision, not a leftover.
+
+**Changed**
+
+- The vendor card's purchase total counts every item ever bought from that
+  vendor, not just the ones still in the catalog. Retiring a coat was quietly
+  reducing what the department had spent with the vendor who sold it. The item
+  count still means the catalog as it stands, matching the list it links to.
+
+### Inventory: vendors are records, not a typed-in name (2026-08-16)
+
+**Added**
+
+- **Vendor tracking.** `inventory_vendors` gives each supplier one row per
+  organization — account number, main line, orders inbox, website, remit-to
+  address, payment terms, a preferred flag — and `inventory_vendor_contacts`
+  holds the named people at it (rep, service desk, accounts receivable) with
+  title, email, phone and extension. Exactly one contact is primary: flagging
+  one demotes the rest, and a vendor left with none promotes its first, so a
+  vendor card always names someone to call.
+- **Vendors screen** (`/inventory/admin/vendors`, `inventory.view` to read and
+  `inventory.manage` to change). Each card shows the contact details, the
+  primary contact, and live purchasing history: items bought from that vendor,
+  open reorders, and total purchased. The item count links to the catalog
+  filtered to that vendor (`/inventory/admin/items?vendor_id=…`).
+- **Items and reorder requests link to a vendor.** The item form and the reorder
+  form pick from the tracked list; picking a vendor on a reorder prefills its
+  primary contact. A name that is not on file can still be typed, exactly as
+  before.
+
+**Changed**
+
+- The CSV export and the item detail page now name the linked vendor, falling
+  back to the free-text value only for rows never linked. A CSV import whose
+  `Vendor` cell matches a vendor already on file links to it; an unrecognized
+  name stays free text rather than silently creating suppliers nobody reviewed.
+- Deactivating a vendor keeps every item and reorder pointing at it. Purchase
+  history for equipment still in service is the reason the record exists.
+
+**Migration**
+
+- `20260816_0002` adds both tables and the `vendor_id` columns, then backfills:
+  every distinct free-text vendor name already on file becomes a vendor
+  (case-folded per organization, first spelling wins) and the items and reorder
+  requests that named it are linked to it. The free-text columns are left in
+  place and unread where a link exists.
+
 ### Facilities: rooms can sit inside other rooms (2026-08-16)
 
 **Added**
