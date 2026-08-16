@@ -519,12 +519,15 @@ Checklists → Apparatus Inventory**. Pick an apparatus and see its tracked
 positions compartment by compartment: what is aboard, the lots and dates on each
 position, and the ready stock behind it.
 
-**It is deliberately crew-level.** An equipment check is a scheduled, signed pass
-over a whole apparatus that produces a report; a crew that used the last of
-something at 03:00 needs somewhere to put that fact _now_, not at the next
-morning's check. So the page and every write on it accept
+**Reporting usage is deliberately crew-level.** An equipment check is a
+scheduled, signed pass over a whole apparatus that produces a report; a crew
+that used the last of something at 03:00 needs somewhere to put that fact
+_now_, not at the next morning's check. So reporting an item used accepts
 `equipment_check.submit` — the default member position — as well as the manage
-permissions.
+permissions. **Corrections of record are not** _(2026-08-11)_: withdrawing a
+restock report, swapping a lot onto the apparatus, and rewriting a deployed
+lot's number or expiration date require `equipment_check.manage` or
+`inventory.manage`.
 
 | Action on a position | What it means                                                                                                                     |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |

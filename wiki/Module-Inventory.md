@@ -30,7 +30,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Mobile Card Views & FAB** — *(2026-03-05)* Responsive card layouts on mobile with floating action button for quick actions (add item, scan barcode, import CSV)
 - **CSV Import** — *(2026-03-02)* Bulk import items via CSV upload with downloadable template, header validation, duplicate serial detection
 - **Variant Groups** — *(2026-03-07)* Link related items that differ by size/style (e.g., coat in S/M/L/XL). Each variant tracks its own stock while sharing a base product description
-- **Equipment Kits** — *(2026-03-07)* Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking
+- **Equipment Kits** — *(2026-03-07)* Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking. *(2026-08-11)* Kit components can be flagged **optional** (`equipment_kit_items.optional`) — an optional component that is out of stock no longer blocks issuing the rest of the kit
 - **Member Size Preferences** — *(2026-03-07)* Members record preferred sizes (coat, pants, gloves, boots, helmet) for auto-selection during kit issuance and ordering
 - **Reorder Requests** — *(2026-03-07)* Full workflow (pending → approved → ordered → received) with vendor/PO tracking and audit logging
 - **Item Reorder Points** — *(2026-03-07)* Per-item threshold for low-stock alerts. Triggers email and SMS (Twilio) notifications

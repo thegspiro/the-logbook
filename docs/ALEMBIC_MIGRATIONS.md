@@ -16,9 +16,15 @@
 
 ## Current Head
 
-> **Update (2026-08-12):** The current head is **`20260812_0001`**
-> (`20260812_0001_add_saved_ballot_templates.py`). **New migrations must set
-> `down_revision = "20260812_0001"`.**
+> **Update (2026-08-16):** The current head is **`20260816_0001`**
+> (`20260816_0001_add_facility_room_parent.py`). **New migrations must set
+> `down_revision = "20260816_0001"`.** Past `20260812_0001` the chain runs the
+> August 12–14 release set (see that section below) ending at `20260814_0004`,
+> then `20260816_0001`. As always, run `alembic heads` before writing a
+> migration rather than trusting this banner.
+>
+> **Superseded (2026-08-12):** The head was **`20260812_0001`**
+> (`20260812_0001_add_saved_ballot_templates.py`).
 >
 > Past `20260810_0008` the chain runs `20260811_0001` (optional equipment-kit
 > items) → `20260811_0002` (skill-test return trail) → `20260812_0001`
@@ -433,3 +439,17 @@ Notes:
   a partially applied state is safe.
 - Standard procedure applies: back up, require exactly one `alembic heads`
   result, then `alembic upgrade head`.
+
+## Startup guard: unknown revisions refuse the fresh-database path (2026-08-11)
+
+If the database's stamped revision is not part of the deployed release, the
+backend now raises `RuntimeError` ("Refusing destructive fresh-database
+initialization…") at startup instead of silently deleting `alembic_version`
+and re-running the destructive fresh-install fast path — which could destroy a
+real installation whose revision id had merely been renamed. A compatibility
+revision (`20260809_0002`, with a dual `down_revision`) keeps databases stamped
+with the previously released ids upgradable. If you hit the guard: verify the
+deployed version matches the database, back up, reconcile the stamp
+(`alembic stamp <equivalent-released-revision>`), then `alembic upgrade head`.
+See the matching entry in
+[`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md#migration-version-mismatch).

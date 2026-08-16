@@ -110,6 +110,193 @@ that confirmed no new critical or high-severity findings.
   callers no longer continue against a missing response, and the expired
   session is handled through the shared `handleExpiredSession()` path.
 
+### Documentation backfill: August 8–14 changes recovered by a history audit (2026-08-16)
+
+A commit-by-commit sweep of the repository's full history (which begins
+2026-08-08) found ~40 merged changes that never reached this changelog — five
+of them contradicted by the documentation then in force. The affected module
+docs, wiki pages, and training guides were corrected in the same pass; the
+disposition of every finding is recorded in
+[`docs/DOCUMENTATION_BACKFILL_2026-08-16.md`](docs/DOCUMENTATION_BACKFILL_2026-08-16.md).
+The entries below are dated by when the change actually merged.
+
+**Training & programs (2026-08-08)**
+
+- A program phase can **link an existing department requirement** instead of
+  only creating one inline (`RequirementLibraryPicker` in the create-pipeline
+  wizard and phase edit modals). Provenance is tracked in
+  `program_requirements.owns_requirement`: unlinking deletes the underlying
+  requirement only when the link created it, so removing the department's
+  shared CPR requirement from a recruit phase no longer deletes it out from
+  under every other program. Editing a linked-in requirement applies everywhere
+  it is used.
+- The **Requirements tab on `/training/programs` can edit requirements** —
+  per-card Edit and a New Requirement button using the shared
+  `RequirementModal`; previously the tab was read-only and changes required
+  the separate Training Admin page. Registry-imported requirements stay
+  read-only (the backend refuses updates to them).
+- Skills testing gained the `score_pass_fail_criteria` scoring model and
+  officer actions on the result page (candidate notification included) —
+  documented at the time in `docs/SKILLS_TESTING_FEATURE.md` §1.5/§21 but
+  never entered here.
+
+**Equipment checks & apparatus supply — authorization pass (2026-08-11)**
+
+- **Submitting a shift equipment check requires crewing the shift.**
+  `POST /equipment-checks/shifts/{id}/submit` now requires
+  `equipment_check.submit`/`.manage` and restricts ordinary submitters to
+  shifts they actively crew (`ASSIGNED`/`CONFIRMED`) or officer for; any
+  authenticated member could previously submit a check against any shift.
+- **Template reads are scoped to the submitter.** Without
+  `equipment_check.view`, template list/detail return only active templates
+  that are general or match the caller's own shift positions; a non-matching
+  template's compartment/item tree is a 404, not a disclosure.
+- **Corrections of record went manage-only.** Withdrawing a restock report and
+  swapping a lot now require `equipment_check.manage`/`inventory.manage`
+  (`equipment_check.submit` was dropped); editing a deployed lot's
+  `lot_number`/`expiration_date` is likewise guarded, while reporting usage
+  and quantity updates remain crew-level.
+- **A submitted check can no longer rewrite an item's expiration.**
+  `expiration_found` is recorded on the check but not written back onto the
+  template item — asserting a fresh date could clear an expired-item
+  auto-fail. Submitted items must belong to the named template.
+- Standalone checks **reject deactivated templates** (2026-08-12): managers
+  can still view/edit an inactive template, but no new check records can be
+  created from it.
+- **Bulk checklist→inventory link changes are audited** (`log_template_change`
+  with `inventory_links` and `changed_count`); the operation previously left
+  no trail.
+
+**Scheduling & shift reports (2026-08-11 → 08-12)**
+
+- **Shift completion reports are officer-released.** A trainee gets 404 on a
+  report that is not `approved` — unconditionally, even with the optional
+  second-review workflow off — and training/pipeline credit is applied only on
+  the transition to `approved`, never at `pending_review` (which could
+  previously credit early or double-credit). Reports also auto-populate
+  `tasks_performed` from the trainee's own equipment checks plus apparatus
+  name and shift start time.
+- **Shift check-in is bounded by a configurable window**:
+  `shift_reports.checklist_timing.checkin_opens_hours_before` (default 2) and
+  `checkin_closes_hours_after` (default 12) — a link to a shift that ended
+  last week is refused instead of stamping an arrival.
+
+**Cross-tenant, privacy, and enumeration fixes (2026-08-11)**
+
+- Instructor-qualification create/update validate that `user_id`, `course_id`,
+  `skill_evaluation_id`, and `category_id` belong to the caller's org, and
+  list joins are org-scoped — another tenant's names can no longer be resolved
+  through a colliding id.
+- Training requirement/progress reads **strip officer-only checklist steps**
+  (`member_visible: false`) and their ids for members without
+  `training.view_all`/`training.manage` — "references called" and similar
+  steps were being returned to the member they were about.
+- **Guest check-in no longer reveals prospect existence**: `prospect_created`
+  was removed from the public kiosk response (an unauthenticated caller could
+  probe whether a name/email was already a prospect); the "someone will follow
+  up" notice is driven client-side from the event's
+  `collects_prospect_details` flag.
+- `scripts/seed_skills_testing.py` dropped `--password`/`--examiner-password`
+  in favor of `LOGBOOK_PASSWORD`/`LOGBOOK_EXAMINER_PASSWORD` env vars or a
+  hidden prompt, keeping credentials out of shell history and `ps`.
+
+**Operations (2026-08-11)**
+
+- **Startup refuses the destructive fresh-database path on an unknown Alembic
+  revision.** When the stamped revision is not in the release, boot raises
+  `RuntimeError` instead of silently deleting `alembic_version` and re-running
+  fresh-install initialization — which could destroy a real installation whose
+  revision id had merely been renamed. Compatibility revision `20260809_0002`
+  keeps already-released databases upgradable. See
+  `docs/TROUBLESHOOTING.md` → "Migration version mismatch".
+
+**Security & correctness batch (2026-08-12 → 08-13)**
+
+- **Member-import rejected-rows CSV neutralizes formula injection** — cells
+  beginning `= + - @ \t \r` are apostrophe-prefixed in the client-side writer,
+  so a malicious member name can't execute when an admin opens the error file
+  in Excel (the earlier `SafeCsvWriter` fix covered server-side exports only).
+- **Duplicate skill credit closed**: shift-completion reports release
+  training/pipeline credit only when `approved` (see scheduling section
+  above); the same pass fixed crediting twice via `pending_review`.
+- **Duplicating a skill template copies its result-visibility settings**
+  (`result_disclosure`, `result_release`, `result_viewer_positions`) instead
+  of silently falling back to defaults that widened who could see results.
+- **PWA updates land in one reload.** Proactive service-worker checks on app
+  resume + a 30-minute interval; "Reload now" waits for the fresh worker to
+  take control before reloading (previously the reload was often served by the
+  old worker's cached shell); stale-chunk loads self-heal through the same
+  path; `sw.js`/`registerSW.js`/`push-sw.js` are exempted from the 1-year
+  immutable cache header in both nginx configs, and update checks bypass the
+  HTTP cache.
+- **`Permissions-Policy` camera directive changed from `camera=()` to
+  `camera=(self)`** in the app's security middleware and both nginx configs so
+  the barcode scanner works; operators mirroring headers on their own proxies
+  need the same change. A lifecycle guard releases the camera when the scanner
+  modal closes.
+- **Onboarding role saves no longer smuggle invisible grants.** The
+  two-checkbox (View/Manage) position editor rebuilds permission lists; only
+  an explicit allow-list of read-only sub-permissions (currently
+  `facilities.view_sensitive`) survives, so action grants like
+  `members.assign_positions` no longer outlive an admin clearing Manage.
+  Roles saved before this may still carry legacy invisible grants — review in
+  Role Management.
+- **Compliance permissions tightened**: report generation is `training.manage`
+  only (`reports.manage` dropped — it manages saved definitions, not
+  member-level data); config/report reads dropped `compliance.view`.
+- **Dues ledger scoped to its owner**: `GET /finance/dues/{id}/payments`
+  filters by the member's own `user_id` unless the caller holds
+  `finance.manage`.
+- **Waiver reasons stay out of the immutable audit log** — reversing this
+  changelog's earlier 2026-08-02/04 design: un-waiving dues erases the
+  free-text `waive_reason` outright instead of copying it into the
+  `finance.dues_waiver_reversed` event, because waiver reasons may carry
+  personal information that must remain reachable by privacy scrubbing.
+- **Member hard-delete rejections no longer enumerate the blocking records**,
+  closing an information-disclosure channel; the error states that dependent
+  records exist without listing them.
+- **Marking an expense report paid no longer crashes** — the
+  separation-of-duties guard referenced a nonexistent `requested_by`
+  attribute; it now compares against `submitted_by`.
+- **Waived storefront orders report a zero balance** everywhere (order detail,
+  notifications, service) instead of showing an outstanding balance and
+  generating collection notices.
+- **Election feature toggles reject explicit `null`** (`nominations_enabled`,
+  `paper_ballots_enabled`, `reminders_enabled`, `auto_open_enabled`) with a
+  validation error; legacy persisted nulls resolve to `true`.
+- **Approving a training submission verifies the credit actually applied** —
+  a failed apply (e.g. the enrollment vanished after pre-flight) returns 400
+  instead of reporting success on a no-op.
+- **Voiding a never-validated skill test no longer notifies the candidate** —
+  an unvalidated official result was only a placeholder, so its withdrawal
+  and reason stay undisclosed.
+- **Prospect pipeline concurrency hardened**: `SELECT … FOR UPDATE` locking in
+  the state machine plus a unique index on `(prospect_id, step_id)` — the
+  index lives in the model (`create_all`), so fresh installs enforce it;
+  existing installations are protected by the locking and can add the index
+  after deduplicating.
+- **Role endpoints constrain `{role_id}` to UUIDs**, so static sub-paths are
+  no longer swallowed by the dynamic detail route.
+- **Property-return delivery email moved outside the request's DB session** —
+  a slow SMTP server can no longer hold a pooled connection for its full
+  timeout.
+- Error logs **redact token-bearing route params** (`sanitize_path` covers
+  finance approval tokens, application-status tokens, `.ics` calendar
+  tokens) before persistence.
+- The public-portal timestamp migration **converts offset-aware values to UTC
+  instead of truncating the offset** — the earlier form discarded valid API-key
+  expirations, creating non-expiring keys; installations that ran the old
+  revision should review key expirations.
+
+**Navigation & UI (2026-08-13)**
+
+- The sidebar entry **"Events Admin" was renamed "Manage Events"** and points
+  at `/events`; Create and Settings deep-link into the admin hub via
+  `/events/admin?tab=create` / `?tab=settings`.
+- **Apparatus fleet-summary cards and admin actions are hidden without the
+  manage/create/edit permissions** — members see their apparatus list without
+  the admin affordances, and the summary fetch is skipped entirely.
+
 ### Facilities: rooms can sit inside other rooms (2026-08-16)
 
 **Added**

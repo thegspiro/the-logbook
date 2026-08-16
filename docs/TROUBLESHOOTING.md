@@ -9040,6 +9040,18 @@ docker-compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD the_logbook -e "S
 docker-compose exec backend alembic upgrade head
 ```
 
+**Backend refuses to start with "Refusing destructive fresh-database
+initialization"** _(2026-08-11)_: the database's stamped Alembic revision is
+not known to this release. Before this guard, startup silently deleted
+`alembic_version` and re-ran the destructive fresh-database path — which could
+destroy a real installation whose revision id had simply been renamed. This is
+a deliberate hard stop, not a corruption: confirm you deployed the right
+image/version for this database, take a backup, then reconcile the revision
+(for a database stamped with a renamed/interim revision, stamp the equivalent
+released revision — `alembic stamp <revision>` — and run
+`alembic upgrade head`). Never "fix" it by dropping `alembic_version` on a
+database that contains data.
+
 ---
 
 ### Performance Issues
