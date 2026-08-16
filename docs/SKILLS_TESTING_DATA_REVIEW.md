@@ -96,9 +96,13 @@ practice run · voided · pending validation
 ```
 
 The last one needs a **non-officer** examiner, because an officer's own
-completion validates in the same step. Pass `--examiner-username` /
-`--examiner-password` to seed it; without them the script prints that it
-skipped that state rather than leaving an empty validation queue unexplained.
+completion validates in the same step. Supply the examiner credentials to seed
+it; without them the script prints that it skipped that state rather than
+leaving an empty validation queue unexplained. _(2026-08-11)_ The `--password`
+/ `--examiner-password` flags were removed so credentials stop landing in
+shell history and `ps` output — set `LOGBOOK_PASSWORD` /
+`LOGBOOK_EXAMINER_USERNAME` / `LOGBOOK_EXAMINER_PASSWORD` in the environment,
+or let the script prompt via hidden `getpass` input.
 
 `scripts/screenshots/seed_demo_data.py` now builds its templates from the same
 library, so re-running the screenshot harness fixes the 0% in `09-01`.
