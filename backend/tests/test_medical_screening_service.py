@@ -579,3 +579,125 @@ class TestRequestEnumValidation:
 
         with pytest.raises(ValidationError):
             ScreeningRequirementUpdate(screening_type="bad_type")
+
+
+# ============================================
+# Self-Service Compliance Summary Tests
+# ============================================
+
+
+class TestMyComplianceSummary:
+    """Tests for get_my_compliance_summary — what a member's own dashboard reads."""
+
+    @pytest.fixture(autouse=True)
+    def _stub_names(self, service):
+        with patch.object(service, "_resolve_names", return_value=_NO_NAMES):
+            yield
+
+    async def test_no_requirements_reports_nothing_outstanding(
+        self, service, org_id, user_id
+    ):
+        """A department that tracks no screenings contributes no findings."""
+        with patch.object(service, "list_requirements", return_value=[]), patch.object(
+            service, "list_records", return_value=[]
+        ):
+            summary = await service.get_my_compliance_summary(org_id, user_id=user_id)
+
+        assert summary.total_requirements == 0
+        assert summary.non_compliant_count == 0
+        assert summary.expiring_soon_count == 0
+        assert summary.days_until_next_expiration is None
+
+    async def test_counts_an_overdue_screening(self, service, org_id, user_id):
+        """An expired screening is counted as non-compliant."""
+        req = make_requirement(org_id)
+        rec = make_record(
+            org_id,
+            user_id=user_id,
+            expiration_date=date.today() - timedelta(days=3),
+        )
+        with patch.object(
+            service, "list_requirements", return_value=[req]
+        ), patch.object(service, "list_records", return_value=[rec]):
+            summary = await service.get_my_compliance_summary(org_id, user_id=user_id)
+
+        assert summary.non_compliant_count == 1
+        assert summary.is_fully_compliant is False
+
+    async def test_reports_days_until_the_soonest_lapse(self, service, org_id, user_id):
+        """With several valid screenings, the nearest expiry is the one reported."""
+        reqs = [
+            make_requirement(org_id, screening_type=ScreeningType.PHYSICAL_EXAM),
+            make_requirement(org_id, screening_type=ScreeningType.DRUG_SCREENING),
+        ]
+        recs = [
+            make_record(
+                org_id,
+                screening_type=ScreeningType.PHYSICAL_EXAM,
+                user_id=user_id,
+                expiration_date=date.today() + timedelta(days=90),
+            ),
+            make_record(
+                org_id,
+                screening_type=ScreeningType.DRUG_SCREENING,
+                user_id=user_id,
+                expiration_date=date.today() + timedelta(days=20),
+            ),
+        ]
+        with patch.object(
+            service, "list_requirements", return_value=reqs
+        ), patch.object(service, "list_records", return_value=recs):
+            summary = await service.get_my_compliance_summary(org_id, user_id=user_id)
+
+        assert summary.days_until_next_expiration == 20
+        assert summary.expiring_soon_count == 1
+
+    async def test_never_reports_a_negative_countdown(self, service, org_id, user_id):
+        """An already-lapsed screening is a count, not a negative countdown.
+
+        Passing one through would render as "expires in -3 days".
+        """
+        req = make_requirement(org_id)
+        rec = make_record(
+            org_id,
+            user_id=user_id,
+            expiration_date=date.today() - timedelta(days=3),
+        )
+        with patch.object(
+            service, "list_requirements", return_value=[req]
+        ), patch.object(service, "list_records", return_value=[rec]):
+            summary = await service.get_my_compliance_summary(org_id, user_id=user_id)
+
+        assert summary.days_until_next_expiration is None
+        assert summary.non_compliant_count == 1
+
+    async def test_carries_no_screening_detail(self, service, org_id, user_id):
+        """Counts only — never which screening, its type, dates or findings.
+
+        The dashboard renders this on tablets left at stations, so naming the
+        screening would disclose it to whoever walks past. This asserts the
+        shape, because the detail is one attribute access away in the summary
+        this is built from.
+        """
+        req = make_requirement(
+            org_id,
+            screening_type=ScreeningType.PSYCHOLOGICAL,
+            name="Psychological Evaluation",
+        )
+        rec = make_record(
+            org_id,
+            screening_type=ScreeningType.PSYCHOLOGICAL,
+            status=ScreeningStatus.FAILED,
+            user_id=user_id,
+            expiration_date=date.today() - timedelta(days=1),
+        )
+        with patch.object(
+            service, "list_requirements", return_value=[req]
+        ), patch.object(service, "list_records", return_value=[rec]):
+            summary = await service.get_my_compliance_summary(org_id, user_id=user_id)
+
+        serialized = summary.model_dump()
+        assert "items" not in serialized
+        blob = str(serialized).lower()
+        for leaked in ("psychological", "evaluation", "failed", str(date.today().year)):
+            assert leaked not in blob

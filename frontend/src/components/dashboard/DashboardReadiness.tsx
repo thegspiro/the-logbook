@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronRight, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
-import { computeReadiness } from '../../utils/readiness';
-import type { ReadinessCert, ReadinessLevel } from '../../utils/readiness';
+import { computeReadiness, joinClauses } from '../../utils/readiness';
+import type { ReadinessCert, ReadinessLevel, ReadinessScreenings } from '../../utils/readiness';
 import { POSITION_LABELS } from '../../constants/enums';
 
 const LEVEL: Record<ReadinessLevel, { box: string; icon: string; headline: string; Icon: typeof ShieldCheck }> = {
@@ -34,6 +34,12 @@ interface DashboardReadinessProps {
    * signup altogether, where the concept does not apply and nothing renders.
    */
   positions?: string[] | undefined;
+  /**
+   * The member's own screening compliance, as counts. Undefined when the read
+   * failed or has not landed; the verdict then covers certifications and seats
+   * only, and says so rather than implying screenings were checked and passed.
+   */
+  screenings?: ReadinessScreenings | null | undefined;
   onOpen: () => void;
 }
 
@@ -46,12 +52,20 @@ interface DashboardReadinessProps {
  * note is not decoration — without it a green line reads as a full clearance,
  * and a member could skip checking the things this cannot see.
  */
-const DashboardReadiness: React.FC<DashboardReadinessProps> = ({ certs, positions, onOpen }) => {
-  const readiness = computeReadiness(certs);
+const DashboardReadiness: React.FC<DashboardReadinessProps> = ({ certs, positions, screenings, onOpen }) => {
+  const readiness = computeReadiness(certs, screenings);
   if (!readiness) return null;
 
   const { box, icon, headline, Icon } = LEVEL[readiness.level];
   const seats = positions ?? [];
+
+  // Names the inputs the verdict actually had, so it never implies a check it
+  // did not make. A department tracking no screenings sees no mention of them.
+  const inputs: string[] = [];
+  if (certs.length > 0) inputs.push('certifications');
+  if (screenings && screenings.total_requirements > 0) inputs.push('screenings');
+  if (seats.length > 0) inputs.push('seats');
+  const scope = joinClauses(inputs);
 
   return (
     <button
@@ -66,12 +80,13 @@ const DashboardReadiness: React.FC<DashboardReadinessProps> = ({ certs, position
         </span>
         <span className="text-theme-text-secondary mt-0.5 block text-xs sm:text-sm">
           {readiness.detail}
-          {/* Names the inputs rather than claiming a clearance. Medical
-              screenings are modelled and computed, but reading them needs
-              medical_screening.view — an officer permission with no
-              self-service route — so they are not in this verdict. */}
+          {/* Names the inputs rather than claiming a clearance, and only the
+              ones this verdict actually had. SCBA fit-test dates are still not
+              modelled anywhere, so they are never among them. */}
           <span className="text-theme-text-muted">
-            {seats.length > 0 ? ' · Certifications and seats' : ' · Certifications only'}
+            {' · '}
+            {scope.charAt(0).toUpperCase() + scope.slice(1)}
+            {inputs.length === 1 ? ' only' : ''}
           </span>
         </span>
         {seats.length > 0 && (

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeReadiness } from './readiness';
-import type { ReadinessCert } from './readiness';
+import type { ReadinessCert, ReadinessScreenings } from './readiness';
 
 const cert = (overrides: Partial<ReadinessCert> = {}): ReadinessCert => ({
   id: 'cert-1',
@@ -104,5 +104,69 @@ describe('computeReadiness', () => {
     );
 
     expect(computeReadiness(certs)?.detail).toBe('5 certifications expiring within 60 days');
+  });
+
+  // Screenings enter the verdict as counts. The backend never sends names, so
+  // there is nothing here that could name one.
+  describe('with medical screenings', () => {
+    const screenings = (over: Partial<ReadinessScreenings> = {}): ReadinessScreenings => ({
+      total_requirements: 2,
+      non_compliant_count: 0,
+      expiring_soon_count: 0,
+      ...over,
+    });
+
+    it('grounds a member whose screening is overdue', () => {
+      const result = computeReadiness([cert()], screenings({ non_compliant_count: 1 }));
+
+      expect(result?.level).toBe('not-clear');
+      expect(result?.detail).toBe('1 screening overdue');
+    });
+
+    it('combines certification and screening problems in one sentence', () => {
+      const result = computeReadiness([cert({ is_expired: true })], screenings({ non_compliant_count: 2 }));
+
+      expect(result?.detail).toBe('1 certification expired and 2 screenings overdue');
+    });
+
+    it('treats an expiring screening as a condition', () => {
+      const result = computeReadiness([cert()], screenings({ expiring_soon_count: 1 }));
+
+      expect(result?.level).toBe('conditions');
+      expect(result?.detail).toBe('1 screening expiring');
+    });
+
+    it('counts both when everything is current', () => {
+      expect(computeReadiness([cert()], screenings())?.detail).toBe('1 certification and 2 screenings current');
+    });
+
+    it('ignores a department that tracks no screenings', () => {
+      const result = computeReadiness([cert()], screenings({ total_requirements: 0 }));
+
+      expect(result?.detail).toBe('1 certification current');
+    });
+
+    // A member with no certifications is not "unknown" if screenings are
+    // tracked — there is something real to say about them.
+    it('still answers for a member with screenings but no certifications', () => {
+      expect(computeReadiness([], screenings({ non_compliant_count: 1 }))?.level).toBe('not-clear');
+      expect(computeReadiness([], screenings())?.detail).toBe('2 screenings current');
+    });
+
+    it('stays silent when neither is tracked', () => {
+      expect(computeReadiness([], screenings({ total_requirements: 0 }))).toBeNull();
+      expect(computeReadiness([], null)).toBeNull();
+      expect(computeReadiness([], undefined)).toBeNull();
+    });
+
+    // A failed read must never be read as a pass.
+    it('does not treat a missing screening read as compliant', () => {
+      const withRead = computeReadiness([cert()], screenings({ non_compliant_count: 1 }));
+      const withoutRead = computeReadiness([cert()], undefined);
+
+      expect(withRead?.level).toBe('not-clear');
+      expect(withoutRead?.detail).toBe('1 certification current');
+      expect(withoutRead?.detail).not.toContain('screening');
+    });
   });
 });

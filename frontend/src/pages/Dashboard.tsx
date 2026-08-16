@@ -44,8 +44,9 @@ import {
   organizationService,
   inventoryService,
   eventService,
+  medicalScreeningService,
 } from '../services/api';
-import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
+import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert, MyComplianceSummary } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -195,6 +196,11 @@ const Dashboard: React.FC = () => {
   // eligibility fetched when a signup row is expanded.
   const [mySeats, setMySeats] = useState<string[]>([]);
 
+  // The member's own screening compliance, as counts. Left null when the read
+  // fails so the verdict states a narrower scope rather than implying
+  // screenings were checked and passed.
+  const [myScreenings, setMyScreenings] = useState<MyComplianceSummary | null>(null);
+
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
@@ -273,6 +279,7 @@ const Dashboard: React.FC = () => {
     void loadDeptMessages();
     void loadHours();
     void loadMySeats();
+    void loadMyScreenings();
     void loadTrainingProgress();
     void loadMyEquipment();
     void loadUpcomingEvents();
@@ -527,6 +534,16 @@ const Dashboard: React.FC = () => {
     } catch {
       // Seat eligibility is non-critical; the verdict falls back to
       // certifications alone and says so.
+    }
+  };
+
+  const loadMyScreenings = async () => {
+    try {
+      setMyScreenings(await medicalScreeningService.getMyCompliance());
+    } catch {
+      // Non-critical, and deliberately not retried: a department that does not
+      // track screenings still answers, and a failure must not turn into a
+      // claim that everything is current.
     }
   };
 
@@ -804,6 +821,7 @@ const Dashboard: React.FC = () => {
       loadDeptMessages(),
       loadHours(),
       loadMySeats(),
+      loadMyScreenings(),
       loadTrainingProgress(),
       loadMyEquipment(),
       loadUpcomingEvents(),
@@ -1011,6 +1029,7 @@ const Dashboard: React.FC = () => {
               <DashboardReadiness
                 certs={myCerts}
                 positions={mySeats}
+                screenings={myScreenings}
                 onOpen={() => void navigate('/training/my-training')}
               />
 

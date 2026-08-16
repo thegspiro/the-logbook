@@ -40,6 +40,7 @@ const {
   mockGetUserInventory,
   mockGetInventorySummary,
   mockGetEligiblePositions,
+  mockGetMyCompliance,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -55,6 +56,7 @@ const {
   mockGetUserInventory: vi.fn(),
   mockGetInventorySummary: vi.fn(),
   mockGetEligiblePositions: vi.fn(),
+  mockGetMyCompliance: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -98,6 +100,9 @@ vi.mock('../services/api', () => ({
   },
   eventService: {
     getEvents: mockGetEvents,
+  },
+  medicalScreeningService: {
+    getMyCompliance: mockGetMyCompliance,
   },
   dashboardService: {
     getStats: vi.fn().mockResolvedValue({}),
@@ -169,6 +174,15 @@ describe('Dashboard', () => {
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
     mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+    // Default: a department that tracks no screenings.
+    mockGetMyCompliance.mockResolvedValue({
+      total_requirements: 0,
+      compliant_count: 0,
+      non_compliant_count: 0,
+      expiring_soon_count: 0,
+      is_fully_compliant: true,
+      days_until_next_expiration: null,
+    });
     mockCheckPermission.mockReturnValue(false);
     mockGetAdminSummary.mockResolvedValue({});
     mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
@@ -378,6 +392,61 @@ describe('Dashboard', () => {
       expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
       expect(screen.queryByLabelText('Seats you can hold')).not.toBeInTheDocument();
       expect(screen.getByText(/Certifications only/)).toBeInTheDocument();
+    });
+
+    it('grounds a member whose medical screening is overdue', async () => {
+      withCerts([
+        { id: 'c1', course_name: 'Firefighter I', expiration_date: null, is_expired: false, days_until_expiry: null },
+      ]);
+      mockGetMyCompliance.mockResolvedValue({
+        total_requirements: 2,
+        compliant_count: 1,
+        non_compliant_count: 1,
+        expiring_soon_count: 0,
+        is_fully_compliant: false,
+        days_until_next_expiration: null,
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Not clear to respond')).toBeInTheDocument();
+      expect(screen.getByText(/1 screening overdue/)).toBeInTheDocument();
+    });
+
+    // The dashboard renders on tablets left at stations. The screening figures
+    // arrive as counts precisely so a passer-by cannot read which screening a
+    // member is behind on, or what it found.
+    it('never names a screening', async () => {
+      withCerts([]);
+      mockGetMyCompliance.mockResolvedValue({
+        total_requirements: 1,
+        compliant_count: 0,
+        non_compliant_count: 1,
+        expiring_soon_count: 0,
+        is_fully_compliant: false,
+        days_until_next_expiration: null,
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Not clear to respond');
+      for (const term of [/psychological/i, /drug/i, /physical exam/i, /failed/i]) {
+        expect(screen.queryByText(term)).not.toBeInTheDocument();
+      }
+    });
+
+    // A failed read is not a pass. The scope note narrows instead.
+    it('does not claim screenings when the read failed', async () => {
+      withCerts([
+        { id: 'c1', course_name: 'Firefighter I', expiration_date: null, is_expired: false, days_until_expiry: null },
+      ]);
+      mockGetMyCompliance.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+      expect(screen.getByText(/Certifications and seats/)).toBeInTheDocument();
+      expect(screen.queryByText(/screening/i)).not.toBeInTheDocument();
     });
 
     // The general eligibility call takes no shift id; the per-shift one used by
