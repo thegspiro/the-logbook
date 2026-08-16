@@ -4598,7 +4598,15 @@ class Seeder:
         # or post to, so both the idempotency check and the create go through
         # the shift the crew would actually have been working.
         shifts = items(self.api.get("/scheduling/shifts?limit=20"), "shifts")
-        target_shifts = [s for s in shifts if pick(s, "id")][:3]
+        # Engine shifts only. The daily template declares apparatus_type
+        # "engine" and the create endpoint refuses any other apparatus
+        # ("Template is not applicable to this shift"). The blind [:3] slice
+        # worked only because the first three shifts happened to be engines on
+        # the database it was written against; a fresh seed sorts a brush
+        # truck first and the whole step failed on it.
+        target_shifts = [
+            s for s in shifts if pick(s, "id") and apparatus_type_of(s) == "engine"
+        ][:3]
         if not target_shifts:
             return {"templates": templates, "checks": []}
         checks = []
@@ -9256,12 +9264,12 @@ class Seeder:
                 payload["pipeline_id"] = pipeline_id
             prospect = self.api.post("/prospective-members/prospects", payload)
             prospects.append(prospect)
-            # Spread applicants across the board so the kanban shows movement
-            # rather than a single stacked first column.
-            for _ in range(index % len(self.PIPELINE_STAGES)):
-                self.api.post(
-                    f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
-                )
+        # Spreading is left entirely to `_spread_prospects_across_stages`
+        # below. A blind advance loop here used to pre-position each new
+        # applicant, and 409'd the whole step on a fresh database the moment
+        # one crossed the interview stage — advancing out of an
+        # `interview_requirement` stage refuses until an interview exists,
+        # and only the spread helper records one.
         self._spread_prospects_across_stages(pipeline_id)
         self._enable_public_status(pipelines)
         self._seed_report_stage_groups(pipelines)
