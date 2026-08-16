@@ -169,6 +169,8 @@ export interface Inspection {
 export interface Room {
   id: string;
   facilityId: string;
+  /** Room this one sits inside (e.g. a storage space within the volunteer office); absent for top-level rooms */
+  parentRoomId?: string | null;
   name: string;
   roomNumber?: string;
   floor?: number;
@@ -178,6 +180,7 @@ export interface Room {
   capacity?: number;
   description?: string;
   equipment?: string;
+  sortOrder?: number;
   isActive?: boolean;
   /** Kiosk display code of the room's linked Location record (for /display/{code} QR URLs) */
   displayCode?: string;
