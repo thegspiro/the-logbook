@@ -895,6 +895,7 @@ async def is_rate_limited(
     limit: int,
     window_seconds: int,
     fail_closed: bool = True,
+    raise_on_error: bool = False,
 ) -> bool:
     """
     Check if a key has exceeded rate limit using Redis sliding window.
@@ -908,6 +909,9 @@ async def is_rate_limited(
         fail_closed: If True (default), deny requests when Redis is
                      unavailable.  This is the safe default for
                      security-critical paths (login, registration).
+        raise_on_error: Re-raise Redis operation errors so callers can use a
+                        separate fallback limiter. Defaults to False to
+                        preserve the fail-closed/fail-open behavior above.
 
     Returns:
         True if rate limit exceeded, False otherwise
@@ -962,6 +966,8 @@ async def is_rate_limited(
 
     except Exception as e:
         logger.error(f"Rate limiting error: {e}")
+        if raise_on_error:
+            raise
         if fail_closed:
             logger.warning("Rate limiting fail-closed on error, denying request")
             return True
