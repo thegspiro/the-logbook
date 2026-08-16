@@ -2261,11 +2261,18 @@ class FacilitiesService:
                 room_id=room.id,
             )
 
-        # A rename or a building change rewrites the linked Location name of
-        # every room underneath this one, since those names carry the path.
+        # A rename, a building change, or a reparent rewrites the linked
+        # Location name of every room underneath this one, since those names
+        # carry the containment path (see _room_location_name) — moving a room
+        # under a different parent changes every descendant's path even though
+        # nothing else about them moved.
         name_changed = "name" in update_data and update_data["name"] != room.name
+        parent_changed = (
+            "parent_room_id" in update_data
+            and update_data["parent_room_id"] != room.parent_room_id
+        )
         descendant_ids: set = set()
-        if facility_changed or name_changed:
+        if facility_changed or name_changed or parent_changed:
             descendant_ids, _ = await self._room_descendants(room.id, organization_id)
 
         # apply_updates rather than a bare setattr loop: a null against a NOT
