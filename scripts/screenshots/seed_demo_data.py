@@ -1913,7 +1913,21 @@ class Seeder:
         options = items(
             self.api.get("/scheduling/apparatus-options"), "options", "apparatus"
         )
-        fleet = [o for o in options if pick(o, "id")]
+        # In blueprint order, not endpoint order. The endpoint lists the fleet
+        # alphabetically, which puts Brush 5 ahead of the engines and ladder —
+        # and everything below stripes shifts onto fleet[:3], so a fresh
+        # database quietly rostered the brush truck instead of Ladder 4. The
+        # long-lived demo database never showed this because its front-line
+        # rigs were created before B-5 existed in the blueprint and the
+        # endpoint happened to return them first. The batch shift-report
+        # fixture (and its screenshots) depend on Ladder 4 carrying shifts.
+        unit_order = {unit: index for index, (unit, *_rest) in enumerate(APPARATUS)}
+        fleet = sorted(
+            (o for o in options if pick(o, "id")),
+            key=lambda o: unit_order.get(
+                pick(o, "unit_number", "unitNumber"), len(unit_order)
+            ),
+        )
         if not fleet:
             # Only reachable when the department has neither inventory — the
             # endpoint then serves hardcoded type defaults, which carry no id
@@ -4605,14 +4619,9 @@ class Seeder:
         # crashed the whole step the first time a fresh seed ordered a medic
         # or ladder shift into the front of the list.
         shifts = items(self.api.get("/scheduling/shifts?limit=20"), "shifts")
-        target_shifts = []
-        for shift in shifts:
-            if not pick(shift, "id"):
-                continue
-            if apparatus_type_of(shift) == "engine":
-                target_shifts.append(shift)
-            if len(target_shifts) == 3:
-                break
+        target_shifts = [
+            s for s in shifts if pick(s, "id") and apparatus_type_of(s) == "engine"
+        ][:3]
         if not target_shifts:
             return {"templates": templates, "checks": []}
         checks = []
@@ -9287,15 +9296,12 @@ class Seeder:
                 payload["pipeline_id"] = pipeline_id
             prospect = self.api.post("/prospective-members/prospects", payload)
             prospects.append(prospect)
-            # Spread applicants across the board so the kanban shows movement
-            # rather than a single stacked first column. Through the
-            # interview-aware helper: a bare advance 409s on the Interview
-            # stage and, uncaught, aborted every applicant after this one.
-            for _ in range(index % len(self.PIPELINE_STAGES)):
-                if not self._advance_recording_interview(
-                    pick(prospect, "id"), "create"
-                ):
-                    break
+        # Spreading is left entirely to `_spread_prospects_across_stages`
+        # below. A blind advance loop here used to pre-position each new
+        # applicant, and 409'd the whole step on a fresh database the moment
+        # one crossed the interview stage — advancing out of an
+        # `interview_requirement` stage refuses until an interview exists,
+        # and only the spread helper records one.
         self._spread_prospects_across_stages(pipeline_id)
         self._enable_public_status(pipelines)
         self._seed_report_stage_groups(pipelines)

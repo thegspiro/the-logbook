@@ -7,9 +7,9 @@ report exports, and xAPI ingestion.
 """
 
 import io
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
-from uuid import UUID
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,22 @@ from app.models.training import (
 from app.models.user import User, UserStatus
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
+
+
+def _stringify_uuids(data: dict) -> dict:
+    """Coerce ``uuid.UUID`` values to their canonical dashed-string form.
+
+    Model ids here are dashed-string ``String(36)`` columns, but the request
+    schemas in ``schemas/training_enhancements.py`` type id fields as ``UUID``.
+    SQLAlchemy renders a ``uuid.UUID`` bound against a ``String`` column as
+    32-char dashless hex, so an org-scope lookup never matches (a real member
+    is rejected as "Invalid user_id") and an INSERT stores a key no join can
+    follow. Normalising at the service boundary covers both.
+    """
+    return {
+        key: str(value) if isinstance(value, uuid.UUID) else value
+        for key, value in data.items()
+    }
 
 
 class RecertificationService:
@@ -68,6 +84,7 @@ class RecertificationService:
         self, organization_id: str, data: dict, created_by: str
     ) -> RecertificationPathway:
         """Create a new recertification pathway"""
+        data = _stringify_uuids(data)
         pathway = RecertificationPathway(
             organization_id=organization_id,
             created_by=created_by,
@@ -89,7 +106,7 @@ class RecertificationService:
         pathway = await self.get_pathway(pathway_id, organization_id)
         if not pathway:
             raise ValueError("Pathway not found")
-        apply_updates(pathway, data)
+        apply_updates(pathway, _stringify_uuids(data))
         await self.db.flush()
         # `updated_at` is server-side (onupdate=func.now()), so the flush leaves
         # it expired rather than fetching the new value back. The endpoint
@@ -226,6 +243,7 @@ class CompetencyService:
         self, organization_id: str, data: dict, created_by: str
     ) -> CompetencyMatrix:
         """Create a competency matrix"""
+        data = _stringify_uuids(data)
         matrix = CompetencyMatrix(
             organization_id=organization_id,
             created_by=created_by,
@@ -245,7 +263,7 @@ class CompetencyService:
         matrix = await self.get_matrix(matrix_id, organization_id)
         if not matrix:
             raise ValueError("Matrix not found")
-        apply_updates(matrix, data)
+        apply_updates(matrix, _stringify_uuids(data))
         await self.db.flush()
         # See update_pathway: server-side `updated_at` stays expired after a
         # flush and cannot be lazy-loaded during response serialisation.
@@ -268,23 +286,6 @@ class InstructorQualificationService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-
-    @staticmethod
-    def _stringify_uuids(data: dict) -> dict:
-        """Convert UUID values to the strings the schema stores.
-
-        The endpoints dump their Pydantic payloads in python mode, so UUID
-        fields arrive as `uuid.UUID` objects while every id column is
-        String(36). aiomysql binds a UUID object in a representation that
-        matches no stored row, so `_validate_references` rejected every
-        qualification create with "Invalid user_id" — including perfectly
-        valid ones — from the day the tenant check landed. Normalising here
-        covers the validation queries and the INSERT/UPDATE values alike.
-        """
-        return {
-            key: str(value) if isinstance(value, UUID) else value
-            for key, value in data.items()
-        }
 
     async def _validate_references(self, organization_id: str, data: dict) -> None:
         """Ensure qualification foreign keys belong to the current tenant."""
@@ -359,7 +360,7 @@ class InstructorQualificationService:
         self, organization_id: str, data: dict, created_by: str
     ) -> InstructorQualification:
         """Create an instructor qualification"""
-        data = self._stringify_uuids(data)
+        data = _stringify_uuids(data)
         await self._validate_references(organization_id, data)
         qual = InstructorQualification(
             organization_id=organization_id,
@@ -385,7 +386,7 @@ class InstructorQualificationService:
         qual = result.scalar_one_or_none()
         if not qual:
             raise ValueError("Qualification not found")
-        data = self._stringify_uuids(data)
+        data = _stringify_uuids(data)
         await self._validate_references(organization_id, data)
         apply_updates(qual, data)
         await self.db.flush()
@@ -443,6 +444,7 @@ class TrainingEffectivenessService:
         self, organization_id: str, data: dict
     ) -> TrainingEffectivenessEvaluation:
         """Create a training effectiveness evaluation"""
+        data = _stringify_uuids(data)
         # Calculate knowledge gain if pre/post scores provided
         pre = data.get("pre_assessment_score")
         post = data.get("post_assessment_score")
@@ -566,6 +568,7 @@ class MultiAgencyService:
         self, organization_id: str, data: dict, created_by: str
     ) -> MultiAgencyTraining:
         """Create a multi-agency training record"""
+        data = _stringify_uuids(data)
         # Convert participating_organizations to serializable format
         if "participating_organizations" in data:
             orgs = data["participating_organizations"]
@@ -599,6 +602,7 @@ class MultiAgencyService:
         if not exercise:
             raise ValueError("Exercise not found")
 
+        data = _stringify_uuids(data)
         if "participating_organizations" in data:
             orgs = data["participating_organizations"]
             if orgs and hasattr(orgs[0], "model_dump"):
