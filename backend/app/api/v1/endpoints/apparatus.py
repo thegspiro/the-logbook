@@ -11,7 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    get_current_user,
+    require_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -70,6 +74,7 @@ from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Ap
     ApparatusTypeResponse,
     ApparatusTypeUpdate,
     ApparatusUpdate,
+    DriverExceptionApprover,
     DriverExceptionCreate,
     DriverExceptionResponse,
     DriverExceptionReview,
@@ -2978,6 +2983,29 @@ async def list_driver_exceptions(
         include_expired=include_expired,
     )
     return [_exception_to_response(exc) for exc in exceptions]
+
+
+@router.get(
+    "/driver-exceptions/approvers",
+    response_model=list[DriverExceptionApprover],
+    tags=["Driver Exceptions"],
+)
+async def list_driver_exception_approvers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List the members who can approve a driver qualification exception.
+
+    Readable by any member: someone blocked from the driver seat needs to know
+    who to ask, and this returns only names and ranks — org-chart information,
+    not contact details.
+
+    **Authentication required**
+    """
+    service = DriverExceptionService(db)
+    approvers = await service.list_approvers(current_user.organization_id)
+    return [DriverExceptionApprover(**approver) for approver in approvers]
 
 
 @router.post(

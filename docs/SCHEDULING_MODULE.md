@@ -1886,6 +1886,45 @@ restrictions.
 | Approving a request whose window already closed      | 400                                                          |
 | Exception's apparatus deleted                        | `SET NULL` — widens to any apparatus, keeps the audit record |
 
+### The refusal has a route forward
+
+A block with no next step is where a safety control turns into a workaround —
+someone drives anyway and nobody records it. When an assignment or signup is
+refused, `ShiftDetailPanel` opens `DriverBlockedDialog` rather than a toast:
+
+- what is missing, in the backend's own words;
+- **who can approve an exception**, by name and rank, so the officer knows who
+  to call. Resolved from live permissions (positions + rank defaults, matched
+  with the same `permission_matches` the dependency layer uses) rather than
+  assumed from rank, so a department that moved the grant onto a training
+  officer sees the training officer. `GET /apparatus/driver-exceptions/approvers`,
+  readable by any member — names and ranks only, no contact details, which stay
+  behind the member directory's visibility settings;
+- an inline **request form**, prefilled with the member, the shift's apparatus,
+  and the shift date as a single-day window — the narrowest grant that solves
+  the problem in front of the officer.
+
+The dialog opens off the **`LB-SCHED-001`** support code, not the message text.
+`_check_driver_qualification` raises `CodedValueError`, `create_assignment` and
+`update_assignment` re-raise it rather than flattening it into their
+`(result, error)` tuple, and the three endpoints convert it to a
+`CodedHTTPException`. Matching on wording would break the moment the wording
+changed.
+
+Members without `scheduling.assign` / `scheduling.manage` / `apparatus.manage`
+see the approver list and are told to ask — the form is absent rather than
+present-and-failing. When nobody holds the approval grant at all, the dialog
+says so, instead of leaving an officer waiting on an approval that can never
+arrive.
+
+| Scenario                                    | Behavior                                                        |
+| ------------------------------------------- | --------------------------------------------------------------- |
+| Driver block on assign or signup            | Dialog with the shortfall, the approvers, and an inline request |
+| Approver lookup fails                       | Block still shown; the names are simply absent                  |
+| Nobody holds the approval grant             | Says so, rather than implying an approval is coming             |
+| Requester lacks the permission to raise one | Approver list only, with who to ask                             |
+| Any other assignment error                  | Unchanged — an ordinary toast                                   |
+
 ---
 
 _Last Updated: August 16, 2026_

@@ -21,6 +21,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, CodedValueError
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.training import (
     AssignmentStatus,
@@ -1337,6 +1338,21 @@ async def get_unavailable_members(
     return {"unavailable_user_ids": user_ids}
 
 
+def _driver_block(exc: CodedValueError) -> CodedHTTPException:
+    """Turn the driver qualification refusal into a 400 that keeps its code.
+
+    The message names what is missing and how to resolve it; the code
+    (``LB-SCHED-001``) is what the UI keys its "request an exception" offer
+    off, so it must survive the trip rather than being flattened into an
+    anonymous 400.
+    """
+    return CodedHTTPException(
+        status_code=400,
+        detail=str(exc),
+        error_code=exc.error_code,
+    )
+
+
 @router.post(
     "/shifts/{shift_id}/assignments",
     response_model=ShiftAssignmentResponse,
@@ -1361,9 +1377,12 @@ async def create_assignment(
         service, current_user, shift_id, "scheduling.assign"
     )
     assignment_data = assignment.model_dump(exclude_none=True)
-    result, error = await service.create_assignment(
-        current_user.organization_id, shift_id, assignment_data, current_user.id
-    )
+    try:
+        result, error = await service.create_assignment(
+            current_user.organization_id, shift_id, assignment_data, current_user.id
+        )
+    except CodedValueError as e:
+        raise _driver_block(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to create assignment.", error)
@@ -1399,9 +1418,12 @@ async def update_assignment(
     service = SchedulingService(db)
     await _authorize_assignment_management(service, current_user, assignment_id)
     update_data = assignment.model_dump(exclude_unset=True)
-    result, error = await service.update_assignment(
-        assignment_id, current_user.organization_id, update_data
-    )
+    try:
+        result, error = await service.update_assignment(
+            assignment_id, current_user.organization_id, update_data
+        )
+    except CodedValueError as e:
+        raise _driver_block(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update assignment.", error)
@@ -1946,13 +1968,16 @@ async def signup_for_shift(
         "user_id": str(current_user.id),
         "position": signup.position.value,
     }
-    result, error = await service.create_assignment(
-        current_user.organization_id,
-        shift_id,
-        assignment_data,
-        current_user.id,
-        self_signup=True,
-    )
+    try:
+        result, error = await service.create_assignment(
+            current_user.organization_id,
+            shift_id,
+            assignment_data,
+            current_user.id,
+            self_signup=True,
+        )
+    except CodedValueError as e:
+        raise _driver_block(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to sign up for shift.", error)

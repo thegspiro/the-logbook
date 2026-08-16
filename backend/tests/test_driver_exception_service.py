@@ -17,6 +17,7 @@ import pytest
 
 from app.models.apparatus import DriverExceptionStatus
 from app.services.driver_exception_service import (
+    APPROVAL_PERMISSION,
     MAX_VALIDITY_DAYS,
     DriverExceptionService,
 )
@@ -268,6 +269,85 @@ class TestFindActiveException:
         )
         sql = str(db.execute.await_args[0][0])
         assert "apparatus_id IS NULL" in sql
+
+
+class TestListApprovers:
+    """Who a blocked officer should call.
+
+    Resolved from live permissions rather than assumed from rank, so a
+    department that moved the grant onto a training-officer position sees the
+    training officer rather than a chief who cannot actually approve.
+    """
+
+    def _db(self, users):
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = users
+        db.execute = AsyncMock(return_value=result)
+        return db
+
+    def _member(self, name, rank=None, position_perms=None):
+        positions = (
+            [SimpleNamespace(permissions=position_perms)]
+            if position_perms is not None
+            else []
+        )
+        return SimpleNamespace(
+            id=f"u-{name}", full_name=name, rank=rank, positions=positions
+        )
+
+    async def test_chief_ranks_are_approvers_by_default(self):
+        db = self._db([self._member("Chief Smith", rank="fire_chief")])
+        out = await DriverExceptionService(db).list_approvers("org-1")
+        assert [a["user_name"] for a in out] == ["Chief Smith"]
+        assert out[0]["rank"] == "fire_chief"
+
+    async def test_officers_without_the_grant_are_excluded(self):
+        db = self._db(
+            [
+                self._member("Cap Jones", rank="captain"),
+                self._member("Lt Brown", rank="lieutenant"),
+                self._member("FF Green", rank="firefighter"),
+            ]
+        )
+        assert await DriverExceptionService(db).list_approvers("org-1") == []
+
+    async def test_a_position_grant_counts_even_without_a_chief_rank(self):
+        # A department that moved the approval onto a training-officer post.
+        db = self._db(
+            [
+                self._member(
+                    "Trainer Diaz",
+                    rank="firefighter",
+                    position_perms=[APPROVAL_PERMISSION],
+                )
+            ]
+        )
+        out = await DriverExceptionService(db).list_approvers("org-1")
+        assert [a["user_name"] for a in out] == ["Trainer Diaz"]
+
+    async def test_module_wildcard_counts(self):
+        # permission_matches treats "apparatus.*" as covering the grant, and
+        # this list must agree with what the API will let through.
+        db = self._db([self._member("Admin Ito", position_perms=["apparatus.*"])])
+        out = await DriverExceptionService(db).list_approvers("org-1")
+        assert [a["user_name"] for a in out] == ["Admin Ito"]
+
+    async def test_global_wildcard_counts(self):
+        db = self._db([self._member("Owner Kim", position_perms=["*"])])
+        out = await DriverExceptionService(db).list_approvers("org-1")
+        assert [a["user_name"] for a in out] == ["Owner Kim"]
+
+    async def test_returns_no_contact_details(self):
+        # Email and phone are governed by the org's contact-visibility
+        # settings; this endpoint has no business bypassing them.
+        db = self._db([self._member("Chief Smith", rank="fire_chief")])
+        out = await DriverExceptionService(db).list_approvers("org-1")
+        assert set(out[0]) == {"user_id", "user_name", "rank"}
+
+    async def test_empty_when_nobody_holds_the_grant(self):
+        db = self._db([self._member("FF Green", rank="firefighter")])
+        assert await DriverExceptionService(db).list_approvers("org-1") == []
 
 
 if __name__ == "__main__":  # pragma: no cover

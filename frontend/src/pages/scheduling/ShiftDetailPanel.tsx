@@ -57,7 +57,9 @@ import {
   formatDateCustom,
   localToUTC,
 } from '../../utils/dateFormatting';
-import { getErrorMessage } from '../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../utils/errorHandling';
+import { DriverBlockedDialog } from './DriverBlockedDialog';
+import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
@@ -367,6 +369,27 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     if (messages.length > 0) toast(messages.join(' '), { icon: '⚠️' });
   };
 
+  // A driver refused for want of an EVOC certification is a dead end unless we
+  // say who can authorize the exception. Keyed off the support code, not the
+  // message text, which would break the moment the wording changed.
+  const [driverBlock, setDriverBlock] = useState<{
+    userId: string;
+    userName: string;
+    reason: string;
+  } | null>(null);
+
+  /** Open the blocked dialog for LB-SCHED-001; otherwise toast as usual. */
+  const handleAssignmentError = (err: unknown, fallback: string, userId: string, userName: string) => {
+    const appError = toAppError(err);
+    if (appError.code === DRIVER_NOT_QUALIFIED_CODE) {
+      setDriverBlock({ userId, userName, reason: appError.message });
+      return;
+    }
+    toast.error(getErrorMessage(err, fallback));
+  };
+
+  const memberName = (userId: string) => memberOptions.find((m) => m.id === userId)?.label ?? 'This member';
+
   const handleAssignFromRoster = async (userId: string) => {
     setPendingFlag('assigningRoster', true);
     try {
@@ -395,7 +418,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to sign up for shift'));
+      handleAssignmentError(
+        err,
+        'Failed to sign up for shift',
+        String(user?.id ?? ''),
+        user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'You'
+      );
     } finally {
       setPendingFlag('signingUp', false);
     }
@@ -575,7 +603,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to assign member'));
+      handleAssignmentError(err, 'Failed to assign member', assignForm.user_id, memberName(assignForm.user_id));
     } finally {
       setPendingFlag('assigning', false);
     }
@@ -2521,6 +2549,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           )}
         </div>
       </div>
+
+      {driverBlock && (
+        <DriverBlockedDialog
+          isOpen
+          onClose={() => setDriverBlock(null)}
+          userId={driverBlock.userId}
+          userName={driverBlock.userName}
+          apparatusId={shift.apparatus_id}
+          apparatusUnitNumber={shift.apparatus_unit_number}
+          shiftDate={shift.shift_date}
+          blockedReason={driverBlock.reason}
+        />
+      )}
     </>
   );
 };

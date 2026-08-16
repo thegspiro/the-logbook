@@ -676,6 +676,14 @@ export interface DriverException {
   reviewNotes: string | null;
 }
 
+/** Someone who can approve an exception — names and ranks only; contact
+ *  details stay behind the member directory's visibility settings. */
+export interface DriverExceptionApprover {
+  userId: string;
+  userName: string;
+  rank: string | null;
+}
+
 export interface DriverExceptionCreate {
   userId: string;
   apparatusId?: string | undefined;

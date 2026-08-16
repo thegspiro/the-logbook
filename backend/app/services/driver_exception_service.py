@@ -28,6 +28,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.permissions import get_rank_default_permissions, permission_matches
 from app.models.apparatus import (
     Apparatus,
     DriverException,
@@ -36,6 +37,10 @@ from app.models.apparatus import (
 from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.org_scoping import assert_in_org
+
+# The grant that lets someone approve. Named once so the enforcement message,
+# the endpoint gate, and the approver lookup cannot drift apart.
+APPROVAL_PERMISSION = "apparatus.approve_driver_exception"
 
 # How far ahead an exception may be granted. A parade three years out is not a
 # plan, it is an unbounded waiver wearing a date.
@@ -91,6 +96,58 @@ class DriverExceptionService:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    # ------------------------------------------------------------------
+    # Who can approve
+    # ------------------------------------------------------------------
+
+    async def list_approvers(self, organization_id: str) -> List[Dict[str, Any]]:
+        """Members who can actually approve a driver exception, by name.
+
+        A blocked officer needs to know who to call, and "ask a chief" is not
+        an answer in a department where the chief is on vacation and the
+        deputy holds the grant. Resolved from live permissions rather than
+        assumed from rank, so a department that moved the grant to a training
+        officer sees the training officer.
+
+        Mirrors ``_collect_user_permissions``: positions plus operational-rank
+        defaults, matched with the same wildcard-aware ``permission_matches``
+        the dependency layer uses, so this list cannot disagree with who the
+        API will actually let through.
+
+        Names and ranks only — no email or phone. Contact details are governed
+        by the org's contact-visibility settings, and this endpoint has no
+        business bypassing them; the member directory is where you look those
+        up.
+        """
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.positions))
+            .where(
+                User.organization_id == str(organization_id),
+                User.deleted_at.is_(None),
+                User.is_active,
+            )
+            .order_by(User.last_name, User.first_name)
+        )
+
+        approvers: List[Dict[str, Any]] = []
+        for user in result.scalars().all():
+            granted: set = set()
+            for position in user.positions or []:
+                granted.update(position.permissions or [])
+            if user.rank:
+                granted.update(get_rank_default_permissions(user.rank))
+
+            if permission_matches(APPROVAL_PERMISSION, granted):
+                approvers.append(
+                    {
+                        "user_id": str(user.id),
+                        "user_name": user.full_name,
+                        "rank": user.rank,
+                    }
+                )
+        return approvers
 
     # ------------------------------------------------------------------
     # Request

@@ -17,6 +17,7 @@ from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid
 from app.models.notification import NotificationLog
 from app.models.training import (
@@ -2409,17 +2410,22 @@ class SchedulingService:
         shift_id: str,
         organization_id: str,
         position: Any,
-    ) -> Optional[str]:
-        """Return a blocking message when a member may not drive this shift.
+    ) -> None:
+        """Raise when a member may not drive this shift.
 
         A safety control, not a convenience check: without the EVOC level the
         apparatus requires, the member does not take the wheel. The sanctioned
         override is a chief-approved ``DriverException``, which
         ``evaluate_driver_assignment`` consults — nothing here needs to know
         about it beyond honouring the answer.
+
+        Raises ``CodedValueError`` rather than returning a message so the
+        refusal carries ``LB-SCHED-001`` all the way to the client. The UI
+        keys its "request an exception" offer off that code; matching on the
+        message text would break the moment the wording changed.
         """
         if not self._is_driver_position(position):
-            return None
+            return
 
         # Imported here rather than at module scope: the eligibility service
         # imports scheduling models, and a top-level import closes the cycle.
@@ -2430,7 +2436,11 @@ class SchedulingService:
             shift_id=shift_id,
             organization_id=organization_id,
         )
-        return None if outcome["allowed"] else outcome["blocked_reason"]
+        if not outcome["allowed"]:
+            raise CodedValueError(
+                outcome["blocked_reason"],
+                error_code=ErrorCode.SCHED_DRIVER_NOT_QUALIFIED,
+            )
 
     async def create_assignment(
         self,
@@ -2559,14 +2569,12 @@ class SchedulingService:
             # both paths reach this one call, and a future third path inherits
             # the check for free.
             if user_id:
-                driver_error = await self._check_driver_qualification(
+                await self._check_driver_qualification(
                     user_id=str(user_id),
                     shift_id=str(shift_id),
                     organization_id=str(organization_id),
                     position=assignment_data.get("position"),
                 )
-                if driver_error:
-                    return None, driver_error
 
             assignment = ShiftAssignment(
                 organization_id=organization_id,
@@ -2616,6 +2624,12 @@ class SchedulingService:
         except IntegrityError:
             await self.db.rollback()
             return None, "Member is already assigned to this shift"
+        except CodedValueError:
+            # A curated business refusal (e.g. the driver qualification
+            # block). Re-raise so the endpoint can surface its support code
+            # instead of flattening it into an anonymous 400.
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
@@ -2792,14 +2806,12 @@ class SchedulingService:
             if "position" in update_data and self._is_driver_position(
                 update_data.get("position")
             ):
-                driver_error = await self._check_driver_qualification(
+                await self._check_driver_qualification(
                     user_id=str(assignment.user_id),
                     shift_id=str(assignment.shift_id),
                     organization_id=str(organization_id),
                     position=update_data.get("position"),
                 )
-                if driver_error:
-                    return None, driver_error
 
             old_status = assignment.assignment_status
             position = assignment.position
@@ -2826,6 +2838,12 @@ class SchedulingService:
                 )
 
             return assignment, None
+        except CodedValueError:
+            # A curated business refusal (e.g. the driver qualification
+            # block). Re-raise so the endpoint can surface its support code
+            # instead of flattening it into an anonymous 400.
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
             return None, str(e)

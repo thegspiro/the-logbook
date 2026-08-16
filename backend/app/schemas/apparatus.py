@@ -1057,6 +1057,18 @@ class DriverExceptionCreate(BaseModel):
         return self
 
 
+class DriverExceptionApprover(BaseModel):
+    """Someone who can approve a driver exception, so a blocked officer knows
+    who to call. Names and ranks only — contact details stay behind the
+    directory's visibility settings."""
+
+    user_id: str
+    user_name: str
+    rank: Optional[str] = None
+
+    model_config = _response_config
+
+
 class DriverExceptionReview(BaseModel):
     """Approve or deny a pending exception request."""
 

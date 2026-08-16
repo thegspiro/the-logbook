@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.core.error_codes import CodedValueError, ErrorCode
 from app.services.scheduling_service import SchedulingService
 
 
@@ -74,7 +75,7 @@ class TestCheckDriverQualification:
         )
         assert called is False
 
-    async def test_allowed_assignment_returns_no_error(self, monkeypatch):
+    async def test_allowed_assignment_passes_quietly(self, monkeypatch):
         svc = self._svc(
             monkeypatch, {"allowed": True, "blocked_reason": None, "warnings": []}
         )
@@ -85,7 +86,7 @@ class TestCheckDriverQualification:
             is None
         )
 
-    async def test_blocked_assignment_returns_the_reason(self, monkeypatch):
+    async def test_blocked_assignment_raises_with_the_reason(self, monkeypatch):
         svc = self._svc(
             monkeypatch,
             {
@@ -94,12 +95,23 @@ class TestCheckDriverQualification:
                 "warnings": [],
             },
         )
-        assert (
+        with pytest.raises(CodedValueError, match="Requires EVOC Level 3."):
             await svc._check_driver_qualification(
                 "u1", "sh1", "org-1", position="driver"
             )
-            == "Requires EVOC Level 3."
+
+    async def test_the_refusal_carries_its_support_code(self, monkeypatch):
+        # The UI keys its "request an exception" offer off this code; matching
+        # on the message text would break the moment the wording changed.
+        svc = self._svc(
+            monkeypatch,
+            {"allowed": False, "blocked_reason": "Nope.", "warnings": []},
         )
+        with pytest.raises(CodedValueError) as caught:
+            await svc._check_driver_qualification(
+                "u1", "sh1", "org-1", position="driver"
+            )
+        assert caught.value.error_code is ErrorCode.SCHED_DRIVER_NOT_QUALIFIED
 
 
 class TestEnforcementIsWiredIntoBothWritePaths:
@@ -112,6 +124,19 @@ class TestEnforcementIsWiredIntoBothWritePaths:
     def test_create_assignment_checks_qualification(self):
         source = inspect.getsource(SchedulingService.create_assignment)
         assert "_check_driver_qualification" in source
+
+    def test_create_assignment_does_not_swallow_the_refusal(self):
+        # A bare `except Exception` would flatten the coded refusal into an
+        # anonymous 400 and the UI would lose its cue to offer help.
+        source = inspect.getsource(SchedulingService.create_assignment)
+        assert "except CodedValueError" in source
+        assert source.index("except CodedValueError") < source.index(
+            "except Exception as e"
+        )
+
+    def test_update_assignment_does_not_swallow_the_refusal(self):
+        source = inspect.getsource(SchedulingService.update_assignment)
+        assert "except CodedValueError" in source
 
     def test_create_assignment_returns_before_persisting(self):
         # The check must gate the insert, not merely annotate it.

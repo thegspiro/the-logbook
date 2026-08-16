@@ -43,6 +43,7 @@ import type {
   EvocLevelUpdate,
   EvocEligibilityCheck,
   DriverException,
+  DriverExceptionApprover,
   DriverExceptionCreate,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
@@ -506,6 +507,11 @@ export const driverExceptionService = {
         include_expired: params?.includeExpired ?? false,
       },
     });
+    return asArray(response.data);
+  },
+
+  async approvers(): Promise<DriverExceptionApprover[]> {
+    const response = await api.get<DriverExceptionApprover[]>('/apparatus/driver-exceptions/approvers');
     return asArray(response.data);
   },
 
