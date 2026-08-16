@@ -591,14 +591,31 @@ export interface EvocLevelCreate {
   levelNumber: number;
   name: string;
   code: string;
-  description?: string;
+  description?: string | undefined;
   isCumulative?: boolean;
-  trainingProgramId?: string;
+  trainingProgramId?: string | undefined;
   sortOrder?: number;
   isActive?: boolean;
 }
 
-export type EvocLevelUpdate = Partial<EvocLevelCreate>;
+/**
+ * Update payload — not `Partial<EvocLevelCreate>`.
+ *
+ * The backend applies updates with `exclude_unset`, so an omitted key means
+ * "leave this alone" and only an explicit `null` clears a field. Unlinking a
+ * certifying program or wiping a description therefore has to send `null`,
+ * which `Partial<EvocLevelCreate>` cannot express.
+ */
+export interface EvocLevelUpdate {
+  levelNumber?: number;
+  name?: string;
+  code?: string;
+  description?: string | null;
+  isCumulative?: boolean;
+  trainingProgramId?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}
 
 export interface EvocLevelListItem {
   id: string;

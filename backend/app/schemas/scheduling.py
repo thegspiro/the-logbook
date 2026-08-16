@@ -769,6 +769,50 @@ class SchedulingEligibilitySettingsResponse(BaseModel):
     open_positions: List[str]
 
 
+class PositionEligibilitySource(BaseModel):
+    """One reason a member holds a position.
+
+    ``type`` is ``rank``, ``training``, or ``open``; ``label`` names the
+    specific rank or completed program so an officer can see *why* without
+    cross-referencing the settings screens.
+    """
+
+    type: str
+    label: str
+
+
+class RosterApparatusClearance(BaseModel):
+    """An apparatus the member holds a current operator record on."""
+
+    apparatus_id: str
+    unit_number: str
+    certification_expiration: Optional[date] = None
+
+
+class PositionRosterMember(BaseModel):
+    """A member eligible for a position, with the basis for that eligibility."""
+
+    user_id: str
+    user_name: str
+    rank: Optional[str] = None
+    rank_display_name: Optional[str] = None
+    membership_type: str
+    platoon: Optional[str] = None
+    sources: List[PositionEligibilitySource]
+    evoc_level_number: Optional[int] = None
+    evoc_level_name: Optional[str] = None
+    apparatus_cleared: List[RosterApparatusClearance] = []
+
+
+class PositionRosterResponse(BaseModel):
+    """Department-wide roster of everyone eligible for a shift position."""
+
+    position: str
+    members: List[PositionRosterMember]
+    excluded_membership_types: List[str]
+    is_open_position: bool
+
+
 class CalendarFeedResponse(BaseModel):
     """The member's personal ICS calendar-feed token and relative path."""
 

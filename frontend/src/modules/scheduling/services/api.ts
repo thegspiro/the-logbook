@@ -47,6 +47,7 @@ import type {
   AvailabilityRecord,
   ShiftSignupResponse,
   EligiblePositionsResponse,
+  PositionRosterResponse,
   EvocWarning,
   SchedulingEligibilitySettings,
   ShiftCallRecord,
@@ -703,6 +704,12 @@ export const schedulingService = {
   async getEligiblePositions(shiftId?: string): Promise<EligiblePositionsResponse> {
     const params = shiftId ? { shift_id: shiftId } : undefined;
     const response = await api.get<EligiblePositionsResponse>('/scheduling/eligibility/positions', { params });
+    return response.data;
+  },
+  async getPositionRoster(position: string): Promise<PositionRosterResponse> {
+    const response = await api.get<PositionRosterResponse>('/scheduling/eligibility/roster', {
+      params: { position },
+    });
     return response.data;
   },
   async getEligibilitySettings(): Promise<SchedulingEligibilitySettings> {

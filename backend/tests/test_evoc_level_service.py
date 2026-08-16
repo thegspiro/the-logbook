@@ -13,12 +13,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.schemas.apparatus import EvocLevelCreate
+from app.schemas.apparatus import EvocLevelCreate, EvocLevelUpdate
 from app.services.evoc_level_service import EvocLevelService
 
 
 def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
+
+
+def _count(n):
+    return MagicMock(scalar=MagicMock(return_value=n))
 
 
 def _scalars(items):
@@ -32,6 +36,7 @@ def _db(side_effect):
     db.execute = AsyncMock(side_effect=side_effect)
     db.add = MagicMock()
     db.commit = AsyncMock()
+    db.flush = AsyncMock()
     db.refresh = AsyncMock()
     db.delete = AsyncMock()
     return db
@@ -226,6 +231,114 @@ class TestAutoAddOperators:
         assert len(out) == 1
         assert out[0].apparatus_id == "ap1"
         db.commit.assert_awaited()
+
+
+class TestSeedDefaults:
+    """The lazy seed behind the EVOC admin screen.
+
+    Without levels on file no apparatus can carry an EVOC requirement, so
+    check_driver_evoc_eligibility passes every member unconditionally — the
+    reason the ladder is seeded rather than left to manual setup.
+    """
+
+    async def test_seeds_full_ladder_when_org_has_none(self):
+        db = _db([_count(0)])
+        levels = await EvocLevelService(db).seed_defaults("org-1")
+
+        assert [level.level_number for level in levels] == [1, 2, 3, 4]
+        assert all(level.organization_id == "org-1" for level in levels)
+        assert all(level.is_cumulative for level in levels)
+        # Not is_system: a two-tier department must be able to delete the
+        # levels it does not use.
+        assert not any(level.is_system for level in levels)
+        assert db.add.call_count == 4
+
+    async def test_no_reseed_when_levels_exist(self):
+        db = _db([_count(1)])
+        assert await EvocLevelService(db).seed_defaults("org-1") == []
+        db.add.assert_not_called()
+
+    async def test_deactivated_levels_still_block_reseed(self):
+        # The guard counts all rows, not just active ones, so hiding a level
+        # the department does not use must not resurrect the whole ladder.
+        db = _db([_count(4)])
+        assert await EvocLevelService(db).seed_defaults("org-1") == []
+
+
+class TestTrainingProgramLinkScoping:
+    """XC-1: the certifying-program link is what _handle_evoc_completion
+    matches enrollments against, so a foreign id would let one org's program
+    completion mint operator records under another org's apparatus."""
+
+    def _data(self, program_id):
+        return EvocLevelCreate(
+            level_number=2, name="EVOC II", code="E2", training_program_id=program_id
+        )
+
+    async def test_create_rejects_out_of_org_program(self):
+        db = _db([_one(None)])  # is_in_org lookup misses
+        with pytest.raises(ValueError, match="Invalid training program"):
+            await EvocLevelService(db).create_level(self._data("prog-other"), "org-1")
+
+    async def test_create_accepts_in_org_program(self):
+        db = _db([_one("prog-1"), _one(None), _one(None)])
+        level = await EvocLevelService(db).create_level(self._data("prog-1"), "org-1")
+        assert level.training_program_id == "prog-1"
+
+    async def test_update_rejects_out_of_org_program(self):
+        db = _db([_one(_level(2)), _one(None)])
+        with pytest.raises(ValueError, match="Invalid training program"):
+            await EvocLevelService(db).update_level(
+                "lvl-2", EvocLevelUpdate(training_program_id="prog-other"), "org-1"
+            )
+
+
+class TestUpdateLevel:
+    async def test_explicit_null_clears_the_program_link(self):
+        # Unlinking must actually persist: the old `if value is not None`
+        # idiom would acknowledge the clear with a 200 and keep the link.
+        level = _level(2)
+        level.training_program_id = "prog-1"
+        db = _db([_one(level)])
+        out = await EvocLevelService(db).update_level(
+            "lvl-2", EvocLevelUpdate(training_program_id=None), "org-1"
+        )
+        assert out.training_program_id is None
+
+    async def test_renumber_collision_rejected(self):
+        # Surfaces as a 400 rather than a unique-index IntegrityError 500.
+        db = _db([_one(_level(2)), _one("lvl-3")])
+        with pytest.raises(ValueError, match="already exists"):
+            await EvocLevelService(db).update_level(
+                "lvl-2", EvocLevelUpdate(level_number=3), "org-1"
+            )
+
+    async def test_recode_collision_rejected(self):
+        level = _level(2)
+        level.code = "E2"
+        db = _db([_one(level), _one("lvl-3")])
+        with pytest.raises(ValueError, match="code"):
+            await EvocLevelService(db).update_level(
+                "lvl-2", EvocLevelUpdate(code="E3"), "org-1"
+            )
+
+    async def test_unchanged_number_skips_collision_check(self):
+        level = _level(2)
+        level.code = "E2"
+        db = _db([_one(level)])
+        out = await EvocLevelService(db).update_level(
+            "lvl-2", EvocLevelUpdate(level_number=2, name="Renamed"), "org-1"
+        )
+        assert out.name == "Renamed"
+
+    async def test_missing_level_returns_none(self):
+        db = _db([_one(None)])
+        assert (
+            await EvocLevelService(db).update_level(
+                "nope", EvocLevelUpdate(name="x"), "org-1"
+            )
+            is None
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

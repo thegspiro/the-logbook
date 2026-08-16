@@ -41,6 +41,7 @@ from app.schemas.scheduling import (
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
     PlatoonOverviewResponse,
+    PositionRosterResponse,
     SchedulingEligibilitySettings,
     SchedulingEligibilitySettingsResponse,
     SchedulingFeatureSettings,
@@ -2235,6 +2236,39 @@ async def get_eligible_positions(
     )
     is_excluded = len(positions) == 0 and not shift_id
     return EligiblePositionsResponse(positions=positions, is_excluded=is_excluded)
+
+
+@router.get(
+    "/eligibility/roster",
+    response_model=PositionRosterResponse,
+)
+async def get_position_roster(
+    position: str = Query(
+        "driver",
+        description="Shift position to build the roster for",
+        max_length=50,
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
+):
+    """
+    List every active member eligible for a shift position, and why.
+
+    Answers "who is cleared to drive?" without opening each apparatus in
+    turn. Each entry reports the sources of the member's eligibility (rank,
+    completed training, or the org's open-position list), their current EVOC
+    level, and the apparatus they hold an operator record on.
+
+    **Permissions required:** scheduling.view or scheduling.manage
+    """
+    service = ShiftEligibilityService(db)
+    roster = await service.get_position_roster(
+        organization_id=current_user.organization_id,
+        position=position.strip().lower(),
+    )
+    return PositionRosterResponse(**roster)
 
 
 @router.get(

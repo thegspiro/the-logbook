@@ -8,6 +8,7 @@ maintenance tracking, equipment, operators, and fleet management.
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, require_permission
@@ -2704,6 +2705,21 @@ async def list_evoc_levels(
     **Permissions required:** apparatus.view or apparatus.manage
     """
     service = EvocLevelService(db)
+
+    # Auto-seed the standard EVOC 1-4 ladder if the org has none yet. Without
+    # levels on file, apparatus carry no EVOC requirement and the driver
+    # qualification checks silently pass everyone.
+    try:
+        seeded = await service.seed_defaults(current_user.organization_id)
+        if seeded:
+            await db.commit()
+    except IntegrityError:
+        # Two first-reads raced (two tabs, or a page issuing parallel loads)
+        # and both passed the empty-ladder check. The unique index on
+        # (organization_id, level_number) settles it; keep the winner's rows
+        # rather than turning an org's very first read into a 500.
+        await db.rollback()
+
     return await service.list_levels(
         organization_id=current_user.organization_id,
         active_only=active_only,

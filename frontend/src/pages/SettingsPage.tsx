@@ -5,7 +5,7 @@
  * Sections: General, Modules, Members, Ranks, Email, Storage, Authentication.
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Building2,
@@ -56,16 +56,18 @@ import type {
   AuthSettings,
 } from '../types/user';
 import { invalidateRanksCache } from '../hooks/useRanks';
+import { useAuthStore } from '../stores/authStore';
 import EmailSettingsSection from '../components/settings/EmailSettingsSection';
 import StorageSettingsSection from '../components/settings/StorageSettingsSection';
 import AuthSettingsSection from '../components/settings/AuthSettingsSection';
 import { MfaPolicyCard } from '../components/settings/MfaPolicyCard';
 import RanksSettingsSection from '../components/settings/RanksSettingsSection';
+import EvocLevelsSettingsSection from '../components/settings/EvocLevelsSettingsSection';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 
 // ── Section definitions ──
 
-type SectionKey = 'general' | 'modules' | 'members' | 'ranks' | 'email' | 'storage' | 'authentication';
+type SectionKey = 'general' | 'modules' | 'members' | 'ranks' | 'evoc' | 'email' | 'storage' | 'authentication';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
   {
@@ -77,6 +79,12 @@ const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'modules', label: 'Modules', icon: Package, description: 'Enable or disable optional features' },
   { key: 'members', label: 'Members', icon: Users, description: 'Contact visibility and membership IDs' },
   { key: 'ranks', label: 'Ranks', icon: Shield, description: 'Operational rank configuration' },
+  {
+    key: 'evoc',
+    label: 'EVOC Levels',
+    icon: Truck,
+    description: 'Driver certification ladder and certifying programs',
+  },
   { key: 'email', label: 'Email', icon: Mail, description: 'Email platform and notification settings' },
   { key: 'storage', label: 'Storage', icon: HardDrive, description: 'File storage platform configuration' },
   { key: 'authentication', label: 'Authentication', icon: Key, description: 'User sign-in and SSO provider' },
@@ -260,13 +268,23 @@ const Toggle: React.FC<{
 
 // ── Main component ──
 
-const SECTION_KEYS = new Set<string>(SECTIONS.map((s) => s.key));
-
 export const SettingsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+
+  // EVOC levels are served by the apparatus API, which this page's own
+  // settings.manage grant does not cover — hide the section rather than show a
+  // tab that can only 403.
+  const canManageEvoc = checkPermission('apparatus.manage');
+  const sections = useMemo(
+    () => SECTIONS.filter((section) => section.key !== 'evoc' || canManageEvoc),
+    [canManageEvoc]
+  );
+  const sectionKeys = useMemo(() => new Set<string>(sections.map((s) => s.key)), [sections]);
+
   const initialTab = searchParams.get('tab');
   const [activeSection, setActiveSection] = useState<SectionKey>(
-    initialTab && SECTION_KEYS.has(initialTab) ? (initialTab as SectionKey) : 'general'
+    initialTab && sectionKeys.has(initialTab) ? (initialTab as SectionKey) : 'general'
   );
   const [loading, setLoading] = useState(true);
 
@@ -1196,6 +1214,12 @@ export const SettingsPage: React.FC = () => {
         );
 
       // ════════════════════════════════════════════
+      // EVOC LEVELS
+      // ════════════════════════════════════════════
+      case 'evoc':
+        return <EvocLevelsSettingsSection />;
+
+      // ════════════════════════════════════════════
       // EMAIL
       // ════════════════════════════════════════════
       case 'email':
@@ -1257,7 +1281,7 @@ export const SettingsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <SettingsLayout
-        sections={SECTIONS}
+        sections={sections}
         activeSection={activeSection}
         onSectionChange={switchSection}
         navLabel="Settings sections"

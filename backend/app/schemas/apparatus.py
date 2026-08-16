@@ -969,6 +969,12 @@ class ApparatusFuelLogResponse(ApparatusFuelLogBase):
 class EvocLevelBase(BaseModel):
     """Base EVOC level schema"""
 
+    # Accept camelCase like every other write schema in this module. Without
+    # it the request models took snake_case only while the responses came back
+    # camelCase, so any client round-tripping a level 422'd on level_number —
+    # latent until the EVOC admin screen became the first caller.
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     level_number: int = Field(..., ge=1, le=10, description="EVOC level number")
     name: str = Field(..., min_length=1, max_length=100)
     code: str = Field(..., min_length=1, max_length=50)
@@ -990,6 +996,8 @@ class EvocLevelCreate(EvocLevelBase):
 
 class EvocLevelUpdate(BaseModel):
     """Schema for updating an EVOC level"""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     level_number: Optional[int] = Field(None, ge=1, le=10)
     name: Optional[str] = Field(None, min_length=1, max_length=100)

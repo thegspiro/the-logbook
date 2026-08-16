@@ -7,11 +7,14 @@ positions, membership type, and EVOC certification levels.
 """
 
 import copy
+from datetime import date
 from typing import Any, Dict, List, Optional, Set
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.models.apparatus import Apparatus, ApparatusOperator
 from app.models.operational_rank import OperationalRank
 from app.models.training import (
     EnrollmentStatus,
@@ -220,6 +223,218 @@ class ShiftEligibilityService:
                 eligible = eligible & shift_positions
 
         return sorted(eligible)
+
+    # ------------------------------------------------------------------
+    # Department-wide position roster
+    # ------------------------------------------------------------------
+
+    async def get_position_roster(
+        self,
+        organization_id: str,
+        position: str,
+    ) -> Dict[str, Any]:
+        """List every active member eligible for ``position``, and why.
+
+        Answers "who is cleared to drive?" in one query set rather than making
+        an officer open each apparatus in turn. For each member it reports the
+        *sources* of their eligibility (rank, completed training, or the org's
+        open-position list), their current EVOC standing, and the apparatus
+        they hold an operator record on.
+
+        Eligibility mirrors ``get_eligible_positions`` exactly — same union of
+        rank / training / open positions behind the same membership-type gate —
+        so the roster can never disagree with what self-signup enforces. The
+        per-shift narrowing is deliberately not applied: this is the
+        department-wide roster, not a roster for one shift.
+        """
+        org = await self._get_org(organization_id)
+        if not org:
+            return {
+                "position": position,
+                "members": [],
+                "excluded_membership_types": [],
+                "is_open_position": False,
+            }
+
+        excluded = self.get_excluded_membership_types(org)
+        open_positions = self.get_open_positions(org)
+        is_open = position in open_positions
+
+        users_result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == str(organization_id))
+            .where(User.deleted_at.is_(None))
+            .where(User.is_active)
+            .order_by(User.last_name, User.first_name)
+        )
+        users = list(users_result.scalars().all())
+
+        rank_map = await self._get_rank_map(organization_id)
+        training_map = await self._get_training_program_map(organization_id, position)
+        operator_map = await self._get_operator_map(organization_id)
+
+        members: List[Dict[str, Any]] = []
+        for user in users:
+            member_type = getattr(user, "membership_type", None) or "active"
+            if member_type in excluded:
+                continue
+
+            sources: List[Dict[str, Any]] = []
+
+            rank_entry = rank_map.get(user.rank or "")
+            if rank_entry and position in rank_entry["positions"]:
+                sources.append(
+                    {
+                        "type": "rank",
+                        "label": rank_entry["display_name"],
+                    }
+                )
+
+            for program_name in training_map.get(str(user.id), []):
+                sources.append({"type": "training", "label": program_name})
+
+            if is_open:
+                sources.append({"type": "open", "label": "Open to all members"})
+
+            if not sources:
+                continue
+
+            operator_records = operator_map.get(str(user.id), [])
+            evoc_level = self._highest_evoc(operator_records)
+
+            members.append(
+                {
+                    "user_id": str(user.id),
+                    "user_name": user.full_name,
+                    "rank": user.rank,
+                    "rank_display_name": (
+                        rank_entry["display_name"] if rank_entry else None
+                    ),
+                    "membership_type": member_type,
+                    "platoon": user.platoon,
+                    "sources": sources,
+                    "evoc_level_number": (
+                        evoc_level.level_number if evoc_level else None
+                    ),
+                    "evoc_level_name": evoc_level.name if evoc_level else None,
+                    "apparatus_cleared": [
+                        {
+                            "apparatus_id": rec["apparatus_id"],
+                            "unit_number": rec["unit_number"],
+                            "certification_expiration": rec["certification_expiration"],
+                        }
+                        for rec in operator_records
+                    ],
+                }
+            )
+
+        return {
+            "position": position,
+            "members": members,
+            "excluded_membership_types": excluded,
+            "is_open_position": is_open,
+        }
+
+    async def _get_rank_map(self, organization_id: str) -> Dict[str, Dict[str, Any]]:
+        """rank_code -> {display_name, positions} for the org's active ranks."""
+        result = await self.db.execute(
+            select(
+                OperationalRank.rank_code,
+                OperationalRank.display_name,
+                OperationalRank.eligible_positions,
+            ).where(
+                OperationalRank.organization_id == organization_id,
+                OperationalRank.is_active.is_(True),
+            )
+        )
+        return {
+            rank_code: {
+                "display_name": display_name,
+                "positions": positions or [],
+            }
+            for rank_code, display_name, positions in result.all()
+        }
+
+    async def _get_training_program_map(
+        self, organization_id: str, position: str
+    ) -> Dict[str, List[str]]:
+        """user_id -> names of completed programs that unlock ``position``.
+
+        Uses the same ``TRAINING_POSITION_MAP`` translation as
+        ``_get_training_positions`` so a ``driver_candidate`` program shows up
+        on the driver roster.
+        """
+        result = await self.db.execute(
+            select(
+                ProgramEnrollment.user_id,
+                TrainingProgram.name,
+                TrainingProgram.target_position,
+            )
+            .join(TrainingProgram, ProgramEnrollment.program_id == TrainingProgram.id)
+            .where(
+                TrainingProgram.organization_id == organization_id,
+                ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+                TrainingProgram.target_position.isnot(None),
+            )
+        )
+
+        by_user: Dict[str, List[str]] = {}
+        for user_id, program_name, target_position in result.all():
+            mapped = TRAINING_POSITION_MAP.get(target_position, target_position)
+            if mapped == position:
+                by_user.setdefault(str(user_id), []).append(program_name)
+        return by_user
+
+    async def _get_operator_map(
+        self, organization_id: str
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """user_id -> current apparatus operator records, newest cert first.
+
+        Only *current* certifications count, matching
+        ``EvocLevelService.check_driver_evoc_eligibility``: active, certified,
+        and not past expiration. An expired card must not read as cleared.
+        """
+        today = date.today()
+        result = await self.db.execute(
+            select(ApparatusOperator, Apparatus.unit_number)
+            .join(Apparatus, ApparatusOperator.apparatus_id == Apparatus.id)
+            .options(selectinload(ApparatusOperator.evoc_level))
+            .where(
+                ApparatusOperator.organization_id == organization_id,
+                ApparatusOperator.is_active.is_(True),
+                ApparatusOperator.is_certified.is_(True),
+                Apparatus.is_archived.is_(False),
+                or_(
+                    ApparatusOperator.certification_expiration.is_(None),
+                    ApparatusOperator.certification_expiration >= today,
+                ),
+            )
+            .order_by(Apparatus.unit_number)
+        )
+
+        by_user: Dict[str, List[Dict[str, Any]]] = {}
+        for operator, unit_number in result.all():
+            by_user.setdefault(str(operator.user_id), []).append(
+                {
+                    "apparatus_id": str(operator.apparatus_id),
+                    "unit_number": unit_number,
+                    "certification_expiration": operator.certification_expiration,
+                    "evoc_level": operator.evoc_level,
+                }
+            )
+        return by_user
+
+    @staticmethod
+    def _highest_evoc(operator_records: List[Dict[str, Any]]):
+        """The highest-numbered EVOC level across a member's operator records."""
+        best = None
+        for record in operator_records:
+            level = record.get("evoc_level")
+            if level is None:
+                continue
+            if best is None or level.level_number > best.level_number:
+                best = level
+        return best
 
     # ------------------------------------------------------------------
     # Internal helpers

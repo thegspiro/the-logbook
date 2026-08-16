@@ -9,12 +9,47 @@ shift scheduling.
 from datetime import date
 from typing import List, Optional
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.apparatus import Apparatus, ApparatusOperator, EvocLevel
+from app.models.training import TrainingProgram
 from app.schemas.apparatus import EvocLevelCreate, EvocLevelUpdate
+from app.utils.model_updates import apply_updates
+from app.utils.org_scoping import assert_in_org
+
+# The NFPA 1451 / national EVOC tiering most departments start from. Seeded
+# per-organization (rather than as org-agnostic system rows) because each level
+# carries a ``training_program_id`` pointing at that department's own
+# certifying program — a shared row would leak that link across tenants.
+# Format: (level_number, name, code, description)
+DEFAULT_EVOC_LEVELS = [
+    (
+        1,
+        "EVOC 1 - Light Vehicle",
+        "EVOC1",
+        "Staff cars, utility vehicles, and other light apparatus.",
+    ),
+    (
+        2,
+        "EVOC 2 - Ambulance",
+        "EVOC2",
+        "Ambulances and medium-duty apparatus.",
+    ),
+    (
+        3,
+        "EVOC 3 - Engine / Pumper",
+        "EVOC3",
+        "Engines, pumpers, tankers, and other heavy apparatus.",
+    ),
+    (
+        4,
+        "EVOC 4 - Aerial",
+        "EVOC4",
+        "Aerials, ladders, tillers, and specialized heavy apparatus.",
+    ),
+]
 
 
 class EvocLevelService:
@@ -24,8 +59,73 @@ class EvocLevelService:
         self.db = db
 
     # ------------------------------------------------------------------
+    # Seed
+    # ------------------------------------------------------------------
+
+    async def seed_defaults(self, organization_id: str) -> List[EvocLevel]:
+        """Insert the standard EVOC 1-4 ladder for an org that has none.
+
+        Called lazily from the list endpoint, mirroring
+        ``OperationalRankService.seed_defaults``. The guard counts *all* rows
+        (not just active ones), so deactivating a level the department does not
+        use will not cause it to reappear. Deleting every level does re-seed on
+        the next read — the same trade-off the rank list makes, and the reason
+        the UI offers deactivation alongside deletion.
+        """
+        result = await self.db.execute(
+            select(func.count(EvocLevel.id)).where(
+                EvocLevel.organization_id == organization_id,
+            )
+        )
+        if result.scalar() > 0:
+            return []
+
+        levels = []
+        for level_number, name, code, description in DEFAULT_EVOC_LEVELS:
+            level = EvocLevel(
+                organization_id=organization_id,
+                level_number=level_number,
+                name=name,
+                code=code,
+                description=description,
+                is_cumulative=True,
+                # Deliberately not is_system: a department with a two-tier
+                # ladder must be able to remove the levels it does not use.
+                is_system=False,
+                sort_order=level_number,
+                is_active=True,
+            )
+            self.db.add(level)
+            levels.append(level)
+
+        await self.db.flush()
+        # Refresh server-computed timestamps to prevent MissingGreenlet when the
+        # response schema serializes created_at/updated_at.
+        for level in levels:
+            await self.db.refresh(level, attribute_names=["created_at", "updated_at"])
+        return levels
+
+    # ------------------------------------------------------------------
     # CRUD
     # ------------------------------------------------------------------
+
+    async def _assert_program_in_org(
+        self, training_program_id: Optional[str], organization_id: str
+    ) -> None:
+        """Reject a certifying-program id belonging to another org (XC-1).
+
+        The link is what ``_handle_evoc_completion`` matches enrollments
+        against, so a foreign id would let one org's program completion mint
+        operator records under this org's apparatus.
+        """
+        await assert_in_org(
+            self.db,
+            TrainingProgram,
+            training_program_id,
+            organization_id,
+            allow_none=True,
+            label="training program",
+        )
 
     async def create_level(
         self,
@@ -33,6 +133,8 @@ class EvocLevelService:
         organization_id: str,
     ) -> EvocLevel:
         """Create an EVOC level for the organization."""
+        await self._assert_program_in_org(data.training_program_id, organization_id)
+
         existing = await self.db.execute(
             select(EvocLevel).where(
                 EvocLevel.organization_id == organization_id,
@@ -103,8 +205,42 @@ class EvocLevelService:
             return None
 
         update_data = data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(level, field, value)
+
+        if "training_program_id" in update_data:
+            await self._assert_program_in_org(
+                update_data["training_program_id"], organization_id
+            )
+
+        # Renumbering or recoding a level must not collide with a sibling —
+        # the (organization_id, level_number) and (organization_id, code)
+        # indexes are unique, and an IntegrityError here surfaces as a 500.
+        new_number = update_data.get("level_number")
+        if new_number is not None and new_number != level.level_number:
+            clash = await self.db.execute(
+                select(EvocLevel.id).where(
+                    EvocLevel.organization_id == organization_id,
+                    EvocLevel.level_number == new_number,
+                    EvocLevel.id != level_id,
+                )
+            )
+            if clash.scalar_one_or_none():
+                raise ValueError(
+                    f"EVOC level {new_number} already exists for this organization"
+                )
+
+        new_code = update_data.get("code")
+        if new_code is not None and new_code != level.code:
+            clash = await self.db.execute(
+                select(EvocLevel.id).where(
+                    EvocLevel.organization_id == organization_id,
+                    EvocLevel.code == new_code,
+                    EvocLevel.id != level_id,
+                )
+            )
+            if clash.scalar_one_or_none():
+                raise ValueError(f"EVOC level code '{new_code}' already exists")
+
+        apply_updates(level, update_data, skip={"organization_id", "id"})
 
         await self.db.commit()
         await self.db.refresh(level)
