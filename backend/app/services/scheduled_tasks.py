@@ -3476,38 +3476,12 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             if success_count > 0:
                 alerts_sent += 1
 
-        try:
-            from app.services.sms_service import SMSService
-
-            sms_svc = SMSService()
-            if sms_svc.enabled:
-                # TCPA: text messaging needs express consent. The email above
-                # is unconditional, so an admin without SMS consent still gets
-                # this alert — only the text is suppressed.
-                from app.models.consent import ConsentType
-                from app.services.consent_service import ConsentService
-
-                consented = await ConsentService(db_session).granted_user_ids(
-                    [str(a.id) for a in admins], ConsentType.SMS_NOTIFICATIONS
-                )
-                admin_phones = [
-                    a.phone
-                    for a in admins
-                    if getattr(a, "phone", None) and str(a.id) in consented
-                ]
-                if admin_phones:
-                    sms_body = (
-                        f"Low Stock Alert: {len(low_stock)} inventory item(s) "
-                        f"below reorder point. Check the inventory dashboard."
-                    )
-                    sms_sent = await sms_svc.send_bulk_sms(admin_phones, sms_body)
-                    logger.info(
-                        f"Low stock SMS sent to {sms_sent}/"
-                        f"{len(admin_phones)} admins for org {org.id}"
-                    )
-        except Exception as sms_err:
-            logger.warning(f"SMS low stock alerts failed for org {org.id}: {sms_err}")
-
+        # Email only, deliberately. Reordering is a purchasing decision a
+        # quartermaster makes during business hours against the itemised table
+        # above — a text can carry neither the item list nor the quantities,
+        # so it adds nothing but an out-of-hours interruption and a per-message
+        # charge. See app/services/notification_channels for the policy and
+        # the list of alerts that do warrant a text.
         return alerts_sent
 
     return await _for_each_org(db, "inventory_low_stock_alerts", process)

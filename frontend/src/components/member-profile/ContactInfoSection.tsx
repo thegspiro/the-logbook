@@ -118,7 +118,9 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
                   onChange={() => onNotificationToggle('sms_notifications')}
                   className="form-checkbox border-theme-surface-border"
                 />
-                <span className="text-theme-text-secondary ml-2 text-sm">Urgent text messages</span>
+                <span className="text-theme-text-secondary ml-2 text-sm">
+                  Urgent text messages (in addition to email)
+                </span>
               </label>
             </div>
           </div>

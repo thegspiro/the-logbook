@@ -825,6 +825,45 @@ it as an `@utility` under the matching group header in `styles/index.css` rather
 than assembling it at the call site — that is what left `toggle-knob` in the
 sheet with no matching track and fifteen hand-built switches around it.
 
+### 18. Notifications Are Email-First; SMS Is an Add-On Behind an Allowlist _(2026-08-16)_
+
+Email is the primary channel and the channel of record. The in-app bell, web
+push and SMS are additions layered on top of an email that still goes out —
+never substitutes for it. A member who reads only their inbox must not miss
+anything, because email is the only channel the department can prove reached
+them.
+
+SMS costs money per message, arrives outside working hours, and is legally
+constrained (US TCPA requires express prior consent). So it is limited to the
+alerts named in `SmsAlert` in `app/services/notification_channels.py`, and that
+list is exhaustive. **Operational and administrative notices are email-only** —
+low-stock and reorder alerts, overdue-property digests, renewal and deadline
+reminders, anything whose recipient acts on it during business hours. A
+quartermaster does not need a 2am text to learn the department is low on gloves,
+and a text can carry neither the item list nor the quantities the email does.
+
+```python
+# WRONG — a hand-rolled filter at the call site, for a routine notice
+sms_svc = SMSService()
+if sms_svc.enabled:
+    phones = [a.phone for a in admins if a.phone and str(a.id) in consented]
+    await sms_svc.send_bulk_sms(phones, "Low Stock Alert: ...")
+
+# CORRECT — the allowlist decides, and it resolves both opt-in gates
+from app.services.notification_channels import SmsAlert, resolve_sms_recipients
+numbers = await resolve_sms_recipients(db, recipients, SmsAlert.URGENT_DEPARTMENT_MESSAGE)
+```
+
+`resolve_sms_recipients` applies Twilio configuration, the recorded TCPA consent
+(fails closed — a member never asked counts as having refused) and the member's
+own `sms_notifications` preference, which mutes texts without touching the
+emails they keep receiving.
+
+**Rule:** Never call `SMSService` directly from a feature. Route through
+`resolve_sms_recipients`, and give a notification a text only by adding a member
+to `SmsAlert` — a visible, reviewable change rather than a call site nobody
+sees. Whatever the SMS gates decide, send the email unconditionally.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

@@ -278,8 +278,11 @@ class User(Base):
     # Format: {"email": true, "email_notifications": true,
     #          "sms_notifications": true, "event_reminders": true,
     #          "training_reminders": true}
-    # sms_notifications gates SMS for urgent department messages (requires a
-    # mobile/phone on file and Twilio configured).
+    # Email is the primary channel; these flags govern what a member gets in
+    # addition to it. sms_notifications mutes the text that accompanies an
+    # urgent department message (the email still goes out) and is one of two
+    # gates — the recorded TCPA consent is the other. See
+    # app/services/notification_channels.
     notification_preferences = Column(JSON, default=dict)
 
     # Department Membership (one per member, no permissions – purely classification)

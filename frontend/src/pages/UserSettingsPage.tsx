@@ -237,8 +237,11 @@ export const UserSettingsPage: React.FC = () => {
     }
   };
 
+  // Loaded for Notifications as well as Security: the SMS consent is the gate
+  // that actually decides whether texts are sent, so the member has to be able
+  // to grant it from the screen where they go looking for text messages.
   useEffect(() => {
-    if (activeTab !== 'security') return;
+    if (activeTab !== 'security' && activeTab !== 'notifications') return;
     userService
       .getMyConsents()
       .then(setConsents)
@@ -246,6 +249,11 @@ export const UserSettingsPage: React.FC = () => {
         // Section renders empty on failure; toggling still surfaces errors.
       });
   }, [activeTab]);
+
+  const smsConsent = consents.find((c) => c.consent_type === 'sms_notifications');
+  // Absent row means never asked, which the backend treats as a refusal.
+  const smsConsentGranted = smsConsent?.granted === true;
+  const hasMobileOnFile = Boolean(profileForm.mobile?.trim() || profileForm.phone?.trim());
 
   const CONSENT_LABELS: Record<string, { title: string; description: string }> = {
     photo_use: {
@@ -258,15 +266,59 @@ export const UserSettingsPage: React.FC = () => {
     },
     sms_notifications: {
       title: 'Text message notifications',
-      description: 'Receive department notifications by SMS at your mobile number.',
+      description:
+        'Add a text at your mobile number for urgent department messages. These are on top of the emails you already receive, never instead of them.',
     },
   };
 
+  const applyConsentLocally = (consentType: string, granted: boolean) => {
+    setConsents((prev) =>
+      prev.some((c) => c.consent_type === consentType)
+        ? prev.map((c) => (c.consent_type === consentType ? { ...c, granted } : c))
+        : [...prev, { consent_type: consentType, granted, updated_at: null }]
+    );
+  };
+
+  /**
+   * Turning texts on or off writes the SMS consent *and* the sms_notifications
+   * preference together, so the member has one switch rather than two controls
+   * on two tabs that each only half-work. It saves immediately rather than
+   * waiting for the Save Preferences button: the consent is a legal record
+   * (TCPA), and a switch that quietly defers is how a member ends up believing
+   * they opted in when they did not.
+   */
+  const handleSmsAddOnToggle = async (enabled: boolean) => {
+    if (!user?.id) return;
+    setSavingConsent('sms_notifications');
+    try {
+      await userService.setMyConsent('sms_notifications', enabled);
+      await userService.updateNotificationPreferences(user.id, {
+        email_notifications: emailNotifications,
+        sms_notifications: enabled,
+        event_reminders: eventReminders,
+        training_reminders: trainingReminders,
+      });
+      applyConsentLocally('sms_notifications', enabled);
+      setSmsNotifications(enabled);
+      toast.success(enabled ? 'Text messages turned on' : 'Text messages turned off');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not update your text message setting'));
+    } finally {
+      setSavingConsent(null);
+    }
+  };
+
   const handleConsentToggle = async (consentType: string, granted: boolean) => {
+    // SMS is a notification channel as well as a consent, so it goes through
+    // the shared handler that keeps the preference in step with the consent.
+    if (consentType === 'sms_notifications') {
+      await handleSmsAddOnToggle(granted);
+      return;
+    }
     setSavingConsent(consentType);
     try {
       await userService.setMyConsent(consentType, granted);
-      setConsents((prev) => prev.map((c) => (c.consent_type === consentType ? { ...c, granted } : c)));
+      applyConsentLocally(consentType, granted);
       toast.success('Privacy choice saved');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not save your choice'));
@@ -1132,7 +1184,10 @@ export const UserSettingsPage: React.FC = () => {
             <div className="space-y-6">
               <div>
                 <h2 className="text-theme-text-primary mb-4 text-xl font-semibold">Notification Preferences</h2>
-                <p className="text-theme-text-secondary mb-6 text-sm">Manage how and when you receive notifications</p>
+                <p className="text-theme-text-secondary mb-6 text-sm">
+                  Email is how the department reaches you. Everything below adds to that email — a push alert on this
+                  device, a text for urgent messages — so turning one off never leaves you without the notice itself.
+                </p>
               </div>
 
               <div className="space-y-4">
@@ -1197,27 +1252,43 @@ export const UserSettingsPage: React.FC = () => {
                   </button>
                 </div>
 
-                {/* SMS Notifications Toggle */}
+                {/* SMS add-on. One switch writes both the consent and the
+                  preference (see handleSmsAddOnToggle) and saves on the spot,
+                  so it does not sit under the Save Preferences button with the
+                  deferred toggles around it. */}
                 <div className="border-theme-surface-border flex items-center justify-between border-b py-4">
-                  <div>
+                  <div className="pr-4">
                     <label htmlFor="smsNotifications" className="text-theme-text-primary text-sm font-medium">
                       Urgent Text Messages
                     </label>
                     <p className="text-theme-text-secondary text-sm">
-                      Receive a text for messages marked urgent (requires a mobile number on file)
+                      Add a text message when an officer marks a department message urgent. You are emailed either way —
+                      this only shortens how long it takes to reach you. Saved as soon as you switch it.
                     </p>
+                    {!hasMobileOnFile && (
+                      <p className="text-theme-text-muted mt-1 text-sm">
+                        Add a mobile number on the Account tab before turning this on, or there is nowhere to text you.
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
                     id="smsNotifications"
-                    onClick={() => setSmsNotifications(!smsNotifications)}
+                    disabled={savingConsent === 'sms_notifications'}
+                    onClick={() => {
+                      void handleSmsAddOnToggle(!(smsConsentGranted && smsNotifications));
+                    }}
                     className={`${
-                      smsNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
-                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
+                      smsConsentGranted && smsNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
+                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md disabled:opacity-50`}
                     role="switch"
-                    aria-checked={smsNotifications}
+                    aria-checked={smsConsentGranted && smsNotifications}
                   >
-                    <span className={`${smsNotifications ? 'translate-x-5' : 'translate-x-0'} toggle-knob-md`} />
+                    <span
+                      className={`${
+                        smsConsentGranted && smsNotifications ? 'translate-x-5' : 'translate-x-0'
+                      } toggle-knob-md`}
+                    />
                   </button>
                 </div>
 
