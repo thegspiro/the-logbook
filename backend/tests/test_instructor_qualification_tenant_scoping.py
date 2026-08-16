@@ -79,6 +79,35 @@ async def test_qualification_enrichment_joins_are_tenant_scoped():
 
 
 @pytest.mark.asyncio
+async def test_create_binds_uuid_references_as_dashed_strings():
+    """UUID payload values must reach the query as their string form.
+
+    The endpoints dump Pydantic payloads in python mode, so `user_id` arrives
+    as `uuid.UUID` while `users.id` is String(36). aiomysql binds a UUID
+    object in a representation that matches no stored row, which made the
+    tenant check above reject every valid create with "Invalid user_id" —
+    a mocked session cannot see that, so this pins the bound value instead.
+    """
+    from uuid import uuid4
+
+    user_id = uuid4()
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=_scalar_result(None))
+    service = InstructorQualificationService(db)
+
+    with pytest.raises(ValueError, match="Invalid user_id"):
+        await service.create_qualification(
+            "tenant-a",
+            {"user_id": user_id, "qualification_type": "instructor"},
+            "creator",
+        )
+
+    statement = db.execute.await_args.args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    assert f"users.id = '{user_id}'" in sql
+
+
+@pytest.mark.asyncio
 async def test_update_validates_changed_reference_before_assignment():
     qualification = MagicMock(course_id="original-course")
     db = MagicMock()

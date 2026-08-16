@@ -9,6 +9,7 @@ report exports, and xAPI ingestion.
 import io
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -268,6 +269,23 @@ class InstructorQualificationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @staticmethod
+    def _stringify_uuids(data: dict) -> dict:
+        """Convert UUID values to the strings the schema stores.
+
+        The endpoints dump their Pydantic payloads in python mode, so UUID
+        fields arrive as `uuid.UUID` objects while every id column is
+        String(36). aiomysql binds a UUID object in a representation that
+        matches no stored row, so `_validate_references` rejected every
+        qualification create with "Invalid user_id" — including perfectly
+        valid ones — from the day the tenant check landed. Normalising here
+        covers the validation queries and the INSERT/UPDATE values alike.
+        """
+        return {
+            key: str(value) if isinstance(value, UUID) else value
+            for key, value in data.items()
+        }
+
     async def _validate_references(self, organization_id: str, data: dict) -> None:
         """Ensure qualification foreign keys belong to the current tenant."""
         references = (
@@ -341,6 +359,7 @@ class InstructorQualificationService:
         self, organization_id: str, data: dict, created_by: str
     ) -> InstructorQualification:
         """Create an instructor qualification"""
+        data = self._stringify_uuids(data)
         await self._validate_references(organization_id, data)
         qual = InstructorQualification(
             organization_id=organization_id,
@@ -366,6 +385,7 @@ class InstructorQualificationService:
         qual = result.scalar_one_or_none()
         if not qual:
             raise ValueError("Qualification not found")
+        data = self._stringify_uuids(data)
         await self._validate_references(organization_id, data)
         apply_updates(qual, data)
         await self.db.flush()
