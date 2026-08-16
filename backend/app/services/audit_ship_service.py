@@ -18,6 +18,7 @@ watermark; with the default cadences (shipping every 30 minutes, retention
 after 7 years) that never happens in practice.
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -75,6 +76,19 @@ async def ship_new_audit_logs(
     if own_client:
         client = httpx.AsyncClient(timeout=30.0)
     try:
+        # Validate the collector URL once per run: it is identical for every
+        # batch, and the guard's DNS resolution is blocking, so it runs in a
+        # worker thread (to_thread) instead of stalling the event loop — a
+        # slow resolver would otherwise freeze every coroutine in the worker,
+        # up to _MAX_BATCHES_PER_RUN times per run. Each scheduled run still
+        # re-resolves, keeping the DNS-rebinding window to one shipping
+        # interval, and fails closed for private/internal destinations unless
+        # the operator has explicitly accepted a trusted-network collector.
+        await asyncio.to_thread(
+            assert_outbound_url_safe,
+            url,
+            allow_private=settings.AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION,
+        )
         for _ in range(_MAX_BATCHES_PER_RUN):
             rows = (
                 (
@@ -101,10 +115,6 @@ async def ship_new_audit_logs(
                 + "\n"
             ).encode("utf-8")
 
-            # Re-resolve and validate immediately before every delivery.  This
-            # fails closed for private/internal destinations and limits the DNS
-            # rebinding window for long-running, multi-batch shipments.
-            assert_outbound_url_safe(url)
             response = await client.post(
                 url,
                 content=payload,
