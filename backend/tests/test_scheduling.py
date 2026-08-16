@@ -963,6 +963,66 @@ class TestPatternGeneration:
         assert {r["user_id"]: r["status"] for r in roster} == {user_id: "assigned"}
 
     @pytest.mark.asyncio
+    async def test_platoon_excludes_deleted_explicit_member(
+        self, db_session, setup_template
+    ):
+        """A member deleted after a pattern is saved is not assigned from its
+        explicit per-pattern crew when shifts are generated later."""
+        org_id, user_id, user2_id, template = setup_template
+        svc = SchedulingService(db_session)
+
+        start = date(2026, 1, 1)
+        pattern, _ = await svc.create_pattern(
+            uuid.UUID(org_id),
+            {
+                "name": "24/48 saved crew",
+                "pattern_type": PatternType.PLATOON,
+                "template_id": template.id,
+                "start_date": start,
+                "days_on": 1,
+                "days_off": 2,
+                "rotation_days": 3,
+                "schedule_config": {"platoons": ["A", "B", "C"]},
+                "assigned_members": [
+                    {"user_id": user_id, "position": "officer", "platoon": "A"},
+                    {
+                        "user_id": user2_id,
+                        "position": "firefighter",
+                        "platoon": "B",
+                    },
+                ],
+            },
+            uuid.UUID(user_id),
+        )
+
+        await db_session.execute(
+            text("UPDATE users SET deleted_at = :deleted_at WHERE id = :id"),
+            {"id": user2_id, "deleted_at": datetime.now(timezone.utc)},
+        )
+        await db_session.flush()
+
+        shifts, err = await svc.generate_shifts_from_pattern(
+            uuid.UUID(pattern.id),
+            uuid.UUID(org_id),
+            start,
+            start + timedelta(days=1),
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        assert len(shifts) == 2
+        by_date = {shift.shift_date: shift for shift in shifts}
+
+        day0 = await svc.get_shift_assignments(
+            uuid.UUID(by_date[start].id), uuid.UUID(org_id)
+        )
+        assert [assignment.user_id for assignment in day0] == [user_id]
+
+        day1 = await svc.get_shift_assignments(
+            uuid.UUID(by_date[start + timedelta(days=1)].id), uuid.UUID(org_id)
+        )
+        assert day1 == []
+
+    @pytest.mark.asyncio
     async def test_platoon_skips_members_on_approved_time_off(
         self, db_session, setup_template
     ):
