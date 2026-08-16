@@ -42,7 +42,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLot } from '../../services/eventServices';
-import { getErrorMessage, isNetworkError } from '../../utils/errorHandling';
+import { getErrorMessage, isNetworkError, isNonRetryableHttpError } from '../../utils/errorHandling';
 import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -379,16 +379,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           }
 
           await dequeueCheck(entry.id);
-        } catch {
-          const updated = await markRetry(entry.id);
-          if (updated && updated.retries >= CHECK_QUEUE_MAX_RETRIES) {
-            // Rejected on every attempt — keeping it would wedge the queue and
-            // keep promising a sync that cannot happen.
-            await dequeueCheck(entry.id);
-            discarded++;
-          } else {
-            failed++;
+        } catch (error) {
+          // Never delete the device's only copy after a transport failure or a
+          // retryable server response. Only explicit, permanent 4xx rejections
+          // count toward the ceiling that unwedges an invalid submission.
+          if (isNonRetryableHttpError(error)) {
+            const updated = await markRetry(entry.id);
+            if (updated && updated.retries >= CHECK_QUEUE_MAX_RETRIES) {
+              await dequeueCheck(entry.id);
+              discarded++;
+              continue;
+            }
           }
+          failed++;
         }
       }
 

@@ -32,7 +32,7 @@ export interface QueuedCheck {
 export type SyncStatus = 'idle' | 'syncing' | 'error';
 
 /**
- * Sync attempts before a queued check is abandoned.
+ * Non-retryable server rejections before a queued check is abandoned.
  *
  * Without a ceiling a permanently-rejected submission (a template deleted, a
  * shift closed, a payload the API no longer accepts) is retried on every
@@ -127,7 +127,7 @@ export async function dequeueCheck(id: string): Promise<void> {
  *
  * Returns the updated entry (or null if it is already gone) so the caller can
  * compare `retries` against CHECK_QUEUE_MAX_RETRIES and abandon a submission
- * the server will never accept.
+ * the server will never accept. Transient failures must not call this helper.
  */
 export async function markRetry(id: string): Promise<QueuedCheck | null> {
   const db = await openDB();
