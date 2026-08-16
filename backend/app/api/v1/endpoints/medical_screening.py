@@ -257,6 +257,9 @@ async def create_record(
         username=current_user.username,
     )
     await db.commit()
+    await service.try_advance_pipeline_stage(
+        record, current_user.organization_id, str(current_user.id)
+    )
     await service.attach_record_names(current_user.organization_id, [record])
     return record
 
@@ -294,6 +297,9 @@ async def update_record(
         username=current_user.username,
     )
     await db.commit()
+    await service.try_advance_pipeline_stage(
+        record, current_user.organization_id, str(current_user.id)
+    )
     await service.attach_record_names(current_user.organization_id, [record])
     return record
 

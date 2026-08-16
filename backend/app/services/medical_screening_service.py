@@ -247,6 +247,55 @@ class MedicalScreeningService:
         await self.db.flush()
         return record
 
+    async def try_advance_pipeline_stage(
+        self,
+        record: ScreeningRecord,
+        organization_id: str,
+        completed_by: str,
+    ) -> bool:
+        """Advance a prospect parked on a medical screening stage, if cleared.
+
+        A screening result is the completion evidence a MEDICAL_SCREENING stage
+        waits on, but nothing connected the two: an org could tick the stage's
+        "auto-advance" box and still watch cleared applicants sit there until
+        someone moved them by hand.
+
+        Only a cleared result is evidence, so this mirrors the stage gate's own
+        definition (``PASSED``/``COMPLETED``) rather than treating any write as
+        progress. The gate still has the final say — it requires *every*
+        configured screening to have cleared, so clearing one of three defers
+        the advance instead of granting it.
+
+        Call this after the screening write is committed: completing a stage
+        commits, and an uncommitted screening row would otherwise ride along.
+        """
+        if not record.prospect_id:
+            return False
+        if record.status not in (ScreeningStatus.PASSED, ScreeningStatus.COMPLETED):
+            return False
+
+        from app.models.membership_pipeline import PipelineStepType
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+        )
+
+        screening_type = (
+            record.screening_type.value
+            if hasattr(record.screening_type, "value")
+            else record.screening_type
+        )
+        return await MembershipPipelineService(self.db).try_auto_advance_current_step(
+            prospect_id=str(record.prospect_id),
+            organization_id=organization_id,
+            step_type=PipelineStepType.MEDICAL_SCREENING,
+            trigger="medical screening result",
+            completed_by=completed_by,
+            action_result={
+                "screening_record_id": str(record.id),
+                "screening_type": screening_type,
+            },
+        )
+
     async def delete_record(self, record_id: str, organization_id: str) -> bool:
         """Delete a screening record."""
         record = await self.get_record(record_id, organization_id)
