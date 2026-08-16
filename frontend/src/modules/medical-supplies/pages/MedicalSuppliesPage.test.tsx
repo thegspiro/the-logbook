@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
 const mockGetSummary = vi.fn();
@@ -136,6 +137,55 @@ describe('MedicalSuppliesPage', () => {
         limit: 200,
       })
     );
+  });
+
+  it('names the category from the list it loaded, not the stripped response field', async () => {
+    // `category_name` is not on InventoryItemResponse, so the API never sends
+    // it and every categorized supply used to render a dash.
+    mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Airway' }]);
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: '4x4 Gauze', category_id: 'cat-1', quantity: 5 }],
+      total: 1,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+    // The cell specifically — the category filter's <option> carries the same
+    // text, and matching either one would pass without the table being right.
+    expect(await screen.findByRole('cell', { name: 'Airway' })).toBeInTheDocument();
+  });
+
+  it('offers an edit action per supply to a manager', async () => {
+    mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage_medical');
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: '4x4 Gauze', quantity: 5 }],
+      total: 1,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+    expect(await screen.findByRole('button', { name: 'Edit 4x4 Gauze' })).toBeInTheDocument();
+  });
+
+  it('offers no edit action to a member who can only view', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: '4x4 Gauze', quantity: 5 }],
+      total: 1,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+    await screen.findByText('4x4 Gauze');
+    expect(screen.queryByRole('button', { name: 'Edit 4x4 Gauze' })).not.toBeInTheDocument();
   });
 
   it('reports the expiry window it actually queried', async () => {

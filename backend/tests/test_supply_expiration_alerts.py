@@ -205,3 +205,44 @@ class TestSupplyExpirationAlerts:
         await run_supply_expiration_alerts(_db(users=[wildcard]))
 
         assert captured["to_emails"] == ["chief@example.org"]
+
+    async def test_the_medical_only_officer_is_notified(self, sent):
+        """The whole point of the ems_supply_officer role.
+
+        It holds ``inventory.manage_medical`` and nothing broader, so a
+        recipient filter checking only ``inventory.manage`` left the one person
+        appointed to own this stock off the alert about it.
+        """
+        captured, overview, lots = sent
+        overview.return_value = {"items": [_deployed("Epi 1:1000", ready_stock=0)]}
+        lots.return_value = []
+
+        ems = _user_with(
+            ["inventory.manage_medical"], user_id="u-5", email="ems@example.org"
+        )
+
+        await run_supply_expiration_alerts(_db(users=[ems]))
+
+        assert captured["to_emails"] == ["ems@example.org"]
+
+    async def test_the_seeded_ems_supply_officer_role_qualifies(self, sent):
+        """Pinned against the real seeded role, not a hand-written grant list.
+
+        A future edit that drops the medical grant from that role would
+        otherwise silently reintroduce the same silence.
+        """
+        from app.core.permissions import DEFAULT_ROLES
+
+        captured, overview, lots = sent
+        overview.return_value = {"items": [_deployed("Epi 1:1000", ready_stock=0)]}
+        lots.return_value = []
+
+        seeded = _user_with(
+            DEFAULT_ROLES["ems_supply_officer"]["permissions"],
+            user_id="u-6",
+            email="seeded@example.org",
+        )
+
+        await run_supply_expiration_alerts(_db(users=[seeded]))
+
+        assert captured["to_emails"] == ["seeded@example.org"]
