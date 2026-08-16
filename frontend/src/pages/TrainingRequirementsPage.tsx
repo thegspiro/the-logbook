@@ -937,7 +937,7 @@ const TemplateModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="template-modal-title"
@@ -945,7 +945,7 @@ const TemplateModal: React.FC<{
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal max-h-[80dvh] w-full max-w-4xl overflow-y-auto rounded-lg p-6">
+      <div className="modal-panel max-h-[80dvh] w-full max-w-4xl overflow-y-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">

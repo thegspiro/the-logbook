@@ -323,8 +323,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     void loadData();
   };
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+  const inputCls = 'form-input py-2.5 focus:ring-violet-500';
 
   if (loading) {
     return (
@@ -659,15 +658,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       {/* Swap Request Modal */}
       {showSwapModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Request shift swap"
         >
-          <div
-            ref={swapModalRef}
-            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border"
-          >
+          <div ref={swapModalRef} className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Shift Swap</h2>
               <p className="text-theme-text-secondary mt-1 text-sm">
@@ -776,15 +772,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       {/* Time Off Modal */}
       {showTimeOffModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Request time off"
         >
-          <div
-            ref={timeOffModalRef}
-            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border"
-          >
+          <div ref={timeOffModalRef} className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Time Off</h2>
             </div>

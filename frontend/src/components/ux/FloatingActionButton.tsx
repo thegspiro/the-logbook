@@ -63,7 +63,7 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ acti
     >
       {/* Backdrop */}
       {open && (
-        <div className="animate-fade-in fixed inset-0 -z-10 bg-black/30 backdrop-blur-[2px]" aria-hidden="true" />
+        <div className="modal-overlay animate-fade-in -z-10 bg-black/30 backdrop-blur-[2px]" aria-hidden="true" />
       )}
 
       {/* Action items */}
@@ -81,7 +81,7 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ acti
               aria-label={action.label}
             >
               <span
-                className="text-theme-text-primary bg-theme-surface-modal border-theme-surface-border rounded-lg border px-3 py-1.5 text-sm font-medium whitespace-nowrap shadow-lg"
+                className="modal-panel text-theme-text-primary px-3 py-1.5 text-sm font-medium whitespace-nowrap"
                 aria-hidden="true"
               >
                 {action.label}

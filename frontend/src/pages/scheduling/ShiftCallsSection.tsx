@@ -42,8 +42,7 @@ const emptyForm: CallForm = {
   notes: '',
 };
 
-const inputCls =
-  'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+const inputCls = 'form-input px-3 text-sm focus:ring-violet-500';
 
 /** Convert a `datetime-local` value to a UTC ISO string in the org timezone. */
 const toUtcIso = (localValue: string, timezone: string): string | undefined =>

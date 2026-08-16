@@ -313,10 +313,10 @@ export const CommandPalette: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-60 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setIsOpen(false)} aria-hidden="true" />
+      <div className="modal-overlay backdrop-blur-xs" onClick={() => setIsOpen(false)} aria-hidden="true" />
       <div className="relative flex min-h-screen items-start justify-center px-4 pt-[15dvh]">
         <div
-          className="bg-theme-surface-modal border-theme-surface-border w-full max-w-lg overflow-hidden rounded-lg border shadow-2xl"
+          className="modal-panel w-full max-w-lg overflow-hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Command palette"

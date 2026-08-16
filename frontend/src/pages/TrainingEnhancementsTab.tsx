@@ -57,8 +57,7 @@ import type {
   ParticipatingOrganization,
 } from '../types/training';
 
-const inputClass =
-  'w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500';
+const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
 const labelClass = 'form-label';
 const selectClass = inputClass;
 

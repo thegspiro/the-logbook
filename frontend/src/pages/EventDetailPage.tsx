@@ -815,7 +815,7 @@ export const EventDetailPage: React.FC = () => {
                           <ChevronDown className="ml-1 h-4 w-4" />
                         </button>
                         {notifications.showReminderMenu && (
-                          <div className="bg-theme-surface-modal border-theme-surface-border absolute right-0 z-20 mt-2 w-56 rounded-lg border shadow-lg">
+                          <div className="modal-panel absolute right-0 z-20 mt-2 w-56">
                             <div className="py-1">
                               <button
                                 onClick={() => void notifications.handleSendReminders('non_respondents')}
@@ -881,7 +881,7 @@ export const EventDetailPage: React.FC = () => {
                         <span className="ml-1">More</span>
                       </button>
                       {showActionsMenu && (
-                        <div className="bg-theme-surface-modal border-theme-surface-border absolute right-0 z-20 mt-2 w-56 rounded-lg border shadow-lg">
+                        <div className="modal-panel absolute right-0 z-20 mt-2 w-56">
                           <div className="py-1">
                             <button
                               onClick={() => {

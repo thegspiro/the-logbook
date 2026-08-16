@@ -2281,7 +2281,7 @@ export const ShiftReportsTab: React.FC = () => {
       {/* Acknowledge Modal */}
       {ackReportId && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Acknowledge Report"
@@ -2332,7 +2332,7 @@ export const ShiftReportsTab: React.FC = () => {
           const reviewReport = reports.find((r) => r.id === reviewReportId);
           return (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+              className="modal-overlay flex items-center justify-center p-4"
               role="dialog"
               aria-modal="true"
               aria-label="Review Report"

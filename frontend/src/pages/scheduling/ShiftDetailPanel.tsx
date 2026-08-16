@@ -830,8 +830,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     }
   }, [positionOptions, assignForm.position, openPositions]);
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+  const inputCls = 'form-input px-3 text-sm focus:ring-violet-500';
 
   const renderAssignmentRow = (assignment: Assignment) => {
     const isCurrentUser = assignment.user_id === user?.id;
@@ -950,12 +949,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} aria-hidden="true" />
+      <div className="modal-overlay z-40" onClick={onClose} aria-hidden="true" />
 
       {/* Panel — uses drawer-panel CSS class for mobile-responsive width */}
       <div className="drawer-panel overflow-y-auto overscroll-contain">
         {/* Header */}
-        <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b p-4 sm:p-6">
+        <div className="modal-header-sticky p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 pr-2">
               <h2 className="text-theme-text-primary text-lg font-bold sm:text-xl">Shift Details</h2>

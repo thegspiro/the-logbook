@@ -143,14 +143,14 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-lg">
+      <div className="modal-panel max-h-[90dvh] w-full max-w-3xl overflow-y-auto">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 className="text-theme-text-primary text-xl font-bold">{isEdit ? 'Edit Course' : 'Add New Course'}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary">
@@ -730,12 +730,12 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
 
       {syllabusCourse && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label={`Classes for ${syllabusCourse.name}`}
         >
-          <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-lg">
+          <div className="modal-panel max-h-[90dvh] w-full max-w-3xl overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <div>
                 <h2 className="text-theme-text-primary text-xl font-bold">{syllabusCourse.name}</h2>

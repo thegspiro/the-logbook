@@ -53,13 +53,13 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="paper-ballots-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+      <div className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="paper-ballots-title" className="text-theme-text-primary text-lg font-medium">
             Record Paper Ballots

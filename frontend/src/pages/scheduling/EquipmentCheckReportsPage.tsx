@@ -520,8 +520,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
     window.open(url, '_blank');
   };
 
-  const selectClass =
-    'px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500';
+  const selectClass = 'form-input px-3 text-sm focus:ring-violet-500';
 
   return (
     <div className="space-y-5">

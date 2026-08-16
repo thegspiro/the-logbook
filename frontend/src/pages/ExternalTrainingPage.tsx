@@ -114,7 +114,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-provider-title"
@@ -122,7 +122,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg">
+      <div className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
         <div className="border-theme-surface-border border-b p-6">
           <h2 id="create-provider-title" className="text-theme-text-primary text-2xl font-bold">
             {step === 'type' ? 'Select Provider Type' : 'Configure Provider'}
@@ -651,7 +651,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-provider-title"
@@ -659,7 +659,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg">
+      <div className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
         <div className="border-theme-surface-border border-b p-6">
           <h2 id="edit-provider-title" className="text-theme-text-primary text-2xl font-bold">
             Edit Provider: {provider.name}
@@ -900,7 +900,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mappings-modal-title"
@@ -908,7 +908,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-lg">
+      <div className="modal-panel flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden">
         <div className="border-theme-surface-border border-b p-6">
           <h2 id="mappings-modal-title" className="text-2xl font-bold text-white">
             Mappings - {providerName}

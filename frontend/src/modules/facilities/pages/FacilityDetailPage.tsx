@@ -184,7 +184,7 @@ export default function FacilityDetailPage() {
       <div className="flex flex-col gap-6 sm:flex-row">
         {/* Sidebar Navigation */}
         <nav className="w-full shrink-0 sm:w-56" aria-label="Facility sections">
-          <div className="bg-theme-surface-modal border-theme-surface-border sticky top-6 rounded-lg border p-2">
+          <div className="modal-panel sticky top-6 p-2">
             {visibleSections.map((navSection) => {
               const Icon = navSection.icon;
               const isActive = section === navSection.id;

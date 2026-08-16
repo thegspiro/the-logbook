@@ -253,7 +253,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
           const targetShift = shifts.find((s) => s.id === signupShiftId);
           return (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+              className="modal-overlay flex items-center justify-center p-4"
               role="dialog"
               aria-modal="true"
               aria-label="Sign up for shift"
@@ -261,7 +261,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 if (e.key === 'Escape') setSignupShiftId(null);
               }}
             >
-              <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-sm rounded-lg border">
+              <div className="modal-panel w-full max-w-sm">
                 <div className="border-theme-surface-border border-b p-5">
                   <h2 className="text-theme-text-primary text-lg font-bold">Sign Up for Shift</h2>
                   {targetShift && (

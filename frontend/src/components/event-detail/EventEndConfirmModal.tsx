@@ -24,8 +24,8 @@ const EventEndConfirmModal: React.FC<EventEndConfirmModalProps> = ({ eventTitle,
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="bg-theme-surface-modal relative z-10 inline-block transform overflow-hidden rounded-lg text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
-          <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+        <div className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+          <div className="modal-header">
             <div className="sm:flex sm:items-start">
               <div className="mx-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10 dark:bg-red-500/20">
                 <StopCircle className="h-6 w-6 text-red-600" />

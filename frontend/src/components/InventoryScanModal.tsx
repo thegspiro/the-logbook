@@ -734,7 +734,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                     {showDropdown && searchResults.length > 0 && (
                       <div
                         ref={dropdownRef}
-                        className="bg-theme-surface-modal border-theme-surface-border absolute top-full right-0 left-0 z-20 mt-1 max-h-60 overflow-y-auto rounded-lg border shadow-lg"
+                        className="modal-panel absolute top-full right-0 left-0 z-20 mt-1 max-h-60 overflow-y-auto"
                       >
                         {searchResults.map((result, i) => {
                           const isAlreadyAdded = scannedItems.some((si) => si.itemId === result.item.id);
@@ -947,7 +947,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         {/* Confirmation overlay */}
         {showConfirm && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-black/50">
-            <div className="bg-theme-surface-modal border-theme-surface-border mx-4 max-w-sm rounded-lg border p-5 shadow-xl">
+            <div className="modal-panel mx-4 max-w-sm p-5">
               <h4 className="text-theme-text-primary mb-2 font-medium">
                 Confirm {mode === 'checkout' ? 'Assignment' : 'Return'}
               </h4>

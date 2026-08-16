@@ -122,7 +122,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="conversion-modal-title"
@@ -130,7 +130,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
         if (e.key === 'Escape' && !isConverting) onClose();
       }}
     >
-      <div className="bg-theme-surface-modal border-theme-surface-border modal-body w-full max-w-lg rounded-lg border">
+      <div className="modal-panel modal-body w-full max-w-lg">
         {/* Header */}
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <div className="flex items-center gap-3">

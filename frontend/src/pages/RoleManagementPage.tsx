@@ -234,7 +234,7 @@ export const RoleManagementPage: React.FC = () => {
         {showCreateModal && (
           <div
             ref={roleModalRef}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            className="modal-overlay flex items-center justify-center"
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-modal-title"
@@ -242,7 +242,7 @@ export const RoleManagementPage: React.FC = () => {
               if (e.key === 'Escape') setShowCreateModal(false);
             }}
           >
-            <div className="bg-theme-surface-modal mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-lg shadow-xl">
+            <div className="modal-panel mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden">
               <div className="border-theme-surface-border shrink-0 border-b px-6 py-4">
                 <h3 id="role-modal-title" className="text-theme-text-primary text-lg font-medium">
                   {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}

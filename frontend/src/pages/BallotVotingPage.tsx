@@ -611,7 +611,7 @@ export const BallotVotingPage: React.FC = () => {
       {/* Confirmation Modal */}
       {showConfirmation && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+          className="modal-overlay flex items-center justify-center bg-black/75 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-ballot-title"
@@ -619,7 +619,7 @@ export const BallotVotingPage: React.FC = () => {
             if (e.key === 'Escape' && !submitting) setShowConfirmation(false);
           }}
         >
-          <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg shadow-xl">
+          <div className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border bg-theme-surface-secondary border-b px-6 py-4">
               <h3 id="confirm-ballot-title" className="text-theme-text-primary text-lg font-bold">
                 Confirm Your Ballot

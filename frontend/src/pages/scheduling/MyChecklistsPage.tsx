@@ -761,7 +761,7 @@ export const MyChecklistsPage: React.FC = () => {
         >
           <div className="flex min-h-full items-center justify-center p-4">
             <div
-              className="fixed inset-0 bg-black/50 transition-opacity"
+              className="modal-overlay transition-opacity"
               onClick={() => setShowTemplatePicker(false)}
               aria-hidden="true"
             />

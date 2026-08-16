@@ -60,9 +60,9 @@ const EventRSVPModal: React.FC<EventRSVPModalProps> = ({
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="bg-theme-surface-modal relative z-10 inline-block transform overflow-hidden rounded-lg text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+        <div className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
           <form onSubmit={onSubmit}>
-            <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div className="modal-header">
               <h3 id="rsvp-modal-title" className="text-theme-text-primary mb-4 text-lg font-medium">
                 RSVP for {event.title}
               </h3>

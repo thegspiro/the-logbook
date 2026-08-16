@@ -29,7 +29,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ballot-preview-title"

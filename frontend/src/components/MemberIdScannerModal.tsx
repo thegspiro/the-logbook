@@ -158,7 +158,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="modal-overlay flex items-center justify-center p-4">
       <div
         className="card relative max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain shadow-xl"
         role="dialog"

@@ -55,8 +55,8 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="bg-theme-surface-modal relative z-10 inline-block transform overflow-hidden rounded-lg text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:align-middle">
-          <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6">
+        <div className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:align-middle">
+          <div className="modal-header">
             <div className="mb-4 flex items-center justify-between">
               <h3 id="checkin-modal-title" className="text-theme-text-primary text-lg font-medium">
                 Check In Members

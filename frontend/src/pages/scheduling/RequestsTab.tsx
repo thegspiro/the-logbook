@@ -451,15 +451,12 @@ export const RequestsTab: React.FC = () => {
       {/* Review Modal */}
       {reviewing && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Review request"
         >
-          <div
-            ref={reviewModalRef}
-            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border"
-          >
+          <div ref={reviewModalRef} className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Review Request</h2>
             </div>

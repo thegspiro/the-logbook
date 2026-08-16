@@ -2256,7 +2256,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       {/* Lot swap modal — pick a ready replacement to put on the apparatus */}
       {swapTarget && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+        <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">

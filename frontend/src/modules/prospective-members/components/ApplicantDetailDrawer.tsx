@@ -229,7 +229,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   return (
     <>
       {/* Overlay */}
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
+      <div className="modal-overlay z-40" onClick={onClose} />
 
       {/* Drawer */}
       <div className="drawer-panel">

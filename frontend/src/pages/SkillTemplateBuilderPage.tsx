@@ -1221,7 +1221,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         </div>
 
         {/* Bottom Save Bar */}
-        <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 -mx-4 flex justify-end gap-2 border-t px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="modal-footer-sticky -mx-4 flex justify-end gap-2 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <button
             onClick={() => void navigate('/training/admin?page=skills-testing&tab=templates')}
             className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 transition-colors"

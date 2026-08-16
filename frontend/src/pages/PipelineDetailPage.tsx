@@ -431,14 +431,14 @@ const EnrollModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-lg flex-col rounded-lg">
+      <div className="modal-panel flex max-h-[90dvh] w-full max-w-lg flex-col">
         <div className="border-theme-surface-border border-b p-6">
           <h2 className="text-theme-text-primary text-xl font-bold">Enroll Members</h2>
           <p className="text-theme-text-muted mt-1 text-sm">Enroll members into {programName}</p>
@@ -1008,14 +1008,14 @@ const EnrollmentProgressModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-lg">
+      <div className="modal-panel flex max-h-[90dvh] w-full max-w-2xl flex-col">
         <div className="border-theme-surface-border border-b p-6">
           <div className="flex items-start justify-between">
             <div>

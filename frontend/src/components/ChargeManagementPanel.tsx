@@ -275,11 +275,11 @@ const ChargeManagementPanel: React.FC = () => {
         >
           <div className="flex min-h-screen items-center justify-center px-4">
             <div
-              className="fixed inset-0 bg-black/60"
+              className="modal-overlay"
               onClick={() => setActionModal({ open: false, item: null, action: '' })}
               aria-hidden="true"
             />
-            <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-md rounded-lg border shadow-xl">
+            <div className="modal-panel relative w-full max-w-md">
               <div className="px-4 pt-5 pb-4 sm:px-6">
                 <div className="mb-4 flex items-center gap-2">
                   {actionModal.action === 'charged' ? (

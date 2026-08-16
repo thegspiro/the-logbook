@@ -114,13 +114,13 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="premeeting-package-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg shadow-xl">
+      <div className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="premeeting-package-modal-title" className="text-theme-text-primary text-lg font-medium">
             Email Pre-Meeting Package

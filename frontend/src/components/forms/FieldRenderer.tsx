@@ -483,7 +483,7 @@ const FieldRenderer = ({
               )}
             </div>
             {memberResults.length > 0 && (
-              <div className="bg-theme-surface-modal border-theme-surface-border absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border shadow-lg">
+              <div className="modal-panel absolute z-10 mt-1 max-h-48 w-full overflow-y-auto">
                 {memberResults.map((member) => (
                   <button
                     key={member.id}

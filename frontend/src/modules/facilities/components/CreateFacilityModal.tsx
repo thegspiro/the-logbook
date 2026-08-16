@@ -67,12 +67,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
     }
   };
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'form-input py-2.5';
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-facility-title"
@@ -80,7 +79,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-lg border">
+      <div className="modal-panel max-h-[90dvh] w-full max-w-md overflow-y-auto">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="create-facility-title" className="text-theme-text-primary text-lg font-bold">
             Add Facility

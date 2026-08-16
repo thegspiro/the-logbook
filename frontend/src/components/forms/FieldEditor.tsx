@@ -80,8 +80,7 @@ export interface FieldEditorProps {
   editingFieldId?: string | undefined;
 }
 
-const inputClass =
-  'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring';
+const inputClass = 'form-input px-3';
 
 const FieldEditor = ({
   field,
@@ -267,9 +266,9 @@ const FieldEditor = ({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
-      <div className="bg-theme-surface-modal border-theme-surface-border relative max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg border shadow-2xl">
+      <div className="modal-panel relative max-h-[90dvh] w-full max-w-lg overflow-y-auto">
         {/* Header */}
-        <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 flex items-center justify-between border-b px-6 py-4">
+        <div className="modal-header-sticky flex items-center justify-between px-6 py-4">
           <h3 id="field-editor-title" className="text-theme-text-primary text-lg font-semibold">
             {isEditing ? 'Edit Field' : 'Add Field'}
           </h3>

@@ -286,8 +286,8 @@ export const EventTemplatesPage: React.FC = () => {
           role="dialog"
           aria-modal="true"
         >
-          <div className="fixed inset-0 bg-black/50" onClick={handleFormCancel} aria-hidden="true" />
-          <div className="bg-theme-surface-modal relative mx-4 w-full max-w-3xl rounded-lg shadow-xl">
+          <div className="modal-overlay" onClick={handleFormCancel} aria-hidden="true" />
+          <div className="modal-panel relative mx-4 w-full max-w-3xl">
             <div className="border-theme-surface-border border-b px-6 py-4">
               <h2 className="text-theme-text-primary text-lg font-semibold">
                 {editingTemplate ? 'Edit Template' : 'Create Template'}

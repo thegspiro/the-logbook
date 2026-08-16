@@ -600,8 +600,8 @@ export const ReportsPage: React.FC = () => {
         {activeCard && activeReportData && activeReportType && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={closeModal} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-5xl rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={closeModal} aria-hidden="true" />
+              <div className="modal-panel relative w-full max-w-5xl">
                 {/* Modal header */}
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

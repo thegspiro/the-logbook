@@ -36,10 +36,8 @@ const CHECK_IN_WINDOW_OPTIONS = [
   { value: 'window', label: 'Window' },
 ];
 
-const inputClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
-const selectClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+const inputClass = 'form-input px-3 text-sm';
+const selectClass = 'form-input px-3 text-sm';
 const labelClass = 'form-label';
 const checkboxClass = 'form-checkbox';
 

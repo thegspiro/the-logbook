@@ -189,11 +189,11 @@ const ReturnRequestsPanel: React.FC = () => {
         >
           <div className="flex min-h-screen items-center justify-center px-4">
             <div
-              className="fixed inset-0 bg-black/60"
+              className="modal-overlay"
               onClick={() => setReviewModal({ open: false, request: null })}
               aria-hidden="true"
             />
-            <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-md rounded-lg border shadow-xl">
+            <div className="modal-panel relative w-full max-w-md">
               <div className="px-4 pt-5 pb-4 sm:px-6">
                 <h3 className="text-theme-text-primary mb-4 text-lg font-medium">
                   {reviewAction === RequestStatus.APPROVED ? 'Approve Return' : 'Deny Return'}

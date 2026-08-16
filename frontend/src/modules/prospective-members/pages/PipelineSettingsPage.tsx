@@ -967,7 +967,7 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Clone Pipeline Modal */}
       {showCloneModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="clone-pipeline-title"
@@ -975,7 +975,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowCloneModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
+          <div className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="clone-pipeline-title"
@@ -1035,7 +1035,7 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Save as Template Modal */}
       {showSaveTemplateModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="save-template-title"
@@ -1043,7 +1043,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowSaveTemplateModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
+          <div className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="save-template-title"
@@ -1103,7 +1103,7 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Template Gallery Modal */}
       {showTemplateGallery && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="template-gallery-title"
@@ -1111,7 +1111,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowTemplateGallery(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[80dvh] w-full max-w-lg flex-col rounded-lg border">
+          <div className="modal-panel flex max-h-[80dvh] w-full max-w-lg flex-col">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="template-gallery-title"
@@ -1177,7 +1177,7 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Create Pipeline Modal */}
       {showCreateModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="create-pipeline-title"
@@ -1185,7 +1185,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowCreateModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
+          <div className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 id="create-pipeline-title" className="text-theme-text-primary text-lg font-bold">
                 Create Pipeline

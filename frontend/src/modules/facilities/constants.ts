@@ -6,8 +6,7 @@
  * from a single source.
  */
 
-export const inputCls =
-  'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+export const inputCls = 'form-input px-3 text-sm';
 
 export const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
 

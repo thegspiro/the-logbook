@@ -73,12 +73,11 @@ const INITIAL_FORM: CreateFormData = {
 };
 
 const inputClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+  'form-input px-3 text-sm placeholder:text-theme-text-secondary focus:border-red-500 focus:ring-red-500';
 
 const labelClass = 'form-label';
 
-const selectClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+const selectClass = 'form-input px-3 text-sm focus:border-red-500 focus:ring-red-500';
 
 // ---------------------------------------------------------------------------
 // Component

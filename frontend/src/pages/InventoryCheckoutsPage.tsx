@@ -398,11 +398,11 @@ export const InventoryCheckoutsPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div
-                className="fixed inset-0 bg-black/60"
+                className="modal-overlay"
                 aria-hidden="true"
                 onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
               ></div>
-              <div className="bg-theme-surface-modal border-theme-surface-border relative z-10 w-full max-w-md rounded-lg border shadow-xl">
+              <div className="modal-panel relative z-10 w-full max-w-md">
                 <div className="px-4 pt-5 pb-4 sm:px-6">
                   <h3 id="checkin-modal-title" className="text-theme-text-primary mb-4 text-lg font-medium">
                     Check In: {checkInModal.itemName}
@@ -482,11 +482,11 @@ export const InventoryCheckoutsPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div
-                className="fixed inset-0 bg-black/60"
+                className="modal-overlay"
                 aria-hidden="true"
                 onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
               ></div>
-              <div className="bg-theme-surface-modal border-theme-surface-border relative z-10 w-full max-w-sm rounded-lg border shadow-xl">
+              <div className="modal-panel relative z-10 w-full max-w-sm">
                 <div className="px-4 pt-5 pb-4 sm:px-6">
                   <h3 id="extend-modal-title" className="text-theme-text-primary mb-1 text-lg font-medium">
                     Extend Return Date

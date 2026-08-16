@@ -643,7 +643,7 @@ export const EventsPage: React.FC = () => {
                     <span className="hidden sm:inline">Quick Create</span>
                   </button>
                   {showQuickCreate && (
-                    <div className="border-theme-surface-border bg-theme-surface-modal absolute right-0 z-50 mt-2 w-64 rounded-lg border shadow-lg">
+                    <div className="modal-panel absolute right-0 z-50 mt-2 w-64">
                       <div className="p-2">
                         <p className="text-theme-text-secondary px-3 py-1.5 text-xs font-semibold tracking-wider uppercase">
                           Create from Template
@@ -794,7 +794,7 @@ export const EventsPage: React.FC = () => {
             </button>
 
             {showPresetMenu && (
-              <div className="bg-theme-surface-modal border-theme-surface-border absolute top-full right-0 z-40 mt-1 w-72 rounded-lg border shadow-lg">
+              <div className="modal-panel absolute top-full right-0 z-40 mt-1 w-72">
                 <div className="border-theme-surface-border border-b p-2">
                   {!showSavePresetInput ? (
                     <button
@@ -1174,7 +1174,7 @@ export const EventsPage: React.FC = () => {
 
       {/* Floating Bulk Action Bar */}
       {selectedEvents.size > 0 && (
-        <div className="bg-theme-surface-modal border-theme-surface-border fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-lg border px-6 py-3 shadow-lg">
+        <div className="modal-panel fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 px-6 py-3">
           <span className="text-theme-text-primary text-sm font-medium">{selectedEvents.size} selected</span>
           <div className="bg-theme-surface-border h-5 w-px" />
           <button
@@ -1212,8 +1212,8 @@ export const EventsPage: React.FC = () => {
           aria-modal="true"
           aria-label="Import Events from CSV"
         >
-          <div className="fixed inset-0 bg-black/50" onClick={handleCloseImportModal} aria-hidden="true" />
-          <div className="bg-theme-surface-modal relative mx-4 w-full max-w-lg rounded-lg p-6 shadow-xl">
+          <div className="modal-overlay" onClick={handleCloseImportModal} aria-hidden="true" />
+          <div className="modal-panel relative mx-4 w-full max-w-lg p-6">
             <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Import Events from CSV</h3>
 
             {!importResult ? (
@@ -1369,8 +1369,8 @@ export const EventsPage: React.FC = () => {
       {/* Cancel Confirmation Modal */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
-          <div className="bg-theme-surface-modal relative mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
+          <div className="modal-overlay" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
+          <div className="modal-panel relative mx-4 w-full max-w-md p-6">
             <h3 className="text-theme-text-primary mb-2 text-lg font-medium">
               Cancel {selectedEvents.size} Event{selectedEvents.size !== 1 ? 's' : ''}?
             </h3>

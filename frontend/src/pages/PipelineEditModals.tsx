@@ -61,7 +61,7 @@ const ModalShell: React.FC<{
   children: React.ReactNode;
 }> = ({ title, onClose, onSubmit, submitting, submitLabel = 'Save', children }) => (
   <div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    className="modal-overlay flex items-center justify-center p-4"
     role="dialog"
     aria-modal="true"
     aria-label={title}
@@ -69,7 +69,7 @@ const ModalShell: React.FC<{
       if (e.key === 'Escape') onClose();
     }}
   >
-    <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-lg flex-col rounded-lg">
+    <div className="modal-panel flex max-h-[90dvh] w-full max-w-lg flex-col">
       <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
         <h2 className="text-theme-text-primary text-lg font-bold">{title}</h2>
         <button

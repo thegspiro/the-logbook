@@ -556,7 +556,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               )}
             </button>
             {showFilters && (
-              <div className="bg-theme-surface-modal border-theme-surface-border absolute top-full left-0 z-10 mt-2 w-48 rounded-lg border py-1 shadow-xl">
+              <div className="modal-panel absolute top-full left-0 z-10 mt-2 w-48 py-1">
                 {(['active', 'on_hold', 'withdrawn', 'converted', 'rejected'] as ApplicantStatus[]).map((status) => (
                   <button
                     key={status}
@@ -1136,8 +1136,8 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
+        <div className="modal-overlay flex items-center justify-center p-4">
+          <div className="modal-panel w-full max-w-md">
             <div className="p-6">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
@@ -1205,8 +1205,8 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Add Applicant Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
+        <div className="modal-overlay flex items-center justify-center p-4">
+          <div className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Add Applicant</h2>
               <button

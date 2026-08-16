@@ -136,8 +136,7 @@ function LocationSetupWizard({
   const [isSaving, setIsSaving] = useState(false);
   const [roomForm, setRoomForm] = useState<WizardRoom>({ name: '', room_number: '', floor: '', capacity: '' });
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'form-input py-2.5';
   const labelCls = 'form-label';
 
   /* ── Step navigation ── */
@@ -297,12 +296,8 @@ function LocationSetupWizard({
 
   /* ── Render ── */
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-lg border">
+    <div className="modal-overlay flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <div className="modal-panel flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden">
         {/* Progress bar */}
         <div className="px-6 pt-5 pb-2">
           <div className="mb-2 flex items-center justify-between">
@@ -1171,8 +1166,7 @@ export default function LocationsPage() {
     }
   };
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'form-input py-2.5';
   const labelCls = 'form-label';
 
   const isSingleStation = stationMode === 'single_station';
@@ -1465,14 +1459,14 @@ export default function LocationsPage() {
       {/* Station Modal */}
       {showStationModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowStationModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
+          <div className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingStation ? 'Edit Station' : 'Add Station'}
@@ -1573,14 +1567,14 @@ export default function LocationsPage() {
       {/* Room Modal */}
       {showRoomModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowRoomModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border">
+          <div className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}

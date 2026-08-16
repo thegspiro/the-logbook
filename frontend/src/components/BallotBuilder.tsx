@@ -839,7 +839,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
 
               {/* Template popover dropdown — opens upward so it doesn't clip */}
               {showTemplatePopover && (
-                <div className="bg-theme-surface-modal border-theme-surface-border absolute right-0 bottom-full z-30 mb-2 max-h-[70dvh] w-[28rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border p-4 shadow-lg">
+                <div className="modal-panel absolute right-0 bottom-full z-30 mb-2 max-h-[70dvh] w-[28rem] max-w-[calc(100vw-2rem)] overflow-y-auto p-4">
                   {!selectedTemplate ? (
                     <>
                       <h4 className="text-theme-text-primary mb-3 text-sm font-semibold">Select a Template</h4>

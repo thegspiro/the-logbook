@@ -153,12 +153,8 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDrop={(e) => handleDrop(e, index)}
                 onDragEnd={handleDragEnd}
-                className={`flex items-center gap-3 rounded-lg border p-4 transition-all ${
-                  isDragging
-                    ? 'bg-theme-surface border-red-500/50 opacity-50'
-                    : isDragOver
-                      ? 'bg-theme-surface-hover border-red-500'
-                      : 'border-theme-surface-border bg-theme-input-bg hover:border-theme-surface-border'
+                className={`drop-surface flex items-center gap-3 p-4 ${
+                  isDragging ? 'drop-surface-dragging' : isDragOver ? 'drop-surface-active' : ''
                 }`}
               >
                 {/* Drag Handle */}

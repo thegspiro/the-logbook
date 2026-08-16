@@ -1873,7 +1873,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     return (
       <div className="flex min-h-screen flex-col">
         {/* Header */}
-        <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b px-4 py-3">
+        <div className="modal-header-sticky px-4 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => void navigate(backTarget)}
@@ -2103,7 +2103,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t px-4">
+        <div className="modal-footer-sticky px-4">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               {/* Officers only — the email endpoint requires training.manage,
@@ -2156,7 +2156,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     return (
       <div className="flex min-h-screen flex-col">
         {/* Review Header */}
-        <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b px-4 py-3">
+        <div className="modal-header-sticky px-4 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setReviewing(false)}
@@ -2241,7 +2241,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Action Bar */}
-        <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t px-4">
+        <div className="modal-footer-sticky px-4">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
@@ -2299,7 +2299,7 @@ export const ActiveSkillTestPage: React.FC = () => {
   return (
     <div className="flex min-h-screen flex-col">
       {/* Top Bar */}
-      <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b px-4 py-3">
+      <div className="modal-header-sticky px-4 py-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <button
             onClick={() => void navigate(backTarget)}
@@ -2466,7 +2466,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           it. Now the primary button is whatever comes next, and finishing keeps
           the rightmost slot on every section so it never moves under a thumb
           that has learned where it is. */}
-      <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t px-4">
+      <div className="modal-footer-sticky px-4">
         <div className="flex gap-3">
           <button
             onClick={() => goToSection(activeSectionIndex - 1)}

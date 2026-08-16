@@ -446,7 +446,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
                         {actionMenuId === applicant.id && (
-                          <div className="bg-theme-surface-modal border-theme-surface-border absolute top-full right-0 z-10 mt-1 w-40 rounded-lg border py-1 shadow-xl">
+                          <div className="modal-panel absolute top-full right-0 z-10 mt-1 w-40 py-1">
                             <button
                               onClick={() => {
                                 onApplicantClick(applicant);

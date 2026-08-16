@@ -132,7 +132,7 @@ export const Modal: React.FC<ModalProps> = ({
         onClick={handleBackdropClick}
       >
         {/* Background overlay */}
-        <div className="pointer-events-none fixed inset-0 bg-black/50 transition-opacity" aria-hidden="true" />
+        <div className="modal-overlay pointer-events-none transition-opacity" aria-hidden="true" />
 
         {/* Center modal vertically */}
         <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">
@@ -142,12 +142,12 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Modal panel */}
         <div
           ref={modalRef}
-          className={`bg-theme-surface-modal relative z-10 inline-block transform overflow-hidden rounded-lg text-left align-bottom shadow-xl transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} max-h-[calc(100dvh-2rem)] w-full overflow-y-auto sm:max-h-[calc(100dvh-4rem)]`}
+          className={`modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} max-h-[calc(100dvh-2rem)] w-full overflow-y-auto sm:max-h-[calc(100dvh-4rem)]`}
           data-testid="modal-panel"
           tabIndex={-1}
         >
           {/* Header */}
-          <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+          <div className="modal-header">
             <div className="mb-4 flex items-start justify-between">
               <h3 className="text-theme-text-primary text-lg font-medium" id="modal-title">
                 {title}

@@ -1244,7 +1244,7 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Link Event Modal */}
         {showLinkEventModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="modal-overlay flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="link-event-title"
@@ -1252,7 +1252,7 @@ export const MinutesDetailPage: React.FC = () => {
               if (e.key === 'Escape') setShowLinkEventModal(false);
             }}
           >
-            <div className="bg-theme-surface-modal w-full max-w-lg rounded-lg shadow-xl">
+            <div className="modal-panel w-full max-w-lg">
               <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
                 <h3 id="link-event-title" className="text-theme-text-primary text-lg font-medium">
                   Link to Meeting Event
@@ -1307,7 +1307,7 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Reject Modal */}
         {showRejectModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="modal-overlay flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="reject-title"
@@ -1318,7 +1318,7 @@ export const MinutesDetailPage: React.FC = () => {
               }
             }}
           >
-            <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+            <div className="modal-panel w-full max-w-md">
               <div className="border-theme-surface-border border-b px-6 py-4">
                 <h3 id="reject-title" className="text-theme-text-primary text-lg font-medium">
                   Reject Minutes

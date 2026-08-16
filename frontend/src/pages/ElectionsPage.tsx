@@ -564,7 +564,7 @@ export const ElectionsPage: React.FC = () => {
 
         {showCreateModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="modal-overlay flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-election-title"
@@ -572,7 +572,7 @@ export const ElectionsPage: React.FC = () => {
               if (e.key === 'Escape') setShowCreateModal(false);
             }}
           >
-            <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
+            <div className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
               <div className="border-theme-surface-border border-b px-6 py-4">
                 <h3 id="create-election-title" className="text-theme-text-primary text-lg font-medium">
                   Create New Election

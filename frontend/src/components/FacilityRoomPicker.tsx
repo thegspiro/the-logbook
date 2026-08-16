@@ -106,8 +106,7 @@ export default function FacilityRoomPicker({
 
   const selectedRoom = rooms.find((r) => r.id === value);
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring appearance-none';
+  const inputCls = 'form-input px-3 py-2.5 text-sm appearance-none';
 
   return (
     <div className={`space-y-2 ${className}`}>
