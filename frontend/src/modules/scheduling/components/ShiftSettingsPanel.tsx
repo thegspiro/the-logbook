@@ -111,8 +111,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   // Paint immediately from the cached/mirrored value, then replace with the
   // department-wide copy from the backend. migrateLocal: this panel requires
   // scheduling.manage, so if the backend has never stored settings but this
-  // browser has a pre-backend localStorage copy, that copy is pushed up once
-  // so it becomes the whole department's settings instead of a private one.
+  // browser has a mirror explicitly scoped to the current organization, that
+  // copy is pushed up once. Untagged legacy copies are ignored.
   const [settings, setSettings] = useState<ShiftSettings>(() => getCachedShiftSettings());
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
