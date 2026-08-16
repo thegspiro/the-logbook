@@ -121,10 +121,19 @@ class TestVisibilityAndProgress:
             "checklist_items": TestVisibilityAndProgress.ITEMS,
         }
 
-    def test_member_requirement_response_omits_officer_only_steps(self):
+    def test_member_requirement_response_redacts_officer_only_steps(self):
+        # Redacted, not stripped: the member view folds hidden steps into a
+        # "+N more steps your officer records" count, so the count must
+        # survive while the text and id must not.
         response = _member_requirement(self._requirement_response_data())
 
-        assert [item.id for item in response.checklist_items] == ["s1"]
+        assert [item.id for item in response.checklist_items] == ["s1", None]
+        assert [item.member_visible for item in response.checklist_items] == [
+            True,
+            False,
+        ]
+        hidden = response.checklist_items[1]
+        assert hidden.text == "Recorded by your officer"
 
     def test_member_progress_omits_hidden_step_and_its_signoff_state(self):
         now = datetime.now(timezone.utc)
@@ -143,12 +152,15 @@ class TestVisibilityAndProgress:
             }
         )
 
-        assert [item.id for item in response.requirement.checklist_items] == ["s1"]
+        assert [item.id for item in response.requirement.checklist_items] == [
+            "s1",
+            None,
+        ]
         assert response.progress_notes["checklist_done"] == ["s1"]
 
-    def test_program_requirement_link_omits_officer_only_steps(self):
+    def test_program_requirement_link_redacts_officer_only_steps(self):
         # GET /programs/{id}/requirements nests the full requirement inside
-        # each link row; the member view must strip hidden steps there too.
+        # each link row; the member view must redact hidden steps there too.
         now = datetime.now(timezone.utc)
         response = _member_program_requirement(
             {
@@ -160,7 +172,13 @@ class TestVisibilityAndProgress:
             }
         )
 
-        assert [item.id for item in response.requirement.checklist_items] == ["s1"]
+        assert [item.id for item in response.requirement.checklist_items] == [
+            "s1",
+            None,
+        ]
+        assert response.requirement.checklist_items[1].text == (
+            "Recorded by your officer"
+        )
 
     def test_program_requirement_link_without_nested_requirement(self):
         now = datetime.now(timezone.utc)

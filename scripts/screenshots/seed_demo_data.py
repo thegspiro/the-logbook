@@ -593,7 +593,15 @@ PART_STAFFED_SHIFT = (4, 2)
 # phase. Chosen among the requirements the seeded members have *not* finished,
 # so the lock has siblings left to hold back.
 PROGRAM_GATE_REQUIREMENTS = {
-    "Probationary Firefighter Pipeline": "Hose Deployment",
+    "Probationary Firefighter Pipeline": (
+        "Hose Deployment",
+        # A knowledge test is only completable by an explicitly recorded exam
+        # result, so this gate survives the hour auto-credit that quietly
+        # finished Hose Deployment for the seeded members — a gate already
+        # satisfied locks nothing, and the member-facing "Locked until you
+        # finish …" line disappeared with it.
+        "Firefighter I Written Exam",
+    ),
 }
 
 # The one enrollment left past its deadline, so Expired and the reopen dialog
@@ -605,15 +613,19 @@ EXPIRED_ENROLLMENT_DAYS_OVER = 23
 
 # Steps behind a checklist requirement, keyed on the requirement name.
 CHECKLIST_ITEMS = {
+    # The last three are officer-recorded (member_visible False): the member
+    # view folds them into a "+N more steps your officer records" line, which
+    # is the subject of a guide-02 screenshot and renders only when at least
+    # one step is hidden.
     "Station Duties Checklist": [
         "Tour the apparatus bay and name every rig",
         "Meet the duty officer and shift crew",
         "Locate the SCBA fill station and spare bottles",
         "Walk the station's evacuation route",
         "Log in to The Logbook and set a photo",
-        "SCBA fit test on file",
-        "Turnout gear issued and sized",
-        "Emergency contacts recorded",
+        {"text": "SCBA fit test on file", "member_visible": False},
+        {"text": "Turnout gear issued and sized", "member_visible": False},
+        {"text": "Emergency contacts recorded", "member_visible": False},
     ],
     "Officer Sign-Off": [
         "Company officer has observed a full shift",
@@ -5243,6 +5255,7 @@ class Seeder:
         if wanted <= have and pending >= 4:
             # The review states still get topped up on the way out. This return
             # is about not re-filing reports.
+            self._ensure_demo_member_report(existing, demo_member_id)
             reports = items(self.api.get("/training/shift-reports/all?limit=50"))
             self._flag_review_queue(reports, demo_member_id)
             return reports
@@ -5340,6 +5353,13 @@ class Seeder:
             )
             seen_trainees.add(str(chosen.get("user_id")))
             pairs.append((shift, str(chosen.get("user_id"))))
+
+        # The demo member's report must not be the draft either: the last
+        # pair files with save_as_draft, and a draft is invisible in My
+        # Reports — the same trap as the positional flag below, one state
+        # over. Swap them off the tail rather than dropping the pair.
+        if len(pairs) > 1 and pairs[-1][1] == demo_member_id:
+            pairs[-1], pairs[-2] = pairs[-2], pairs[-1]
 
         # Wired before the reports are filed, not after: the create derives the
         # call count from the run log, and nothing re-derives it later. The
@@ -5468,6 +5488,115 @@ class Seeder:
             )
         self._flag_review_queue(reports, demo_member_id)
         return reports
+
+    def _ensure_demo_member_report(
+        self, existing: list[dict], demo_member_id: str
+    ) -> None:
+        """File and approve one report for the demo member if none exists.
+
+        My Reports and the My Shift Progress stats card render only from the
+        member's own *approved* reports, and the filing loop's states-present
+        early return can leave the one member the `auth: "member"` shots sign
+        in as with nothing — the states were all satisfied by other people's
+        reports before a shift of hers came up.
+        """
+        if not demo_member_id:
+            return
+        mine = [
+            r
+            for r in existing
+            if str(pick(r, "trainee_id", "traineeId")) == demo_member_id
+            and pick(r, "review_status", "reviewStatus") != "draft"
+        ]
+        if any(pick(r, "review_status", "reviewStatus") == "approved" for r in mine):
+            return
+        if mine:
+            self.api.post(
+                f"/training/shift-reports/{pick(mine[0], 'id')}/review",
+                {"review_status": "approved"},
+            )
+            return
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        past = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate")),
+            reverse=True,
+        )
+        for shift in past:
+            crew = items(
+                self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
+            )
+            me = next(
+                (
+                    c
+                    for c in crew
+                    if str(c.get("user_id")) == demo_member_id
+                    and not c.get("has_existing_report")
+                ),
+                None,
+            )
+            if me is None:
+                continue
+            shift_date = str(pick(shift, "shift_date", "shiftDate"))
+            self._name_on_run_log(
+                str(pick(shift, "id")), shift_date, demo_member_id, count=2
+            )
+            report = self.api.post(
+                "/training/shift-reports",
+                {
+                    "shift_id": pick(shift, "id"),
+                    "shift_date": shift_date,
+                    "trainee_id": demo_member_id,
+                    "hours_on_shift": 12.0,
+                    "calls_responded": 2,
+                    "call_types": ["EMS", "Automatic Fire Alarm"],
+                    "performance_rating": 4,
+                    "areas_of_strength": "Excellent patient rapport.",
+                    "areas_for_improvement": (
+                        "Radio traffic is too long — keep it to the point."
+                    ),
+                    "officer_narrative": (
+                        "Good instincts on the medical call — got a full set "
+                        "of vitals before the medic unit arrived."
+                    ),
+                    "skills_observed": [
+                        {
+                            "skill_name": "Pump operations",
+                            "demonstrated": True,
+                            "score": 4,
+                            "notes": "Set the pump and held pressure unprompted.",
+                        },
+                        {
+                            "skill_name": "SCBA donning",
+                            "demonstrated": True,
+                            "score": 5,
+                            "notes": "Under sixty seconds, mask seal checked.",
+                        },
+                    ],
+                    "tasks_performed": [
+                        {
+                            "task": "Apparatus check",
+                            "description": (
+                                "Completed the start-of-shift engine inventory."
+                            ),
+                        }
+                    ],
+                },
+            )
+            self.api.post(
+                f"/training/shift-reports/{pick(report, 'id')}/review",
+                {"review_status": "approved"},
+            )
+            return
+        self.blocked.append(
+            "shift reports: no past shift crews the demo member, so their "
+            "My Reports view stays empty"
+        )
 
     #: Two flagged reports, not one. The Flagged view is a queue, and a queue of
     #: one pictures neither the batch-review bar — which renders only above a
@@ -6207,6 +6336,7 @@ class Seeder:
                 )
         self._strip_phase_number_prefixes(programs)
         self._flag_gating_requirements(programs)
+        self._backfill_checklist_items(programs)
         self._expire_one_enrollment(programs, members)
         self._advance_pipeline_progress(programs)
         self._complete_one_enrollment(programs)
@@ -6347,8 +6477,39 @@ class Seeder:
         """
         for program in programs:
             program_id = pick(program, "id")
-            gate_name = PROGRAM_GATE_REQUIREMENTS.get(str(pick(program, "name") or ""))
-            if not program_id or not gate_name:
+            gate_names = PROGRAM_GATE_REQUIREMENTS.get(str(pick(program, "name") or ""))
+            if not program_id or not gate_names:
+                continue
+            links = items(
+                self.api.get(f"/training/programs/programs/{program_id}/requirements"),
+                "requirements",
+            )
+            for gate_name in gate_names:
+                for link in links:
+                    requirement = pick(link, "requirement") or {}
+                    if str(pick(requirement, "name") or "") != gate_name:
+                        continue
+                    if pick(link, "is_prerequisite"):
+                        break
+                    self.api.patch(
+                        f"/training/programs/programs/{program_id}"
+                        f"/requirements/{pick(link, 'id')}",
+                        {"is_prerequisite": True},
+                    )
+                    break
+
+    def _backfill_checklist_items(self, programs: list[dict]) -> None:
+        """Bring existing checklist requirements up to the blueprint's items.
+
+        The create path only runs once per program (skip-by-name), so a
+        database seeded before the blueprint gained officer-only steps keeps
+        its old list forever — the recurring blueprint-backfill trap. Replaces
+        the list wholesale when the texts or visibilities differ; safe in the
+        demo, where no member has checklist ticks recorded.
+        """
+        for program in programs:
+            program_id = pick(program, "id")
+            if not program_id:
                 continue
             links = items(
                 self.api.get(f"/training/programs/programs/{program_id}/requirements"),
@@ -6356,16 +6517,39 @@ class Seeder:
             )
             for link in links:
                 requirement = pick(link, "requirement") or {}
-                if str(pick(requirement, "name") or "") != gate_name:
+                name = str(pick(requirement, "name") or "")
+                blueprint = CHECKLIST_ITEMS.get(name)
+                if not blueprint:
                     continue
-                if pick(link, "is_prerequisite"):
-                    break
-                self.api.patch(
-                    f"/training/programs/programs/{program_id}"
-                    f"/requirements/{pick(link, 'id')}",
-                    {"is_prerequisite": True},
+                requirement_id = pick(link, "requirement_id") or pick(requirement, "id")
+                detail = self.api.get(
+                    f"/training/programs/requirements/{requirement_id}"
                 )
-                break
+                current = [
+                    (
+                        str(i.get("text") or ""),
+                        bool(i.get("member_visible", True)),
+                    )
+                    for i in pick(detail, "checklist_items") or []
+                ]
+                wanted = [
+                    (
+                        (i if isinstance(i, str) else str(i.get("text") or "")),
+                        (True if isinstance(i, str) else i.get("member_visible", True)),
+                    )
+                    for i in blueprint
+                ]
+                if current == wanted:
+                    continue
+                self.api.patch(
+                    f"/training/programs/requirements/{requirement_id}",
+                    {
+                        "checklist_items": [
+                            {"text": text, "member_visible": visible}
+                            for text, visible in wanted
+                        ]
+                    },
+                )
 
     def _strip_phase_number_prefixes(self, programs: list[dict]) -> None:
         """Drop a "Phase N — " prefix a phase carries in its own name.
@@ -7202,6 +7386,35 @@ class Seeder:
             )
         except ApiError as exc:
             self.blocked.append(f"training attachment: {exc}")
+
+    def seed_training_submission(self) -> None:
+        """A self-reported training submission awaiting officer review.
+
+        The Review Submissions queue reads /training/submissions/pending, and
+        nothing seeded one — the queue rendered its empty state under a
+        caption describing pending rows. Submitted as the demo member so the
+        submitter and the reviewing officer differ; the org default
+        (require_approval on, no auto-approve threshold) routes it to
+        pending review.
+        """
+        if items(self.api.get("/training/submissions/pending")):
+            return
+        member = Api(self.base_url)
+        member.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+        member.post(
+            "/training/submissions",
+            {
+                "course_name": "ICS-200: Basic Incident Command",
+                "training_type": "continuing_education",
+                "description": (
+                    "Completed the FEMA independent-study course online; "
+                    "certificate is in my training file."
+                ),
+                "completion_date": str(TODAY - timedelta(days=3)),
+                "hours_completed": 4.0,
+                "instructor": "FEMA Emergency Management Institute",
+            },
+        )
 
     def seed_training_records(
         self, members: list[dict], courses: list[dict]
@@ -11013,6 +11226,7 @@ class Seeder:
             "training records",
             lambda: self.seed_training_records(members, training.get("courses", [])),
         )
+        self.step("training submission", self.seed_training_submission)
         self.step("training programs", lambda: self.seed_training_programs(members))
         self.step(
             "training enhancements",
