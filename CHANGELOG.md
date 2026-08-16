@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: vendors get database-backed tests, and a second migration-id collision (2026-08-16)
+
+**Fixed**
+
+- The vendor migration collided with `20260816_0002`, landed the same day by
+  another branch: two files declaring one revision id, which leaves
+  `alembic upgrade head` failing with "Multiple head revisions" for anyone
+  running it. Renumbered to `20260816_0003`, chained after the storage-area
+  backfill. This is the second such collision on this branch — the pattern is
+  worth a guard rail, since git merges the two files without a word and only
+  `validate_migrations.py` notices.
+
+**Added**
+
+- `test_inventory_vendors_db.py` — the vendor flows against a real database,
+  marked `integration` so CI's MySQL and MariaDB jobs run them. The mocked
+  suite passed in full while merging a vendor deleted the contacts it reported
+  as moving; a cascade is precisely what a mock cannot have. These assert on
+  what is still in the database afterwards: contacts survive a merge, links
+  survive a deactivation, the case-folded matching the cleanup screen promises
+  actually matches across spellings and departments, spend counts retired
+  items while the catalog count does not, and a relinked reorder comes back
+  naming its new vendor. Verified to fail against the pre-fix merge.
+
 ### Inventory: vendor review fixes (2026-08-16)
 
 **Fixed**
@@ -88,7 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Migration**
 
-- `20260816_0002` adds both tables and the `vendor_id` columns, then backfills:
+- `20260816_0003` adds both tables and the `vendor_id` columns, then backfills:
   every distinct free-text vendor name already on file becomes a vendor
   (case-folded per organization, first spelling wins) and the items and reorder
   requests that named it are linked to it. The free-text columns are left in
