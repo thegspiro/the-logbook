@@ -51,6 +51,7 @@ from app.schemas.user import (
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
+    NotificationPreferences,
     UserListResponse,
     UserProfileResponse,
     UserUpdate,
@@ -1230,9 +1231,28 @@ async def update_contact_info(
         user.mobile = contact_update.mobile
 
     if contact_update.notification_preferences is not None:
-        user.notification_preferences = (
-            contact_update.notification_preferences.model_dump()
+        # Merge, never replace. Every field on NotificationPreferences defaults
+        # to True, so dumping the whole model turned a partial payload into a
+        # re-subscribe: a caller sending only {"sms_notifications": false}
+        # silently switched the member's other preferences back on, and the
+        # 200 made it look like the save had done exactly what was asked.
+        # An omitted key means "leave this alone" (CLAUDE.md pitfall 1b).
+        known_keys = set(NotificationPreferences.model_fields)
+        merged = {
+            key: value
+            for key, value in (user.notification_preferences or {}).items()
+            # Drops keys no sender reads any more, so a blob that predates
+            # migration 20260816_0002 heals on its next save instead of
+            # carrying a dead `email` flag forever.
+            if key in known_keys
+        }
+        merged.update(
+            contact_update.notification_preferences.model_dump(exclude_unset=True)
         )
+        # Every value is a flat bool, so this rebuilt dict is a genuinely new
+        # value and SQLAlchemy issues the UPDATE. Pitfall 12 (shallow copies
+        # sharing nested references) does not arise — there is no nesting.
+        user.notification_preferences = merged
 
     await db.commit()
 

@@ -292,11 +292,11 @@ export const UserSettingsPage: React.FC = () => {
     setSavingConsent('sms_notifications');
     try {
       await userService.setMyConsent('sms_notifications', enabled);
+      // Only the key this switch owns. The backend merges, so the toggles
+      // above keep whatever the member last saved — flipping this must not
+      // quietly commit unsaved edits sitting in the rest of the form.
       await userService.updateNotificationPreferences(user.id, {
-        email_notifications: emailNotifications,
         sms_notifications: enabled,
-        event_reminders: eventReminders,
-        training_reminders: trainingReminders,
       });
       applyConsentLocally('sms_notifications', enabled);
       setSmsNotifications(enabled);

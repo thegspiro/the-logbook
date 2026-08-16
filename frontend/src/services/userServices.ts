@@ -187,7 +187,11 @@ export const userService = {
   },
 
   /**
-   * Update notification preferences for a user
+   * Update notification preferences for a user.
+   *
+   * Partial by design: the backend merges, so a key you omit is left as it
+   * is rather than reset. Send only what the caller means to change — a
+   * screen that owns one toggle should send that one toggle.
    */
   async updateNotificationPreferences(
     userId: string,

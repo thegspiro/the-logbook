@@ -141,12 +141,13 @@ describe('UserSettingsPage', () => {
       await waitFor(() => expect(smsToggle).toHaveAttribute('aria-checked', 'true'));
       await user.click(smsToggle);
 
-      // Saved on the switch, not deferred to the Save Preferences button.
+      // Saved on the switch, not deferred to the Save Preferences button —
+      // and carrying only the key this switch owns, so it cannot commit
+      // unsaved edits sitting in the toggles above it.
       await waitFor(() => expect(userService.setMyConsent).toHaveBeenCalledWith('sms_notifications', false));
-      expect(userService.updateNotificationPreferences).toHaveBeenCalledWith(
-        'user-123',
-        expect.objectContaining({ sms_notifications: false })
-      );
+      expect(userService.updateNotificationPreferences).toHaveBeenCalledWith('user-123', {
+        sms_notifications: false,
+      });
     });
 
     it('reads as off until the member grants SMS consent, whatever the stored preference says', async () => {
