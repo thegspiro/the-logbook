@@ -247,10 +247,42 @@ _(reworked 2026-08-12 so updates land on installed PWAs in one reload)_:
    nothing until a second reload
 
 > **Hint:** If you don't see the update notification and suspect you're on an
-> old version, you can always force a refresh with `Ctrl+Shift+R` (desktop) or
-> by closing and reopening the app (mobile). Since 2026-08-12 a stale-chunk
-> load after a deployment also self-heals through the same one-reload path
-> instead of landing on the error page.
+> old version, use **Settings → App** (below) rather than guessing. Since
+> 2026-08-12 a stale-chunk load after a deployment also self-heals through the
+> same one-reload path instead of landing on the error page.
+
+### Checking and Forcing an Update Yourself _(2026-08-16)_
+
+Everything above is automatic, but an installed app has no address bar and no
+`Ctrl+Shift+R` — so when a device _does_ get stuck on an old build, there was
+previously nothing to press. **Settings → App** is that button. It shows:
+
+- **Installed version** — the build this device is actually running. Read it
+  out when you report a problem; it tells whoever is helping exactly which
+  version you are seeing, which is otherwise guesswork.
+- **Check for updates** — asks the server whether a newer version has been
+  released. If one has, the app swaps in the new version and reloads onto it.
+  If not, it says so, which is itself useful: it rules the app out.
+- **Force refresh** — the escape hatch. It deletes every stored copy of the app
+  on this device (the offline app shell and every cached screen) and reloads it
+  from the server.
+
+Reach for **Force refresh** when the app still looks out of date after an
+update, or when it shows an old department name or logo — that branding is
+stored on the device the first time you open the app and is otherwise never
+re-read, so a department that renames itself or changes its logo can leave
+existing phones showing the old one indefinitely.
+
+A force refresh is safe:
+
+- **You stay signed in.** It is a refresh, not a sign-out.
+- **Offline work is kept.** Anything saved offline but not yet synced is left
+  untouched — a force refresh will never be the thing that loses a shift report.
+- **Push notifications keep working.** This device's notification subscription
+  is deliberately left alone, so you do not have to re-enable it afterwards.
+
+The only cost is speed: the next few screens load a little slower while the app
+re-downloads what it just discarded.
 
 > **Fixed 2026-08-07:** on a phone the update banner was rendered _behind_ the
 > fixed mobile header and was therefore invisible. For an installed app that
@@ -492,7 +524,7 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 | "Add to Home Screen" not appearing (iOS)                            | You must use **Safari**. Chrome, Firefox, and other browsers on iOS cannot install PWAs. Also verify you are on the actual Logbook URL, not a redirect page.                                                                                                                                                                                                                                                                                                                            |
 | "Add to Home Screen" not appearing (Android)                        | Ensure you are using Chrome. The option may be in the three-dot menu under "Install app" or "Add to Home screen." Some browsers use different wording.                                                                                                                                                                                                                                                                                                                                  |
 | App shows blank screen after install                                | Close the app completely and reopen. If it persists, uninstall from home screen, clear browser cache for the site, and reinstall.                                                                                                                                                                                                                                                                                                                                                       |
-| App stuck on old version                                            | The autoUpdate service worker should handle this. If it doesn't: close the app completely, wait 30 seconds, reopen. On iOS, you can also clear Safari's website data for the Logbook URL in Settings > Safari > Advanced > Website Data.                                                                                                                                                                                                                                                |
+| App stuck on old version                                            | **Settings > App > Force refresh** _(2026-08-16)_. It clears every stored copy of the app on this device and reloads from the server, while keeping you signed in, keeping unsynced offline work, and keeping push enabled. The same screen shows the build you are actually running, so you can confirm the refresh worked rather than assuming it did.                                                                                                                                |
 | QR code scan not opening the app                                    | On iOS, the camera app opens QR links in Safari, not the installed PWA. This is an iOS limitation. The check-in still works — it just opens in Safari instead.                                                                                                                                                                                                                                                                                                                          |
 | Member ID scan not finding member                                   | Verify the member has a `membership_number` assigned and the ID card was generated by The Logbook. Fall back to name search if scanning fails.                                                                                                                                                                                                                                                                                                                                          |
 | Barcode scanner not activating                                      | Your browser needs camera permission. Go to your phone's Settings > Privacy > Camera and ensure the browser (or the PWA) has camera access. On desktop, verify your webcam is not in use by another app.                                                                                                                                                                                                                                                                                |
@@ -506,7 +538,7 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 | Form submission did not synchronize                                 | Training submissions and event RSVPs queue in IndexedDB while offline. Restore connectivity, use the sync indicator to retry if needed, and verify the durable result in Training or Events. Other forms may still require connectivity; preserve the entered values and follow the error shown by that form.                                                                                                                                                                           |
 | App icon disappeared from home screen                               | Some devices remove PWA icons after system updates or storage cleanups. Reinstall following the steps above.                                                                                                                                                                                                                                                                                                                                                                            |
 | Dark mode not applying in PWA                                       | Dark mode follows the app's theme setting (My Account > Appearance), not the device's system setting. Toggle it from within the app.                                                                                                                                                                                                                                                                                                                                                    |
-| "Update Available" notification not appearing                       | The version detection checks periodically. If you suspect you're on an old version, force refresh with Ctrl+Shift+R or close and reopen the app.                                                                                                                                                                                                                                                                                                                                        |
+| "Update Available" notification not appearing                       | The version detection checks periodically. If you suspect you're on an old version, open **Settings > App > Check for updates** — it answers the question directly instead of leaving you to guess, and reloads onto the new version if there is one.                                                                                                                                                                                                                                   |
 | Layout looks wrong on mobile                                        | Mobile responsiveness has been significantly improved (major updates 2026-03-22 and 2026-08-07). Clear your browser cache to load the latest styles. Use landscape orientation for complex tables.                                                                                                                                                                                                                                                                                      |
 | Login page shows "Too many attempts"                                | Rate limiting is active. Wait for the countdown timer to expire before trying again.                                                                                                                                                                                                                                                                                                                                                                                                    |
 | A page went blank / "Something went wrong"                          | Fixed 2026-08-07/08. An unexpected response from the server used to take a whole screen down instead of showing an empty list — most often on station Wi-Fi behind a captive portal or a carrier interception page, which answer with a web page where the app expects data. If it still happens, note the page and report it; those failures are now recorded on the Error Monitoring page for your IT manager.                                                                        |
