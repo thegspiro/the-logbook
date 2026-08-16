@@ -32,8 +32,10 @@ class RecordingSession:
         self._results = list(results)
         self.commit = AsyncMock()
         self.refresh = AsyncMock()
+        self.statements = []
 
     async def execute(self, statement, *args, **kwargs):
+        self.statements.append(statement)
         return self._results.pop(0) if self._results else MagicMock()
 
 
@@ -47,14 +49,14 @@ def _enrollment(user_id, **over):
         withdrawal_reason=None,
     )
     base.update(over)
-    return SimpleNamespace(**base)
+    return ProgramEnrollment(**base)
 
 
 class TestWithdrawEnrollment:
     async def test_member_withdraws_own(self):
         user = uuid4()
         enr = _enrollment(user)
-        db = RecordingSession([_one(enr)])
+        db = RecordingSession([_one(enr), SimpleNamespace(rowcount=1)])
         svc = TrainingProgramService(db)
 
         result, error = await svc.withdraw_enrollment(
@@ -71,6 +73,27 @@ class TestWithdrawEnrollment:
         assert enr.withdrawn_at is not None
         assert enr.withdrawal_reason == "Stepped down to EMT"
         db.commit.assert_awaited_once()
+
+    async def test_member_withdrawal_loses_race_to_finalization(self):
+        user = uuid4()
+        enr = _enrollment(user)
+        db = RecordingSession([_one(enr), SimpleNamespace(rowcount=0)])
+        svc = TrainingProgramService(db)
+
+        result, error = await svc.withdraw_enrollment(
+            enrollment_id=UUID(enr.id),
+            organization_id=uuid4(),
+            acting_user_id=user,
+            can_manage=False,
+        )
+
+        assert result is None
+        assert error == "Not authorized to withdraw a finalized enrollment"
+        assert enr.status == EnrollmentStatus.ACTIVE
+        db.commit.assert_not_awaited()
+
+        sql = str(db.statements[1].compile(compile_kwargs={"literal_binds": True}))
+        assert "program_enrollments.status IN" in sql
 
     async def test_officer_withdraws_other(self):
         enr = _enrollment(uuid4())  # some other member

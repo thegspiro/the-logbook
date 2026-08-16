@@ -20,6 +20,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import (
@@ -3550,10 +3551,43 @@ class TrainingProgramService:
         }:
             return None, "Not authorized to withdraw a finalized enrollment"
 
-        enrollment.status = EnrollmentStatus.WITHDRAWN
-        enrollment.withdrawn_at = datetime.now(timezone.utc)
-        if reason:
-            enrollment.withdrawal_reason = reason
+        withdrawn_at = datetime.now(timezone.utc)
+
+        if not can_manage:
+            # Do not turn the status check above into a check-then-update race.
+            # Progress recalculation may finalize the enrollment in another
+            # transaction after our read, so make the allowed source states part
+            # of the UPDATE itself and require it to have matched.
+            values = {
+                "status": EnrollmentStatus.WITHDRAWN,
+                "withdrawn_at": withdrawn_at,
+            }
+            if reason:
+                values["withdrawal_reason"] = reason
+            withdrawal = await self.db.execute(
+                update(ProgramEnrollment)
+                .where(
+                    ProgramEnrollment.id == str(enrollment_id),
+                    ProgramEnrollment.status.in_(
+                        (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
+                    ),
+                )
+                .values(**values)
+                .execution_options(synchronize_session=False)
+            )
+            if withdrawal.rowcount != 1:
+                return None, "Not authorized to withdraw a finalized enrollment"
+
+            # Keep the already-loaded return object in sync without marking it
+            # dirty: a normal assignment here would emit an unconditional ORM
+            # UPDATE at commit and defeat the compare-and-set above.
+            for field, value in values.items():
+                set_committed_value(enrollment, field, value)
+        else:
+            enrollment.status = EnrollmentStatus.WITHDRAWN
+            enrollment.withdrawn_at = withdrawn_at
+            if reason:
+                enrollment.withdrawal_reason = reason
 
         await self.db.commit()
         await self.db.refresh(enrollment)
