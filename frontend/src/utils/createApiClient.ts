@@ -14,7 +14,7 @@
 
 import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
-import { performSharedRefresh } from '../services/apiClient';
+import { handleExpiredSession, performSharedRefresh } from '../services/apiClient';
 import { reportApiError } from '../services/errorReporting';
 
 declare module 'axios' {
@@ -75,8 +75,7 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
           await performSharedRefresh();
           return api(originalRequest);
         } catch {
-          localStorage.removeItem('has_session');
-          window.location.href = '/login';
+          handleExpiredSession();
         }
       }
 
