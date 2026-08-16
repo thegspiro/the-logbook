@@ -245,12 +245,30 @@ EQUIPMENT_CHECK_SUBMIT = Permission(
     PermissionCategory.SCHEDULING,
 )
 
-# Inventory
+# Inventory — gear and uniforms
 INVENTORY_VIEW = Permission(
-    "inventory.view", "View inventory", PermissionCategory.INVENTORY
+    "inventory.view", "View gear and uniforms", PermissionCategory.INVENTORY
 )
 INVENTORY_MANAGE = Permission(
-    "inventory.manage", "Manage inventory", PermissionCategory.INVENTORY
+    "inventory.manage", "Manage gear and uniforms", PermissionCategory.INVENTORY
+)
+
+# Inventory — medical supplies.
+#
+# A separate domain so a department can appoint an EMS supply officer without
+# handing over the uniform closet, and vice versa. These are additive: the
+# broad ``inventory.manage`` still covers medical stock, so a department
+# running everything through one quartermaster is unaffected, and every
+# medical route accepts either. ``inventory.*`` continues to grant all of it.
+INVENTORY_VIEW_MEDICAL = Permission(
+    "inventory.view_medical",
+    "View medical supplies",
+    PermissionCategory.INVENTORY,
+)
+INVENTORY_MANAGE_MEDICAL = Permission(
+    "inventory.manage_medical",
+    "Manage medical supplies, stock lots, and expiration tracking",
+    PermissionCategory.INVENTORY,
 )
 
 # Storefront (optional department store that sits alongside logistics)
@@ -560,6 +578,8 @@ ALL_PERMISSIONS: list[Permission] = [
     EQUIPMENT_CHECK_SUBMIT,
     INVENTORY_VIEW,
     INVENTORY_MANAGE,
+    INVENTORY_VIEW_MEDICAL,
+    INVENTORY_MANAGE_MEDICAL,
     STOREFRONT_VIEW,
     STOREFRONT_ORDER,
     STOREFRONT_MANAGE,
@@ -820,6 +840,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_REPORT.name,
             EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             MEETINGS_MANAGE.name,
             ELECTIONS_MANAGE.name,
@@ -878,6 +900,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_REPORT.name,
             EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             MEETINGS_MANAGE.name,
             ELECTIONS_MANAGE.name,
@@ -930,6 +954,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_REPORT.name,
             EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             MEETINGS_MANAGE.name,
             EVENTS_CREATE.name,
@@ -1181,6 +1207,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             INVENTORY_MANAGE.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
@@ -1379,7 +1407,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
     "quartermaster": {
         "name": "Quartermaster",
         "slug": "quartermaster",
-        "description": "Manages department inventory, equipment, and gear assignments",
+        "description": "Manages gear, uniforms, and member issuance — and medical "
+        "supplies too, unless the department appoints an EMS supply officer",
         "is_system": True,
         "priority": 85,
         "permissions": [
@@ -1393,10 +1422,38 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             INVENTORY_MANAGE.name,
+            # Departments that run one supply line seed the quartermaster with
+            # both domains; those that split it drop these two from this role
+            # and appoint an ems_supply_officer.
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             COMPLIANCE_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
+        ],
+    },
+    "ems_supply_officer": {
+        "name": "EMS Supply Officer",
+        "slug": "ems_supply_officer",
+        "description": "Manages medical supplies, stock lots, and what is aboard "
+        "each rig — without access to gear or uniforms",
+        "is_system": True,
+        "priority": 55,
+        "permissions": [
+            USERS_VIEW.name,
+            MEMBERS_VIEW.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
+            # Both halves of the shelf-to-truck loop: stock is only useful if
+            # the same officer can put it on the apparatus checklist and see
+            # what is expiring out there.
+            EQUIPMENT_CHECK_VIEW.name,
+            EQUIPMENT_CHECK_MANAGE.name,
+            APPARATUS_VIEW.name,
+            LOCATIONS_VIEW.name,
         ],
     },
     "public_outreach": {

@@ -36,16 +36,33 @@ def _enum_values(enum_cls):
 
 
 class ItemType(str, enum.Enum):
-    """Type of inventory item"""
+    """Type of inventory item.
+
+    Also the domain axis: ``MEDICAL`` is what separates the medical-supply
+    page from the gear-and-uniforms page, so a department can hand EMS stock
+    to a supply officer without handing over the uniform closet.
+
+    New members are appended, never inserted. MySQL stores an ENUM as the
+    member's ordinal, so reordering this list silently reassigns the type of
+    every existing category.
+    """
 
     UNIFORM = "uniform"  # Shirts, jackets, Class A brass
     PPE = "ppe"  # Personal Protective Equipment
     TOOL = "tool"  # Hand tools, power tools
-    EQUIPMENT = "equipment"  # Rescue equipment, medical supplies
+    EQUIPMENT = "equipment"  # Rescue equipment, hand-carried tools
     VEHICLE = "vehicle"  # Fire engines, ambulances, utility vehicles
     ELECTRONICS = "electronics"  # Radios, tablets, computers, cameras
     CONSUMABLE = "consumable"  # Items that get used up
     OTHER = "other"
+    MEDICAL = "medical"  # EMS supplies — lot- and expiration-tracked
+
+
+# The medical-supply domain, as a set rather than an equality check so a
+# department that later splits it further (controlled substances kept apart
+# from consumables, say) widens the domain in one place and every permission
+# gate, list filter and nav entry follows.
+MEDICAL_ITEM_TYPES: frozenset[ItemType] = frozenset({ItemType.MEDICAL})
 
 
 class ItemCondition(str, enum.Enum):

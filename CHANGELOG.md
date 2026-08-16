@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: medical supplies split onto their own page (2026-08-16)
+
+**Added**
+
+- **Medical Supplies** module at `/medical-supplies` — EMS stock with lot
+  numbers and expiration dates, on its own page rather than mixed into the gear
+  catalog. Opens on what is expiring, with an all-supplies tab, category
+  management, an add-supply form, and a receive-delivery form that books a whole
+  shipment as one dated lot per item line.
+- `ItemType.MEDICAL`, appended to the enum (never inserted — MySQL stores an
+  ENUM as its ordinal, so a mid-list insert would silently reclassify every
+  existing category). Migration `20260816_0001`.
+- Domain-scoped permissions `inventory.view_medical` and
+  `inventory.manage_medical`, so a department can appoint an EMS supply officer
+  for medical stock while the quartermaster keeps gear. Every medical route
+  accepts either these or the broad `inventory.view` / `inventory.manage`, so a
+  department running one supply line is unaffected, and `inventory.*` still
+  grants everything.
+- `ems_supply_officer` system role and matching email-signature office. It holds
+  the medical permissions plus `equipment_check.*` — both halves of the
+  shelf-to-truck loop — and no access to gear or uniforms.
+- `medical_supplies` module toggle (off by default), so departments that do not
+  run EMS never see the page.
+
+**Changed**
+
+- Renamed the gear side so the two are distinguishable: **Inventory** →
+  **Gear & Uniforms**, **My Equipment** → **My Issued Gear**, **Inventory
+  Admin** → **Gear Admin**, **Equipment Requests** → **Gear Requests**,
+  **Equipment Kits** → **Gear Kits**. Routes and table names are unchanged, so
+  no existing link breaks.
+- Gear listings now exclude medical-domain items and categories, and the medical
+  routes are pinned to the medical domain server-side — the domain is never read
+  from a query parameter, and every by-id write re-checks that its target is in
+  the domain before touching it.
+
+**Fixed**
+
+- Low-stock, NFPA-retirement, and expiring-supply alerts had never been
+  delivered. All three filtered recipients on `u.role`, a column `User` does not
+  have (roles are the many-to-many `positions` relationship), so every send
+  raised `AttributeError` inside the per-organization guard, which logged it and
+  moved on. Recipients now resolve through the `inventory.manage` permission via
+  the roles relationship.
+
 ### YouTube scripts: August release changes are written into the takes (2026-08-14)
 
 **Documentation**
@@ -22,7 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   intentionally a recording-production task because narration pacing determines
   them; no behavioral content remains only in `SCRIPT_CURRENCY.md`.
 
-
 ### Events: reminder audience and check-in teaching update (2026-08-14)
 
 **Changed**
@@ -34,7 +78,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   training/schema references and documented Strict/Window behavior, early-member
   notices, guest blocking, actual-time boundaries, and the overlapping-meeting
   15-minute exception. Added exact screenshot and YouTube B-roll requirements.
-
 
 ### Security, privacy, permissions, and dashboard follow-up (2026-08-14)
 

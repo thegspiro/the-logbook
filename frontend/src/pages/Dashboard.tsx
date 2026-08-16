@@ -1317,12 +1317,12 @@ const Dashboard: React.FC = () => {
 
               <DashboardHoursCard monthLabel={monthLabel} segments={hoursSegments} loading={loadingHours} />
 
-              {/* Equipment — compact in the rail; the full picture is in Organization */}
+              {/* Issued gear — compact in the rail; the full picture is in Organization */}
               {!loadingMyEquipment && (myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
                 <section className="card p-4" aria-labelledby="my-equipment-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="my-equipment-heading" className="text-theme-text-primary text-[15px] font-bold">
-                      My Equipment
+                      My Issued Gear
                     </h3>
                     <button
                       onClick={() => void navigate('/inventory/my-equipment')}
@@ -1503,7 +1503,7 @@ const Dashboard: React.FC = () => {
                 <DashboardCardHeader
                   icon={Package}
                   iconColor="text-emerald-500"
-                  title={isInventoryAdmin ? 'Equipment & Inventory' : 'My Equipment'}
+                  title={isInventoryAdmin ? 'Gear & Uniforms' : 'My Issued Gear'}
                   viewAllColor="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300"
                   onViewAll={() => void navigate('/inventory')}
                 />
@@ -1572,7 +1572,7 @@ const Dashboard: React.FC = () => {
                     onClick={() => void navigate('/inventory/my-equipment')}
                     className="rounded-lg bg-emerald-600 px-4 py-2 text-center text-sm text-white transition-colors hover:bg-emerald-700"
                   >
-                    My Equipment
+                    My Issued Gear
                   </button>
                   {isInventoryAdmin && (
                     <button

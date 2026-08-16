@@ -469,7 +469,7 @@ describe('Dashboard', () => {
 
       renderWithRouter(<Dashboard />);
 
-      const equipment = await screen.findByRole('region', { name: 'My Equipment' });
+      const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
       expect(within(equipment).getByText('1')).toBeInTheDocument();
       expect(within(equipment).queryByText('99')).not.toBeInTheDocument();
       expect(mockGetInventorySummary).not.toHaveBeenCalled();

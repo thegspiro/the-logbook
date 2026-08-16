@@ -38,6 +38,7 @@ from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import generate_uuid, safe_error_detail, sanitize_error_message
 from app.core.websocket_manager import ws_manager
 from app.models.inventory import (
+    MEDICAL_ITEM_TYPES,
     AssignmentType,
     CheckOutRecord,
     EquipmentRequest,
@@ -238,6 +239,10 @@ async def list_categories(
     categories = await service.get_categories(
         organization_id=current_user.organization_id,
         item_type=item_type,
+        # Medical supplies have their own page and their own officer; listing
+        # them here too would put the same stock under two owners and let a
+        # gear-only quartermaster edit an EMS category by accident.
+        exclude_item_types=MEDICAL_ITEM_TYPES,
         active_only=active_only,
     )
     return categories
@@ -465,6 +470,8 @@ async def list_items(
         status=status_enum,
         condition=condition_enum,
         item_type=item_type_enum,
+        # Gear and uniforms only — medical stock is listed on its own page.
+        exclude_item_types=MEDICAL_ITEM_TYPES,
         assigned_to=assigned_to,
         location_id=location_id,
         storage_area_id=storage_area_id,

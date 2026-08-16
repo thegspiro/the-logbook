@@ -165,7 +165,7 @@ export const InventoryAdminHub: React.FC = () => {
             </div>
             <div className="min-w-0">
               <h1 className="text-theme-text-primary truncate text-xl font-bold sm:text-2xl">
-                Inventory Administration
+                Gear & Uniforms Administration
               </h1>
               <p className="text-theme-text-muted text-sm">Manage equipment, assignments, and compliance</p>
             </div>
@@ -335,7 +335,7 @@ export const InventoryAdminHub: React.FC = () => {
               <NavCard
                 to="/inventory/admin/kits"
                 icon={<BoxSelect className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
-                title="Equipment Kits"
+                title="Gear Kits"
                 description="Create and manage kit templates for multi-item issuance"
                 iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
               />
@@ -385,7 +385,7 @@ export const InventoryAdminHub: React.FC = () => {
               <NavCard
                 to="/inventory/admin/requests"
                 icon={<ClipboardList className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />}
-                title="Equipment Requests"
+                title="Gear Requests"
                 description="Review member requests for equipment"
                 badge={pendingRequests > 0 ? pendingRequests : undefined}
                 badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"

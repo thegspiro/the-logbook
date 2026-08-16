@@ -35,6 +35,7 @@ ItemTypeLiteral = Literal[
     "electronics",
     "consumable",
     "other",
+    "medical",
 ]
 
 ItemConditionLiteral = Literal[
