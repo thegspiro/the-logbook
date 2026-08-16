@@ -153,6 +153,19 @@ cd backend && flake8
 cd backend && mypy .
 ```
 
+> **Run `npm install` before any of these, and treat a `MODULE_NOT_FOUND` as a
+> stop sign.** With no `node_modules`, `npx <tool>` does not fail — it silently
+> downloads whatever version is current on the registry and runs _that_ instead
+> of the one this repo pins. On 2026-08-16 that turned a routine
+> `npx prettier --write` over some Markdown into three corrupted literals,
+> including a quoted API error string (`end_date` → `end*date`) in prose the
+> author had never touched. The pinned Prettier does not do that; the fetched one
+> did.
+>
+> The formatter is only the example. Anything reached through `npx` — ESLint,
+> Prettier, `tsc` — is a different program when the workspace is empty. Use
+> `npx --no-install <tool>` if you want it to fail loudly rather than improvise.
+
 ### Documentation Checks
 
 Two checks run in CI and are worth running locally before opening a PR that

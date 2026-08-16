@@ -757,3 +757,23 @@ jobs:
       # third-party outage cannot fail this build.
       - name: Check documentation links
         run: python3 scripts/check_docs_links.py
+
+      # Pinned to the version backend/requirements.txt already declares, so this
+      # job and the application cannot drift onto different Pillow behaviour.
+      - name: Install image-audit dependency
+        run: pip install 'Pillow==12.3.0'
+
+      # Catches the staleness nothing else can see: a global stylesheet change
+      # alters captured screenshots without touching a guide, a placeholder or
+      # the manifest, so no reviewer is prompted to look. That happened on
+      # 2026-08-15, when the themed canvas moved to the root element and left
+      # 39 images showing an unpainted scrollbar gutter.
+      #
+      # Runs against a baseline: those 39 are recorded and tolerated, and only
+      # NEW findings fail. A baselined image that no longer flags fails too —
+      # deliberately, so the list shrinks as captures are redone rather than
+      # growing into a blanket suppression.
+      - name: Audit captured screenshots
+        run: |
+          python3 scripts/screenshots/audit_images.py \
+            --baseline scripts/screenshots/audit_baseline.txt
