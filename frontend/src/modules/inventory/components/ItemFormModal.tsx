@@ -130,7 +130,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     if (!isOpen) return;
     void (async () => {
       try {
-        setVendors(await inventoryService.getVendors({ active_only: true }));
+        // Inactive vendors are fetched too: an item linked to one before it was
+        // deactivated must still show that name rather than reading as unlinked
+        // while quietly submitting the old id. Only active ones are offered.
+        setVendors(await inventoryService.getVendors({ active_only: false }));
       } catch {
         setVendors([]);
       }
@@ -580,11 +583,14 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   }}
                 >
                   <option value="">— Not linked —</option>
-                  {vendors.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
+                  {vendors
+                    .filter((v) => v.is_active || v.id === f.vendor_id)
+                    .map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                        {v.is_active ? '' : ' (inactive)'}
+                      </option>
+                    ))}
                 </select>
                 {!f.vendor_id && (
                   <input

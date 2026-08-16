@@ -944,6 +944,10 @@ class InventoryService:
         Grouped case-insensitively, because "Galls Inc." and "galls inc" are
         one supplier to whoever has to make the call. The first spelling seen
         is the one shown, and the rest fold into it.
+
+        Retired items count too: attaching updates them, and the vendor's spend
+        total includes them, so leaving them out here would strand historical
+        purchases with no way to reach them from the screen.
         """
         org_id = str(organization_id)
         counts: Dict[str, Dict[str, Any]] = {}
@@ -964,7 +968,6 @@ class InventoryService:
                 InventoryItem.organization_id == org_id,
                 InventoryItem.vendor_id.is_(None),
                 InventoryItem.vendor.isnot(None),
-                InventoryItem.active.is_(True),
             )
             .group_by(InventoryItem.vendor)
         )
@@ -1081,14 +1084,15 @@ class InventoryService:
                 )
                 .values(vendor_id=str(target_id))
             )
-            contact_result = await self.db.execute(
-                update(InventoryVendorContact)
-                .where(
-                    InventoryVendorContact.organization_id == org_id,
-                    InventoryVendorContact.vendor_id == str(source_id),
-                )
-                .values(vendor_id=str(target_id))
-            )
+            # Contacts move through the ORM, not a bulk UPDATE. `source.contacts`
+            # is already loaded, and the relationship cascades delete-orphan: a
+            # bulk UPDATE repoints the rows in the database but leaves them in
+            # the loaded collection, so deleting the source would then cascade a
+            # DELETE onto the contacts this merge just reported as moved.
+            # Appending to the target re-parents each one on both sides.
+            moved_contacts = list(source.contacts)
+            for contact in moved_contacts:
+                target.contacts.append(contact)
 
             await self.db.delete(source)
             await self.db.flush()
@@ -1100,7 +1104,7 @@ class InventoryService:
                 {
                     "items_moved": item_result.rowcount or 0,
                     "reorders_moved": reorder_result.rowcount or 0,
-                    "contacts_moved": contact_result.rowcount or 0,
+                    "contacts_moved": len(moved_contacts),
                     "merged_name": source_name,
                     "vendor_name": target.name,
                 },
@@ -5084,10 +5088,20 @@ class InventoryService:
         return list(result.scalars().all())
 
     async def get_reorder_request(
-        self, request_id: UUID, organization_id: UUID
+        self,
+        request_id: UUID,
+        organization_id: UUID,
+        refresh_loaded: bool = False,
     ) -> Optional[ReorderRequest]:
-        """Get a single reorder request."""
-        result = await self.db.execute(
+        """Get a single reorder request.
+
+        ``refresh_loaded`` re-reads relationships the session already holds.
+        A second query returns the same identity-mapped instance and leaves
+        loaded relationships alone, so after an update changes ``vendor_id``
+        the row would otherwise be serialized with the *previous* vendor's
+        name still attached.
+        """
+        query = (
             select(ReorderRequest)
             .where(ReorderRequest.id == str(request_id))
             .where(ReorderRequest.organization_id == str(organization_id))
@@ -5097,6 +5111,9 @@ class InventoryService:
                 selectinload(ReorderRequest.vendor_record),
             )
         )
+        if refresh_loaded:
+            query = query.execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalars().first()
 
     async def _assert_reorder_fks_in_org(
@@ -5189,8 +5206,11 @@ class InventoryService:
             await self.db.flush()
             # Re-fetch rather than refresh: refresh expires the relationships
             # the response needs (requester, approver, vendor), and reloading
-            # them lazily is not an option under asyncio.
-            reorder = await self.get_reorder_request(request_id, organization_id)
+            # them lazily is not an option under asyncio. populate_existing so a
+            # changed vendor_id does not come back beside the old vendor's name.
+            reorder = await self.get_reorder_request(
+                request_id, organization_id, refresh_loaded=True
+            )
             return reorder, None
         except Exception as e:
             logger.error(f"Error updating reorder request: {e}")

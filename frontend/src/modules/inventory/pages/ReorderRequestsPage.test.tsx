@@ -222,6 +222,45 @@ describe('ReorderRequestsPage', () => {
     expect(mockUpdateReorderRequest.mock.calls[0]?.[1]).toMatchObject({ vendor_id: null });
   });
 
+  it('clears the typed-in name when an edit links a vendor', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([makeVendor()]);
+    mockGetReorderRequests.mockResolvedValue([makeReq({ vendor: 'galls inc', vendor_contact: 'someone@old.test' })]);
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findAllByText('SCBA Cylinders');
+
+    await user.click(firstButton('Edit'));
+    await screen.findByText('Edit Reorder Request');
+    await user.selectOptions(screen.getByLabelText('Vendor'), 'v-1');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    // Without the explicit null the old supplier survives the link and
+    // reappears the moment the vendor is unlinked again.
+    await waitFor(() => expect(mockUpdateReorderRequest).toHaveBeenCalledTimes(1));
+    expect(mockUpdateReorderRequest.mock.calls[0]?.[1]).toMatchObject({ vendor: null, vendor_id: 'v-1' });
+  });
+
+  it('still names a vendor that has since been deactivated', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([makeVendor({ id: 'v-9', name: 'Cascade Fire', is_active: false })]);
+    mockGetReorderRequests.mockResolvedValue([makeReq({ vendor_id: 'v-9', vendor_name: 'Cascade Fire' })]);
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findAllByText('SCBA Cylinders');
+
+    await user.click(firstButton('Edit'));
+    await screen.findByText('Edit Reorder Request');
+
+    // Offered as "(inactive)" rather than dropping out of the list, which would
+    // read as unlinked while still submitting the old id.
+    expect(screen.getByRole('option', { name: 'Cascade Fire (inactive)' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Vendor')).toHaveValue('v-9');
+  });
+
+  it('fetches inactive vendors so an existing link can still be named', async () => {
+    renderWithRouter(<ReorderRequestsPage />);
+    await waitFor(() => expect(mockGetVendors).toHaveBeenCalledWith({ active_only: false }));
+  });
+
   it('refetches with the selected status filter', async () => {
     const user = userEvent.setup();
     renderWithRouter(<ReorderRequestsPage />);

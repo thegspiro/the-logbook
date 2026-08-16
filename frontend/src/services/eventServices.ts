@@ -1402,8 +1402,8 @@ export interface ReorderRequestUpdate {
   item_name?: string | undefined;
   quantity_requested?: number | undefined;
   quantity_received?: number | undefined;
-  vendor?: string | undefined;
-  vendor_contact?: string | undefined;
+  vendor?: string | null | undefined;
+  vendor_contact?: string | null | undefined;
   vendor_id?: string | null | undefined;
   estimated_unit_cost?: number | undefined;
   actual_unit_cost?: number | undefined;

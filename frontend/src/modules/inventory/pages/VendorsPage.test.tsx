@@ -327,10 +327,9 @@ describe('VendorsPage', () => {
       renderWithRouter(<VendorsPage />);
 
       await user.click(await screen.findByRole('button', { name: 'Merge a duplicate into Galls' }));
-      const select = await screen.findByLabelText('Duplicate to merge in');
-      const options = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
-      expect(options).toContain('Galls Inc.');
-      expect(options).not.toContain('Galls');
+      await screen.findByLabelText('Duplicate to merge in');
+      expect(screen.getByRole('option', { name: 'Galls Inc.' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Galls' })).not.toBeInTheDocument();
     });
   });
 });

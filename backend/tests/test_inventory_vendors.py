@@ -377,7 +377,6 @@ class TestMergeVendors:
             _first(source),
             _rowcount(12),
             _rowcount(3),
-            _rowcount(2),
             _all([]),  # _normalize_primary_contact on the target
         ]
 
@@ -386,13 +385,41 @@ class TestMergeVendors:
         assert error is None
         assert result["items_moved"] == 12
         assert result["reorders_moved"] == 3
-        assert result["contacts_moved"] == 2
+        # Counted from the collection that was re-parented, not from a bulk
+        # UPDATE's rowcount; this source had no contacts loaded.
+        assert result["contacts_moved"] == 0
         # Named, so the confirmation can say what happened.
         assert result["merged_name"] == "Galls Inc."
         assert result["vendor_name"] == "Galls"
         # Removed rather than deactivated: a merged duplicate left on file keeps
         # its name reserved and haunts "show inactive" forever.
         mock_db.delete.assert_awaited_once_with(source)
+
+    async def test_contacts_are_reparented_rather_than_cascade_deleted(
+        self, service, mock_db, org_id
+    ):
+        target = _vendor(org_id, name="Galls")
+        source = _vendor(org_id, name="Galls Inc.")
+        contact = _contact(source.id, org_id, name="Ray Whitfield")
+        source.contacts.append(contact)
+        mock_db.execute.side_effect = [
+            _first(target),
+            _first(source),
+            _rowcount(1),
+            _rowcount(0),
+            _all([]),
+        ]
+
+        result, error = await service.merge_vendors(target.id, source.id, org_id)
+
+        assert error is None
+        # The relationship cascades delete-orphan, so a contact still sitting in
+        # the source's loaded collection when the source is deleted is deleted
+        # with it — reported as moved, gone from the database. Re-parenting on
+        # both sides is what keeps the merge honest.
+        assert contact in target.contacts
+        assert list(source.contacts) == []
+        assert result["contacts_moved"] == 1
 
     async def test_a_vendor_cannot_be_merged_into_itself(self, service, org_id):
         vendor_id = str(uuid4())
@@ -420,6 +447,24 @@ class TestMergeVendors:
         mock_db.execute.side_effect = [_first(_vendor(org_id)), _first(None)]
         await service.merge_vendors(str(uuid4()), str(uuid4()), org_id)
         mock_db.delete.assert_not_called()
+
+
+class TestReorderRelationshipRefresh:
+    """A second query returns the same identity-mapped row and leaves loaded
+    relationships alone, so a changed vendor_id would otherwise be serialized
+    beside the previous vendor's name."""
+
+    async def test_refresh_asks_for_populate_existing(self, service, mock_db, org_id):
+        mock_db.execute.side_effect = [_first(None)]
+        await service.get_reorder_request(str(uuid4()), org_id, refresh_loaded=True)
+        query = mock_db.execute.await_args[0][0]
+        assert query.get_execution_options().get("populate_existing") is True
+
+    async def test_plain_reads_do_not_force_a_refresh(self, service, mock_db, org_id):
+        mock_db.execute.side_effect = [_first(None)]
+        await service.get_reorder_request(str(uuid4()), org_id)
+        query = mock_db.execute.await_args[0][0]
+        assert "populate_existing" not in query.get_execution_options()
 
 
 class TestVendorFkScoping:

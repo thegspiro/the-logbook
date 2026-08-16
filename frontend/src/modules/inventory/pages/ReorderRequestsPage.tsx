@@ -24,6 +24,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate as formatDateUtil } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Modal } from '../../../components/Modal';
+import { blankToNull } from '../../../utils/formValues';
 import { VendorName } from '../components/VendorName';
 import type {
   ReorderRequest,
@@ -143,11 +144,13 @@ const ReorderFormModal: React.FC<{
         const updateData: ReorderRequestUpdate = {
           item_name: f.item_name.trim(),
           quantity_requested: Number(f.quantity_requested),
-          vendor: f.vendor.trim() || undefined,
-          // Explicit null so unlinking a vendor persists: an omitted key means
-          // "leave it alone" to the backend (CLAUDE.md pitfall #1).
+          // Explicit nulls so clearing these persists: an omitted key means
+          // "leave it alone" to the backend (CLAUDE.md pitfall #1). Linking a
+          // vendor blanks the typed-in name, and without the null the old
+          // supplier survives to reappear the moment the link is removed.
+          vendor: blankToNull(f.vendor),
           vendor_id: f.vendor_id || null,
-          vendor_contact: f.vendor_contact.trim() || undefined,
+          vendor_contact: blankToNull(f.vendor_contact),
           estimated_unit_cost: f.estimated_unit_cost ? Number(f.estimated_unit_cost) : undefined,
           expected_delivery_date: f.expected_delivery_date || undefined,
           urgency: f.urgency || undefined,
@@ -286,11 +289,14 @@ const ReorderFormModal: React.FC<{
                 }}
               >
                 <option value="">— Not linked —</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
+                {vendors
+                  .filter((v) => v.is_active || v.id === f.vendor_id)
+                  .map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                      {v.is_active ? '' : ' (inactive)'}
+                    </option>
+                  ))}
               </select>
               {!f.vendor_id && (
                 <input
@@ -517,7 +523,9 @@ export const ReorderRequestsPage: React.FC = () => {
         }),
         inventoryService.getCategories().catch(() => [] as InventoryCategory[]),
         inventoryService.getLowStockItems().catch(() => [] as LowStockAlert[]),
-        inventoryService.getVendors({ active_only: true }).catch(() => [] as InventoryVendor[]),
+        // Inactive vendors are fetched too so an existing link to one still
+        // shows its name; the options below only offer the active ones.
+        inventoryService.getVendors({ active_only: false }).catch(() => [] as InventoryVendor[]),
       ]);
       setRequests(reqs);
       setCategories(cats);

@@ -221,7 +221,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/vendors"
         element={
-          <ProtectedRoute requiredPermission="inventory.view">
+          <ProtectedRoute requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <VendorsPage />
             </Suspense>

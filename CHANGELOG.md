@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: vendor review fixes (2026-08-16)
+
+**Fixed**
+
+- **Merging a vendor no longer deletes the duplicate's contacts.** The source's
+  contacts were repointed with a bulk `UPDATE` while still sitting in the
+  loaded relationship, which cascades `delete-orphan` — so deleting the merged
+  vendor deleted the contacts the merge had just reported as moved. They are
+  re-parented through the ORM now, and the count comes from what actually
+  moved.
+- **A reorder's PATCH response named the previous vendor.** Re-reading the row
+  after an update returns the same identity-mapped instance and leaves loaded
+  relationships alone, so a changed `vendor_id` came back beside the old
+  vendor's name. The refresh asks for `populate_existing`.
+- **Linking a vendor on a reorder now clears the typed-in name and contact.**
+  They were serialized as omitted rather than null, so the stale supplier
+  survived behind the link and reappeared if it was ever unlinked.
+- **A vendor deactivated after being linked still shows in the edit pickers**,
+  marked "(inactive)", rather than dropping out and leaving the field reading
+  "Not linked" while it submitted the old id.
+- **Retired items count toward the cleanup list.** Attaching updates them and
+  vendor spend includes them, so a supplier named only on retired items was
+  stranded with no way to reach it from the screen.
+- The vendors screen sits behind `inventory.manage`, matching the rest of
+  `/inventory/admin`; it was reachable only by URL for anyone else.
+
 ### Inventory: cleaning up duplicate and unattached suppliers (2026-08-16)
 
 **Added**

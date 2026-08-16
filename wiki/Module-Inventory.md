@@ -75,7 +75,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage` |
 | `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage` |
 | `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage` |
-| `/inventory/admin/vendors`        | Vendors                   | `inventory.view`   |
+| `/inventory/admin/vendors`        | Vendors                   | `inventory.manage` |
 | `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
 | `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
 | `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage` |
@@ -288,7 +288,7 @@ POST   /api/v1/inventory/vendors/{id}/merge              # Fold a duplicate in; 
 order, and the id route would otherwise reject "unlinked-names" as a malformed
 UUID.
 
-Everything but the two read endpoints requires `inventory.manage`. `GET /api/v1/inventory/items?vendor_id=…` filters the catalog to one vendor — the link behind the item count on a vendor card.
+The two read endpoints take `inventory.view`; everything that writes takes `inventory.manage`. The screen itself sits behind `inventory.manage`, like every other page under `/inventory/admin` — the read permission on the API is there for surfaces that only need to name a vendor. `GET /api/v1/inventory/items?vendor_id=…` filters the catalog to one vendor — the link behind the item count on a vendor card.
 
 ### Write-Off Requests
 
