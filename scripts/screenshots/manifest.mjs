@@ -978,7 +978,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1278,
     anchor: "Screenshot of the Assign Member form",
-    alt: "The Assign Member form on a shift, with its position and member pickers",
+    alt: "The Assign someone form on a shift, with its position and member pickers",
     route: "/scheduling",
     prepare: async (page) => {
       await openPartStaffedShift("03-58")(page);
@@ -1273,7 +1273,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 987,
     anchor: "Screenshot of a shift's Crew Board with one position filled",
-    alt: "A shift's crew board — one filled position and three open, each with Assign and Sign Up",
+    alt: "A shift's crew board — open positions each offering Assign someone and Sign myself up, with the bulk Fill All Open action beneath them",
     route: "/scheduling",
     prepare: async (page) => {
       // A shift with several slots still open: that is what puts open-position
@@ -4153,7 +4153,7 @@ export const SHOTS = [
     line: 260,
     anchor:
       "Screenshot of the pattern creation form showing the pattern type selector (Daily,",
-    alt: "Shift pattern creation page with the pattern type selector",
+    alt: "The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action",
     route: "/scheduling/patterns",
     fullPage: true,
   },
@@ -4197,7 +4197,7 @@ export const SHOTS = [
     line: 880,
     anchor:
       'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
-    alt: "The report-used sheet: quantity stepper, optional note, and the position's current count",
+    alt: "The Flag sheet on a counted position — it raises the restock report with an optional note, leaving the count to the minus button",
     auth: "member",
     route: "/scheduling/apparatus-inventory",
     viewport: "mobile",
@@ -7207,6 +7207,9 @@ export const SHOTS = [
       await clickByName(/^assign someone$/i)(page);
     },
     fullPage: true,
+    // "No calls logged for this shift." is the Calls sub-panel on a shift
+    // that is deliberately in the future; the assign form is the subject.
+    allowEmptyState: true,
   },
   {
     id: "03-31-shift-edit-times",

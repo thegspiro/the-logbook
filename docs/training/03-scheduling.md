@@ -340,7 +340,7 @@ To generate shifts from a pattern:
 3. Click **Generate Shifts**.
 4. Review and confirm the generated shifts.
 
-![Shift pattern creation page with the pattern type selector](./images/03-13-shift-patterns.png)
+![The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action](./images/03-13-shift-patterns.png)
 
 ### Understanding Platoon Rotations
 
@@ -1007,7 +1007,7 @@ report carries who raised it, when, and an optional note, and it appears on the
 supply worklist beside the expiring items — to a supply officer, "expires
 Thursday" and "the crew used it last night" are the same job.
 
-![The report-used sheet: quantity stepper, optional note, and the position's current count](./images/03-60-report-used-sheet.png)
+![The Flag sheet on a counted position — it raises the restock report with an optional note, leaving the count to the minus button](./images/03-60-report-used-sheet.png)
 
 **A report is settled only when the truck is back at its target.** Two of four
 back is still a truck short two, and clearing the flag there would close the gap
@@ -1366,7 +1366,7 @@ or is removed:
 > says so under the heading. A shift with none configured shows a plain Crew
 > Roster of whoever is assigned, with no open slots to fill.
 
-![A shift's crew board — one filled position and three open, each with Assign and Sign Up](./images/03-54-crew-board-open-slots.png)
+![A shift's crew board — open positions each offering Assign someone and Sign myself up, with the bulk Fill All Open action beneath them](./images/03-54-crew-board-open-slots.png)
 
 ### Additional Fixes (2026-03-19)
 
@@ -1668,10 +1668,10 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 
 The shift assignment UI previously required the `scheduling.manage_assignments` permission, which was more restrictive than intended. As of 2026-03-22, users with the broader `scheduling.manage` permission can assign members to shifts.
 
-There is no button called "Add Assignment": the control is **Assign Member**,
-beneath the crew board on a rig with riding positions, or **Assign** in the
-Crew Roster heading on one without. Either opens the same form, which asks for
-the position first and defaults it to the first open seat.
+There is no button called "Add Assignment": the control is **Assign someone**,
+on each open seat of the crew board (its narrow-screen label is just
+**Assign**). It opens the assignment form, which asks for the position first
+and defaults it to the seat you pressed it on.
 
 The member list is not filtered by who is qualified for that seat — it excludes
 only members who are unavailable for the shift at all (on leave, or already
@@ -1680,7 +1680,7 @@ EVOC level the apparatus requires and the assignment is still created; what you
 get is a warning toast afterwards, alongside any overtime warning. The list is
 long on a large roster, so the search box above it filters by name.
 
-![The Assign Member form on a shift, with its position and member pickers](./images/03-58-assign-member-form.png)
+![The Assign someone form on a shift, with its position and member pickers](./images/03-58-assign-member-form.png)
 
 ### Open Shifts Self-Signup Fix
 
@@ -1690,21 +1690,25 @@ The self-signup button visibility on the Open Shifts tab had a fallback permissi
 
 ### Dashboard Shift Display
 
-The "My Upcoming Shifts" section on the dashboard now correctly filters out:
+The dashboard's shift panels were merged into a single **Next 7 Days**
+timeline: your own shifts (marked **Yours**), open slots you can sign up for,
+and upcoming events in one seven-day list, with a line noting how much more
+lies beyond the window. The old "My Upcoming Shifts" filtering rules carry
+over — declined and cancelled assignments do not appear:
 
 - Declined assignments (shifts you said "no" to)
 - Cancelled assignments (shifts that were cancelled after you were assigned)
 
 Only pending and confirmed assignments appear.
 
-The panel does not distinguish the two: there is no status badge on a dashboard
-row, only the date, the hours and the shift officer. Which of your shifts are
-still awaiting your confirmation is a question for **My Shifts**, where each
-card carries its badge and the bulk Confirm All / Decline All bar sits above
-them. What the dashboard promises is narrower — that everything listed is a
-shift you are still on.
+The timeline does not distinguish the two: there is no status badge on a
+dashboard row, only the time, the shift officer and the staffing. Which of
+your shifts are still awaiting your confirmation is a question for **My
+Shifts**, where each card carries its badge and the bulk Confirm All /
+Decline All bar sits above them. What the dashboard promises is narrower —
+that everything marked Yours is a shift you are still on.
 
-![The dashboard's My Upcoming Shifts panel, listing only shifts the member is still on](./images/03-60-dashboard-my-shifts.png)
+![The dashboard's Next 7 Days timeline, listing the member's own shifts alongside open slots and events](./images/03-60-dashboard-my-shifts.png)
 
 ### Desktop Camera Scanning
 
