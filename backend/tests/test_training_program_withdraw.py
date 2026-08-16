@@ -105,6 +105,49 @@ class TestWithdrawEnrollment:
         assert enr.status == EnrollmentStatus.ACTIVE
         db.commit.assert_not_awaited()
 
+    @pytest.mark.parametrize(
+        "enrollment_status",
+        [
+            EnrollmentStatus.COMPLETED,
+            EnrollmentStatus.EXPIRED,
+            EnrollmentStatus.FAILED,
+        ],
+    )
+    async def test_member_cannot_withdraw_finalized_enrollment(self, enrollment_status):
+        user = uuid4()
+        enr = _enrollment(user, status=enrollment_status)
+        db = RecordingSession([_one(enr)])
+        svc = TrainingProgramService(db)
+
+        result, error = await svc.withdraw_enrollment(
+            enrollment_id=uuid4(),
+            organization_id=uuid4(),
+            acting_user_id=user,
+            can_manage=False,
+        )
+
+        assert result is None
+        assert error == "Not authorized to withdraw a finalized enrollment"
+        assert enr.status == enrollment_status
+        db.commit.assert_not_awaited()
+
+    async def test_officer_can_withdraw_finalized_enrollment(self):
+        enr = _enrollment(uuid4(), status=EnrollmentStatus.COMPLETED)
+        db = RecordingSession([_one(enr)])
+        svc = TrainingProgramService(db)
+
+        result, error = await svc.withdraw_enrollment(
+            enrollment_id=uuid4(),
+            organization_id=uuid4(),
+            acting_user_id=uuid4(),
+            can_manage=True,
+        )
+
+        assert error is None
+        assert result is enr
+        assert enr.status == EnrollmentStatus.WITHDRAWN
+        db.commit.assert_awaited_once()
+
     async def test_missing_enrollment_errors(self):
         db = RecordingSession([_one(None)])
         svc = TrainingProgramService(db)

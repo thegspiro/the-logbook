@@ -3541,6 +3541,15 @@ class TrainingProgramService:
             await self._ensure_program_loaded(enrollment)
             return enrollment, None
 
+        # Self-service withdrawal is only valid while an enrollment is still
+        # in progress. Finalized outcomes are official records and may only be
+        # changed by an officer with training.manage.
+        if not can_manage and enrollment.status not in {
+            EnrollmentStatus.ACTIVE,
+            EnrollmentStatus.ON_HOLD,
+        }:
+            return None, "Not authorized to withdraw a finalized enrollment"
+
         enrollment.status = EnrollmentStatus.WITHDRAWN
         enrollment.withdrawn_at = datetime.now(timezone.utc)
         if reason:
