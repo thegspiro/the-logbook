@@ -11,8 +11,8 @@ changes that appear nowhere else.
 The engineering audit lives in the source repository at
 [`docs/CHANGE_AUDIT_2026-08-10_TO_16.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-10_TO_16.md).
 
-**Window:** 504 non-merge commits · 1,517 changed paths · 26 Alembic revisions ·
-5 new routes · 1 new model.
+**Window:** 504 non-merge commits · 1,517 changed paths · 28 Alembic revisions ·
+5 new routes · 3 new models · 37 new endpoint handlers.
 
 ## What changed, by sub-window
 
@@ -31,7 +31,7 @@ route gate.
 | Page                        | URL                                        | Who can open it                                                                                         |
 | --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | Learning Center             | `/learning`                                | Any signed-in member                                                                                    |
-| Room QR Codes directory     | `/locations/qr-codes`                      | `locations.manage` **or** `facilities.manage`                                                           |
+| Check-In QR Codes           | `/locations/qr-codes`                      | `locations.manage` **or** `facilities.manage`                                                           |
 | Apparatus Inventory         | `/scheduling/apparatus-inventory`          | `equipment_check.submit`, `equipment_check.view`, **or** `inventory.view`                               |
 | Blank skill sheet (print)   | `/training/skills-testing/print/template`  | Any signed-in member — it is the empty form and carries no member data                                  |
 | Completed scorecard (print) | `/training/skills-testing/print/scorecard` | Any signed-in member — the server redacts the result to the reader's disclosure level before sending it |
@@ -92,11 +92,21 @@ This affects **every screen, signed-in and public**, which is why it matters for
 documentation: any full-window dark-mode screenshot or video B-roll captured
 before August 15 may show the old seam.
 
-One open item: the print stylesheet forces a white background on the body but
-does not name the root element. Browsers do not print backgrounds by default, so
-normal printing is unaffected — but printing a scorecard, blank skill sheet,
-barcode label or QR sign with **"Background graphics"** switched on may now put
-the gradient behind it. Tracked as a known limitation.
+**Two open items, found 2026-08-16 while auditing this change.** Moving the
+background to the root element stopped the page body's background from reaching
+the window, which two things were quietly relying on:
+
+1. **Printing with "Background graphics" enabled, in light mode only.** Browsers
+   do not print backgrounds by default, so normal printing is unaffected. If that
+   option is switched on, the themed background may print behind a scorecard,
+   skill sheet, label or QR sign. Dark mode is unaffected — incidentally rather
+   than by design.
+2. **The six print-preview screens** (skill sheet, scorecard, member training
+   record, program, compliance, shift report) now show the themed background
+   framing the grey backdrop behind the sheet. **Cosmetic — what prints is
+   unchanged.**
+
+Both are tracked as known limitations with fixes identified.
 
 ## Database upgrade route
 

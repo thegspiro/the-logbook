@@ -218,9 +218,11 @@ Requires `events.manage` permission. Tab-based admin interface.
 | URL                   | Page                 | Permission                                    |
 | --------------------- | -------------------- | --------------------------------------------- |
 | `/locations`          | Locations Management | Authenticated                                 |
-| `/locations/qr-codes` | Room QR Codes        | `locations.manage` **OR** `facilities.manage` |
+| `/locations/qr-codes` | Check-In QR Codes    | `locations.manage` **OR** `facilities.manage` |
 
-> Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Room QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
+> Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
+
+> **Name check:** the page's on-screen heading is **"Check-In QR Codes"** — that is what a reader will see and what the command palette calls it. "Room QR Codes" is the component's filename (`RoomQRCodesPage.tsx`) and appears in some engineering notes; it is not a user-facing label. Documentation should use the heading.
 
 > **The QR directory is restricted, unlike the rest of Locations** _(corrected 2026-08-16)_. This page was previously listed here as Authenticated; it is not. The route is registered by the Facilities module (so it resolves in both Locations and Facilities modes) behind `locations.manage` **OR** `facilities.manage`. The restriction is the point: a kiosk display code is a check-in credential, so a bulk directory of every room's code is a different object from any one room's QR. Regenerating a display code invalidates the previous one, and codes are tenant-bound.
 

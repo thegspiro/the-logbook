@@ -92,14 +92,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `overscroll-behavior: none` deliberately stayed on `body` — iOS bounce
   suppression is a body concern.
 
-**Known edge case (open, not fixed)**
+**Two regressions this introduced (open, found 2026-08-16 during the audit)**
 
-- The `@media print` reset forces a white background on `body, main, .dark` but
-  does not name `html`. Browsers do not print background images by default, so
-  ordinary printing is unaffected — but a user who enables "Background graphics"
-  to print a scorecard, blank skill sheet, barcode label or QR sign may now get
-  the gradient behind it. Recorded in `docs/KNOWN_LIMITATIONS.md` for an owner
-  decision; it has an ink cost either way.
+Both follow from one CSS rule nobody restated: a `body` background propagates to
+the window **only** while the root element's `background-image` is `none` and its
+`background-color` is `transparent`. Once `html` is painted, nothing on `body`
+propagates.
+
+- **Six in-app print routes lost their screen backdrop.** `print/template`,
+  `print/scorecard`, `training/print/member`, `training/print/program`,
+  `training/print/compliance` and `scheduling/shift-reports/print` each inject
+  `@media screen { body { background: #f3f4f6 } }` to put a grey desk behind a
+  white letter-size sheet. That grey now paints the body box only, and the app
+  gradient frames it — a dark gradient around a white sheet in dark mode.
+  Cosmetic, and it does not change printed output. `InventoryBarcodePrintPage`
+  and `LabelPrintPage` are **not** affected: they `document.write` into a fresh
+  iframe, so the app stylesheet never reaches them.
+- **The `@media print` reset misses `html` — in light mode only.** It resets
+  `body, main, .dark`, and because `ThemeContext` puts the `dark` class on
+  `document.documentElement`, **dark mode is covered by accident while light mode
+  is not.** Browsers do not print background images by default, so ordinary
+  printing is unaffected; a user who enables "Background graphics" to print a
+  scorecard, skill sheet, label or QR sign can now get the gradient behind it in
+  light mode. Adding `html` to that selector list is the fix, and it also makes
+  the `.dark` coverage intentional rather than incidental.
+
+**No test asserts the canvas contract**, which is why a one-rule move altered six
+pages without anything going red. Both defects, their fixes, and the missing
+regression test are in `docs/KNOWN_LIMITATIONS.md` → "The Root Canvas Broke the
+Print Pages' Background Contract".
 
 **Screenshot impact**
 

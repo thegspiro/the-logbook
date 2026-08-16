@@ -1713,38 +1713,90 @@ findings shape it, and two of them need an owner rather than an engineer:
 | **May logout keep destroying unsynced work on a shared terminal?** | Open (needs owner decision) | FE-6/FE-7 purges the offline queues on logout, which is right for an equipment check and wrong for a scored evaluation.                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Must offline support cover a cold start?**                       | Open (needs owner decision) | This decides whether test ids stay server-generated or become client-minted — a structural choice rather than a later refactor.                                                                                                                                                                                                                                                                                                                                                                                         |
 
-## Print Background and the Root Canvas (2026-08-15)
+## The Root Canvas Broke the Print Pages' Background Contract (2026-08-15)
 
-**Status: open, needs an owner decision.** Severity: low, but it costs ink when
-it bites.
+**Status: two defects, both open, both introduced by one correct fix.** Found
+2026-08-16 while auditing that change; neither has a field report yet, because
+neither throws.
 
-On 2026-08-15 the themed background gradient moved from `body` to `html`, because
+On 2026-08-15 the themed gradient moved from `body` to `html`, because
 `scrollbar-gutter: stable` reserves its gutter on `html` — outside the body box —
 so painting only `body` left a bright seam down the right edge of every page in
-dark mode. That fix is correct and is not in question here.
+dark mode. **That fix is correct and is not in question.** What follows is its
+unnoticed blast radius.
 
-The `@media print` reset in `frontend/src/styles/index.css` forces
-`background: white !important` on `body, main, .dark`. **It does not name
-`html`.** Browsers do not print background images by default
-(`print-color-adjust` defaults to `economy`), so ordinary printing is unaffected
-and no regression has been observed. But the application ships several pages
-whose whole purpose is printing — the skill-sheet and scorecard print routes,
-barcode/asset labels, Room QR signs, the shift check-in sheet — and a user who
-switches on **"Background graphics"** to get those to render faithfully may now
-also get the gradient behind them.
+### The mechanism, because both defects follow from it
 
-The decision is which way to resolve it, and both directions are defensible:
+CSS propagates a background to the canvas from the **root element**. It falls
+back to `body` **only when the root's `background-image` is `none` and its
+`background-color` is `transparent`** (CSS Backgrounds & Borders §2.11.2).
 
-| Option                        | Consequence                                                                                                                                              |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add `html` to the print reset | Printed pages stay white even with background graphics on. Costs nothing, but hard-codes the assumption that nobody ever wants the themed canvas printed |
-| Leave it                      | "Background graphics" means what it says, and the user asked for it                                                                                      |
+Before 08-15, `html` carried no background, so `body`'s background propagated and
+filled the viewport. Since 08-15, `html` paints a gradient — so **nothing on
+`body` propagates any more.** A `body` background now paints the body box only.
+Six pages were relying on the old behavior, and one reset was written against it.
 
-Not resolved here because it is a style judgement with an ink cost either way,
-and no report of it in the field yet exists. **To verify:** print a scorecard and
-a barcode label with "Background graphics" enabled and record what comes out.
-See [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) → "Public Pages Unreadable in
-Dark Mode" for the canvas rule itself.
+### Defect 1 — six print pages lost their screen backdrop
+
+These render inside the app document and each injects
+`@media screen { body { background: #f3f4f6; } }` to put a neutral grey "desk"
+behind a white letter-size sheet:
+
+| Page                          | Route                                      |
+| ----------------------------- | ------------------------------------------ |
+| `SkillSheetPrintPage`         | `/training/skills-testing/print/template`  |
+| `SkillTestScorecardPrintPage` | `/training/skills-testing/print/scorecard` |
+| `MemberTrainingPrintPage`     | `/training/print/member`                   |
+| `ProgramPrintPage`            | `/training/print/program`                  |
+| `CompliancePrintPage`         | `/training/print/compliance`               |
+| `ShiftReportPrintPage`        | `/scheduling/shift-reports/print`          |
+
+That grey no longer reaches the canvas. It paints the body box; the app gradient
+shows everywhere else — the scrollbar gutter always, and the whole area below the
+sheet whenever the content is shorter than the viewport. In dark mode that is a
+dark gradient framing a white sheet, which is not what any of these six were
+written to look like.
+
+**`InventoryBarcodePrintPage` and `LabelPrintPage` are NOT affected** — they
+`document.write` into a fresh iframe with their own `<html>`, so the app's
+stylesheet never reaches them. Worth stating explicitly so a fix does not chase
+them.
+
+**Fix:** move the rule from `body` to `html` in those six (or, better, factor the
+three-line print-page style block they each duplicate into one shared utility —
+the duplication is why one global change silently altered six pages).
+
+### Defect 2 — the print reset misses `html`, in light mode only
+
+`@media print` forces `background: white !important` on `body, main, .dark`. It
+does not name `html`.
+
+**The `.dark` in that list is doing accidental work.** `ThemeContext` puts the
+`dark` class on `document.documentElement` — the `html` element — so in dark mode
+`.dark` _does_ match the root and the reset covers it. **In light mode nothing
+matches `html`, and the gradient is the canvas.** So the exposure is
+light-mode-only, which is the inversion nobody would guess and the mode most
+departments print in.
+
+Browsers do not print background images by default (`print-color-adjust`
+defaults to `economy`), so ordinary printing is unaffected. But the application
+ships pages whose entire purpose is printing — the six above, plus QR signs and
+the check-in sheet — and a user who enables **"Background graphics"** to make
+those render faithfully now also gets the gradient behind them, in light mode.
+
+**Fix:** add `html` to the print reset's selector list. One token, and it also
+makes the `.dark` coverage intentional instead of incidental.
+
+### Why neither was caught
+
+**No test asserts the canvas contract**, and nothing in the six print pages
+references `html`, so a change to `html` reads as unrelated to all of them. A
+regression test that renders one print route and asserts the computed canvas
+background would have caught both. That gap is the real finding.
+
+**To verify:** open `/training/skills-testing/print/template` in dark mode on a
+tall window and look below the sheet; then print it in **light** mode with
+"Background graphics" enabled.
 
 ## Onboarding Cannot Be Resumed Across a Browser Restart (2026-08-15)
 

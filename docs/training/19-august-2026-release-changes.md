@@ -203,11 +203,22 @@ out.
 
 > **[SCREENSHOT NEEDED — a public page (`/f/{slug}` or an application-status link) in dark mode at full window width with the page long enough to scroll, so the gutter is visible and painted. This is the standing proof that pages outside the app shell are covered.]**
 
-One open item for administrators who print: browsers do not print page
-backgrounds by default, so ordinary printing is unchanged. If your department
-prints scorecards, blank skill sheets, barcode labels or QR signs with the
-browser's **"Background graphics"** option switched on, check one page before
-running a batch — the themed background may now print behind it.
+**Two open items for administrators who print**, both found on 2026-08-16 while
+auditing this change. Neither breaks a print job; both are being tracked for a
+fix.
+
+1. **"Background graphics" printing, in light mode.** Browsers do not print page
+   backgrounds by default, so ordinary printing is unchanged. If your department
+   switches that option on to make scorecards, skill sheets, labels or QR signs
+   render faithfully — **and you are in light mode** — check one page before
+   running a batch; the themed background may print behind it. Dark mode happens
+   not to be affected.
+2. **The print preview screens look different.** The six print pages
+   (skill sheet, scorecard, member training record, program, compliance, shift
+   report) show a grey backdrop behind the white sheet that no longer fills the
+   window — the app's themed background now frames it. **This is cosmetic and
+   changes nothing about what comes out of the printer.** Mentioned only so it is
+   not reported as a broken page.
 
 ## Upgrade notes for administrators
 

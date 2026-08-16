@@ -8641,7 +8641,12 @@ It prints both `.env` lines already filled in, in the exact encoding each consum
 
 **Edge Case:** `overscroll-behavior: none` deliberately stayed on `body` — iOS bounce suppression is a body concern, not a canvas one. **Any new public route must use the gradient utility, not `bg-theme-surface-secondary`** — the token is correct only inside `AppLayout`.
 
-**Edge Case (open):** The `@media print` reset forces a white background on `body, main, .dark` — it does **not** name `html`. Browsers do not print background images by default, so ordinary printing is unaffected. A user who enables **"Background graphics"** to print a scorecard, blank skill sheet, barcode label or QR sign may now get the gradient behind it. See [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) → "Print Background and the Root Canvas".
+**Edge Case (open, two defects):** Moving the canvas to `html` had a blast radius nobody checked, because CSS only propagates a `body` background to the canvas when the root's `background-image` is `none` and its `background-color` is `transparent`. Since `html` is painted, **nothing on `body` propagates any more.**
+
+1. **Six in-app print routes lost their screen backdrop.** They each inject `@media screen { body { background: #f3f4f6; } }` for a grey "desk" behind a white sheet; that grey now paints only the body box while the app gradient frames it. (`InventoryBarcodePrintPage` / `LabelPrintPage` are unaffected — they write into a fresh iframe.)
+2. **The `@media print` reset misses `html` in light mode.** It resets `body, main, .dark`; because `ThemeContext` puts `dark` on `document.documentElement`, dark mode is covered _by accident_ and **light mode is not**. Printing with "Background graphics" enabled can therefore put the gradient behind a scorecard, skill sheet, label or QR sign — in light mode only.
+
+Both are recorded with fixes in [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) → "The Root Canvas Broke the Print Pages' Background Contract".
 
 ---
 

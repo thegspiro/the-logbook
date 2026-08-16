@@ -3,8 +3,9 @@
 **Audit window:** 2026-08-10 00:00 UTC through 2026-08-16 (inclusive)
 **Baseline:** `fddbdbc1e548d0e0f74811a358e6b507a7a96fd5` (last commit before the window)
 **Audited head:** `3872361886779554ce3f0f081c455653c6c7e7e0`
-**Volume:** 504 non-merge commits, 1,517 net changed paths, 26 Alembic revisions,
-5 new authenticated routes, 1 new backend model, 1 new endpoint module.
+**Volume:** 504 non-merge commits, 1,517 net changed paths, **28** Alembic
+revisions, 5 new authenticated routes, **3** new models, 37 new endpoint
+handlers in 1 new endpoint module plus existing ones.
 
 This is the six-day rollup the release asked for. It **supersedes nothing** — it
 is the wider frame around the
@@ -119,14 +120,22 @@ rule, which is precisely why it is a screenshot problem — see
   ballot voting and `/application-status/:token` render outside `AppLayout`.
   Any new public route must use the gradient utility, not
   `bg-theme-surface-secondary` — that token is correct only inside `AppLayout`.
-- **Print output is a flagged risk, not a verified regression.** The
-  `@media print` reset forces a white background on `body, main, .dark` — it does
-  **not** name `html`. Browsers do not print background images by default, so
-  ordinary printing is unaffected; a user who enables "Background graphics" to
-  print a scorecard, a blank skill sheet, a barcode label or a QR sign may now
-  get the gradient behind it. Recorded in
-  [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) for an owner call rather than
-  fixed here, because it is a style decision with an ink cost either way.
+- **It silently broke the print pages' background contract — two open defects.**
+  CSS propagates a `body` background to the canvas **only** while the root's
+  `background-image` is `none` and its `background-color` is `transparent`. Once
+  `html` is painted, nothing on `body` propagates. **Six in-app print routes**
+  (`print/template`, `print/scorecard`, `training/print/member`,
+  `.../program`, `.../compliance`, `scheduling/shift-reports/print`) each inject
+  `@media screen { body { background: #f3f4f6 } }` for a grey desk behind a white
+  sheet, and that grey no longer reaches the canvas. Separately, the
+  `@media print` reset covers `body, main, .dark` — and because `ThemeContext`
+  puts `dark` on `document.documentElement`, **dark mode is covered by accident
+  while light mode is not**, so printing with "Background graphics" on can put
+  the gradient behind a scorecard or label in light mode. `InventoryBarcodePrintPage`
+  and `LabelPrintPage` are unaffected — they write into a fresh iframe. Both
+  defects, their fixes, and why no test caught them are in
+  [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) → "The Root Canvas Broke the
+  Print Pages' Background Contract".
 - **`overscroll-behavior: none` stayed on `body`** — iOS bounce suppression is a
   body concern and was deliberately not moved.
 
@@ -149,7 +158,7 @@ sections there.
 | Route                                      | Page                        | Gate                                                                           | Notes                                                                                                                                                                      |
 | ------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/learning`                                | Learning Center             | **Authenticated**                                                              | In-app guide index; sits beside `/dashboard` inside `AppLayout`                                                                                                            |
-| `/locations/qr-codes`                      | Room QR Codes directory     | `locations.manage` **OR** `facilities.manage`                                  | Search, print signs, PNG download, inline room QR; prefetched by `routePrefetch.ts`                                                                                        |
+| `/locations/qr-codes`                      | Check-In QR Codes           | `locations.manage` **OR** `facilities.manage`                                  | Search, print signs, PNG download, inline room QR; prefetched by `routePrefetch.ts`                                                                                        |
 | `/scheduling/apparatus-inventory`          | Apparatus Inventory         | `equipment_check.submit` **OR** `equipment_check.view` **OR** `inventory.view` | Deliberately crew-level: recording what you just used is the point                                                                                                         |
 | `/training/skills-testing/print/template`  | Blank skill sheet (print)   | **Authenticated**                                                              | Empty form, no member data; the backend's template fetch enforces visibility and org scope                                                                                 |
 | `/training/skills-testing/print/scorecard` | Completed scorecard (print) | **Authenticated**                                                              | The backend redacts to the reader's disclosure level before the data leaves the server; gating on `training.manage` would instead block members printing their own results |
@@ -162,11 +171,18 @@ wrong and would send departments looking for a permission to grant.
 
 ## Models and data points
 
-One new model in the window: **`SchedulingModuleConfig`**
-(`backend/app/models/scheduling_module_config.py`, table via
-`20260813_0010`, served by `backend/app/api/v1/endpoints/scheduling_module_config.py`
-at `/api/v1/scheduling/shift-settings` GET/PUT/DELETE) — per-organization shift
-settings, cached and keyed by org.
+**Three** new models in the window. Only one of them arrived in a new file, which
+is why a file-level count undercounts them — the other two were added to existing
+domain modules:
+
+| Model                                                                    | Table                       | Revision        | Purpose                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------ | --------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SchedulingModuleConfig` (new file `models/scheduling_module_config.py`) | `scheduling_module_configs` | `20260813_0010` | Per-organization shift settings, cached and keyed by org. Served by the window's one new endpoint module, `endpoints/scheduling_module_config.py`, at `/api/v1/scheduling/shift-settings` GET/PUT/DELETE — all three resolve the org from `current_user.organization_id`, never from client input |
+| `CheckItemDeployedLot`                                                   | `check_item_deployed_lots`  | `20260810_0008` | One row per lot's presence on one checklist position — the record that makes "soonest expiration aboard" representable                                                                                                                                                                            |
+| `SavedBallotTemplate`                                                    | `saved_ballot_templates`    | `20260812_0001` | Org-scoped reusable ballot **structure**; carries no candidates, rosters, votes, tokens, or attendance                                                                                                                                                                                            |
+
+Across the window **37 new endpoint handlers** were added, the large majority on
+existing routers rather than the one new module.
 
 Columns and settings added across the window, grouped by the question they let a
 user answer:
@@ -195,6 +211,7 @@ Single head at the audited commit: **`20260814_0004`**. Run the chain in
 repository order; never select revisions by filename.
 
 ```
+20260809_0002  preserve released revision          (dated 08-09, added inside this window)
 20260810_0001  encrypt medical-screening PHI
 20260810_0002  score pass/fail criteria            (merge: 20260810_0001 + 20260809_0002)
 20260810_0003  email templates track default CSS
