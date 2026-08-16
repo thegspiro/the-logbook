@@ -146,6 +146,11 @@ export const GrantOpportunitiesPage: React.FC = () => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    // One request per keystroke, and the server is free to answer them out of
+    // order — without this flag a slow response for "fi" lands after the one
+    // for "fire" and the list settles on results for a prefix the member is no
+    // longer looking at, with nothing to indicate it is stale.
+    let cancelled = false;
     const loadOpportunities = async () => {
       try {
         setIsLoading(true);
@@ -153,14 +158,17 @@ export const GrantOpportunitiesPage: React.FC = () => {
         if (search) params.search = search;
         if (categoryFilter) params.category = categoryFilter;
         const data = await grantsService.listOpportunities(params);
-        setOpportunities(data);
+        if (!cancelled) setOpportunities(data);
       } catch {
-        setError('Failed to load grant opportunities.');
+        if (!cancelled) setError('Failed to load grant opportunities.');
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     void loadOpportunities();
+    return () => {
+      cancelled = true;
+    };
   }, [search, categoryFilter]);
 
   const toggleExpand = (id: string) => {

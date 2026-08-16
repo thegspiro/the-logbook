@@ -189,4 +189,24 @@ describe('MyOrdersPage', () => {
     renderPage();
     expect(await screen.findByText('No orders yet')).toBeInTheDocument();
   });
+  it('reports a failed load instead of claiming the member has no orders', async () => {
+    mockGetMyOrders.mockRejectedValue(new Error('Network Error'));
+    renderPage();
+
+    // The empty state is a statement about the member's account; a load
+    // failure must not be dressed up as one.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/network error/i);
+    expect(screen.queryByText('No orders yet')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it('retries the load from the error state', async () => {
+    mockGetMyOrders.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValueOnce([unpaidOrder]);
+    renderPage();
+    await screen.findByRole('alert');
+
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(await screen.findByRole('heading', { name: 'ORD-2026-0001' })).toBeInTheDocument();
+  });
 });

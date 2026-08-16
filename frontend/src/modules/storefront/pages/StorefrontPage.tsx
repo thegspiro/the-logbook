@@ -165,6 +165,7 @@ const StorefrontPage: React.FC = () => {
     cart,
     isLoading,
     isSubmitting,
+    error,
     loadStorefront,
     addToCart,
     updateCartQuantity,
@@ -220,6 +221,23 @@ const StorefrontPage: React.FC = () => {
     return (
       <div className="flex justify-center py-16" role="status" aria-live="polite">
         <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  // Checked before the "store is closed" branch below: a failed load leaves
+  // `storefront` null, which that branch reads as a deliberate department
+  // decision and states as one. A member told the store is closed does not
+  // retry.
+  if (error && !storefront) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-3 px-4 py-10 sm:px-6">
+        <p className="alert-danger" role="alert">
+          {error}
+        </p>
+        <button type="button" onClick={() => void loadStorefront()} className="btn-secondary btn-md">
+          Try again
+        </button>
       </div>
     );
   }

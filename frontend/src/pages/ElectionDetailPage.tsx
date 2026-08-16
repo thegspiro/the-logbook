@@ -77,7 +77,6 @@ export const ElectionDetailPage: React.FC = () => {
   const [isLoadingNonVoters, setIsLoadingNonVoters] = useState(false);
   const [showRemindModal, setShowRemindModal] = useState(false);
   const [nonVoterCount, setNonVoterCount] = useState(0);
-  const [nonVoterIds, setNonVoterIds] = useState<string[]>([]);
   const [isSendingReminders, setIsSendingReminders] = useState(false);
   const [remindError, setRemindError] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -690,8 +689,9 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       setIsLoadingNonVoters(true);
       const data = await electionService.getNonVoters(electionId);
+      // Only the count is kept: remind_non_voters recomputes the recipient
+      // list server-side at send time, so a client copy could only go stale.
       setNonVoterCount(data.count);
-      setNonVoterIds(data.non_voters.map((v) => v.id));
 
       if (data.count === 0) {
         toast.success('All eligible voters have already voted!');
@@ -708,7 +708,13 @@ export const ElectionDetailPage: React.FC = () => {
   };
 
   const handleSendReminders = async (message: string) => {
-    if (!electionId || nonVoterIds.length === 0) return;
+    // Guarded on the count the modal itself displays. The request below carries
+    // only `message` — the server recomputes the recipients — so gating the send
+    // on a client-side id list meant a payload that reported a count without an
+    // expanded list (redaction, truncation) would leave the officer pressing
+    // Send Reminders on a modal saying "N members haven't voted" with no
+    // request, no error and no explanation.
+    if (!electionId || nonVoterCount === 0) return;
 
     try {
       setIsSendingReminders(true);

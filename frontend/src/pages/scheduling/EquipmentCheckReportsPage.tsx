@@ -31,6 +31,7 @@ import { DateRangePicker } from '../../components/ux/DateRangePicker';
 import { Pagination } from '../../components/ux/Pagination';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
 import SchedulingHeader from './SchedulingHeader';
 
 type ReportTab = 'compliance' | 'failures' | 'trends';
@@ -460,6 +461,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
   const [trendData, setTrendData] = useState<ItemTrendResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Load templates for the picker
   useEffect(() => {
@@ -467,8 +469,11 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
       try {
         const result = await schedulingService.getEquipmentCheckTemplates({});
         setTemplates(result);
-      } catch {
-        // silently handle
+      } catch (err: unknown) {
+        // An empty picker and a picker whose contents failed to load looked
+        // identical, so a failure here read as "this department has no
+        // templates" and the officer stopped rather than retrying.
+        setError(getErrorMessage(err, 'Failed to load check templates'));
       } finally {
         setLoadingTemplates(false);
       }
@@ -484,24 +489,38 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
   useEffect(() => {
     if (!selectedItemId) {
       setTrendData(null);
+      setError(null);
       return;
     }
+    // Switching items re-fires this before the previous request lands. Without
+    // the flag a slow response for the item just deselected overwrites the one
+    // the officer is now looking at — the heading names the new item while the
+    // bars belong to the old one, and nothing looks wrong.
+    let cancelled = false;
     const load = async () => {
       setLoading(true);
+      setError(null);
       try {
         const result = await schedulingService.getItemTrends({
           template_item_id: selectedItemId,
           date_from: startDate,
           date_to: endDate,
         });
-        setTrendData(result);
-      } catch {
-        // silently handle
+        if (!cancelled) setTrendData(result);
+      } catch (err: unknown) {
+        if (cancelled) return;
+        // Leaving the previous item's chart on screen under the new item's
+        // name was the worst of both: stale numbers presented as current.
+        setTrendData(null);
+        setError(getErrorMessage(err, 'Failed to load trend data'));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     void load();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedItemId, startDate, endDate]);
 
   // Reset item when template changes
@@ -566,6 +585,12 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
       </div>
 
       {/* Content */}
+      {error && (
+        <p className="alert-danger" role="alert">
+          {error}
+        </p>
+      )}
+
       {!selectedItemId ? (
         <div className="text-theme-text-muted py-12 text-center">
           <TrendingUp className="mx-auto mb-2 h-8 w-8 opacity-50" />
