@@ -92,35 +92,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `overscroll-behavior: none` deliberately stayed on `body` — iOS bounce
   suppression is a body concern.
 
-**Two regressions this introduced (open, found 2026-08-16 during the audit)**
+**Two regressions it introduced, found and fixed 2026-08-16**
 
 Both follow from one CSS rule nobody restated: a `body` background propagates to
 the window **only** while the root element's `background-image` is `none` and its
 `background-color` is `transparent`. Once `html` is painted, nothing on `body`
-propagates.
+propagates — and two things were relying on it.
 
 - **Six in-app print routes lost their screen backdrop.** `print/template`,
   `print/scorecard`, `training/print/member`, `training/print/program`,
-  `training/print/compliance` and `scheduling/shift-reports/print` each inject
-  `@media screen { body { background: #f3f4f6 } }` to put a grey desk behind a
-  white letter-size sheet. That grey now paints the body box only, and the app
-  gradient frames it — a dark gradient around a white sheet in dark mode.
-  Cosmetic, and it does not change printed output. `InventoryBarcodePrintPage`
-  and `LabelPrintPage` are **not** affected: they `document.write` into a fresh
-  iframe, so the app stylesheet never reaches them.
-- **The `@media print` reset misses `html` — in light mode only.** It resets
-  `body, main, .dark`, and because `ThemeContext` puts the `dark` class on
-  `document.documentElement`, **dark mode is covered by accident while light mode
-  is not.** Browsers do not print background images by default, so ordinary
-  printing is unaffected; a user who enables "Background graphics" to print a
-  scorecard, skill sheet, label or QR sign can now get the gradient behind it in
-  light mode. Adding `html` to that selector list is the fix, and it also makes
-  the `.dark` coverage intentional rather than incidental.
+  `training/print/compliance` and `scheduling/shift-reports/print` each carried
+  their own copy of `@media screen { body { background: #f3f4f6 } }`, putting a
+  grey desk behind a white letter-size sheet. That grey had been painting the
+  body box alone while the app gradient framed it — a dark gradient around a
+  white sheet in dark mode. Cosmetic; printed output was never affected.
 
-**No test asserts the canvas contract**, which is why a one-rule move altered six
-pages without anything going red. Both defects, their fixes, and the missing
-regression test are in `docs/KNOWN_LIMITATIONS.md` → "The Root Canvas Broke the
-Print Pages' Background Contract".
+  All six now render **`components/print/PrintPageStyles`**, which marks the root
+  element so a single `html.print-preview` rule beside the canvas rule in
+  `index.css` supplies the desk. **The duplication was the actual defect** — six
+  copies of a rule, none of them naming what they depended on, is why one global
+  change altered six pages invisibly. `InventoryBarcodePrintPage` and
+  `LabelPrintPage` were never affected: they `document.write` into a fresh
+  iframe, so the app stylesheet never reaches them.
+
+- **The `@media print` reset missed `html` — in light mode only.** It reset
+  `body, main, .dark`, and because `ThemeContext` puts the `dark` class on
+  `document.documentElement`, **dark mode was covered by accident while light
+  mode was not.** Browsers do not print background images by default, so ordinary
+  printing was unaffected; a reader who enabled "Background graphics" to print a
+  scorecard, skill sheet, label or QR sign could get the gradient behind it in
+  light mode. `html` is now named explicitly, which also makes the `.dark`
+  coverage intentional rather than incidental.
+
+**Neither would have been caught, because nothing asserted the canvas contract.**
+`PrintPageStyles.test.tsx` now guards all three invariants — the canvas belongs
+to the root, the print-preview override sits on the root beside it, and the print
+reset names the root. It reads the stylesheet rather than a rendered page on
+purpose: jsdom does not apply the real cascade, so no DOM assertion could catch
+this class of break. Each assertion was verified by re-introducing the exact
+regression it guards.
 
 **Screenshot impact**
 
@@ -8349,16 +8359,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario                                      | Behavior                                                                         |
+| Scenario | Behavior |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
-| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
-| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
-| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
-| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
-| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 

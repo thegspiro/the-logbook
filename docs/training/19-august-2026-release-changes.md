@@ -65,7 +65,7 @@ the active organization.
 
 ## Room and apparatus QR codes
 
-Authorized administrators can use the Room QR Codes directory to search,
+Authorized administrators can use the Check-In QR Codes directory to search,
 download PNG codes, and print room signs. Facility-room codes and apparatus
 shift check-in codes are available from their inline entry points. Regenerating
 a location display code immediately invalidates the old code.
@@ -75,7 +75,7 @@ bound; a stale printed sign stops working after rotation; sensitive facility
 fields require `facilities.view_sensitive`, while editing still requires
 `facilities.edit` or `facilities.manage`.
 
-> **[SCREENSHOT NEEDED — Room QR directory search results with Download PNG and Print controls, using non-sensitive demo rooms.]**
+> **[SCREENSHOT NEEDED — Check-In QR Codes directory search results with Download PNG and Print controls, using non-sensitive demo rooms.]**
 >
 > **[SCREENSHOT NEEDED — regenerate-code confirmation explicitly warning that the previously printed code becomes invalid.]**
 
@@ -203,22 +203,19 @@ out.
 
 > **[SCREENSHOT NEEDED — a public page (`/f/{slug}` or an application-status link) in dark mode at full window width with the page long enough to scroll, so the gutter is visible and painted. This is the standing proof that pages outside the app shell are covered.]**
 
-**Two open items for administrators who print**, both found on 2026-08-16 while
-auditing this change. Neither breaks a print job; both are being tracked for a
-fix.
+**Two problems this caused, both already fixed** _(2026-08-16)_. Recorded here
+only so nobody re-reports them from an older build:
 
-1. **"Background graphics" printing, in light mode.** Browsers do not print page
-   backgrounds by default, so ordinary printing is unchanged. If your department
-   switches that option on to make scorecards, skill sheets, labels or QR signs
-   render faithfully — **and you are in light mode** — check one page before
-   running a batch; the themed background may print behind it. Dark mode happens
-   not to be affected.
-2. **The print preview screens look different.** The six print pages
-   (skill sheet, scorecard, member training record, program, compliance, shift
-   report) show a grey backdrop behind the white sheet that no longer fills the
-   window — the app's themed background now frames it. **This is cosmetic and
-   changes nothing about what comes out of the printer.** Mentioned only so it is
-   not reported as a broken page.
+1. Printing with the browser's **"Background graphics"** option switched on could
+   put the themed background behind a scorecard, skill sheet, label or QR sign —
+   in light mode. Fixed.
+2. The six print-preview screens (skill sheet, scorecard, member training record,
+   program, compliance, shift report) briefly showed the themed background
+   framing the grey backdrop behind the sheet. Cosmetic, and what came out of the
+   printer was never affected. Fixed.
+
+If you see either on your installation, you are on a build from between
+August 15 and 16; update.
 
 ## Upgrade notes for administrators
 

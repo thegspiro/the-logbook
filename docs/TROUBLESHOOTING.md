@@ -8641,12 +8641,12 @@ It prints both `.env` lines already filled in, in the exact encoding each consum
 
 **Edge Case:** `overscroll-behavior: none` deliberately stayed on `body` — iOS bounce suppression is a body concern, not a canvas one. **Any new public route must use the gradient utility, not `bg-theme-surface-secondary`** — the token is correct only inside `AppLayout`.
 
-**Edge Case (open, two defects):** Moving the canvas to `html` had a blast radius nobody checked, because CSS only propagates a `body` background to the canvas when the root's `background-image` is `none` and its `background-color` is `transparent`. Since `html` is painted, **nothing on `body` propagates any more.**
-
-1. **Six in-app print routes lost their screen backdrop.** They each inject `@media screen { body { background: #f3f4f6; } }` for a grey "desk" behind a white sheet; that grey now paints only the body box while the app gradient frames it. (`InventoryBarcodePrintPage` / `LabelPrintPage` are unaffected — they write into a fresh iframe.)
-2. **The `@media print` reset misses `html` in light mode.** It resets `body, main, .dark`; because `ThemeContext` puts `dark` on `document.documentElement`, dark mode is covered _by accident_ and **light mode is not**. Printing with "Background graphics" enabled can therefore put the gradient behind a scorecard, skill sheet, label or QR sign — in light mode only.
-
-Both are recorded with fixes in [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) → "The Root Canvas Broke the Print Pages' Background Contract".
+> **Follow-up, 2026-08-16 — moving the canvas broke two things, both since fixed.** CSS propagates a `body` background to the window **only** while the root's `background-image` is `none` and its `background-color` is `transparent`. Once `html` is painted, nothing on `body` propagates, and two things were relying on that:
+>
+> 1. **Six in-app print routes lost their screen backdrop.** Each injected `@media screen { body { background: #f3f4f6 } }` for a grey "desk" behind a white sheet, which then painted the body box alone while the app gradient framed it. They now render `components/print/PrintPageStyles`, which marks the root so the `html.print-preview` rule in `index.css` supplies the desk. (`InventoryBarcodePrintPage` / `LabelPrintPage` were never affected — they `document.write` into a fresh iframe, so the app stylesheet never reaches them.)
+> 2. **The `@media print` reset missed `html` in light mode.** It reset `body, main, .dark`; because `ThemeContext` puts `dark` on `document.documentElement`, dark mode was covered _by accident_ and light mode was not, so printing with "Background graphics" enabled could put the gradient behind a scorecard, label or QR sign. `html` is now named explicitly.
+>
+> **Debugging note:** if a print route shows the app gradient again, first check that `PrintPageStyles` is mounted — it adds `print-preview` to `<html>` — before looking anywhere else. `PrintPageStyles.test.tsx` guards all three invariants: canvas on the root, the print-preview override on the root, and `html` in the print reset.
 
 ---
 

@@ -120,22 +120,27 @@ rule, which is precisely why it is a screenshot problem — see
   ballot voting and `/application-status/:token` render outside `AppLayout`.
   Any new public route must use the gradient utility, not
   `bg-theme-surface-secondary` — that token is correct only inside `AppLayout`.
-- **It silently broke the print pages' background contract — two open defects.**
-  CSS propagates a `body` background to the canvas **only** while the root's
-  `background-image` is `none` and its `background-color` is `transparent`. Once
-  `html` is painted, nothing on `body` propagates. **Six in-app print routes**
-  (`print/template`, `print/scorecard`, `training/print/member`,
-  `.../program`, `.../compliance`, `scheduling/shift-reports/print`) each inject
-  `@media screen { body { background: #f3f4f6 } }` for a grey desk behind a white
-  sheet, and that grey no longer reaches the canvas. Separately, the
-  `@media print` reset covers `body, main, .dark` — and because `ThemeContext`
-  puts `dark` on `document.documentElement`, **dark mode is covered by accident
-  while light mode is not**, so printing with "Background graphics" on can put
-  the gradient behind a scorecard or label in light mode. `InventoryBarcodePrintPage`
-  and `LabelPrintPage` are unaffected — they write into a fresh iframe. Both
-  defects, their fixes, and why no test caught them are in
-  [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) → "The Root Canvas Broke the
-  Print Pages' Background Contract".
+- **It silently broke the print pages' background contract — two defects, both
+  fixed 2026-08-16.** CSS propagates a `body` background to the window **only**
+  while the root's `background-image` is `none` and its `background-color` is
+  `transparent`. Once `html` is painted, nothing on `body` propagates. **Six
+  in-app print routes** (`print/template`, `print/scorecard`,
+  `training/print/member`, `.../program`, `.../compliance`,
+  `scheduling/shift-reports/print`) each carried their own
+  `@media screen { body { background: #f3f4f6 } }` for a grey desk behind a
+  white sheet, and that grey stopped reaching the canvas. Separately, the
+  `@media print` reset covered `body, main, .dark` — and because `ThemeContext`
+  puts `dark` on `document.documentElement`, **dark mode was covered by accident
+  while light mode was not**, so printing with "Background graphics" on could put
+  the gradient behind a scorecard or label. `InventoryBarcodePrintPage` and
+  `LabelPrintPage` were never affected — they write into a fresh iframe.
+
+  Fixed by `components/print/PrintPageStyles`, which all six routes now render:
+  it marks the root so one `html.print-preview` rule beside the canvas rule
+  supplies the desk, and `html` is now named in the print reset.
+  `PrintPageStyles.test.tsx` guards all three invariants. **The duplication was
+  the real defect** — six copies of a rule, none naming what they depended on.
+
 - **`overscroll-behavior: none` stayed on `body`** — iOS bounce suppression is a
   body concern and was deliberately not moved.
 
@@ -394,8 +399,10 @@ training and skills, 08 QR short) is unchanged.
 - Load a public route (`/f/:slug`, ballot voting, `/application-status/:token`)
   in dark mode at a window narrow enough to scroll, and confirm no seam at the
   right edge.
-- Print a scorecard and a label with "Background graphics" **on** and record what
-  happens; that is the open question in `KNOWN_LIMITATIONS.md`.
+- Print a scorecard and a label with "Background graphics" **on**, in **light**
+  mode, and confirm a white page; then open a print route in dark mode on a
+  tall window and confirm the grey desk reaches the edges. Both were broken
+  between 08-15 and 08-16 and are guarded by `PrintPageStyles.test.tsx`.
 - Verify desktop and 375px layouts, keyboard focus, 44px touch targets, empty
   states, loading states, and API failures.
 - Clear a **SCREENSHOT NEEDED** marker only after the image is opened and read

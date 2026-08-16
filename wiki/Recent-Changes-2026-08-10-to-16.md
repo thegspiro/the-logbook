@@ -43,7 +43,7 @@ the gap it was built to close. The scorecard print is _not_ gated on
 `training.manage` because that would stop a member printing a result they are
 already allowed to read, while withholding nothing from anyone else.
 
-The Room QR directory is the opposite case: a kiosk display code is a check-in
+The Check-In QR Codes directory is the opposite case: a kiosk display code is a check-in
 credential, so a bulk directory of every room's code is a different object from
 any single room's QR, and it is restricted. Regenerating a code invalidates the
 previous sign.
@@ -92,21 +92,20 @@ This affects **every screen, signed-in and public**, which is why it matters for
 documentation: any full-window dark-mode screenshot or video B-roll captured
 before August 15 may show the old seam.
 
-**Two open items, found 2026-08-16 while auditing this change.** Moving the
+**This caused two problems, both already fixed** (2026-08-16). Moving the
 background to the root element stopped the page body's background from reaching
-the window, which two things were quietly relying on:
+the window, and two things were quietly relying on it:
 
-1. **Printing with "Background graphics" enabled, in light mode only.** Browsers
-   do not print backgrounds by default, so normal printing is unaffected. If that
-   option is switched on, the themed background may print behind a scorecard,
-   skill sheet, label or QR sign. Dark mode is unaffected — incidentally rather
-   than by design.
+1. **Printing with "Background graphics" enabled, in light mode** could put the
+   themed background behind a scorecard, skill sheet, label or QR sign.
 2. **The six print-preview screens** (skill sheet, scorecard, member training
-   record, program, compliance, shift report) now show the themed background
-   framing the grey backdrop behind the sheet. **Cosmetic — what prints is
-   unchanged.**
+   record, program, compliance, shift report) showed the themed background
+   framing the grey backdrop behind the sheet — cosmetic, and printed output was
+   never affected.
 
-Both are tracked as known limitations with fixes identified.
+Both are fixed, with a regression test so the next change to the page background
+cannot repeat them. If you see either, you are running a build from between
+August 15 and 16.
 
 ## Database upgrade route
 
