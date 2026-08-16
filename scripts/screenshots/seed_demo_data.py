@@ -1913,7 +1913,21 @@ class Seeder:
         options = items(
             self.api.get("/scheduling/apparatus-options"), "options", "apparatus"
         )
-        fleet = [o for o in options if pick(o, "id")]
+        # In blueprint order, not endpoint order. The endpoint lists the fleet
+        # alphabetically, which puts Brush 5 ahead of the engines and ladder —
+        # and everything below stripes shifts onto fleet[:3], so a fresh
+        # database quietly rostered the brush truck instead of Ladder 4. The
+        # long-lived demo database never showed this because its front-line
+        # rigs were created before B-5 existed in the blueprint and the
+        # endpoint happened to return them first. The batch shift-report
+        # fixture (and its screenshots) depend on Ladder 4 carrying shifts.
+        unit_order = {unit: index for index, (unit, *_rest) in enumerate(APPARATUS)}
+        fleet = sorted(
+            (o for o in options if pick(o, "id")),
+            key=lambda o: unit_order.get(
+                pick(o, "unit_number", "unitNumber"), len(unit_order)
+            ),
+        )
         if not fleet:
             # Only reachable when the department has neither inventory — the
             # endpoint then serves hardcoded type defaults, which carry no id
