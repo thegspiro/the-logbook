@@ -46,7 +46,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import case, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import EventRSVP
@@ -253,9 +253,16 @@ class MemberAnonymizationService:
         form_submissions_scrubbed = 0
         step_progress_scrubbed = 0
         for prospect in prospects:
+            # Rows linked to BOTH user_id and prospect_id were already
+            # scrubbed (and counted) by the user-scoped update in
+            # anonymize_member — exclude them here so the summary counts
+            # each record exactly once.
             result = await self.db.execute(
                 update(ScreeningRecord)
-                .where(ScreeningRecord.prospect_id == prospect.id)
+                .where(
+                    ScreeningRecord.prospect_id == prospect.id,
+                    ScreeningRecord.user_id.is_(None),
+                )
                 .values(
                     result_summary=None,
                     result_data=None,
@@ -306,7 +313,13 @@ class MemberAnonymizationService:
                         data={},
                         submitter_name=None,
                         submitter_email=None,
-                        submitted_by=None,
+                        # submitted_by may identify a coordinator who filed
+                        # the application on the member's behalf — clear it
+                        # only when it names the member being anonymized.
+                        submitted_by=case(
+                            (FormSubmission.submitted_by == user.id, None),
+                            else_=FormSubmission.submitted_by,
+                        ),
                         ip_address=None,
                         user_agent=None,
                         integration_result=None,
