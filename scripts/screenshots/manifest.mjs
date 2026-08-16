@@ -6339,16 +6339,46 @@ export const SHOTS = [
   },
   {
     id: "03-22-equipment-check-builder",
-    // a builder opened on a new template correctly starts with no compartments;
-    // the shot is of the builder layout
-    allowEmptyState: true,
     doc: "03-scheduling.md",
     line: 668,
     anchor:
       "Screenshot of the Equipment Check Template Builder showing the template header (name,",
     alt: "Equipment check template builder with the template header and sections",
-    route: "/scheduling/equipment-check-templates/new",
-    fullPage: true,
+    route: "/scheduling/equipment-check-templates",
+    // The seeded Medic 3 Supply Check, not the blank create form. The guide
+    // text under this image is about compartments, item check types and the
+    // catalog quick-add — none of which render on a template with no items,
+    // so the /new route produced a page saying "No compartments yet" under a
+    // caption describing a populated builder. The 2026-08-11 pass made this
+    // same change and it was lost in a later reconciliation; the currency
+    // log's account of that fix is the authority here.
+    prepare: async (page) => {
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/equipment-checks/templates", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const list = Array.isArray(body) ? body : (body.templates ?? []);
+        return list.find((t) => t.name === "Medic 3 Supply Check")?.id ?? null;
+      });
+      if (!id) {
+        throw new Error(
+          "03-22: seeded 'Medic 3 Supply Check' template not found",
+        );
+      }
+      await page.goto(
+        new URL(
+          `/scheduling/equipment-check-templates/${id}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(2500);
+    },
+    // fullPage off: the toolbar and the summary bar are both sticky, and a
+    // stitched full-page capture paints each of them twice.
+    fullPage: false,
   },
   {
     id: "04-04-event-qr-code",

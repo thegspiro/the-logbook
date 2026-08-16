@@ -595,22 +595,33 @@ const Dashboard: React.FC = () => {
   const windowStart = getTodayLocalDate(tz);
   const windowEnd = addCalendarDays(windowStart, TIMELINE_DAYS - 1);
 
-  const shiftTimeRange = (shift: ShiftRecord) => {
-    const start = formatTimeOfDay(shift.start_time);
-    const end = formatTimeOfDay(shift.end_time);
-    return end ? `${start}–${end}` : start;
-  };
-
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
 
+    // start_time is "HH:MM" on some shift payloads and a full UTC datetime on
+    // others (my-shifts). formatTimeOfDay falls back to the raw string on
+    // anything it cannot parse, which put bare ISO timestamps on the timeline.
+    const formatShiftTime = (value: string | null | undefined) =>
+      value && value.includes('T') ? formatTime(value, tz) : formatTimeOfDay(value);
+
+    const shiftTimeRange = (shift: ShiftRecord) => {
+      const start = formatShiftTime(shift.start_time);
+      const end = formatShiftTime(shift.end_time);
+      return end ? `${start}–${end}` : start;
+    };
+
     const shiftSortAt = (shift: ShiftRecord) =>
-      new Date(`${shift.shift_date}T${shift.start_time || '00:00'}`).getTime();
+      shift.start_time?.includes('T')
+        ? new Date(shift.start_time).getTime()
+        : new Date(`${shift.shift_date}T${shift.start_time || '00:00'}`).getTime();
 
     for (const shift of myShifts) {
       const details = [shiftTimeRange(shift)];
       if (shift.shift_officer_name) details.push(`Officer ${shift.shift_officer_name}`);
-      if (shift.min_staffing != null) details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
+      // The my-shifts payload carries no attendee_count; interpolating it
+      // unguarded printed "undefined of 4 filled" on the member's own rows.
+      if (shift.min_staffing != null && shift.attendee_count != null)
+        details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
       entries.push({
         key: `my-${shift.id}`,
         kind: 'my-shift',
@@ -624,7 +635,8 @@ const Dashboard: React.FC = () => {
 
     for (const shift of openShifts) {
       const details = [shiftTimeRange(shift)];
-      if (shift.min_staffing != null) details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
+      if (shift.min_staffing != null && shift.attendee_count != null)
+        details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
       entries.push({
         key: `open-${shift.id}`,
         kind: 'open-shift',
