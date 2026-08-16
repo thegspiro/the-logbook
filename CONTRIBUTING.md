@@ -168,9 +168,9 @@ cd backend && mypy .
 
 ### Documentation Checks
 
-Two checks run in CI and are worth running locally before opening a PR that
-touches Markdown or an API endpoint. Both are pure standard library — no
-dependencies to install, and neither imports the application.
+Three checks run in CI and are worth running locally before opening a PR that
+touches Markdown, an API endpoint, or a frontend route. All are pure standard
+library — no dependencies to install, and none imports the application.
 
 ```bash
 # Every internal Markdown link resolves: in-page anchors, relative file links,
@@ -179,6 +179,9 @@ python3 scripts/check_docs_links.py
 
 # Endpoint docstrings agree with the permissions their routes actually enforce
 python3 scripts/check_endpoint_permissions.py
+
+# APPLICATION_PAGES.md agrees with the permissions frontend routes enforce
+python3 scripts/check_route_permissions.py
 ```
 
 **Why link checking is a CI gate.** Renaming a heading silently breaks every
@@ -192,12 +195,24 @@ own `require_permission(...)` dependency propagates that error into every
 document downstream, and it surfaces months later during a documentation pass
 rather than at the commit that caused it.
 
-The permission check fails on a docstring that names **different** permissions
-than the code enforces, or that claims a permission the route does not require
-at all. Routes that merely under-document — code enforces a permission, the
-docstring says only "Authentication required" — are reported as warnings; run
-with `--list-understated` to see them. If you touch such a route, fixing its
-docstring is a welcome drive-by.
+The endpoint check fails on a docstring that names **different** permissions than
+the code enforces, or that claims a permission the route does not require at all.
+Routes that merely under-document — code enforces a permission, the docstring
+says only "Authentication required" — are reported as warnings; run with
+`--list-understated` to see them. If you touch such a route, fixing its docstring
+is a welcome drive-by.
+
+**Why frontend routes are checked too.** `APPLICATION_PAGES.md` is what support
+and the training guides answer "who can see this page?" from, and until
+2026-08-16 nothing compared it to the routes. The first run found 13 errors,
+including a page documented as permission-gated whose route has no gate at all,
+an API path listed as a page URL, and a documented page the router does not have.
+
+`check_route_permissions.py` applies the same error/warning split: a disagreement
+between the table and the route is an error, as is a route with no entry or an
+entry with no route, while a route described only in prose — or one documenting
+less than it enforces — is a warning. Use `--list-warnings` to see those, and
+`--strict` to fail on them.
 
 ### Python (Backend)
 

@@ -30,7 +30,7 @@ Complete reference of all pages in the application, organized by module.
 > room; otherwise it renders a "sign-in is not available" state. See
 > **Events → Check-In Settings** below.
 
-> **Public routes sit outside `AppLayout`** and therefore do not inherit its background. Until 2026-08-08 the public form page, ballot voting page and the prospective-member application-status page painted `bg-theme-surface-secondary` — a **translucent** token in dark mode, designed to composite over `AppLayout`'s gradient — so they rendered over the browser's bare white canvas: white-on-white labels with dark inputs. `body` now carries the themed gradient, and these pages use the same gradient utility as `LoginPage`. **Any new public route must use the gradient utility, not a surface token.** Print styles force a white body background, so printed output is unaffected.
+> **Public routes sit outside `AppLayout`** and therefore do not inherit its background. Until 2026-08-08 the public form page, ballot voting page and the prospective-member application-status page painted `bg-theme-surface-secondary` — a **translucent** token in dark mode, designed to composite over `AppLayout`'s gradient — so they rendered over the browser's bare white canvas: white-on-white labels with dark inputs. The **root element (`html`)** now carries the themed gradient — moved there from `body` on 2026-08-15 so it also covers the browser's stable scrollbar gutter — and these pages use the same gradient utility as `LoginPage`. **Any new public route must use the gradient utility, not a surface token.** Print styles force a white background on `html` and `body`, so printed output is unaffected.
 
 ---
 
@@ -124,11 +124,12 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 ## Prospective Members
 
-| URL                             | Page                         | Permission                                           |
-| ------------------------------- | ---------------------------- | ---------------------------------------------------- |
-| `/prospective-members`          | Prospective Members Pipeline | `prospective_members.manage`                         |
-| `/prospective-members/settings` | Pipeline Settings            | `prospective_members.manage`                         |
-| `/application-status/:token`    | Public Application Status    | None (token-based; see the public-routes note above) |
+| URL                                           | Page                         | Permission                                           |
+| --------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
+| `/prospective-members`                        | Prospective Members Pipeline | `prospective_members.manage`                         |
+| `/prospective-members/settings`               | Pipeline Settings            | `prospective_members.manage`                         |
+| `/prospective-members/:applicantId/interview` | Applicant Interview          | `prospective_members.manage`                         |
+| `/application-status/:token`                  | Public Application Status    | None (token-based; see the public-routes note above) |
 
 > **Board view fetch size** _(2026-08-08)_: the kanban view requests `KANBAN_PAGE_SIZE` (**200**, the list endpoint's ceiling), not `DEFAULT_PAGE_SIZE` (25) — it groups applicants into stage columns client-side, so a page of 25 produced a board silently assembled from a fraction of the pipeline. Switching between board and table **refetches** rather than inheriting the other view's page. Past 200 the board renders a truncation notice naming the real total. Column headers count only the cards that loaded, so a stage on a truncated board can read low — the table view is the accurate one at that size.
 >
@@ -230,12 +231,12 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ## Facilities (when Facilities module is on)
 
-| URL                       | Page                       | Permission        |
-| ------------------------- | -------------------------- | ----------------- |
-| `/facilities`             | Facilities Dashboard       | `facilities.view` |
-| `/facilities/:id`         | Facility Detail            | `facilities.view` |
-| `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` |
-| `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` |
+| URL                       | Page                       | Permission                                   |
+| ------------------------- | -------------------------- | -------------------------------------------- |
+| `/facilities`             | Facilities Dashboard       | `facilities.view` **OR** `facilities.manage` |
+| `/facilities/:id`         | Facility Detail            | `facilities.view` **OR** `facilities.manage` |
+| `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` **OR** `facilities.manage` |
+| `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` **OR** `facilities.manage` |
 
 > The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
 
@@ -320,11 +321,15 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Manual Shift Report _(2026-04-11)_
 
-| URL                             | Page                           | Permission        |
-| ------------------------------- | ------------------------------ | ----------------- |
-| `/training/manual-shift-report` | Manual Shift Report            | `training.manage` |
-| `/training/log-shift`           | Log Shift                      | `training.manage` |
-| `/training/compliance-config`   | Compliance Requirements Config | `settings.manage` |
+| URL                           | Page                           | Permission                                   |
+| ----------------------------- | ------------------------------ | -------------------------------------------- |
+| `/training/log-shift`         | Log Shift                      | `training.manage`                            |
+| `/training/compliance-config` | Compliance Requirements Config | `compliance.manage` **OR** `settings.manage` |
+
+> **`/training/manual-shift-report` was listed here and does not exist**
+> _(corrected 2026-08-16)_. No route declares it; `/training/log-shift` is the
+> page that logs a shift manually. Found by
+> `scripts/check_route_permissions.py`.
 
 > **Manual entry settings look empty when the feature is off** — everything below
 > the enable checkbox on the **ManualEntrySettingsPanel** is conditional on it.
@@ -356,12 +361,13 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Member-Facing Pages
 
-| URL                        | Page                 | Permission    |
-| -------------------------- | -------------------- | ------------- |
-| `/inventory`               | Inventory Items List | Authenticated |
-| `/inventory/my-equipment`  | My Equipment         | Authenticated |
-| `/inventory/items/:id`     | Item Detail          | Authenticated |
-| `/inventory/storage-areas` | Storage Areas        | Authenticated |
+| URL                        | Page                         | Permission    |
+| -------------------------- | ---------------------------- | ------------- |
+| `/inventory`               | Inventory Items List         | Authenticated |
+| `/inventory/items`         | Inventory Items List (alias) | Authenticated |
+| `/inventory/my-equipment`  | My Equipment                 | Authenticated |
+| `/inventory/items/:id`     | Item Detail                  | Authenticated |
+| `/inventory/storage-areas` | Storage Areas                | Authenticated |
 
 ### Inventory Admin Hub (`/inventory/admin`)
 
@@ -378,6 +384,7 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/admin/maintenance`    | Maintenance Records       | `inventory.manage` |
 | `/inventory/admin/members`        | Members Inventory         | `inventory.manage` |
 | `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage` |
+| `/inventory/admin/vendors`        | Vendors                   | `inventory.manage` |
 | `/inventory/admin/returns`        | Return Requests           | `inventory.manage` |
 | `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage` |
 | `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage` |
@@ -496,8 +503,8 @@ Sections are defined in
 
 | URL                                                 | Page                             | Permission                                                                |
 | --------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `equipment_check.manage`                                                  |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `equipment_check.manage`                                                  |
+| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `scheduling.manage`                                                       |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `scheduling.manage`                                                       |
 | `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`                                                       |
 | `/scheduling?tab=equipment-checks`                  | My Equipment Checklists          | Authenticated                                                             |
 | `/scheduling/supply/expiring`                       | Expiring on Apparatus            | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
@@ -576,9 +583,24 @@ permissions.
 
 ## Medical Screening (2026-03-13)
 
-| URL                  | Page              | Permission               |
-| -------------------- | ----------------- | ------------------------ |
-| `/medical-screening` | Medical Screening | `medical_screening.view` |
+| URL                  | Page              | Permission        |
+| -------------------- | ----------------- | ----------------- |
+| `/medical-screening` | Medical Screening | **Authenticated** |
+
+> **The route is not permission-gated, though this table said it was**
+> _(corrected 2026-08-16, found by `scripts/check_route_permissions.py`)_. Every
+> other module wraps its routes in `<ProtectedRoute requiredPermission=…>`;
+> `getMedicalScreeningRoutes()` returns a bare `<Route>`, so any signed-in member
+> can open the page.
+>
+> **What actually protects the data is the API**, which enforces
+> `medical_screening.view` on every read — so a member without it gets an empty
+> or erroring screen rather than PHI, the same server-side-redaction pattern the
+> skills-testing print routes use. This is therefore a defence-in-depth and UX
+> gap rather than a disclosure: the member sees a broken page instead of a clean
+> "not authorized". **Adding the route gate would match every other module** and
+> is recorded in [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md) for an
+> owner decision, since it changes who can reach the URL.
 
 > Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Availability is controlled per organization via the `enabled_modules` setting in Organization/Admin Settings.
 
@@ -586,9 +608,14 @@ permissions.
 
 ## Compliance Requirements Configuration (2026-03-13)
 
-| URL                  | Page                           | Permission        |
-| -------------------- | ------------------------------ | ----------------- |
-| `/compliance/config` | Compliance Requirements Config | `settings.manage` |
+| URL                           | Page                           | Permission                                   |
+| ----------------------------- | ------------------------------ | -------------------------------------------- |
+| `/training/compliance-config` | Compliance Requirements Config | `compliance.manage` **OR** `settings.manage` |
+
+> **This was listed as `/compliance/config`, which is the API path, not a page**
+> _(corrected 2026-08-16)_. `GET`/`PUT /compliance/config` is what the screen
+> calls; the screen itself is `/training/compliance-config`. Found by
+> `scripts/check_route_permissions.py`.
 
 > Configure organization-wide compliance thresholds (percentage or all-required), create compliance profiles targeting specific membership types and roles, schedule automated compliance reports (monthly, quarterly, yearly) with email delivery, and generate on-demand reports. Linked from the compliance officer dashboard.
 

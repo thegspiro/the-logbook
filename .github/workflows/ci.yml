@@ -101,6 +101,17 @@ jobs:
         working-directory: .
         run: python3 scripts/check_endpoint_permissions.py
 
+      # The frontend half of the same problem. APPLICATION_PAGES.md is what
+      # support and the training guides answer "who can see this page?" from,
+      # and nothing compared it to the routes. When this was added it found 13
+      # errors, including a page documented as permission-gated whose route has
+      # no gate, an API path listed as a page URL, and a documented page that
+      # does not exist. Same stdlib-only, no-application-import constraint.
+      - name: Check route permission docs match enforcement
+        if: "!cancelled()"
+        working-directory: .
+        run: python3 scripts/check_route_permissions.py
+
       - name: Check dependency scans have no vulnerability suppressions
         if: "!cancelled()"
         working-directory: .

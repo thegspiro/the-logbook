@@ -1742,6 +1742,39 @@ draft. Until then the guides carry the caution explicitly (see
 [`ONBOARDING.md`](../ONBOARDING.md) → Data Persistence and
 [`training/00-getting-started.md`](./training/00-getting-started.md)).
 
+## Medical Screening — The Route Has No Permission Gate (2026-08-16)
+
+**Status: open, needs an owner decision.** Severity: low as a disclosure risk,
+moderate as a UX and defence-in-depth gap.
+
+`getMedicalScreeningRoutes()` returns a bare `<Route path="/medical-screening">`.
+Every other module wraps its routes in `<ProtectedRoute requiredPermission=…>`,
+and `APPLICATION_PAGES.md` claimed this one required `medical_screening.view`
+until the claim was checked. Found by `scripts/check_route_permissions.py` on the
+run that introduced it.
+
+**This is not an open door to PHI.** The route still sits inside the app-layout
+`<ProtectedRoute>`, so it requires a session, and the API enforces
+`medical_screening.view` on every read behind it. A member without the permission
+gets an empty or erroring screen, not records — the same server-side-redaction
+pattern the skills-testing print routes rely on deliberately.
+
+What it costs is the clean refusal. A member who lands there sees a page that
+looks broken rather than one that says they are not authorized, and the module
+handles PHI, which is the worst category in which to have a screen whose
+behaviour depends on an API call failing the right way.
+
+The decision is whether to add the gate:
+
+| Option                                                             | Consequence                                                                                                                                  |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add `<ProtectedRoute requiredPermission="medical_screening.view">` | Matches every other module; the URL refuses cleanly. Changes who can _reach_ the URL, so anyone currently relying on partial access loses it |
+| Leave it                                                           | The API remains the only enforcement point, which is where it has to be correct anyway                                                       |
+
+Not resolved here because it changes runtime access, which is an owner's call
+rather than a documentation fix. The page reference now describes what the route
+actually does.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
