@@ -779,15 +779,16 @@ which positions are open to everyone regardless of rank.
 
 **How it affects shift signup:**
 
-- Every open shift on the Dashboard offers a **Sign Up** button. Eligibility is
-  checked when you press it, not before — the card gives no advance warning
-- Pressing **Sign Up** expands the card into a position dropdown holding **only
-  the positions your rank qualifies for**
-- If your rank qualifies for none of the open positions, the expanded card says
+- Every open slot in the Dashboard's **Next 7 Days** list offers a **Sign Up**
+  button. Eligibility is checked when you press it, not before — the row gives
+  no advance warning
+- Pressing **Sign Up** expands the row into a position dropdown holding **only
+  the positions your rank qualifies for**, with a Confirm button beside it
+- If your rank qualifies for none of the open positions, the expanded row says
   **"Not eligible for this shift."** instead of a dropdown
 - Ranks with no `eligible_positions` defined default to all positions being eligible (backward-compatible)
 
-![An open shift expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for](./images/03-62-dashboard-signup-positions.png)
+![An open shift row expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for](./images/03-62-dashboard-signup-positions.png)
 
 > **The button is not a promise.** It appears on every shift, so a member can
 > press Sign Up and be told they are not eligible. This is a known rough edge —
@@ -1568,7 +1569,7 @@ Report cards now display **trainee and officer names** alongside dates:
   collapsed card, so a list of reports is readable without opening any of them
 - Review modal: Shows shift date alongside trainee and officer names in the header
 
-![A shift report card naming the trainee in its header and the filing officer in its footer](./images/03-49-report-card-names.png)
+![A shift report card naming the trainee in its header, with the filing officer in the metadata row beneath it](./images/03-49-report-card-names.png)
 
 ### Full Report Content in Review Modal
 
@@ -2250,7 +2251,7 @@ Previously, if you started an equipment check but couldn't finish it, the check 
 3. The button follows the state: **Continue checklist** on a part-answered card, **Open checklist** otherwise. Continuing opens the form with the answered items already filled in
 4. Complete what is left and submit
 
-![My Equipment Checklists — one check part-answered with its progress and a Resume control, one finished, and the untouched ones offering Start Check](./images/03-99-checklists-resume.png)
+![My Equipment Checklists — a part-answered check with its progress and Continue checklist button, a finished one reading Passed, and the untouched ones offering Open checklist](./images/03-99-checklists-resume.png)
 
 ### Edge Cases
 

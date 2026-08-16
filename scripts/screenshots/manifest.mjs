@@ -2835,7 +2835,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1138,
     anchor: "Screenshot of an expanded shift report card, its header naming",
-    alt: "A shift report card naming the trainee in its header and the filing officer in its footer",
+    alt: "A shift report card naming the trainee in its header, with the filing officer in the metadata row beneath it",
     route: "/scheduling?tab=shift-reports",
     prepare: async (page) => {
       await expandFirstReportCard(page);

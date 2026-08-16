@@ -336,7 +336,46 @@ and the later silently overwrites the earlier; identical copies are the lucky
 case. One removed, and the manifest now **throws at import on any duplicate
 id**, beside the existing mutates-last invariant.
 
----
+### Two sessions re-captured guide 03 at once — how the sets were reconciled
+
+The 08-11 "two sessions shot the same screens" incident repeated at full
+scale: this session and a parallel one each re-captured the whole guide
+against their own rebuilt databases, fixed overlapping defect sets, and
+pushed within the hour. The committed images are the **parallel session's
+set** (the "67 of 67" record above), chosen on evidence rather than
+recency: its captures postdate two frontend fixes this session's did not
+carry — the platoon-rank formatting (this session's `03-16` showed raw
+`deputy_chief` enums) and the same dashboard-timeline repairs both sessions
+wrote independently.
+
+What survived from this session's pass, verified over its own captures and
+kept in the merge:
+
+- **The `ReportContentDisplay` label fix** — the expanded report card and
+  review modal hardcoded the sample skill-score scale while scoring uses the
+  department's configured one, so a skill scored "Exemplary" displayed
+  "5/5 — Excellent". Both sessions' `03-49` and `03-62-flagged-queue`
+  captures predate the fix on the card path; the two were re-shot after the
+  merge so the pictured labels match the shipped code.
+- **The seeder's `seed_membership_vote_outcome`, batch-trainee, reminder and
+  review-queue-depth fixtures** merged with the parallel session's versions
+  of the same repairs — where both wrote one (`seed_scheduling_requests`),
+  the merge kept the version whose swap request deliberately targets the
+  member's furthest-out shift, so the swap-dialog shot's card keeps its
+  plain Swap button, plus this session's near-term seat for the timeline's
+  "Yours" pill.
+- **`--only` accepts a comma-separated prefix list**, because re-running
+  exactly the failed shots previously meant one invocation per shot.
+- The apparatus-type mismatch both sessions found was fixed at **opposite
+  ends**: this session re-keyed the seeder vocabulary to the lowercased
+  display name, the parallel one made `ApparatusRef.type_slug` prefer the
+  **code** — the right end, since UI-configured departments already key on
+  codes. The seeder keys are back on codes and the backend fix stands.
+
+The independent verification passes agreed with the parallel session's
+verdicts everywhere they overlapped, including the reservations: `03-14`'s
+member-requirement-pairs arithmetic, the `03-15`/`03-32` shared frame, and
+notification-badge drift between shots captured minutes apart.
 
 ## The 2026-08-13 guide-by-guide re-verification
 
