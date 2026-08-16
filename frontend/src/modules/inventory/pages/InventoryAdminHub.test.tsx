@@ -62,7 +62,7 @@ describe('InventoryAdminHub', () => {
 
   it('renders the page title and subtitle', async () => {
     renderWithRouter(<InventoryAdminHub />);
-    expect(screen.getByText('Inventory Administration')).toBeInTheDocument();
+    expect(screen.getByText('Gear & Uniforms Administration')).toBeInTheDocument();
     expect(screen.getByText('Manage equipment, assignments, and compliance')).toBeInTheDocument();
     await waitFor(() => {
       expect(mockGetSummary).toHaveBeenCalledTimes(1);
@@ -128,10 +128,10 @@ describe('InventoryAdminHub', () => {
       'Return Requests',
       'Storage Areas',
       'Import / Export',
-      'Equipment Requests',
+      'Gear Requests',
       'Write-Offs',
       'Reorder Requests',
-      'Equipment Kits',
+      'Gear Kits',
       'Variant Groups',
     ];
     for (const title of navTitles) {

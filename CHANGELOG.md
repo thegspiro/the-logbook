@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: medical supplies split onto their own page (2026-08-16)
+
+**Added**
+
+- **Medical Supplies** module at `/medical-supplies` — EMS stock with lot
+  numbers and expiration dates, on its own page rather than mixed into the gear
+  catalog. Opens on what is expiring, with an all-supplies tab, category
+  management, an add-supply form, and a receive-delivery form that books a whole
+  shipment as one dated lot per item line.
+- `ItemType.MEDICAL`, appended to the enum (never inserted — MySQL stores an
+  ENUM as its ordinal, so a mid-list insert would silently reclassify every
+  existing category). Migration `20260816_0001`.
+- Domain-scoped permissions `inventory.view_medical` and
+  `inventory.manage_medical`, so a department can appoint an EMS supply officer
+  for medical stock while the quartermaster keeps gear. Every medical route
+  accepts either these or the broad `inventory.view` / `inventory.manage`, so a
+  department running one supply line is unaffected, and `inventory.*` still
+  grants everything.
+- `ems_supply_officer` system role and matching email-signature office. It holds
+  the medical permissions plus `equipment_check.*` — both halves of the
+  shelf-to-truck loop — and no access to gear or uniforms.
+- `apparatus_officer` now states the medical permissions explicitly (it already
+  reached medical stock through the broad `inventory.manage`, so nothing is
+  widened — the role editor is simply honest about it now), and gains the
+  `equipment_check.*` set its description has always promised.
+- `medical_supplies` module toggle (off by default), so departments that do not
+  run EMS never see the page.
+
+**Changed**
+
+- Renamed the gear side so the two are distinguishable: **Inventory** →
+  **Gear & Uniforms**, **My Equipment** → **My Issued Gear**, **Inventory
+  Admin** → **Gear Admin**, **Equipment Requests** → **Gear Requests**,
+  **Equipment Kits** → **Gear Kits**. Routes and table names are unchanged, so
+  no existing link breaks.
+- Gear listings now exclude medical-domain items and categories, and the medical
+  routes are pinned to the medical domain server-side — the domain is never read
+  from a query parameter, and every by-id write re-checks that its target is in
+  the domain before touching it.
+
+**Fixed**
+
+- Low-stock, NFPA-retirement, and expiring-supply alerts had never been
+  delivered. All three filtered recipients on `u.role`, a column `User` does not
+  have (roles are the many-to-many `positions` relationship), so every send
+  raised `AttributeError` inside the per-organization guard, which logged it and
+  moved on. Recipients now resolve through the `inventory.manage` permission via
+  the roles relationship.
+
 ### Inventory: vendor review fixes (2026-08-16)
 
 **Fixed**

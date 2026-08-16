@@ -419,7 +419,7 @@ const ImpactPlannerPage: React.FC = () => {
           to="/inventory/admin"
           className="text-theme-text-muted hover:text-theme-text-primary mb-4 inline-flex items-center gap-1.5 text-sm"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to Inventory Admin
+          <ArrowLeft className="h-4 w-4" /> Back to Gear Admin
         </Link>
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex min-w-0 items-center gap-3">

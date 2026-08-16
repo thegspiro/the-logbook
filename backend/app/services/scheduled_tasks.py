@@ -366,6 +366,44 @@ SCHEDULE = {
 }
 
 
+async def _stock_alert_recipients(
+    db_session: AsyncSession, organization_id: str
+) -> list[User]:
+    """The members this department put in charge of stock.
+
+    Resolved by permission (``inventory.manage``) rather than by a fixed list
+    of role slugs, because departments split the job differently: one may run
+    everything through a quartermaster, another gives medical supplies to an
+    EMS supply officer and uniforms to someone else. Whoever a department
+    granted the permission to is who hears about low stock and expiring lots.
+
+    Matching a scalar ``User.role`` here — as this did — matched nothing:
+    ``User`` carries no such column (roles are the many-to-many ``positions``
+    relationship), so every call raised ``AttributeError`` inside the per-org
+    guard in ``_for_each_org``, which logged it and moved on. The alerts were
+    silently undelivered rather than visibly broken.
+    """
+    from sqlalchemy.orm import selectinload
+
+    from app.core.permissions import permission_matches
+
+    result = await db_session.execute(
+        select(User)
+        .where(User.organization_id == organization_id)
+        .where(User.is_active == True)  # noqa: E712
+        .where(User.email.isnot(None))
+        .options(selectinload(User.roles))
+    )
+    recipients: list[User] = []
+    for user in result.scalars().all():
+        granted: set[str] = set()
+        for role in user.roles or []:
+            granted.update(role.permissions or [])
+        if permission_matches("inventory.manage", granted):
+            recipients.append(user)
+    return recipients
+
+
 async def _for_each_org(
     db: AsyncSession,
     task_name: str,
@@ -3448,17 +3486,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             header_color="#dc2626",
         )
 
-        admin_result = await db_session.execute(
-            select(User)
-            .where(User.organization_id == str(org.id))
-            .where(User.is_active == True)  # noqa: E712
-            .where(User.email.isnot(None))
-        )
-        admins = [
-            u
-            for u in admin_result.scalars().all()
-            if u.role in ("admin", "owner", "quartermaster")
-        ]
+        admins = await _stock_alert_recipients(db_session, str(org.id))
         admin_emails = [a.email for a in admins if a.email]
 
         alerts_sent = 0
@@ -3664,17 +3692,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
             header_color="#dc2626",
         )
 
-        admin_result = await db_session.execute(
-            select(User)
-            .where(User.organization_id == str(org.id))
-            .where(User.is_active == True)  # noqa: E712
-            .where(User.email.isnot(None))
-        )
-        admins = [
-            u
-            for u in admin_result.scalars().all()
-            if u.role in ("admin", "owner", "quartermaster")
-        ]
+        admins = await _stock_alert_recipients(db_session, str(org.id))
         admin_emails = [a.email for a in admins if a.email]
 
         if admin_emails:
@@ -3845,17 +3863,8 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
             header_color="#dc2626",
         )
 
-        admin_result = await db_session.execute(
-            select(User)
-            .where(User.organization_id == str(org.id))
-            .where(User.is_active == True)  # noqa: E712
-            .where(User.email.isnot(None))
-        )
-        admin_emails = [
-            u.email
-            for u in admin_result.scalars().all()
-            if u.role in ("admin", "owner", "quartermaster") and u.email
-        ]
+        admins = await _stock_alert_recipients(db_session, str(org.id))
+        admin_emails = [a.email for a in admins if a.email]
         if not admin_emails:
             return 0
 

@@ -134,8 +134,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       subItems: [
         ...(isModuleOn('inventory')
           ? [
-              { label: 'My Equipment', path: '/inventory/my-equipment' },
-              { label: 'Inventory', path: '/inventory' },
+              { label: 'My Issued Gear', path: '/inventory/my-equipment' },
+              { label: 'Gear & Uniforms', path: '/inventory' },
+            ]
+          : []),
+        ...(isModuleOn('medical_supplies')
+          ? [
+              {
+                label: 'Medical Supplies',
+                path: '/medical-supplies',
+                anyPermission: ['inventory.view_medical', 'inventory.view'],
+              },
             ]
           : []),
         ...(isModuleOn('apparatus')
@@ -197,7 +206,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
               ...(isModuleOn('inventory')
-                ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
+                ? [{ label: 'Gear Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
                 : []),
               ...(isModuleOn('storefront')
                 ? [{ label: 'Store Admin', path: '/store/admin', permission: 'storefront.manage' }]
