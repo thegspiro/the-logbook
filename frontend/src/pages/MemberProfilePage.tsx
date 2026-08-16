@@ -86,12 +86,13 @@ export const MemberProfilePage: React.FC = () => {
   // Edit mode states
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  // null = not loaded / unreadable, so the UI claims nothing either way.
+  const [smsConsentGranted, setSmsConsentGranted] = useState<boolean | null>(null);
   const [editForm, setEditForm] = useState<ContactInfoUpdate>({
     email: '',
     phone: '',
     mobile: '',
     notification_preferences: {
-      email: true,
       email_notifications: true,
       sms_notifications: true,
       event_reminders: true,
@@ -292,12 +293,27 @@ export const MemberProfilePage: React.FC = () => {
   };
 
   const handleEditClick = () => {
+    // The SMS preference in this form is meaningless without the member's own
+    // consent, so load it alongside. Read-only: staff can see the consent and
+    // mute a consenting member, but cannot grant consent on their behalf.
+    if (userId) {
+      userService
+        .getUserConsents(userId)
+        .then((items) => {
+          const sms = items.find((c) => c.consent_type === 'sms_notifications');
+          setSmsConsentGranted(sms?.granted === true);
+        })
+        .catch(() => {
+          // Unknown rather than assumed: leaving it null keeps the checkbox
+          // disabled and shows no claim about what the member agreed to.
+          setSmsConsentGranted(null);
+        });
+    }
     setEditForm({
       email: user?.email || '',
       phone: user?.phone || '',
       mobile: user?.mobile || '',
       notification_preferences: user?.notification_preferences || {
-        email: true,
         email_notifications: true,
         sms_notifications: true,
         event_reminders: true,
@@ -347,7 +363,6 @@ export const MemberProfilePage: React.FC = () => {
   const handleNotificationToggle = (type: keyof NotificationPreferences) => {
     setEditForm((prev) => {
       const currentPrefs = prev.notification_preferences ?? {
-        email: true,
         email_notifications: true,
         sms_notifications: true,
         event_reminders: true,
@@ -789,6 +804,7 @@ export const MemberProfilePage: React.FC = () => {
               onSaveContact={handleSaveContact}
               onFormChange={handleFormChange}
               onNotificationToggle={handleNotificationToggle}
+              smsConsentGranted={smsConsentGranted}
             />
 
             {/* Address & Personal Email */}

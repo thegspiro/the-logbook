@@ -130,7 +130,7 @@ class CertAlertService:
     def _member_has_email_enabled(self, member: User) -> bool:
         """Check if a member wants training-related email reminders.
 
-        Honors the master email switch (email_notifications/email) AND the
+        Honors the master email switch (email_notifications) AND the
         training_reminders category preference — certification expiration
         alerts are training reminders, so a member who turns that category
         off should stop receiving them. This mirrors how event reminders
@@ -138,13 +138,16 @@ class CertAlertService:
         was settable in the profile but never consulted, so disabling it had
         no effect. In-app notifications are still created regardless so
         opted-out members can see alerts in their inbox.
+
+        This used to AND in a second key, `email`, which no other sender read
+        and which only the admin contact panel wrote — so the same switch
+        meant "no mail at all" here and nothing anywhere else. Migration
+        20260816_0002 folded that key into email_notifications.
         """
         prefs = getattr(member, "notification_preferences", None)
         if prefs and isinstance(prefs, dict):
-            return (
-                prefs.get("email_notifications", True)
-                and prefs.get("email", True)
-                and prefs.get("training_reminders", True)
+            return prefs.get("email_notifications", True) and prefs.get(
+                "training_reminders", True
             )
         return True  # Default to enabled
 

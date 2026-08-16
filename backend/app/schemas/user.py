@@ -240,7 +240,9 @@ class NotificationPreferences(BaseModel):
     member receives on top of the announcements they always get by email.
     """
 
-    email: bool = True
+    # The single master email switch. A second `email` key used to sit beside
+    # this one meaning the same thing, read by one sender and written by a
+    # different screen; migration 20260816_0002 folded it in here.
     email_notifications: bool = True
     # Mutes the SMS *addition* to the emails a member already receives, and
     # only for the urgent alerts in notification_channels.SmsAlert. Defaults

@@ -95,7 +95,6 @@ describe('UserSettingsPage', () => {
     vi.clearAllMocks();
     vi.mocked(userService.getUserWithRoles).mockResolvedValue(defaultProfile as never);
     vi.mocked(userService.getNotificationPreferences).mockResolvedValue({
-      email: true,
       email_notifications: true,
       sms_notifications: true,
       event_reminders: true,

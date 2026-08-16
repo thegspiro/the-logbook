@@ -2313,6 +2313,52 @@ async def get_my_consents(
     return await ConsentService(db).list_for_user(current_user)
 
 
+@router.get("/{user_id}/consents")
+async def get_user_consents(
+    user_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Read another member's consents, for staff editing that member's contact
+    and notification settings.
+
+    **Read-only by design, and there is deliberately no admin write
+    counterpart.** SMS consent is a TCPA record of what the *member* agreed
+    to; an officer ticking a box on their behalf would not be consent. Staff
+    need to see it because the notification preferences they can edit are
+    meaningless without it — the SMS preference cannot switch texts on for a
+    member who never consented, only off for one who did.
+    """
+    if str(current_user.id) != str(user_id):
+        user_perms = _collect_user_permissions(current_user)
+        if not _has_permission("users.edit", user_perms) and not _has_permission(
+            "members.manage", user_perms
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to view this member's consents",
+            )
+
+    # Org-scoped: a permission is held within the caller's own organization and
+    # says nothing about a member of another one (CLAUDE.md pitfall 14b).
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    from app.services.consent_service import ConsentService
+
+    return await ConsentService(db).list_for_user(member)
+
+
 @router.put("/me/consents/{consent_type}")
 async def set_my_consent(
     consent_type: str,

@@ -275,9 +275,8 @@ class User(Base):
     emergency_contacts = Column(JSON, default=list)
 
     # Notification Preferences (stored as JSON object)
-    # Format: {"email": true, "email_notifications": true,
-    #          "sms_notifications": true, "event_reminders": true,
-    #          "training_reminders": true}
+    # Format: {"email_notifications": true, "sms_notifications": true,
+    #          "event_reminders": true, "training_reminders": true}
     # Email is the primary channel; these flags govern what a member gets in
     # addition to it. sms_notifications mutes the text that accompanies an
     # urgent department message (the email still goes out) and is one of two

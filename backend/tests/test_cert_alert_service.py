@@ -114,11 +114,16 @@ class TestMemberEmailEnabled:
         m = SimpleNamespace(notification_preferences={"email_notifications": False})
         assert self._svc()._member_has_email_enabled(m) is False
 
-    def test_email_channel_off(self):
+    def test_a_leftover_email_key_no_longer_suppresses_mail(self):
+        # `email` was a second master switch that only this sender read, while
+        # the member's own settings screen wrote `email_notifications`.
+        # Migration 20260816_0002 folds it in; a blob still carrying the dead
+        # key (written by an old client mid-deploy) must be inert, not a
+        # silent opt-out nobody can see or clear from the UI.
         m = SimpleNamespace(
             notification_preferences={"email_notifications": True, "email": False}
         )
-        assert self._svc()._member_has_email_enabled(m) is False
+        assert self._svc()._member_has_email_enabled(m) is True
 
     def test_training_reminders_off(self):
         # Cert expiration alerts are training reminders; disabling that
@@ -126,7 +131,6 @@ class TestMemberEmailEnabled:
         m = SimpleNamespace(
             notification_preferences={
                 "email_notifications": True,
-                "email": True,
                 "training_reminders": False,
             }
         )
@@ -136,7 +140,6 @@ class TestMemberEmailEnabled:
         m = SimpleNamespace(
             notification_preferences={
                 "email_notifications": True,
-                "email": True,
                 "training_reminders": True,
             }
         )
