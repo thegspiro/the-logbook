@@ -231,12 +231,15 @@ class ElectionService:
     async def list_candidates(
         self,
         election_id,
+        *,
+        accepted_only: bool = False,
     ) -> List[Candidate]:
-        """List accepted/all candidates for an election ordered by position."""
+        """List candidates for an election ordered by position."""
+        query = select(Candidate).where(Candidate.election_id == str(election_id))
+        if accepted_only:
+            query = query.where(Candidate.accepted.is_(True))
         result = await self.db.execute(
-            select(Candidate)
-            .where(Candidate.election_id == str(election_id))
-            .order_by(Candidate.position, Candidate.display_order)
+            query.order_by(Candidate.position, Candidate.display_order)
         )
         return list(result.scalars().all())
 
@@ -1326,6 +1329,35 @@ class ElectionService:
             digestmod=hashlib.sha256,
         ).hexdigest()
 
+    def _token_voter_is_on_frozen_roll(
+        self, election: Election, voting_token: VotingToken
+    ) -> bool:
+        """Return whether an anonymous token represents a frozen-roll voter.
+
+        Tokens retain only the voter's keyed hash, so compare it with hashes
+        derived from the frozen roster and any secretary overrides.  A NULL
+        snapshot preserves the documented live-roster behavior for legacy
+        elections.
+        """
+        snapshot = getattr(election, "eligible_roster_snapshot", None)
+        if snapshot is None:
+            return True
+
+        permitted_ids = {str(user_id) for user_id in snapshot}
+        permitted_ids.update(
+            str(override["user_id"])
+            for override in (election.voter_overrides or [])
+            if override.get("user_id")
+        )
+        salt = election.voter_anonymity_salt or ""
+        return any(
+            hmac.compare_digest(
+                voting_token.voter_hash,
+                self._generate_voter_hash(user_id, election.id, salt),
+            )
+            for user_id in permitted_ids
+        )
+
     # ------------------------------------------------------------------
     # Vote security helpers
     # ------------------------------------------------------------------
@@ -1871,7 +1903,7 @@ class ElectionService:
         When the recording officer attested the physical ballot count for a
         batch (``recorded_ballots``, keyed by batch id), that exact count is
         preferred over the estimate — see the inline note for how counts from
-        several batches combine.
+        several batches combine conservatively.
         """
         if election.anonymous_voting:
             identified = {v.voter_hash for v in all_votes if v.voter_hash}
@@ -1908,19 +1940,20 @@ class ElectionService:
         # Prefer counts the recording officer attested (ManualBallotBatch.
         # ballots_cast) over the tally-derived estimate. Each recorded count
         # is exact for its own stack, but two batches may or may not be the
-        # same physical ballots, so they combine per position:
+        # same physical ballots. In a single-choice election they combine per
+        # position:
         #
         #   sum ballots_cast over the batches that recorded votes for a
         #   position, then take the max across positions.
         #
-        # A physical ballot marks any GIVEN position at most once, so two
-        # batches that both hold votes for the same position cannot be the
-        # same ballots — their attested counts add. Batches covering
-        # disjoint positions may well be one stack recorded position by
-        # position (a ballot can mark several positions), so across
-        # positions only the max is provable. Both halves are therefore
-        # lower bounds, and so is the result — it can understate a genuinely
-        # split box but can never certify a quorum that was not met.
+        # A single-choice physical ballot marks any GIVEN position at most
+        # once, so two such batches that both hold votes for the same position
+        # cannot be the same ballots — their attested counts add. In a
+        # multi-vote election, however, one stack may be entered in separate
+        # per-candidate batches for the same position. Without ballot-level
+        # grouping, only the largest attested batch is then a safe turnout
+        # lower bound. This can understate a genuinely split box, but cannot
+        # inflate turnout and certify a quorum that was not met.
         #
         # Votes with no position share the None bucket, exactly as the
         # estimate above buckets them, so an unpositioned batch is compared
@@ -1938,15 +1971,23 @@ class ElectionService:
                 if batch_id in recorded_ballots:
                     positions_by_batch.setdefault(batch_id, set()).add(vote.position)
 
-            recorded_by_position: Dict[Optional[str], int] = {}
-            for batch_id, positions in positions_by_batch.items():
-                for position in positions:
-                    recorded_by_position[position] = (
-                        recorded_by_position.get(position, 0)
-                        + recorded_ballots[batch_id]
+            if is_single_choice:
+                recorded_by_position: Dict[Optional[str], int] = {}
+                for batch_id, positions in positions_by_batch.items():
+                    for position in positions:
+                        recorded_by_position[position] = (
+                            recorded_by_position.get(position, 0)
+                            + recorded_ballots[batch_id]
+                        )
+                if recorded_by_position:
+                    paper_ballots = max(
+                        paper_ballots, max(recorded_by_position.values())
                     )
-            if recorded_by_position:
-                paper_ballots = max(paper_ballots, max(recorded_by_position.values()))
+            elif positions_by_batch:
+                paper_ballots = max(
+                    paper_ballots,
+                    max(recorded_ballots[batch_id] for batch_id in positions_by_batch),
+                )
 
         return len(identified) + paper_ballots
 
@@ -5773,6 +5814,34 @@ Best regards,
         pending_emails: List[Dict] = []
 
         for recipient in recipients:
+            # Do not issue a live ballot credential to someone added after
+            # the voter roll was frozen. Secretary overrides remain valid.
+            frozen_roster = getattr(election, "eligible_roster_snapshot", None)
+            override_ids = {
+                str(override["user_id"])
+                for override in (election.voter_overrides or [])
+                if override.get("user_id")
+            }
+            if (
+                frozen_roster is not None
+                and str(recipient.id) not in {str(uid) for uid in frozen_roster}
+                and str(recipient.id) not in override_ids
+            ):
+                skipped_count += 1
+                reason = "Not on the voter roll frozen when the election opened"
+                skipped_details.append(
+                    {
+                        "user_id": str(recipient.id),
+                        "name": recipient.full_name or recipient.username,
+                        "reason": reason,
+                    }
+                )
+                logger.info(
+                    f"Skipping ballot email for user={recipient.id} "
+                    f"({reason}) | election={election_id}"
+                )
+                continue
+
             # Empty ballot prevention: skip members who have zero eligible
             # ballot items so they don't receive a confusing empty ballot.
             eligible_items: List[Dict] = []
@@ -6902,6 +6971,19 @@ Best regards,
 
         if not election:
             return None, None, "Election not found"
+
+        # Defense in depth for tokens issued before the roll was frozen (or
+        # by an older application node): a credential cannot bypass the same
+        # frozen-roll boundary enforced by authenticated voting.
+        if not self._token_voter_is_on_frozen_roll(election, voting_token):
+            return (
+                None,
+                None,
+                (
+                    "You are not on the voter roll that was frozen when this "
+                    "election opened"
+                ),
+            )
 
         # Check if election is still open
         now = datetime.now(timezone.utc)

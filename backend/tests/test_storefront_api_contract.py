@@ -21,6 +21,8 @@ from pathlib import Path
 import pytest
 
 from app.schemas.storefront import (
+    StoreDashboardActivityResponse,
+    StoreDashboardResponse,
     StoreNotificationPreviewResponse,
     StoreNotificationTestResponse,
     StoreOrderResponse,
@@ -47,6 +49,8 @@ _TYPES_FILE = (
 
 # (Pydantic response model, TypeScript interface name)
 _CONTRACT = [
+    (StoreDashboardResponse, "StoreDashboard"),
+    (StoreDashboardActivityResponse, "StoreDashboardActivity"),
     (StoreSettingsResponse, "StoreSettings"),
     (StoreOrderResponse, "StoreOrder"),
     (StoreProductResponse, "StoreProduct"),

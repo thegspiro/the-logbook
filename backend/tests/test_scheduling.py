@@ -2049,6 +2049,21 @@ class TestReporting:
         )
         await db_session.flush()
 
+        # Self-service attendance remains pending until an officer finalizes
+        # the shift, so it must not affect worked hours yet.
+        pending_report = await svc.get_member_hours_report(
+            uuid.UUID(org_id), today, today
+        )
+        pending_entry = next(
+            (r for r in pending_report if r["user_id"] == user2_id), None
+        )
+        assert pending_entry is not None
+        assert pending_entry["worked_hours"] == 0.0
+        assert pending_entry["scheduled_hours"] == 12.0
+
+        shift.is_finalized = True
+        await db_session.flush()
+
         report = await svc.get_member_hours_report(uuid.UUID(org_id), today, today)
         assert len(report) >= 1
         member_entry = next((r for r in report if r["user_id"] == user2_id), None)
@@ -2089,6 +2104,7 @@ class TestReporting:
                 duration_minutes=180,
             )
         )
+        shift.is_finalized = True
         await db_session.flush()
 
         report = await svc.get_member_hours_report(uuid.UUID(org_id), today, today)

@@ -48,6 +48,8 @@ class SavedBallotTemplate(Base):
     name_key = Column(String(64), nullable=False)
     description = Column(Text, nullable=True)
     ballot_items = Column(JSON, nullable=False)
+    voting_method = Column(String(50), nullable=False, default="simple_majority")
+    allow_write_ins = Column(Boolean, nullable=False, default=False)
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

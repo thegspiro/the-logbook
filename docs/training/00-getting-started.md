@@ -418,3 +418,20 @@ Back on his laptop, Jake takes his first actions in the system:
 ---
 
 **Next:** [Membership Management](./01-membership.md)
+
+## Personal and Organization dashboard views (August 14, 2026)
+
+The dashboard separates **Personal** information from the leadership
+**Organization** view. Personal keeps the signed-in member's equipment,
+training/activity, and attention items. Authorized leaders can switch to
+Organization for department-wide operational cards and management links. This
+prevents department totals or another member's equipment from being presented
+as the viewer's own data.
+
+**Edge cases:** members without an organization-level permission do not see the
+Organization tab; conditional cards remain absent when their module or data is
+unavailable; management links require their specific permission even when the
+summary card is visible; switching tabs must not mix cached personal and
+organization responses.
+
+> **[SCREENSHOT NEEDED — leader dashboard with Personal and Organization tabs, the Personal equipment panel, and an Organization aggregate card; use captions to identify the data boundary.]**

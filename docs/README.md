@@ -10,6 +10,15 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ## 📚 Documentation Index
 
+### 🔄 Recent-change handoff
+
+**[Three-day change and connection audit — 2026-08-12 through 2026-08-14](./CHANGE_AUDIT_2026-08-12_TO_14.md)**
+is the release-facing inventory of changed pages, API connection points,
+models/data points, Alembic upgrade routes, data-sharing boundaries, edge
+cases, training screenshot work, and YouTube script work. Its companion
+[net changed-file manifest](./change-audit/2026-08-12-through-14-files.txt)
+provides the auditable 879-file scope.
+
 ### 🚨 Troubleshooting & Errors
 
 **Start here if you're experiencing issues:**

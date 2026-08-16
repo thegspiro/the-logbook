@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Facilities: rooms can sit inside other rooms (2026-08-16)
+
+**Added**
+
+- A room can now be placed inside another room in the same facility — the
+  quartermaster's storage space within the volunteer office — via a "Located
+  inside" picker on the room form and an add-a-room-inside action on each row.
+  The rooms list renders the resulting tree, and each room reports how many
+  sub-rooms it holds. Nesting is capped at five levels.
+- `GET /api/v1/facilities/rooms` returns `parentRoomId` on every room and
+  accepts `parent_room_id` / `top_level_only` to fetch a single level.
+- The cross-module room picker (events, training, scheduling) lists sub-rooms
+  indented under their container and shows the containment path for the
+  selected room. A nested room's linked Location now carries the same path, so
+  "Quartermaster's Storage — Volunteer Office — Station 1" is distinguishable
+  from a storage room elsewhere in the building.
+
+**Changed**
+
+- Deleting a room keeps its sub-rooms, re-parenting them onto the deleted
+  room's own container rather than cascading the delete through everything
+  stored below it. The confirmation says so before you commit.
+- The room form now sends explicit nulls on save, so clearing a field (floor,
+  capacity, description) persists instead of silently keeping the old value.
+
+### YouTube scripts: August release changes are written into the takes (2026-08-14)
+
+**Documentation**
+
+- Replaced the script-currency-only queue with word-for-word recording inserts in
+  scripts 01, 03, 04, 06, 07, 12, 13, 14, 15, and 16, plus new Room QR Short
+  8AF. The scripts now cover TLS/upgrades, dashboard data scopes, Events,
+  permissions/privacy, notification cleanup, saved/frozen-roll elections,
+  storefront operations, linked training sessions, and skills scoring/resume/
+  visibility behavior with screen directions and edge-case narration.
+- Each changed script now identifies its insertion point, B-roll state, runtime
+  added, and exact chapters/clip tables requiring re-timing. Final timecodes are
+  intentionally a recording-production task because narration pacing determines
+  them; no behavioral content remains only in `SCRIPT_CURRENCY.md`.
+
+### Events: reminder audience and check-in teaching update (2026-08-14)
+
+**Changed**
+
+- Documented the `going` / `all` / `none` reminder audience across the event and
+  template workflows, including mandatory/optional legacy defaults, recipient
+  preferences, organization boundaries, series copies, and disabled reminders.
+- Corrected the Flexible check-in default from 30 to 60 minutes throughout the
+  training/schema references and documented Strict/Window behavior, early-member
+  notices, guest blocking, actual-time boundaries, and the overlapping-meeting
+  15-minute exception. Added exact screenshot and YouTube B-roll requirements.
+
+### Security, privacy, permissions, and dashboard follow-up (2026-08-14)
+
+**Changed**
+
+- **Audit archives are private on disk.** Archive directories are created with
+  mode `0700` and files with `0600`; creation uses an exclusive file descriptor
+  rather than writing permissively and tightening permissions afterwards.
+- **Frozen election rolls are enforced at both connection points.** Ballot email
+  issuance and token redemption reject members outside the snapshot captured
+  when voting opened. Secretary overrides remain the explicit admission path;
+  legacy elections with a null snapshot retain their prior live-roll behavior.
+- **Personal data exports respect training visibility.** Officer-only
+  `ShiftCompletionReport` evaluation fields are omitted when the organization's
+  Training result-visibility setting does not expose them to the trainee.
+- **Member-directory and scanner permissions are distinct.** `members.view`
+  reaches the redacted colleague directory/profile; ID-card scanning requires
+  `users.view` or `members.manage`. Navigation uses the same OR permission rules
+  as the protected routes.
+- **Dashboard views separate personal and organization data.** Leaders can
+  switch to the Organization view while the personal view retains the member's
+  own equipment and activity; management affordances remain permission-gated.
+- Event and series duplication deep-copy mutable JSON, preserve reminder
+  audience/check-in configuration, and remove lifecycle markers so copied or
+  extended events cannot mutate or inherit the source's processing state.
+
+**Security / compatibility notes**
+
+- Existing archives are not chmod-migrated; operators should audit and repair
+  permissions on historical archive directories separately.
+- A member removed from a frozen election roll cannot redeem an already issued
+  token unless a secretary override admits them. Null legacy snapshots are the
+  intentional compatibility exception.
+- Export visibility affects newly generated exports; previously downloaded
+  files remain the recipient's responsibility under department retention rules.
+
+### Three-day release documentation handoff (2026-08-14)
+
+**Documentation**
+
+- Audited the net changes from 2026-08-12 through 2026-08-14 and published a
+  single cross-functional map of pages, routes, models and data points,
+  Alembic migration order, end-to-end data paths, organization/permission
+  sharing boundaries, operational edge cases, screenshot replacements, and
+  YouTube script updates. The narrative audit is
+  [`docs/CHANGE_AUDIT_2026-08-12_TO_14.md`](docs/CHANGE_AUDIT_2026-08-12_TO_14.md);
+  its generated 879-path net manifest is retained beside it for traceability.
+- Added the same handoff to the repository wiki index and added explicit
+  **SCREENSHOT NEEDED** / **REPLACE** and pre-recording script queues so media
+  work cannot be mistaken for completed documentation.
+- Updated the relevant storefront, forms, prospective-member, scheduling,
+  training-program, and Alembic references plus the affected numbered training
+  guides. Added an operator-facing release lesson with exact screenshot state,
+  required demo data, permissions, non-shared data, and edge cases for each
+  changed workflow; expanded the wiki page so it also works outside `docs/`.
+
 ### Messaging: the guides now say what delivery actually does (2026-08-13)
 
 **Changed**

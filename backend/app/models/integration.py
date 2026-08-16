@@ -67,6 +67,14 @@ class Integration(Base):
         secrets = self._get_secrets_dict()
         return secrets.get(key)
 
+    def clear_secret(self, key: str) -> None:
+        """Remove a stored secret so integrations can change auth flows."""
+        from app.core.security import encrypt_data
+
+        secrets = self._get_secrets_dict()
+        secrets.pop(key, None)
+        self.encrypted_config = encrypt_data(json.dumps(secrets)) if secrets else None
+
     def _get_secrets_dict(self) -> dict[str, Any]:
         """Decrypt and parse the encrypted_config JSON."""
         if not self.encrypted_config:

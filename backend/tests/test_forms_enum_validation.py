@@ -49,6 +49,18 @@ class TestFormEnumValidation:
 
 
 class TestIntegrationEnumValidation:
+    def test_form_create_accepts_and_normalizes_integration_type(self):
+        form = FormCreate(name="F", integration_type="EVENT_REQUEST")
+        assert form.integration_type == "event_request"
+
+    def test_form_create_rejects_bad_integration_type(self):
+        with pytest.raises(ValidationError):
+            FormCreate(name="F", integration_type="bogus")
+
+    def test_form_update_rejects_bad_integration_type(self):
+        with pytest.raises(ValidationError):
+            FormUpdate(integration_type="bogus")
+
     def test_valid(self):
         i = FormIntegrationCreate(
             target_module="membership",

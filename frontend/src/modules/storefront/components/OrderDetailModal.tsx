@@ -53,6 +53,8 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
   const [statusChoice, setStatusChoice] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [updateMessage, setUpdateMessage] = useState('');
+  const [notifyUpdateByEmail, setNotifyUpdateByEmail] = useState(true);
+  const [notifyUpdateInApp, setNotifyUpdateInApp] = useState(true);
   const [adminNotes, setAdminNotes] = useState('');
   const [waiveReason, setWaiveReason] = useState('');
 
@@ -164,7 +166,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
         await storefrontService.addOrderMessage(order.id, {
           message: updateMessage.trim(),
           isMemberVisible: true,
-          notifyMember: true,
+          notifyMember: notifyUpdateByEmail || notifyUpdateInApp,
+          notifyEmail: notifyUpdateByEmail,
+          notifyInApp: notifyUpdateInApp,
         });
         setUpdateMessage('');
         toast.success('Update sent');
@@ -490,11 +494,32 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                 aria-label="Message to the member"
                 placeholder="Your shirt came in a size large by mistake — swap available."
               />
-              <div className="flex justify-end">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <fieldset className="flex flex-wrap gap-4">
+                  <legend className="sr-only">Notification channels</legend>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={notifyUpdateInApp}
+                      onChange={(event) => setNotifyUpdateInApp(event.target.checked)}
+                    />
+                    In-app notification
+                  </label>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={notifyUpdateByEmail}
+                      onChange={(event) => setNotifyUpdateByEmail(event.target.checked)}
+                    />
+                    Email
+                  </label>
+                </fieldset>
                 <button
                   type="button"
                   className="btn-secondary btn-md"
-                  disabled={busy || !updateMessage.trim()}
+                  disabled={busy || !updateMessage.trim() || (!notifyUpdateByEmail && !notifyUpdateInApp)}
                   onClick={() => {
                     void postUpdate();
                   }}

@@ -2016,3 +2016,22 @@ When you enable **Check allowances**:
 ---
 
 **Previous:** [Events & Meetings](./04-events-meetings.md) | **Next:** [Apparatus & Facilities](./06-apparatus-facilities.md)
+
+## August 12–14, 2026 update
+
+Inventory now calculates overdue state from the current return deadline,
+preserves return dates for temporary issues, corrects available stock by
+excluding issued/deployed quantities, and uses the documented barcode/asset-tag
+fallback for labels. CSV imports enforce byte-size and content limits, while
+live inventory connections reject WebSocket origins outside the configured
+allowlist.
+
+**Edge cases:** changing a temporary issue must not erase its deadline; an item
+can have on-hand stock without having available stock; identifier fallback must
+not silently relabel an asset; oversized UTF-8 CSV input can exceed the byte
+limit before it exceeds the row limit; and a valid login does not make an
+unapproved WebSocket origin valid.
+
+> **[SCREENSHOT NEEDED — item issue/detail view with a temporary return deadline and live overdue state; seed one overdue and one not-yet-due issue.]**
+>
+> **[SCREENSHOT NEEDED — item stock ledger showing on-hand, issued/deployed, and available quantities whose arithmetic can be verified from the caption.]**

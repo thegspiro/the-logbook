@@ -11,14 +11,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      exclude: [
-        'node_modules/',
-        'src/test/',
-        '**/*.d.ts',
-        '**/*.config.*',
-        '**/mockData',
-        'dist/',
-      ],
+      exclude: ['node_modules/', 'src/test/', '**/*.d.ts', '**/*.config.*', '**/mockData', 'dist/'],
       // Ratchet floor: set ~2 points under measured coverage (2026-07-29:
       // 54.98% lines / 41.67% funcs / 52.93% stmts / 45.71% branches on 2026-07-31) so the
       // gate blocks real regressions instead of failing every build against
@@ -35,7 +28,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
 });

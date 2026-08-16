@@ -761,3 +761,7 @@ edit the order and message them so the change is on the record.
 - [Inventory Management](./05-inventory.md) — linking store products to
   inventory records
 - [Finance](./11-finance.md) — how store income relates to budgets and dues
+
+## August 12–14, 2026 update
+
+Dashboard counts, order filters, the open-banner switch, own payment-method updates, and recipient privacy from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#storefront), including two open screenshots.

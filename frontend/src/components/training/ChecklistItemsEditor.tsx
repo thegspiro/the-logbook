@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { Eye, EyeOff, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, Plus, Trash2, UserCheck } from 'lucide-react';
 import type { ChecklistItem } from '../../types/training';
 import { emptyChecklistItem } from '../../utils/checklistItems';
 
@@ -48,7 +48,8 @@ export const ChecklistItemsEditor: React.FC<Props> = ({ idPrefix, items, onChang
       <p className="text-theme-text-muted mb-2 text-xs">
         Each step is signed off on its own, so the member watches the requirement fill up rather than waiting for one
         all-or-nothing tick. Turn off the eye to keep a step off the member&apos;s view — it still has to be done, and
-        it still counts toward their progress.
+        it still counts toward their progress. Enable the member icon to let a member report a visible step complete; an
+        officer must still validate it.
       </p>
 
       {items.length === 0 ? (
@@ -79,7 +80,12 @@ export const ChecklistItemsEditor: React.FC<Props> = ({ idPrefix, items, onChang
               />
               <button
                 type="button"
-                onClick={() => update(index, { member_visible: !item.member_visible })}
+                onClick={() =>
+                  update(index, {
+                    member_visible: !item.member_visible,
+                    ...(!item.member_visible ? {} : { member_can_complete: false }),
+                  })
+                }
                 title={
                   item.member_visible
                     ? 'The member can see this step — click to make it officer-only'
@@ -102,6 +108,21 @@ export const ChecklistItemsEditor: React.FC<Props> = ({ idPrefix, items, onChang
                 ) : (
                   <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
                 )}
+              </button>
+              <button
+                type="button"
+                disabled={!item.member_visible}
+                onClick={() => update(index, { member_can_complete: !item.member_can_complete })}
+                title="Allow the member to report this step complete for officer validation"
+                aria-label={`Allow member to complete step ${index + 1}`}
+                aria-pressed={item.member_can_complete}
+                className={`mobile-touch-target rounded-md border px-2 py-1 text-xs disabled:opacity-30 ${
+                  item.member_can_complete
+                    ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                    : 'border-theme-surface-border text-theme-text-muted'
+                }`}
+              >
+                <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
               <button
                 type="button"

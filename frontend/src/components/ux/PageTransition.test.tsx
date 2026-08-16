@@ -19,6 +19,23 @@ const LateHeading: React.FC<{ delayMs?: number }> = ({ delayMs = 20 }) => {
 };
 
 describe('PageTransition accessibility', () => {
+  it('applies the shared CSS page-spacing boundary', () => {
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <PageTransition>
+          <h1>Dashboard</h1>
+        </PageTransition>
+      </MemoryRouter>
+    );
+
+    // The layout marker intentionally has no ARIA role; it is visual CSS plumbing.
+    // eslint-disable-next-line testing-library/no-node-access
+    expect(screen.getByRole('heading', { name: 'Dashboard' }).closest('[data-page-layout]')).toHaveAttribute(
+      'data-page-layout',
+      'application'
+    );
+  });
+
   it('announces the page heading without making the whole page a live region', async () => {
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
       callback(0);

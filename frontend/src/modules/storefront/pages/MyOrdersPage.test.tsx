@@ -5,12 +5,14 @@ import { MemoryRouter } from 'react-router';
 
 const mockGetMyOrders = vi.fn();
 const mockReportPayment = vi.fn();
+const mockUpdateMyPaymentMethod = vi.fn();
 const mockCancelMyOrder = vi.fn();
 
 vi.mock('../services/api', () => ({
   storefrontService: {
     getMyOrders: (...args: unknown[]) => mockGetMyOrders(...args) as unknown,
     reportPayment: (...args: unknown[]) => mockReportPayment(...args) as unknown,
+    updateMyPaymentMethod: (...args: unknown[]) => mockUpdateMyPaymentMethod(...args) as unknown,
     cancelMyOrder: (...args: unknown[]) => mockCancelMyOrder(...args) as unknown,
   },
 }));
@@ -143,6 +145,21 @@ describe('MyOrdersPage', () => {
         paymentMethod: 'venmo',
         reference: 'venmo-1234',
       });
+    });
+  });
+
+  it('lets a member change the planned payment method', async () => {
+    const user = userEvent.setup();
+    mockUpdateMyPaymentMethod.mockResolvedValue({ ...unpaidOrder, paymentMethod: 'zelle' });
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    await user.click(screen.getByRole('button', { name: /change payment method/i }));
+    await user.selectOptions(screen.getByLabelText(/^payment method$/i), 'zelle');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateMyPaymentMethod).toHaveBeenCalledWith('o1', 'zelle');
     });
   });
 

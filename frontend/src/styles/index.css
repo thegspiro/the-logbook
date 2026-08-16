@@ -247,6 +247,62 @@
   }
 }
 
+/*
+ * Application page spacing
+ * ------------------------
+ * Protected routes all pass through PageTransition, making this the single
+ * CSS-owned boundary for page gutters and vertical breathing room. Individual
+ * pages may still choose their content width, but they must not have to repeat
+ * viewport padding utilities to remain usable at each breakpoint.
+ */
+:root {
+  --page-gutter-inline: 1rem;
+  --page-gutter-block: 1.5rem;
+  --page-section-gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --page-gutter-inline: 1.5rem;
+    --page-gutter-block: 2rem;
+    --page-section-gap: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --page-gutter-inline: 2rem;
+  }
+}
+
+[data-page-layout='application'] {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: var(--page-gutter-block) var(--page-gutter-inline);
+  padding-bottom: calc(var(--page-gutter-block) + var(--bottom-nav-height, 0px));
+}
+
+/* Existing routes historically put their viewport padding on either the page
+ * root or its immediate <main>. Remove only that outer padding so the shared
+ * boundary does not double it; component/card padding remains untouched. */
+[data-page-layout='application'] > :first-child,
+[data-page-layout='application'] > :first-child > main {
+  padding: 0;
+}
+
+/* A reusable width boundary for new and gradually simplified pages. */
+@utility page-container {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+}
+
+@utility page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-section-gap);
+}
+
 @utility scrollbar-thin {
   &::-webkit-scrollbar {
     width: 8px;
@@ -1222,6 +1278,22 @@
   }
 }
 
+/* The root owns the application canvas because its stable scrollbar gutter is
+   outside the body's box. Painting only the body leaves that gutter on the
+   browser's default background; painting it a solid fallback creates a seam
+   beside the gradient instead. */
+html {
+  /* Opaque themed canvas behind every route. The dark-mode surface tokens
+     (--surface-bg, --surface-secondary) are translucent white — they are
+     designed to sit on this gradient. Without a painted canvas, any page
+     rendered outside AppLayout (public forms, ballots, status pages) composites
+     those tokens over the browser's default white, producing a white page with
+     light-on-light text in dark mode. */
+  background: linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to));
+  background-attachment: fixed;
+  scrollbar-gutter: stable;
+}
+
 /* Body defaults */
 body {
   @apply antialiased;
@@ -1232,14 +1304,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
   /* Prevent iOS overscroll bounce on body */
   overscroll-behavior: none;
-  /* Opaque themed canvas behind every route. The dark-mode surface tokens
-     (--surface-bg, --surface-secondary) are translucent white — they are
-     designed to sit on this gradient. Without a painted canvas, any page
-     rendered outside AppLayout (public forms, ballots, status pages) composites
-     those tokens over the browser's default white, producing a white page with
-     light-on-light text in dark mode. */
-  background: linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to));
-  background-attachment: fixed;
   color: var(--text-primary);
 }
 
@@ -1414,11 +1478,6 @@ option {
 
 .dark ::selection {
   background-color: rgba(248, 113, 113, 0.3);
-}
-
-/* #34 Smooth scrollbar gutter to prevent layout shift */
-html {
-  scrollbar-gutter: stable;
 }
 
 /* #35 Enhanced link hover states globally */

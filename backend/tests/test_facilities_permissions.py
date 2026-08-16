@@ -12,8 +12,8 @@ introspection, so it runs in the sandbox):
    it would hand every member door/alarm codes, account numbers, budgets,
    and lease terms.
 3. ``facilities.view_sensitive`` is a READ-ONLY grant: sensitive GETs accept
-   it (so captain / vice president / treasurer can read this data), but no
-   mutation on the router does.
+   it (so explicitly authorized roles can read this data), but no mutation on
+   the router does.
 """
 
 from datetime import date, datetime, timezone
@@ -114,17 +114,20 @@ def test_view_sensitive_grants_sensitive_reads_but_never_writes():
     ), f"facilities.view_sensitive must stay read-only, found on: {writable}"
 
 
-def test_default_positions_grant_sensitive_read_to_facility_ranks():
+def test_default_positions_grant_sensitive_read_only_to_org_wide_roles():
     """Ranks whose duties require facility knowledge keep the sensitive read."""
 
     def perms(slug: str) -> set[str]:
         return set(DEFAULT_POSITIONS[slug]["permissions"])
 
-    # Read-only sensitive access for ranks with facility duties but no
-    # facility write role: station commander, president's deputy, and the
-    # treasurer (utilities/insurance/budgets are financial records).
-    for slug in ("captain", "vice_president", "treasurer"):
+    # Organization-wide roles may read all sensitive facility records without
+    # receiving facility write access.
+    for slug in ("vice_president", "treasurer"):
         assert "facilities.view_sensitive" in perms(slug), slug
+
+    # Captain is a station-specific rank, while sensitive reads are scoped to
+    # the organization. Do not grant cross-station access through rank defaults.
+    assert "facilities.view_sensitive" not in perms("captain")
 
     # Full-management positions are covered through facilities.manage.
     for slug in (

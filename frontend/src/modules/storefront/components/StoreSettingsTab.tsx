@@ -30,6 +30,7 @@ interface FormState {
   storeName: string;
   tagline: string;
   description: string;
+  showOpenOrderBanner: boolean;
   acceptedPaymentMethods: string[];
   paymentPolicy: string;
   venmoHandle: string;
@@ -70,6 +71,7 @@ const toForm = (settings: StoreSettings): FormState => ({
   storeName: settings.storeName,
   tagline: settings.tagline ?? '',
   description: settings.description ?? '',
+  showOpenOrderBanner: settings.showOpenOrderBanner,
   acceptedPaymentMethods: settings.acceptedPaymentMethods,
   paymentPolicy: settings.paymentPolicy ?? 'none',
   venmoHandle: settings.venmoHandle ?? '',
@@ -241,6 +243,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       storeName: form.storeName.trim() || 'Department Store',
       tagline: blankToNull(form.tagline),
       description: blankToNull(form.description),
+      showOpenOrderBanner: form.showOpenOrderBanner,
       acceptedPaymentMethods: form.acceptedPaymentMethods,
       paymentPolicy: form.paymentPolicy as StorePaymentPolicy,
       venmoHandle: blankToNull(form.venmoHandle),
@@ -313,6 +316,21 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
             onChange={(e) => update('isEnabled', e.target.checked)}
           />
           Store is live for members
+        </label>
+        <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="form-checkbox mt-0.5"
+            aria-label="Show prominent store status banner"
+            checked={form.showOpenOrderBanner}
+            onChange={(e) => update('showOpenOrderBanner', e.target.checked)}
+          />
+          <span>
+            <span className="text-theme-text-primary block font-medium">Show the “Ordering is open” banner</span>
+            <span className="text-theme-text-muted block text-xs">
+              Turn this off for stores that are always open and do not need an availability callout.
+            </span>
+          </span>
         </label>
         <div className="form-grid-2">
           <div>

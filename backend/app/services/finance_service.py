@@ -712,7 +712,9 @@ class FinanceService:
     ) -> ApprovalStepRecord:
         """Approve a step via email token (for external approvers)"""
         result = await self.db.execute(
-            select(ApprovalStepRecord).where(ApprovalStepRecord.approval_token == token)
+            select(ApprovalStepRecord)
+            .where(ApprovalStepRecord.approval_token == token)
+            .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
@@ -728,6 +730,7 @@ class FinanceService:
         record.status = ApprovalStepStatus.APPROVED
         record.acted_at = now
         record.notes = notes
+        record.approval_token = None
 
         await self.db.flush()
         await self._advance_notification_steps(record.entity_type, record.entity_id)
@@ -744,7 +747,9 @@ class FinanceService:
     ) -> ApprovalStepRecord:
         """Deny a step via email token (for external approvers)"""
         result = await self.db.execute(
-            select(ApprovalStepRecord).where(ApprovalStepRecord.approval_token == token)
+            select(ApprovalStepRecord)
+            .where(ApprovalStepRecord.approval_token == token)
+            .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
@@ -759,6 +764,7 @@ class FinanceService:
         record.status = ApprovalStepStatus.DENIED
         record.acted_at = datetime.now(timezone.utc)
         record.notes = notes
+        record.approval_token = None
 
         await self._finalize_denial(record.entity_type, record.entity_id, None, notes)
         await self.db.flush()

@@ -1,12 +1,26 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import LearningCenterPage from './LearningCenterPage';
+
+const isModuleOn = vi.fn(() => true);
+vi.mock('../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({ isModuleOn, enabledModules: null }),
+}));
 
 describe('LearningCenterPage', () => {
   beforeEach(() => {
     localStorage.clear();
+    isModuleOn.mockImplementation(() => true);
+  });
+
+  it('hides learning paths for disabled modules', () => {
+    isModuleOn.mockImplementation((module: string) => module !== 'scheduling');
+    renderPage();
+
+    expect(screen.queryByRole('heading', { name: 'Scheduling: Cover a Vacancy' })).not.toBeInTheDocument();
+    expect(screen.getByText('0 of 6 tasks')).toBeInTheDocument();
   });
 
   const renderPage = () =>

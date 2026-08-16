@@ -192,6 +192,7 @@ export interface StoreSettings {
   tagline?: string | null;
   description?: string | null;
   currency: string;
+  showOpenOrderBanner: boolean;
   acceptedPaymentMethods: string[];
   paymentPolicy: StorePaymentPolicy;
   venmoHandle?: string | null;
@@ -258,6 +259,7 @@ export interface StoreSettingsUpdate {
   storeName?: string;
   tagline?: string | null;
   description?: string | null;
+  showOpenOrderBanner?: boolean;
   acceptedPaymentMethods?: string[];
   paymentPolicy?: StorePaymentPolicy | null;
   venmoHandle?: string | null;
@@ -464,6 +466,7 @@ export interface Storefront {
   tagline?: string | null;
   description?: string | null;
   currency: string;
+  showOpenOrderBanner: boolean;
   termsText?: string | null;
   allowPickup: boolean;
   allowShipping: boolean;
@@ -628,6 +631,7 @@ export interface StoreWindowSummary {
 export interface StoreDashboard {
   isEnabled: boolean;
   activeWindow?: StoreOrderWindow | null;
+  newOrderCount: number;
   openOrderCount: number;
   awaitingPaymentCount: number;
   pendingVerificationCount: number;
@@ -635,7 +639,22 @@ export interface StoreDashboard {
   outstandingBalance: string;
   collectedThisWindow: string;
   activeProductCount: number;
+  statusCounts: Record<string, number>;
+  recentActivity: StoreDashboardActivity[];
   recentOrders: StoreOrder[];
+}
+
+export interface StoreDashboardActivity {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  eventType: string;
+  fromStatus?: string | null;
+  toStatus?: string | null;
+  message?: string | null;
+  authorName?: string | null;
+  createdAt: string;
 }
 
 export interface StorePermissions {

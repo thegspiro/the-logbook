@@ -735,3 +735,7 @@ for the shelf side of it.
 ---
 
 **Previous:** [Inventory Management](./05-inventory.md) | **Next:** [Documents & Forms](./07-documents-forms.md)
+
+## August 12–14, 2026 update
+
+Room QR rotation/download/printing, sensitive facility reads, and rank-backed crew seats from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#room-and-apparatus-qr-codes); its screenshot markers remain open.

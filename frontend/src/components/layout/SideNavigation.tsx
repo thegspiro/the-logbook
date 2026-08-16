@@ -8,8 +8,6 @@ import {
   FileText,
   Settings,
   LogOut,
-  Menu,
-  X,
   ChevronRight,
   ChevronDown,
   Shield,
@@ -52,7 +50,6 @@ import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
-import { hasAdministrationAccess } from './adminNavigation';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -65,6 +62,8 @@ interface SubNavItem {
   path: string;
   icon: React.ElementType;
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
 }
 
 interface NavItem {
@@ -72,6 +71,8 @@ interface NavItem {
   path: string;
   icon: React.ElementType;
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
   subItems?: SubNavItem[];
   /** If true, this item is a visual section divider label */
   isSectionLabel?: boolean;
@@ -149,7 +150,20 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   // Determine if user has any admin permission (to show/hide Administration section)
-  const hasAnyAdminPermission = hasAdministrationAccess(checkPermission);
+  const hasAnyAdminPermission =
+    // users.view alone opens the section: the member ID scanner lives here,
+    // and validating a scanned card only needs users.view (see /members/scan).
+    checkPermission('users.view') ||
+    checkPermission('members.manage') ||
+    checkPermission('prospective_members.manage') ||
+    checkPermission('events.manage') ||
+    checkPermission('training.manage') ||
+    checkPermission('inventory.manage') ||
+    checkPermission('admin_hours.manage') ||
+    checkPermission('positions.manage_permissions') ||
+    checkPermission('settings.manage') ||
+    checkPermission('forms.view') ||
+    checkPermission('analytics.view');
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
@@ -158,6 +172,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
+    ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store', icon: Store } as NavItem] : []),
     ...(isModuleOn('training')
       ? [
           {
@@ -219,7 +234,6 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               { label: 'Inventory', path: '/inventory', icon: Package },
             ]
           : []),
-        ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store', icon: Store }] : []),
         // Full apparatus module or lightweight version
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus', icon: Truck }]
@@ -291,7 +305,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             label: 'Members',
             path: '#',
             icon: Users,
-            permission: 'members.manage',
+            // users.view holders (e.g. the quartermaster) get this group for
+            // the ID scanner; the manage-only entries below stay gated.
+            anyPermission: ['users.view', 'members.manage'],
             subItems: [
               ...(isModuleOn('prospective_members')
                 ? [
@@ -319,7 +335,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 label: 'Scan Member ID',
                 path: '/members/scan',
                 icon: ScanLine,
-                permission: 'members.manage',
+                // Scanning resolves a card to a member profile, which the
+                // backend serves to users.view or members.manage holders.
+                anyPermission: ['users.view', 'members.manage'],
               },
               {
                 label: 'Waivers',
@@ -524,22 +542,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         className="bg-theme-nav-bg border-theme-surface-border safe-top fixed top-0 right-0 left-0 z-50 border-b md:hidden"
         role="banner"
       >
-        <div className="flex h-16 items-center gap-1 px-4">
-          {/* Hamburger sits on the left, matching the edge the drawer slides
-              in from (and the desktop sidebar's position). */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-theme-text-primary hover:bg-theme-surface-hover focus:ring-theme-focus-ring mobile-touch-target shrink-0 rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden"
-            aria-expanded={mobileMenuOpen}
-            aria-controls="side-navigation"
-            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-          >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" aria-hidden="true" />
-            ) : (
-              <Menu className="h-6 w-6" aria-hidden="true" />
-            )}
-          </button>
+        <div className="flex h-16 items-center px-4">
           <Link
             to="/dashboard"
             className="focus:ring-theme-focus-ring flex min-h-[44px] min-w-0 flex-1 items-center rounded-lg focus:ring-2 focus:outline-hidden"
@@ -575,7 +578,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         id="side-navigation"
         role="navigation"
         aria-label="Main navigation"
-        className={`mobile-navigation-drawer safe-top bg-theme-nav-bg border-theme-surface-border fixed top-0 left-0 z-40 h-full overscroll-contain border-r transition-all duration-300 ${
+        className={`mobile-navigation-drawer safe-top bg-theme-nav-bg border-theme-surface-border fixed left-0 z-40 overscroll-contain border-r transition-all duration-300 md:top-0 md:h-full ${
           collapsed ? 'w-20' : 'w-64'
         } ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       >
@@ -666,11 +669,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
 
                 // Filter sub-items by permission
                 const visibleSubItems = item.subItems?.filter(
-                  (sub) => !sub.permission || checkPermission(sub.permission)
+                  (sub) =>
+                    (!sub.permission || checkPermission(sub.permission)) &&
+                    (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p)))
                 );
 
                 // Skip top-level permission-gated items
                 if (item.permission && !checkPermission(item.permission)) return null;
+                if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return null;
 
                 // Skip parent groups where all sub-items are hidden
                 if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;

@@ -6,8 +6,10 @@ from datetime import UTC, date, datetime
 import pytest
 from sqlalchemy import select
 
+from app.models.forms import Form, FormSubmission
 from app.models.inventory import MemberSizePreferences
 from app.models.medical_screening import ScreeningRecord, ScreeningType
+from app.models.membership_pipeline import ProspectiveMember
 from app.models.user import (
     LeaveType,
     MemberLeaveOfAbsence,
@@ -160,6 +162,62 @@ class TestAnonymizeMember:
 
         assert user_a.email != user_b.email
         assert user_a.username != user_b.username
+
+    async def test_scrubs_applicant_screening_and_source_form(self, db_session):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        form = Form(organization_id=org.id, name="Membership application")
+        db_session.add(form)
+        await db_session.flush()
+        submission = FormSubmission(
+            organization_id=org.id,
+            form_id=form.id,
+            data={"date_of_birth": "1990-05-04", "medical_notes": "Asthma"},
+            submitter_name="Pat Firefighter",
+            submitter_email="pat@example.org",
+            ip_address="192.0.2.1",
+            user_agent="Applicant browser",
+            integration_result={"applicant_name": "Pat Firefighter"},
+        )
+        db_session.add(submission)
+        await db_session.flush()
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Firefighter",
+            email="pat@example.org",
+            transferred_user_id=user.id,
+            form_submission_id=submission.id,
+        )
+        db_session.add(prospect)
+        await db_session.flush()
+        screening = ScreeningRecord(
+            organization_id=org.id,
+            prospect_id=prospect.id,
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+            result_summary="Cleared with restrictions",
+            result_data={"diagnosis": "asthma"},
+            notes="Applicant medical history",
+            provider_name="Dr. Example",
+        )
+        db_session.add(screening)
+        await db_session.flush()
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert summary["screening_records_scrubbed"] == 1
+        assert summary["form_submissions_scrubbed"] == 1
+        assert screening.result_summary is None
+        assert screening.result_data is None
+        assert screening.notes is None
+        assert screening.provider_name is None
+        assert prospect.form_submission_id is None
+        assert submission.data == {}
+        assert submission.submitter_name is None
+        assert submission.submitter_email is None
+        assert submission.ip_address is None
+        assert submission.user_agent is None
+        assert submission.integration_result is None
 
     async def test_refuses_double_anonymization(self, db_session):
         org = await _make_org(db_session)

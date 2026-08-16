@@ -2373,3 +2373,7 @@ ahead — no need to press "Generate" each cycle.
 ---
 
 **Previous:** [Training & Certification](./02-training.md) | **Next:** [Events & Meetings](./04-events-meetings.md)
+
+## August 12–14, 2026 update
+
+Scheduling settings, rank-backed apparatus seats, checklist access, and calendar-context changes from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#apparatus-crew-seats-and-scheduling-settings), including its screenshot requirement and cross-organization cache edge case.

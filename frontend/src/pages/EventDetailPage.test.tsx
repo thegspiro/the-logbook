@@ -80,6 +80,7 @@ const mockEvent: Event = {
   is_mandatory: false,
   allow_guests: true,
   send_reminders: true,
+  reminder_target: 'all',
   reminder_schedule: [24],
   is_cancelled: false,
   created_at: '2026-01-20T10:00:00Z',
@@ -354,6 +355,57 @@ describe('EventDetailPage', () => {
         expect(screen.getByRole('button', { name: /cancel event/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /delete event/i })).toBeInTheDocument();
       });
+    });
+
+    it('should show Finalize Attendance as a primary action when the event is over', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        start_datetime: '2025-04-15T18:00:00Z',
+        end_datetime: '2025-04-15T20:00:00Z',
+      });
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      renderWithRouter(<EventDetailPage />);
+
+      const finalizeButton = await screen.findByRole('button', { name: 'Finalize Attendance' });
+      expect(finalizeButton).toBeVisible();
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /more/i }));
+      expect(screen.getAllByRole('button', { name: /finalize attendance/i })).toHaveLength(1);
+    });
+
+    it('should finalize attendance from the primary action', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        start_datetime: '2025-04-15T18:00:00Z',
+        end_datetime: '2025-04-15T20:00:00Z',
+      });
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.finalizeAttendance).mockResolvedValue({ updated_count: 2 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: 'Finalize Attendance' }));
+
+      await waitFor(() => {
+        expect(eventService.finalizeAttendance).toHaveBeenCalledWith('evt-1');
+      });
+    });
+
+    it('should show Finalize Attendance when an event is ended early', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        actual_end_time: '2026-08-14T01:00:00Z',
+      });
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: 'Finalize Attendance' })).toBeVisible();
     });
 
     it('should display statistics sidebar', async () => {

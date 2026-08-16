@@ -64,6 +64,7 @@ class StoreSettingsUpdate(BaseModel):
     tagline: Optional[str] = Field(None, max_length=300)
     description: Optional[str] = None
     currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    show_open_order_banner: Optional[bool] = None
 
     accepted_payment_methods: Optional[List[StorePaymentMethod]] = None
     payment_policy: Optional[StorePaymentPolicy] = None
@@ -158,6 +159,7 @@ class StoreSettingsResponse(UTCResponseBase):
     tagline: Optional[str] = None
     description: Optional[str] = None
     currency: str
+    show_open_order_banner: bool
 
     accepted_payment_methods: List[str] = Field(default_factory=list)
     payment_policy: StorePaymentPolicy = StorePaymentPolicy.NONE
@@ -539,6 +541,7 @@ class StorefrontResponse(UTCResponseBase):
     tagline: Optional[str] = None
     description: Optional[str] = None
     currency: str
+    show_open_order_banner: bool
     terms_text: Optional[str] = None
     allow_pickup: bool
     allow_shipping: bool
@@ -740,6 +743,14 @@ class StoreOrderPaymentReport(BaseModel):
     note: Optional[str] = None
 
 
+class StoreOrderPaymentMethodUpdate(BaseModel):
+    """Change how a member plans to pay an unsettled order."""
+
+    model_config = _REQUEST_CONFIG
+
+    payment_method: StorePaymentMethod
+
+
 class StoreOrderMarkPaid(BaseModel):
     """Settle an order's whole remaining balance."""
 
@@ -796,7 +807,11 @@ class StoreOrderMessage(BaseModel):
 
     message: str = Field(..., min_length=1)
     is_member_visible: bool = True
+    # ``notify_member`` remains the master switch for older clients. The two
+    # channel switches let the admin console send either kind independently.
     notify_member: bool = True
+    notify_email: bool = True
+    notify_in_app: bool = True
 
 
 class StoreOrderAdminNotes(BaseModel):
@@ -894,6 +909,23 @@ class StoreWindowSummaryResponse(UTCResponseBase):
     tallies: List[StoreWindowProductTally] = Field(default_factory=list)
 
 
+class StoreDashboardActivityResponse(UTCResponseBase):
+    """A recent order-timeline event with enough order context to act on it."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    order_id: str
+    order_number: str
+    customer_name: str
+    event_type: StoreOrderEventType
+    from_status: Optional[str] = None
+    to_status: Optional[str] = None
+    message: Optional[str] = None
+    author_name: Optional[str] = None
+    created_at: datetime
+
+
 class StoreDashboardResponse(UTCResponseBase):
     """Admin landing-page rollup"""
 
@@ -901,6 +933,7 @@ class StoreDashboardResponse(UTCResponseBase):
 
     is_enabled: bool
     active_window: Optional[StoreOrderWindowResponse] = None
+    new_order_count: int
     open_order_count: int
     awaiting_payment_count: int
     pending_verification_count: int
@@ -908,6 +941,11 @@ class StoreDashboardResponse(UTCResponseBase):
     outstanding_balance: Decimal
     collected_this_window: Decimal
     active_product_count: int
+    # Complete workflow distribution, including zero-value statuses.  The
+    # admin overview uses this to expose every queue rather than making staff
+    # infer it from the ten most recent orders.
+    status_counts: Dict[str, int] = Field(default_factory=dict)
+    recent_activity: List[StoreDashboardActivityResponse] = Field(default_factory=list)
     recent_orders: List[StoreOrderResponse] = Field(default_factory=list)
 
 

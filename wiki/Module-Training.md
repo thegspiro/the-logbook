@@ -1414,3 +1414,11 @@ the ones that come up most:
   already enrolled keeps their existing progress.
 - **Adding a member mid-course invites them only to classes still to come**;
   withdrawing one clears their upcoming RSVPs but keeps their records.
+
+## Personal export visibility (August 14, 2026)
+
+Personal-data exports apply the Training module's result-visibility setting to
+`ShiftCompletionReport` fields. Officer-only evaluation data hidden from the
+trainee in the application is also omitted from a newly generated export;
+completion history remains available. Previously downloaded exports are not
+recalled when the setting changes.

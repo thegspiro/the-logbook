@@ -65,6 +65,7 @@ const mockEvent: Event = {
   is_mandatory: false,
   allow_guests: false,
   send_reminders: true,
+  reminder_target: 'all',
   reminder_schedule: [24],
   is_cancelled: false,
   created_at: '2026-01-20T10:00:00Z',
@@ -140,6 +141,7 @@ describe('EventEditPage', () => {
       await waitFor(() => {
         expect(screen.getByLabelText(/title/i)).toHaveValue('Existing Event');
       });
+      expect(screen.getByLabelText(/who should receive reminders/i)).toHaveValue('all');
     });
 
     it('should show Save Changes as submit button label', async () => {

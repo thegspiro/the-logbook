@@ -151,6 +151,15 @@ export function clearTempAccessToken(): void {
   // Kept for backward compatibility with existing imports.
 }
 
+/** Clear local state after refresh proves that the browser session has expired. */
+export function handleExpiredSession(): void {
+  localStorage.removeItem('has_session');
+  clearCache();
+  if (!window.location.pathname.startsWith('/onboarding')) {
+    window.location.href = '/login';
+  }
+}
+
 /**
  * Perform a token refresh, sharing a single in-flight request across
  * all axios instances (global + module-specific).  This prevents
@@ -284,15 +293,11 @@ api.interceptors.response.use(
         // manages its own session and auth cookies may not be fully
         // established yet. A hard redirect here would kick the user out
         // of onboarding and lose their progress.
-        localStorage.removeItem('has_session');
         // SEC: Purge cached responses now. The non-onboarding branch gets a
         // full reload (which clears the in-memory cache), but the onboarding
         // branch skips the redirect — without this, cached data would survive
         // the lost session there.
-        clearCache();
-        if (!window.location.pathname.startsWith('/onboarding')) {
-          window.location.href = '/login';
-        }
+        handleExpiredSession();
         return Promise.reject(refreshError instanceof Error ? refreshError : new Error(String(refreshError)));
       }
     }

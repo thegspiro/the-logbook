@@ -20,7 +20,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
@@ -30,6 +34,7 @@ from app.models.election import (
     Candidate,
     Election,
     ElectionStatus,
+    ManualBallotBatch,
     SavedBallotTemplate,
     Vote,
 )
@@ -228,10 +233,17 @@ async def list_elections(
     election_ids = [e.id for e in elections]
     vote_counts_map: dict = {}
     if election_ids:
+        pending_manual_batch = select(ManualBallotBatch.id).where(
+            ManualBallotBatch.id == Vote.manual_batch_id,
+            ManualBallotBatch.election_id == Vote.election_id,
+            ManualBallotBatch.status == "pending",
+        )
         vote_counts_result = await db.execute(
             select(Vote.election_id, func.count(Vote.id))
             .where(Vote.election_id.in_(election_ids))
             .where(Vote.deleted_at.is_(None))
+            .where(Vote.is_test.is_(False))
+            .where(~pending_manual_batch.exists())
             .group_by(Vote.election_id)
         )
         vote_counts_map = dict(vote_counts_result.all())
@@ -265,6 +277,10 @@ async def list_elections(
                 meeting_id=election.meeting_id,
                 meeting_title=meeting_info.get("title"),
                 meeting_date=meeting_info.get("meeting_date"),
+                is_runoff=election.is_runoff,
+                parent_election_id=election.parent_election_id,
+                runoff_round=election.runoff_round,
+                enable_runoffs=election.enable_runoffs,
             )
         )
 
@@ -412,6 +428,8 @@ async def save_ballot_template(
         ballot_items=[
             item.model_dump(exclude_none=True) for item in payload.ballot_items
         ],
+        voting_method=payload.voting_method,
+        allow_write_ins=payload.allow_write_ins,
     )
     db.add(template)
     try:
@@ -1842,7 +1860,14 @@ async def list_candidates(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    return await service.list_candidates(election_id)
+    # Pending nominations are visible to members while nominations are open so
+    # nominees can respond.  Outside that phase they are election-management
+    # records and must not be exposed through the member-facing candidate list.
+    include_pending = (
+        election.status == ElectionStatus.NOMINATIONS
+        or user_has_permission(current_user, "elections.manage")
+    )
+    return await service.list_candidates(election_id, accepted_only=not include_pending)
 
 
 @router.post(
