@@ -1,6 +1,6 @@
 # The Logbook - Training Documentation
 
-> **New release lesson:** [August 12–14, 2026 workflow updates](./19-august-2026-release-changes.md) covers changed workflows, permissions, data-sharing boundaries, edge cases, exact screenshot states, and required demo data.
+> **New release lesson:** [August 12–16, 2026 workflow updates](./19-august-2026-release-changes.md) covers changed workflows, permissions, data-sharing boundaries, edge cases, exact screenshot states, and required demo data — including the August 15 change that makes the installation wizard a **one tab, one sitting** operation.
 
 Welcome to the training documentation for The Logbook. These guides are designed to help new users learn the system and serve as a reference for experienced users.
 

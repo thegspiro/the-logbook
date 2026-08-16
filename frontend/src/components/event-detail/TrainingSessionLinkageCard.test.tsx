@@ -37,8 +37,9 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import TrainingSessionLinkageCard from './TrainingSessionLinkageCard';
+import type { TrainingSessionResponse } from '../../services/adminServices';
 
-const SESSION = {
+const SESSION: TrainingSessionResponse = {
   id: 'sess-1',
   organization_id: 'org-1',
   event_id: 'evt-1',
@@ -48,6 +49,7 @@ const SESSION = {
   training_type: 'certification',
   credit_hours: 4,
   issues_certification: true,
+  counts_toward_certification: true,
   auto_create_records: true,
   require_completion_confirmation: false,
   approval_deadline_days: 7,

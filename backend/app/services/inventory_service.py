@@ -90,6 +90,12 @@ _REQUIRES_ASSIGNED_USER = {ItemStatus.ASSIGNED}
 DEFAULT_BARCODE_PREFIX = "INV-"
 BARCODE_MIN_DIGITS = 6
 
+# Storage areas run their own series in the same format so a scanned code is
+# unambiguous: "SA-000001" is a place, "INV-000001" is a thing that sits in
+# one. Counter lives in organization.settings["storage_area_barcode"].
+DEFAULT_STORAGE_AREA_BARCODE_PREFIX = "SA-"
+STORAGE_AREA_BARCODE_SETTINGS_KEY = "storage_area_barcode"
+
 
 def _format_sequential_barcode(prefix: str, number: int) -> str:
     """Render a sequential barcode, e.g. ``INV-000001``."""
@@ -174,18 +180,24 @@ class InventoryService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def _next_sequential_barcode(self, organization_id) -> str:
-        """Assign the next sequential barcode for the organization.
+    async def _next_barcode_in_series(
+        self,
+        organization_id,
+        *,
+        settings_key: str,
+        default_prefix: str,
+        exists,
+    ) -> str:
+        """Assign the next sequential barcode in one of the org's series.
 
-        Format: ``<prefix><zero-padded number>`` (default ``INV-000001``). The
-        prefix and running counter live in ``organization.settings["barcode"]``
+        Format: ``<prefix><zero-padded number>`` (e.g. ``INV-000001``). The
+        prefix and running counter live in ``organization.settings[settings_key]``
         (mirroring the membership-number scheme in OrganizationService).
 
         The organization row is locked ``FOR UPDATE`` for the read-increment so
-        concurrent item creates in the same org get distinct numbers; the
-        per-org unique constraint on ``inventory_items.barcode`` is the final
-        backstop. Any number already taken (e.g. a manually-entered barcode) is
-        skipped.
+        concurrent creates in the same org get distinct numbers. Any number
+        already taken (e.g. a manually-entered barcode) is skipped, which
+        *exists* answers for the series being drawn from.
         """
         org_id = str(organization_id)
         org = await self.db.scalar(
@@ -195,23 +207,50 @@ class InventoryService:
             raise ValueError("Organization not found")
 
         settings = copy.deepcopy(org.settings or {})
-        barcode_cfg = settings.get("barcode") or {}
-        prefix = barcode_cfg.get("prefix", DEFAULT_BARCODE_PREFIX)
+        barcode_cfg = settings.get(settings_key) or {}
+        prefix = barcode_cfg.get("prefix", default_prefix)
         number = int(barcode_cfg.get("next_number", 1))
 
         barcode = _format_sequential_barcode(prefix, number)
-        while await self._barcode_exists(org_id, barcode):
+        while await exists(org_id, barcode):
             number += 1
             barcode = _format_sequential_barcode(prefix, number)
 
         barcode_cfg["prefix"] = prefix
         barcode_cfg["next_number"] = number + 1
-        settings["barcode"] = barcode_cfg
+        settings[settings_key] = barcode_cfg
         # Reassign the whole dict so SQLAlchemy detects the nested change
         # (Organization.settings is a MutableDict; see CLAUDE.md Pitfall #12).
         org.settings = settings
         await self.db.flush()
         return barcode
+
+    async def _next_sequential_barcode(self, organization_id) -> str:
+        """Next item barcode for the organization (default ``INV-000001``).
+
+        The per-org unique constraint on ``inventory_items.barcode`` is the
+        final backstop behind the skip-if-taken loop.
+        """
+        return await self._next_barcode_in_series(
+            organization_id,
+            settings_key="barcode",
+            default_prefix=DEFAULT_BARCODE_PREFIX,
+            exists=self._barcode_exists,
+        )
+
+    async def next_storage_area_barcode(self, organization_id) -> str:
+        """Next storage-area barcode for the organization (``SA-000001``).
+
+        Every storage area carries a barcode so a shelf can be scanned the same
+        way an item can; the caller assigns this at create time rather than
+        leaving it to whoever remembers to type one in.
+        """
+        return await self._next_barcode_in_series(
+            organization_id,
+            settings_key=STORAGE_AREA_BARCODE_SETTINGS_KEY,
+            default_prefix=DEFAULT_STORAGE_AREA_BARCODE_PREFIX,
+            exists=self._storage_area_barcode_exists,
+        )
 
     async def _barcode_exists(self, org_id: str, barcode: str) -> bool:
         """Whether a barcode is already used by an item in the organization."""
@@ -220,6 +259,22 @@ class InventoryService:
             .where(
                 InventoryItem.organization_id == org_id,
                 InventoryItem.barcode == barcode,
+            )
+            .limit(1)
+        )
+        return existing is not None
+
+    async def _storage_area_barcode_exists(self, org_id: str, barcode: str) -> bool:
+        """Whether a barcode is already used by a storage area in the org.
+
+        Inactive (soft-deleted) areas count as taken — their labels are still
+        stuck to the physical shelf.
+        """
+        existing = await self.db.scalar(
+            select(StorageArea.id)
+            .where(
+                StorageArea.organization_id == org_id,
+                StorageArea.barcode == barcode,
             )
             .limit(1)
         )

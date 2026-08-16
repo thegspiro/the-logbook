@@ -32,6 +32,143 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The room form now sends explicit nulls on save, so clearing a field (floor,
   capacity, description) persists instead of silently keeping the old value.
 
+### Six-day release documentation rollup (2026-08-16)
+
+**Documentation**
+
+- Published [`docs/CHANGE_AUDIT_2026-08-10_TO_16.md`](docs/CHANGE_AUDIT_2026-08-10_TO_16.md),
+  the six-day frame around the existing three-day audit. It adds what a
+  three-day window could not show: the five routes added across the window with
+  their real permission gates, the full 28-revision Alembic route from
+  `20260809_0002` to the then-head `20260814_0004`, the supply-loop and
+  restock data paths, a client-side storage map, and the 08-15 → 08-16 changes
+  that had no coverage anywhere. The
+  [three-day audit](docs/CHANGE_AUDIT_2026-08-12_TO_14.md) remains authoritative
+  for 08-12 → 08-14.
+- **A YouTube script told installers to do the thing that now loses their
+  work.** Script 02's Welcome Screen narration read _"the wizard auto-saves your
+  progress, so if you need to step away or your browser closes, you'll pick up
+  right where you left off."_ That became false on 2026-08-15, and it was already
+  misleading — the onboarding session has always expired after 30 minutes idle.
+  Nothing in the series had been recorded yet, which is the cheap moment to catch
+  this. Rewritten in `02-first-time-setup-and-onboarding.md` with the
+  one-tab/one-sitting caution and the refilled-form trap, plus an EDITOR note:
+  every timecode from Chapter 2 onward re-times (~45–70 seconds added).
+- The skills-testing guide had **no printing section at all**, though both print
+  routes shipped 2026-08-11. Added, with the disclosure rules that decide what a
+  printed scorecard may contain and why neither route is gated on
+  `training.manage`.
+- **Four trackers had drifted and are corrected at the source.** The Alembic
+  "Current Head" banner still named `20260812_0001` — four revisions and one
+  merge behind the real head, which is exactly the staleness that causes a new
+  migration to be chained onto a dead branch. `APPLICATION_PAGES.md` was missing
+  five routes that had been live for days (`/learning`, `/locations/qr-codes`,
+  `/scheduling/apparatus-inventory`, and the two skills-testing print pages).
+  `ONBOARDING.md` still described the session identifier as living in
+  `localStorage`. The public-page dark-mode troubleshooting entry still said
+  `body` carries the canvas.
+
+### Onboarding: the setup session no longer outlives the tab (2026-08-15)
+
+**Security**
+
+- **The onboarding session identifier moved from `localStorage` to
+  `sessionStorage`.** It is a bearer credential — presented as `X-Session-ID`, it
+  authorizes the mutations that create the organization, its stations and
+  apparatus, the IT team, and the first System Owner. In `localStorage` it
+  survived browser restarts indefinitely and was readable from every tab on the
+  origin, which on a shared or station-kiosk machine is a standing grant to
+  finish somebody else's installation. It now ends with the tab.
+- Identifiers written by the previous build are deleted on the first page load
+  of the new one, in both `loadSession()` and `clearSession()`, so a browser
+  carrying a stale identifier drops it rather than presenting it.
+- The CSRF companion (`onboarding_csrf_token`, `SameSite=Strict` cookie) and the
+  server's 30-minute sliding session TTL are unchanged. No endpoint, schema,
+  model, migration, or permission changed.
+
+**Edge cases worth teaching**
+
+- **Onboarding is now one tab, one sitting.** A second tab does not inherit the
+  wizard — it starts a new server session, and a step that needs an established
+  one answers `401` / `ONBD_SESSION_INVALID`. (A _duplicated_ tab does carry the
+  identifier, because Chrome and Firefox copy `sessionStorage` into duplicates.
+  That is browser behavior, not a supported resume path.)
+- **The wizard can look resumable when it is not.** The typed answers live in
+  `localStorage` under `onboarding-storage` and are untouched by this change, so
+  reopening `/onboarding` after a restart repaints them. The failure surfaces at
+  the next mutating step, not at the repaint. The recovery is to restart the
+  wizard, not to re-type.
+- Seeing "Onboarding has already been completed" (`403` /
+  `ONBD_ALREADY_COMPLETED`) is a _different_ condition — the install finished and
+  the operator should sign in, not restart setup.
+
+### Interface: the scrollbar gutter stopped showing through in dark mode (2026-08-15)
+
+**Fixed**
+
+- **A bright strip ran down the right edge of every page in dark mode.** The
+  dark-mode surface tokens are translucent white by design — they composite over
+  the themed gradient. `scrollbar-gutter: stable` reserves its gutter on `html`,
+  **outside the body box**, so painting the gradient on `body` left that strip
+  showing the browser's default canvas. The gradient now sits on `html`, which is
+  also what reserves the gutter, and `scrollbar-gutter` folds into the same rule.
+  Painting the gutter a flat fallback colour was the alternative and was
+  rejected: it trades the seam for a different seam.
+- `overscroll-behavior: none` deliberately stayed on `body` — iOS bounce
+  suppression is a body concern.
+
+**Two regressions it introduced, found and fixed 2026-08-16**
+
+Both follow from one CSS rule nobody restated: a `body` background propagates to
+the window **only** while the root element's `background-image` is `none` and its
+`background-color` is `transparent`. Once `html` is painted, nothing on `body`
+propagates — and two things were relying on it.
+
+- **Six in-app print routes lost their screen backdrop.** `print/template`,
+  `print/scorecard`, `training/print/member`, `training/print/program`,
+  `training/print/compliance` and `scheduling/shift-reports/print` each carried
+  their own copy of `@media screen { body { background: #f3f4f6 } }`, putting a
+  grey desk behind a white letter-size sheet. That grey had been painting the
+  body box alone while the app gradient framed it — a dark gradient around a
+  white sheet in dark mode. Cosmetic; printed output was never affected.
+
+  All six now render **`components/print/PrintPageStyles`**, which marks the root
+  element so a single `html.print-preview` rule beside the canvas rule in
+  `index.css` supplies the desk. **The duplication was the actual defect** — six
+  copies of a rule, none of them naming what they depended on, is why one global
+  change altered six pages invisibly. `InventoryBarcodePrintPage` and
+  `LabelPrintPage` were never affected: they `document.write` into a fresh
+  iframe, so the app stylesheet never reaches them.
+
+- **The `@media print` reset missed `html` — in light mode only.** It reset
+  `body, main, .dark`, and because `ThemeContext` puts the `dark` class on
+  `document.documentElement`, **dark mode was covered by accident while light
+  mode was not.** Browsers do not print background images by default, so ordinary
+  printing was unaffected; a reader who enabled "Background graphics" to print a
+  scorecard, skill sheet, label or QR sign could get the gradient behind it in
+  light mode. `html` is now named explicitly, which also makes the `.dark`
+  coverage intentional rather than incidental.
+
+**Neither would have been caught, because nothing asserted the canvas contract.**
+`PrintPageStyles.test.tsx` now guards all three invariants — the canvas belongs
+to the root, the print-preview override sits on the root beside it, and the print
+reset names the root. It reads the stylesheet rather than a rendered page on
+purpose: jsdom does not apply the real cascade, so no DOM assertion could catch
+this class of break. Each assertion was verified by re-introducing the exact
+regression it guards.
+
+**Screenshot impact**
+
+- **39 captured images show the unpainted gutter**, found with
+  `scripts/screenshots/audit_images.py --check edges`. Only one is a dark-mode
+  page; the other 38 are **light-mode captures of modal dialogs**, where the
+  overlay darkens the viewport but sits inside `body`, leaving the gutter white
+  behind it. The trigger is dark content at the right edge, not the theme — do
+  not skip light-mode captures on the assumption that this is a dark-mode defect.
+  Only the dark page (`10-11-public-form-dark`) is worth re-shooting on its own;
+  the rest change by a pale 15px strip. Queued in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ### YouTube scripts: August release changes are written into the takes (2026-08-14)
 
 **Documentation**
@@ -180,7 +317,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ballot_template_created` / `ballot_template_deleted`.
 
   Three design decisions worth knowing:
-
   - **Configuration only, by construction.** A template snapshots ballot
     _structure_ — never candidates, voter rosters, votes, tokens, or
     attendance. The create schema is `extra="forbid"`, so a payload that tries
@@ -530,7 +666,6 @@ reading it. This batch:
   page held its tab in plain `useState('templates')`, so `?tab=footers` — or any
   other value — landed on Templates. Two costs, and the second is what made this
   worth fixing rather than noting:
-
   - A secretary could not send a colleague a link to the **footer library**,
     which is the tab a colleague is most likely to be pointed at.
   - The screenshot harness could only ever capture the default tab. That is
@@ -1426,7 +1561,6 @@ reported by a test.
   plausible success rather than an error it can adapt to.
 
   **Edge cases worth knowing:**
-
   - **Guests get the organizer's check-in window, minus the early-arrival
     grace.** A member may check in before a flexible window opens because a
     member checking in early is identifiable and correctable. An anonymous early
@@ -1468,7 +1602,6 @@ reported by a test.
 
 - **A cleared field came back after a reload, with a success toast in between.**
   Both ends of the request dropped the clear, independently:
-
   - **Backend.** Every update method guarded its writes with
     `if value is not None: setattr(...)`. Update payloads are `exclude_unset`
     dumps, so a null arriving at the service is an _explicit_ null — the user
@@ -1539,7 +1672,6 @@ reported by a test.
 
   All 33 `window.confirm` call sites across 23 files, and all four
   `window.prompt` call sites, now use in-app dialogs. Notably:
-
   - **Voiding a paper-ballot batch** also dropped any reason shorter than three
     characters the same silent way — a secretary who typed "PM" got no batch
     voided and no message.

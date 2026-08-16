@@ -7583,19 +7583,72 @@ export const SHOTS = [
     id: "01-37-elected-package-badge",
     doc: "01-membership.md",
     line: 1156,
-    anchor: "The Elections module showing Alex Rivera's election package",
-    alt: "The applicant drawer's Election Package section after a successful vote — the status badge reading elected and the banner offering conversion to membership",
+    anchor:
+      "its status badge reading Elected after the recorded vote closed",
+    alt: "The applicant drawer's Election Package section, its status badge reading Elected",
     route: "/prospective-members",
-    // The tally itself (Approve/Deny counts) lives on the election results
-    // screen guide 14 photographs; no single screen joins it to the package.
-    // The seeder's "elected membership vote" step plays the March election to
-    // a close so the applicant at the vote stage carries an elected package.
+    // The badge reads `elected` only after `seed_membership_vote_outcome` has
+    // walked the August membership vote to a close — package assigned to the
+    // ballot, paper tally recorded and attested, election closed, statuses
+    // synced back. Matched on the stage rather than a name, like 15-08, so a
+    // different seeding spread cannot point this at somebody else.
+    //
+    // The tally is NOT in this frame and the caption no longer promises it:
+    // vote counts live on the election results screen guide 14 pictures, and
+    // nothing joins the two on one screen.
     prepare: openApplicantAtStage("Membership Vote"),
     fullPage: true,
-    // Same false positive as 15-08: a board spread across six stages leaves
-    // columns reading "No applicants", and a drawer for an applicant with no
-    // uploads reads "No documents yet". The package section is populated.
+    // Sibling sections of the same drawer legitimately read "No documents
+    // yet" / "No checklist data recorded yet" for an applicant with no
+    // uploads; the section this pictures is populated.
     allowEmptyState: true,
+  },
+  {
+    id: "01-38-program-phase-progress",
+    doc: "01-membership.md",
+    line: 1287,
+    anchor:
+      "every phase group with its requirements and their statuses, the current phase marked",
+    alt: "A recruit's program progress — every phase group with its requirements and statuses, the current phase marked, the overall bar above them",
+    // The member-facing page rather than the admin Progress modal, which
+    // shows the same grouping but is height-capped and scrolls — a capture of
+    // it holds one phase group, and the caption is about seeing all of them.
+    // The program detail (`GET .../programs/{id}`) returns phases with no
+    // requirements in them at all, so no phase grouping can render there.
+    auth: "member",
+    route: "/dashboard",
+    prepare: async (page) => {
+      // The enrollment id is the member's own; resolve it the way the
+      // dashboard's My Training panel does rather than hardcoding a seed id.
+      const enrollments = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/programs/enrollments/me?status=active",
+          { credentials: "include" },
+        );
+        return response.ok ? response.json() : [];
+      });
+      const list = Array.isArray(enrollments) ? enrollments : [];
+      // Prefer the phased probationary pipeline — 13 requirements across
+      // three phases with prerequisite locks, which is the structure the
+      // guide's worked example walks through. The member's other enrollment
+      // (Recruit School) is a five-requirement program that shows the same
+      // grouping with far less in it.
+      const first =
+        list.find(
+          (enrollment) =>
+            enrollment.program?.name === "Probationary Firefighter Pipeline",
+        ) ?? list[0];
+      if (!first?.id) {
+        throw new Error("01-38: the demo member has no active enrollment");
+      }
+      await page.goto(
+        new URL(`/training/my-progress/${first.id}`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.getByText(/Current phase:/).waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
   },
   {
     id: "01-07-admin-member-edit",
@@ -8570,30 +8623,6 @@ export const SHOTS = [
     fullPage: false,
   },
   {
-    id: "03-60-report-used-sheet",
-    doc: "03-scheduling.md",
-    line: 880,
-    anchor:
-      'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
-    alt: "The report-used sheet: quantity stepper, optional note, and the position's current count",
-    auth: "member",
-    route: "/scheduling/apparatus-inventory",
-    viewport: "mobile",
-    prepare: async (page) => {
-      await selectMedicApparatus(page);
-      // "Flag" on a counted position, "Used" on one with no target — the same
-      // report by either name, so match both rather than assuming which the
-      // seeder produced for the first row.
-      const trigger = page
-        .getByRole("button", { name: /^(Flag|Used)$/ })
-        .first();
-      await trigger.waitFor({ timeout: 20_000 });
-      await trigger.click();
-      await page.waitForTimeout(900);
-    },
-    fullPage: false,
-  },
-  {
     id: "09-20-result-disclosure-settings",
     doc: "09-skills-testing.md",
     line: 1051,
@@ -9399,5 +9428,26 @@ for (const [index, shot] of SHOTS.entries()) {
         `${shot.doc}; these still follow it: ` +
         laterInSameDoc.map((later) => later.id).join(", "),
     );
+  }
+}
+
+/**
+ * Ids double as output filenames, so two entries with one id capture twice and
+ * the later one silently overwrites the earlier. A merge produced exactly this
+ * — 03-60-report-used-sheet appeared verbatim in two places — and identical
+ * copies are the lucky case: the day they diverge, manifest order decides which
+ * screen the guide shows, with nothing reporting it.
+ */
+{
+  const seen = new Map();
+  for (const shot of SHOTS) {
+    const first = seen.get(shot.id);
+    if (first) {
+      throw new Error(
+        `duplicate shot id ${shot.id}: one entry must be removed, or the ` +
+          `newer shot renamed to a free number`,
+      );
+    }
+    seen.set(shot.id, shot);
   }
 }

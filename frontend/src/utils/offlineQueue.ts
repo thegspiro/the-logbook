@@ -31,6 +31,17 @@ export interface QueuedCheck {
 
 export type SyncStatus = 'idle' | 'syncing' | 'error';
 
+/**
+ * Sync attempts before a queued check is abandoned.
+ *
+ * Without a ceiling a permanently-rejected submission (a template deleted, a
+ * shift closed, a payload the API no longer accepts) is retried on every
+ * reconnect forever: the queue never drains, the pending-count pill never
+ * clears, and the member is told "will retry" indefinitely. Mirrors
+ * GENERIC_QUEUE_MAX_RETRIES in genericOfflineQueue.ts.
+ */
+export const CHECK_QUEUE_MAX_RETRIES = 5;
+
 // ---------------------------------------------------------------------------
 // IndexedDB helpers
 // ---------------------------------------------------------------------------
@@ -111,8 +122,14 @@ export async function dequeueCheck(id: string): Promise<void> {
   });
 }
 
-/** Increment retry count for a failed sync attempt. */
-export async function markRetry(id: string): Promise<void> {
+/**
+ * Increment the retry count for a failed sync attempt.
+ *
+ * Returns the updated entry (or null if it is already gone) so the caller can
+ * compare `retries` against CHECK_QUEUE_MAX_RETRIES and abandon a submission
+ * the server will never accept.
+ */
+export async function markRetry(id: string): Promise<QueuedCheck | null> {
   const db = await openDB();
   const entry = await new Promise<QueuedCheck | undefined>((resolve, reject) => {
     const store = txStore(db, 'readonly');
@@ -121,15 +138,17 @@ export async function markRetry(id: string): Promise<void> {
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
 
-  if (!entry) return;
+  if (!entry) return null;
   entry.retries += 1;
 
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const store = txStore(db, 'readwrite');
     const req = store.put(entry);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
+
+  return entry;
 }
 
 /** Return the number of items waiting in the queue. */

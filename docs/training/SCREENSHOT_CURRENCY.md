@@ -1,5 +1,74 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-15 → 08-16 changes
+
+### REPLACE — one image now; 38 more only when they are next re-shot
+
+The themed background gradient moved from `body` to `html` so that it also
+covers the browser's stable scrollbar gutter. Before that, the gutter showed the
+browser's default canvas — against dark content, **a 15px white strip down the
+right edge**.
+
+All 429 images were checked with
+[`scripts/screenshots/audit_images.py`](../../scripts/screenshots/audit_images.py)
+(`--check edges`). **39 carry the strip**, and they split cleanly by how much it
+matters:
+
+| Tier                                     | Count | What changed                                                                     | Action                                                            |
+| ---------------------------------------- | ----- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Stark** — `10-11-public-form-dark.png` | 1     | Dark page: the white strip becomes a **dark** gradient. Plainly visible          | **Re-shoot.** It is the only `theme: "dark"` shot in the manifest |
+| **Subtle** — 38 modal captures           | 38    | Light page under a dark modal overlay: white becomes a **pale** gradient at 15px | Leave. Fold in whenever the shot is re-taken for another reason   |
+
+**The 38 are the instructive part.** They are light-mode pages; what darkens the
+right edge is the **modal overlay**, which dims the viewport but sits inside
+`body`, leaving the gutter — reserved on `html` — white behind it. So the trigger
+is _dark content at the right edge_, not a dark page.
+
+> **Correction (2026-08-16).** This section first said "exactly three, measured".
+> That was wrong, and wrong in an instructive way: the first scan pre-filtered on
+> **whole-image** brightness before looking at the edge, which quietly assumed the
+> defect was a dark-mode one. Every modal capture is bright overall and dark
+> exactly where it matters, so 36 of them were filtered out before the real check
+> ran. **A filter that encodes the assumption you are testing will confirm it.**
+> The script now compares the edge with the content beside it and never with the
+> page average; run it rather than re-deriving the check by hand.
+
+Cropped per-control shots never included the edge and are unaffected. **There is
+still no set-wide re-shoot here** — the actionable list is one file.
+
+Nothing else about the rendering changed — no layout, no spacing, no colour
+inside the content area — so these three need only re-capture, not re-caption.
+
+### SCREENSHOT NEEDED
+
+- **Onboarding session expired, in two frames.** (1) The wizard reopened after a
+  browser restart, showing previously typed answers repainted; (2) the
+  session-expired error raised by the next step. Demo data: begin an onboarding
+  run through the stations step, close the browser, reopen `/onboarding`, and try
+  to continue. **Both frames are required** — either one alone teaches the wrong
+  lesson, because the whole point is that a filled-in form does not mean a live
+  session. Used by `08-admin-reports.md` and
+  `19-august-2026-release-changes.md`.
+- **A public page in dark mode at full window width**, on a page long enough to
+  scroll (`/f/{slug}` or an application-status link). This is the standing proof
+  that the canvas covers routes rendered outside the app shell, which is the
+  reason the rule exists at all. Used by `19-august-2026-release-changes.md`.
+- **Skills-testing printing, three shots** (added by the 2026-08-11 print pages,
+  documented 2026-08-16 — the guide had no printing section until then):
+  - The Templates tab row actions with **Print** visible, plus the resulting
+    blank sheet in print preview. Demo data: one published template with at
+    least two sections and a mix of criterion types (pass/fail, scored, timed),
+    so the differing marking boxes appear in one frame.
+  - A completed scorecard print preview showing per-step marks, the score
+    arithmetic, and the validating officer's sign-off. Demo data: one validated
+    official result with at least one failed step, so the deduction is visible.
+  - The same scorecard as a candidate under `scores` disclosure sees it, with
+    the examiner's notes absent. **Capture beside the officer version** — the
+    pair is the teaching point; either alone is not.
+
+The reason, data path, and edge cases for each are recorded in
+[`../CHANGE_AUDIT_2026-08-10_TO_16.md`](../CHANGE_AUDIT_2026-08-10_TO_16.md#documentation-and-media-disposition).
+
 ## Flagged by the 2026-08-12 → 08-14 changes
 
 The three-day connection audit identified the following capture work. These
@@ -71,6 +140,121 @@ earlier** and remain stale.
 > database, and the pipeline runs fine without Docker. The claim is corrected
 > rather than deleted because it is the sort of environment assumption that
 > quietly becomes policy.
+
+---
+
+## The 2026-08-16 pass — a fresh database, and the last two placeholders
+
+The container was reclaimed, taking MariaDB (and its data directory), the
+backend virtualenv and node_modules with it. The demo database this session
+runs against was therefore **rebuilt from `bootstrap_demo.py`** — which the
+08-13 notes predicted would happen someday and warned would carry a cost. Two
+consequences worth separating:
+
+- **Nothing already committed is invalidated by the rebuild.** The 421
+  verified images record what the product rendered against the old data;
+  the rebuild changes incidental values (ids, dates, spreads) only for
+  captures taken from here on.
+- **The clean rows the 08-13 pass wanted arrived for free.** The regress
+  residue ("4 of 6 stages completed" on a stage-four applicant) is gone by
+  construction.
+
+### Three seeder crashes only a fresh database could expose
+
+Every one of these sat in the create path, which a long-lived database never
+re-runs — the skip-by-name guard means that code executes exactly once per
+database, and it had not run since the blueprints last changed.
+
+1. **The prospect create-loop advanced without the interview fallback.** The
+   spread's advance knows to record an interview when a stage demands one; the
+   create-path loop above it did not, so the first applicant that had to clear
+   Interview aborted the whole step — Morgan Tran and Riley Bishop were never
+   created at all. Both paths now share `_advance_recording_interview`.
+2. **The equipment-check seed posted the engine template to the first three
+   shifts regardless of apparatus.** The old database happened to return
+   engines first; the fresh one ordered a medic shift into the front and the
+   API correctly refused it ("Template is not applicable to this shift"),
+   killing the step. The loop now filters to engine shifts with the
+   `apparatus_type_of` helper that was already defined a page above it.
+3. **`POST /training/instructors/qualifications` has refused every valid
+   create since 2026-08-11 — a product bug, not a seeder one.** The
+   tenant-scoping commit compares `users.id` (String(36)) against the
+   `uuid.UUID` the endpoint's `model_dump()` produces, and aiomysql binds a
+   UUID object in a representation that matches no stored row — so the guard
+   answered "Invalid user_id" for references that were perfectly in-org. The
+   unit test mocked the session and asserted compiled SQL, which is exactly
+   the layer that cannot see a bind-value mismatch. Fixed by stringifying
+   UUIDs at the service boundary; a new test pins the bound value itself.
+
+### 01-37-elected-package-badge — the elected badge, produced by the vote
+
+`01-membership.md:1156` wanted status Elected, a 35-3 tally and the linked
+prospect on one screen, which the 08-13 analysis had already split: no screen
+joins them. The caption now promises the drawer badge and cross-references
+guide 14 for tallies.
+
+`elected` is written in exactly one place — `_sync_package_statuses` when an
+election closes — so the seeder now walks the product's own lifecycle
+(`seed_membership_vote_outcome`): package marked `ready`, assigned to the
+draft August election through the assign endpoint, election opened, the floor
+vote recorded as a paper batch, attested by two officers, election closed.
+Three things that pass mattered:
+
+- **The hand-built ballot item was replaced, not reused.** It carried no
+  `prospect_package_id`, so closing an election around it would have synced
+  nothing — the assign endpoint is what writes the link.
+- **The assign default of regular/life eligibility matches nobody** in a
+  roster of active/administrative members, and an item with zero eligible
+  voters rejects any tally as implausible. The package's
+  `recommended_ballot_item` opens it to all types.
+- **The tally is 18-2, not the guide's 35-3** — the plausibility check caps a
+  batch at the eligible-voter count, and inventing 38 voters for a 22-member
+  department would need the audited override for no documentary gain. The
+  worked example keeps its numbers as prose.
+
+Verified: drawer open on the applicant at Membership Vote, ELECTION PACKAGE
+section reading **elected** with the "can now be converted" line, against an
+API state of package `elected` / election `closed`.
+
+Consequences recorded: the August election is now permanently closed in the
+demo. `14-23-membership-ballot-item` still captures — Preview Ballot renders
+for any manageable election with ballot items, status regardless — and its
+committed image predates the close anyway. `GET /elections/{id}/results` on
+this election answers 403 ("Results not available yet") because it was
+seeded `results_visible_immediately: false`; the certified-results screens
+picture the July election, which is `true`, so nothing loses its picture.
+
+### 01-38-program-phase-progress — the phase view, on the page that shows all of it
+
+`01-membership.md:1282`'s fractions (4/4, 0/6, 1/3, 0/2, 25%) were the worked
+example's numbers, not any screen's. The 08-13 analysis established the
+program detail carries no requirements inside its phases; the per-phase
+grouping lives on the **enrollment progress** view. Confirmed on the fresh
+database — where the blueprint's requirements actually seeded this time —
+and shot as the member-facing **My Program Progress** page rather than the
+admin Progress modal: the modal shows the same grouping but is height-capped
+and scrolls, so a capture of it holds one phase group, and the caption is
+about seeing all of them. (The fresh seed is also why this became capturable
+at all: the old database's programs pre-dated requirements in the phase
+payload, and the skip-by-name guard kept them that way.)
+
+Verified: Probationary Firefighter Pipeline for the demo member — 4/13
+requirements · 31% (matches the enrollment API), three phase groups with
+per-requirement status, "You are here" on Phase 1, and a completed
+requirement sitting inside not-yet-started Phase 2, which is the guide's
+prior-credit story rendered. Caption rewritten against the screen; both
+surfaces (member page, Enrollments-tab modal) named in prose.
+
+**With these two, every placeholder in every guide is filled — 423 captured,
+0 remaining.**
+
+### Manifest housekeeping
+
+`03-60-report-used-sheet` existed twice in the manifest, byte-identical — a
+merge artifact. Ids double as output filenames, so duplicates capture twice
+and the later silently overwrites the earlier; identical copies are the lucky
+case. One removed, and the manifest now **throws at import on any duplicate
+id**, beside the existing mutates-last invariant.
 
 ---
 
@@ -346,7 +530,7 @@ Okafor's election package was still `draft`, so the item type the whole
 prospective-member pipeline exists to produce had never reached a ballot.
 
 **The item had to go on a draft election, and that is correct.** An open
-election refuses ballot edits — "Only end_date can be updated while voting is
+election refuses ballot edits — "Only `end_date` can be updated while voting is
 active" — because a cast vote references an item id. So the seeder now creates a
 draft _Membership Vote — August Business Meeting_ carrying the item, which is
 also the order the guide's own workflow describes: package marked ready,

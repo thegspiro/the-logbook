@@ -4611,13 +4611,14 @@ class Seeder:
         # Checks belong to a shift — there is no module-level collection to list
         # or post to, so both the idempotency check and the create go through
         # the shift the crew would actually have been working.
+        #
+        # Engine shifts only: the template is type-scoped to engines and the
+        # API rightly refuses it anywhere else ("Template is not applicable to
+        # this shift"). Taking the first three shifts regardless of apparatus
+        # happened to work while the demo database returned engines first, and
+        # crashed the whole step the first time a fresh seed ordered a medic
+        # or ladder shift into the front of the list.
         shifts = items(self.api.get("/scheduling/shifts?limit=20"), "shifts")
-        # Engine shifts only. The daily template declares apparatus_type
-        # "engine" and the create endpoint refuses any other apparatus
-        # ("Template is not applicable to this shift"). The blind [:3] slice
-        # worked only because the first three shifts happened to be engines on
-        # the database it was written against; a fresh seed sorts a brush
-        # truck first and the whole step failed on it.
         target_shifts = [
             s for s in shifts if pick(s, "id") and apparatus_type_of(s) == "engine"
         ][:3]
@@ -5207,8 +5208,7 @@ class Seeder:
                 self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
             )
             if any(
-                c.get("program_name") and not c.get("has_existing_report")
-                for c in crew
+                c.get("program_name") and not c.get("has_existing_report") for c in crew
             ):
                 reserved_shift_id = pick(shift, "id")
                 break
@@ -8603,190 +8603,6 @@ class Seeder:
         except ApiError as exc:
             self.blocked.append(f"membership vote election: {exc}")
 
-    ELECTED_ELECTION_TITLE = "Membership Vote — March Business Meeting"
-
-    def seed_elected_membership_vote(self) -> None:
-        """Play a membership vote to completion so one package reads `elected`.
-
-        `01-membership.md` pictures an applicant's election package *after* the
-        vote — the drawer badge reading `elected` — and nothing in the demo had
-        ever taken a package past `draft`. The August draft election is left
-        alone: its hand-authored ballot item (with no `prospect_package_id`)
-        is what the ballot-preview screenshot pictures, and closing it would
-        not flip any package anyway, because `_sync_package_statuses` only
-        reads items carrying a package id — which only the assign endpoint
-        writes. So the applicant standing at the vote stage has their package
-        assigned to a second election, and that one is played to a close.
-
-        Idempotent on the package status: once it reads `elected`, re-runs
-        return before touching anything.
-        """
-        prospects = items(
-            self.api.get("/prospective-members/prospects?limit=100"), "prospects"
-        )
-        target_id = None
-        package = None
-        for prospect in prospects:
-            prospect_id = pick(prospect, "id")
-            if not prospect_id:
-                continue
-            detail = self.api.get(f"/prospective-members/prospects/{prospect_id}")
-            step = pick(detail, "current_step") or {}
-            if str(pick(step, "step_type") or "").lower() != "election_vote":
-                continue
-            try:
-                package = self.api.get(
-                    f"/prospective-members/prospects/{prospect_id}/election-package"
-                )
-            except ApiError as exc:
-                if exc.code != 404:
-                    raise
-                continue
-            target_id = prospect_id
-            break
-        if not target_id or not package:
-            self.blocked.append(
-                "elected membership vote: no applicant at the vote stage "
-                "carries an election package"
-            )
-            return
-
-        status = str(pick(package, "status") or "").lower()
-        if status == "elected":
-            return
-
-        elections = items(self.api.get("/elections?limit=50"), "elections")
-        election = next(
-            (e for e in elections if pick(e, "title") == self.ELECTED_ELECTION_TITLE),
-            None,
-        )
-        if status in ("draft", "ready", "not_elected"):
-            if election is None:
-                election = self.api.post(
-                    "/elections",
-                    {
-                        "title": self.ELECTED_ELECTION_TITLE,
-                        "description": (
-                            "Membership vote brought to the floor and counted "
-                            "by hand at the March business meeting."
-                        ),
-                        "election_type": "general",
-                        "start_date": iso(NOW),
-                        "end_date": iso(NOW + timedelta(days=7)),
-                        "anonymous_voting": True,
-                        "allow_write_ins": False,
-                        "results_visible_immediately": False,
-                        "voting_method": "simple_majority",
-                        "victory_condition": "majority",
-                        "quorum_type": "none",
-                    },
-                )
-            # Ready is the only status the assign endpoint accepts.
-            if status != "ready":
-                self.api.put(
-                    f"/prospective-members/prospects/{target_id}/election-package",
-                    {"status": "ready"},
-                )
-            self.api.post(
-                f"/prospective-members/prospects/{target_id}/election-package/assign",
-                {"election_id": pick(election, "id")},
-            )
-            package = self.api.get(
-                f"/prospective-members/prospects/{target_id}/election-package"
-            )
-
-        election_id = pick(package, "election_id")
-        if not election_id:
-            self.blocked.append(
-                "elected membership vote: package has no election after assign"
-            )
-            return
-
-        detail = self.api.get(f"/elections/{election_id}")
-        # The detail response serializes a whitelist of item fields that does
-        # not include prospect_package_id — the assign endpoint's generated
-        # "pkg_<package>_<uuid>" id is the marker that survives serialization.
-        item = next(
-            (
-                i
-                for i in items(detail, "ballot_items")
-                if str(i.get("id") or "").startswith("pkg_")
-                and i.get("type") == "membership_approval"
-            ),
-            None,
-        )
-        if item is None:
-            self.blocked.append(
-                "elected membership vote: no package-linked ballot item on "
-                f"election {election_id}"
-            )
-            return
-        # The tally matches votes on `position or item id`, and the assign
-        # endpoint writes no position — so the candidates are parked on the
-        # generated item id.
-        position = item.get("position") or item.get("id")
-
-        candidates = items(
-            self.api.get(f"/elections/{election_id}/candidates"), "candidates"
-        )
-        names = {pick(c, "name") for c in candidates}
-        for name in ("Approve", "Deny"):
-            if name not in names:
-                self.api.post(
-                    f"/elections/{election_id}/candidates",
-                    {"election_id": election_id, "name": name, "position": position},
-                )
-
-        if str(pick(detail, "status") or "").lower() != "closed":
-            if str(pick(detail, "status") or "").lower() == "draft":
-                self.api.post(f"/elections/{election_id}/open")
-            # Entries mapped by candidate *name*, not via _play_paper_round —
-            # that helper zips candidates against its counts in listing order,
-            # and the admin create path sets no display_order, so the list came
-            # back Deny-first and the first attempt elected the wrong outcome.
-            by_name = {
-                pick(c, "name"): pick(c, "id")
-                for c in items(
-                    self.api.get(f"/elections/{election_id}/candidates"),
-                    "candidates",
-                )
-            }
-            batches = items(
-                self.api.get(f"/elections/{election_id}/manual-ballots"), "batches"
-            )
-            if not batches:
-                self.api.post(
-                    f"/elections/{election_id}/manual-ballots",
-                    {
-                        "entries": [
-                            {"candidate_id": by_name["Approve"], "count": 14},
-                            {"candidate_id": by_name["Deny"], "count": 3},
-                        ],
-                        "notes": (
-                            "Membership vote counted by hand at the March "
-                            "business meeting."
-                        ),
-                    },
-                )
-                batches = items(
-                    self.api.get(f"/elections/{election_id}/manual-ballots"),
-                    "batches",
-                )
-            batch_id = pick(batches[0], "batch_id", "id") if batches else None
-            if batch_id:
-                self._attest_ballot_batch(election_id, batch_id)
-            self.api.post(f"/elections/{election_id}/close")
-
-        final = self.api.get(
-            f"/prospective-members/prospects/{target_id}/election-package"
-        )
-        final_status = str(pick(final, "status") or "").lower()
-        if final_status != "elected":
-            self.blocked.append(
-                "elected membership vote: package reads "
-                f"'{final_status}' after the close, not 'elected'"
-            )
-
     RESTRICTED_ELECTION_TITLE = "Operations Committee Seat — Restricted Ballot"
 
     def _seed_restricted_election(self, elections: list[dict]) -> None:
@@ -9421,32 +9237,47 @@ class Seeder:
                     break
 
             for _ in range(target - current):
-                try:
-                    self.api.post(
-                        f"/prospective-members/prospects/{prospect_id}/advance"
-                    )
-                except ApiError as exc:
-                    if "interview" not in str(exc).lower():
-                        self.blocked.append(f"spread applicant: {exc}")
-                        break
-                    try:
-                        self.api.post(
-                            f"/prospective-members/prospects/{prospect_id}/interviews",
-                            {
-                                "recommendation": "recommend",
-                                "interviewer_role": "Membership Coordinator",
-                                "notes": (
-                                    "Panel interview; candidate answered "
-                                    "scenario questions well."
-                                ),
-                            },
-                        )
-                        self.api.post(
-                            f"/prospective-members/prospects/{prospect_id}/advance"
-                        )
-                    except ApiError as inner:
-                        self.blocked.append(f"spread applicant: {inner}")
-                        break
+                if not self._advance_recording_interview(prospect_id, "spread"):
+                    break
+
+    def _advance_recording_interview(self, prospect_id: str, label: str) -> bool:
+        """Advance one stage, recording an interview where the stage demands one.
+
+        Advancing out of an `interview_requirement` stage legitimately refuses
+        until an interview exists (409, "requires at least 1 interview(s)").
+        Recording one and retrying — rather than skipping the stage — keeps the
+        applicant's progress track honest about how they got where they are.
+
+        Shared by the create-path advance loop and the spread: the fallback
+        lived only in the spread, so a *fresh* database — where the create path
+        actually runs — crashed the whole prospective-members step the first
+        time a new applicant had to clear the Interview stage, and the
+        applicants after that one were never created at all.
+        """
+        try:
+            self.api.post(f"/prospective-members/prospects/{prospect_id}/advance")
+            return True
+        except ApiError as exc:
+            if "interview" not in str(exc).lower():
+                self.blocked.append(f"{label} applicant: {exc}")
+                return False
+            try:
+                self.api.post(
+                    f"/prospective-members/prospects/{prospect_id}/interviews",
+                    {
+                        "recommendation": "recommend",
+                        "interviewer_role": "Membership Coordinator",
+                        "notes": (
+                            "Panel interview; candidate answered "
+                            "scenario questions well."
+                        ),
+                    },
+                )
+                self.api.post(f"/prospective-members/prospects/{prospect_id}/advance")
+                return True
+            except ApiError as inner:
+                self.blocked.append(f"{label} applicant: {inner}")
+                return False
 
     PROSPECTS = [
         ("Alex", "Rivera", "Saw the station open house"),
@@ -9772,6 +9603,201 @@ class Seeder:
                 if exc.code not in (400, 409):
                     raise
                 self.blocked.append(f"election package: {exc}")
+
+    # Approve / Deny, under the 22-member eligible count so the paper batch
+    # passes the plausibility check without an audited override.
+    MEMBERSHIP_VOTE_TALLY = (18, 2)
+
+    def seed_membership_vote_outcome(self) -> None:
+        """Carry the August membership vote through to an Elected package.
+
+        Guide 01 pictures the applicant drawer's ELECTION PACKAGE badge
+        reading Elected, and `elected` is written in exactly one place —
+        `_sync_package_statuses`, when an election whose ballot item carries
+        the package's id closes. No package edit gets there; the vote has to
+        actually happen. So this walks the product's own lifecycle:
+
+        1. mark the package `ready` (the assign endpoint refuses anything
+           else), with a `recommended_ballot_item` that keeps the title and
+           statement `_seed_membership_vote_election` used — and opens the
+           vote to all membership types, because the assign default of
+           regular/life matches nobody in a roster of active/administrative
+           members and an item with zero eligible voters rejects any tally;
+        2. replace the hand-built ballot item with the assign endpoint's —
+           the hand item carried no `prospect_package_id`, so closing an
+           election around it would have synced nothing;
+        3. open the election, record the floor vote as a paper batch, have
+           two officers attest it, and close.
+
+        Each stage checks where a previous run stopped, so a re-run against
+        a database whose election is already closed does nothing.
+        """
+        elections = items(self.api.get("/elections?limit=100"), "elections")
+        election_id = next(
+            (
+                pick(e, "id")
+                for e in elections
+                if pick(e, "title") == self.MEMBERSHIP_ELECTION_TITLE
+            ),
+            None,
+        )
+        if not election_id:
+            self.blocked.append(
+                "membership vote outcome: election not found "
+                f"({self.MEMBERSHIP_ELECTION_TITLE!r})"
+            )
+            return
+
+        packages = items(
+            self.api.get("/prospective-members/election-packages"), "packages"
+        )
+        package = next((p for p in packages if pick(p, "status") != "withdrawn"), None)
+        if not package:
+            self.blocked.append("membership vote outcome: no election package")
+            return
+        prospect_id = pick(package, "prospect_id", "prospectId")
+        pkg_status = pick(package, "status")
+        if pkg_status == "elected":
+            return
+
+        election = self.api.get(f"/elections/{election_id}")
+        election_status = str(pick(election, "status") or "").lower()
+        if election_status == "closed":
+            # The only way here is an election closed around the unlinked
+            # hand item, and a closed election accepts no repair over the
+            # API. Say so rather than half-working.
+            self.blocked.append(
+                "membership vote outcome: election closed but package is "
+                f"'{pkg_status}' — its ballot item never carried the package id"
+            )
+            return
+
+        snapshot = pick(package, "applicant_snapshot", "applicantSnapshot") or {}
+        full_name = (
+            f"{snapshot.get('first_name', '')} {snapshot.get('last_name', '')}"
+        ).strip() or "the applicant"
+
+        if pkg_status in ("draft", "pending"):
+            config = dict(pick(package, "package_config", "packageConfig") or {})
+            config["recommended_ballot_item"] = {
+                "title": f"Membership Approval — {full_name}",
+                "description": SUPPORTING_STATEMENT,
+                "eligible_voter_types": ["all"],
+                "require_attendance": False,
+            }
+            self.api.put(
+                f"/prospective-members/prospects/{prospect_id}/election-package",
+                {"status": "ready", "package_config": config},
+            )
+            pkg_status = "ready"
+
+        try:
+            if election_status == "draft":
+                if pkg_status == "ready":
+                    # Drop the unlinked hand item first, so the ballot does
+                    # not put the same applicant to the floor twice.
+                    remaining = [
+                        item
+                        for item in (pick(election, "ballot_items") or [])
+                        if item.get("id") != "item-membership-okafor"
+                    ]
+                    self.api.patch(
+                        f"/elections/{election_id}", {"ballot_items": remaining}
+                    )
+                    self.api.post(
+                        f"/prospective-members/prospects/{prospect_id}"
+                        "/election-package/assign",
+                        {"election_id": election_id},
+                    )
+                self.api.post(f"/elections/{election_id}/open")
+                election = self.api.get(f"/elections/{election_id}")
+
+            item = next(
+                (
+                    i
+                    for i in (pick(election, "ballot_items") or [])
+                    if i.get("type") == "membership_approval"
+                ),
+                None,
+            )
+            if not item:
+                self.blocked.append(
+                    "membership vote outcome: no membership_approval item "
+                    "on the opened election"
+                )
+                return
+            # The votes-to-item join `_sync_package_statuses` uses: the
+            # item's `position` key when set, its id otherwise.
+            position = item.get("position") or item["id"]
+
+            existing = items(
+                self.api.get(f"/elections/{election_id}/candidates"), "candidates"
+            )
+            by_name = {
+                pick(c, "name"): pick(c, "id")
+                for c in existing
+                if pick(c, "position") == position
+            }
+            candidate_ids = {}
+            for name in ("Approve", "Deny"):
+                candidate_ids[name] = by_name.get(name) or pick(
+                    self.api.post(
+                        f"/elections/{election_id}/candidates",
+                        {
+                            "election_id": election_id,
+                            "name": name,
+                            "position": position,
+                        },
+                    ),
+                    "id",
+                )
+
+            batches = items(
+                self.api.get(f"/elections/{election_id}/manual-ballots"),
+                "batches",
+            )
+            if not batches:
+                approve, deny = self.MEMBERSHIP_VOTE_TALLY
+                self.api.post(
+                    f"/elections/{election_id}/manual-ballots",
+                    {
+                        "entries": [
+                            {
+                                "candidate_id": candidate_ids["Approve"],
+                                "count": approve,
+                            },
+                            {"candidate_id": candidate_ids["Deny"], "count": deny},
+                        ],
+                        "ballots_cast": approve + deny,
+                        "notes": (
+                            "In-room paper tally, August business meeting. "
+                            "Counted by the Secretary, witnessed by the Chief."
+                        ),
+                    },
+                )
+                batches = items(
+                    self.api.get(f"/elections/{election_id}/manual-ballots"),
+                    "batches",
+                )
+            batch = batches[0] if batches else None
+            batch_id = pick(batch, "batch_id", "id") if batch else None
+            # Only a pending batch needs attestations; re-attesting a
+            # confirmed one earns each officer a 400 and a blocked note.
+            if batch_id and pick(batch, "status") == "pending":
+                self._attest_ballot_batch(election_id, batch_id)
+            self.api.post(f"/elections/{election_id}/close")
+        except ApiError as exc:
+            self.blocked.append(f"membership vote outcome: {exc}")
+            return
+
+        final = self.api.get(
+            f"/prospective-members/prospects/{prospect_id}/election-package"
+        )
+        if pick(final, "status") != "elected":
+            self.blocked.append(
+                "membership vote outcome: election closed but package reads "
+                f"'{pick(final, 'status')}' — vote-to-package sync did not run"
+            )
 
     def seed_bulk_prospects(self, pipeline_id: str | None, target: int) -> int:
         """Pad the pipeline out past the board's card ceiling. Opt-in only.
@@ -10833,9 +10859,6 @@ class Seeder:
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}
         )
-        # After prospective members: the package it plays to `elected` is
-        # created by that step for whoever stands at the vote stage.
-        self.step("elected membership vote", self.seed_elected_membership_vote)
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []
             self.step(
@@ -10845,6 +10868,9 @@ class Seeder:
                     self.bulk_prospects,
                 ),
             )
+        # After prospective members: the vote consumes the election package
+        # that step creates.
+        self.step("membership vote outcome", self.seed_membership_vote_outcome)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)

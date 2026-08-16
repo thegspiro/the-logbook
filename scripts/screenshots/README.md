@@ -203,3 +203,65 @@ Two waiting pitfalls worth knowing, both of which cost a debugging round here:
 
 Ids are the filename and the applier's key, so keep them stable once a shot has
 been applied — renaming one orphans the image already referenced in the guide.
+
+## When something outside the guides invalidates a shot
+
+Everything above assumes staleness arrives through a guide: a placeholder moves,
+a caption changes, a screen gains a control. **A global stylesheet change
+invalidates images without touching a guide, a placeholder, or this manifest**,
+so nothing prompts anyone to look.
+
+That happened on 2026-08-15. The themed canvas moved from `body` to `html` so it
+would also cover the browser's stable scrollbar gutter; before the fix that
+gutter showed the browser's default white. It changed no guide and no manifest
+entry, and it altered 39 captured images.
+
+`audit_images.py` exists for this class of defect:
+
+```bash
+python3 scripts/screenshots/audit_images.py            # all checks
+python3 scripts/screenshots/audit_images.py --check edges
+```
+
+It exits non-zero when something is flagged, so it can gate CI, and it reports a
+severity so a long list can be triaged without opening every file. Add a check
+to it whenever a global change turns out to have moved pixels — the checks are
+cheap and the alternative is asking a human to compare hundreds of images.
+
+### Measure before you assign a sweep
+
+The first response to the gutter change was to write "check every image in every
+guide" into `SCREENSHOT_CURRENCY.md`. Running a check instead took about a second
+and produced a list of 39, of which exactly **one** was worth re-shooting on its
+own account.
+
+This matters beyond saving time: a reviewer asked to eyeball 429 images for a
+15px strip stops seeing it somewhere around the fortieth, so the sweep both costs
+more _and_ finds less than the script. If you are about to write "audit all of
+these" into a tracker, try to write the check instead.
+
+### …and be careful what you filter on
+
+The first version of that check pre-filtered on **whole-image** brightness, on
+the assumption that only dark-mode captures could be affected. It reported three.
+
+The real number was 39. Most affected shots are **light-mode pages under a dark
+modal overlay** — bright overall, dark exactly at the right edge, because the
+overlay dims the viewport but sits inside `body` while the gutter is reserved on
+`html`. They were filtered out before the real comparison ran.
+
+**A filter that encodes the assumption you are testing will confirm it.** Compare
+the thing you care about with what sits next to it, not with the frame average.
+
+### Two more things that quietly decide whether a shot is right
+
+- **Name the page by its on-screen heading, not its component file.** The
+  directory page at `/locations/qr-codes` renders `RoomQRCodesPage.tsx` and is
+  headed **"Check-In QR Codes"**. Alt text and captions that use the filename
+  send a reader looking for a heading that does not exist.
+- **Check the API before writing a caption that implies data.** A caption asking
+  for per-phase counts on the training program detail could never be satisfied:
+  `GET /training/programs/programs/{id}` returns phases with no requirements at
+  all, so those numbers belong to a member's enrolment view. A caption can
+  describe something the screen is structurally unable to show, and no amount of
+  re-shooting will fix it.
