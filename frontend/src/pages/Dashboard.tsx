@@ -595,22 +595,40 @@ const Dashboard: React.FC = () => {
   const windowStart = getTodayLocalDate(tz);
   const windowEnd = addCalendarDays(windowStart, TIMELINE_DAYS - 1);
 
-  const shiftTimeRange = (shift: ShiftRecord) => {
-    const start = formatTimeOfDay(shift.start_time);
-    const end = formatTimeOfDay(shift.end_time);
-    return end ? `${start}–${end}` : start;
-  };
-
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
 
+    // The my-shifts and open-shifts endpoints return full UTC datetimes for
+    // start/end, while schedule rows carry bare "HH:MM" strings.
+    // formatTimeOfDay only understands the latter — fed an ISO datetime it
+    // returns it unchanged, which put raw "2026-08-18T11:00:00+00:00" strings
+    // on every timeline row.
+    const shiftTime = (value: string | null | undefined): string => {
+      if (!value) return '';
+      return value.includes('T') ? formatTime(value, tz) : formatTimeOfDay(value);
+    };
+
+    const shiftTimeRange = (shift: ShiftRecord) => {
+      const start = shiftTime(shift.start_time);
+      const end = shiftTime(shift.end_time);
+      return end ? `${start}–${end}` : start;
+    };
+
+    // Same shape split as shiftTime: a full datetime parses as-is, and
+    // concatenating it after the date made an Invalid Date (NaN), which
+    // silently broke the timeline's chronological order.
     const shiftSortAt = (shift: ShiftRecord) =>
-      new Date(`${shift.shift_date}T${shift.start_time || '00:00'}`).getTime();
+      shift.start_time?.includes('T')
+        ? new Date(shift.start_time).getTime()
+        : new Date(`${shift.shift_date}T${shift.start_time || '00:00'}`).getTime();
 
     for (const shift of myShifts) {
       const details = [shiftTimeRange(shift)];
       if (shift.shift_officer_name) details.push(`Officer ${shift.shift_officer_name}`);
-      if (shift.min_staffing != null) details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
+      // Both counts, not just the target: my-shifts rows omit attendee_count,
+      // and interpolating the hole printed "undefined of 3 filled".
+      if (shift.attendee_count != null && shift.min_staffing != null)
+        details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
       entries.push({
         key: `my-${shift.id}`,
         kind: 'my-shift',
@@ -624,7 +642,8 @@ const Dashboard: React.FC = () => {
 
     for (const shift of openShifts) {
       const details = [shiftTimeRange(shift)];
-      if (shift.min_staffing != null) details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
+      if (shift.attendee_count != null && shift.min_staffing != null)
+        details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
       entries.push({
         key: `open-${shift.id}`,
         kind: 'open-shift',

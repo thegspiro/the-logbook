@@ -256,6 +256,107 @@ and the later silently overwrites the earlier; identical copies are the lucky
 case. One removed, and the manifest now **throws at import on any duplicate
 id**, beside the existing mutates-last invariant.
 
+### Guide 03 — the full re-capture, 66 of 66, every image verified
+
+All 66 guide-03 shots were captured against the rebuilt database and current
+code. Twelve came out **byte-identical** — those screens were already current.
+The 54 changed images were each opened and read against their captions
+(three verification passes recorded below); every wrong one was fixed and
+re-shot before being committed. `--only` now takes a comma-separated list of
+id prefixes, because re-running exactly the failed shots previously meant one
+invocation per shot or the whole guide again.
+
+**Three images were wrong on arrival, none of them because of the code the
+re-capture was checking:**
+
+- `03-22-equipment-check-builder` pictured the "No compartments yet" empty
+  state again — the 2026-08-11 fix that pointed it at the seeded Medic 3
+  Supply Check was **lost in a merge**, and with it the `allowEmptyState`
+  flag came back to suppress the one check that would have said so. The
+  targeting is restored through the template list, the flag removed;
+  verified with the `5/8 linked` badge, populated compartments and the
+  catalog quick-add bar in frame.
+- `03-13-shift-patterns` pictured the pattern _list_: the page grew one, and
+  the bare-route capture silently photographed it instead of the creation
+  form the caption promises. A `New Pattern` click now precedes the shot;
+  verified showing the pattern-type selector and preset cards.
+- `03-08-calls-runs-section` cropped the Calls section down to its heading.
+  The drawer's foot moved below a full-page frame; the shot now scrolls the
+  heading to center. Verified with the seeded structure-fire call fully
+  legible (`03-09` needed the same scroll for its inline form).
+
+**The station-board dashboard retired two shots' subjects.**
+`03-60-dashboard-my-shifts` and `03-62-dashboard-signup-positions`
+photographed "My Upcoming Shifts" and "Open Shifts" panels that no longer
+exist — the rebuild merged both into the **Next 7 Days** timeline. Both are
+retargeted there and the guide prose rewritten: a member's shifts carry a
+blue rail and a "Yours" pill, open slots a green rail and inline Sign Up,
+and the expanded row holds the eligible-position dropdown with Confirm.
+
+**Re-capturing exposed three frontend defects, all fixed here:**
+
+1. **The timeline printed raw UTC.** The my-shifts and open-shifts endpoints
+   return full ISO datetimes; `formatTimeOfDay` understands bare "HH:MM" and
+   returns anything else unchanged, so every row read
+   `2026-08-18T11:00:00+00:00–…`. The same shape mismatch made the sort key
+   `NaN` (date concatenated onto a datetime), which had silently randomised
+   the timeline's order — and hidden the bug, since the broken sort happened
+   to float the member's own shifts into frame.
+2. **"undefined of 3 filled"** on the member's own rows: my-shifts rows omit
+   `attendee_count`, and the fill-count line interpolated the hole.
+3. **The report display ignored the department's rating labels.**
+   `ReportContentDisplay` hardcoded the built-in sample scale, so a skill
+   scored "Exemplary" displayed as "5/5 — Excellent" beside a settings page
+   proudly showing the configured labels. Scoring and display now read the
+   same config, with the built-ins kept only where the config is
+   unreadable (the member-facing report page — the endpoint is
+   officer-only).
+
+**A seeder-data defect of the same flavour:** the shift-report vocabulary
+keyed its ladder skills as `"ladder"`, but every product surface — shift
+responses, apparatus-options, the settings editor — keys on the _lowercased
+type name_, `"ladder/aerial"`. The key looked right, counted right in the
+settings chips, and matched no ladder shift ever; the batch report form fell
+back to the generic sample skills on the one apparatus the ladder vocabulary
+exists for. Engine and ambulance never showed the problem because their
+names equal their codes.
+
+**Fresh-database gaps the failures pointed at, now seeded:** a pending swap
+request and a time-off request from the demo member (the Requests tab was
+flagged empty); a recruit crewed onto the first past Ladder 4 shift so the
+batch form's per-trainee Evaluate control exists (with the report
+pair-picker now skipping recruits so it stays live); a Review Queue at least
+four deep (the batch bar needs several rows — and the old "two calendar
+months" guard turned out unreachable mid-month, re-filing reports on every
+run); a start-of-shift reminder in the administrator's inbox, produced by
+running the real reminder task over a temporarily widened lookahead — with
+the administrator first crewed onto an uncovered upcoming shift, because
+the task's `start_reminder_sent` flag is permanent and one mis-timed run
+burns every shift in its window; and the demo member seated on a shift
+inside the timeline's visible rows, without which no "Yours" pill can be
+in frame now that the sort is correct.
+
+**Caption corrections, each against the shipped control:** the close-out
+checklist button is "Close out shift", not "Finalize Shift" (03-45, and
+02-39 carries the same alt for guide 02's turn); the filing officer sits in
+the card's metadata row, not a footer (03-49, also re-pointed at an approved
+card — the flagged composition is 03-62's subject); "Continue checklist" /
+"Open checklist", not "Resume" / "Start Check" (03-99); and the "report-used
+sheet with a quantity stepper" no longer exists as one dialog — the stepper
+lives on the row and the Flag/Used dialog carries only the note, which is
+what the caption now says (03-60-report-used-sheet; the prose around it was
+already right).
+
+**Verified with reservations, recorded rather than hidden:** `03-14` still
+shows the known member-requirement-pairs arithmetic ("Total Members 66" in a
+22-member department, tiles internally consistent at 63+3); `03-15`/`03-32`
+remain one screen under two captions, as recorded on 2026-08-13; the
+notification badge differs between shots captured minutes apart (11 vs 15) —
+runs generate notifications, and cross-shot chrome was never promised to be
+frozen. The equipment-check builder's page title ellipsises to one letter at
+capture width beside its toolbar; the caption names no title, but it is the
+kind of squeeze a future toolbar addition will make worse.
+
 ---
 
 ## The 2026-08-13 guide-by-guide re-verification

@@ -12,7 +12,7 @@
  *   - `bootstrap_demo.py` and `seed_demo_data.py` already run
  *
  * Usage:
- *   node scripts/screenshots/capture.mjs [--only <id-prefix>] [--headed]
+ *   node scripts/screenshots/capture.mjs [--only <id-prefix>[,<id-prefix>...]] [--headed]
  */
 
 import { chromium } from "@playwright/test";
@@ -94,7 +94,10 @@ function viewportFor(shot) {
 
 const args = process.argv.slice(2);
 const onlyIndex = args.indexOf("--only");
-const only = onlyIndex >= 0 ? args[onlyIndex + 1] : null;
+// Comma-separated prefixes, so a run can target exactly the shots that
+// failed ("--only 03-09,03-31,03-58") instead of a whole guide per invocation.
+const only =
+  onlyIndex >= 0 ? args[onlyIndex + 1].split(",").filter(Boolean) : null;
 const headed = args.includes("--headed");
 
 /**
@@ -380,7 +383,9 @@ async function main() {
   const sessions = makeSessions(browser, contextOptions);
 
   const results = [];
-  const shots = SHOTS.filter((shot) => !only || shot.id.startsWith(only));
+  const shots = SHOTS.filter(
+    (shot) => !only || only.some((prefix) => shot.id.startsWith(prefix)),
+  );
   for (const shot of shots) {
     const target = resolve(OUTPUT_DIR, `${shot.id}.png`);
     const page = await sessions.pageFor(shot);

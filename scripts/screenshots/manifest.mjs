@@ -934,10 +934,10 @@ export const SHOTS = [
     route: "/scheduling",
     prepare: async (page) => {
       await openPartStaffedShift("03-58")(page);
-      // The form is behind "Assign Member" on a board with riding positions,
-      // and behind "Assign" on one without. Either name opens the same form.
+      // "Assign someone" since the crew-board refresh, wherever it appears;
+      // the old "Assign Member" / "Assign" names match nothing now.
       await page
-        .getByRole("button", { name: /^Assign( Member)?$/ })
+        .getByRole("button", { name: /^Assign someone$/ })
         .first()
         .click({ timeout: 15_000 });
       // Wait for the member list to load rather than for a fixed pause: the
@@ -949,7 +949,7 @@ export const SHOTS = [
     // `window.scrollBy` moves the calendar behind it and leaves the form
     // hanging off the bottom of the frame; an element screenshot brings it
     // into view by itself, and the form is the subject anyway.
-    selector: "div.rounded-lg:has(> h4:text-is('Assign Member'))",
+    selector: "div.rounded-lg:has(> h4:text-is('Assign someone to this shift'))",
   },
   {
     id: "03-59-open-shifts-signup",
@@ -977,41 +977,39 @@ export const SHOTS = [
     id: "03-60-dashboard-my-shifts",
     doc: "03-scheduling.md",
     line: 1304,
-    anchor: 'Screenshot of the Dashboard "My Upcoming Shifts" panel',
-    alt: "The dashboard's My Upcoming Shifts panel, listing only shifts the member is still on",
+    anchor: "the Next 7 Days list marking the shifts that are yours",
+    alt: "The dashboard's Next 7 Days list — the member's own shifts marked Yours beside open slots carrying their own Sign Up buttons, in one seven-day timeline",
     auth: "member",
     route: "/dashboard",
+    // The station-board rebuild merged "My Upcoming Shifts" and "Open Shifts"
+    // into one seven-day timeline: a member's own shifts carry a blue rail and
+    // a "Yours" pill, open slots a green rail and a Sign Up button. The old
+    // panels this shot photographed no longer exist.
     prepare: async (page) => {
-      // The heading text sits in a span inside the h3, so `text-is` on the h3
-      // does not match it; `has-text` does. Scrolled into view first because a
-      // clipped element still below the fold never settles for a screenshot.
       const panel = page
-        .locator("div.card:has(h3:has-text('My Upcoming Shifts'))")
+        .locator("section.card:has(h3:has-text('Next 7 Days'))")
         .first();
       await panel.waitFor({ timeout: 20_000 });
+      await panel.getByText("Yours").first().waitFor({ timeout: 20_000 });
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(1200);
     },
-    // Clipped to the card, trailing space and all: it is a grid cell stretched
-    // to match the notifications panel beside it. The viewport alternative puts
-    // that panel in half the frame, and it is a column of near-identical
-    // skills-test notices that reads as the subject of the shot.
-    selector: "div.card:has(h3:has-text('My Upcoming Shifts'))",
+    selector: "section.card:has(h3:has-text('Next 7 Days'))",
   },
   {
     id: "03-62-dashboard-signup-positions",
     doc: "03-scheduling.md",
     line: 790,
     anchor: "Screenshot of the Dashboard's Open Shifts section",
-    alt: "An open shift expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for",
+    alt: "An open shift row expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for",
     auth: "member",
     route: "/dashboard",
     prepare: async (page) => {
       // The eligibility check happens on press, not on render — every open
-      // shift shows Sign Up regardless of rank — so the dropdown this pictures
-      // only exists after the card is expanded.
+      // slot in the Next 7 Days timeline shows Sign Up regardless of rank —
+      // so the dropdown this pictures only exists after the row is expanded.
       const panel = page
-        .locator("div.card:has(h3:has-text('Open Shifts'))")
+        .locator("section.card:has(h3:has-text('Next 7 Days'))")
         .first();
       await panel.waitFor({ timeout: 20_000 });
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -1024,7 +1022,7 @@ export const SHOTS = [
       await panel.locator("select").first().waitFor({ timeout: 15_000 });
       await page.waitForTimeout(400);
     },
-    selector: "div.card:has(h3:has-text('Open Shifts'))",
+    selector: "section.card:has(h3:has-text('Next 7 Days'))",
   },
   {
     id: "03-63-offline-banner",
@@ -1193,7 +1191,9 @@ export const SHOTS = [
     prepare: async (page) => {
       // The bar renders only with more than one pending assignment, and the
       // buttons only once something is selected.
-      const selectAll = page.getByText(/Select all \d+ pending/).first();
+      const selectAll = page
+        .getByText(/Select all \d+ (pending|awaiting your confirmation)/)
+        .first();
       await selectAll.waitFor({ timeout: 15_000 });
       await selectAll.click();
       await page.waitForTimeout(700);
@@ -2811,10 +2811,19 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1138,
     anchor: "Screenshot of an expanded shift report card, its header naming",
-    alt: "A shift report card naming the trainee in its header and the filing officer in its footer",
+    alt: "A shift report card naming the trainee in its header, with the filing officer in the metadata row beneath it",
     route: "/scheduling?tab=shift-reports",
     prepare: async (page) => {
-      await expandFirstReportCard(page);
+      // An approved card, not a flagged one: the flagged composition carries
+      // reviewer banners and a Re-Review button that 03-62 already pictures,
+      // and they crowd out the names this caption is about.
+      const header = page
+        .locator("div.rounded-xl:has-text('Approved') > button:visible")
+        .filter({ hasText: /\d+(\.\d+)?h/ })
+        .first();
+      await header.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+      await header.click({ timeout: 15_000 });
+      await page.waitForTimeout(400);
       // Scroll the card's own header to the top of the viewport: expanding it
       // leaves the summary table above still filling most of the screen.
       await page
@@ -4100,6 +4109,10 @@ export const SHOTS = [
       "Screenshot of the pattern creation form showing the pattern type selector (Daily,",
     alt: "Shift pattern creation page with the pattern type selector",
     route: "/scheduling/patterns",
+    // The page opens on the pattern LIST; the creation form with the type
+    // selector the caption promises is behind New Pattern. A bare route
+    // capture silently pictured the list once the page grew one.
+    prepare: clickByName(/New Pattern/),
     fullPage: true,
   },
   {
@@ -4137,16 +4150,18 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 880,
     anchor:
-      'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
-    alt: "The report-used sheet: quantity stepper, optional note, and the position's current count",
+      "the optional note it sends to the supply worklist, and the reminder that units actually used",
+    alt: "The Flag dialog on a counted position — the optional note it sends to the supply worklist, and the reminder that units actually used are recorded with the minus button",
     auth: "member",
     route: "/scheduling/apparatus-inventory",
     viewport: "mobile",
     prepare: async (page) => {
       await selectMedicApparatus(page);
       // "Flag" on a counted position, "Used" on one with no target — the same
-      // report by either name, so match both rather than assuming which the
-      // seeder produced for the first row.
+      // note dialog by either name. The old caption promised a quantity
+      // stepper inside this dialog; the product moved the stepper onto the
+      // row itself and the dialog carries only the note, which is what the
+      // caption now says.
       const trigger = page
         .getByRole("button", { name: /^(Flag|Used)$/ })
         .first();
@@ -6246,12 +6261,11 @@ export const SHOTS = [
         .first()
         .click({ timeout: 10_000 });
       // The save toast lands in the top-right corner and would otherwise sit
-      // in the frame as though it were part of the settings page.
-      await page
-        .getByText(/display style updated/i)
-        .first()
-        .waitFor({ state: "hidden", timeout: 15_000 })
-        .catch(() => {});
+      // in the frame as though it were part of the settings page. Deleting
+      // its DOM does not work — the Toaster still owns the toast in state and
+      // React re-renders it on the next frame — and a visibility wait raced
+      // the toast's exit animation. Toasts live 4 seconds; outwait them.
+      await page.waitForTimeout(5_500);
     },
     fullPage: true,
   },
@@ -6280,16 +6294,27 @@ export const SHOTS = [
   },
   {
     id: "03-22-equipment-check-builder",
-    // a builder opened on a new template correctly starts with no compartments;
-    // the shot is of the builder layout
-    allowEmptyState: true,
     doc: "03-scheduling.md",
     line: 668,
     anchor:
       "Screenshot of the Equipment Check Template Builder showing the template header (name,",
     alt: "Equipment check template builder with the template header and sections",
-    route: "/scheduling/equipment-check-templates/new",
-    fullPage: true,
+    // The seeded Medic 3 Supply Check, NOT the blank create form. The guide
+    // text around this image is about compartments, item check types and the
+    // catalog toolbar — none of which render on `/new`, whose "No compartments
+    // yet" empty state this shot pictured for as long as it existed (recorded
+    // in SCREENSHOT_CURRENCY.md, 2026-08-11). That fix was lost in a merge and
+    // the empty state came back; route through the template list so it cannot.
+    route: "/scheduling/equipment-check-templates",
+    prepare: openFirstFromApi(
+      "/equipment-checks/templates",
+      (id) => `/scheduling/equipment-check-templates/${id}`,
+      "templates",
+      (template) => template.name === "Medic 3 Supply Check",
+    ),
+    // Both the toolbar and the summary bar are sticky; a full-page capture
+    // paints each of them twice.
+    fullPage: false,
   },
   {
     id: "04-04-event-qr-code",
@@ -6968,7 +6993,7 @@ export const SHOTS = [
     line: 807,
     anchor:
       "Screenshot of the pre-finalization checklist modal showing the equipment check validation status",
-    alt: "The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button",
+    alt: "The close-out checklist with the equipment-check block, attendance, call count, pass-down notes and the Close out shift button",
     route: "/scheduling",
     prepare: async (page) => {
       // An engine shift specifically. Equipment-check templates resolve by
@@ -7007,7 +7032,7 @@ export const SHOTS = [
     line: 927,
     anchor:
       "Screenshot of the pre-finalization checklist modal showing the equipment check validation, attendance count",
-    alt: "The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button",
+    alt: "The close-out checklist with the equipment-check block, attendance, call count, pass-down notes and the Close out shift button",
     route: "/scheduling",
     prepare: async (page) => {
       // An engine shift specifically. Equipment-check templates resolve by
@@ -7060,8 +7085,19 @@ export const SHOTS = [
     anchor: "Screenshot of the Calls / Runs section on the shift detail panel",
     alt: "Calls and runs logged against a shift",
     route: "/scheduling",
-    prepare: openStaffedShift((shift) => (shift.call_count ?? 0) > 0),
-    fullPage: true,
+    prepare: async (page) => {
+      await openStaffedShift((shift) => (shift.call_count ?? 0) > 0)(page);
+      // The Calls section sits at the foot of the drawer, below the crew
+      // board — a full-page capture cropped it to its heading. Scroll it to
+      // the middle of the drawer and shoot the viewport instead.
+      // The count sits in a nested span, so the heading is two text nodes
+      // and a bare text matcher never fires; match the h3 by its own text.
+      const heading = page.locator("h3:has-text('Calls')").first();
+      await heading.waitFor({ timeout: 15_000 });
+      await heading.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    fullPage: false,
   },
   {
     id: "03-09-log-call-form",
@@ -7072,8 +7108,19 @@ export const SHOTS = [
     alt: "Inline log call form with incident type and times",
     route: "/scheduling",
     prepare: async (page) => {
-      await openStaffedShift((shift) => (shift.call_count ?? 0) > 0)(page);
+      // Not the finalized shift — it also carries calls, and fresh-database
+      // list order put it first, but a closed-out shift hides Log Call.
+      await openStaffedShift(
+        (shift) => (shift.call_count ?? 0) > 0 && !shift.is_finalized,
+      )(page);
       await clickByName(/log call/i)(page);
+      // The inline form opens at the foot of the drawer's Calls section;
+      // unscrolled, the frame holds its first two field labels and nothing
+      // else. Center it.
+      const field = page.getByText("Incident Type").first();
+      await field.waitFor({ timeout: 15_000 });
+      await field.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(500);
     },
     fullPage: true,
   },
@@ -7092,9 +7139,15 @@ export const SHOTS = [
         (shift) => ({ shift: shift.id }),
         isFutureShift,
       )(page);
-      await clickByName(/^assign$/i)(page);
+      // "Assign someone" since the crew-board refresh; the old bare "Assign"
+      // matches nothing.
+      await clickByName(/^Assign someone$/i)(page);
     },
     fullPage: true,
+    // "No calls logged for this shift" belongs to the calls sub-panel further
+    // down the same drawer — correct for a future shift, and not the form
+    // this pictures. Same false positive as 03-54's.
+    allowEmptyState: true,
   },
   {
     id: "03-31-shift-edit-times",
@@ -7111,9 +7164,14 @@ export const SHOTS = [
         (shift) => ({ shift: shift.id }),
         isFutureShift,
       )(page);
-      await clickByName(/edit shift/i)(page);
+      // The header control reads "Edit" since the panel-header refresh.
+      // Exact-anchored: the panel also carries "Edit notes" and "Edit call".
+      await clickByName(/^Edit$/)(page);
     },
     fullPage: true,
+    // "No shift officer" is the officer select's placeholder option, in the
+    // DOM on every render of the edit form — not an empty state.
+    allowEmptyState: true,
   },
   {
     id: "08-22-screening-record-form",
@@ -7198,7 +7256,7 @@ export const SHOTS = [
     line: 2233,
     anchor:
       "Screenshot of My Equipment Checklists with a part-answered check beside a finished one",
-    alt: "My Equipment Checklists — one check part-answered with its progress and a Resume control, one finished, and the untouched ones offering Start Check",
+    alt: "My Equipment Checklists — a part-answered check with its progress and Continue checklist button, a finished one reading Passed, and the untouched ones offering Open checklist",
     route: "/scheduling?tab=equipment-checks",
     auth: "member",
     prepare: async (page) => {

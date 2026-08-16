@@ -737,6 +737,13 @@ SHIFT_REVIEW_TASKS = [
 
 # Per rig class, so an engine crew is not asked about aerial placement and a
 # medic crew is not asked about pump pressures.
+# Keyed by the slug the product actually matches on — the *lowercased type
+# name* ("ladder/aerial"), which is what shift responses, apparatus-options
+# and the settings editor all carry. A bare "ladder" key looked right, counted
+# right in the settings chips, and matched no ladder shift ever: the batch
+# report form fell back to the generic sample skills on the one apparatus the
+# ladder vocabulary exists for. Engine and ambulance never showed it because
+# their type names equal their codes.
 APPARATUS_TYPE_SKILLS = {
     "engine": [
         "Pump operations",
@@ -745,7 +752,7 @@ APPARATUS_TYPE_SKILLS = {
         "Nozzle technique",
         "SCBA donning/doffing",
     ],
-    "ladder": [
+    "ladder/aerial": [
         "Aerial placement",
         "Ground ladder throw",
         "Ventilation",
@@ -768,7 +775,7 @@ APPARATUS_TYPE_TASKS = {
         "Hydrant survey",
         "Foam level check",
     ],
-    "ladder": [
+    "ladder/aerial": [
         "Aerial inspection",
         "Ground ladder inventory",
         "Saw and fan service",
@@ -5066,6 +5073,11 @@ class Seeder:
                 "id",
             )
         )
+        recruit_ids = {
+            str(pick(m, "id"))
+            for m in members
+            if pick(m, "username") in RECRUIT_USERNAMES
+        }
 
         # The demo member's own report is approved on every run, not only on
         # the run that files it. A trainee sees only approved reports, so a
@@ -5116,13 +5128,25 @@ class Seeder:
         # section the guide describes underneath them.
         wanted = {"approved", "pending_review", "flagged", "draft"}
         have = {pick(r, "review_status", "reviewStatus") for r in existing}
-        months = {str(pick(r, "shift_date", "shiftDate"))[:7] for r in existing}
-        if wanted <= have and len(months) >= 2:
+        pending = sum(
+            1
+            for r in existing
+            if pick(r, "review_status", "reviewStatus") == "pending_review"
+        )
+        # `pending >= 4`, not just each state present once: the Review Queue's
+        # batch bar is photographed with several rows selected, and a guard
+        # that only asks whether each state name appears somewhere left the
+        # queue near-empty on a database seeded before the count mattered —
+        # the same lesson _flag_review_queue's docstring records for Flagged.
+        #
+        # `months` is deliberately NOT part of the condition. The schedule
+        # spans two weeks around today, so mid-month every report lands in one
+        # calendar month, the two-month analytics spread is unreachable, and a
+        # guard demanding it re-filed another batch of reports on every single
+        # run until the roster ran out of unreported trainees.
+        if wanted <= have and pending >= 4:
             # The review states still get topped up on the way out. This return
-            # is about not re-filing reports, and a guard that only asks whether
-            # each state name appears somewhere is satisfied by a single flagged
-            # report — which is why the Flagged view stayed a queue of one on
-            # every existing demo database no matter how often it was re-seeded.
+            # is about not re-filing reports.
             reports = items(self.api.get("/training/shift-reports/all?limit=50"))
             self._flag_review_queue(reports, demo_member_id)
             return reports
@@ -5169,7 +5193,10 @@ class Seeder:
             head, tail = head + 1, tail - 1
 
         for shift in interleaved[:30]:
-            if len(pairs) >= 5:
+            # Nine, not five. Approvals take two, the flagged queue takes two
+            # and the draft one, so a five-report seed left the Review Queue
+            # near-empty — and its batch bar needs several pending rows.
+            if len(pairs) >= 9:
                 break
             crew = items(
                 self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
@@ -5179,6 +5206,11 @@ class Seeder:
                 for c in crew
                 if not c.get("has_existing_report")
                 and str(c.get("user_id")) not in seen_trainees
+                # Never a recruit: the batch-report screenshots need a program
+                # trainee whose Evaluate control is still live on the ladder
+                # fixture shift, and a report filed about them anywhere on
+                # this loop's walk could land exactly there.
+                and str(c.get("user_id")) not in recruit_ids
             ]
             if not available:
                 continue
@@ -5303,7 +5335,15 @@ class Seeder:
             for r in queued
             if str(pick(r, "trainee_id", "traineeId")) == demo_member_id
         ]
-        others = [r for r in queued if r not in mine]
+        # Only reports still pending: `others[0]` once landed on an
+        # already-flagged report and quietly re-reviewed it to approved,
+        # shrinking the Flagged queue the 03-62 capture counts on.
+        others = [
+            r
+            for r in queued
+            if r not in mine
+            and pick(r, "review_status", "reviewStatus") == "pending_review"
+        ]
         for report in mine[:1] + others[:1]:
             self.api.post(
                 f"/training/shift-reports/{pick(report, 'id')}/review",
@@ -5354,7 +5394,255 @@ class Seeder:
                 {"review_status": "flagged", "reviewer_notes": note},
             )
 
+    def seed_scheduling_requests(self) -> None:
+        """A pending swap request and a time-off request, from the demo member.
+
+        The Requests tab lists both kinds and `03-11` captions it that way,
+        but nothing seeded either — the tab rendered "No swap requests" on
+        every fresh database and the shot was held back as an empty state.
+        Members create these through their own session (there is no admin
+        on-behalf-of endpoint), which the seeder already signs into for RSVPs.
+        """
+        member_api = Api(self.base_url)
+        member_api.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+
+        swaps = items(member_api.get("/scheduling/swap-requests"), "requests")
+        if not swaps:
+            mine = items(
+                member_api.get("/scheduling/my-shifts?limit=50"), "shifts"
+            )
+            upcoming = next(
+                (
+                    s
+                    for s in mine
+                    if str(pick(s, "shift_date", "shiftDate") or "") >= str(TODAY)
+                ),
+                None,
+            )
+            if upcoming is None:
+                self.blocked.append(
+                    "scheduling requests: demo member has no upcoming shift "
+                    "to offer for swap"
+                )
+            else:
+                try:
+                    member_api.post(
+                        "/scheduling/swap-requests",
+                        {
+                            "offering_shift_id": pick(upcoming, "id"),
+                            "reason": (
+                                "Family commitment that evening — happy to "
+                                "take a weekend shift in return."
+                            ),
+                        },
+                    )
+                except ApiError as exc:
+                    self.blocked.append(f"scheduling requests (swap): {exc}")
+
+        # The dashboard's Next 7 Days list shows only its first handful of
+        # rows, chronologically. The rotation parks the demo member's next
+        # shift days out, which pushed every "Yours" row below the cut —
+        # 03-60 pictures that pill, so the member needs a seat on one of the
+        # first shifts of the window.
+        mine = items(member_api.get("/scheduling/my-shifts?limit=50"), "shifts")
+        soon = str(TODAY + timedelta(days=1))
+        if not any(
+            str(pick(s, "shift_date", "shiftDate") or "") <= soon
+            and str(pick(s, "shift_date", "shiftDate") or "") >= str(TODAY)
+            for s in mine
+        ):
+            member_id = next(
+                (
+                    str(pick(m, "id"))
+                    for m in items(self.api.get("/users?limit=100"), "users")
+                    if pick(m, "username") == DEMO_MEMBER_USERNAME
+                ),
+                "",
+            )
+            shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+            upcoming = sorted(
+                (
+                    s
+                    for s in shifts
+                    if pick(s, "id")
+                    and str(TODAY)
+                    <= str(pick(s, "shift_date", "shiftDate") or "")
+                    <= soon
+                ),
+                key=lambda s: str(pick(s, "start_time", "startTime") or ""),
+            )
+            for shift in upcoming:
+                try:
+                    self.api.post(
+                        f"/scheduling/shifts/{pick(shift, 'id')}/assignments",
+                        {"user_id": member_id, "position": "firefighter"},
+                    )
+                    break
+                except ApiError as exc:
+                    if exc.code not in (400, 409):
+                        raise
+            else:
+                self.blocked.append(
+                    "scheduling requests: no near-term seat for the demo member"
+                )
+
+        time_off = items(member_api.get("/scheduling/time-off"), "requests")
+        if not time_off:
+            try:
+                member_api.post(
+                    "/scheduling/time-off",
+                    {
+                        "start_date": str(TODAY + timedelta(days=21)),
+                        "end_date": str(TODAY + timedelta(days=25)),
+                        "reason": "Out of town for a family wedding.",
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"scheduling requests (time off): {exc}")
+
+    def seed_batch_report_trainee(self) -> None:
+        """Crew a program trainee onto the first past Ladder 4 shift.
+
+        The batch shift-report form renders its per-member Evaluate control
+        only for crew enrolled in a training program, and `03-63` /
+        `03-64` open exactly that: the first ladder shift in the picker,
+        expanded on its trainee. The crew rotation deals members by pool
+        order with no reason to put a recruit on the ladder, so on a fresh
+        database the fixture simply wasn't there — the form opened, listed a
+        crew, and offered nothing to expand.
+
+        Runs after `seed_shift_reports`, whose pair-picker also skips
+        recruits, so no report can exist about the trainee on this shift and
+        the Evaluate control stays live across re-runs.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        ladders = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+                and str(pick(s, "apparatus_unit_number", "apparatusUnitNumber"))
+                == "L-4"
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate")),
+        )
+        if not ladders:
+            self.blocked.append("batch report trainee: no past Ladder 4 shift")
+            return
+        target = ladders[0]
+        shift_id = pick(target, "id")
+
+        crew = items(
+            self.api.get(f"/training/shift-reports/shift-crew/{shift_id}")
+        )
+        members = items(self.api.get("/users?limit=100"), "users")
+        recruit_ids = {
+            str(pick(m, "id")): pick(m, "username")
+            for m in members
+            if pick(m, "username") in RECRUIT_USERNAMES
+        }
+        if any(str(c.get("user_id")) in recruit_ids for c in crew):
+            return
+        for user_id in recruit_ids:
+            try:
+                self.api.post(
+                    f"/scheduling/shifts/{shift_id}/assignments",
+                    {"user_id": user_id, "position": "firefighter"},
+                )
+                return
+            except ApiError as exc:
+                # A double-booking refusal means this recruit was on another
+                # rig that day — the next one usually was not.
+                if exc.code not in (400, 409):
+                    raise
+        self.blocked.append(
+            "batch report trainee: every recruit was refused on the ladder shift"
+        )
+
     # -- notification rules ------------------------------------------
+
+    def seed_shift_reminder_notification(self) -> None:
+        """Put a start-of-shift reminder in the administrator's inbox.
+
+        The reminder is written by the `shift_reminders` scheduled task, which
+        looks only `lookahead_hours` (default 2) ahead. On a long-lived
+        deployment it fires as each shift's window opens; a freshly seeded
+        database captured minutes later has no reminder unless a shift happens
+        to start within two hours of the capture. `03-97` pictures the
+        expanded reminder card, so: widen the window far enough to cover the
+        next seeded shift, run the task once, and put the setting back —
+        the notification persists, and `03-39` pictures the 2-hour default.
+
+        The task itself refuses to re-notify a shift it has already covered,
+        so a re-run adds at most the newly seeded shifts' reminders.
+        """
+        logs = self.api.get("/notifications/my?limit=100")
+        rows = (logs.get("logs") if isinstance(logs, dict) else logs) or []
+        if any(
+            "Shift Reminder" in str(r.get("subject") or r.get("title") or "")
+            for r in rows
+        ):
+            return
+
+        # The reminder goes to each *crewed* member, and the rotation only
+        # puts the administrator on today's first shift — already started by
+        # the time this runs, and past shifts are outside every window. Crew
+        # the administrator onto the earliest upcoming shift the task has not
+        # already covered (`start_reminder_sent` in the shift's activities is
+        # permanent — a run that fires while the admin is on none of the
+        # window's shifts burns them all), then size the window to reach it.
+        me = self.api.get("/auth/me")
+        admin_id = str(pick(me, "id") or pick(me.get("user") or {}, "id"))
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        now = datetime.now(timezone.utc)
+        candidates = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and not (pick(s, "activities") or {}).get("start_reminder_sent")
+                and str(pick(s, "start_time", "startTime") or "")
+                > now.strftime("%Y-%m-%dT%H:%M:%S")
+            ),
+            key=lambda s: str(pick(s, "start_time", "startTime")),
+        )
+        if not candidates:
+            self.blocked.append(
+                "shift reminder inbox: no upcoming shift the reminder task "
+                "has not already covered"
+            )
+            return
+        target = candidates[0]
+        try:
+            self.api.post(
+                f"/scheduling/shifts/{pick(target, 'id')}/assignments",
+                {"user_id": admin_id, "position": "officer"},
+            )
+        except ApiError as exc:
+            # Already aboard (or the seat is taken) still means the reminder
+            # will name them if they hold any assignment on the shift.
+            if exc.code not in (400, 409):
+                raise
+
+        starts = str(pick(target, "start_time", "startTime"))
+        start_dt = datetime.fromisoformat(starts.replace("Z", "+00:00"))
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        hours_out = max(2, int((start_dt - now).total_seconds() // 3600) + 2)
+        widened = {
+            "enabled": True,
+            "lookahead_hours": hours_out,
+            "send_email": False,
+        }
+        self.api.patch("/organization/settings", {"shift_reminders": widened})
+        try:
+            self.api.post("/scheduled/run-task?task=shift_reminders", {})
+        finally:
+            self.api.patch(
+                "/organization/settings",
+                {"shift_reminders": {**widened, "lookahead_hours": 2}},
+            )
 
     def seed_notification_rules(self) -> list[dict]:
         """Automations for the notification rules list.
@@ -10774,6 +11062,9 @@ class Seeder:
         self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)
         self.step("notification rules", self.seed_notification_rules)
+        # After scheduling (needs upcoming crewed shifts) — the reminder task
+        # notifies each rostered member, the administrator among them.
+        self.step("shift reminder inbox", self.seed_shift_reminder_notification)
         self.step("officers", lambda: self.seed_officers(members))
         self.step("messages", lambda: self.seed_messages(self.base_url, members))
         forms = self.step("forms", self.seed_forms) or []
@@ -10820,6 +11111,10 @@ class Seeder:
         # depend on that fix is one less thing to get wrong later.
         self.step("supply tracking", lambda: self.seed_supply_tracking(apparatus))
         self.step("shift reports", lambda: self.seed_shift_reports(members))
+        # After the reports: the pair-picker above skips recruits, so crewing
+        # one onto the ladder now leaves their Evaluate control live.
+        self.step("batch report trainee", self.seed_batch_report_trainee)
+        self.step("scheduling requests", self.seed_scheduling_requests)
         # After the reports: finalizing auto-creates drafts for attendees, and
         # doing it first would put a second batch of drafts in the way of the
         # ones seed_shift_reports files deliberately.
