@@ -419,6 +419,7 @@ class TrainingProgramService:
         self,
         program: TrainingProgram,
         enrollment: ProgramEnrollment,
+        completion_credit_id: Optional[str] = None,
     ) -> None:
         """When a training program linked to an EVOC level completes,
         auto-add the member as an operator on qualifying apparatus."""
@@ -441,6 +442,7 @@ class TrainingProgramService:
             user_id=str(enrollment.user_id),
             evoc_level_id=str(evoc_level.id),
             organization_id=str(program.organization_id),
+            completion_credit_id=completion_credit_id,
         )
 
         if new_operators:
@@ -2446,6 +2448,7 @@ class TrainingProgramService:
         verified_by: Optional[UUID] = None,
         acting_user_id: Optional[UUID] = None,
         can_manage: bool = False,
+        completion_credit_id: Optional[str] = None,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """
         Update progress on a specific requirement
@@ -2844,7 +2847,9 @@ class TrainingProgramService:
         await self.db.refresh(progress)
 
         # Recalculate enrollment progress
-        await self._recalculate_enrollment_progress(progress.enrollment_id)
+        await self._recalculate_enrollment_progress(
+            progress.enrollment_id, completion_credit_id=completion_credit_id
+        )
 
         # Auto-advance phases whose requirements are now complete (no-op for
         # non-phased programs and phases flagged for manual advancement)
@@ -2920,6 +2925,15 @@ class TrainingProgramService:
             # the feeds safe to replay.
             return progress, None
 
+        phase_before_id = None
+        if mark_completed:
+            phase_before_result = await self.db.execute(
+                select(ProgramEnrollment.current_phase_id).where(
+                    ProgramEnrollment.id == str(progress.enrollment_id)
+                )
+            )
+            phase_before_id = phase_before_result.scalar_one_or_none()
+
         # Insert the ledger row first: the DB unique constraint — not the check
         # above — is the real guard, catching a duplicate that races in from a
         # concurrent request on a separate session.
@@ -2929,6 +2943,12 @@ class TrainingProgramService:
             source_id=str(source_id),
             units=float(units),
             applied_by=str(applied_by) if applied_by else None,
+            previous_status=(
+                progress.status.value
+                if mark_completed and hasattr(progress.status, "value")
+                else (str(progress.status) if mark_completed else None)
+            ),
+            phase_before_id=str(phase_before_id) if phase_before_id else None,
         )
         self.db.add(ledger)
         try:
@@ -2945,12 +2965,24 @@ class TrainingProgramService:
             update_kwargs["status"] = RequirementProgressStatus.COMPLETED.value
         if progress_notes is not None:
             update_kwargs["progress_notes"] = progress_notes
-        return await self.update_requirement_progress(
+        result = await self.update_requirement_progress(
             progress_id=progress.id,
             organization_id=organization_id,
             updates=RequirementProgressUpdate(**update_kwargs),
             verified_by=verified_by,
+            completion_credit_id=str(ledger.id) if mark_completed else None,
         )
+        if mark_completed:
+            phase_after_result = await self.db.execute(
+                select(ProgramEnrollment.current_phase_id).where(
+                    ProgramEnrollment.id == str(progress.enrollment_id)
+                )
+            )
+            phase_after_id = phase_after_result.scalar_one_or_none()
+            if str(phase_after_id or "") != str(phase_before_id or ""):
+                ledger.phase_after_id = str(phase_after_id) if phase_after_id else None
+                await self.db.commit()
+        return result
 
     async def revoke_requirement_credit(
         self,
@@ -2983,6 +3015,19 @@ class TrainingProgramService:
             return progress, None
 
         units = float(credit.units or 0)
+        previous_status = credit.previous_status
+        phase_before_id = credit.phase_before_id
+        phase_after_id = credit.phase_after_id
+        if units == 0:
+            # Only qualifications created by this exact completion are removed;
+            # pre-existing and manually managed operator records have no id.
+            from app.models.apparatus import ApparatusOperator
+
+            await self.db.execute(
+                delete(ApparatusOperator).where(
+                    ApparatusOperator.completion_credit_id == str(credit.id)
+                )
+            )
         await self.db.delete(credit)
         await self.db.flush()
 
@@ -3001,13 +3046,27 @@ class TrainingProgramService:
                 .limit(1)
             )
             if remaining_result.scalar_one_or_none() is None:
-                update_kwargs["status"] = RequirementProgressStatus.NOT_STARTED.value
-        return await self.update_requirement_progress(
+                update_kwargs["status"] = (
+                    previous_status or RequirementProgressStatus.NOT_STARTED.value
+                )
+        result = await self.update_requirement_progress(
             progress_id=progress.id,
             organization_id=organization_id,
             updates=RequirementProgressUpdate(**update_kwargs),
             verified_by=verified_by,
         )
+        if units == 0 and phase_after_id:
+            phase_result = await self.db.execute(
+                select(ProgramEnrollment).where(
+                    ProgramEnrollment.id == str(progress.enrollment_id)
+                )
+            )
+            enrollment = phase_result.scalar_one_or_none()
+            # Do not overwrite a later manual or legitimate phase change.
+            if enrollment and str(enrollment.current_phase_id) == str(phase_after_id):
+                enrollment.current_phase_id = phase_before_id
+                await self.db.commit()
+        return result
 
     async def reverse_credits_for_source(
         self,
@@ -3779,6 +3838,7 @@ class TrainingProgramService:
     async def _recalculate_enrollment_progress(
         self,
         enrollment_id: UUID,
+        completion_credit_id: Optional[str] = None,
     ) -> None:
         """
         Recalculate overall progress percentage for an enrollment.
@@ -3908,7 +3968,9 @@ class TrainingProgramService:
 
                     # Auto-add as operator on matching apparatus when
                     # an EVOC training program completes
-                    await self._handle_evoc_completion(program, enrollment)
+                    await self._handle_evoc_completion(
+                        program, enrollment, completion_credit_id
+                    )
             except Exception as e:
                 logger.error(f"Failed to send program completion notification: {e}")
 

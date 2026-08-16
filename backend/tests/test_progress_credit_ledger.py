@@ -45,8 +45,14 @@ class RecordingSession:
         self.deleted.append(obj)
 
 
-def _progress(value=0.0):
-    return SimpleNamespace(id=str(uuid4()), progress_value=value)
+def _progress(value=0.0, status="not_started", phase_id=None):
+    return SimpleNamespace(
+        id=str(uuid4()),
+        enrollment_id=str(uuid4()),
+        progress_value=value,
+        status=status,
+        phase_id=phase_id,
+    )
 
 
 def _svc(db):
@@ -119,7 +125,9 @@ class TestApplyCredit:
 
     async def test_zero_unit_completion_is_recorded(self):
         progress = _progress(value=0.0)
-        db = RecordingSession([_one(progress), _one(None)])
+        db = RecordingSession(
+            [_one(progress), _one(None), _one("phase-1"), _one("phase-2")]
+        )
         svc = _svc(db)
 
         await svc.apply_requirement_credit(
@@ -132,6 +140,9 @@ class TestApplyCredit:
         )
 
         assert len(db.added) == 1
+        assert db.added[0].previous_status == "not_started"
+        assert db.added[0].phase_before_id == "phase-1"
+        assert db.added[0].phase_after_id == "phase-2"
         updates = svc.update_requirement_progress.await_args.kwargs["updates"]
         assert updates.status == "completed"
 
@@ -241,7 +252,7 @@ class TestRevokeCredit:
             source_id="submission-1",
             units=0.0,
         )
-        db = RecordingSession([_one(progress), _one(credit), _one(None)])
+        db = RecordingSession([_one(progress), _one(credit), MagicMock(), _one(None)])
         svc = _svc(db)
 
         await svc.revoke_requirement_credit(
@@ -262,7 +273,9 @@ class TestRevokeCredit:
             source_id="submission-1",
             units=0.0,
         )
-        db = RecordingSession([_one(progress), _one(credit), _one("other-credit")])
+        db = RecordingSession(
+            [_one(progress), _one(credit), MagicMock(), _one("other-credit")]
+        )
         svc = _svc(db)
 
         await svc.revoke_requirement_credit(
@@ -274,6 +287,56 @@ class TestRevokeCredit:
 
         updates = svc.update_requirement_progress.await_args.kwargs["updates"]
         assert updates.status is None
+
+    async def test_revoke_restores_preexisting_partial_status(self):
+        progress = _progress(value=3.0, status="completed")
+        credit = RequirementProgressCredit(
+            progress_id=progress.id,
+            source_type=ProgressCreditSource.OFFICER_APPLY,
+            source_id="submission-1",
+            units=0.0,
+            previous_status="in_progress",
+        )
+        db = RecordingSession([_one(progress), _one(credit), MagicMock(), _one(None)])
+        svc = _svc(db)
+
+        await svc.revoke_requirement_credit(
+            progress.id,
+            uuid4(),
+            ProgressCreditSource.OFFICER_APPLY,
+            "submission-1",
+        )
+
+        updates = svc.update_requirement_progress.await_args.kwargs["updates"]
+        assert updates.status == "in_progress"
+        assert updates.progress_value == 3.0
+
+    async def test_revoke_rolls_back_phase_advanced_by_completion(self):
+        progress = _progress(value=0.0, status="completed")
+        enrollment = SimpleNamespace(current_phase_id="phase-2")
+        credit = RequirementProgressCredit(
+            progress_id=progress.id,
+            source_type=ProgressCreditSource.OFFICER_APPLY,
+            source_id="submission-1",
+            units=0.0,
+            previous_status="in_progress",
+            phase_before_id="phase-1",
+            phase_after_id="phase-2",
+        )
+        db = RecordingSession(
+            [_one(progress), _one(credit), MagicMock(), _one(None), _one(enrollment)]
+        )
+        svc = _svc(db)
+
+        await svc.revoke_requirement_credit(
+            progress.id,
+            uuid4(),
+            ProgressCreditSource.OFFICER_APPLY,
+            "submission-1",
+        )
+
+        assert enrollment.current_phase_id == "phase-1"
+        db.commit.assert_awaited_once()
 
     async def test_revoke_missing_credit_is_noop(self):
         progress = _progress(value=10.0)

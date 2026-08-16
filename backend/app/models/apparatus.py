@@ -1264,6 +1264,12 @@ class ApparatusOperator(Base):
         ForeignKey("evoc_levels.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Present only on eligibility granted by a specific training completion.
+    completion_credit_id = Column(
+        String(36),
+        ForeignKey("requirement_progress_credits.id", ondelete="CASCADE"),
+        nullable=True,
+    )
 
     # Certification
     is_certified = Column(Boolean, default=True, nullable=False, server_default="1")
@@ -1317,6 +1323,7 @@ class ApparatusOperator(Base):
         ),
         Index("idx_apparatus_operators_active", "is_active"),
         Index("idx_apparatus_operators_evoc", "evoc_level_id"),
+        Index("idx_apparatus_operators_completion_credit", "completion_credit_id"),
     )
 
     def __repr__(self):
