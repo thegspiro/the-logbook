@@ -7273,11 +7273,11 @@ export const SHOTS = [
       'Screenshot of the inventory admin hub with the "Finish inventory setup" prompt',
     alt: 'The inventory admin hub with the "Finish inventory setup" prompt naming what is still missing',
     route: "/inventory/admin",
-    // The prompt only renders while a step is outstanding, and the demo
-    // department is fully seeded — so the shot is of a hub that has it, which
-    // the seeded data cannot produce. Held back rather than faked.
-    holdBack:
-      "the prompt only shows before setup is complete; the demo department is fully seeded",
+    // Verified against the seeded department: it captures a hub with no prompt
+    // at all, because the prompt is gone the moment rooms, storage areas,
+    // categories and items exist — which seeding guarantees. Capturing it here
+    // would overwrite a correct picture with a wrong one on every run.
+    capturedElsewhere: "scripts/screenshots/inventory-setup.mjs",
     fullPage: false,
   },
   {
@@ -7287,9 +7287,9 @@ export const SHOTS = [
     anchor: "Screenshot of step 1 of the inventory setup workflow",
     alt: "Step 1 of the inventory setup workflow, with no rooms declared yet",
     route: "/inventory/admin/setup?step=0",
-    // Rooms exist in the demo department, so this pictures the populated form
-    // rather than the empty state the caption describes.
-    allowEmptyState: true,
+    // Same reason as 05-72: the caption describes a department with no rooms,
+    // and the seeder creates several.
+    capturedElsewhere: "scripts/screenshots/inventory-setup.mjs",
     fullPage: false,
   },
   {
@@ -7298,8 +7298,37 @@ export const SHOTS = [
     line: 124,
     anchor:
       "Screenshot of step 3 offering the standard fire-service starter categories",
-    alt: "Step 3 offering the standard fire-service starter categories, two of them already added",
+    alt: "Step 3 offering the standard fire-service starter categories, one of them already added",
     route: "/inventory/admin/setup?step=2",
+    fullPage: true,
+  },
+  {
+    id: "05-77-setup-storage",
+    doc: "05-inventory.md",
+    line: 112,
+    anchor: "Screenshot of step 2 of the setup workflow, adding storage areas",
+    alt: "Step 2 of the setup workflow, adding storage areas to the selected room",
+    route: "/inventory/admin/setup?step=1",
+    fullPage: false,
+  },
+  {
+    id: "05-78-setup-first-items",
+    doc: "05-inventory.md",
+    line: 138,
+    anchor:
+      "Screenshot of step 4 of the setup workflow, with the room, storage area",
+    alt: "Step 4 of the setup workflow, with the room, storage area and category pickers",
+    route: "/inventory/admin/setup?step=3",
+    fullPage: false,
+  },
+  {
+    id: "05-81-setup-categories-mobile",
+    doc: "05-inventory.md",
+    line: 160,
+    anchor: "Screenshot of the category step of the setup workflow on a phone",
+    alt: "The category step of the setup workflow on a phone",
+    route: "/inventory/admin/setup?step=2",
+    viewport: "mobile",
     fullPage: true,
   },
   {

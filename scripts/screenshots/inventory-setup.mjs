@@ -1,17 +1,21 @@
 /**
  * Database-free capture of the guided inventory setup workflow.
  *
- * `scripts/screenshots/capture.mjs` at the repo root is the pipeline of record:
- * it drives the real application against a seeded demo department and is what
- * should regenerate these images whenever the UI changes. This exists for the
- * one thing that pipeline cannot do — run where there is no MySQL to seed —
- * and produces the same five `05-7x-setup-*` ids at the same framing, so the
- * outputs are interchangeable.
+ * `scripts/screenshots/capture.mjs` is the pipeline of record and owns every
+ * populated screen in this workflow. This owns the two it cannot reach:
  *
- * It is also where the workflow's *empty* states come from. The setup prompt
- * and the "no rooms yet" step only render for a department that has not
- * finished setting up, which a fully-seeded demo department can never be; the
- * fixtures below can.
+ *   05-72-setup-prompt   the admin hub's "Finish inventory setup" banner
+ *   05-73-setup-rooms    step 1 with no rooms declared yet
+ *
+ * Both picture a department that has *not* finished setting up, and seeding is
+ * precisely what ends that state — verified: run against the seeded demo
+ * department, 05-72 captures a hub with no banner on it at all. Those two ids
+ * carry `capturedElsewhere` in the manifest so capture.mjs skips rather than
+ * overwrites them; nothing else here writes a file, so the two sources never
+ * race for the same name.
+ *
+ * It also walks all five steps at phone width and fails on horizontal
+ * overflow, which needs no seeded data to be worth running.
  *
  * Usage:
  *   npm run build && npx vite preview --port 4173
@@ -541,50 +545,15 @@ async function main() {
   await settle(page);
   await shoot(page, "05-73-setup-rooms");
 
-  // 3 — step 2, storage areas, once a room exists
-  await installRoutes(desktop, scenarios.rooms);
-  await page.goto(`${BASE}/inventory/admin/setup?step=1`);
-  await page.getByRole("heading", { name: "Storage areas" }).waitFor();
-  await settle(page);
-  await shoot(page, "05-77-setup-storage");
+  // Everything past step 1 is a populated screen that the seeded department
+  // renders truthfully, so `capture.mjs` owns those ids (05-74 through 05-78,
+  // 05-81) and this stops here. Writing them from fixtures too would mean two
+  // sources racing for the same filenames, and the last one run would win.
+  //
+  // The remaining steps are still *walked* below, at phone width, for the
+  // layout check — which needs no seeded data to be worth running.
 
-  // 4 — step 3, the starter category catalog
-  await installRoutes(desktop, scenarios.storage);
-  await page.goto(`${BASE}/inventory/admin/setup?step=2`);
-  await page.getByRole("heading", { name: "Categories" }).waitFor();
-  await page.getByRole("checkbox").first().check();
-  await page.getByRole("checkbox").nth(1).check();
-  await settle(page);
-  await shoot(page, "05-74-setup-categories");
-
-  // 5 — step 4, the pickers that pre-fill the item form
-  await installRoutes(desktop, scenarios.categories);
-  await page.goto(`${BASE}/inventory/admin/setup?step=3`);
-  await page.getByRole("heading", { name: "First items" }).waitFor();
-  await page.getByLabel("Storage area").selectOption("area-1");
-  await settle(page);
-  await shoot(page, "05-78-setup-first-items");
-
-  // 6 — the item form opening with room/storage/category already answered.
-  // Taller window for this one: the dialog is capped at 90dvh with its own
-  // scrollbar, so at 900px neither a viewport nor a full-page shot reaches
-  // the Location fields that are the point of the picture.
-  await page.setViewportSize({ width: DESKTOP.width, height: 1300 });
-  await page.getByRole("button", { name: /Add an item/ }).click();
-  await page.getByRole("dialog").waitFor();
-  await settle(page);
-  await shoot(page, "05-75-setup-item-prefilled", { fullPage: false });
-  await page.keyboard.press("Escape");
-  await page.setViewportSize(DESKTOP);
-
-  // 7 — step 5, the recap and what to set up next
-  await installRoutes(desktop, scenarios.done);
-  await page.goto(`${BASE}/inventory/admin/setup?step=4`);
-  await page.getByRole("heading", { name: "Setup complete" }).waitFor();
-  await settle(page);
-  await shoot(page, "05-76-setup-done");
-
-  // 9 & 10 — phone width: the compact progress bar and the wrapped forms
+  // Phone width: every step checked for overflow, one of them photographed.
   const phone = await browser.newContext({
     viewport: MOBILE,
     deviceScaleFactor: 1,
@@ -606,12 +575,7 @@ async function main() {
   const phoneSteps = [
     { step: 0, scenario: scenarios.empty, heading: "Rooms" },
     { step: 1, scenario: scenarios.rooms, heading: "Storage areas" },
-    {
-      step: 2,
-      scenario: scenarios.storage,
-      heading: "Categories",
-      shot: "05-81-setup-categories-mobile",
-    },
+    { step: 2, scenario: scenarios.storage, heading: "Categories" },
     { step: 3, scenario: scenarios.categories, heading: "First items" },
     { step: 4, scenario: scenarios.done, heading: "Setup complete" },
   ];

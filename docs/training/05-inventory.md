@@ -116,7 +116,7 @@ what is missing. **Select all** ticks everything still available in one action.
 Everything created here is an ordinary category afterwards and can be edited or
 removed on the Categories page.
 
-![Step 3 offering the standard fire-service starter categories, two of them already added](./images/05-74-setup-categories.png)
+![Step 3 offering the standard fire-service starter categories, one of them already added](./images/05-74-setup-categories.png)
 
 ### Step 4 — First items
 

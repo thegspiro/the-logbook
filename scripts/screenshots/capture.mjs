@@ -420,6 +420,31 @@ async function main() {
   const shots = SHOTS.filter((shot) => !only || shot.id.startsWith(only));
   for (const shot of shots) {
     const target = resolve(OUTPUT_DIR, `${shot.id}.png`);
+
+    // Some states cannot exist in a seeded department — a first-run prompt is
+    // gone the moment the thing it prompts for is seeded, and an empty-state
+    // screen is the absence of seed data, not a shape of it. Those images come
+    // from a fixture-driven harness instead. Skipping is the point: this loop
+    // would otherwise capture the *populated* page under the same filename and
+    // overwrite a correct picture with a wrong one on every run, silently,
+    // because the capture itself succeeds.
+    if (shot.capturedElsewhere) {
+      results.push({
+        id: shot.id,
+        status: "skipped",
+        file: `${shot.id}.png`,
+        doc: shot.doc,
+        line: shot.line,
+        anchor: shot.anchor,
+        alt: shot.alt,
+        capturedElsewhere: shot.capturedElsewhere,
+      });
+      console.log(
+        `  = ${shot.id} (captured elsewhere: ${shot.capturedElsewhere})`,
+      );
+      continue;
+    }
+
     const page = await sessions.pageFor(shot);
     try {
       await page.setViewportSize(viewportFor(shot));
@@ -541,11 +566,18 @@ async function main() {
   await browser.close();
 
   const failed = results.filter((r) => r.status === "failed");
+  const skipped = results.filter((r) => r.status === "skipped");
   const empty = results.filter((r) => r.emptyState);
   const overflowing = results.filter((r) => r.horizontalOverflow);
   console.log(
-    `\n${results.length - failed.length}/${results.length} screenshots captured.`,
+    `\n${results.length - failed.length - skipped.length}/${results.length - skipped.length} screenshots captured.`,
   );
+  if (skipped.length) {
+    console.log(
+      `${skipped.length} left alone (captured elsewhere): ` +
+        skipped.map((r) => r.id).join(", "),
+    );
+  }
   if (empty.length) {
     console.log(
       `${empty.length} show an empty state and need richer seed data before they can be applied.`,
