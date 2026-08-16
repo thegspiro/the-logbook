@@ -1,6 +1,6 @@
 # The Logbook - Training Documentation
 
-> **New release lesson:** [August 2026 workflow updates](./19-august-2026-release-changes.md) covers changed workflows, permissions, data-sharing boundaries, edge cases, exact screenshot states, and required demo data for both the August 12–14 and August 15–16 change windows (nested facility rooms, candidate-list visibility, profile privacy, and the security hardening batch).
+> **New release lesson:** [August 12–16, 2026 workflow updates](./19-august-2026-release-changes.md) covers changed workflows, permissions, data-sharing boundaries, edge cases, exact screenshot states, and required demo data for the August 12–14 and August 15–16 change windows — nested facility rooms, candidate-list visibility, profile privacy, the security hardening batch, and the August 15 change that makes the installation wizard a **one tab, one sitting** operation.
 
 Welcome to the training documentation for The Logbook. These guides are designed to help new users learn the system and serve as a reference for experienced users.
 

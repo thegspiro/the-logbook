@@ -1294,6 +1294,22 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* A print route replaces that canvas with a neutral grey desk behind its white
+   sheet. It has to be set here, on the root, for the same reason the gradient
+   is: a background on `body` reaches the window only while the root's own
+   background is transparent, and the rule above means it is not. Six print
+   routes set `body` instead and silently lost their desk when the canvas moved
+   here on 2026-08-15.
+
+   The mark is applied by `components/print/PrintPageStyles`, which every print
+   route renders. Anything moving the canvas rule above must keep this one with
+   it. */
+@media screen {
+  html.print-preview {
+    background: #f3f4f6;
+  }
+}
+
 /* Body defaults */
 body {
   @apply antialiased;
@@ -1519,7 +1535,15 @@ tbody tr:last-child {
     display: none !important;
   }
 
-  /* Reset backgrounds for ink savings */
+  /* Reset backgrounds for ink savings.
+   *
+   * `html` is named explicitly because the root carries the themed canvas. It
+   * used to be covered only by `.dark` — which ThemeContext puts on
+   * documentElement — so dark mode was reset by accident and **light mode was
+   * not**, and printing with "Background graphics" enabled put the gradient
+   * behind a scorecard, label or QR sign. Do not drop `html` from this list on
+   * the grounds that `.dark` appears to cover it. */
+  html,
   body,
   main,
   .dark {

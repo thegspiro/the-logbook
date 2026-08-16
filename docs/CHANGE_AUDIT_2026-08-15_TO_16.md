@@ -38,7 +38,10 @@ One revision this window:
 | --- | --- | --- | --- |
 | `20260816_0001` | `20260814_0004` | `20260816_0001_add_facility_room_parent.py` | Adds `facility_rooms.parent_room_id` VARCHAR(36) NULL, index `idx_facility_rooms_parent`, self-referential FK `fk_facility_rooms_parent_room` with `ON DELETE SET NULL` |
 
-`20260816_0001` is the new single head. The migration is introspection-guarded
+`20260816_0001` was the single head at this audit's snapshot; later
+same-day merges appended `20260816_0002` (storage-area barcode backfill) and
+`20260816_0003` (inventory vendors — renumbered from a colliding `_0002`), so
+the current head is `20260816_0003`. The migration is introspection-guarded
 (no-op if the table is absent or the column already exists) and the downgrade
 removes FK, index, and column defensively in that order.
 

@@ -1,10 +1,7 @@
 # Welcome to The Logbook Wiki
 
-> **Release handoff:** [Changes from August 15–16, 2026](Recent-Changes-2026-08-15-to-16)
-> covers nested facility rooms, the security/privacy hardening batch, and the
-> `20260816_0001` migration. The prior window is
-> [August 12–14, 2026](Recent-Changes-2026-08-12-to-14); both map new pages,
-> APIs, data, migrations, sharing boundaries, edge cases, and
+> **Release handoff:** [Changes from August 10–16, 2026](Recent-Changes-2026-08-10-to-16) — the six-day rollup, including the new pages and their permissions, the upgrade route, and the August 15–16 onboarding and dark-mode changes. Per-window detail: [August 15–16](Recent-Changes-2026-08-15-to-16) (nested facility rooms, the security/privacy hardening batch, the `20260816_0001` migration) and [August 12–14](Recent-Changes-2026-08-12-to-14). All three
+> map new pages, APIs, data, migrations, sharing boundaries, edge cases, and
 > documentation/media follow-up.
 
 ![The Logbook](https://img.shields.io/badge/Version-1.0.0-blue.svg)
@@ -95,7 +92,7 @@ docker compose up -d
 
 ### 🛠️ Troubleshooting
 
-- **[Error Codes](Error-Codes)** - What an on-screen LB-* code means and how to resolve it
+- **[Error Codes](Error-Codes)** - What an on-screen LB-\* code means and how to resolve it
 - **[Common Issues](Troubleshooting)** - Solutions to common problems
 - **[Container Diagnostics](Troubleshooting#container--docker-diagnostics)** - Docker container issues
 - **[Frontend Diagnostics](Troubleshooting#frontend--browser-diagnostics)** - Frontend not loading

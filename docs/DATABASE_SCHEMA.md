@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**241 tables · 4168 columns · 784 foreign keys**
+**243 tables · 4203 columns · 790 foreign keys**
 
 ---
 
@@ -296,9 +296,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`equipment_requests`](#equipment_requests) | `EquipmentRequest` | 20 | Equipment Request model |
 | [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 16 | Inventory Category model |
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
-| [`inventory_items`](#inventory_items) | `InventoryItem` | 50 | Inventory Item model |
+| [`inventory_items`](#inventory_items) | `InventoryItem` | 51 | Inventory Item model |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 11 | A batch/lot of a consumable inventory item held as ready stock. |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
+| [`inventory_vendor_contacts`](#inventory_vendor_contacts) | `InventoryVendorContact` | 12 | A named person at a vendor — sales rep, service desk, accounts receivable. |
+| [`inventory_vendors`](#inventory_vendors) | `InventoryVendor` | 21 | Vendor model |
 | [`inventory_write_offs`](#inventory_write_offs) | `WriteOffRequest` | 18 | Write-Off Request model |
 | [`issuance_allowances`](#issuance_allowances) | `IssuanceAllowance` | 10 | Issuance Allowance model |
 | [`item_assignments`](#item_assignments) | `ItemAssignment` | 16 | Item Assignment model |
@@ -310,7 +312,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`nfpa_inspection_details`](#nfpa_inspection_details) | `NFPAInspectionDetail` | 18 | NFPA-specific inspection fields extending a MaintenanceRecord. |
 | [`nfpa_item_compliance`](#nfpa_item_compliance) | `NFPAItemCompliance` | 20 | NFPA 1851/1852 compliance record for PPE and SCBA items. |
 | [`property_return_reminders`](#property_return_reminders) | `PropertyReturnReminder` | 10 | Tracks which property-return reminder notices have been sent to |
-| [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 23 | Tracks reorder requests for inventory items that have dropped below |
+| [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 24 | Tracks reorder requests for inventory items that have dropped below |
 | [`return_requests`](#return_requests) | `ReturnRequest` | 18 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
 
@@ -4507,6 +4509,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `purchase_price` | NUMERIC(10, 2) | yes |  |  |  |
 | `purchase_order` | VARCHAR(255) | yes |  |  |  |
 | `vendor` | VARCHAR(255) | yes |  |  |  |
+| `vendor_id` | VARCHAR(36) | yes | FK, IDX |  | → `inventory_vendors.id` ON DELETE SET NULL |
 | `warranty_expiration` | DATE | yes |  |  |  |
 | `expected_lifetime_years` | INTEGER | yes |  |  |  |
 | `current_value` | NUMERIC(10, 2) | yes |  |  |  |
@@ -4563,6 +4566,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_inventory_items_serial_number` (`serial_number`)
 - `ix_inventory_items_status` (`status`)
 - `ix_inventory_items_storage_area_id` (`storage_area_id`)
+- `ix_inventory_items_vendor_id` (`vendor_id`)
 
 **Constraints**
 
@@ -4623,6 +4627,71 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_inv_notif_queue_org_user` (`organization_id`, `user_id`)
 - `idx_inv_notif_queue_pending` (`processed`, `created_at`)
+
+### `inventory_vendor_contacts`
+
+**InventoryVendorContact** · `app/models/inventory.py`
+
+> A named person at a vendor — sales rep, service desk, accounts receivable. Separate from the vendor row because departments deal with more than one person at the same company, and the rep who quotes turnout gear is not the number to call about a warranty claim.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `vendor_id` | VARCHAR(36) | no | FK, IDX |  | → `inventory_vendors.id` ON DELETE CASCADE |
+| `name` | VARCHAR(255) | no |  |  |  |
+| `title` | VARCHAR(150) | yes |  |  |  |
+| `email` | VARCHAR(255) | yes |  |  |  |
+| `phone` | VARCHAR(50) | yes |  |  |  |
+| `phone_extension` | VARCHAR(20) | yes |  |  |  |
+| `notes` | TEXT | yes |  |  |  |
+| `is_primary` | BOOL | no |  | `0` |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_inventory_vendor_contacts_org_vendor` (`organization_id`, `vendor_id`)
+- `ix_inventory_vendor_contacts_vendor_id` (`vendor_id`)
+
+### `inventory_vendors`
+
+**InventoryVendor** · `app/models/inventory.py`
+
+> Vendor model A supplier the department buys equipment from. Items, reorder requests and purchase history point here instead of repeating a hand-typed company name, so "who did we buy this from, and who do we call about it" has one answer per organization rather than one per record. Company-level contact details (main line, orders inbox, remit-to address) live on this row; named people at the vendor live in :class:`InventoryVendorContact`.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(255) | no |  |  |  |
+| `account_number` | VARCHAR(100) | yes |  |  |  |
+| `website` | VARCHAR(255) | yes |  |  |  |
+| `phone` | VARCHAR(50) | yes |  |  |  |
+| `email` | VARCHAR(255) | yes |  |  |  |
+| `fax` | VARCHAR(50) | yes |  |  |  |
+| `address_line1` | VARCHAR(255) | yes |  |  |  |
+| `address_line2` | VARCHAR(255) | yes |  |  |  |
+| `city` | VARCHAR(100) | yes |  |  |  |
+| `state` | VARCHAR(100) | yes |  |  |  |
+| `postal_code` | VARCHAR(20) | yes |  |  |  |
+| `country` | VARCHAR(100) | yes |  |  |  |
+| `payment_terms` | VARCHAR(100) | yes |  |  |  |
+| `notes` | TEXT | yes |  |  |  |
+| `is_preferred` | BOOL | no |  | `0` |  |
+| `is_active` | BOOL | no | IDX | `1` |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `idx_inventory_vendors_org_active` (`organization_id`, `is_active`)
+- `ix_inventory_vendors_is_active` (`is_active`)
+
+**Constraints**
+
+- UNIQUE `uq_inventory_vendor_org_name` (`organization_id`, `name`)
 
 ### `inventory_write_offs`
 
@@ -4993,6 +5062,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `quantity_received` | INTEGER | yes |  |  |  |
 | `vendor` | VARCHAR(255) | yes |  |  |  |
 | `vendor_contact` | VARCHAR(255) | yes |  |  |  |
+| `vendor_id` | VARCHAR(36) | yes | FK, IDX |  | → `inventory_vendors.id` ON DELETE SET NULL |
 | `estimated_unit_cost` | NUMERIC(10, 2) | yes |  |  |  |
 | `actual_unit_cost` | NUMERIC(10, 2) | yes |  |  |  |
 | `purchase_order_number` | VARCHAR(255) | yes |  |  |  |
@@ -5013,6 +5083,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_reorder_item` (`item_id`)
 - `idx_reorder_org_status` (`organization_id`, `status`)
 - `ix_reorder_requests_status` (`status`)
+- `ix_reorder_requests_vendor_id` (`vendor_id`)
 
 ### `return_requests`
 
@@ -8523,7 +8594,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (293 references)
+### → `users` (294 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8669,6 +8740,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_lots` | `created_by` | SET NULL | yes |
 | `inventory_notification_queue` | `performed_by` | NO ACTION | yes |
 | `inventory_notification_queue` | `user_id` | CASCADE | no |
+| `inventory_vendors` | `created_by` | SET NULL | yes |
 | `inventory_write_offs` | `requested_by` | RESTRICT | no |
 | `inventory_write_offs` | `reviewed_by` | SET NULL | yes |
 | `ip_exception_audit_log` | `performed_by` | NO ACTION | no |
@@ -8821,7 +8893,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (190 references)
+### → `organizations` (192 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8923,6 +8995,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_items` | `organization_id` | CASCADE | no |
 | `inventory_lots` | `organization_id` | CASCADE | no |
 | `inventory_notification_queue` | `organization_id` | CASCADE | no |
+| `inventory_vendor_contacts` | `organization_id` | CASCADE | no |
+| `inventory_vendors` | `organization_id` | CASCADE | no |
 | `inventory_write_offs` | `organization_id` | CASCADE | no |
 | `ip_exceptions` | `organization_id` | CASCADE | no |
 | `issuance_allowances` | `organization_id` | CASCADE | no |
@@ -9369,6 +9443,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `form_fields` | `form_id` | CASCADE | no |
 | `form_integrations` | `form_id` | CASCADE | no |
 | `form_submissions` | `form_id` | CASCADE | no |
+
+### → `inventory_vendors` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `inventory_items` | `vendor_id` | SET NULL | yes |
+| `inventory_vendor_contacts` | `vendor_id` | CASCADE | no |
+| `reorder_requests` | `vendor_id` | SET NULL | yes |
 
 ### → `program_enrollments` (3 references)
 

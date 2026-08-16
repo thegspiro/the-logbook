@@ -22,12 +22,15 @@ Predecessor: [August 12–14](Recent-Changes-2026-08-12-to-14).
 
 ## Database upgrade route
 
-One migration: `20260816_0001` (revises `20260814_0004`, new single head) adds
+One migration in this window: `20260816_0001` (revises `20260814_0004`) adds
 `facility_rooms.parent_room_id` with an index and a self-referential foreign
 key `ON DELETE SET NULL`. No backfill — existing rooms come up top-level and
 nothing changes until someone nests a room. SET NULL is the database backstop;
 the application re-parents sub-rooms before deletion ever reaches it. Back up,
-require one `alembic heads` result, run `alembic upgrade head`.
+require one `alembic heads` result, run `alembic upgrade head`. (Later
+same-day merges appended `20260816_0002`/`_0003` — storage-area barcode and
+inventory-vendor backfills — so the head today is `20260816_0003`; see the
+[Aug 10–16 rollup](Recent-Changes-2026-08-10-to-16).)
 
 ## Deployment notes
 

@@ -1,12 +1,18 @@
-# August 2026 workflow updates
+# August 12–16, 2026 workflow updates
 
-This lesson is the operator-facing companion to the technical change audits
-for [August 12–14](../CHANGE_AUDIT_2026-08-12_TO_14.md) and
-[August 15–16](../CHANGE_AUDIT_2026-08-15_TO_16.md). It explains what members
-and administrators now do differently. Permission names are included because a
-control that is absent is usually a permission or module-state issue, not a
-rendering failure. The August 15–16 additions start
-[here](#facilities-rooms-can-now-live-inside-other-rooms-august-1516).
+This lesson is the operator-facing companion to the
+[six-day change audit](../CHANGE_AUDIT_2026-08-10_TO_16.md), its
+[three-day detail](../CHANGE_AUDIT_2026-08-12_TO_14.md), and the
+[August 15–16 detail](../CHANGE_AUDIT_2026-08-15_TO_16.md). It explains what
+members and administrators now do differently. Permission names are included
+because a control that is absent is usually a permission or module-state issue,
+not a rendering failure.
+
+> **August 15–16 added two changes with no new screen**, so they are easy to
+> miss in a walkthrough and are covered at the end of this lesson: the
+> installation wizard no longer survives leaving the tab, and the dark-mode
+> background now covers the scrollbar gutter. Neither needs a migration, a
+> permission grant, or any configuration.
 
 ## Elections: reuse a ballot without reusing election data
 
@@ -60,7 +66,7 @@ the active organization.
 
 ## Room and apparatus QR codes
 
-Authorized administrators can use the Room QR Codes directory to search,
+Authorized administrators can use the Check-In QR Codes directory to search,
 download PNG codes, and print room signs. Facility-room codes and apparatus
 shift check-in codes are available from their inline entry points. Regenerating
 a location display code immediately invalidates the old code.
@@ -70,7 +76,7 @@ bound; a stale printed sign stops working after rotation; sensitive facility
 fields require `facilities.view_sensitive`, while editing still requires
 `facilities.edit` or `facilities.manage`.
 
-> **[SCREENSHOT NEEDED — Room QR directory search results with Download PNG and Print controls, using non-sensitive demo rooms.]**
+> **[SCREENSHOT NEEDED — Check-In QR Codes directory search results with Download PNG and Print controls, using non-sensitive demo rooms.]**
 >
 > **[SCREENSHOT NEEDED — regenerate-code confirmation explicitly warning that the previously printed code becomes invalid.]**
 
@@ -96,7 +102,6 @@ events default to `all` until explicitly edited. Flexible check-in now defaults
 to 60 minutes before start, with the full workflow, delivery caveats, early
 member/guest distinction, and screenshot requirements in
 [Events & Meetings](./04-events-meetings.md#reminder-audience-and-one-hour-check-in-default-august-14-2026).
-
 
 The Event Settings outreach picker discovers only related public-outreach forms
 and only for event administrators. Mandatory-event eligibility uses the
@@ -144,7 +149,82 @@ pass.
 >
 > **[SCREENSHOT NEEDED — Salesforce readiness/preview result with secrets and tokens visibly absent.]**
 
+## Installing: the wizard is now one tab, one sitting _(August 15)_
+
+**Who this affects:** whoever runs the one-time installation wizard at
+`/onboarding`. Nobody else — existing departments see no change.
+
+The wizard holds a short-lived credential that authorizes the requests creating
+the organization, its stations and apparatus, the IT team, and the first System
+Owner account. That credential used to outlive browser restarts and was readable
+from every tab on the site. It now lives only in the tab that started the run,
+because on a shared or station-kiosk machine a credential that can finish
+creating a department should not still be sitting there the next morning.
+
+**No permission, module setting, endpoint or migration is involved.** What
+changes is how you schedule the install:
+
+| Situation                                  | Result                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Finish in one tab without closing it       | Normal path                                                                           |
+| Open `/onboarding` in a second tab mid-run | That tab starts its own session; the original step refuses to save                    |
+| Close the browser partway through          | The run is over — restart the wizard                                                  |
+| Idle more than 30 minutes                  | The server session expires. It always did; the timer resets on each action            |
+| "Onboarding has already been completed"    | A **different** condition: a department already exists. Sign in, do not restart setup |
+
+**Teach this part explicitly, because the screen misleads.** The answers you
+typed are stored separately and are _not_ cleared. Reopen the wizard after a
+restart and **the form comes back filled in while the session behind it is
+gone** — nothing says so until the next step fails. The filled-in form is a
+local draft, not a resumed session; the recovery is to start the wizard over,
+not to re-type into it.
+
+Practical guidance for an installer: gather the department address, station
+list, apparatus list and first administrator's details before starting, allow an
+uninterrupted half hour, and stay in one tab until the dashboard appears.
+
+> **[SCREENSHOT NEEDED — sequence of two: (1) the wizard reopened after a browser restart, showing the previously typed answers repainted; (2) the session-expired error raised when continuing to the next step. Demo data: start an onboarding run through the stations step, close the browser, reopen `/onboarding`. Both frames are required — a single frame of either one teaches the wrong lesson.]**
+
+## Dark mode: the strip at the right edge is gone _(August 15)_
+
+**Who this affects:** everyone using dark mode, on every page — including the
+public pages members' families and applicants see (public forms, ballot voting,
+application status).
+
+The themed background gradient now covers the browser's scrollbar gutter. It
+previously stopped short of it, so in dark mode a bright strip ran down the
+right edge of every page. There is nothing to configure and no behavior change;
+it is purely what the screen looks like.
+
+**Why it appears in a workflow lesson at all:** it invalidates images. Any
+dark-mode screenshot, printed handout or recorded video captured before August
+15 that shows a full browser window may still show the old strip. When you reuse
+department training material, check the right edge of the image before handing it
+out.
+
+> **[SCREENSHOT NEEDED — a public page (`/f/{slug}` or an application-status link) in dark mode at full window width with the page long enough to scroll, so the gutter is visible and painted. This is the standing proof that pages outside the app shell are covered.]**
+
+**Two problems this caused, both already fixed** _(2026-08-16)_. Recorded here
+only so nobody re-reports them from an older build:
+
+1. Printing with the browser's **"Background graphics"** option switched on could
+   put the themed background behind a scorecard, skill sheet, label or QR sign —
+   in light mode. Fixed.
+2. The six print-preview screens (skill sheet, scorecard, member training record,
+   program, compliance, shift report) briefly showed the themed background
+   framing the grey backdrop behind the sheet. Cosmetic, and what came out of the
+   printer was never affected. Fixed.
+
+If you see either on your installation, you are on a build from between
+August 15 and 16; update.
+
 ## Upgrade notes for administrators
+
+The notes below apply to the August 12–14 changes; the August 15–16 window
+has [its own upgrade notes](#upgrade-notes-for-administrators-august-1516)
+further down — it **does** carry a migration (`20260816_0001`, nested
+facility rooms; plus the 08-16 inventory-vendor and storage-area-barcode
+backfills) and a deployment floor (Docker Compose v2.24.4+).
 
 Back up the database and encryption keys separately, require a single result
 from `alembic heads`, and run `alembic upgrade head`. Production transport TLS
@@ -221,19 +301,18 @@ lost their index entry.
   no longer count against a form's daily cap, so a flood of junk cannot lock
   legitimate submitters out for the day. The cap still answers with a clear
   "not accepting further submissions today" message when genuinely reached.
-- **Dark mode on public pages** (forms, ballots, status pages) no longer
-  renders white-on-white; the themed background now covers every page,
-  including the scrollbar gutter.
-- **Onboarding sessions are tab-scoped.** The setup wizard's session no
-  longer survives a browser restart or spans tabs; if you close the tab
-  mid-onboarding, expect to resume by signing in again.
+- The dark-mode and installation-wizard changes in this window have their own
+  sections above ("Dark mode: the strip at the right edge is gone" and
+  "Installing: the wizard is now one tab, one sitting").
 
 ## Upgrade notes for administrators (August 15–16)
 
-One migration: `20260816_0001` adds `facility_rooms.parent_room_id`
+Three migrations, linear: `20260816_0001` adds `facility_rooms.parent_room_id`
 (nullable, self-referential, `ON DELETE SET NULL`) — no backfill, existing
-rooms stay top-level. Back up, require a single `alembic heads` result, run
-`alembic upgrade head`. Deploying `docker-compose.prod.yml` now requires
+rooms stay top-level; `20260816_0002` backfills storage-area barcodes; and
+`20260816_0003` creates inventory vendors and backfills one per distinct
+free-text supplier name. Back up, require a single `alembic heads` result
+(`20260816_0003`), run `alembic upgrade head`. Deploying `docker-compose.prod.yml` now requires
 Docker Compose v2.24.4+ (`volumes: !override` clears development bind
 mounts; upgrade Compose rather than removing the tag). Unraid operators
 copying `unraid/.env.example` will find an HTTPS `ALLOWED_ORIGINS` example —
