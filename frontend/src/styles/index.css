@@ -1519,7 +1519,10 @@ tbody tr:last-child {
     display: none !important;
   }
 
-  /* Reset backgrounds for ink savings */
+  /* Reset backgrounds for ink savings. html carries the app canvas gradient
+     (see the root-canvas rule above), so it must be reset here too or prints
+     with background graphics enabled include the gradient. */
+  html,
   body,
   main,
   .dark {
