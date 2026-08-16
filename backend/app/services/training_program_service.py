@@ -685,7 +685,7 @@ class TrainingProgramService:
             "checklist_items",
         }
         target_changed = any(
-            field in updates and getattr(requirement, field, None) != value
+            self._target_field_changed(field, getattr(requirement, field, None), value)
             for field, value in updates.items()
             if field in target_fields
         )
@@ -1162,6 +1162,24 @@ class TrainingProgramService:
         await self.db.commit()
         return True, None
 
+    @staticmethod
+    def _target_field_changed(field: str, stored: Any, new: Any) -> bool:
+        """Whether an update to a target field changes the completion math.
+
+        For ``checklist_items`` the raw values can't be compared directly:
+        normalization injects metadata (``member_can_complete``, visibility
+        defaults) into every stored item, so a legacy row lacking those keys
+        makes ANY full-array resave look "changed" — and a metadata-only edit
+        (toggling who may self-report a step) would recompute and reopen
+        progress that nothing about the member's work invalidated. Only the
+        set of step ids feeds the completion math, so that is all we compare.
+        """
+        if field != "checklist_items":
+            return stored != new
+        stored_ids = sorted(i["id"] for i in normalize_checklist_items(stored))
+        new_ids = sorted(i["id"] for i in normalize_checklist_items(new))
+        return stored_ids != new_ids
+
     async def _recompute_checklist_progress(
         self, requirement: TrainingRequirement
     ) -> None:
@@ -1181,6 +1199,16 @@ class TrainingProgramService:
         for row in rows_result.scalars().all():
             notes = row.progress_notes or {}
             if "checklist_done" not in notes:
+                continue
+            # Same rule as the numeric branch below: a row an officer marked
+            # complete/verified/waived stays satisfied. Re-deriving its status
+            # from the tick count would reopen a sign-off (a partially ticked
+            # row that was completed wholesale) nobody asked to revisit.
+            if row.status in (
+                RequirementProgressStatus.COMPLETED,
+                RequirementProgressStatus.VERIFIED,
+                RequirementProgressStatus.WAIVED,
+            ):
                 continue
 
             done = prune_done_ids(requirement.checklist_items, notes["checklist_done"])
@@ -2457,7 +2485,11 @@ class TrainingProgramService:
 
         Returns: (progress, error_message)
         """
-        # Get progress with enrollment and program
+        # Get progress with enrollment and program. Locked FOR UPDATE: a
+        # member's self-report and an officer's sign-off both read-modify-write
+        # the whole progress_notes JSON, so concurrent writers must serialize
+        # or the second commit silently drops the first one's changes (same
+        # pattern as membership_pipeline_service.get_prospect).
         result = await self.db.execute(
             select(RequirementProgress)
             .options(
@@ -2472,6 +2504,7 @@ class TrainingProgramService:
                 RequirementProgress.id == str(progress_id),
                 TrainingProgram.organization_id == str(organization_id),
             )
+            .with_for_update(of=RequirementProgress)
         )
         progress = result.scalar_one_or_none()
 
@@ -2508,14 +2541,39 @@ class TrainingProgramService:
                     or requirement.requirement_type != RequirementType.CHECKLIST
                 ):
                     return None, "This requirement is not a checklist"
+                stored_claims = {
+                    str(item_id)
+                    for item_id in (
+                        (progress.progress_notes or {}).get("checklist_claimed") or []
+                    )
+                }
+                # Validate only the ids this submission ADDS. The member's UI
+                # echoes previously stored claims back on every save, so if an
+                # officer has since disabled self-reporting on a claimed step,
+                # holding the whole update hostage to that stale claim would
+                # leave the member unable to save anything at all. Retracting
+                # a claim is always allowed.
+                new_claims = [
+                    str(item_id)
+                    for item_id in updates.checklist_claimed
+                    if str(item_id) not in stored_claims
+                ]
+                if new_claims and progress.status in (
+                    RequirementProgressStatus.COMPLETED,
+                    RequirementProgressStatus.VERIFIED,
+                    RequirementProgressStatus.WAIVED,
+                ):
+                    return (
+                        None,
+                        "This requirement is already satisfied and no longer "
+                        "accepts self-reported steps",
+                    )
                 allowed = {
                     item["id"]
                     for item in normalize_checklist_items(requirement.checklist_items)
                     if item["member_visible"] and item["member_can_complete"]
                 }
-                if any(
-                    str(item_id) not in allowed for item_id in updates.checklist_claimed
-                ):
+                if any(item_id not in allowed for item_id in new_claims):
                     return (
                         None,
                         "One or more checklist steps cannot be completed by a member",
