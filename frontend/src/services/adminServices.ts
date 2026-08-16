@@ -472,6 +472,12 @@ export interface NotificationRuleRecord {
   channel: string;
   enabled: boolean;
   config?: unknown;
+  /**
+   * Whether a sender actually consults this rule. Rules for triggers that
+   * have no sender yet are stored and listed but never read — the UI says so
+   * rather than showing them as plain "Active".
+   */
+  enforced: boolean;
   created_at: string;
   updated_at: string;
   created_by?: string;

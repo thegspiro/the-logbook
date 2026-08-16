@@ -462,10 +462,27 @@ async def resolve_check_templates(
 
 
 async def run_cert_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
-    """Run certification expiration alerts for all organizations."""
+    """Run certification expiration alerts for all organizations.
+
+    The org's notification rule for TRAINING_EXPIRY gates the whole run. It is
+    checked here rather than inside CertAlertService so the rule stays one
+    query per organization instead of one per member, and so the service keeps
+    a single reason to refuse (its own cert_alert_config).
+
+    Note the two switches compose as AND: the training module's
+    ``cert_alert_config.enabled`` decides whether these alerts exist for the
+    org at all, and the rule can then turn them off. Creating an enabled rule
+    does not switch them on for an org that never configured cert alerts.
+    """
+    from app.models.notification import NotificationTrigger
     from app.services.cert_alert_service import CertAlertService
+    from app.services.notification_rules import NotificationRuleResolver
+
+    resolver = NotificationRuleResolver(db)
 
     async def _process(db_session, org):
+        if not await resolver.is_enabled(org.id, NotificationTrigger.TRAINING_EXPIRY):
+            return 0
         service = CertAlertService(db_session)
         result = await service.process_alerts(org.id)
         return result.get("alerts_sent", 0)
@@ -751,10 +768,19 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.core.config import settings
     from app.core.utils import generate_uuid
     from app.models.event import Event, RSVPStatus
-    from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.notification import (
+        NotificationChannel,
+        NotificationLog,
+        NotificationTrigger,
+    )
     from app.models.user import User
     from app.services.email_service import EmailService
+    from app.services.notification_rules import (
+        NotificationRuleResolver,
+        reminder_schedule_from,
+    )
 
+    rule_resolver = NotificationRuleResolver(db)
     now = datetime.now(dt_timezone.utc)
     orgs = await db.execute(
         select(Organization).where(Organization.active.isnot(False))
@@ -770,6 +796,16 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         org_emails = 0
 
         try:
+            # The org's EVENT_REMINDER rule, if it made one. Absent means on,
+            # so an org that never opened the notifications screen keeps the
+            # reminders it has always had.
+            rule = await rule_resolver.resolve(
+                org.id, NotificationTrigger.EVENT_REMINDER
+            )
+            if not rule.enabled:
+                continue
+            fallback_schedule = reminder_schedule_from(rule.config)
+
             # Load org event settings to get default_reminder_time
             org_settings = (org.settings or {}).get("events", {}).get("defaults", {})
             default_reminder_time_str = org_settings.get(
@@ -806,7 +842,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
             events = list(events_result.scalars().all())
 
             for event in events:
-                schedule = event.reminder_schedule or [24]
+                # An event's own schedule always wins; the rule only supplies
+                # the fallback for events that carry none.
+                schedule = event.reminder_schedule or fallback_schedule
                 custom = event.custom_fields or {}
                 already_sent = set(custom.get("reminders_sent", []))
 

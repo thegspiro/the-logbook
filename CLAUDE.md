@@ -864,6 +864,38 @@ emails they keep receiving.
 to `SmsAlert` — a visible, reviewable change rather than a call site nobody
 sees. Whatever the SMS gates decide, send the email unconditionally.
 
+### 19. A Config Switch Must Have a Reader Before It Has a UI _(2026-08-16)_
+
+`notification_rules` shipped with a model, CRUD endpoints, an admin screen, a
+create modal and an enable/disable toggle — and **no code that read the table**.
+A chief could create "Event reminders", see it listed as _Active_, toggle it
+off, and the reminders kept going out. A switch wired to nothing is worse than
+no switch: it invites somebody to believe a notification is off when it is not,
+and nothing about the UI says otherwise.
+
+When adding org-level configuration, the reader comes first, and the UI only
+ever offers what a reader consults:
+
+- **Name the wired set in code, on the backend.** `ENFORCED_TRIGGERS` in
+  `models/notification.py` is the authority; `NotificationRuleResponse` reports
+  `enforced` per rule so the screen can label a stored-but-inert one instead of
+  badging it Active. The frontend dropdown offers only the wired values.
+- **Absence must mean "current behaviour", never "off".** A resolver that
+  defaults to disabled when a table is empty silently kills every existing
+  installation's notifications on upgrade, and nobody connects the missed drill
+  notice to the deploy. `NotificationRuleResolver` returns
+  `enabled=True` plus the sender's previous built-in defaults when an org has no
+  rule.
+- **Read free-form JSON config defensively.** `rule.config` is unvalidated JSON;
+  `reminder_schedule_from` degrades a bad value to the built-in default rather
+  than raising, because an exception inside a scheduled task takes out the whole
+  organization's reminders rather than the one setting somebody typed wrong.
+
+**Rule:** Do not ship a setting whose only effect is being stored. Either wire a
+reader in the same change, or mark it in the UI as not yet in effect — and add a
+test asserting the wired set, so the next trigger cannot be added to the list
+without a sender that reads it.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

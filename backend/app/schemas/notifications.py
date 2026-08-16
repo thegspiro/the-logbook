@@ -8,12 +8,13 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from app.models.notification import (
     NotificationCategory,
     NotificationChannel,
     NotificationTrigger,
+    is_enforced,
 )
 from app.schemas.base import UTCResponseBase
 
@@ -105,6 +106,17 @@ class NotificationRuleResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def enforced(self) -> bool:
+        """Whether a sender consults this rule, or it is stored and inert.
+
+        Surfaced so the admin screen can label a rule nobody reads. Rules
+        shipped for a while with no dispatcher at all; showing an inert rule as
+        plain "Active" is what made that invisible.
+        """
+        return is_enforced(self.trigger)
 
     model_config = ConfigDict(from_attributes=True)
 
