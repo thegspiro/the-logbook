@@ -190,6 +190,11 @@ const Dashboard: React.FC = () => {
   // cannot disagree about what is expiring.
   const [myCerts, setMyCerts] = useState<ReadinessCert[]>([]);
 
+  // Shift positions this member may hold, resolved by the backend from rank,
+  // completed training and membership type. Distinct from the per-shift
+  // eligibility fetched when a signup row is expanded.
+  const [mySeats, setMySeats] = useState<string[]>([]);
+
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
@@ -267,6 +272,7 @@ const Dashboard: React.FC = () => {
     void loadOpenShifts();
     void loadDeptMessages();
     void loadHours();
+    void loadMySeats();
     void loadTrainingProgress();
     void loadMyEquipment();
     void loadUpcomingEvents();
@@ -506,6 +512,21 @@ const Dashboard: React.FC = () => {
       toast.error(getErrorMessage(error, 'Failed to sign up for shift'));
     } finally {
       setSigningUpShiftId(null);
+    }
+  };
+
+  const loadMySeats = async () => {
+    try {
+      // No shift id: the positions the member may hold in general, not the
+      // ones open on a particular shift.
+      const data = await schedulingService.getEligiblePositions();
+      // A member the department excludes from shift signup has no seats to
+      // report, and "no seats" is not a readiness finding about them — the
+      // verdict simply says nothing on the subject.
+      setMySeats(data.is_excluded ? [] : data.positions);
+    } catch {
+      // Seat eligibility is non-critical; the verdict falls back to
+      // certifications alone and says so.
     }
   };
 
@@ -782,6 +803,7 @@ const Dashboard: React.FC = () => {
       loadOpenShifts(),
       loadDeptMessages(),
       loadHours(),
+      loadMySeats(),
       loadTrainingProgress(),
       loadMyEquipment(),
       loadUpcomingEvents(),
@@ -986,7 +1008,11 @@ const Dashboard: React.FC = () => {
               {/* Both carry the default flex order, so source order puts the
                   verdict above the panel it summarises — on phones too, where
                   the actions and timeline swap around them. */}
-              <DashboardReadiness certs={myCerts} onOpen={() => void navigate('/training/my-training')} />
+              <DashboardReadiness
+                certs={myCerts}
+                positions={mySeats}
+                onOpen={() => void navigate('/training/my-training')}
+              />
 
               <DashboardNeedsYou items={needsYouItems} />
 

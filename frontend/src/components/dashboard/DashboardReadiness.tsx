@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronRight, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
 import { computeReadiness } from '../../utils/readiness';
 import type { ReadinessCert, ReadinessLevel } from '../../utils/readiness';
+import { POSITION_LABELS } from '../../constants/enums';
 
 const LEVEL: Record<ReadinessLevel, { box: string; icon: string; headline: string; Icon: typeof ShieldCheck }> = {
   clear: {
@@ -26,6 +27,13 @@ const LEVEL: Record<ReadinessLevel, { box: string; icon: string; headline: strin
 
 interface DashboardReadinessProps {
   certs: ReadinessCert[];
+  /**
+   * Shift positions the member is eligible to hold, from the scheduling
+   * eligibility service — rank, completed training and membership type
+   * resolved together. Empty for a member the department excludes from shift
+   * signup altogether, where the concept does not apply and nothing renders.
+   */
+  positions?: string[] | undefined;
   onOpen: () => void;
 }
 
@@ -38,11 +46,12 @@ interface DashboardReadinessProps {
  * note is not decoration — without it a green line reads as a full clearance,
  * and a member could skip checking the things this cannot see.
  */
-const DashboardReadiness: React.FC<DashboardReadinessProps> = ({ certs, onOpen }) => {
+const DashboardReadiness: React.FC<DashboardReadinessProps> = ({ certs, positions, onOpen }) => {
   const readiness = computeReadiness(certs);
   if (!readiness) return null;
 
   const { box, icon, headline, Icon } = LEVEL[readiness.level];
+  const seats = positions ?? [];
 
   return (
     <button
@@ -57,8 +66,26 @@ const DashboardReadiness: React.FC<DashboardReadinessProps> = ({ certs, onOpen }
         </span>
         <span className="text-theme-text-secondary mt-0.5 block text-xs sm:text-sm">
           {readiness.detail}
-          <span className="text-theme-text-muted"> · Certifications only</span>
+          {/* Names the inputs rather than claiming a clearance. Medical
+              screenings are modelled and computed, but reading them needs
+              medical_screening.view — an officer permission with no
+              self-service route — so they are not in this verdict. */}
+          <span className="text-theme-text-muted">
+            {seats.length > 0 ? ' · Certifications and seats' : ' · Certifications only'}
+          </span>
         </span>
+        {seats.length > 0 && (
+          <span className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Seats you can hold">
+            {seats.map((position) => (
+              <span
+                key={position}
+                className="border-theme-surface-border bg-theme-surface text-theme-text-secondary rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+              >
+                {POSITION_LABELS[position] ?? position}
+              </span>
+            ))}
+          </span>
+        )}
       </span>
       <ChevronRight className="text-theme-text-muted h-5 w-5 shrink-0" aria-hidden="true" />
     </button>

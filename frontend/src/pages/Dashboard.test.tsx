@@ -39,6 +39,7 @@ const {
   mockGetSetupChecklist,
   mockGetUserInventory,
   mockGetInventorySummary,
+  mockGetEligiblePositions,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -53,6 +54,7 @@ const {
   mockGetSetupChecklist: vi.fn(),
   mockGetUserInventory: vi.fn(),
   mockGetInventorySummary: vi.fn(),
+  mockGetEligiblePositions: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -63,7 +65,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
       .fn()
       .mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
     signupForShift: mockSignupForShift,
-    getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'] }),
+    getEligiblePositions: mockGetEligiblePositions,
   },
 }));
 
@@ -166,6 +168,7 @@ describe('Dashboard', () => {
     mockAcknowledge.mockResolvedValue(undefined);
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
+    mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
     mockCheckPermission.mockReturnValue(false);
     mockGetAdminSummary.mockResolvedValue({});
     mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
@@ -345,6 +348,47 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+    });
+
+    it('names the seats the member can hold', async () => {
+      withCerts([
+        { id: 'c1', course_name: 'Firefighter I', expiration_date: null, is_expired: false, days_until_expiry: null },
+      ]);
+      mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter', 'driver'], is_excluded: false });
+
+      renderWithRouter(<Dashboard />);
+
+      const seats = await screen.findByLabelText('Seats you can hold');
+      expect(within(seats).getByText('Firefighter')).toBeInTheDocument();
+      expect(within(seats).getByText('Driver/Operator')).toBeInTheDocument();
+    });
+
+    // A member the department excludes from shift signup — a social or
+    // administrative member — has no seats to report. "No seats" is not a
+    // readiness finding about them, so the verdict says nothing on the subject
+    // rather than implying they failed something.
+    it('says nothing about seats for a member excluded from shift signup', async () => {
+      withCerts([
+        { id: 'c1', course_name: 'Firefighter I', expiration_date: null, is_expired: false, days_until_expiry: null },
+      ]);
+      mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Seats you can hold')).not.toBeInTheDocument();
+      expect(screen.getByText(/Certifications only/)).toBeInTheDocument();
+    });
+
+    // The general eligibility call takes no shift id; the per-shift one used by
+    // a signup row does. Passing an id here would narrow the seats to whatever
+    // shift happened to be expanded.
+    it('asks for general eligibility, not a shift’s', async () => {
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(mockGetEligiblePositions).toHaveBeenCalledWith();
+      });
     });
 
     it('sits above the panel it summarises', async () => {
