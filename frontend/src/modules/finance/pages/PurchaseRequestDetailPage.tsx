@@ -29,6 +29,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { PurchaseRequestStatus, PURCHASE_REQUEST_STATUS_COLORS, APPROVAL_STEP_STATUS_COLORS } from '../types';
 
@@ -178,6 +179,7 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
 const PurchaseRequestDetailPage: React.FC = () => {
   const tz = useTimezone();
   const { id } = useParams<{ id: string }>();
+  const { busy, run } = useSubmitGuard();
   const navigate = useNavigate();
   const {
     selectedPurchaseRequest: pr,
@@ -193,15 +195,16 @@ const PurchaseRequestDetailPage: React.FC = () => {
     }
   }, [id, fetchPurchaseRequest]);
 
-  const handleSubmit = async () => {
-    if (!id) return;
-    try {
-      await submitPurchaseRequest(id);
-      toast.success('Purchase request submitted for approval');
-    } catch {
-      // Error handled by store
-    }
-  };
+  const handleSubmit = () =>
+    run(async () => {
+      if (!id) return;
+      try {
+        await submitPurchaseRequest(id);
+        toast.success('Purchase request submitted for approval');
+      } catch {
+        // Error handled by store
+      }
+    });
 
   const handleMarkOrdered = async () => {
     if (!id) return;
@@ -341,8 +344,9 @@ const PurchaseRequestDetailPage: React.FC = () => {
             {canSubmit && (
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => void handleSubmit()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit

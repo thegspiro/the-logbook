@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -18,6 +19,7 @@ export const RoleManagementPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const { busy, run } = useSubmitGuard();
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const roleModalRef = useFocusTrap<HTMLDivElement>(showCreateModal);
 
@@ -74,29 +76,30 @@ export const RoleManagementPage: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  const handleSubmit = async () => {
-    try {
-      setError(null);
+  const handleSubmit = () =>
+    run(async () => {
+      try {
+        setError(null);
 
-      if (editingRole) {
-        // Update existing role
-        await roleService.updateRole(editingRole.id, {
-          name: formData.name !== editingRole.name ? formData.name : undefined,
-          description: formData.description !== editingRole.description ? formData.description : undefined,
-          permissions: formData.permissions,
-          priority: formData.priority !== editingRole.priority ? formData.priority : undefined,
-        });
-      } else {
-        // Create new role
-        await roleService.createRole(formData);
+        if (editingRole) {
+          // Update existing role
+          await roleService.updateRole(editingRole.id, {
+            name: formData.name !== editingRole.name ? formData.name : undefined,
+            description: formData.description !== editingRole.description ? formData.description : undefined,
+            permissions: formData.permissions,
+            priority: formData.priority !== editingRole.priority ? formData.priority : undefined,
+          });
+        } else {
+          // Create new role
+          await roleService.createRole(formData);
+        }
+
+        await fetchData();
+        setShowCreateModal(false);
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Unable to save the role. Please check your input and try again.'));
       }
-
-      await fetchData();
-      setShowCreateModal(false);
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to save the role. Please check your input and try again.'));
-    }
-  };
+    });
 
   const handleDelete = async (role: Role) => {
     if (
@@ -366,10 +369,11 @@ export const RoleManagementPage: React.FC = () => {
                   Cancel
                 </button>
                 <button
+                  disabled={busy}
                   onClick={() => {
                     void handleSubmit();
                   }}
-                  className="btn-info rounded-md text-sm font-medium"
+                  className="btn-info rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {editingRole ? 'Save Changes' : 'Create Role'}
                 </button>

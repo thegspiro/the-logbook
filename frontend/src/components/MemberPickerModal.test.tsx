@@ -128,4 +128,30 @@ describe('MemberPickerModal', () => {
     render(<MemberPickerModal {...defaultProps} />);
     expect(await screen.findByText('Server unreachable')).toBeInTheDocument();
   });
+  it('fires onSelect once when a member row is double-clicked', async () => {
+    // Every consumer turns a selection into a write (assign an item, issue a
+    // kit) and none can disable this list mid-request, so a second click used
+    // to issue the same equipment twice.
+    const onSelect = vi.fn();
+    render(<MemberPickerModal {...defaultProps} onSelect={onSelect} />);
+    const row = await screen.findByText('John Smith');
+
+    await userEvent.dblClick(row);
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith({ userId: 'user-1', memberName: 'John Smith' });
+  });
+
+  it('accepts a new selection after the modal is reopened', async () => {
+    const onSelect = vi.fn();
+    const { rerender } = render(<MemberPickerModal {...defaultProps} onSelect={onSelect} />);
+    await userEvent.click(await screen.findByText('John Smith'));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+
+    rerender(<MemberPickerModal {...defaultProps} onSelect={onSelect} isOpen={false} />);
+    rerender(<MemberPickerModal {...defaultProps} onSelect={onSelect} isOpen />);
+
+    await userEvent.click(await screen.findByText('John Smith'));
+    expect(onSelect).toHaveBeenCalledTimes(2);
+  });
 });

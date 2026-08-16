@@ -11,6 +11,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { useNavigate, useParams } from 'react-router';
 import toast from 'react-hot-toast';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import {
   ArrowLeft,
   Edit,
@@ -188,6 +189,11 @@ const getDueDateClasses = (dueDate: string): string => {
 export const GrantDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  // One guard per modal: the three Add buttons are independent, and a shared
+  // flag would let an in-flight budget line block an unrelated expenditure.
+  const { busy: budgetBusy, run: runBudget } = useSubmitGuard();
+  const { busy: expenditureBusy, run: runExpenditure } = useSubmitGuard();
+  const { busy: complianceBusy, run: runCompliance } = useSubmitGuard();
   const tz = useTimezone();
 
   const {
@@ -287,59 +293,62 @@ export const GrantDetailPage: React.FC = () => {
     setComplianceReportTemplate('');
   };
 
-  const handleAddBudgetItem = async () => {
-    if (!id || !budgetCategory || !budgetDescription || !budgetAmount) return;
-    try {
-      await addBudgetItem(id, {
-        category: budgetCategory,
-        description: budgetDescription,
-        amountBudgeted: parseFloat(budgetAmount),
-      });
-      toast.success('Budget item added');
-      resetBudgetForm();
-      setShowBudgetModal(false);
-    } catch {
-      toast.error('Failed to add budget item');
-    }
-  };
+  const handleAddBudgetItem = () =>
+    runBudget(async () => {
+      if (!id || !budgetCategory || !budgetDescription || !budgetAmount) return;
+      try {
+        await addBudgetItem(id, {
+          category: budgetCategory,
+          description: budgetDescription,
+          amountBudgeted: parseFloat(budgetAmount),
+        });
+        toast.success('Budget item added');
+        resetBudgetForm();
+        setShowBudgetModal(false);
+      } catch {
+        toast.error('Failed to add budget item');
+      }
+    });
 
-  const handleAddExpenditure = async () => {
-    if (!id || !expenditureDescription || !expenditureAmount || !expenditureDate) return;
-    try {
-      await addExpenditure(id, {
-        description: expenditureDescription,
-        amount: parseFloat(expenditureAmount),
-        expenditureDate,
-        vendor: expenditureVendor || null,
-        invoiceNumber: expenditureInvoice || null,
-        budgetItemId: expenditureBudgetItemId || null,
-      });
-      toast.success('Expenditure recorded');
-      resetExpenditureForm();
-      setShowExpenditureModal(false);
-    } catch {
-      toast.error('Failed to record expenditure');
-    }
-  };
+  const handleAddExpenditure = () =>
+    runExpenditure(async () => {
+      if (!id || !expenditureDescription || !expenditureAmount || !expenditureDate) return;
+      try {
+        await addExpenditure(id, {
+          description: expenditureDescription,
+          amount: parseFloat(expenditureAmount),
+          expenditureDate,
+          vendor: expenditureVendor || null,
+          invoiceNumber: expenditureInvoice || null,
+          budgetItemId: expenditureBudgetItemId || null,
+        });
+        toast.success('Expenditure recorded');
+        resetExpenditureForm();
+        setShowExpenditureModal(false);
+      } catch {
+        toast.error('Failed to record expenditure');
+      }
+    });
 
-  const handleAddComplianceTask = async () => {
-    if (!id || !complianceTitle || !complianceDueDate) return;
-    try {
-      await addComplianceTask(id, {
-        taskType: complianceType,
-        title: complianceTitle,
-        description: complianceDescription || null,
-        dueDate: complianceDueDate,
-        priority: compliancePriority,
-        reportTemplate: complianceReportTemplate || null,
-      });
-      toast.success('Compliance task added');
-      resetComplianceForm();
-      setShowComplianceModal(false);
-    } catch {
-      toast.error('Failed to add compliance task');
-    }
-  };
+  const handleAddComplianceTask = () =>
+    runCompliance(async () => {
+      if (!id || !complianceTitle || !complianceDueDate) return;
+      try {
+        await addComplianceTask(id, {
+          taskType: complianceType,
+          title: complianceTitle,
+          description: complianceDescription || null,
+          dueDate: complianceDueDate,
+          priority: compliancePriority,
+          reportTemplate: complianceReportTemplate || null,
+        });
+        toast.success('Compliance task added');
+        resetComplianceForm();
+        setShowComplianceModal(false);
+      } catch {
+        toast.error('Failed to add compliance task');
+      }
+    });
 
   const handleMarkTaskComplete = async (taskId: string) => {
     if (!id) return;
@@ -1156,7 +1165,7 @@ export const GrantDetailPage: React.FC = () => {
             </button>
             <button
               type="button"
-              disabled={!budgetCategory || !budgetDescription || !budgetAmount}
+              disabled={budgetBusy || !budgetCategory || !budgetDescription || !budgetAmount}
               onClick={() => void handleAddBudgetItem()}
               className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -1275,7 +1284,7 @@ export const GrantDetailPage: React.FC = () => {
             </button>
             <button
               type="button"
-              disabled={!expenditureDescription || !expenditureAmount || !expenditureDate}
+              disabled={expenditureBusy || !expenditureDescription || !expenditureAmount || !expenditureDate}
               onClick={() => void handleAddExpenditure()}
               className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -1395,7 +1404,7 @@ export const GrantDetailPage: React.FC = () => {
             </button>
             <button
               type="button"
-              disabled={!complianceTitle || !complianceDueDate}
+              disabled={complianceBusy || !complianceTitle || !complianceDueDate}
               onClick={() => void handleAddComplianceTask()}
               className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >

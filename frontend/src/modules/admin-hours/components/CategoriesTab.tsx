@@ -13,6 +13,7 @@ import { adminHoursEntryService, adminHoursSeedService } from '../services/api';
 import type { AdminHoursCategory, AdminHoursCategoryCreate, AdminHoursCategoryUpdate } from '../types';
 import CategoryForm from './CategoryForm';
 import toast from 'react-hot-toast';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 const DEFAULT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
@@ -30,6 +31,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
   const deleteCategory = useAdminHoursStore((s) => s.deleteCategory);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const { busy, run } = useSubmitGuard();
   const [editingCategory, setEditingCategory] = useState<AdminHoursCategory | null>(null);
   const [formData, setFormData] = useState<AdminHoursCategoryCreate>({
     name: '',
@@ -55,15 +57,17 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
     setEditingCategory(null);
   }, [categories.length]);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      await createCategory(formData);
-      toast.success('Category created');
-      resetForm();
-    } catch {
-      // error handled by store
-    }
+    return run(async () => {
+      try {
+        await createCategory(formData);
+        toast.success('Category created');
+        resetForm();
+      } catch {
+        // error handled by store
+      }
+    });
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -193,6 +197,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
                 }
           }
           isEditing={!!editingCategory}
+          submitting={busy}
           onCancel={resetForm}
         />
       )}

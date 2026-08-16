@@ -43,6 +43,7 @@ import {
   Link2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent, DraggableAttributes } from '@dnd-kit/core';
 import {
@@ -322,6 +323,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // State
   const [form, setForm] = useState<TemplateFormState>(defaultTemplateForm);
   const [compartments, setCompartments] = useState<CompartmentFormState[]>([]);
+  // Two guards, not one: adding a compartment and adding a section header are
+  // separate buttons, and a shared flag would gray out one because the other
+  // is mid-flight.
+  const { busy: addingCompartment, run: runAddCompartment } = useSubmitGuard();
+  const { busy: addingSection, run: runAddSection } = useSubmitGuard();
   const [expandedCompartments, setExpandedCompartments] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -477,75 +483,77 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     });
   };
 
-  const addCompartment = async () => {
-    if (!templateId) {
-      // For new templates not yet saved, add locally
-      const key = `new-${Date.now()}`;
-      const comp = emptyCompartment();
-      setCompartments((prev) => [...prev, comp]);
-      setExpandedCompartments((prev) => new Set(prev).add(key));
-      return;
-    }
+  const addCompartment = () =>
+    runAddCompartment(async () => {
+      if (!templateId) {
+        // For new templates not yet saved, add locally
+        const key = `new-${Date.now()}`;
+        const comp = emptyCompartment();
+        setCompartments((prev) => [...prev, comp]);
+        setExpandedCompartments((prev) => new Set(prev).add(key));
+        return;
+      }
 
-    try {
-      const payload: CheckTemplateCompartmentCreate = {
-        name: 'New Compartment',
-        sort_order: compartments.length,
-        container_type: 'compartment',
-      };
-      const created = await schedulingService.addCompartment(templateId, payload);
-      const comp: CompartmentFormState = {
-        id: created.id,
-        name: created.name,
-        description: created.description ?? '',
-        imageUrl: created.imageUrl ?? '',
-        isHeader: false,
-        containerType: created.containerType ?? 'compartment',
-        parentCompartmentId: created.parentCompartmentId ?? '',
-        items: [],
-      };
-      setCompartments((prev) => [...prev, comp]);
-      setExpandedCompartments((prev) => new Set(prev).add(created.id));
-      toast.success('Compartment added');
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add compartment'));
-    }
-  };
+      try {
+        const payload: CheckTemplateCompartmentCreate = {
+          name: 'New Compartment',
+          sort_order: compartments.length,
+          container_type: 'compartment',
+        };
+        const created = await schedulingService.addCompartment(templateId, payload);
+        const comp: CompartmentFormState = {
+          id: created.id,
+          name: created.name,
+          description: created.description ?? '',
+          imageUrl: created.imageUrl ?? '',
+          isHeader: false,
+          containerType: created.containerType ?? 'compartment',
+          parentCompartmentId: created.parentCompartmentId ?? '',
+          items: [],
+        };
+        setCompartments((prev) => [...prev, comp]);
+        setExpandedCompartments((prev) => new Set(prev).add(created.id));
+        toast.success('Compartment added');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add compartment'));
+      }
+    });
 
-  const addSectionHeader = async () => {
-    if (!templateId) {
-      const comp: CompartmentFormState = {
-        ...emptyCompartment(),
-        name: 'Section Header',
-        isHeader: true,
-      };
-      setCompartments((prev) => [...prev, comp]);
-      return;
-    }
+  const addSectionHeader = () =>
+    runAddSection(async () => {
+      if (!templateId) {
+        const comp: CompartmentFormState = {
+          ...emptyCompartment(),
+          name: 'Section Header',
+          isHeader: true,
+        };
+        setCompartments((prev) => [...prev, comp]);
+        return;
+      }
 
-    try {
-      const payload: CheckTemplateCompartmentCreate = {
-        name: 'Section Header',
-        sort_order: compartments.length,
-        is_header: true,
-      };
-      const created = await schedulingService.addCompartment(templateId, payload);
-      const comp: CompartmentFormState = {
-        id: created.id,
-        name: created.name,
-        description: created.description ?? '',
-        imageUrl: created.imageUrl ?? '',
-        isHeader: true,
-        containerType: created.containerType ?? 'compartment',
-        parentCompartmentId: created.parentCompartmentId ?? '',
-        items: [],
-      };
-      setCompartments((prev) => [...prev, comp]);
-      toast.success('Section header added');
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add section header'));
-    }
-  };
+      try {
+        const payload: CheckTemplateCompartmentCreate = {
+          name: 'Section Header',
+          sort_order: compartments.length,
+          is_header: true,
+        };
+        const created = await schedulingService.addCompartment(templateId, payload);
+        const comp: CompartmentFormState = {
+          id: created.id,
+          name: created.name,
+          description: created.description ?? '',
+          imageUrl: created.imageUrl ?? '',
+          isHeader: true,
+          containerType: created.containerType ?? 'compartment',
+          parentCompartmentId: created.parentCompartmentId ?? '',
+          items: [],
+        };
+        setCompartments((prev) => [...prev, comp]);
+        toast.success('Section header added');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add section header'));
+      }
+    });
 
   const updateCompartmentField = (idx: number, patch: Partial<CompartmentFormState>) => {
     setCompartments((prev) => {
@@ -3466,16 +3474,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               )}
               <button
                 type="button"
+                disabled={addingSection}
                 onClick={() => void addSectionHeader()}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm font-medium transition-colors"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Type className="h-4 w-4" />
                 Add Section
               </button>
               <button
                 type="button"
+                disabled={addingCompartment}
                 onClick={() => void addCompartment()}
-                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus className="h-4 w-4" />
                 Add Compartment
