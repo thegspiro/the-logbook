@@ -74,6 +74,121 @@ earlier** and remain stale.
 
 ---
 
+## The 2026-08-16 pass — a fresh database, and the last two placeholders
+
+The container was reclaimed, taking MariaDB (and its data directory), the
+backend virtualenv and node_modules with it. The demo database this session
+runs against was therefore **rebuilt from `bootstrap_demo.py`** — which the
+08-13 notes predicted would happen someday and warned would carry a cost. Two
+consequences worth separating:
+
+- **Nothing already committed is invalidated by the rebuild.** The 421
+  verified images record what the product rendered against the old data;
+  the rebuild changes incidental values (ids, dates, spreads) only for
+  captures taken from here on.
+- **The clean rows the 08-13 pass wanted arrived for free.** The regress
+  residue ("4 of 6 stages completed" on a stage-four applicant) is gone by
+  construction.
+
+### Three seeder crashes only a fresh database could expose
+
+Every one of these sat in the create path, which a long-lived database never
+re-runs — the skip-by-name guard means that code executes exactly once per
+database, and it had not run since the blueprints last changed.
+
+1. **The prospect create-loop advanced without the interview fallback.** The
+   spread's advance knows to record an interview when a stage demands one; the
+   create-path loop above it did not, so the first applicant that had to clear
+   Interview aborted the whole step — Morgan Tran and Riley Bishop were never
+   created at all. Both paths now share `_advance_recording_interview`.
+2. **The equipment-check seed posted the engine template to the first three
+   shifts regardless of apparatus.** The old database happened to return
+   engines first; the fresh one ordered a medic shift into the front and the
+   API correctly refused it ("Template is not applicable to this shift"),
+   killing the step. The loop now filters to engine shifts with the
+   `apparatus_type_of` helper that was already defined a page above it.
+3. **`POST /training/instructors/qualifications` has refused every valid
+   create since 2026-08-11 — a product bug, not a seeder one.** The
+   tenant-scoping commit compares `users.id` (String(36)) against the
+   `uuid.UUID` the endpoint's `model_dump()` produces, and aiomysql binds a
+   UUID object in a representation that matches no stored row — so the guard
+   answered "Invalid user_id" for references that were perfectly in-org. The
+   unit test mocked the session and asserted compiled SQL, which is exactly
+   the layer that cannot see a bind-value mismatch. Fixed by stringifying
+   UUIDs at the service boundary; a new test pins the bound value itself.
+
+### 01-37-elected-package-badge — the elected badge, produced by the vote
+
+`01-membership.md:1156` wanted status Elected, a 35-3 tally and the linked
+prospect on one screen, which the 08-13 analysis had already split: no screen
+joins them. The caption now promises the drawer badge and cross-references
+guide 14 for tallies.
+
+`elected` is written in exactly one place — `_sync_package_statuses` when an
+election closes — so the seeder now walks the product's own lifecycle
+(`seed_membership_vote_outcome`): package marked `ready`, assigned to the
+draft August election through the assign endpoint, election opened, the floor
+vote recorded as a paper batch, attested by two officers, election closed.
+Three things that pass mattered:
+
+- **The hand-built ballot item was replaced, not reused.** It carried no
+  `prospect_package_id`, so closing an election around it would have synced
+  nothing — the assign endpoint is what writes the link.
+- **The assign default of regular/life eligibility matches nobody** in a
+  roster of active/administrative members, and an item with zero eligible
+  voters rejects any tally as implausible. The package's
+  `recommended_ballot_item` opens it to all types.
+- **The tally is 18-2, not the guide's 35-3** — the plausibility check caps a
+  batch at the eligible-voter count, and inventing 38 voters for a 22-member
+  department would need the audited override for no documentary gain. The
+  worked example keeps its numbers as prose.
+
+Verified: drawer open on the applicant at Membership Vote, ELECTION PACKAGE
+section reading **elected** with the "can now be converted" line, against an
+API state of package `elected` / election `closed`.
+
+Consequences recorded: the August election is now permanently closed in the
+demo. `14-23-membership-ballot-item` still captures — Preview Ballot renders
+for any manageable election with ballot items, status regardless — and its
+committed image predates the close anyway. `GET /elections/{id}/results` on
+this election answers 403 ("Results not available yet") because it was
+seeded `results_visible_immediately: false`; the certified-results screens
+picture the July election, which is `true`, so nothing loses its picture.
+
+### 01-38-program-phase-progress — the phase view, on the page that shows all of it
+
+`01-membership.md:1282`'s fractions (4/4, 0/6, 1/3, 0/2, 25%) were the worked
+example's numbers, not any screen's. The 08-13 analysis established the
+program detail carries no requirements inside its phases; the per-phase
+grouping lives on the **enrollment progress** view. Confirmed on the fresh
+database — where the blueprint's requirements actually seeded this time —
+and shot as the member-facing **My Program Progress** page rather than the
+admin Progress modal: the modal shows the same grouping but is height-capped
+and scrolls, so a capture of it holds one phase group, and the caption is
+about seeing all of them. (The fresh seed is also why this became capturable
+at all: the old database's programs pre-dated requirements in the phase
+payload, and the skip-by-name guard kept them that way.)
+
+Verified: Probationary Firefighter Pipeline for the demo member — 4/13
+requirements · 31% (matches the enrollment API), three phase groups with
+per-requirement status, "You are here" on Phase 1, and a completed
+requirement sitting inside not-yet-started Phase 2, which is the guide's
+prior-credit story rendered. Caption rewritten against the screen; both
+surfaces (member page, Enrollments-tab modal) named in prose.
+
+**With these two, every placeholder in every guide is filled — 423 captured,
+0 remaining.**
+
+### Manifest housekeeping
+
+`03-60-report-used-sheet` existed twice in the manifest, byte-identical — a
+merge artifact. Ids double as output filenames, so duplicates capture twice
+and the later silently overwrites the earlier; identical copies are the lucky
+case. One removed, and the manifest now **throws at import on any duplicate
+id**, beside the existing mutates-last invariant.
+
+---
+
 ## The 2026-08-13 guide-by-guide re-verification
 
 Every image below was **opened and read against its caption** before being
