@@ -108,6 +108,22 @@ class TestCategoryPresets:
         assert by_key["turnout_gear"]["exists"] is True
         assert by_key["radios"]["exists"] is False
 
+    async def test_only_active_categories_count_as_taken(
+        self, service, mock_db, org_id
+    ):
+        """A deactivated category must not mark its preset as already-added.
+
+        `delete_category` deactivates rather than deleting, so matching every
+        row would show the preset as done, hide it from the category list
+        beside it, and leave no way to bring it back from here.
+        """
+        mock_db.execute.return_value = _names_result([])
+
+        await service.get_category_presets(org_id)
+
+        where = str(mock_db.execute.await_args.args[0])
+        assert "active" in where
+
 
 class TestApplyCategoryPresets:
     async def test_creates_the_requested_presets(self, service, mock_db, org_id):

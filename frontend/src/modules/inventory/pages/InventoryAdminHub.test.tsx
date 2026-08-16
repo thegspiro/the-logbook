@@ -216,7 +216,7 @@ describe('InventoryAdminHub', () => {
     await waitFor(() => {
       expect(screen.getByText('Finish inventory setup')).toBeInTheDocument();
     });
-    expect(screen.getByText(/storage areas, categories, items still to set up/)).toBeInTheDocument();
+    expect(screen.getByText(/Still to set up: storage areas, categories, items/)).toBeInTheDocument();
   });
 
   it('hides the setup prompt once every step has records', async () => {

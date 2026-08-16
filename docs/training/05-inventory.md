@@ -7,32 +7,33 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 ## Table of Contents
 
 1. [Inventory Overview](#inventory-overview)
-2. [Browsing Items](#browsing-items)
-3. [Categories](#categories)
-4. [Individual vs Pool Items](#individual-vs-pool-items)
-5. [Variant Groups](#variant-groups)
-6. [Equipment Kits](#equipment-kits)
-7. [Member Size Preferences](#member-size-preferences)
-8. [Issuance Allowances](#issuance-allowances)
-9. [Equipment Request Fulfillment](#equipment-request-fulfillment)
-10. [Reorder Requests](#reorder-requests)
-11. [Item Detail Page](#item-detail-page)
-12. [Item Assignments](#item-assignments)
-13. [Checkout and Return](#checkout-and-return)
-14. [Batch Operations](#batch-operations)
-15. [Barcode and QR Scanning](#barcode-and-qr-scanning)
-16. [Label Printing](#label-printing)
-17. [Maintenance Tracking](#maintenance-tracking)
-18. [Low Stock Alerts](#low-stock-alerts)
-19. [Dated Stock Lots and Receiving](#dated-stock-lots-and-receiving-2026-08-10)
-20. [Departure Clearance](#departure-clearance)
-21. [Members Inventory View (Admin)](#members-inventory-view-admin)
-22. [Inventory Admin Hub](#inventory-admin-hub)
-23. [Equipment Kits Admin Page](#equipment-kits-admin-page)
-24. [Variant Groups Admin Page](#variant-groups-admin-page)
-25. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
-26. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
-27. [Troubleshooting](#troubleshooting)
+2. [First-Run Setup](#first-run-setup)
+3. [Browsing Items](#browsing-items)
+4. [Categories](#categories)
+5. [Individual vs Pool Items](#individual-vs-pool-items)
+6. [Variant Groups](#variant-groups)
+7. [Equipment Kits](#equipment-kits)
+8. [Member Size Preferences](#member-size-preferences)
+9. [Issuance Allowances](#issuance-allowances)
+10. [Equipment Request Fulfillment](#equipment-request-fulfillment)
+11. [Reorder Requests](#reorder-requests)
+12. [Item Detail Page](#item-detail-page)
+13. [Item Assignments](#item-assignments)
+14. [Checkout and Return](#checkout-and-return)
+15. [Batch Operations](#batch-operations)
+16. [Barcode and QR Scanning](#barcode-and-qr-scanning)
+17. [Label Printing](#label-printing)
+18. [Maintenance Tracking](#maintenance-tracking)
+19. [Low Stock Alerts](#low-stock-alerts)
+20. [Dated Stock Lots and Receiving](#dated-stock-lots-and-receiving-2026-08-10)
+21. [Departure Clearance](#departure-clearance)
+22. [Members Inventory View (Admin)](#members-inventory-view-admin)
+23. [Inventory Admin Hub](#inventory-admin-hub)
+24. [Equipment Kits Admin Page](#equipment-kits-admin-page)
+25. [Variant Groups Admin Page](#variant-groups-admin-page)
+26. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
+27. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
+28. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -51,6 +52,105 @@ Key pages in the inventory module:
 | **Admin Dashboard** | `/inventory/admin`         | Summary statistics, low-stock alerts, and navigation to admin sub-pages  |
 
 ![Inventory Items list with search, category filter, and status pills](./images/05-01-inventory-items.png)
+
+---
+
+## First-Run Setup
+
+A new quartermaster meeting the inventory module for the first time hits an
+ordering problem the screens do not state: **an item depends on three other
+records that have to exist first.** A room holds storage areas, a storage area
+holds items, and a category decides which fields the item form even shows. Open
+the item form first and its Category, Room, and Storage Area dropdowns are all
+empty — and an item saved with all three blank is the one that later cannot be
+found on a shelf, never appears in a low-stock alert, and has no inspection
+cycle attached.
+
+**Inventory → Admin → Setup Guide** (`/inventory/admin/setup`) puts those four
+in dependency order on one screen. While any of them is missing, the admin hub
+carries a prompt into it naming exactly what is left.
+
+![The inventory admin hub with the "Finish inventory setup" prompt naming what is still missing](./images/05-72-setup-prompt.png)
+
+### The four steps
+
+| Step               | What it produces     | Why it comes here                                                                       |
+| ------------------ | -------------------- | --------------------------------------------------------------------------------------- |
+| **1. Rooms**       | A location record    | Storage areas hang off a room, so nothing else can be filed until one exists            |
+| **2. Storage**     | Racks, shelves, bins | Turns "it's in the gear room somewhere" into a shelf someone can walk to                |
+| **3. Categories**  | Item classifications | Decides which fields an item asks for, and whether it gets inspection and NFPA tracking |
+| **4. First items** | Actual equipment     | The item form opens with steps 1–3 already filled in                                    |
+
+Each step can be skipped — a department that already has rooms is not made to
+re-declare them — and each links to its own full admin page for doing the work
+at volume. The current step lives in the URL (`?step=2`), so the page can be
+bookmarked or reloaded without losing your place.
+
+### Step 1 — Rooms
+
+A room is the place an item is kept: a station bay, a gear room, a supply
+closet. Name is the only required field; building and room number are optional
+and only help you tell two similar rooms apart later.
+
+![Step 1 of the inventory setup workflow, with no rooms declared yet](./images/05-73-setup-rooms.png)
+
+### Step 2 — Storage areas
+
+Pick the room, then add an area for each place gear actually sits. Areas can
+nest later on the full Storage Areas page (Rack → Shelf → Box); this step keeps
+to one level so the catalog can get started.
+
+![Step 2 of the setup workflow, adding storage areas to the selected room](./images/05-77-setup-storage.png)
+
+### Step 3 — Categories
+
+The step that saves the most time. Rather than inventing a classification
+scheme, pick from the standard fire-service categories — turnout gear, SCBA,
+helmets, station uniforms, hand tools, power equipment, ladders, radios, EMS
+supplies and the rest — each arriving with its serial-number, maintenance and
+NFPA switches already set correctly.
+
+A category the department already has is shown as **already added** rather than
+offered again, so the step is safe to come back to: a second visit adds only
+what is missing. **Select all** ticks everything still available in one action.
+Everything created here is an ordinary category afterwards and can be edited or
+removed on the Categories page.
+
+![Step 3 offering the standard fire-service starter categories, two of them already added](./images/05-74-setup-categories.png)
+
+### Step 4 — First items
+
+Choose the room, storage area and category these first items belong to, and the
+**Add an item** form opens with all three already selected — the repetition that
+makes stocking a catalog feel like paperwork. For a catalog that already exists
+in a spreadsheet, **Import from CSV** is beside it.
+
+![Step 4 of the setup workflow, with the room, storage area and category pickers](./images/05-78-setup-first-items.png)
+
+![The Add Item form opened from the setup workflow with room, storage area and category pre-filled](./images/05-75-setup-item-prefilled.png)
+
+### Step 5 — What to set up next
+
+The closing step recaps what was created and points at the pieces most
+departments need next: issuance allowances, equipment kits, the impact planner,
+and barcode labels.
+
+![The closing step of the setup workflow recapping what was created](./images/05-76-setup-done.png)
+
+### Edge Cases
+
+- The prompt on the admin hub disappears once rooms, storage areas, categories and items all exist. The **Setup Guide** card under Tools stays, so the workflow remains reachable afterwards.
+- Retired items do not count towards completion — a department that retired its way back to an empty catalog is offered the workflow again.
+- A category that was _deleted_ is deactivated rather than removed. Its preset becomes available again, so the workflow can re-create it.
+
+### On a phone
+
+The workflow works at phone width throughout. The step indicator collapses to a
+progress bar ("Step 3 of 5"), the preset grid stacks to one column, and the
+count-and-**Select all** control sits above the list so it is reachable without
+scrolling past every card.
+
+![The category step of the setup workflow on a phone](./images/05-81-setup-categories-mobile.png)
 
 ---
 

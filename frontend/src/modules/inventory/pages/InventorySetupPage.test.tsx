@@ -247,6 +247,26 @@ describe('InventorySetupPage', () => {
     expect(within(dialog).getByLabelText('Storage Area')).toHaveValue('area-1');
   });
 
+  it('selects and clears every addable preset from one control', async () => {
+    // The button that files them sits below thirteen cards; on a phone that is
+    // several screens down from the first checkbox.
+    const user = userEvent.setup();
+    renderWithRouter(<InventorySetupPage />);
+    await screen.findByRole('heading', { name: 'Rooms' });
+
+    await advance(user, 2);
+    await screen.findByRole('heading', { name: 'Categories' });
+
+    // One of the two fixtures already exists, so only one is selectable.
+    expect(screen.getByText('1 available to add')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Select all' }));
+    expect(screen.getByText('1 of 1 selected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+    expect(screen.getByText('1 available to add')).toBeInTheDocument();
+  });
+
   it('lets the room be cleared back to none on the item step', async () => {
     // The picker defaults to the first room; an effect that re-applied that
     // default on every change would put it straight back.

@@ -6538,6 +6538,22 @@ class InventoryService:
         }
         return {**counts, "is_complete": all(value > 0 for value in counts.values())}
 
+    async def _taken_category_names(self, organization_id: UUID) -> set[str]:
+        """Case-folded names of the org's *active* categories.
+
+        Active only: `delete_category` deactivates rather than deleting, so
+        matching every row would let one retired "Turnout Gear" mark the preset
+        as already-added forever — shown as done in the workflow, absent from
+        the category list beside it, and impossible to re-create from here.
+        """
+        existing = await self.db.execute(
+            select(InventoryCategory.name).where(
+                InventoryCategory.organization_id == str(organization_id),
+                InventoryCategory.active.is_(True),
+            )
+        )
+        return {name.strip().lower() for name in existing.scalars().all() if name}
+
     async def get_category_presets(self, organization_id: UUID) -> List[Dict[str, Any]]:
         """Starter categories, each flagged with whether the org already has it.
 
@@ -6546,12 +6562,7 @@ class InventoryService:
         be offered a second one, and presets carry no identity of their own
         once created.
         """
-        existing = await self.db.execute(
-            select(InventoryCategory.name).where(
-                InventoryCategory.organization_id == str(organization_id)
-            )
-        )
-        taken = {name.strip().lower() for name in existing.scalars().all() if name}
+        taken = await self._taken_category_names(organization_id)
 
         return [
             {
@@ -6578,12 +6589,7 @@ class InventoryService:
         if unknown:
             return [], [], f"Unknown category preset: {unknown[0]}"
 
-        existing = await self.db.execute(
-            select(InventoryCategory.name).where(
-                InventoryCategory.organization_id == str(organization_id)
-            )
-        )
-        taken = {name.strip().lower() for name in existing.scalars().all() if name}
+        taken = await self._taken_category_names(organization_id)
 
         created: List[InventoryCategory] = []
         skipped: List[str] = []

@@ -282,6 +282,14 @@ const InventorySetupPage: React.FC = () => {
     setSelectedPresets((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
+  /** Presets the org does not already have — the only ones that can be ticked. */
+  const selectablePresets = useMemo(() => presets.filter((p) => !p.exists), [presets]);
+  const allPresetsSelected = selectablePresets.length > 0 && selectedPresets.length === selectablePresets.length;
+
+  const toggleAllPresets = () => {
+    setSelectedPresets(allPresetsSelected ? [] : selectablePresets.map((p) => p.key));
+  };
+
   const applyPresets = async () => {
     if (selectedPresets.length === 0) return;
     setApplyingPresets(true);
@@ -511,6 +519,27 @@ const InventorySetupPage: React.FC = () => {
           manageLabel="Manage categories"
         >
           <div className="space-y-4">
+            {/* Bulk control above the grid. On a phone the thirteen cards run
+                roughly five screens tall, so a QM who ticks a box at the top
+                would otherwise have to scroll past all of them to find the
+                button that files them. */}
+            {selectablePresets.length > 0 && (
+              <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+                <p className="text-theme-text-secondary text-sm">
+                  {selectedPresets.length > 0
+                    ? `${selectedPresets.length} of ${selectablePresets.length} selected`
+                    : `${selectablePresets.length} available to add`}
+                </p>
+                <button
+                  type="button"
+                  onClick={toggleAllPresets}
+                  className="shrink-0 text-sm font-medium whitespace-nowrap text-blue-700 underline dark:text-blue-400"
+                >
+                  {allPresetsSelected ? 'Clear selection' : 'Select all'}
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {presets.map((preset) => {
                 const already = preset.exists;
@@ -755,25 +784,31 @@ const InventorySetupPage: React.FC = () => {
         </StepShell>
       )}
 
-      {/* Footer navigation */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Footer navigation. Below 480px the app styles .btn-* full-width, so
+          Back and Continue each own a row whether or not this asks them to —
+          which is why they stack here rather than competing for one row (three
+          no-wrap controls do not fit in 390px, and pinning them only trades a
+          wrapped "Skip / this / step" for a sideways-scrolling page). Continue
+          is ordered first on a phone as the action being offered, and the row
+          re-forms as Back | skip + Continue from `sm` up. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
           onClick={() => goToStep(step - 1)}
           disabled={step === 0}
-          className="btn-secondary btn-md inline-flex items-center gap-2 disabled:opacity-40"
+          className="btn-secondary btn-md order-2 inline-flex items-center justify-center gap-2 disabled:opacity-40 sm:order-1"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
 
         {step < LAST_STEP ? (
-          <div className="flex items-center gap-3">
+          <>
             {!currentComplete && (
               <button
                 type="button"
                 onClick={() => goToStep(step + 1)}
-                className="text-theme-text-muted hover:text-theme-text-primary text-sm underline"
+                className="text-theme-text-muted hover:text-theme-text-primary order-3 self-center text-sm whitespace-nowrap underline sm:order-2 sm:ml-auto sm:self-auto"
               >
                 Skip this step
               </button>
@@ -781,14 +816,17 @@ const InventorySetupPage: React.FC = () => {
             <button
               type="button"
               onClick={() => goToStep(step + 1)}
-              className="btn-info btn-md inline-flex items-center gap-2"
+              className="btn-info btn-md order-1 inline-flex items-center justify-center gap-2 whitespace-nowrap sm:order-3"
             >
               Continue
               <ArrowRight className="h-4 w-4" />
             </button>
-          </div>
+          </>
         ) : (
-          <Link to="/inventory/admin" className="btn-info btn-md inline-flex items-center gap-2">
+          <Link
+            to="/inventory/admin"
+            className="btn-info btn-md order-1 inline-flex items-center justify-center gap-2 whitespace-nowrap sm:order-2"
+          >
             Go to Inventory Admin
             <ArrowRight className="h-4 w-4" />
           </Link>

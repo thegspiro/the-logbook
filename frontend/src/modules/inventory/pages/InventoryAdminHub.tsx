@@ -243,6 +243,7 @@ export const InventoryAdminHub: React.FC = () => {
             <div className="min-w-0 flex-1">
               <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">Finish inventory setup</h3>
               <p className="text-xs text-blue-600 dark:text-blue-400">
+                Still to set up:{' '}
                 {[
                   setupStatus.rooms === 0 ? 'rooms' : null,
                   setupStatus.storage_areas === 0 ? 'storage areas' : null,
@@ -250,8 +251,8 @@ export const InventoryAdminHub: React.FC = () => {
                   setupStatus.items === 0 ? 'items' : null,
                 ]
                   .filter(Boolean)
-                  .join(', ')}{' '}
-                still to set up. The guide walks through them in order.
+                  .join(', ')}
+                . The guide walks through them in order.
               </p>
             </div>
             <ArrowRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
