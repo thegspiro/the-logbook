@@ -49,30 +49,30 @@ export const computeReadiness = (certs: ReadinessCert[]): Readiness | null => {
     .filter((c) => !c.is_expired && c.days_until_expiry !== null && c.days_until_expiry <= READINESS_WINDOW_DAYS)
     .sort((a, b) => (a.days_until_expiry ?? Infinity) - (b.days_until_expiry ?? Infinity));
 
+  // The detail counts rather than names. Naming the soonest certification
+  // reproduced the row directly beneath it word for word — the "said twice"
+  // fault the dashboard redesign existed to remove. The verdict summarises and
+  // gives the total; the rows below carry the names and the buttons, and they
+  // show at most two, so the count here is the part they cannot state.
+  //
   // Expired outranks expiring: a member who is grounded must not be told they
   // are clear because a different card also happens to be near renewal.
   if (expired.length > 0) {
-    const first = expired[0];
     return {
       level: 'not-clear',
       headline: 'Not clear to respond',
       detail:
-        expired.length === 1 && first
-          ? `${first.course_name} has expired`
+        expiring.length > 0
+          ? `${plural(expired.length, 'certification')} expired, ${expiring.length} expiring`
           : `${plural(expired.length, 'certification')} expired`,
     };
   }
 
   if (expiring.length > 0) {
-    const first = expiring[0];
-    const lead =
-      first && first.days_until_expiry !== null
-        ? `${first.course_name} expires in ${plural(first.days_until_expiry, 'day')}`
-        : 'A certification expires soon';
     return {
       level: 'conditions',
       headline: 'Clear, with conditions',
-      detail: expiring.length > 1 ? `${lead}, ${expiring.length - 1} more expiring` : lead,
+      detail: `${plural(expiring.length, 'certification')} expiring within ${READINESS_WINDOW_DAYS} days`,
     };
   }
 

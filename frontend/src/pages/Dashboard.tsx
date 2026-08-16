@@ -468,10 +468,7 @@ const Dashboard: React.FC = () => {
         start_date: today,
         end_date: nextMonth,
       });
-      // Filter out shifts the user is already signed up for (defense-in-depth;
-      // the backend also filters these, but guard against race conditions)
-      const myShiftIds = new Set(myShifts.map((s) => s.id));
-      setOpenShifts(data.filter((s) => !myShiftIds.has(s.id)));
+      setOpenShifts(data);
     } catch {
       // Open shifts are non-critical
     } finally {
@@ -599,6 +596,15 @@ const Dashboard: React.FC = () => {
     return end ? `${start}–${end}` : start;
   };
 
+  // Open slots the member is not already on. The backend excludes their own
+  // shifts, but this is the defence-in-depth pass — and it has to happen here
+  // rather than inside loadOpenShifts, where `myShifts` is read from a render
+  // closure that is still empty because both lists are fetched concurrently.
+  const availableOpenShifts = useMemo(() => {
+    const mine = new Set(myShifts.map((s) => s.id));
+    return openShifts.filter((s) => !mine.has(s.id));
+  }, [myShifts, openShifts]);
+
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
 
@@ -620,7 +626,7 @@ const Dashboard: React.FC = () => {
       });
     }
 
-    for (const shift of openShifts) {
+    for (const shift of availableOpenShifts) {
       const details = [shiftTimeRange(shift)];
       if (shift.min_staffing != null) details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
       entries.push({
@@ -651,11 +657,11 @@ const Dashboard: React.FC = () => {
     return entries
       .filter((e) => e.dateOnly >= windowStart && e.dateOnly <= windowEnd)
       .sort((a, b) => a.sortAt - b.sortAt);
-  }, [myShifts, openShifts, upcomingEvents, tz, windowStart, windowEnd]);
+  }, [myShifts, availableOpenShifts, upcomingEvents, tz, windowStart, windowEnd]);
 
   const visibleTimeline = timeline.slice(0, TIMELINE_ROWS_SHOWN);
-  const laterOpenShifts = openShifts.filter((s) => s.shift_date > windowEnd).length;
-  const shortStaffedOpenShifts = openShifts.filter(
+  const laterOpenShifts = availableOpenShifts.filter((s) => s.shift_date > windowEnd).length;
+  const shortStaffedOpenShifts = availableOpenShifts.filter(
     (s) => s.min_staffing != null && s.attendee_count < s.min_staffing
   ).length;
   const timelineLoading = loadingMyShifts || loadingOpenShifts || loadingUpcomingEvents;
@@ -1014,7 +1020,7 @@ const Dashboard: React.FC = () => {
                       Take a Shift
                     </span>
                     <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      <span className="font-bold tabular-nums">{openShifts.length}</span> open
+                      <span className="font-bold tabular-nums">{availableOpenShifts.length}</span> open
                       {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
                     </span>
                   </span>

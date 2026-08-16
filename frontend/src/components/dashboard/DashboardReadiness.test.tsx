@@ -24,7 +24,7 @@ describe('DashboardReadiness', () => {
     render(<DashboardReadiness certs={[cert({ days_until_expiry: 24 })]} onOpen={vi.fn()} />);
 
     expect(screen.getByText('Clear, with conditions')).toBeInTheDocument();
-    expect(screen.getByText(/EMT-B Recertification expires in 24 days/)).toBeInTheDocument();
+    expect(screen.getByText(/1 certification expiring within 60 days/)).toBeInTheDocument();
     // The scope note keeps a green line from reading as a full clearance.
     expect(screen.getByText(/Certifications only/)).toBeInTheDocument();
   });

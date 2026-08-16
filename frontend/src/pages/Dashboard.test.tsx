@@ -366,9 +366,11 @@ describe('Dashboard', () => {
       expect(panelFollowsVerdict).toBe(true);
     });
 
-    // The verdict and the rows beneath it read the same list, so an expiry
-    // can never be urgent in one and fine in the other.
-    it('agrees with the Needs you row about the same certification', async () => {
+    // The verdict and the rows beneath it read the same list, so an expiry can
+    // never be urgent in one and fine in the other — but they must not say the
+    // same sentence. The verdict counts; the row names it and carries the
+    // button.
+    it('summarises without restating the row beneath it', async () => {
       withCerts([
         {
           id: 'c1',
@@ -382,7 +384,11 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       expect(await screen.findByText('Not clear to respond')).toBeInTheDocument();
-      expect(screen.getByText('EMT-B Recertification is expired')).toBeInTheDocument();
+      // The verdict counts…
+      expect(screen.getByText(/1 certification expired/)).toBeInTheDocument();
+      // …the row names it, once, and carries the action.
+      expect(screen.getAllByText(/EMT-B Recertification/)).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'Start Renewal' })).toBeInTheDocument();
     });
   });
 
@@ -468,7 +474,7 @@ describe('Dashboard', () => {
     });
   });
 
-  describe('Department Feed', () => {
+  describe('My Updates', () => {
     const makeMessage = (overrides: Record<string, unknown> = {}) => ({
       id: 'msg-1',
       title: 'Station 2 Bay Doors Out of Service',

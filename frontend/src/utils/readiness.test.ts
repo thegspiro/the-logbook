@@ -37,17 +37,17 @@ describe('computeReadiness', () => {
 
     expect(result?.level).toBe('conditions');
     expect(result?.headline).toBe('Clear, with conditions');
-    expect(result?.detail).toBe('EMT-B Recertification expires in 24 days');
+    expect(result?.detail).toBe('1 certification expiring within 60 days');
   });
 
-  it('names the soonest expiry and counts the rest', () => {
+  it('counts every expiring certification rather than naming one', () => {
     const result = computeReadiness([
       cert({ id: 'c1', course_name: 'Hazmat Awareness', days_until_expiry: 50 }),
       cert({ id: 'c2', course_name: 'EMT-B Recertification', days_until_expiry: 12 }),
       cert({ id: 'c3', course_name: 'CPR', days_until_expiry: 30 }),
     ]);
 
-    expect(result?.detail).toBe('EMT-B Recertification expires in 12 days, 2 more expiring');
+    expect(result?.detail).toBe('3 certifications expiring within 60 days');
   });
 
   it('leaves a certification just outside the window alone', () => {
@@ -60,7 +60,7 @@ describe('computeReadiness', () => {
 
     expect(result?.level).toBe('not-clear');
     expect(result?.headline).toBe('Not clear to respond');
-    expect(result?.detail).toBe('EMT-B Recertification has expired');
+    expect(result?.detail).toBe('1 certification expired');
   });
 
   it('counts rather than names when several have expired', () => {
@@ -82,5 +82,27 @@ describe('computeReadiness', () => {
 
   it('treats a certification with no expiry as current', () => {
     expect(computeReadiness([cert({ expiration_date: null, days_until_expiry: null })])?.level).toBe('clear');
+  });
+
+  // The rows beneath the verdict state the course name and carry the renewal
+  // button. Repeating it here is the "said twice" fault the redesign removed.
+  it('never names a certification, so it cannot restate the row below it', () => {
+    const named = [
+      computeReadiness([cert({ days_until_expiry: 24 })]),
+      computeReadiness([cert({ is_expired: true })]),
+      computeReadiness([cert({ id: 'c1', is_expired: true }), cert({ id: 'c2', days_until_expiry: 10 })]),
+    ];
+
+    for (const result of named) {
+      expect(result?.detail).not.toContain('EMT-B');
+    }
+  });
+
+  it('still counts what the two-row panel below cannot show', () => {
+    const certs = Array.from({ length: 5 }, (_, i) =>
+      cert({ id: `c${i}`, course_name: `Course ${i}`, days_until_expiry: 10 + i })
+    );
+
+    expect(computeReadiness(certs)?.detail).toBe('5 certifications expiring within 60 days');
   });
 });
