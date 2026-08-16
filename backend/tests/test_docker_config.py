@@ -469,9 +469,7 @@ class TestUnraidComposeSecuritySwitches:
         self.setup_script = _read(ROOT_DIR / "unraid" / "unraid-setup.sh")
 
     def test_compose_passes_explicit_tls_opt_out(self):
-        assert (
-            "SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-false}" in self.compose
-        )
+        assert "SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-false}" in self.compose
 
     @pytest.mark.parametrize("setting", ["DB_SSL", "REDIS_SSL"])
     def test_compose_passes_through_tls_switches(self, setting: str):

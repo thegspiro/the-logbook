@@ -1843,9 +1843,7 @@ async def save_session_organization(
         )
 
 
-_CARRYOVER_SUBPERMISSIONS = frozenset(
-    {"facilities.view_sensitive", "scheduling.swap"}
-)
+_CARRYOVER_SUBPERMISSIONS = frozenset({"facilities.view_sensitive", "scheduling.swap"})
 
 
 def _merge_default_permissions(
