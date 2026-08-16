@@ -5,6 +5,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock3, Info, ListChecks } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { localToUTC } from '../../../utils/dateFormatting';
 
 type DatePreset = 'all' | '30-days' | 'year' | 'custom';
 
@@ -19,6 +21,13 @@ const toDateInput = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+const toDateInputUTC = (date: Date): string => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const dateRangeFor = (preset: DatePreset): { startDate?: string; endDate?: string } => {
   if (preset === 'all' || preset === 'custom') return {};
   const today = new Date();
@@ -27,9 +36,25 @@ const dateRangeFor = (preset: DatePreset): { startDate?: string; endDate?: strin
   return { startDate: toDateInput(start), endDate: toDateInput(today) };
 };
 
+// Entries are stored in UTC, so a reporting day picked in the department's
+// timezone has to be converted before it becomes an API bound. Sending the bare
+// "YYYY-MM-DDT23:59:59.999" the picker produces drops every entry logged in the
+// UTC-offset-sized tail of the last day for any department west of UTC.
+const startOfReportingDayUTC = (date: string, timezone: string): string => localToUTC(`${date}T00:00`, timezone);
+
+// The exclusive end is midnight opening the *next* day, less a millisecond, so
+// the whole selected end day is covered without spilling into the day after.
+const endOfReportingDayUTC = (date: string, timezone: string): string => {
+  const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  const nextDate = toDateInputUTC(nextDay);
+  return new Date(new Date(localToUTC(`${nextDate}T00:00`, timezone)).getTime() - 1).toISOString();
+};
+
 const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
   const summary = useAdminHoursStore((s) => s.summary);
   const fetchSummary = useAdminHoursStore((s) => s.fetchSummary);
+  const timezone = useTimezone();
   const [preset, setPreset] = useState<DatePreset>('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -38,16 +63,15 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
     const range = dateRangeFor(preset);
     if (preset === 'custom') return;
     void fetchSummary({
-      ...range,
-      // Include the whole selected end day rather than stopping at midnight.
-      ...(range.endDate ? { endDate: `${range.endDate}T23:59:59.999` } : {}),
+      ...(range.startDate ? { startDate: startOfReportingDayUTC(range.startDate, timezone) } : {}),
+      ...(range.endDate ? { endDate: endOfReportingDayUTC(range.endDate, timezone) } : {}),
     });
-  }, [fetchSummary, preset]);
+  }, [fetchSummary, preset, timezone]);
 
   const applyCustomRange = () => {
     void fetchSummary({
-      ...(customStart ? { startDate: customStart } : {}),
-      ...(customEnd ? { endDate: `${customEnd}T23:59:59.999` } : {}),
+      ...(customStart ? { startDate: startOfReportingDayUTC(customStart, timezone) } : {}),
+      ...(customEnd ? { endDate: endOfReportingDayUTC(customEnd, timezone) } : {}),
     });
   };
 

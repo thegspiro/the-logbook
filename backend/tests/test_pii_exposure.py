@@ -458,9 +458,10 @@ class TestProfileEndpointAccessControl:
     `members.manage`, yet MemberIdCardPage, MemberProfilePage and
     UserSettingsPage all load the caller's own record through this endpoint —
     gating it entirely behind those permissions 403'd every ordinary member
-    off their own ID card. Viewing anyone else requires a grant:
-    `members.view` (the directory permission every default position carries)
-    opens a redacted profile; a caller with no grants at all is refused.
+    off their own ID card. Viewing anyone else requires `users.view` or
+    `members.manage`; the baseline `members.view` directory grant is not
+    enough, because this response carries account and role metadata that the
+    roster itself never exposes.
     """
 
     async def test_member_without_grants_reads_their_own_record(self):
@@ -502,10 +503,11 @@ class TestProfileEndpointAccessControl:
 
         assert result.username == "jsmith"
 
-    async def test_members_view_reads_other_records_redacted(self):
-        # The directory permission opens colleagues' profiles, but on the
-        # roster's terms: contact info per org visibility settings (all off
-        # here), DOB and emergency contacts leadership-only.
+    async def test_members_view_alone_cannot_read_someone_else(self):
+        # members.view is the roster-read grant every default position carries.
+        # It admits the caller to the directory, not to a colleague's full
+        # profile, which additionally carries account state and role
+        # permissions.
         subject = _member()
         caller = _caller(
             user_id=str(uuid.uuid4()),
@@ -513,18 +515,22 @@ class TestProfileEndpointAccessControl:
             permissions=["members.view"],
         )
 
+        with pytest.raises(HTTPException) as exc:
+            await _call_endpoint(subject, caller)
+
+        assert exc.value.status_code == 403
+
+    async def test_members_manage_reads_other_records(self):
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.manage"],
+        )
+
         result = await _call_endpoint(subject, caller)
 
         assert result.username == "jsmith"
-        assert result.phone is None
-        assert result.address_street is None
-        assert result.date_of_birth is None
-        assert result.emergency_contacts == []
-        assert result.email_verified is None
-        assert result.mfa_enabled is None
-        assert result.created_at is None
-        assert result.updated_at is None
-        assert result.notification_preferences is None
 
     async def test_users_view_retains_account_metadata(self):
         subject = _member()
