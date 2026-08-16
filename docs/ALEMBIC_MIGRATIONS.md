@@ -370,10 +370,11 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260801_0008` | `20260801_0007` | `20260801_0008_add_tie_policy_roster_snapshot_merge.py` | Add `elections.tie_policy`, `elections.eligible_roster_snapshot` (voter roll frozen at open), and `candidates.merged_into_candidate_id` (write-in consolidation alias) |
 | `20260801_0009` | `20260801_0008` | `20260801_0009_add_audit_log_organization_id.py` | Add `audit_logs.organization_id` (indexed, backfilled from `user_id`) — org-scoped audit reads; hash chain v3 binds the org on new rows |
 | `20260801_0010` | `20260801_0009` | `20260801_0010_grant_equipment_check_submit_to_members.py` | Data migration: append `equipment_check.submit` to existing system member positions (EC-7 gated the check-flow reads view-OR-submit; new orgs get it from `DEFAULT_POSITIONS`) |
-| `20260801_0011` | `20260801_0010` | `20260801_0011_per_org_finance_request_numbers.py` | Replace the global unique on `purchase_requests.request_number` / `expense_reports.report_number` / `check_requests.request_number` with per-org composite uniques (`uq_*_org_number`) — introspection-defensive because these tables are create_all-materialized — **current single head** |
+| `20260801_0011` | `20260801_0010` | `20260801_0011_per_org_finance_request_numbers.py` | Replace the global unique on `purchase_requests.request_number` / `expense_reports.report_number` / `check_requests.request_number` with per-org composite uniques (`uq_*_org_number`) — introspection-defensive because these tables are create_all-materialized — head as of 2026-07-31 |
 
-> **Single head as of 2026-07-31:** `20260801_0011` is the linear head of the
-> chain, so `alembic upgrade head` is unambiguous.
+> **Single head:** the chain remains linear — `20260801_0011` was the head as
+> of 2026-07-31; later release windows (below) extend it, and the current
+> single head is `20260816_0001` — so `alembic upgrade head` is unambiguous.
 > `tests/test_alembic_migrations.py` validates the single-head DAG (it
 > understands merge migrations).
 
@@ -407,3 +408,28 @@ A non-empty result is a hard stop. Choose the earliest `created_at` (then lowest
 `id`) as keeper after reviewing linked application data, mark the other rows
 `inactive`, and require a zero-row recheck. Otherwise the unique-index migration
 fails before `20260814_0003` can reconcile anything.
+
+## August 16, 2026 upgrade
+
+One revision: `20260816_0001` (`20260816_0001_add_facility_room_parent.py`),
+revising `20260814_0004`. It is the **current single head**.
+
+| Revision | Revises | What it does |
+| --- | --- | --- |
+| `20260816_0001` | `20260814_0004` | Adds `facility_rooms.parent_room_id` (VARCHAR(36), nullable), index `idx_facility_rooms_parent`, and self-referential FK `fk_facility_rooms_parent_room` with `ON DELETE SET NULL` — nested facility rooms |
+
+Notes:
+
+- **`ON DELETE SET NULL`, deliberately never CASCADE.** Removing a room must
+  not silently delete the sub-rooms hanging off it (with their kiosk codes and
+  stored inventory). The service re-parents children onto the deleted room's
+  own parent; the constraint is only the database-level backstop.
+- No data backfill: existing rooms upgrade with `parent_room_id = NULL`
+  (top-level) and nothing changes until a room is nested. Nesting rules —
+  same org, same facility, no cycles, max depth 5 — are enforced in
+  `facilities_service.py`, not in the schema.
+- The upgrade and downgrade are introspection-guarded (no-op if the table is
+  missing or the column already exists/is already gone), so re-running against
+  a partially applied state is safe.
+- Standard procedure applies: back up, require exactly one `alembic heads`
+  result, then `alembic upgrade head`.

@@ -296,8 +296,11 @@ This is a deliberate design decision for data integrity and HIPAA compliance —
 Station computers are shared: whoever is on duty signs in on the same browser.
 Anything left on the device is readable by the next person to sit down, so
 **signing out erases everything held locally** — queued equipment checks and
-their photos, queued shift reports, queued training submissions and RSVPs, and
-saved shift-report drafts.
+their photos, queued shift reports, queued training submissions and RSVPs,
+saved shift-report drafts, and **in-progress equipment-check drafts**
+_(added 2026-08-16; previously these drafts survived logout, so the next
+person at the terminal could read apparatus results and notes — flagged and
+fixed as red-team finding RT-08)_.
 
 **If you have queued work, get back online and let it sync before you sign
 out.** Anything still waiting is discarded. The app is not silent about it: if

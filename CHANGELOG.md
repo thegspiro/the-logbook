@@ -7,6 +7,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security and privacy hardening batch (2026-08-16)
+
+Nine targeted fixes landed together, plus a follow-up red-team review
+([`docs/security/RED_TEAM_REVIEW_2026-08-16.md`](docs/security/RED_TEAM_REVIEW_2026-08-16.md))
+that confirmed no new critical or high-severity findings.
+
+**Security**
+
+- **Pending election nominations are no longer exposed through the member
+  candidate list.** `GET /elections/{id}/candidates` returns accepted
+  candidates only, unless the election is in its nominations phase (so nominees
+  can respond) or the caller holds `elections.manage`. Election managers still
+  see everything.
+- **Directory profiles no longer reveal account-security metadata.** A caller
+  with only `members.view` opening a colleague's profile no longer receives
+  `email_verified`, `mfa_enabled`, `last_login_at`, `created_at`, `updated_at`,
+  notification preferences, or the permission lists attached to the
+  colleague's roles. Role names remain visible because the profile displays
+  them. `users.view`, members-managers, and the subject themselves are exempt.
+- **`hire_date` joined the restricted profile fields.** It drives automatic
+  membership-tier advancement, so — like rank, station, platoon, and membership
+  number — it now requires leadership, the secretary, or the membership
+  coordinator, not merely `users.edit`.
+- **Finance email-approval tokens are consumed atomically.** The token row is
+  locked (`SELECT … FOR UPDATE`) while acting, and the token is cleared on
+  approve/deny, so a link can be used exactly once even under concurrent
+  clicks; a second attempt sees "already actioned," not a duplicate approval.
+- **Public form daily caps count only valid submissions.** The per-form daily
+  cap is now enforced inside the service after authorization and validation, so
+  bots tripping the honeypot and rejected payloads no longer burn a form's
+  daily allowance and deny service to legitimate submitters. Cap exhaustion
+  still returns `429`.
+- **Public rate limits survive Redis failures.** `is_rate_limited()` gained
+  `raise_on_error` so `public_rate_limit` falls back to its separate in-memory
+  limiter on Redis errors instead of silently failing open (fail-closed paths
+  such as login are unchanged).
+- **Equipment-check drafts are purged on shared-device logout** (red-team
+  finding RT-08, medium). The logout purge previously removed shift-report
+  drafts and offline queues but left `equipment-check-draft-*` keys in
+  `localStorage`, so the next member on a station computer could read the
+  previous member's apparatus results and notes.
+- **Production compose no longer inherits development bind mounts.**
+  `docker-compose.prod.yml` uses `volumes: !override` (requires Docker Compose
+  v2.24.4+) so the source-tree mounts from the development file are cleared
+  rather than merged into production.
+- **The Unraid example environment now shows an HTTPS origin.**
+  `unraid/.env.example` sets `ALLOWED_ORIGINS=https://logbook.yourdomain.com`;
+  the app enforces HTTPS in its default production posture, so the old
+  `http://192.168.1.10:7880` example could not work as shipped.
+
+### Test coverage is now measured honestly (2026-08-16)
+
+**Changed**
+
+- **Frontend coverage counts every source file.** Vitest 4 measures only files
+  a test imports unless `coverage.include` is set; that hid 384 of 758 source
+  files (48% of the frontend) and reported 60.32% lines where the honest figure
+  is 33.10%. The denominator is now the full `src/**/*.{ts,tsx}` tree
+  (Playwright specs excluded), and the ratchet floors were re-based against the
+  corrected measurement (31/23/25/30 lines/functions/branches/statements) — the
+  same suite measured honestly, not a regression.
+- **Backend coverage floor raised from 46 to 51,** matching today's 53.1%
+  measurement, and CI now gates `app/api`+`app/services`+`app/core`+`app/utils`
+  separately at 35 (measured 37.6%) so declarative model/schema bulk (~97%
+  covered by import alone) cannot absorb a regression in real business logic.
+- Added a Stryker mutation-testing pilot config (`frontend/stryker.pilot.json`
+  + `vitest.stryker.config.ts`). Pilot score: 90.6% on three well-covered
+  utilities; the surviving mutants cluster in the `apiCache.ts` eviction path.
+- Corrected CLAUDE.md pitfall #13: no lint rule guards bare
+  `toHaveBeenCalledWith()` — it is review discipline, and a blanket ban was
+  evaluated and rejected because the zero-argument form is the stronger, correct
+  assertion for genuinely zero-arity functions.
+
+### Onboarding session storage and dark-mode canvas (2026-08-15)
+
+**Security**
+
+- **The onboarding session identifier moved from `localStorage` to
+  `sessionStorage`.** An onboarding session can authorize setup mutations, so
+  it no longer survives a browser restart or leaks to unrelated tabs.
+  Identifiers persisted by older clients are removed on load, and
+  `clearSession()` sweeps both the new and legacy locations.
+  [`docs/ONBOARDING_FLOW.md`](docs/ONBOARDING_FLOW.md) documents the model.
+
+**Fixed**
+
+- **Dark mode outside the app shell no longer renders white-on-white.** The
+  themed gradient canvas moved from `body` to `html` so the stable scrollbar
+  gutter — which sits outside the body's box — is painted too, and pages
+  rendered outside `AppLayout` (public forms, ballots, status pages) composite
+  their translucent dark-mode surface tokens over the gradient instead of the
+  browser's default white.
+
+### Module API clients reject after a failed refresh (2026-08-14)
+
+**Fixed**
+
+- When a 401 retry's cookie refresh also fails, module axios clients
+  (`createApiClient`) now report the error and **reject the original request**
+  instead of returning `undefined` while the browser navigates to `/login` —
+  callers no longer continue against a missing response, and the expired
+  session is handled through the shared `handleExpiredSession()` path.
+
 ### Facilities: rooms can sit inside other rooms (2026-08-16)
 
 **Added**

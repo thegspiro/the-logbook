@@ -1,10 +1,12 @@
-# August 12–14, 2026 workflow updates
+# August 2026 workflow updates
 
-This lesson is the operator-facing companion to the
-[technical change audit](../CHANGE_AUDIT_2026-08-12_TO_14.md). It explains what
-members and administrators now do differently. Permission names are included
-because a control that is absent is usually a permission or module-state issue,
-not a rendering failure.
+This lesson is the operator-facing companion to the technical change audits
+for [August 12–14](../CHANGE_AUDIT_2026-08-12_TO_14.md) and
+[August 15–16](../CHANGE_AUDIT_2026-08-15_TO_16.md). It explains what members
+and administrators now do differently. Permission names are included because a
+control that is absent is usually a permission or module-state issue, not a
+rendering failure. The August 15–16 additions start
+[here](#facilities-rooms-can-now-live-inside-other-rooms-august-1516).
 
 ## Elections: reuse a ballot without reusing election data
 
@@ -155,3 +157,85 @@ A non-empty result is a hard stop: review linked applications, keep the earliest
 record, mark the remaining duplicate active rows inactive, and re-run the query.
 The unique index otherwise fails before the later reconciliation can run. Never
 downgrade merely to repair a migration fork.
+
+## Facilities: rooms can now live inside other rooms (August 15–16)
+
+The Rooms section of a facility renders a containment tree. Use the
+add-a-room-inside action on a row, or the room form's **Located inside**
+picker, to place a room inside another room in the same facility. Sub-rooms
+show indented with per-container counts, and the cross-module room picker
+(Events, Training, Scheduling) indents them too and prints the containment
+path for the selected room. A nested room's linked Location is renamed with
+the full path.
+
+**Edge cases:** container must be the same facility and organization; a room
+cannot enter its own subtree; five levels maximum; deleting a container
+re-parents its sub-rooms up one level (never deletes them) and the
+confirmation says so; moving a room across facilities carries its subtree and
+re-syncs Locations; clearing floor/capacity/description now persists on save.
+
+The full walkthrough with screenshot markers lives in
+[Apparatus & Facilities → Nesting rooms inside rooms](./06-apparatus-facilities.md#nesting-rooms-inside-rooms-2026-08-16).
+
+> **[SCREENSHOT NEEDED — nested Rooms tree with counts and add-a-room-inside action (shared with lesson 06; capture once, reuse).]**
+
+## Privacy and access tightening (August 15–16)
+
+Four behavior changes members and officers will notice:
+
+- **Colleague profiles show less to `members.view`.** Opening a directory
+  profile without `users.view` no longer reveals the colleague's MFA state,
+  email-verification state, last login, account timestamps, notification
+  preferences, or the permission lists behind their roles — role names remain.
+  Members-managers and the member themselves still see everything.
+- **Hire date joined the restricted profile fields.** Like rank, station,
+  platoon, and membership number, changing `hire_date` now requires
+  leadership, the secretary, or the membership coordinator — it drives
+  automatic membership-tier advancement.
+- **Pending election nominations are phase-scoped.** The member-facing
+  candidate list shows pending nominations only while nominations are open
+  (so nominees can respond). After that, members see accepted candidates
+  only; `elections.manage` always sees the full list.
+- **Logout on a shared computer clears equipment-check drafts** along with
+  shift-report drafts and offline queues. The next person at a station
+  computer cannot recover the previous member's in-progress apparatus checks.
+
+**Edge cases:** the profile redaction returns nulls, not errors — an
+integration reading those fields must tolerate their absence; the candidate
+list change is per-request permission logic, not stored state, so no data
+migration is involved; the draft purge also removes orphaned draft keys that
+lost their index entry.
+
+> **[SCREENSHOT NEEDED — the same colleague profile side by side as seen with `members.view` only (metadata absent) and with `users.view`; use a demo member with MFA enabled so the redaction is visible.]**
+>
+> **[SCREENSHOT NEEDED — profile edit attempting a hire-date change without the coordinator grant, showing the 403 explanation toast.]**
+>
+> **[SCREENSHOT NEEDED — member candidate list on an election in nominations phase (pending visible) and the same election after close (accepted only); label which account is which.]**
+
+## Reliability changes members may notice (August 15–16)
+
+- **External finance approvers:** the emailed approve/deny link works exactly
+  once. A second click (or a concurrent duplicate) reports the step as
+  already actioned rather than approving twice.
+- **Public forms:** submissions that fail validation — and bot submissions —
+  no longer count against a form's daily cap, so a flood of junk cannot lock
+  legitimate submitters out for the day. The cap still answers with a clear
+  "not accepting further submissions today" message when genuinely reached.
+- **Dark mode on public pages** (forms, ballots, status pages) no longer
+  renders white-on-white; the themed background now covers every page,
+  including the scrollbar gutter.
+- **Onboarding sessions are tab-scoped.** The setup wizard's session no
+  longer survives a browser restart or spans tabs; if you close the tab
+  mid-onboarding, expect to resume by signing in again.
+
+## Upgrade notes for administrators (August 15–16)
+
+One migration: `20260816_0001` adds `facility_rooms.parent_room_id`
+(nullable, self-referential, `ON DELETE SET NULL`) — no backfill, existing
+rooms stay top-level. Back up, require a single `alembic heads` result, run
+`alembic upgrade head`. Deploying `docker-compose.prod.yml` now requires
+Docker Compose v2.24.4+ (`volumes: !override` clears development bind
+mounts; upgrade Compose rather than removing the tag). Unraid operators
+copying `unraid/.env.example` will find an HTTPS `ALLOWED_ORIGINS` example —
+substitute your reverse-proxy hostname. Details in the
+[technical audit](../CHANGE_AUDIT_2026-08-15_TO_16.md).

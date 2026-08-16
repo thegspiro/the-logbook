@@ -1,5 +1,34 @@
 # Script currency
 
+## Flagged by the 2026-08-15 → 08-16 changes
+
+Two items are already **written into the scripts** (same convention as the
+08-12 → 08-14 pass — each carries an inline **EDITOR** note at the insertion
+point):
+
+| Script | Applied update |
+|---|---|
+| **01** | Compose minimum raised to **v2.24.4+** in the prerequisites narration (production override now uses `volumes: !override`); on-screen `docker compose version` output must show ≥ 2.24.4 |
+| **12** | New ~15s beat in Chapter 5: pending nominations are member-visible only while the nomination window is open; managers always see the full list. Chapter 5 onward re-times by ~0:15 |
+
+The rest of the window's changes are **B-roll / verify** items — the words in
+the scripts remain true, but the screens behind them changed. Nothing is
+recorded yet, so these are capture-plan notes, not re-records:
+
+| Script | Kind | What changed on screen |
+|---|---|---|
+| **04** (Fire Chief) | B-roll only | The event-creation Location picker now indents sub-rooms under their container and shows a containment path for a selected nested room (facilities rooms can nest, 2026-08-16). If the demo department has nested rooms, the picker will not look like a flat list. Either seed flat-only demo rooms or let the tree show and don't remark on it. |
+| **06** (Member guide) | B-roll only + verify | Member Directory beat (18:00–18:30): a colleague's profile opened from the directory no longer shows MFA/verification/last-login/account timestamps or role permission lists to members — do not capture or gesture at an account-metadata block that is no longer there. The narration as written makes no such claim; keep it that way. |
+| **07** (Secretary) | B-roll only | Event form location field — same nested-room picker note as script 04. |
+| **08** (Short 8AF) | B-roll only | Room QR Codes directory: nested rooms display with their containment path, so "search for 'Training Room'" may surface "Training Room — Station 1"-style names. Still correct; choose demo data so the searched name is unambiguous. |
+| **03** (IT manager) | Verify before take | If the deployment chapter shows `docker compose` commands or version checks, apply the same v2.24.4+ floor as script 01. Also: `unraid/.env.example` now ships an HTTPS `ALLOWED_ORIGINS` example — any Unraid-flavored aside should not show the old `http://<LAN-IP>` form as the end state. |
+| **All** | B-roll only | Dark-mode captures of public pages (forms, ballots, status) render on the themed gradient now, not white — retake any dark-mode public-page B-roll captured before 2026-08-15. |
+
+No script narrates facility-room management in enough depth to need a nested
+rooms chapter today; if a Facilities deep-dive script is added later, the
+walkthrough source is
+[`../training/06-apparatus-facilities.md`](../training/06-apparatus-facilities.md#nesting-rooms-inside-rooms-2026-08-16).
+
 ## Resolved in-script for the 2026-08-12 → 08-14 changes
 
 The previously flagged material is now written word-for-word in the actual

@@ -1,7 +1,10 @@
 # Welcome to The Logbook Wiki
 
-> **Release handoff:** [Changes from August 12–14, 2026](Recent-Changes-2026-08-12-to-14)
-> maps new pages, APIs, data, migrations, sharing boundaries, edge cases, and
+> **Release handoff:** [Changes from August 15–16, 2026](Recent-Changes-2026-08-15-to-16)
+> covers nested facility rooms, the security/privacy hardening batch, and the
+> `20260816_0001` migration. The prior window is
+> [August 12–14, 2026](Recent-Changes-2026-08-12-to-14); both map new pages,
+> APIs, data, migrations, sharing boundaries, edge cases, and
 > documentation/media follow-up.
 
 ![The Logbook](https://img.shields.io/badge/Version-1.0.0-blue.svg)

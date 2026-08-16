@@ -121,6 +121,7 @@ Enums:
 - External approvers who aren't system users (e.g., a Township Trustee who doesn't have a login)
 - Notification-only steps to external parties (e.g., "email the accountant when approved")
 - For APPROVAL steps with EMAIL type, the system generates a secure token link (like the existing `TrainingApproval.approval_token` pattern) so the external party can approve/deny via a one-click email link without logging in
+- **Approval tokens are single-use and consumed atomically** _(2026-08-16)_: the token row is locked (`SELECT … FOR UPDATE`) while the action runs and the token is cleared on approve/deny, so a forwarded or double-clicked link cannot action a step twice — the second attempt sees the step as already actioned
 
 ### How It Works
 

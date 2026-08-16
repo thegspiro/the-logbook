@@ -1,5 +1,50 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-15 → 08-16 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-15_TO_16.md`](../CHANGE_AUDIT_2026-08-15_TO_16.md#documentation-and-media-disposition).
+These are **not verified captures**; each remains open until the image is
+opened and checked against its guide caption.
+
+### SCREENSHOT NEEDED
+
+- **Nested facility rooms** (guide 06, lesson 19): the Rooms section rendering
+  a two/three-level tree with indented sub-rooms, per-room sub-room counts,
+  and the add-a-room-inside row action. Seed one nested branch (e.g.
+  Volunteer Office → Quartermaster's Storage).
+- Room form with the **"Located inside" picker** open, demonstrating the
+  room's own subtree is excluded from the options.
+- **Delete-room confirmation** for a container room, showing the
+  "sub-rooms move up a level" warning.
+- **Cross-module room picker** (an event form) with indented sub-rooms and
+  the containment path printed under a selected nested room.
+- **Candidate list, member vs. manager** (guides 14, 19): the same election
+  after nominations close from a member account (accepted only) and an
+  `elections.manage` account (pending visible). Caption which is which.
+- **Directory profile redaction** (guides 17, 19): the same colleague profile
+  with `members.view` only (no MFA/verification/last-login/notification
+  metadata, roles without permission lists) beside the `users.view` version.
+  Use a demo member with MFA enabled so the difference is visible.
+- **Hire-date restriction** (guide 19): profile edit rejecting a `hire_date`
+  change without leadership/secretary/membership-coordinator permission,
+  showing the explanation in the toast.
+
+### REPLACE / re-verify
+
+- `06-11-facility-detail.png` — re-verify: if the Rooms section is visible,
+  it now renders a tree with sub-room counts, not a flat list. Replace if the
+  old flat list shows.
+- Any existing capture of the **room form** without the "Located inside"
+  field, or of a **room picker** (events/training/scheduling captures) showing
+  a flat, un-indented list — the picker now indents sub-rooms and shows the
+  containment path.
+- Any **dark-mode capture of a public page** (public form, ballot, status
+  page) taken before 2026-08-15 — those pages previously rendered on a white
+  canvas in dark mode; current captures should show the themed gradient.
+- Any capture of a colleague profile that shows the account-metadata block
+  (MFA, last login, timestamps) under a members-only viewing context.
+
 ## Flagged by the 2026-08-12 → 08-14 changes
 
 The three-day connection audit identified the following capture work. These
