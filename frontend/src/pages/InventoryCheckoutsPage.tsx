@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
 import { Package, AlertTriangle, RefreshCw, ArrowDownToLine, Clock, Search, CalendarClock } from 'lucide-react';
 import { inventoryService } from '../services/api';
@@ -154,7 +155,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             onClick={() => {
               void fetchCheckouts();
             }}
-            className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary border-theme-surface-border flex shrink-0 items-center space-x-2 rounded-lg border px-3 py-2 transition-colors sm:px-4"
+            className="btn-secondary flex shrink-0 items-center space-x-2 px-3 sm:px-4"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">Refresh</span>
@@ -398,11 +399,14 @@ export const InventoryCheckoutsPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div
-                className="fixed inset-0 bg-black/60"
+                className="modal-overlay"
                 aria-hidden="true"
                 onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
               ></div>
-              <div className="bg-theme-surface-modal border-theme-surface-border relative z-10 w-full max-w-md rounded-lg border shadow-xl">
+              <DialogPanel
+                onClose={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
+                className="relative z-10 w-full max-w-md"
+              >
                 <div className="px-4 pt-5 pb-4 sm:px-6">
                   <h3 id="checkin-modal-title" className="text-theme-text-primary mb-4 text-lg font-medium">
                     Check In: {checkInModal.itemName}
@@ -464,7 +468,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                     <span>{submitting ? 'Checking In...' : 'Check In'}</span>
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -482,11 +486,14 @@ export const InventoryCheckoutsPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div
-                className="fixed inset-0 bg-black/60"
+                className="modal-overlay"
                 aria-hidden="true"
                 onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
               ></div>
-              <div className="bg-theme-surface-modal border-theme-surface-border relative z-10 w-full max-w-sm rounded-lg border shadow-xl">
+              <DialogPanel
+                onClose={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
+                className="relative z-10 w-full max-w-sm"
+              >
                 <div className="px-4 pt-5 pb-4 sm:px-6">
                   <h3 id="extend-modal-title" className="text-theme-text-primary mb-1 text-lg font-medium">
                     Extend Return Date
@@ -536,7 +543,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                     {submitting ? 'Extending...' : 'Extend'}
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}

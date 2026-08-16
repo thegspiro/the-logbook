@@ -29,12 +29,24 @@ def _org():
     return Organization(id="org-1", name="Test FD")
 
 
-def _admin():
+def _user_with(permissions, user_id="u-1", email="supply@example.org"):
+    """A member whose roles grant ``permissions``.
+
+    Recipients are resolved off the roles relationship, never a scalar
+    ``user.role`` — ``User`` has no such column, and a MagicMock answering
+    one is what let a broken recipient filter pass its tests.
+    """
+    role = MagicMock()
+    role.permissions = list(permissions)
     user = MagicMock()
-    user.id = "u-1"
-    user.role = "quartermaster"
-    user.email = "supply@example.org"
+    user.id = user_id
+    user.email = email
+    user.roles = [role]
     return user
+
+
+def _admin():
+    return _user_with(["inventory.manage"])
 
 
 def _db(users=None):
@@ -154,12 +166,42 @@ class TestSupplyExpirationAlerts:
         overview.return_value = {"items": [_deployed("4x4 Gauze", ready_stock=0)]}
         lots.return_value = []
 
-        member = MagicMock()
-        member.id = "u-2"
-        member.role = "member"
-        member.email = "member@example.org"
+        member = _user_with(
+            ["inventory.view"], user_id="u-2", email="member@example.org"
+        )
 
         result = await run_supply_expiration_alerts(_db(users=[member]))
 
         assert captured == {}
         assert result["total"] == 0
+
+    async def test_any_role_granted_inventory_manage_is_notified(self, sent):
+        """Departments split stock duties differently.
+
+        A department that gives medical supplies to an EMS supply officer
+        rather than the quartermaster must still get the alert, so the filter
+        is the permission, not the title holding it.
+        """
+        captured, overview, lots = sent
+        overview.return_value = {"items": [_deployed("4x4 Gauze", ready_stock=0)]}
+        lots.return_value = []
+
+        ems_officer = _user_with(
+            ["inventory.manage"], user_id="u-3", email="ems@example.org"
+        )
+
+        await run_supply_expiration_alerts(_db(users=[ems_officer]))
+
+        assert captured["to_emails"] == ["ems@example.org"]
+
+    async def test_module_wildcard_grant_is_notified(self, sent):
+        """``inventory.*`` and ``*`` are real grants; they must match too."""
+        captured, overview, lots = sent
+        overview.return_value = {"items": [_deployed("4x4 Gauze", ready_stock=0)]}
+        lots.return_value = []
+
+        wildcard = _user_with(["inventory.*"], user_id="u-4", email="chief@example.org")
+
+        await run_supply_expiration_alerts(_db(users=[wildcard]))
+
+        assert captured["to_emails"] == ["chief@example.org"]

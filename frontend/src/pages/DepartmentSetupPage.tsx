@@ -139,7 +139,7 @@ const DepartmentSetupPage: React.FC = () => {
       </div>
 
       {/* Progress Card */}
-      <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-6">
+      <div className="card p-6">
         <div className="mb-3 flex items-center justify-between">
           <div>
             <p className="text-theme-text-secondary text-sm font-medium">Setup Progress</p>
@@ -229,7 +229,7 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate, onAcknowledge, 
   // itself can't be one — nesting interactive elements is invalid HTML and
   // breaks keyboard navigation. The navigation target is its own button.
   return (
-    <div className="bg-theme-surface border-theme-surface-border group w-full rounded-xl border transition-all hover:border-red-500/30">
+    <div className="card group w-full transition-all hover:border-red-500/30">
       <button onClick={() => onNavigate(item.path)} className="w-full p-4 text-left">
         <div className="flex items-center gap-4">
           {/* Status Icon */}

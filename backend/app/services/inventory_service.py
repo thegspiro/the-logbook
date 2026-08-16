@@ -9,13 +9,14 @@ import copy
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql import Select
 
 from app.core.audit import log_audit_event
 from app.models.inventory import (
@@ -136,6 +137,162 @@ def _size_label(size: str) -> str:
     if "_" in code or " " in code:
         return code.replace("_", " ").title()
     return code.upper()
+
+
+# Starter categories offered by the guided setup workflow.
+#
+# A category is the switch that decides which fields the item form shows and
+# which compliance machinery runs, so a department that starts from an empty
+# list either invents its own scheme or (more often) files everything under one
+# catch-all and loses maintenance and NFPA tracking. These presets are the
+# fire-service defaults a new quartermaster would otherwise have to know to
+# ask for; they are ordinary categories once created and can be edited or
+# deleted like any other.
+CATEGORY_PRESETS: List[Dict[str, Any]] = [
+    {
+        "key": "turnout_gear",
+        "name": "Turnout Gear",
+        "description": "Coats, pants, and liners issued to a member.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": True,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": True,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "helmets",
+        "name": "Helmets",
+        "description": "Structural and wildland helmets, shields, and liners.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": True,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": True,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "boots_gloves_hoods",
+        "name": "Boots, Gloves & Hoods",
+        "description": "Sized PPE issued per member and replaced on wear.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": True,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 10,
+    },
+    {
+        "key": "scba",
+        "name": "SCBA",
+        "description": "Packs, masks, and cylinders on a flow-test cycle.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": False,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": True,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "station_uniforms",
+        "name": "Station Uniforms",
+        "description": "Job shirts, t-shirts, and duty pants kept in sizes.",
+        "item_type": ItemType.UNIFORM,
+        "requires_assignment": True,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 10,
+    },
+    {
+        "key": "dress_uniforms",
+        "name": "Dress Uniforms",
+        "description": "Class A coats, trousers, covers, and insignia.",
+        "item_type": ItemType.UNIFORM,
+        "requires_assignment": True,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "hand_tools",
+        "name": "Hand Tools",
+        "description": "Irons, axes, hooks, and other truck-company tools.",
+        "item_type": ItemType.TOOL,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "power_equipment",
+        "name": "Power Equipment",
+        "description": "Saws, fans, and extrication tools on a service cycle.",
+        "item_type": ItemType.TOOL,
+        "requires_assignment": False,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "hose_appliances",
+        "name": "Hose & Appliances",
+        "description": "Hose, nozzles, and adapters carried on apparatus.",
+        "item_type": ItemType.EQUIPMENT,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "ladders",
+        "name": "Ladders",
+        "description": "Ground ladders on an annual test cycle.",
+        "item_type": ItemType.EQUIPMENT,
+        "requires_assignment": False,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "radios",
+        "name": "Radios & Pagers",
+        "description": "Portables, chargers, and pagers issued by serial.",
+        "item_type": ItemType.ELECTRONICS,
+        "requires_assignment": True,
+        "requires_serial_number": True,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "ems_supplies",
+        "name": "EMS Supplies",
+        "description": "Consumables restocked by quantity and expiration.",
+        "item_type": ItemType.CONSUMABLE,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 20,
+    },
+    {
+        "key": "station_supplies",
+        "name": "Station Supplies",
+        "description": "Cleaning and household stock reordered by quantity.",
+        "item_type": ItemType.CONSUMABLE,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 15,
+    },
+]
 
 
 # Supported extra-line field keys that can be requested on labels.
@@ -507,17 +664,33 @@ class InventoryService:
         self,
         organization_id: UUID,
         item_type: Optional[ItemType] = None,
+        item_types: Optional[Iterable[ItemType]] = None,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
         active_only: bool = True,
         skip: int = 0,
         limit: int = 200,
     ) -> List[InventoryCategory]:
-        """Get categories for an organization with pagination"""
+        """Get categories for an organization with pagination.
+
+        ``item_types`` / ``exclude_item_types`` scope the result to a domain,
+        so the medical-supply page's category picker never offers a uniform
+        category and the gear page's never offers a medical one.
+        """
         query = select(InventoryCategory).where(
             InventoryCategory.organization_id == str(organization_id)
         )
 
+        include_types = set(item_types or ())
         if item_type:
-            query = query.where(InventoryCategory.item_type == item_type)
+            include_types.add(item_type)
+
+        if include_types:
+            query = query.where(InventoryCategory.item_type.in_(list(include_types)))
+
+        if exclude_item_types:
+            query = query.where(
+                InventoryCategory.item_type.notin_(list(exclude_item_types))
+            )
 
         if active_only:
             query = query.where(InventoryCategory.active.is_(True))
@@ -1287,6 +1460,21 @@ class InventoryService:
         "updated_at": InventoryItem.updated_at,
     }
 
+    @staticmethod
+    def _category_ids_of_type(
+        organization_id: UUID, item_types: Set[ItemType]
+    ) -> "Select":
+        """Org-scoped select of category ids in the given domains.
+
+        Org-scoped inside the subquery rather than relying on the outer
+        query's filter: without it, an item could be matched against another
+        organization's category of the same type.
+        """
+        return select(InventoryCategory.id).where(
+            InventoryCategory.organization_id == str(organization_id),
+            InventoryCategory.item_type.in_(list(item_types)),
+        )
+
     async def get_items(
         self,
         organization_id: UUID,
@@ -1294,6 +1482,8 @@ class InventoryService:
         status: Optional[ItemStatus] = None,
         condition: Optional[ItemCondition] = None,
         item_type: Optional[ItemType] = None,
+        item_types: Optional[Iterable[ItemType]] = None,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
         assigned_to: Optional[UUID] = None,
         location_id: Optional[UUID] = None,
         storage_area_id: Optional[UUID] = None,
@@ -1308,7 +1498,14 @@ class InventoryService:
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[InventoryItem], int]:
-        """Get items with filtering, sorting, and pagination"""
+        """Get items with filtering, sorting, and pagination.
+
+        ``item_types`` restricts to a domain, ``exclude_item_types`` carves one
+        out — that pair is what keeps the medical-supply page and the
+        gear-and-uniforms page from each listing the other's stock. Both are
+        applied server-side from the caller's permissions, never from a query
+        parameter, so a medical-only officer cannot widen their own view.
+        """
         query = (
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
@@ -1328,17 +1525,32 @@ class InventoryService:
         if condition:
             query = query.where(InventoryItem.condition == condition)
 
+        include_types = set(item_types or ())
         if item_type:
-            # Filter by item_type via the category relationship
-            cat_subq = (
-                select(InventoryCategory.id)
-                .where(
-                    InventoryCategory.organization_id == str(organization_id),
-                    InventoryCategory.item_type == item_type,
+            include_types.add(item_type)
+
+        if include_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, include_types)
                 )
-                .subquery()
             )
-            query = query.where(InventoryItem.category_id.in_(select(cat_subq)))
+
+        if exclude_item_types:
+            # An uncategorized item has no domain, so it is not the excluded
+            # one — NOT IN would drop it along with the excluded rows because
+            # NULL NOT IN (...) is NULL, and the gear page would quietly lose
+            # every item nobody has filed yet.
+            query = query.where(
+                or_(
+                    InventoryItem.category_id.is_(None),
+                    InventoryItem.category_id.notin_(
+                        self._category_ids_of_type(
+                            organization_id, set(exclude_item_types)
+                        )
+                    ),
+                )
+            )
 
         if assigned_to:
             # str(): the column is String(36) and the parameter is a UUID, so
@@ -4790,6 +5002,65 @@ class InventoryService:
             )
         )
 
+    async def category_in_domain(
+        self,
+        category_id: Optional[str],
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Is this category one of ``item_types``, in this organization?
+
+        Fails closed: an unresolvable or uncategorized id is not in the
+        domain. A medical-only officer reaching for a uniform category must be
+        refused, and so must one reaching for a category that does not exist.
+        """
+        if not category_id:
+            return False
+        found = await self.db.scalar(
+            select(InventoryCategory.id).where(
+                InventoryCategory.id == str(category_id),
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(list(item_types)),
+            )
+        )
+        return found is not None
+
+    async def item_in_domain(
+        self,
+        item_id: str,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Is this item filed under a category in ``item_types``?"""
+        found = await self.db.scalar(
+            select(InventoryItem.id)
+            .join(
+                InventoryCategory,
+                InventoryCategory.id == InventoryItem.category_id,
+            )
+            .where(
+                InventoryItem.id == str(item_id),
+                InventoryItem.organization_id == organization_id,
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(list(item_types)),
+            )
+        )
+        return found is not None
+
+    async def lot_in_domain(
+        self,
+        lot_id: str,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Is this stock lot attached to an item in ``item_types``?"""
+        lot = await self._get_lot(lot_id, organization_id)
+        if not lot:
+            return False
+        return await self.item_in_domain(
+            lot.inventory_item_id, organization_id, item_types
+        )
+
     async def _get_lot(
         self, lot_id: str, organization_id: str
     ) -> Optional[InventoryLot]:
@@ -5024,11 +5295,18 @@ class InventoryService:
         return by_item
 
     async def get_expiring_lots(
-        self, organization_id: str, days_ahead: int = 30
+        self,
+        organization_id: str,
+        days_ahead: int = 30,
+        item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Tuple[InventoryLot, str]]:
-        """Get in-stock lots expiring within N days, with the item name."""
+        """Get in-stock lots expiring within N days, with the item name.
+
+        ``item_types`` narrows the result to one domain so the medical-supply
+        page reports its own expiring stock and not the whole department's.
+        """
         cutoff = date.today() + timedelta(days=days_ahead)
-        result = await self.db.execute(
+        query = (
             select(InventoryLot, InventoryItem.name)
             .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
             .where(
@@ -5037,7 +5315,15 @@ class InventoryService:
                 InventoryLot.expiration_date.isnot(None),
                 InventoryLot.expiration_date <= cutoff,
             )
-            .order_by(InventoryLot.expiration_date.asc())
+        )
+        if item_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                )
+            )
+        result = await self.db.execute(
+            query.order_by(InventoryLot.expiration_date.asc())
         )
         return [(row[0], row[1]) for row in result.all()]
 
@@ -6992,3 +7278,146 @@ class InventoryService:
             "categories": categories,
             "size_fields": size_fields,
         }
+
+    # ============================================
+    # Guided Setup
+    # ============================================
+
+    async def get_setup_status(self, organization_id: UUID) -> Dict[str, Any]:
+        """Counts of the records the guided setup workflow walks through.
+
+        Each count is what the corresponding step of the workflow produces, in
+        the order an item needs them: a room holds storage areas, a storage
+        area holds items, and a category decides which fields an item has.
+        Retired items are excluded so a department that retired its way back to
+        an empty catalog is offered the workflow again.
+        """
+        org_id = str(organization_id)
+
+        rooms = await self.db.scalar(
+            select(func.count())
+            .select_from(Location)
+            .where(
+                Location.organization_id == org_id,
+                Location.is_active.is_(True),
+            )
+        )
+        storage_areas = await self.db.scalar(
+            select(func.count())
+            .select_from(StorageArea)
+            .where(
+                StorageArea.organization_id == org_id,
+                StorageArea.is_active.is_(True),
+            )
+        )
+        categories = await self.db.scalar(
+            select(func.count())
+            .select_from(InventoryCategory)
+            .where(
+                InventoryCategory.organization_id == org_id,
+                InventoryCategory.active.is_(True),
+            )
+        )
+        items = await self.db.scalar(
+            select(func.count())
+            .select_from(InventoryItem)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.status != ItemStatus.RETIRED,
+            )
+        )
+
+        counts = {
+            "rooms": rooms or 0,
+            "storage_areas": storage_areas or 0,
+            "categories": categories or 0,
+            "items": items or 0,
+        }
+        return {**counts, "is_complete": all(value > 0 for value in counts.values())}
+
+    async def _taken_category_names(self, organization_id: UUID) -> set[str]:
+        """Case-folded names of the org's *active* categories.
+
+        Active only: `delete_category` deactivates rather than deleting, so
+        matching every row would let one retired "Turnout Gear" mark the preset
+        as already-added forever — shown as done in the workflow, absent from
+        the category list beside it, and impossible to re-create from here.
+        """
+        existing = await self.db.execute(
+            select(InventoryCategory.name).where(
+                InventoryCategory.organization_id == str(organization_id),
+                InventoryCategory.active.is_(True),
+            )
+        )
+        return {name.strip().lower() for name in existing.scalars().all() if name}
+
+    async def get_category_presets(self, organization_id: UUID) -> List[Dict[str, Any]]:
+        """Starter categories, each flagged with whether the org already has it.
+
+        The flag is matched on case-insensitive name rather than on a stored
+        key: a department that already typed "Turnout Gear" by hand should not
+        be offered a second one, and presets carry no identity of their own
+        once created.
+        """
+        taken = await self._taken_category_names(organization_id)
+
+        return [
+            {
+                **preset,
+                "item_type": preset["item_type"].value,
+                "exists": preset["name"].strip().lower() in taken,
+            }
+            for preset in CATEGORY_PRESETS
+        ]
+
+    async def apply_category_presets(
+        self, organization_id: UUID, keys: List[str], created_by: UUID
+    ) -> Tuple[List[InventoryCategory], List[str], Optional[str]]:
+        """Create the named starter categories, skipping ones already present.
+
+        Returns ``(created, skipped_names, error)``. Skipping rather than
+        failing keeps the workflow re-runnable: a quartermaster who applies a
+        second batch later gets only what is missing, and a double-submitted
+        form does not duplicate the catalog.
+        """
+        requested = [key for key in dict.fromkeys(keys) if key]
+        by_key = {preset["key"]: preset for preset in CATEGORY_PRESETS}
+        unknown = [key for key in requested if key not in by_key]
+        if unknown:
+            return [], [], f"Unknown category preset: {unknown[0]}"
+
+        taken = await self._taken_category_names(organization_id)
+
+        created: List[InventoryCategory] = []
+        skipped: List[str] = []
+        try:
+            for key in requested:
+                preset = by_key[key]
+                if preset["name"].strip().lower() in taken:
+                    skipped.append(preset["name"])
+                    continue
+                category = InventoryCategory(
+                    organization_id=str(organization_id),
+                    created_by=str(created_by),
+                    name=preset["name"],
+                    description=preset["description"],
+                    item_type=preset["item_type"],
+                    requires_assignment=preset["requires_assignment"],
+                    requires_serial_number=preset["requires_serial_number"],
+                    requires_maintenance=preset["requires_maintenance"],
+                    nfpa_tracking_enabled=preset["nfpa_tracking_enabled"],
+                    low_stock_threshold=preset["low_stock_threshold"],
+                )
+                self.db.add(category)
+                created.append(category)
+                taken.add(preset["name"].strip().lower())
+
+            if created:
+                await self.db.commit()
+                for category in created:
+                    await self.db.refresh(category)
+            return created, skipped, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to apply category presets: {e}")
+            return [], [], str(e)

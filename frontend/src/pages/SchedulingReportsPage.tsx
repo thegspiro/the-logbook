@@ -108,7 +108,7 @@ interface StatCardProps {
 }
 
 const StatCard: React.FC<StatCardProps> = ({ label, value, icon }) => (
-  <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+  <div className="card p-4">
     <div className="flex items-center gap-3">
       <div className="bg-theme-surface-secondary rounded-lg p-2">{icon}</div>
       <div>
@@ -983,10 +983,7 @@ export const SchedulingReportsPage: React.FC = () => {
                     complianceFilter === 'non-compliant' ? req.members.filter((m) => !m.compliant) : req.members;
 
                   return (
-                    <div
-                      key={req.requirement_id}
-                      className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border"
-                    >
+                    <div key={req.requirement_id} className="card overflow-hidden">
                       {/* Requirement header */}
                       <button
                         onClick={() => toggleRequirement(req.requirement_id)}

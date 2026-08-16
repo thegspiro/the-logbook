@@ -103,8 +103,8 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
   const setEd = (field: string, value: string) => setEditData((prev) => ({ ...prev, [field]: value }));
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
-      <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
+    <div className="card">
+      <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
         <h2 className="text-theme-text-primary text-sm font-semibold">Facility Details</h2>
         {!isEditing ? (
           canManage ? (
@@ -137,7 +137,7 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
         )}
       </div>
 
-      <div className="p-5">
+      <div className="p-4">
         {!isEditing ? (
           <OverviewViewMode facility={facility} tz={tz} />
         ) : (

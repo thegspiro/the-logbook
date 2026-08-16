@@ -261,7 +261,7 @@ export const StartSkillTestPage: React.FC = () => {
         </div>
 
         {/* Step 1: Select Template */}
-        <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
+        <div className="card mb-4 p-4 sm:p-6">
           <h2 className="text-theme-text-primary mb-3 flex items-center gap-2 text-lg font-semibold">
             <FileText className="h-5 w-5 text-red-600" />
             1. Select Template
@@ -296,7 +296,7 @@ export const StartSkillTestPage: React.FC = () => {
                   placeholder="Search templates..."
                   value={templateSearch}
                   onChange={(e) => setTemplateSearch(e.target.value)}
-                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-3 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
+                  className="form-input placeholder:text-theme-text-muted py-3 pr-4 pl-10"
                 />
               </div>
               {templatesLoading ? (
@@ -328,7 +328,7 @@ export const StartSkillTestPage: React.FC = () => {
         </div>
 
         {/* Step 2: Test Mode */}
-        <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
+        <div className="card mb-4 p-4 sm:p-6">
           <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">2. Test Mode</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
@@ -392,7 +392,7 @@ export const StartSkillTestPage: React.FC = () => {
         </div>
 
         {/* Step 3: Select Candidate (search-only) */}
-        <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
+        <div className="card mb-4 p-4 sm:p-6">
           <h2 className="text-theme-text-primary mb-3 flex items-center gap-2 text-lg font-semibold">
             <User className="h-5 w-5 text-red-600" />
             3. Select Candidates
@@ -441,7 +441,7 @@ export const StartSkillTestPage: React.FC = () => {
                   placeholder="Type a name to search..."
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-3 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
+                  className="form-input placeholder:text-theme-text-muted py-3 pr-4 pl-10"
                 />
               </div>
               {membersLoading ? (
@@ -498,7 +498,7 @@ export const StartSkillTestPage: React.FC = () => {
             when they validate; showing the picker to a member invites them to
             re-point a test whose credit they cannot grant anyway. */}
         {showRequirementStep && (
-          <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
+          <div className="card mb-4 p-4 sm:p-6">
             <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">
               4. Counts Toward Requirement (optional)
             </h2>
@@ -514,7 +514,7 @@ export const StartSkillTestPage: React.FC = () => {
                   <select
                     value={overrideRequirementId}
                     onChange={(e) => setOverrideRequirementId(e.target.value)}
-                    className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-3 focus:ring-2 focus:outline-hidden"
+                    className="form-input px-3 py-3"
                   >
                     <option value="">{defaultReq ? `Use template default (${defaultReq.name})` : 'Not linked'}</option>
                     {requirements.map((r) => (
@@ -531,7 +531,7 @@ export const StartSkillTestPage: React.FC = () => {
 
         {/* Notes (optional) — numbered off the requirement step, which is hidden
             for practice runs and for members. */}
-        <div className="bg-theme-surface border-theme-surface-border mb-6 rounded-lg border p-4 sm:p-6">
+        <div className="card mb-6 p-4 sm:p-6">
           <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">
             {showRequirementStep ? '5' : '4'}. Notes (optional)
           </h2>
@@ -540,7 +540,7 @@ export const StartSkillTestPage: React.FC = () => {
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Any notes for this test session..."
-            className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-3 focus:ring-2 focus:outline-hidden"
+            className="form-input placeholder:text-theme-text-muted resize-none px-3 py-3"
           />
         </div>
 

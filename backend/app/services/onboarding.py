@@ -1124,6 +1124,7 @@ class OnboardingService:
             # Operations modules
             "training",
             "inventory",
+            "medical_supplies",
             "scheduling",
             "apparatus",
             "facilities",

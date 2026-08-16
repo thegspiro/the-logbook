@@ -119,7 +119,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
       </div>
 
       {/* Enable toggle */}
-      <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+      <div className="card p-4">
         <label className="flex cursor-pointer items-center gap-3">
           <input
             type="checkbox"
@@ -139,7 +139,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
       {enabled && (
         <>
           {/* Apparatus configuration */}
-          <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-lg border p-4">
+          <div className="card space-y-4 p-4">
             <div className="flex items-center gap-2">
               <Truck className="text-theme-text-muted h-4 w-4" />
               <h4 className="text-theme-text-primary text-sm font-medium">Apparatus</h4>
@@ -197,7 +197,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
           </div>
 
           {/* Default times */}
-          <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-lg border p-4">
+          <div className="card space-y-4 p-4">
             <div className="flex items-center gap-2">
               <Clock className="text-theme-text-muted h-4 w-4" />
               <h4 className="text-theme-text-primary text-sm font-medium">Default Shift Times</h4>

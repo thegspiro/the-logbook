@@ -38,6 +38,7 @@ from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import generate_uuid, safe_error_detail, sanitize_error_message
 from app.core.websocket_manager import ws_manager
 from app.models.inventory import (
+    MEDICAL_ITEM_TYPES,
     AssignmentType,
     CheckOutRecord,
     EquipmentRequest,
@@ -53,6 +54,7 @@ from app.models.inventory import (
     NFPAItemCompliance,
     StorageArea,
 )
+from app.models.location import Location
 from app.models.operational_rank import OperationalRank
 from app.models.user import User
 from app.schemas.inventory import (
@@ -64,6 +66,9 @@ from app.schemas.inventory import (
     BulkIssuanceRequest,
     BulkIssuanceResponse,
     BulkIssuanceResultItem,
+    CategoryPresetApplyRequest,
+    CategoryPresetApplyResponse,
+    CategoryPresetResponse,
     ChargeManagementResponse,
     CheckInRequest,
     CheckOutCreate,
@@ -104,6 +109,7 @@ from app.schemas.inventory import (
     InventoryLotCreate,
     InventoryLotResponse,
     InventoryLotUpdate,
+    InventorySetupStatus,
     InventorySummary,
     InventoryVendorContactCreate,
     InventoryVendorContactResponse,
@@ -173,6 +179,7 @@ from app.services.inventory_service import InventoryService
 from app.services.label_service import LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
+from app.utils.org_scoping import assert_in_org
 from app.utils.upload_limits import read_upload_limited
 from app.utils.websocket_origin import is_websocket_origin_allowed
 
@@ -250,6 +257,10 @@ async def list_categories(
     categories = await service.get_categories(
         organization_id=current_user.organization_id,
         item_type=item_type,
+        # Medical supplies have their own page and their own officer; listing
+        # them here too would put the same stock under two owners and let a
+        # gear-only quartermaster edit an EMS category by accident.
+        exclude_item_types=MEDICAL_ITEM_TYPES,
         active_only=active_only,
     )
     return categories
@@ -405,6 +416,99 @@ async def delete_category(
 
 
 # ============================================
+# Guided Setup Endpoints
+# ============================================
+
+
+@router.get("/setup/status", response_model=InventorySetupStatus)
+async def get_setup_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Counts of the records the guided setup workflow walks through.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_setup_status(organization_id=current_user.organization_id)
+
+
+@router.get("/setup/category-presets", response_model=list[CategoryPresetResponse])
+async def list_category_presets(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    List the starter categories the setup workflow offers, each flagged with
+    whether the organization already has a category by that name.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_category_presets(
+        organization_id=current_user.organization_id
+    )
+
+
+@router.post(
+    "/setup/category-presets",
+    response_model=CategoryPresetApplyResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def apply_category_presets(
+    request: CategoryPresetApplyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create the named starter categories. Presets whose name already exists in
+    the organization are skipped rather than duplicated, so the call is safe to
+    repeat.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    created, skipped, error = await service.apply_category_presets(
+        organization_id=current_user.organization_id,
+        keys=request.keys,
+        created_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error),
+        )
+
+    if created:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_category_presets_applied",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "category_ids": [str(category.id) for category in created],
+                "category_names": [category.name for category in created],
+                "skipped": skipped,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return CategoryPresetApplyResponse(
+        created=[
+            InventoryCategoryResponse.model_validate(category, from_attributes=True)
+            for category in created
+        ],
+        skipped=skipped,
+    )
+
+
+# ============================================
 # Item Endpoints
 # ============================================
 
@@ -493,6 +597,8 @@ async def list_items(
         status=status_enum,
         condition=condition_enum,
         item_type=item_type_enum,
+        # Gear and uniforms only — medical stock is listed on its own page.
+        exclude_item_types=MEDICAL_ITEM_TYPES,
         assigned_to=assigned_to,
         location_id=location_id,
         storage_area_id=storage_area_id,
@@ -3611,8 +3717,6 @@ async def list_storage_areas(
     item_counts = {row.storage_area_id: row.cnt for row in count_result.all()}
 
     # Load locations for names
-    from app.models.location import Location
-
     loc_result = await db.execute(
         select(Location.id, Location.name).where(
             Location.organization_id == str(current_user.organization_id)
@@ -3672,6 +3776,36 @@ async def create_storage_area(
     organization's storage-area series. Areas are meant to be scannable, so
     this is not left to whoever remembers to fill the field in.
     """
+    # XC-1: the room and parent area come from the client, so both have to be
+    # confirmed in-org before they are stored — otherwise an area can be filed
+    # under another organization's room and the tree reads that room's name back.
+    #
+    # Ahead of the barcode, deliberately: allocating one advances the
+    # organization's running counter, so validating afterwards would burn a
+    # number out of the series on every rejected request.
+    try:
+        await assert_in_org(
+            db,
+            Location,
+            data.location_id,
+            current_user.organization_id,
+            allow_none=True,
+            label="room",
+        )
+        await assert_in_org(
+            db,
+            StorageArea,
+            data.parent_id,
+            current_user.organization_id,
+            allow_none=True,
+            label="parent storage area",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
     service = InventoryService(db)
     barcode = (data.barcode or "").strip() or None
     if barcode is None:
@@ -3727,6 +3861,32 @@ async def update_storage_area(
     area = result.scalar_one_or_none()
     if not area:
         raise HTTPException(status_code=404, detail="Storage area not found")
+
+    # XC-1: same as create — a re-filed room or parent must still be in-org.
+    try:
+        if "location_id" in data.model_fields_set:
+            await assert_in_org(
+                db,
+                Location,
+                data.location_id,
+                current_user.organization_id,
+                allow_none=True,
+                label="room",
+            )
+        if "parent_id" in data.model_fields_set:
+            await assert_in_org(
+                db,
+                StorageArea,
+                data.parent_id,
+                current_user.organization_id,
+                allow_none=True,
+                label="parent storage area",
+            )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
 
     ALLOWED_AREA_FIELDS = {
         "name",
