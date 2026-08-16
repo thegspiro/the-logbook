@@ -134,7 +134,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/supply/expiring"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredAnyPermission={['scheduling.manage', 'equipment_check.view']}>
+            <ProtectedRoute requiredAnyPermission={['scheduling.manage', 'equipment_check.view', 'inventory.manage']}>
               <SupplyExpiringPage />
             </ProtectedRoute>
           </Suspense>

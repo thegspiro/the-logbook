@@ -30,9 +30,9 @@ def test_inventory_mutations_require_management_permission(path, method):
     assert "equipment_check.submit" not in permissions
 
 
-def test_supply_overview_requires_equipment_check_view_permission():
-    """Baseline inventory viewers must not access deployed supply details."""
+def test_supply_overview_requires_officer_permission():
+    """Check and inventory officers, but not baseline viewers, get access."""
     permissions = _permission_set("/supply/expiring-items", "GET")
 
-    assert permissions == {"equipment_check.view"}
+    assert permissions == {"equipment_check.view", "inventory.manage"}
     assert "inventory.view" not in permissions
