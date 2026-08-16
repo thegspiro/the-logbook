@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Failures now say so: eight silent-error paths surfaced (2026-08-16)
+
+**Fixed**
+
+- **A rejected equipment check no longer pretends it was queued.** The submit
+  path treated every failure as a connection loss: a 400/403/422 — validation
+  failure, revoked permission, shift already checked — got a "Connection lost
+  — check queued for sync" toast, the draft was deleted, and the offline queue
+  re-sent the identical doomed body on every reconnect without ever giving up
+  (the retry counter was incremented but never read). Server rejections now
+  surface as errors; only genuine transport failures queue (shared
+  `isNetworkError` helper), and the drain loop abandons a check past
+  `CHECK_QUEUE_MAX_RETRIES` **and reports the loss** — including photos that
+  failed to upload, whose only copy was previously dequeued undiscoverably.
+- Quick RSVP failures now surface instead of being indistinguishable from a
+  tap that never registered; bulk event cancel reports refusals rather than
+  "Cancelled 0 events" in a success toast; compliance attestation errors are
+  shown inline on the form instead of replacing the dashboard; election
+  package creation on stage advance treats only a 409 as "already exists";
+  event-request assignee notification failures are actually logged; a skills
+  test score is no longer cleared from its input when the save was refused.
+
+### Inventory: storage areas are always scannable (2026-08-16)
+
+**Added / Changed**
+
+- **Storage areas always carry a barcode.** Creation auto-assigns the next
+  code in a per-organization sequential series (default prefix `SA-`, counter
+  in `organization.settings["storage_area_barcode"]`, manually-entered codes
+  skipped) when the caller doesn't supply one; a blank from an older client
+  cannot strip a code already printed on the shelf; pre-barcode areas pick one
+  up on first edit; migration `20260816_0002` backfills the rest.
+- The Storage Areas page shows **all areas by default**, and its facility
+  picker was fixed.
+
+### Small fixes from the open-PR resolution pass (2026-08-16)
+
+**Fixed / Changed**
+
+- The admin-hours Summary tab computes its date boundaries through the
+  timezone utilities (`useTimezone` + `localToUTC`) instead of raw `Date`
+  math.
+- Sidebar/top navigation deduplicate the Administration-section permission
+  check into a shared `hasAdministrationAccess` helper (no behavior change).
+- The frontend `TrainingSessionResponse` type caught up with the backend
+  response: `instructor_id`, `co_instructors`, `apparatus_id`, and
+  `counts_toward_certification` (false when a session's delivery would not be
+  accepted by a certifying body, so its hours must not advance linked
+  certificate requirements). Session linkage is now covered by integration
+  tests against a real database.
+
 ### Inventory: vendor review fixes (2026-08-16)
 
 **Fixed**

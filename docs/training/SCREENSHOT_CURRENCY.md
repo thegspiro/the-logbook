@@ -30,6 +30,18 @@ opened and checked against its guide caption.
   change without leadership/secretary/membership-coordinator permission,
   showing the explanation in the toast.
 
+### Added by the post-audit August 16 merges
+
+- **Storage Areas page** (guide 05): now shows all areas by default and every
+  area carries a barcode (auto-assigned `SA-…` series). Re-verify any
+  storage-areas capture; a new capture should show the barcode column
+  populated on every row.
+- **Equipment-check rejection vs. offline queue** (guides 03/10): capture a
+  server-rejected check showing the real error message — **not** the
+  "queued for sync" toast — and, separately, the abandoned-after-retries
+  loss notice. Requires demo setup that forces a 4xx (e.g. a
+  revoked-permission account).
+
 ### REPLACE / re-verify
 
 - `06-11-facility-detail.png` — re-verify: if the Rooms section is visible,
