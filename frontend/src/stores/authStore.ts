@@ -328,6 +328,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    // Disable draft autosave before waiting on either the logout request or
+    // the asynchronous device purge. The form remains mounted during both.
+    localStorage.removeItem('has_session');
     try {
       await authService.logout();
     } catch {
@@ -344,7 +347,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       clearCache();
       invalidateRanksCache();
       clearQueuedReports();
-      localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       // SEC (FE-6/FE-7): shift-report drafts (localStorage) and the offline
@@ -407,6 +409,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
+      await purgeLocalMemberData();
       set({
         user: null,
         isAuthenticated: false,

@@ -670,6 +670,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   useEffect(() => {
     if (previewMode) return;
+    // Session termination removes this hint synchronously, before its slower
+    // IndexedDB purge. Do not let a late API response recreate a sensitive
+    // draft while logout/session-expiry cleanup is still running.
+    if (!localStorage.getItem('has_session')) return;
     if (Object.keys(results).length === 0 && !overallNotes) return;
     try {
       localStorage.setItem(draftKey, JSON.stringify({ results, overallNotes }));
