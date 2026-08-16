@@ -546,6 +546,41 @@ def _clear_hidden_contact_fields(
     payload.address_country = None
 
 
+def _clear_account_security_fields(
+    payload: UserWithRolesResponse | UserProfileResponse,
+) -> None:
+    """Blank, in place, account-security metadata a colleague has no claim to.
+
+    `members.view` — the directory permission every default position carries —
+    opens any colleague's profile, so whatever survives redaction here is
+    org-wide public. These fields are not roster data:
+
+    * `mfa_enabled` maps exactly which accounts lack MFA — a target list for
+      credential attacks. Withheld as None rather than a neutral False, which
+      would misreport protected accounts as unprotected (the schema fields are
+      Optional for precisely this).
+    * `email_verified` and `last_login_at` profile account hygiene and
+      activity patterns (who has gone dormant, when leadership logs in).
+    * `notification_preferences` reveals how to reach — or avoid alerting —
+      a member outside the app.
+    * Each role's `permissions` list is an access-control map of the
+      organization; the profile page needs only role names. Replaced with []
+      (the schema default) rather than None so clients iterating it don't
+      break.
+
+    Cleared for everyone except `members.manage` holders and the member
+    themselves; both exemptions are applied by the caller, which skips
+    redaction entirely for them.
+    """
+    payload.mfa_enabled = None
+    payload.email_verified = None
+    payload.last_login_at = None
+    if isinstance(payload, UserProfileResponse):
+        payload.notification_preferences = None
+    for role in payload.roles:
+        role.permissions = []
+
+
 def _redact_contact_fields(
     user: User, visibility: dict[str, bool], is_admin: bool
 ) -> UserWithRolesResponse:
@@ -1086,8 +1121,10 @@ async def get_user_with_roles(
     `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
     see `_clear_hidden_contact_fields`. Date of birth and emergency contacts are
     leadership-only regardless of that setting — see
-    `_clear_leadership_only_fields`. Members-managers and the subject themselves
-    are exempt from both.
+    `_clear_leadership_only_fields` — and so are account-security metadata
+    (MFA status, email verification, last login, notification preferences)
+    and each role's permissions list — see `_clear_account_security_fields`.
+    Members-managers and the subject themselves are exempt from all of it.
 
     **Authentication required**
     """
@@ -1155,6 +1192,7 @@ async def get_user_with_roles(
         visibility = await _load_contact_visibility(db, current_user, is_admin)
         _clear_hidden_contact_fields(payload, visibility)
         _clear_leadership_only_fields(payload)
+        _clear_account_security_fields(payload)
 
     return payload
 
