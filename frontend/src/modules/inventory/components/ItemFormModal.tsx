@@ -75,6 +75,14 @@ const EMPTY: FD = {
   notes: '',
 };
 
+/** Fields a caller can pre-fill on a new item. Ignored when editing. */
+export interface ItemFormDefaults {
+  category_id?: string | undefined;
+  location_id?: string | undefined;
+  storage_area_id?: string | undefined;
+  tracking_type?: string | undefined;
+}
+
 export interface ItemFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -83,6 +91,12 @@ export interface ItemFormModalProps {
   locations: Location[];
   storageAreas: StorageAreaResponse[];
   editItem?: InventoryItem | null;
+  /**
+   * Pre-selected category/room/storage area for a new item. The setup workflow
+   * has already asked for these a step earlier, so re-asking is the repetition
+   * that makes adding the first item feel like paperwork.
+   */
+  defaults?: ItemFormDefaults;
 }
 
 /** All item types support size/style variant generation (uniforms, PPE,
@@ -107,6 +121,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   locations,
   storageAreas,
   editItem,
+  defaults,
 }) => {
   const [f, setF] = useState<FD>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -117,6 +132,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [variantColors, setVariantColors] = useState('');
+
+  // Read as primitives so an inline `defaults={{...}}` at the call site does
+  // not re-run the reset effect on every parent render and wipe what is typed.
+  const defaultCategoryId = defaults?.category_id ?? '';
+  const defaultLocationId = defaults?.location_id ?? '';
+  const defaultStorageAreaId = defaults?.storage_area_id ?? '';
+  const defaultTrackingType = defaults?.tracking_type ?? '';
 
   useEffect(() => {
     if (editItem) {
@@ -147,14 +169,20 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         notes: editItem.notes ?? '',
       });
     } else {
-      setF(EMPTY);
+      setF({
+        ...EMPTY,
+        category_id: defaultCategoryId,
+        location_id: defaultLocationId,
+        storage_area_id: defaultStorageAreaId,
+        tracking_type: defaultTrackingType || EMPTY.tracking_type,
+      });
     }
     setShowFin(false);
     setGenerateVariants(false);
     setSelectedSizes([]);
     setSelectedStyles([]);
     setVariantColors('');
-  }, [editItem, isOpen]);
+  }, [editItem, isOpen, defaultCategoryId, defaultLocationId, defaultStorageAreaId, defaultTrackingType]);
 
   const cat = useMemo(() => categories.find((c) => c.id === f.category_id), [categories, f.category_id]);
   const itemType = getItemTypeFromCategory(cat);
@@ -315,12 +343,23 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Basic Info</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className={lbl}>Name *</label>
-              <input className={inp} value={f.name} onChange={(e) => up('name', e.target.value)} required />
+              <label className={lbl} htmlFor="item-name">
+                Name *
+              </label>
+              <input
+                id="item-name"
+                className={inp}
+                value={f.name}
+                onChange={(e) => up('name', e.target.value)}
+                required
+              />
             </div>
             <div className="sm:col-span-2">
-              <label className={lbl}>Description</label>
+              <label className={lbl} htmlFor="item-description">
+                Description
+              </label>
               <textarea
+                id="item-description"
                 className={inp}
                 rows={2}
                 value={f.description}
@@ -328,8 +367,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               />
             </div>
             <div>
-              <label className={lbl}>Category</label>
-              <select className={inp} value={f.category_id} onChange={(e) => up('category_id', e.target.value)}>
+              <label className={lbl} htmlFor="item-category_id">
+                Category
+              </label>
+              <select
+                id="item-category_id"
+                className={inp}
+                value={f.category_id}
+                onChange={(e) => up('category_id', e.target.value)}
+              >
                 <option value="">-- Select --</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -339,8 +385,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               </select>
             </div>
             <div>
-              <label className={lbl}>Tracking Type</label>
-              <select className={inp} value={f.tracking_type} onChange={(e) => up('tracking_type', e.target.value)}>
+              <label className={lbl} htmlFor="item-tracking_type">
+                Tracking Type
+              </label>
+              <select
+                id="item-tracking_type"
+                className={inp}
+                value={f.tracking_type}
+                onChange={(e) => up('tracking_type', e.target.value)}
+              >
                 <option value="individual">Individual</option>
                 <option value="pool">Pool</option>
               </select>
@@ -355,8 +408,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {has('serial_number') && (
                 <div>
-                  <label className={lbl}>Serial #</label>
+                  <label className={lbl} htmlFor="item-serial_number">
+                    Serial #
+                  </label>
                   <input
+                    id="item-serial_number"
                     className={inp}
                     value={f.serial_number}
                     onChange={(e) => up('serial_number', e.target.value)}
@@ -365,13 +421,27 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               )}
               {has('asset_tag') && (
                 <div>
-                  <label className={lbl}>Asset Tag</label>
-                  <input className={inp} value={f.asset_tag} onChange={(e) => up('asset_tag', e.target.value)} />
+                  <label className={lbl} htmlFor="item-asset_tag">
+                    Asset Tag
+                  </label>
+                  <input
+                    id="item-asset_tag"
+                    className={inp}
+                    value={f.asset_tag}
+                    onChange={(e) => up('asset_tag', e.target.value)}
+                  />
                 </div>
               )}
               <div>
-                <label className={lbl}>Barcode</label>
-                <input className={inp} value={f.barcode} onChange={(e) => up('barcode', e.target.value)} />
+                <label className={lbl} htmlFor="item-barcode">
+                  Barcode
+                </label>
+                <input
+                  id="item-barcode"
+                  className={inp}
+                  value={f.barcode}
+                  onChange={(e) => up('barcode', e.target.value)}
+                />
               </div>
             </div>
           </fieldset>
@@ -404,10 +474,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Variant size/style selectors */}
         {generateVariants && (
           <fieldset className="space-y-4">
-            {/* Sizes */}
+            {/* Sizes — a toggle-button group, so it is labelled as a group
+                rather than with a <label> that names no single control. */}
             <div>
-              <label className={lbl}>Sizes *</label>
-              <div className="mt-1 flex flex-wrap gap-1.5">
+              <span className={lbl} id="item-sizes-label">
+                Sizes *
+              </span>
+              <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-labelledby="item-sizes-label">
                 {STANDARD_SIZES.map((s) => (
                   <button
                     key={s.value}
@@ -428,8 +501,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
             {/* Styles */}
             <div>
-              <label className={lbl}>Styles</label>
-              <div className="mt-1 flex flex-wrap gap-1.5">
+              <span className={lbl} id="item-styles-label">
+                Styles
+              </span>
+              <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-labelledby="item-styles-label">
                 {GARMENT_STYLES.map((s) => (
                   <button
                     key={s.value}
@@ -450,8 +525,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
             {/* Colors (comma-separated text) */}
             <div>
-              <label className={lbl}>Colors</label>
+              <label className={lbl} htmlFor="item-variant_colors">
+                Colors
+              </label>
               <input
+                id="item-variant_colors"
                 className={inp}
                 value={variantColors}
                 onChange={(e) => setVariantColors(e.target.value)}
@@ -486,14 +564,23 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {has('size') && (
                 <div>
-                  <label className={lbl}>Size</label>
-                  <input className={inp} value={f.size} onChange={(e) => up('size', e.target.value)} />
+                  <label className={lbl} htmlFor="item-size">
+                    Size
+                  </label>
+                  <input id="item-size" className={inp} value={f.size} onChange={(e) => up('size', e.target.value)} />
                 </div>
               )}
               {has('color') && (
                 <div>
-                  <label className={lbl}>Color</label>
-                  <input className={inp} value={f.color} onChange={(e) => up('color', e.target.value)} />
+                  <label className={lbl} htmlFor="item-color">
+                    Color
+                  </label>
+                  <input
+                    id="item-color"
+                    className={inp}
+                    value={f.color}
+                    onChange={(e) => up('color', e.target.value)}
+                  />
                 </div>
               )}
             </div>
@@ -512,8 +599,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           {showFin && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className={lbl}>Purchase Price</label>
+                <label className={lbl} htmlFor="item-purchase_price">
+                  Purchase Price
+                </label>
                 <input
+                  id="item-purchase_price"
                   type="number"
                   step="0.01"
                   className={inp}
@@ -522,8 +612,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 />
               </div>
               <div>
-                <label className={lbl}>Current Value</label>
+                <label className={lbl} htmlFor="item-current_value">
+                  Current Value
+                </label>
                 <input
+                  id="item-current_value"
                   type="number"
                   step="0.01"
                   className={inp}
@@ -532,8 +625,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 />
               </div>
               <div>
-                <label className={lbl}>Purchase Date</label>
+                <label className={lbl} htmlFor="item-purchase_date">
+                  Purchase Date
+                </label>
                 <input
+                  id="item-purchase_date"
                   type="date"
                   className={inp}
                   value={f.purchase_date}
@@ -541,12 +637,22 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 />
               </div>
               <div>
-                <label className={lbl}>Vendor</label>
-                <input className={inp} value={f.vendor} onChange={(e) => up('vendor', e.target.value)} />
+                <label className={lbl} htmlFor="item-vendor">
+                  Vendor
+                </label>
+                <input
+                  id="item-vendor"
+                  className={inp}
+                  value={f.vendor}
+                  onChange={(e) => up('vendor', e.target.value)}
+                />
               </div>
               <div>
-                <label className={lbl}>Warranty Expiration</label>
+                <label className={lbl} htmlFor="item-warranty_expiration">
+                  Warranty Expiration
+                </label>
                 <input
+                  id="item-warranty_expiration"
                   type="date"
                   className={inp}
                   value={f.warranty_expiration}
@@ -554,8 +660,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 />
               </div>
               <div>
-                <label className={lbl}>Replacement Cost</label>
+                <label className={lbl} htmlFor="item-replacement_cost">
+                  Replacement Cost
+                </label>
                 <input
+                  id="item-replacement_cost"
                   type="number"
                   step="0.01"
                   className={inp}
@@ -572,8 +681,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Location</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={lbl}>Facility / Room</label>
+              <label className={lbl} htmlFor="item-location_id">
+                Facility / Room
+              </label>
               <select
+                id="item-location_id"
                 className={inp}
                 value={f.location_id}
                 onChange={(e) => {
@@ -590,8 +702,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               </select>
             </div>
             <div>
-              <label className={lbl}>Storage Area</label>
-              <select className={inp} value={f.storage_area_id} onChange={(e) => up('storage_area_id', e.target.value)}>
+              <label className={lbl} htmlFor="item-storage_area_id">
+                Storage Area
+              </label>
+              <select
+                id="item-storage_area_id"
+                className={inp}
+                value={f.storage_area_id}
+                onChange={(e) => up('storage_area_id', e.target.value)}
+              >
                 <option value="">-- Select --</option>
                 {areas.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -612,8 +731,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             </legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className={lbl}>{generateVariants ? 'Starting Quantity (each)' : 'Quantity'}</label>
+                <label className={lbl} htmlFor="item-quantity">
+                  {generateVariants ? 'Starting Quantity (each)' : 'Quantity'}
+                </label>
                 <input
+                  id="item-quantity"
                   type="number"
                   min="0"
                   className={inp}
@@ -622,8 +744,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 />
               </div>
               <div>
-                <label className={lbl}>Unit of Measure</label>
+                <label className={lbl} htmlFor="item-unit_of_measure">
+                  Unit of Measure
+                </label>
                 <input
+                  id="item-unit_of_measure"
                   className={inp}
                   placeholder="e.g. pairs, boxes"
                   value={f.unit_of_measure}
@@ -632,8 +757,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               </div>
               {!generateVariants && (
                 <div>
-                  <label className={lbl}>Reorder Point</label>
+                  <label className={lbl} htmlFor="item-reorder_point">
+                    Reorder Point
+                  </label>
                   <input
+                    id="item-reorder_point"
                     type="number"
                     min="0"
                     className={inp}
@@ -654,8 +782,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Maintenance</legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className={lbl}>Inspection Interval (days)</label>
+                <label className={lbl} htmlFor="item-inspection_interval_days">
+                  Inspection Interval (days)
+                </label>
                 <input
+                  id="item-inspection_interval_days"
                   type="number"
                   min="0"
                   className={inp}
@@ -664,8 +795,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 />
               </div>
               <div>
-                <label className={lbl}>Condition</label>
-                <select className={inp} value={f.condition} onChange={(e) => up('condition', e.target.value)}>
+                <label className={lbl} htmlFor="item-condition">
+                  Condition
+                </label>
+                <select
+                  id="item-condition"
+                  className={inp}
+                  value={f.condition}
+                  onChange={(e) => up('condition', e.target.value)}
+                >
                   {ITEM_CONDITION_OPTIONS.map((c) => (
                     <option key={c.value} value={c.value}>
                       {c.label}
@@ -680,7 +818,14 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Notes */}
         <fieldset>
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Notes</legend>
-          <textarea className={inp} rows={2} value={f.notes} onChange={(e) => up('notes', e.target.value)} />
+          <textarea
+            id="item-notes"
+            aria-label="Notes"
+            className={inp}
+            rows={2}
+            value={f.notes}
+            onChange={(e) => up('notes', e.target.value)}
+          />
         </fieldset>
       </form>
     </Modal>

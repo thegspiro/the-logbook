@@ -22,6 +22,9 @@ import type {
   InventoryItemsListResponse,
   ItemHistoryEvent,
   InventorySummary,
+  InventorySetupStatus,
+  CategoryPreset,
+  CategoryPresetApplyResponse,
   InventoryCategoryCreate,
   ScanLookupResponse,
   BatchCheckoutRequest,
@@ -151,6 +154,22 @@ export const inventoryService = {
 
   async createCategory(data: InventoryCategoryCreate): Promise<InventoryCategory> {
     const response = await api.post<InventoryCategory>('/inventory/categories', data);
+    return response.data;
+  },
+
+  // Guided setup
+  async getSetupStatus(): Promise<InventorySetupStatus> {
+    const response = await api.get<InventorySetupStatus>('/inventory/setup/status');
+    return response.data;
+  },
+
+  async getCategoryPresets(): Promise<CategoryPreset[]> {
+    const response = await api.get<CategoryPreset[]>('/inventory/setup/category-presets');
+    return asArray(response.data);
+  },
+
+  async applyCategoryPresets(keys: string[]): Promise<CategoryPresetApplyResponse> {
+    const response = await api.post<CategoryPresetApplyResponse>('/inventory/setup/category-presets', { keys });
     return response.data;
   },
 

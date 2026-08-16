@@ -129,6 +129,162 @@ def _size_label(size: str) -> str:
     return code.upper()
 
 
+# Starter categories offered by the guided setup workflow.
+#
+# A category is the switch that decides which fields the item form shows and
+# which compliance machinery runs, so a department that starts from an empty
+# list either invents its own scheme or (more often) files everything under one
+# catch-all and loses maintenance and NFPA tracking. These presets are the
+# fire-service defaults a new quartermaster would otherwise have to know to
+# ask for; they are ordinary categories once created and can be edited or
+# deleted like any other.
+CATEGORY_PRESETS: List[Dict[str, Any]] = [
+    {
+        "key": "turnout_gear",
+        "name": "Turnout Gear",
+        "description": "Coats, pants, and liners issued to a member.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": True,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": True,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "helmets",
+        "name": "Helmets",
+        "description": "Structural and wildland helmets, shields, and liners.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": True,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": True,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "boots_gloves_hoods",
+        "name": "Boots, Gloves & Hoods",
+        "description": "Sized PPE issued per member and replaced on wear.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": True,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 10,
+    },
+    {
+        "key": "scba",
+        "name": "SCBA",
+        "description": "Packs, masks, and cylinders on a flow-test cycle.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": False,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": True,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "station_uniforms",
+        "name": "Station Uniforms",
+        "description": "Job shirts, t-shirts, and duty pants kept in sizes.",
+        "item_type": ItemType.UNIFORM,
+        "requires_assignment": True,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 10,
+    },
+    {
+        "key": "dress_uniforms",
+        "name": "Dress Uniforms",
+        "description": "Class A coats, trousers, covers, and insignia.",
+        "item_type": ItemType.UNIFORM,
+        "requires_assignment": True,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "hand_tools",
+        "name": "Hand Tools",
+        "description": "Irons, axes, hooks, and other truck-company tools.",
+        "item_type": ItemType.TOOL,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "power_equipment",
+        "name": "Power Equipment",
+        "description": "Saws, fans, and extrication tools on a service cycle.",
+        "item_type": ItemType.TOOL,
+        "requires_assignment": False,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "hose_appliances",
+        "name": "Hose & Appliances",
+        "description": "Hose, nozzles, and adapters carried on apparatus.",
+        "item_type": ItemType.EQUIPMENT,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "ladders",
+        "name": "Ladders",
+        "description": "Ground ladders on an annual test cycle.",
+        "item_type": ItemType.EQUIPMENT,
+        "requires_assignment": False,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "radios",
+        "name": "Radios & Pagers",
+        "description": "Portables, chargers, and pagers issued by serial.",
+        "item_type": ItemType.ELECTRONICS,
+        "requires_assignment": True,
+        "requires_serial_number": True,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "ems_supplies",
+        "name": "EMS Supplies",
+        "description": "Consumables restocked by quantity and expiration.",
+        "item_type": ItemType.CONSUMABLE,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 20,
+    },
+    {
+        "key": "station_supplies",
+        "name": "Station Supplies",
+        "description": "Cleaning and household stock reordered by quantity.",
+        "item_type": ItemType.CONSUMABLE,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 15,
+    },
+]
+
+
 # Supported extra-line field keys that can be requested on labels.
 _EXTRA_LINE_FIELDS = {"location", "category", "condition", "custom"}
 
@@ -6325,3 +6481,140 @@ class InventoryService:
             "categories": categories,
             "size_fields": size_fields,
         }
+
+    # ============================================
+    # Guided Setup
+    # ============================================
+
+    async def get_setup_status(self, organization_id: UUID) -> Dict[str, Any]:
+        """Counts of the records the guided setup workflow walks through.
+
+        Each count is what the corresponding step of the workflow produces, in
+        the order an item needs them: a room holds storage areas, a storage
+        area holds items, and a category decides which fields an item has.
+        Retired items are excluded so a department that retired its way back to
+        an empty catalog is offered the workflow again.
+        """
+        org_id = str(organization_id)
+
+        rooms = await self.db.scalar(
+            select(func.count())
+            .select_from(Location)
+            .where(
+                Location.organization_id == org_id,
+                Location.is_active.is_(True),
+            )
+        )
+        storage_areas = await self.db.scalar(
+            select(func.count())
+            .select_from(StorageArea)
+            .where(
+                StorageArea.organization_id == org_id,
+                StorageArea.is_active.is_(True),
+            )
+        )
+        categories = await self.db.scalar(
+            select(func.count())
+            .select_from(InventoryCategory)
+            .where(
+                InventoryCategory.organization_id == org_id,
+                InventoryCategory.active.is_(True),
+            )
+        )
+        items = await self.db.scalar(
+            select(func.count())
+            .select_from(InventoryItem)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.status != ItemStatus.RETIRED,
+            )
+        )
+
+        counts = {
+            "rooms": rooms or 0,
+            "storage_areas": storage_areas or 0,
+            "categories": categories or 0,
+            "items": items or 0,
+        }
+        return {**counts, "is_complete": all(value > 0 for value in counts.values())}
+
+    async def get_category_presets(self, organization_id: UUID) -> List[Dict[str, Any]]:
+        """Starter categories, each flagged with whether the org already has it.
+
+        The flag is matched on case-insensitive name rather than on a stored
+        key: a department that already typed "Turnout Gear" by hand should not
+        be offered a second one, and presets carry no identity of their own
+        once created.
+        """
+        existing = await self.db.execute(
+            select(InventoryCategory.name).where(
+                InventoryCategory.organization_id == str(organization_id)
+            )
+        )
+        taken = {name.strip().lower() for name in existing.scalars().all() if name}
+
+        return [
+            {
+                **preset,
+                "item_type": preset["item_type"].value,
+                "exists": preset["name"].strip().lower() in taken,
+            }
+            for preset in CATEGORY_PRESETS
+        ]
+
+    async def apply_category_presets(
+        self, organization_id: UUID, keys: List[str], created_by: UUID
+    ) -> Tuple[List[InventoryCategory], List[str], Optional[str]]:
+        """Create the named starter categories, skipping ones already present.
+
+        Returns ``(created, skipped_names, error)``. Skipping rather than
+        failing keeps the workflow re-runnable: a quartermaster who applies a
+        second batch later gets only what is missing, and a double-submitted
+        form does not duplicate the catalog.
+        """
+        requested = [key for key in dict.fromkeys(keys) if key]
+        by_key = {preset["key"]: preset for preset in CATEGORY_PRESETS}
+        unknown = [key for key in requested if key not in by_key]
+        if unknown:
+            return [], [], f"Unknown category preset: {unknown[0]}"
+
+        existing = await self.db.execute(
+            select(InventoryCategory.name).where(
+                InventoryCategory.organization_id == str(organization_id)
+            )
+        )
+        taken = {name.strip().lower() for name in existing.scalars().all() if name}
+
+        created: List[InventoryCategory] = []
+        skipped: List[str] = []
+        try:
+            for key in requested:
+                preset = by_key[key]
+                if preset["name"].strip().lower() in taken:
+                    skipped.append(preset["name"])
+                    continue
+                category = InventoryCategory(
+                    organization_id=str(organization_id),
+                    created_by=str(created_by),
+                    name=preset["name"],
+                    description=preset["description"],
+                    item_type=preset["item_type"],
+                    requires_assignment=preset["requires_assignment"],
+                    requires_serial_number=preset["requires_serial_number"],
+                    requires_maintenance=preset["requires_maintenance"],
+                    nfpa_tracking_enabled=preset["nfpa_tracking_enabled"],
+                    low_stock_threshold=preset["low_stock_threshold"],
+                )
+                self.db.add(category)
+                created.append(category)
+                taken.add(preset["name"].strip().lower())
+
+            if created:
+                await self.db.commit()
+                for category in created:
+                    await self.db.refresh(category)
+            return created, skipped, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to apply category presets: {e}")
+            return [], [], str(e)

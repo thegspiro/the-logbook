@@ -37,6 +37,7 @@ const EquipmentKitsPage = lazyWithRetry(() => import('./pages/EquipmentKitsPage'
 const VariantGroupsPage = lazyWithRetry(() => import('./pages/VariantGroupsPage'));
 const AllowancesPage = lazyWithRetry(() => import('./pages/AllowancesPage'));
 const ImpactPlannerPage = lazyWithRetry(() => import('./pages/ImpactPlannerPage'));
+const InventorySetupPage = lazyWithRetry(() => import('./pages/InventorySetupPage'));
 
 export const getInventoryRoutes = () => {
   return (
@@ -68,6 +69,18 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryAdminHub />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Inventory - Guided first-run setup */}
+      <Route
+        path="/inventory/admin/setup"
+        element={
+          <ProtectedRoute requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <InventorySetupPage />
             </Suspense>
           </ProtectedRoute>
         }

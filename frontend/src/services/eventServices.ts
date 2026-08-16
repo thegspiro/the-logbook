@@ -1218,6 +1218,35 @@ export interface InventoryCategoryCreate {
   nfpa_tracking_enabled?: boolean | undefined;
 }
 
+// Guided Setup Types
+export interface InventorySetupStatus {
+  rooms: number;
+  storage_areas: number;
+  categories: number;
+  items: number;
+  is_complete: boolean;
+}
+
+export interface CategoryPreset {
+  key: string;
+  name: string;
+  description: string;
+  item_type: string;
+  requires_assignment: boolean;
+  requires_serial_number: boolean;
+  requires_maintenance: boolean;
+  nfpa_tracking_enabled: boolean;
+  low_stock_threshold?: number | null;
+  /** True when the org already has a category by this name. */
+  exists: boolean;
+}
+
+export interface CategoryPresetApplyResponse {
+  created: InventoryCategory[];
+  /** Names that already existed and were left untouched. */
+  skipped: string[];
+}
+
 // Reorder Request Types
 export interface ReorderRequest {
   id: string;
