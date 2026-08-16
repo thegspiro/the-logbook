@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockGetFacilities = vi.fn();
@@ -82,7 +82,7 @@ describe('FacilityRoomPicker', () => {
     await user.selectOptions(facilitySelect, 'f1');
 
     await waitFor(() => {
-      expect(mockGetRooms).toHaveBeenCalledWith({ facility_id: 'f1' });
+      expect(mockGetRooms).toHaveBeenCalledWith({ facility_id: 'f1', limit: 500 });
     });
   });
 
@@ -136,5 +136,40 @@ describe('FacilityRoomPicker', () => {
 
     const roomSelect = screen.getByLabelText('Select room');
     expect(roomSelect).toBeDisabled();
+  });
+
+  describe('nested rooms', () => {
+    const nestedRooms = [
+      {
+        id: 'storage',
+        facilityId: 'f1',
+        name: 'Quartermaster Storage',
+        parentRoomId: 'office',
+        createdAt: '',
+        updatedAt: '',
+      },
+      { id: 'office', facilityId: 'f1', name: 'Volunteer Office', parentRoomId: null, createdAt: '', updatedAt: '' },
+    ];
+
+    it('lists a sub-room directly after the room that contains it', async () => {
+      mockGetRooms.mockResolvedValue(nestedRooms);
+      render(<FacilityRoomPicker value={null} onChange={mockOnChange} facilityId="f1" />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Select room')).toBeInTheDocument();
+      });
+
+      const values = within(screen.getByLabelText('Select room'))
+        .getAllByRole('option')
+        .map((option) => (option as HTMLOptionElement).value);
+      expect(values).toEqual(['', 'office', 'storage']);
+    });
+
+    it('shows the containment path for a selected sub-room', async () => {
+      mockGetRooms.mockResolvedValue(nestedRooms);
+      render(<FacilityRoomPicker value="storage" onChange={mockOnChange} facilityId="f1" />);
+
+      expect(await screen.findByText('Volunteer Office › Quartermaster Storage')).toBeInTheDocument();
+    });
   });
 });

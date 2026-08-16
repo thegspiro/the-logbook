@@ -66,6 +66,14 @@ export const ROOM_TYPE_OPTIONS = [
 
 export const ZONE_OPTIONS = ['hot', 'transition', 'cold', 'unclassified'] as const;
 
+/**
+ * How many levels of room nesting the API accepts — a top-level room is
+ * level 1, a room inside it is level 2. Mirrors MAX_ROOM_NESTING_DEPTH in
+ * `backend/app/services/facilities_service.py`, which is the authority; this
+ * copy exists so the UI can hide moves the backend would reject.
+ */
+export const MAX_ROOM_NESTING_DEPTH = 5;
+
 export const CONDITION_OPTIONS = ['excellent', 'good', 'fair', 'poor', 'critical'] as const;
 
 export const CONDITION_COLORS: Record<string, string> = {

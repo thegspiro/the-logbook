@@ -684,7 +684,26 @@ expect(mockGetRequirements).toHaveBeenCalled();
 expect(mockGetTemplates).toHaveBeenCalledWith(undefined);
 ```
 
-**Rule:** Never use bare `toHaveBeenCalledWith()`. Use `toHaveBeenCalled()` if you don't care about arguments, or specify the expected arguments explicitly. The ESLint rule `vitest/prefer-called-with` enforces this at `error` level.
+**Rule:** Never write bare `toHaveBeenCalledWith()` when you mean "called with
+_something_". Use `toHaveBeenCalled()` if you don't care about arguments, or
+specify the expected arguments explicitly.
+
+**This is review discipline, not an enforced rule — nothing catches it for you.**
+An earlier version of this section claimed `vitest/prefer-called-with` enforced
+it at `error` level. That was wrong twice over, and the correction matters
+because it tells you how much vigilance the matcher actually needs:
+
+- The rule is configured at `warn`, not `error`.
+- More importantly it enforces the _opposite_ direction. It flags
+  `toHaveBeenCalled()` and pushes callers **toward** `toHaveBeenCalledWith`. It
+  says nothing about the zero-argument form, so it has never guarded this.
+
+A lint rule banning the zero-argument form outright was tried and rejected: of
+the 53 instances in the suite, at least 35 assert against genuinely zero-arity
+functions, where `toHaveBeenCalledWith()` is the _stronger_ and correct
+assertion — it proves no stray argument was passed. A blanket ban would delete
+precision from correct tests, and no static selector can distinguish "asserts
+zero args on purpose" from "meant to assert some args". Check it in review.
 
 ### 14. Multi-Tenant Isolation: Every By-Id Query and FK Must Be Org-Scoped
 

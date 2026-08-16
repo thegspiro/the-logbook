@@ -3622,7 +3622,18 @@ async def create_storage_area(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
-    """Create a new storage area"""
+    """Create a new storage area.
+
+    A barcode is always assigned: an explicit one when the caller supplies it
+    (imports, relabelling an existing shelf), otherwise the next code in the
+    organization's storage-area series. Areas are meant to be scannable, so
+    this is not left to whoever remembers to fill the field in.
+    """
+    service = InventoryService(db)
+    barcode = (data.barcode or "").strip() or None
+    if barcode is None:
+        barcode = await service.next_storage_area_barcode(current_user.organization_id)
+
     area = StorageArea(
         id=generate_uuid(),
         organization_id=str(current_user.organization_id),
@@ -3632,7 +3643,7 @@ async def create_storage_area(
         storage_type=data.storage_type,
         parent_id=str(data.parent_id) if data.parent_id else None,
         location_id=str(data.location_id) if data.location_id else None,
-        barcode=data.barcode,
+        barcode=barcode,
         sort_order=data.sort_order,
         created_by=str(current_user.id),
     )
@@ -3691,7 +3702,21 @@ async def update_storage_area(
             continue
         if field in ("parent_id", "location_id") and value is not None:
             value = str(value)
+        if field == "barcode":
+            # A storage area always keeps a barcode. Clearing the field is not
+            # an option the UI offers, and a blank arriving from an older
+            # client must not strip the code already printed on the shelf.
+            value = (value or "").strip() or None
+            if value is None:
+                continue
         setattr(area, field, value)
+
+    # Areas created before barcodes were mandatory pick one up on first edit.
+    if not area.barcode:
+        service = InventoryService(db)
+        area.barcode = await service.next_storage_area_barcode(
+            current_user.organization_id
+        )
 
     await db.commit()
     await db.refresh(area)
