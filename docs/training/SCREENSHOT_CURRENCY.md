@@ -106,6 +106,23 @@ seeded twice.
 **All three remaining placeholders are now characterised** — none is a mystery,
 each is a bounded piece of demo-data work, and two of them share a fixture.
 
+### Program phases carry no requirements, so the caption's counts come from elsewhere
+
+`01-membership.md:1282` wants Phase 1 (Complete, 4/4), Phase 2 (In Progress,
+0/6) and so on. A program's detail response — `GET
+/training/programs/programs/{id}` — returns phases with `name`,
+`phase_number`, `prerequisite_phase_ids`, `requires_manual_advancement` and
+`time_limit_days`, and **no requirements at all**. So the fractions in the
+caption cannot come from this screen; they belong to a member's enrolment view,
+which is guide 02's territory and where `02-90-phase-prerequisites` already
+looks.
+
+That makes this the same split as `09-18` and `01-membership.md:1156`: the
+program detail can show the phase structure and its gating, and the per-phase
+progress belongs to a cross-reference. Confirm against the enrolment view before
+rewriting the caption — this was established from the API shape alone, and the
+screen has not been opened yet.
+
 ### The skip banner is right; the toast beside it is a demo artifact
 
 The fixture works. `Operations Committee Seat — Restricted Ballot` is open with
