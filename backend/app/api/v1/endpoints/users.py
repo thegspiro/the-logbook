@@ -518,6 +518,24 @@ def _clear_leadership_only_fields(
     payload.emergency_contacts = []
 
 
+def _clear_directory_only_profile_metadata(payload: UserProfileResponse) -> None:
+    """Remove account and authorization metadata from a directory profile.
+
+    ``members.view`` allows a member to find and open a colleague's directory
+    entry.  It must not also reveal the colleague's account-security state,
+    notification settings, or the permission sets attached to their roles.
+    Role names remain available because they are displayed on the profile.
+    """
+    payload.email_verified = None
+    payload.mfa_enabled = None
+    payload.last_login_at = None
+    payload.created_at = None
+    payload.updated_at = None
+    payload.notification_preferences = None
+    for role in payload.roles:
+        role.permissions = []
+
+
 def _clear_hidden_contact_fields(
     payload: UserWithRolesResponse | UserProfileResponse, visibility: dict[str, bool]
 ) -> None:
@@ -1086,8 +1104,9 @@ async def get_user_with_roles(
     `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
     see `_clear_hidden_contact_fields`. Date of birth and emergency contacts are
     leadership-only regardless of that setting — see
-    `_clear_leadership_only_fields`. Members-managers and the subject themselves
-    are exempt from both.
+    `_clear_leadership_only_fields`. A caller relying only on `members.view`
+    also receives no account-security, notification, or role-permission
+    metadata. Members-managers and the subject themselves are exempt.
 
     **Authentication required**
     """
@@ -1155,6 +1174,8 @@ async def get_user_with_roles(
         visibility = await _load_contact_visibility(db, current_user, is_admin)
         _clear_hidden_contact_fields(payload, visibility)
         _clear_leadership_only_fields(payload)
+        if not _has_permission("users.view", user_permissions):
+            _clear_directory_only_profile_metadata(payload)
 
     return payload
 
