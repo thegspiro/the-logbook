@@ -52,28 +52,41 @@ after it** re-time. Budget roughly **45–70 seconds added**, depending on deliv
 and on whether the optional two-shot insert is used. Final timecodes are a
 recording-production task — narration pacing determines them.
 
-### 01, 03 — Installing / IT Manager · **Incomplete**
+### 01 — Installing The Logbook · **Incomplete — written in-script 2026-08-16**
 
-Same caution, shorter, wherever the install walkthrough hands off between
-screens. These scripts already carry the fail-closed TLS and Alembic material
-from the 08-12 → 08-14 pass; this rides in beside it rather than needing its own
-chapter. **No re-timing** if it lands inside an existing install chapter.
+Chapter 7 hands the viewer to script 02 and explicitly invites them to "jump
+ahead and explore on your own" — which is exactly the viewer who will lose a
+session. A short form of the caution now sits there: one tab, one sitting, what
+to have ready, and the 30-minute idle limit. **No re-timing needed** beyond
+Chapter 7's own band; it lands inside an existing chapter near the end.
+
+### 03 — IT Manager · **retired, not applicable**
+
+Flagged on 08-16 alongside 01, then withdrawn on inspection. Script 03 is a
+**post-setup** administration guide — it opens with "if you've been handed the
+System Owner account" — and has no install walkthrough to attach the caution to.
+Its nearest neighbour, the Chapter 9 backup/restore drill, is about restoring a
+database, and **a restored install already has an organization, so the onboarding
+wizard cannot run against it at all.** Adding the caution here would teach a
+constraint the viewer will never meet. Recorded rather than silently dropped, so
+the next pass does not re-flag it.
 
 ### Any script with full-screen dark-mode B-roll · **B-roll only**
 
 The themed background moved to the root element on 2026-08-15 so it covers the
-browser's scrollbar gutter; before that, dark mode showed a bright strip down the
-right edge of every page.
+browser's scrollbar gutter; before that, dark content showed a **15px white strip**
+down the right edge (measured against the affected training captures — see
+`SCREENSHOT_CURRENCY.md`).
 
 Audio is unaffected — no script describes the page background. **This is a
-per-clip edit decision, not a re-record and not a blanket re-shoot:** check
-whether the seam is visible in frame. It only appears in full-window dark-mode
-footage on pages long enough to scroll. Light-mode footage and any shot framed
-inside the content area are fine.
+per-clip edit decision, not a re-record and not a blanket re-shoot.** Note the
+trigger is _dark content at the right edge_, not dark mode as such: the same
+strip appears on a light page under a **modal overlay**, which is how two of the
+three affected training screenshots picked it up.
 
 Since nothing in the series has been recorded yet, the practical action is to
-**capture new B-roll against a build dated 2026-08-15 or later** and to note it in
-the shot list, rather than to audit existing footage.
+**capture new B-roll against a build dated 2026-08-15 or later** and note it in
+the shot list, rather than to audit footage that does not exist.
 
 ---
 

@@ -2,32 +2,36 @@
 
 ## Flagged by the 2026-08-15 → 08-16 changes
 
-### REPLACE — every full-window dark-mode capture taken before 2026-08-15
+### REPLACE — three images, measured (not a set-wide triage)
 
 The themed background gradient moved from `body` to `html` so that it also
 covers the browser's stable scrollbar gutter. Before that, the gutter showed the
-browser's default canvas — **in dark mode, a bright strip down the right edge of
-the page.**
+browser's default canvas — against dark content, **a 15px white strip down the
+right edge**.
 
-This is a global style rule, so it touches captures in **every guide**, not one
-module's. It is also the cheapest flag on this page to triage:
+**All 429 images in this directory were checked programmatically on 2026-08-16**
+(mean luminance to find dark captures, then right-edge luminance and strip width).
+Exactly three carry the strip, and all three measure 15px — the gutter width:
 
-- **Look at the right edge of the image.** A light strip beside the scrollbar
-  means the capture predates the fix.
-- **Light-mode captures are unaffected** — the gutter was showing white against a
-  light canvas, which is what it looks like now.
-- **Captures cropped inside the content column are unaffected**, which is most of
-  the per-control shots in these guides.
-- Only full-window shots on pages long enough to scroll can show it at all.
+| Image                        | Why it caught the strip            |
+| ---------------------------- | ---------------------------------- |
+| `10-11-public-form-dark.png` | a genuine dark-mode capture        |
+| `00-18-rsvp-modal.png`       | light page, **dark modal overlay** |
+| `04-09-rsvp-modal.png`       | light page, **dark modal overlay** |
 
-**Do not re-shoot the set wholesale.** The vast majority of images in this
-directory are unaffected, and a blanket re-capture would burn the same effort the
-2026-08-11 pass spent proving which images were actually stale. Triage first,
-list what fails, then shoot that list.
+**The two modal shots are the useful finding.** The trigger is not "dark mode" —
+it is _dark content at the right edge_. A modal overlay dims the page but sits
+inside `body`, so the gutter stayed white behind it. Anyone re-checking this later
+should look for dark pixels at the right edge, not for the theme setting.
+
+The remaining 426 are unaffected: light-mode captures showed white gutter against
+a light canvas, which is what they look like now, and cropped per-control shots
+never included the edge. **No set-wide re-shoot** — this replaced an earlier,
+vaguer instruction on this page to triage every guide, which would have spent the
+effort the 2026-08-11 pass was careful not to spend.
 
 Nothing else about the rendering changed — no layout, no spacing, no colour
-inside the content area — so an image that passes the right-edge check is still
-current for the reason it was current before.
+inside the content area — so these three need only re-capture, not re-caption.
 
 ### SCREENSHOT NEEDED
 

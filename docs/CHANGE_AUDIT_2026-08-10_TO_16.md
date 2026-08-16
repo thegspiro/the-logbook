@@ -338,13 +338,12 @@ capture exists:
 
 **New to this pass (08-15 → 08-16):**
 
-- **REPLACE — dark-mode captures with a visible scrollbar gutter.** Every
-  full-window dark-mode screenshot taken **before 2026-08-15** may show a bright
-  strip down the right edge where the reserved gutter went unpainted. This is a
-  global rule, so it touches captures in _every_ guide, not one module's. Triage
-  by looking at the right edge of the image, not by re-shooting the set
-  wholesale — light-mode captures and captures cropped inside the content column
-  are unaffected.
+- **REPLACE — three images, measured.** All 429 training images were checked
+  programmatically on 08-16. Exactly three carry the old 15px white gutter strip:
+  `10-11-public-form-dark`, `00-18-rsvp-modal` and `04-09-rsvp-modal`. The two
+  modal shots are the instructive ones — a modal overlay darkens a _light_ page
+  but sits inside `body`, so the gutter stayed white behind it. The trigger is
+  dark content at the right edge, not the theme setting. No set-wide re-shoot.
 - **SCREENSHOT NEEDED — the onboarding session-expiry state.** The wizard
   reporting `ONBD_SESSION_INVALID` after a restart, so the guide can show the
   installer what "start over" looks like rather than describing it. Demo data:
