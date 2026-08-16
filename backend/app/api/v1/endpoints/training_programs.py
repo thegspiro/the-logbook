@@ -758,6 +758,15 @@ async def delete_training_program(
     )
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="warning",
+        event_data={"program_id": str(program_id), "action": "program_deleted"},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ==================== Program Phase Endpoints ====================

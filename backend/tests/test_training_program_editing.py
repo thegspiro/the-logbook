@@ -25,6 +25,7 @@ class TestPipelineEditingAuditCoverage:
 
     AUDITED_ENDPOINTS = (
         "update_training_program",
+        "delete_training_program",
         "reorder_program_phases",
         "update_program_phase",
         "delete_program_phase",
