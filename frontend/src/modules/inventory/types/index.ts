@@ -12,6 +12,9 @@ export type {
   InventoryItemCreate,
   InventoryCategoryCreate,
   InventorySummary,
+  InventorySetupStatus,
+  CategoryPreset,
+  CategoryPresetApplyResponse,
   LocationInventorySummary,
   InventoryItemsListResponse,
   InventoryImportResult,
@@ -90,7 +93,7 @@ export type {
 
 import type { InventoryCategory } from '../../../services/eventServices';
 
-export type { Location } from '../../../services/communicationsServices';
+export type { Location, LocationCreate } from '../../../services/communicationsServices';
 export type { Role } from '../../../types/role';
 
 /** Item type options for category classification */

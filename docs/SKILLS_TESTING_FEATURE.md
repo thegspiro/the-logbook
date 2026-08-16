@@ -168,7 +168,7 @@ inflating them:
 - **CRUD operations** for templates, sections, steps, and critical criteria
 - **Version control**: When a template is modified after being used in evaluations, a new version is created; historical evaluations reference the version they were administered under
 - **Import/export**: Templates can be imported/exported as JSON for sharing between organizations
-- **Duplication**: Clone an existing template as a starting point for customization
+- **Duplication**: Clone an existing template as a starting point for customization. _(2026-08-12)_ The clone copies the source's result-visibility configuration (`result_disclosure`, `result_release`, `result_viewer_positions`) — previously those silently fell back to defaults, which could widen who saw results on tests run against the copy
 - **NREMT presets**: Seed data with standard NREMT skill sheets (Trauma Assessment, Medical Assessment, Cardiac Arrest, BVM Ventilation, Spinal Immobilization, Bleeding Control/Shock, Oxygen Administration, Joint Immobilization, etc.)
 - **Permissions**: Only training officers/admins can create or modify templates
 
@@ -1193,6 +1193,7 @@ with the reader fixed as the candidate — rather than on the calling endpoint:
 | `POST /complete` by a member (leaves it pending) | **No** — no decided outcome exists                      |
 | `POST /void` on a result the candidate could see | Yes, with the reason (`notify_candidate_result_voided`) |
 | `POST /void` on a result they could never see    | **No**                                                  |
+| `POST /void` on a **never-validated** official test | **No** _(2026-08-13)_ — an unvalidated result was only a placeholder, so its withdrawal and reason stay undisclosed |
 | Anything on a practice attempt                   | **No**                                                  |
 
 The message names the tier it is granting: at `scores` it states that examiner

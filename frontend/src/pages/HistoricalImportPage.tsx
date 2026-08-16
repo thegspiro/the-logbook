@@ -198,7 +198,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
       </div>
 
       {/* Match strategy selector */}
-      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-5">
+      <div className="card-secondary p-5">
         <h3 className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-semibold">
           <Users className="h-4 w-4" />
           How should members be matched?
@@ -231,7 +231,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
       </div>
 
       {/* Required columns info */}
-      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-5">
+      <div className="card-secondary p-5">
         <h3 className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-semibold">
           <Info className="h-4 w-4" />
           CSV Format Guide
@@ -392,10 +392,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
           );
 
           return (
-            <div
-              key={uc.csv_course_name}
-              className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-4"
-            >
+            <div key={uc.csv_course_name} className="card-secondary p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <span className="text-theme-text-primary font-medium">{uc.csv_course_name}</span>
@@ -558,7 +555,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
     <div className="space-y-6">
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-4 text-center">
+        <div className="card-secondary p-4 text-center">
           <div className="text-theme-text-primary text-2xl font-bold">{parseResult.total_rows}</div>
           <div className="text-theme-text-muted text-xs">Total Rows</div>
         </div>
@@ -566,7 +563,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
           <div className="text-2xl font-bold text-green-500">{importableRows.length}</div>
           <div className="text-xs text-green-700 dark:text-green-400">Will Import</div>
         </div>
-        <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-4 text-center">
+        <div className="card-secondary p-4 text-center">
           <div className="text-theme-text-primary text-2xl font-bold">{parseResult.members_matched}</div>
           <div className="text-theme-text-muted text-xs">Members Matched</div>
         </div>
@@ -783,7 +780,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
     </div>
 
     <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-4 text-center">
+      <div className="card-secondary p-4 text-center">
         <div className="text-theme-text-primary text-2xl font-bold">{result.total}</div>
         <div className="text-theme-text-muted text-xs">Total</div>
       </div>
@@ -791,7 +788,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
         <div className="text-2xl font-bold text-green-500">{result.imported}</div>
         <div className="text-xs text-green-700 dark:text-green-400">Imported</div>
       </div>
-      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-4 text-center">
+      <div className="card-secondary p-4 text-center">
         <div className="text-theme-text-muted text-2xl font-bold">{result.skipped}</div>
         <div className="text-theme-text-muted text-xs">Skipped</div>
       </div>

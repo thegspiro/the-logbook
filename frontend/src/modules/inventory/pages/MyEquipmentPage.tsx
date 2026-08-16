@@ -651,7 +651,7 @@ const MyEquipmentPage: React.FC = () => {
                 )}
               </div>
               {reqResults.length > 0 && !reqSelected && (
-                <ul className="border-theme-surface-border bg-theme-surface divide-theme-surface-border mt-1 max-h-40 divide-y overflow-y-auto rounded-md border">
+                <ul className="card divide-theme-surface-border mt-1 max-h-40 divide-y overflow-y-auto">
                   {reqResults.map((item) => (
                     <li key={item.id}>
                       <button

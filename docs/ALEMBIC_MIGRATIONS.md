@@ -16,10 +16,23 @@
 
 ## Current Head
 
-> **Update (2026-08-16, later):** The current head is **`20260816_0001`**
+> **Update (2026-08-16, latest):** The current head is **`20260816_0003`**
+> (`20260816_0003_add_inventory_vendors.py`). **New migrations must set
+> `down_revision = "20260816_0003"`.** Past `20260814_0004` the chain runs
+> `20260816_0001` (`facility_rooms.parent_room_id`, nested rooms) →
+> `20260816_0002` (backfill storage-area barcodes) → `20260816_0003`
+> (inventory vendors + contact backfill).
+>
+> **`20260816_0003` was renumbered from `20260816_0002`** — the vendor branch
+> and the storage-area barcode branch both claimed `_0002` off `_0001` on the
+> same day, the fourth occurrence of the same-day collision this document
+> warns about. The vendor migration (merged second) took the next number and
+> chains after the barcode backfill.
+>
+> **Superseded within the same day (2026-08-16):** the head was
+> **`20260816_0001`**
 > (`20260816_0001_add_facility_room_parent.py` — `facility_rooms.parent_room_id`,
-> for rooms nested inside other rooms). **New migrations must set
-> `down_revision = "20260816_0001"`.** It chains onto `20260814_0004`, so the
+> for rooms nested inside other rooms). It chains onto `20260814_0004`, so the
 > route below is unchanged behind it.
 >
 > **Superseded within the same day (2026-08-16):** the head was
@@ -399,10 +412,11 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260801_0008` | `20260801_0007`                  | `20260801_0008_add_tie_policy_roster_snapshot_merge.py`                   | Add `elections.tie_policy`, `elections.eligible_roster_snapshot` (voter roll frozen at open), and `candidates.merged_into_candidate_id` (write-in consolidation alias)                                                                                                                         |
 | `20260801_0009` | `20260801_0008`                  | `20260801_0009_add_audit_log_organization_id.py`                          | Add `audit_logs.organization_id` (indexed, backfilled from `user_id`) — org-scoped audit reads; hash chain v3 binds the org on new rows                                                                                                                                                        |
 | `20260801_0010` | `20260801_0009`                  | `20260801_0010_grant_equipment_check_submit_to_members.py`                | Data migration: append `equipment_check.submit` to existing system member positions (EC-7 gated the check-flow reads view-OR-submit; new orgs get it from `DEFAULT_POSITIONS`)                                                                                                                 |
-| `20260801_0011` | `20260801_0010`                  | `20260801_0011_per_org_finance_request_numbers.py`                        | Replace the global unique on `purchase_requests.request_number` / `expense_reports.report_number` / `check_requests.request_number` with per-org composite uniques (`uq_*_org_number`) — introspection-defensive because these tables are create_all-materialized — **current single head**    |
+| `20260801_0011` | `20260801_0010`                  | `20260801_0011_per_org_finance_request_numbers.py`                        | Replace the global unique on `purchase_requests.request_number` / `expense_reports.report_number` / `check_requests.request_number` with per-org composite uniques (`uq_*_org_number`) — introspection-defensive because these tables are create_all-materialized — head as of 2026-07-31         |
 
-> **Single head as of 2026-07-31:** `20260801_0011` is the linear head of the
-> chain, so `alembic upgrade head` is unambiguous.
+> **Single head:** the chain remains linear — `20260801_0011` was the head as
+> of 2026-07-31; later release windows (below) extend it, and the current
+> single head is `20260816_0001` — so `alembic upgrade head` is unambiguous.
 > `tests/test_alembic_migrations.py` validates the single-head DAG (it
 > understands merge migrations).
 
@@ -436,3 +450,44 @@ A non-empty result is a hard stop. Choose the earliest `created_at` (then lowest
 `id`) as keeper after reviewing linked application data, mark the other rows
 `inactive`, and require a zero-row recheck. Otherwise the unique-index migration
 fails before `20260814_0003` can reconcile anything.
+
+## August 16, 2026 upgrade
+
+Three revisions, linear, revising `20260814_0004`. `20260816_0003` is the
+**current single head**.
+
+| Revision | Revises | What it does |
+| --- | --- | --- |
+| `20260816_0001` | `20260814_0004` | Adds `facility_rooms.parent_room_id` (VARCHAR(36), nullable), index `idx_facility_rooms_parent`, and self-referential FK `fk_facility_rooms_parent_room` with `ON DELETE SET NULL` — nested facility rooms |
+| `20260816_0002` | `20260816_0001` | Backfills barcodes for storage areas that predate auto-assignment |
+| `20260816_0003` | `20260816_0002` | Creates `inventory_vendors` + `inventory_vendor_contacts`, adds `vendor_id` to items and reorder requests, and backfills a vendor per distinct free-text supplier name (case-folded per org), linking the rows that named it. **Renumbered from `20260816_0002`** after a same-day id collision with the barcode backfill |
+
+Notes:
+
+- **`ON DELETE SET NULL`, deliberately never CASCADE.** Removing a room must
+  not silently delete the sub-rooms hanging off it (with their kiosk codes and
+  stored inventory). The service re-parents children onto the deleted room's
+  own parent; the constraint is only the database-level backstop.
+- No data backfill: existing rooms upgrade with `parent_room_id = NULL`
+  (top-level) and nothing changes until a room is nested. Nesting rules —
+  same org, same facility, no cycles, max depth 5 — are enforced in
+  `facilities_service.py`, not in the schema.
+- The upgrade and downgrade are introspection-guarded (no-op if the table is
+  missing or the column already exists/is already gone), so re-running against
+  a partially applied state is safe.
+- Standard procedure applies: back up, require exactly one `alembic heads`
+  result, then `alembic upgrade head`.
+
+## Startup guard: unknown revisions refuse the fresh-database path (2026-08-11)
+
+If the database's stamped revision is not part of the deployed release, the
+backend now raises `RuntimeError` ("Refusing destructive fresh-database
+initialization…") at startup instead of silently deleting `alembic_version`
+and re-running the destructive fresh-install fast path — which could destroy a
+real installation whose revision id had merely been renamed. A compatibility
+revision (`20260809_0002`, with a dual `down_revision`) keeps databases stamped
+with the previously released ids upgradable. If you hit the guard: verify the
+deployed version matches the database, back up, reconcile the stamp
+(`alembic stamp <equivalent-released-revision>`), then `alembic upgrade head`.
+See the matching entry in
+[`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md#migration-version-mismatch).
