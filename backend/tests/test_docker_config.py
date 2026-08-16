@@ -458,6 +458,29 @@ class TestDockerComposeArm:
         ), "ARM compose file should specify ARM platform for at least one service"
 
 
+class TestUnraidComposeSecuritySwitches:
+    """The Unraid stack runs ENVIRONMENT=production with bundled plaintext
+    MySQL/Redis, so it must carry an explicit SECURITY_REQUIRE_TLS opt-out —
+    without it the fail-closed default puts every install in a boot loop."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.compose = _read(ROOT_DIR / "unraid" / "docker-compose-unraid.yml")
+        self.setup_script = _read(ROOT_DIR / "unraid" / "unraid-setup.sh")
+
+    def test_compose_passes_explicit_tls_opt_out(self):
+        assert (
+            "SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-false}" in self.compose
+        )
+
+    @pytest.mark.parametrize("setting", ["DB_SSL", "REDIS_SSL"])
+    def test_compose_passes_through_tls_switches(self, setting: str):
+        assert f"{setting}: ${{{setting}:-false}}" in self.compose
+
+    def test_setup_script_records_the_risk_acceptance(self):
+        assert "SECURITY_REQUIRE_TLS=false" in self.setup_script
+
+
 # ===========================================================================
 # Health Endpoint Contract Tests
 # ===========================================================================
