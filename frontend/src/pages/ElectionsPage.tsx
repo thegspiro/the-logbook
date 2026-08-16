@@ -779,7 +779,7 @@ export const ElectionsPage: React.FC = () => {
                               if (filtered.length === 0) return null;
                               return (
                                 <ul
-                                  className="bg-theme-surface-modal border-theme-input-border absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-md border shadow-lg"
+                                  className="popover-panel absolute z-20 mt-1 max-h-48 w-full overflow-auto"
                                   role="listbox"
                                   aria-label="Available positions"
                                 >
