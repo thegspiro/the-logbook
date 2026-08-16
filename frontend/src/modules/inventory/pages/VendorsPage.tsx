@@ -23,8 +23,8 @@ import {
   Users,
   Package,
   Pencil,
-  Trash2,
-  RotateCcw,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -426,7 +426,7 @@ const VendorFormModal: React.FC<{
           />
         </div>
 
-        <label className="text-theme-text-primary flex items-center gap-2 text-sm">
+        <label className="text-theme-text-primary flex items-center gap-3 text-sm">
           <input
             type="checkbox"
             className="form-checkbox"
@@ -704,7 +704,7 @@ const VendorContactsModal: React.FC<{
               onChange={(e) => up('notes', e.target.value)}
             />
           </div>
-          <label className="text-theme-text-primary flex items-center gap-2 text-sm">
+          <label className="text-theme-text-primary flex items-center gap-3 text-sm">
             <input
               type="checkbox"
               className="form-checkbox"
@@ -818,32 +818,34 @@ export const VendorsPage: React.FC = () => {
           <ArrowLeft className="h-4 w-4" /> Back to Admin
         </Link>
 
-        <div className="mb-6 flex items-center gap-3">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex-1">
             <h1 className="text-theme-text-primary text-2xl font-bold">Vendors</h1>
             <p className="text-theme-text-muted text-sm">Suppliers, their contacts, and what we buy from them</p>
           </div>
-          <button
-            onClick={() => {
-              void load();
-            }}
-            className="btn-secondary btn-md"
-            aria-label="Refresh vendors"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          {canManage && (
+          <div className="flex items-center gap-3 self-start sm:self-auto">
             <button
               onClick={() => {
-                setEditVendor(null);
-                setShowForm(true);
+                void load();
               }}
-              className="btn-info btn-md flex items-center gap-2"
+              className="btn-secondary btn-md"
+              aria-label="Refresh vendors"
             >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">New Vendor</span>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-          )}
+            {canManage && (
+              <button
+                onClick={() => {
+                  setEditVendor(null);
+                  setShowForm(true);
+                }}
+                className="btn-info btn-md flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                New Vendor
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mb-6 grid grid-cols-3 gap-3">
@@ -861,8 +863,8 @@ export const VendorsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[200px] flex-1">
+        <div className="card-secondary mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:flex-1">
             <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
             <input
               autoCapitalize="none"
@@ -875,7 +877,7 @@ export const VendorsPage: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <label className="text-theme-text-muted flex items-center gap-2 text-sm">
+          <label className="text-theme-text-muted flex shrink-0 items-center gap-3 text-sm max-md:ps-3.5">
             <input
               type="checkbox"
               className="form-checkbox"
@@ -955,7 +957,7 @@ export const VendorsPage: React.FC = () => {
                           className="btn-icon"
                           aria-label={`${vendor.is_active ? 'Deactivate' : 'Reactivate'} ${vendor.name}`}
                         >
-                          {vendor.is_active ? <Trash2 className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                          {vendor.is_active ? <Archive className="h-4 w-4" /> : <ArchiveRestore className="h-4 w-4" />}
                         </button>
                       </div>
                     )}
