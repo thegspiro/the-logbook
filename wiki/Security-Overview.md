@@ -15,7 +15,7 @@ A whole-stack zero-trust pass ("never trust, always verify" — nothing trusted 
 network location, client header, session state, or internal origin) confirmed a
 strong foundation and closed the remaining implicit-trust gaps:
 
-- **Deployment posture:** the base `docker-compose.yml` is a *development*
+- **Deployment posture:** the base `docker-compose.yml` is a _development_
   config and had hardcoded `ENVIRONMENT: development`, so the documented
   `docker compose up -d` path booted in dev mode and skipped the startup
   security gate. Production now layers `docker-compose.prod.yml` (the installer
@@ -99,6 +99,27 @@ schema migration (e.g. DB/Redis TLS enforcement in production, a dedicated
 `audit_logs.organization_id` column) are tracked in
 [`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
 
+### Onboarding Session Storage (2026-08-15)
+
+The onboarding session identifier moved from `localStorage` to **`sessionStorage`**
+(`onboarding_session_id`). It is a bearer credential: presented as the
+`X-Session-ID` header, it authorizes the setup mutations that create the
+organization, its stations and apparatus, the IT team, and the first System
+Owner. In `localStorage` it survived browser restarts indefinitely and was
+readable from every tab on the origin — on a shared or station-kiosk machine,
+that is a standing grant to finish somebody else's installation.
+
+- Identifiers written by older clients are deleted on load **and** on clear, so a
+  browser carrying a stale one drops it rather than presenting it.
+- The CSRF companion (`onboarding_csrf_token`, `SameSite=Strict` cookie) and the
+  server's 30-minute sliding session expiry are unchanged.
+- No endpoint, schema, model, migration, or permission changed.
+- **Operational consequence:** onboarding must be completed in one tab and one
+  sitting. A second tab starts a new session; a browser restart ends the run with
+  `ONBD_SESSION_INVALID` at the next saving step. The wizard's non-sensitive
+  answers still persist in `localStorage`, so the form can repaint over a dead
+  session — the recovery is to restart the wizard, not to re-type.
+
 ### Comprehensive Security Audit & Remediation (2026-03-07)
 
 - **25-issue security audit**: Full audit report identifying critical, high, medium, and low severity issues across backend, frontend, infrastructure, and deployment (`SECURITY_AUDIT.md`)
@@ -116,9 +137,9 @@ schema migration (e.g. DB/Redis TLS enforcement in production, a dedicated
 - **Brute-force protection**: Progressive rate limiting on login with IP-based and per-user lockout, exponential backoff, frontend rate limiting on login/forgot-password pages
 - **IDOR fixes**: Organization-scoped validation on documents and training endpoints prevents cross-org data access
 - **Open redirect prevention**: API response interceptor validates redirect URLs against allowed origins
-- **Security alert persistence**: New `SecurityAlert` database model stores alerts with severity, type, source IP, and resolution status *(2026-07: now includes `organization_id` — alerts are org-scoped; an org admin only sees/acknowledges/resolves their own department's alerts)*
-- **Audit log export**: New endpoint for exporting audit logs with date range filters *(2026-07: scoped to the caller's org and redacts `session_id` to a non-reversible fingerprint)*
-- **Audit archival**: Scheduled task archives old audit entries while maintaining hash chain integrity *(2026-07: the `rehash_chain` op is now break-glass — gated by `AUDIT_ALLOW_CHAIN_REHASH`, repairs legacy rows only, and fails closed with 409 on a keyed-row mismatch rather than rebuilding over a tamper)*
+- **Security alert persistence**: New `SecurityAlert` database model stores alerts with severity, type, source IP, and resolution status _(2026-07: now includes `organization_id` — alerts are org-scoped; an org admin only sees/acknowledges/resolves their own department's alerts)_
+- **Audit log export**: New endpoint for exporting audit logs with date range filters _(2026-07: scoped to the caller's org and redacts `session_id` to a non-reversible fingerprint)_
+- **Audit archival**: Scheduled task archives old audit entries while maintaining hash chain integrity _(2026-07: the `rehash_chain` op is now break-glass — gated by `AUDIT_ALLOW_CHAIN_REHASH`, repairs legacy rows only, and fails closed with 409 on a keyed-row mismatch rather than rebuilding over a tamper)_
 - **Audit deletion logging**: All audit log deletions are themselves logged for accountability
 - **Hardened file logs**: Secure permissions and restricted access paths for file-based log rotation
 - **HIPAA cache exclusions expanded**: `/admin-hours/`, `/facilities/`, `/organizations/`, `/documents/`, `/training/` added to `UNCACHEABLE_PREFIXES`
@@ -162,11 +183,11 @@ schema migration (e.g. DB/Redis TLS enforcement in production, a dedicated
 ✅ **Rate Limiting**: Protection against brute force attacks
 ✅ **Input Sanitization**: XSS and injection attack prevention
 ✅ **Security Headers**: CSP, HSTS, X-Frame-Options, etc.
-✅ **Member Privacy Rights**: personal-data export, consent tracking, and anonymization of departed members *(2026-07-31)*
-✅ **Records Retention**: per-department schedules with safety floors, enforced daily *(2026-07-31)*
-✅ **Key Rotation**: encryption keys rotate with no downtime via a legacy-key ring *(2026-07-31)*
-✅ **Vulnerability Disclosure**: RFC 9116 `/.well-known/security.txt` *(2026-07-31)*
-✅ **Supply-Chain Scanning**: Dependabot, blocking dependency audits, secret scanning, SPDX SBOM *(2026-07-31)*
+✅ **Member Privacy Rights**: personal-data export, consent tracking, and anonymization of departed members _(2026-07-31)_
+✅ **Records Retention**: per-department schedules with safety floors, enforced daily _(2026-07-31)_
+✅ **Key Rotation**: encryption keys rotate with no downtime via a legacy-key ring _(2026-07-31)_
+✅ **Vulnerability Disclosure**: RFC 9116 `/.well-known/security.txt` _(2026-07-31)_
+✅ **Supply-Chain Scanning**: Dependabot, blocking dependency audits, secret scanning, SPDX SBOM _(2026-07-31)_
 ✅ **Intrusion Detection**: Real-time anomaly and threat detection
 ✅ **Data Exfiltration Monitoring**: Detection of unauthorized data transfers
 ✅ **Session Hijacking Detection**: IP/session correlation monitoring
@@ -209,31 +230,31 @@ POST /api/v1/security/manual-check              - Trigger manual security check
 
 ### Security Alert Types
 
-| Alert Type | Threat Level | Description |
-|------------|--------------|-------------|
-| `brute_force` | HIGH | Multiple failed login attempts |
-| `session_hijack` | CRITICAL | Potential session takeover detected |
-| `data_exfiltration` | HIGH/CRITICAL | Large or suspicious data transfers |
-| `log_tampering` | CRITICAL | Audit log integrity failure |
-| `anomaly_detected` | MEDIUM | Unusual patterns detected |
-| `unauthorized_access` | HIGH | Access to restricted resources |
-| `privilege_escalation` | CRITICAL | Unauthorized permission changes |
-| `suspicious_activity` | HIGH | Injection attempts, etc. |
-| `external_data_transfer` | CRITICAL | Data sent to external endpoints |
-| `rate_limit_exceeded` | MEDIUM | Too many requests |
+| Alert Type               | Threat Level  | Description                         |
+| ------------------------ | ------------- | ----------------------------------- |
+| `brute_force`            | HIGH          | Multiple failed login attempts      |
+| `session_hijack`         | CRITICAL      | Potential session takeover detected |
+| `data_exfiltration`      | HIGH/CRITICAL | Large or suspicious data transfers  |
+| `log_tampering`          | CRITICAL      | Audit log integrity failure         |
+| `anomaly_detected`       | MEDIUM        | Unusual patterns detected           |
+| `unauthorized_access`    | HIGH          | Access to restricted resources      |
+| `privilege_escalation`   | CRITICAL      | Unauthorized permission changes     |
+| `suspicious_activity`    | HIGH          | Injection attempts, etc.            |
+| `external_data_transfer` | CRITICAL      | Data sent to external endpoints     |
+| `rate_limit_exceeded`    | MEDIUM        | Too many requests                   |
 
 ### Configurable Thresholds
 
 Security monitoring thresholds can be configured:
 
-| Threshold | Default | Description |
-|-----------|---------|-------------|
-| `failed_logins_per_hour` | 10 | Max failed logins per IP per hour |
-| `failed_logins_per_user` | 5 | Max failed logins per user per hour |
-| `api_calls_per_minute` | 60 | Max API calls per minute |
-| `large_data_export_mb` | 50 | Alert threshold for data exports |
-| `concurrent_sessions` | 3 | Max concurrent sessions per user |
-| `session_ip_changes` | 2 | Max IP changes per session |
+| Threshold                | Default | Description                         |
+| ------------------------ | ------- | ----------------------------------- |
+| `failed_logins_per_hour` | 10      | Max failed logins per IP per hour   |
+| `failed_logins_per_user` | 5       | Max failed logins per user per hour |
+| `api_calls_per_minute`   | 60      | Max API calls per minute            |
+| `large_data_export_mb`   | 50      | Alert threshold for data exports    |
+| `concurrent_sessions`    | 3       | Max concurrent sessions per user    |
+| `session_ip_changes`     | 2       | Max IP changes per session          |
 
 ---
 
@@ -244,26 +265,31 @@ Security monitoring thresholds can be configured:
 The system monitors for common attack patterns:
 
 #### SQL Injection Detection
+
 - Monitors for patterns like `' OR '1'='1`, `; DROP TABLE`, `UNION SELECT`
 - All requests are analyzed before processing
 - Alerts generated on detection
 
 #### XSS Detection
+
 - Detects `<script>`, `javascript:`, `onerror=`, etc.
 - Input sanitization enforced on server-side
 - CSP headers prevent execution
 
 #### Path Traversal Detection
+
 - Blocks `../`, `..\\`, and encoded variants
 - Validates all file paths server-side
 
 #### Command Injection Detection
+
 - Detects shell metacharacters in inputs
 - All external commands parameterized
 
 ### Session Monitoring
 
 Session hijacking detection through:
+
 - IP address correlation
 - User agent consistency checks
 - Geographic anomaly detection
@@ -294,6 +320,7 @@ The system monitors for data exfiltration through:
 ### Protected Endpoints
 
 Export endpoints with DLP monitoring:
+
 - `/api/v1/users/export`
 - `/api/v1/events/export`
 - `/api/v1/audit/export`
@@ -301,16 +328,17 @@ Export endpoints with DLP monitoring:
 
 ### Alert Triggers
 
-| Trigger | Threshold | Threat Level |
-|---------|-----------|--------------|
-| Single large export | > 50MB | HIGH |
-| 24-hour cumulative | > 250MB | CRITICAL |
-| External destination | Any | CRITICAL |
-| Bulk record access | > 100 records | MEDIUM |
+| Trigger              | Threshold     | Threat Level |
+| -------------------- | ------------- | ------------ |
+| Single large export  | > 50MB        | HIGH         |
+| 24-hour cumulative   | > 250MB       | CRITICAL     |
+| External destination | Any           | CRITICAL     |
+| Bulk record access   | > 100 records | MEDIUM       |
 
 ### Response Actions
 
 When data exfiltration is detected:
+
 1. Alert generated and logged
 2. Administrator notified
 3. Event recorded in tamper-proof audit log
@@ -379,6 +407,7 @@ Organizations implementing The Logbook must also implement:
 #### Minimum Necessary Standard
 
 The system supports:
+
 - Role-based access control to limit PHI access
 - Granular permissions for different user roles
 - Audit trails showing who accessed what data
@@ -386,6 +415,7 @@ The system supports:
 #### Individual Rights
 
 The system supports:
+
 - Data export capabilities for individual access requests
 - Audit logs for accounting of disclosures
 - Data amendment tracking
@@ -521,17 +551,17 @@ All pages use proper semantic HTML5 elements:
 
 Comprehensive ARIA support for screen readers:
 
-| Attribute | Usage |
-|-----------|-------|
-| `aria-label` | Labels for icon-only buttons, navigation regions |
-| `aria-describedby` | Links form inputs to their error messages |
-| `aria-invalid` | Indicates form validation state |
-| `aria-expanded` | Toggle state for dropdowns and mobile menus |
-| `aria-controls` | Associates buttons with controlled elements |
-| `aria-current="page"` | Indicates current page in navigation |
-| `aria-hidden="true"` | Hides decorative icons from screen readers |
-| `role="alert"` | Announces error messages immediately |
-| `role="region"` | Defines landmark regions |
+| Attribute             | Usage                                            |
+| --------------------- | ------------------------------------------------ |
+| `aria-label`          | Labels for icon-only buttons, navigation regions |
+| `aria-describedby`    | Links form inputs to their error messages        |
+| `aria-invalid`        | Indicates form validation state                  |
+| `aria-expanded`       | Toggle state for dropdowns and mobile menus      |
+| `aria-controls`       | Associates buttons with controlled elements      |
+| `aria-current="page"` | Indicates current page in navigation             |
+| `aria-hidden="true"`  | Hides decorative icons from screen readers       |
+| `role="alert"`        | Announces error messages immediately             |
+| `role="region"`       | Defines landmark regions                         |
 
 #### Form Accessibility
 
@@ -540,25 +570,27 @@ Form inputs include complete accessibility support:
 ```tsx
 <input
   id="email"
-  aria-invalid={errors.email ? 'true' : 'false'}
-  aria-describedby={errors.email ? 'email-error' : undefined}
-/>
-{errors.email && (
-  <p id="email-error" role="alert" className="text-red-500">
-    {errors.email}
-  </p>
-)}
+  aria-invalid={errors.email ? "true" : "false"}
+  aria-describedby={errors.email ? "email-error" : undefined}
+/>;
+{
+  errors.email && (
+    <p id="email-error" role="alert" className="text-red-500">
+      {errors.email}
+    </p>
+  );
+}
 ```
 
 #### Color Contrast
 
 All text meets WCAG 2.1 AA contrast requirements:
 
-| Element | Before | After | Contrast Ratio |
-|---------|--------|-------|----------------|
-| Secondary text | `text-slate-400` | `text-slate-300` | 4.5:1+ |
-| Error text | `text-red-400` | `text-red-400` | 4.5:1+ |
-| Links | `text-red-500` | `text-red-500` | 4.5:1+ |
+| Element        | Before           | After            | Contrast Ratio |
+| -------------- | ---------------- | ---------------- | -------------- |
+| Secondary text | `text-slate-400` | `text-slate-300` | 4.5:1+         |
+| Error text     | `text-red-400`   | `text-red-400`   | 4.5:1+         |
+| Links          | `text-red-500`   | `text-red-500`   | 4.5:1+         |
 
 #### Keyboard Navigation
 
@@ -603,17 +635,20 @@ Mobile menu includes full accessibility:
 Use these tools to verify accessibility compliance:
 
 **Automated Testing:**
+
 - axe DevTools browser extension
 - Lighthouse accessibility audit
 - WAVE evaluation tool
 
 **Manual Testing:**
+
 - Keyboard-only navigation (no mouse)
 - Screen reader testing (NVDA, JAWS, VoiceOver)
 - High contrast mode
 - 200% browser zoom
 
 **Command Line:**
+
 ```bash
 # Run Lighthouse accessibility audit
 npx lighthouse http://localhost:3000 --only-categories=accessibility --output=html
@@ -626,6 +661,7 @@ npx lighthouse http://localhost:3000 --only-categories=accessibility --output=ht
 ### Password Requirements
 
 **Minimum Standards (configurable in .env):**
+
 - Minimum length: 12 characters (NIST SP 800-63B recommendation)
 - At least one uppercase letter
 - At least one lowercase letter
@@ -670,6 +706,7 @@ migration used Fernet (AES-128-CBC + HMAC) and remain transparently readable;
 [backfill runbook](../docs/AES256_GCM_BACKFILL_RUNBOOK.md)).
 
 **What is Encrypted:**
+
 - User passwords (Argon2id hashing)
 - Sensitive PHI fields
 - File uploads containing sensitive data
@@ -677,6 +714,7 @@ migration used Fernet (AES-128-CBC + HMAC) and remain transparently readable;
 - Database columns marked as sensitive
 
 **Key Management:**
+
 - Encryption keys stored in environment variables
 - Never committed to version control
 - Rotated regularly (recommended: every 90 days)
@@ -685,6 +723,7 @@ migration used Fernet (AES-128-CBC + HMAC) and remain transparently readable;
 ### Encryption in Transit
 
 **TLS 1.3** for all network communications:
+
 - HTTPS for web traffic
 - TLS for database connections
 - Encrypted email (STARTTLS)
@@ -693,6 +732,7 @@ migration used Fernet (AES-128-CBC + HMAC) and remain transparently readable;
 ### Field-Level Encryption
 
 Sensitive fields that can be encrypted:
+
 - Social Security Numbers
 - Driver's License Numbers
 - Medical Record Numbers
@@ -724,6 +764,7 @@ logs without detection.
 ### What is Logged
 
 #### Authentication Events
+
 - Login attempts (success and failure)
 - Logout events
 - Password changes
@@ -732,6 +773,7 @@ logs without detection.
 - Session creation/termination
 
 #### Data Access
+
 - PHI access (view, edit, delete)
 - Document downloads
 - Report generation
@@ -739,6 +781,7 @@ logs without detection.
 - Search queries (if sensitive)
 
 #### Administrative Actions
+
 - User creation/modification/deletion
 - Role changes
 - Permission modifications
@@ -746,6 +789,7 @@ logs without detection.
 - Module enable/disable
 
 #### Security Events
+
 - Failed authorization attempts
 - Rate limit violations
 - Suspicious activity
@@ -754,12 +798,12 @@ logs without detection.
 ### Log Retention
 
 - **Minimum**: 7 years (exceeds HIPAA 6-year minimum)
-- **Enforced**, not merely configured *(2026-07-31)* — a weekly job exports
+- **Enforced**, not merely configured _(2026-07-31)_ — a weekly job exports
   expired rows to signed gzipped JSONL archives (`AUDIT_ARCHIVE_DIR`) and then
   purges them. Purges are checkpoint-aligned, refuse to run against a chain
   that fails verification, and record a keyed attestation of the boundary so
   the surviving chain still verifies while unsanctioned deletions still fail.
-- **Off-host copy** *(2026-07-31)* — set `AUDIT_SHIP_WEBHOOK_URL` to stream new
+- **Off-host copy** _(2026-07-31)_ — set `AUDIT_SHIP_WEBHOOK_URL` to stream new
   entries to a SIEM as HMAC-signed NDJSON. The hash chain detects tampering;
   only an off-host copy survives deletion of the table itself.
 - **Format**: Immutable, tamper-evident
@@ -771,6 +815,7 @@ logs without detection.
 ### Log Monitoring
 
 Automated monitoring for:
+
 - Multiple failed login attempts
 - After-hours access to PHI
 - Bulk data exports
@@ -799,9 +844,9 @@ Automated monitoring for:
 3. **OAuth 2.0 / SSO (OIDC)**
    - Microsoft Azure AD
    - Google Workspace
-   - SAML and LDAP/Active Directory are **not implemented** *(clarified
+   - SAML and LDAP/Active Directory are **not implemented** _(clarified
      2026-07-31 — the unused `pysaml2`/`python-ldap` dependencies were
-     removed; the `LDAP_*` settings are inert placeholders)*
+     removed; the `LDAP\__` settings are inert placeholders)\*
 
 ### Session Management
 
@@ -845,6 +890,7 @@ Automated monitoring for:
 Permissions are structured as: `module.resource.action`
 
 Examples:
+
 - `users.profile.view`
 - `users.profile.edit`
 - `documents.sensitive.view`
@@ -882,6 +928,7 @@ We take security seriously. If you discover a security vulnerability:
 ### Bug Bounty
 
 Currently no formal bug bounty program, but we may offer:
+
 - Public acknowledgment (if desired)
 - Contribution credit
 - Swag/merchandise
@@ -945,16 +992,19 @@ Currently no formal bug bounty program, but we may offer:
 ### Regular Maintenance
 
 #### Daily
+
 - [ ] Review error logs
 - [ ] Check system alerts
 - [ ] Monitor active sessions
 
 #### Weekly
+
 - [ ] Review audit logs for anomalies
 - [ ] Check backup status
 - [ ] Review failed login attempts
 
 #### Monthly
+
 - [ ] Update dependencies
 - [ ] Review user access lists
 - [ ] Test backup restoration
@@ -962,6 +1012,7 @@ Currently no formal bug bounty program, but we may offer:
 - [ ] Review rate limiting logs
 
 #### Quarterly
+
 - [ ] Full security audit
 - [ ] Review and update access controls
 - [ ] Disaster recovery testing
@@ -969,6 +1020,7 @@ Currently no formal bug bounty program, but we may offer:
 - [ ] Review third-party integrations
 
 #### Annually
+
 - [ ] Comprehensive penetration testing
 - [ ] HIPAA risk assessment
 - [ ] Staff security training
@@ -1010,30 +1062,35 @@ Currently no formal bug bounty program, but we may offer:
 ### Response Steps
 
 #### 1. Detection & Analysis
+
 - Identify the incident
 - Determine scope and severity
 - Collect evidence
 - Document everything
 
 #### 2. Containment
+
 - Isolate affected systems
 - Revoke compromised credentials
 - Block malicious IPs
 - Preserve evidence
 
 #### 3. Eradication
+
 - Remove malware/backdoors
 - Patch vulnerabilities
 - Reset compromised accounts
 - Update security rules
 
 #### 4. Recovery
+
 - Restore from clean backups
 - Monitor for re-infection
 - Verify system integrity
 - Gradual service restoration
 
 #### 5. Post-Incident
+
 - Document lessons learned
 - Update security procedures
 - Implement preventive measures
@@ -1059,6 +1116,7 @@ If PHI is breached, you may need to:
 ### Contact Information
 
 Maintain a current list of:
+
 - Incident response team members
 - Legal counsel
 - Public relations contact
@@ -1071,6 +1129,7 @@ Maintain a current list of:
 ## Security Certifications
 
 Organizations may pursue:
+
 - SOC 2 Type II
 - ISO 27001
 - HITRUST CSF
@@ -1082,20 +1141,21 @@ Organizations may pursue:
 
 Multiple cross-organization IDOR vulnerabilities were identified and fixed:
 
-| Module | Vulnerability | Fix |
-|--------|---------------|-----|
-| Training submissions | Any same-org member could read other members' submissions | Org boundary check + owner-or-`training.manage` gate |
-| Grant notes | Cross-org read/write on grant notes | Org-scoped query |
-| Grant budget items | Cross-org access to budget items, expenditures, compliance tasks | Org-scoped queries on all paths |
-| Finance approvals | Cross-org approve/deny on approval steps | Org-scope check in approval handler |
-| Documents | Folder-less document listing bypassed access control; by-id fetch bypassed folder restrictions | Enforce folder access on all document queries |
-| Equipment requests | Double-issue race in fulfillment | Row-level locking during fulfillment |
-| IP exception approval | Cross-org IDOR in IP exception workflow | Org-scoped query + 404 for missing/foreign exceptions |
-| Shift reports | Any authenticated user could read any report by ID | Trainee/officer/`training.manage` gate |
+| Module                | Vulnerability                                                                                  | Fix                                                   |
+| --------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Training submissions  | Any same-org member could read other members' submissions                                      | Org boundary check + owner-or-`training.manage` gate  |
+| Grant notes           | Cross-org read/write on grant notes                                                            | Org-scoped query                                      |
+| Grant budget items    | Cross-org access to budget items, expenditures, compliance tasks                               | Org-scoped queries on all paths                       |
+| Finance approvals     | Cross-org approve/deny on approval steps                                                       | Org-scope check in approval handler                   |
+| Documents             | Folder-less document listing bypassed access control; by-id fetch bypassed folder restrictions | Enforce folder access on all document queries         |
+| Equipment requests    | Double-issue race in fulfillment                                                               | Row-level locking during fulfillment                  |
+| IP exception approval | Cross-org IDOR in IP exception workflow                                                        | Org-scoped query + 404 for missing/foreign exceptions |
+| Shift reports         | Any authenticated user could read any report by ID                                             | Trainee/officer/`training.manage` gate                |
 
 ### IP Spoofing Protection
 
 `get_client_ip()` was rewritten to be **spoof-proof**:
+
 - Reads `X-Forwarded-For` only when behind a trusted reverse proxy
 - Validates the proxy's own IP against a trusted list
 - Supports multi-worker environments with synchronized state
@@ -1107,6 +1167,7 @@ GeoIP-based country blocking is a **platform-edge control**: it runs in
 middleware before any tenant/authentication context exists, against one shared
 MaxMind database and one global blocked-country set, so it applies deployment-wide
 rather than per-organization:
+
 - The blocklist is normally set at deploy time via `BLOCKED_COUNTRIES`. Runtime
   block/unblock via the API (`POST`/`DELETE /api/v1/ip-security/blocked-countries`,
   overlaid onto `CountryBlockRule` rows) is **disabled by default** and enabled
@@ -1122,6 +1183,7 @@ rather than per-organization:
 ### Scheduled Task Auto-Run
 
 Five scheduled tasks that previously required an external cron job to fire are now auto-run by the built-in asyncio task runner:
+
 - `process_inactivity_warnings` (prospect pipeline)
 - `expire_old_exceptions` (IP security)
 - `refresh_overdue_checkouts` (inventory)
@@ -1149,6 +1211,7 @@ Five scheduled tasks that previously required an external cron job to fire are n
 ## Questions or Concerns?
 
 For security questions or concerns:
+
 - Email: security@yourfiredept.org
 - GitHub Discussions: https://github.com/thegspiro/the-logbook/discussions
 - Documentation: https://docs.the-logbook.org/security

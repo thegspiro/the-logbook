@@ -1,10 +1,17 @@
-# August 12–14, 2026 workflow updates
+# August 12–16, 2026 workflow updates
 
 This lesson is the operator-facing companion to the
-[technical change audit](../CHANGE_AUDIT_2026-08-12_TO_14.md). It explains what
+[six-day change audit](../CHANGE_AUDIT_2026-08-10_TO_16.md) and its
+[three-day detail](../CHANGE_AUDIT_2026-08-12_TO_14.md). It explains what
 members and administrators now do differently. Permission names are included
 because a control that is absent is usually a permission or module-state issue,
 not a rendering failure.
+
+> **August 15–16 added two changes with no new screen**, so they are easy to
+> miss in a walkthrough and are covered at the end of this lesson: the
+> installation wizard no longer survives leaving the tab, and the dark-mode
+> background now covers the scrollbar gutter. Neither needs a migration, a
+> permission grant, or any configuration.
 
 ## Elections: reuse a ballot without reusing election data
 
@@ -95,7 +102,6 @@ to 60 minutes before start, with the full workflow, delivery caveats, early
 member/guest distinction, and screenshot requirements in
 [Events & Meetings](./04-events-meetings.md#reminder-audience-and-one-hour-check-in-default-august-14-2026).
 
-
 The Event Settings outreach picker discovers only related public-outreach forms
 and only for event administrators. Mandatory-event eligibility uses the
 organization's configured membership tiers. Early-ended events can be finalized;
@@ -142,7 +148,71 @@ pass.
 >
 > **[SCREENSHOT NEEDED — Salesforce readiness/preview result with secrets and tokens visibly absent.]**
 
+## Installing: the wizard is now one tab, one sitting _(August 15)_
+
+**Who this affects:** whoever runs the one-time installation wizard at
+`/onboarding`. Nobody else — existing departments see no change.
+
+The wizard holds a short-lived credential that authorizes the requests creating
+the organization, its stations and apparatus, the IT team, and the first System
+Owner account. That credential used to outlive browser restarts and was readable
+from every tab on the site. It now lives only in the tab that started the run,
+because on a shared or station-kiosk machine a credential that can finish
+creating a department should not still be sitting there the next morning.
+
+**No permission, module setting, endpoint or migration is involved.** What
+changes is how you schedule the install:
+
+| Situation                                  | Result                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Finish in one tab without closing it       | Normal path                                                                           |
+| Open `/onboarding` in a second tab mid-run | That tab starts its own session; the original step refuses to save                    |
+| Close the browser partway through          | The run is over — restart the wizard                                                  |
+| Idle more than 30 minutes                  | The server session expires. It always did; the timer resets on each action            |
+| "Onboarding has already been completed"    | A **different** condition: a department already exists. Sign in, do not restart setup |
+
+**Teach this part explicitly, because the screen misleads.** The answers you
+typed are stored separately and are _not_ cleared. Reopen the wizard after a
+restart and **the form comes back filled in while the session behind it is
+gone** — nothing says so until the next step fails. The filled-in form is a
+local draft, not a resumed session; the recovery is to start the wizard over,
+not to re-type into it.
+
+Practical guidance for an installer: gather the department address, station
+list, apparatus list and first administrator's details before starting, allow an
+uninterrupted half hour, and stay in one tab until the dashboard appears.
+
+> **[SCREENSHOT NEEDED — sequence of two: (1) the wizard reopened after a browser restart, showing the previously typed answers repainted; (2) the session-expired error raised when continuing to the next step. Demo data: start an onboarding run through the stations step, close the browser, reopen `/onboarding`. Both frames are required — a single frame of either one teaches the wrong lesson.]**
+
+## Dark mode: the strip at the right edge is gone _(August 15)_
+
+**Who this affects:** everyone using dark mode, on every page — including the
+public pages members' families and applicants see (public forms, ballot voting,
+application status).
+
+The themed background gradient now covers the browser's scrollbar gutter. It
+previously stopped short of it, so in dark mode a bright strip ran down the
+right edge of every page. There is nothing to configure and no behavior change;
+it is purely what the screen looks like.
+
+**Why it appears in a workflow lesson at all:** it invalidates images. Any
+dark-mode screenshot, printed handout or recorded video captured before August
+15 that shows a full browser window may still show the old strip. When you reuse
+department training material, check the right edge of the image before handing it
+out.
+
+> **[SCREENSHOT NEEDED — a public page (`/f/{slug}` or an application-status link) in dark mode at full window width with the page long enough to scroll, so the gutter is visible and painted. This is the standing proof that pages outside the app shell are covered.]**
+
+One open item for administrators who print: browsers do not print page
+backgrounds by default, so ordinary printing is unchanged. If your department
+prints scorecards, blank skill sheets, barcode labels or QR signs with the
+browser's **"Background graphics"** option switched on, check one page before
+running a batch — the themed background may now print behind it.
+
 ## Upgrade notes for administrators
+
+The August 15–16 changes require **no migration and no configuration**. The
+notes below apply to the August 12–14 changes.
 
 Back up the database and encryption keys separately, require a single result
 from `alembic heads`, and run `alembic upgrade head`. Production transport TLS

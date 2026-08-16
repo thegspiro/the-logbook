@@ -1,5 +1,64 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-15 → 08-16 changes
+
+### REPLACE — every full-window dark-mode capture taken before 2026-08-15
+
+The themed background gradient moved from `body` to `html` so that it also
+covers the browser's stable scrollbar gutter. Before that, the gutter showed the
+browser's default canvas — **in dark mode, a bright strip down the right edge of
+the page.**
+
+This is a global style rule, so it touches captures in **every guide**, not one
+module's. It is also the cheapest flag on this page to triage:
+
+- **Look at the right edge of the image.** A light strip beside the scrollbar
+  means the capture predates the fix.
+- **Light-mode captures are unaffected** — the gutter was showing white against a
+  light canvas, which is what it looks like now.
+- **Captures cropped inside the content column are unaffected**, which is most of
+  the per-control shots in these guides.
+- Only full-window shots on pages long enough to scroll can show it at all.
+
+**Do not re-shoot the set wholesale.** The vast majority of images in this
+directory are unaffected, and a blanket re-capture would burn the same effort the
+2026-08-11 pass spent proving which images were actually stale. Triage first,
+list what fails, then shoot that list.
+
+Nothing else about the rendering changed — no layout, no spacing, no colour
+inside the content area — so an image that passes the right-edge check is still
+current for the reason it was current before.
+
+### SCREENSHOT NEEDED
+
+- **Onboarding session expired, in two frames.** (1) The wizard reopened after a
+  browser restart, showing previously typed answers repainted; (2) the
+  session-expired error raised by the next step. Demo data: begin an onboarding
+  run through the stations step, close the browser, reopen `/onboarding`, and try
+  to continue. **Both frames are required** — either one alone teaches the wrong
+  lesson, because the whole point is that a filled-in form does not mean a live
+  session. Used by `08-admin-reports.md` and
+  `19-august-2026-release-changes.md`.
+- **A public page in dark mode at full window width**, on a page long enough to
+  scroll (`/f/{slug}` or an application-status link). This is the standing proof
+  that the canvas covers routes rendered outside the app shell, which is the
+  reason the rule exists at all. Used by `19-august-2026-release-changes.md`.
+- **Skills-testing printing, three shots** (added by the 2026-08-11 print pages,
+  documented 2026-08-16 — the guide had no printing section until then):
+  - The Templates tab row actions with **Print** visible, plus the resulting
+    blank sheet in print preview. Demo data: one published template with at
+    least two sections and a mix of criterion types (pass/fail, scored, timed),
+    so the differing marking boxes appear in one frame.
+  - A completed scorecard print preview showing per-step marks, the score
+    arithmetic, and the validating officer's sign-off. Demo data: one validated
+    official result with at least one failed step, so the deduction is visible.
+  - The same scorecard as a candidate under `scores` disclosure sees it, with
+    the examiner's notes absent. **Capture beside the officer version** — the
+    pair is the teaching point; either alone is not.
+
+The reason, data path, and edge cases for each are recorded in
+[`../CHANGE_AUDIT_2026-08-10_TO_16.md`](../CHANGE_AUDIT_2026-08-10_TO_16.md#documentation-and-media-disposition).
+
 ## Flagged by the 2026-08-12 → 08-14 changes
 
 The three-day connection audit identified the following capture work. These
@@ -306,9 +365,9 @@ Okafor's election package was still `draft`, so the item type the whole
 prospective-member pipeline exists to produce had never reached a ballot.
 
 **The item had to go on a draft election, and that is correct.** An open
-election refuses ballot edits — "Only end_date can be updated while voting is
+election refuses ballot edits — "Only end*date can be updated while voting is
 active" — because a cast vote references an item id. So the seeder now creates a
-draft _Membership Vote — August Business Meeting_ carrying the item, which is
+draft \_Membership Vote — August Business Meeting* carrying the item, which is
 also the order the guide's own workflow describes: package marked ready,
 secretary adds it, then the election opens.
 

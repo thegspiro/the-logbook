@@ -22,10 +22,11 @@ Skills Testing lives within the Training module and integrates with Training Req
 12. [Practice Mode](#practice-mode)
 13. [Who Sees a Result — Disclosure Settings](#who-sees-a-result--disclosure-settings-2026-08-08)
 14. [Withdrawing a Result — Void, Cancel, Delete](#withdrawing-a-result--void-cancel-delete-2026-08-08)
-15. [Attempt Limits](#attempt-limits-2026-08-08)
-16. [Permissions](#permissions)
-17. [Integration with Training Compliance](#integration-with-training-compliance)
-18. [Troubleshooting](#troubleshooting)
+15. [Printing: the blank sheet and the completed scorecard](#printing-the-blank-sheet-and-the-completed-scorecard-2026-08-11)
+16. [Attempt Limits](#attempt-limits-2026-08-08)
+17. [Permissions](#permissions)
+18. [Integration with Training Compliance](#integration-with-training-compliance)
+19. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -1174,6 +1175,74 @@ you normally discover that a result should not stand.
 > **Cancel is not void.** An unscored test has no result to withdraw and nothing
 > to release from the pipeline, so it needs neither a reason nor a pipeline
 > reversal.
+
+---
+
+## Printing: the blank sheet and the completed scorecard _(2026-08-11)_
+
+Two print views exist, and they are opposite halves of the same sheet. Both open
+in a **new tab** and raise the browser's print dialog on load, so you are not
+dropped out of the list you were working in.
+
+| View                    | Where you start                                                    | URL                                                        | What it is                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Blank skill sheet**   | Training Admin → **Templates** tab → a template's **Print** action | `/training/skills-testing/print/template?id=<template_id>` | The department's own sheet as a paper form: marking boxes, candidate and examiner fields, signature lines                               |
+| **Completed scorecard** | A finished result page → **Print**                                 | `/training/skills-testing/print/scorecard?id=<test_id>`    | A finished evaluation as a paper record: what was marked against each step, the arithmetic behind the percentage, and who signed it off |
+
+### Why print at all
+
+**The blank sheet is for where the app cannot go.** A skills evaluation happens
+at a burn tower, in an apparatus bay, or at a county training ground — places
+with no usable signal, where the examiner screen cannot save. Departments
+already fall back to paper there; printing _your own template_ rather than a
+generic form means what gets marked in the field matches what gets transcribed
+afterwards. Sections and criteria are numbered exactly as the examiner screen
+numbers them, and each criterion type prints the marking affordance its
+on-screen control produces, so one paper mark maps onto one field with no
+interpretation in between.
+
+**The completed scorecard is for the two places a screen cannot go** — a
+candidate's paper training file, and a state or ISO audit packet. Emailing
+results already works, and neither of those accepts an email.
+
+### Who can print what
+
+Both routes are open to **any signed-in member**, and that is deliberate rather
+than an oversight.
+
+- The **blank sheet** carries no member data. It is the empty form, and the
+  templates list that links to it already applies the template's own visibility
+  rules; the server enforces visibility and department scoping when it fetches
+  the template.
+- The **completed scorecard** is redacted **by the server** before it reaches the
+  page. An officer receives the full scorecard; a candidate under `scores`
+  disclosure receives per-criterion marks with the examiner's notes stripped; a
+  result still awaiting validation arrives with **no outcome at all**. The page
+  renders exactly what the response contained and derives nothing that was
+  withheld.
+
+> **This is why the print route is not gated on `training.manage`.** Gating it
+> would stop a member printing a result they are already allowed to read on
+> screen, while withholding nothing from anyone else — the disclosure policy is
+> what controls the content, and it does so before the data leaves the server.
+> Printing cannot become a way around the policy.
+
+### Edge cases
+
+| Situation                                                   | What happens                                                                                                                                                                                                                             |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Result still awaiting officer validation                    | The **Print** button is not offered, and the print page refuses one anyway. There is no outcome to print yet                                                                                                                             |
+| Candidate under `scores` disclosure prints their own result | They get the marks and the arithmetic; the examiner's written notes are absent — the same redaction they see on screen                                                                                                                   |
+| Practice attempt                                            | Prints like any completed attempt; the page identifies it as practice so a practice sheet cannot be filed as an official record                                                                                                          |
+| Template archived after a sheet was printed                 | The paper sheet is still valid to transcribe from, but check the criteria against the current template before entering results — an archived template may have been superseded                                                           |
+| Pop-up blocker                                              | Both views open with `window.open`; a blocker will silently stop them. If **Print** appears to do nothing, allow pop-ups for the site                                                                                                    |
+| Printing with "Background graphics" on _(2026-08-15)_       | Browsers do not print page backgrounds by default. If you have switched that option on, check one page before running a batch — the app's themed background may print behind the sheet. See [Known Limitations](../KNOWN_LIMITATIONS.md) |
+
+> **[SCREENSHOT NEEDED — the Templates tab row actions with **Print** visible, and the resulting blank sheet in the browser's print preview. Demo data: one published template with at least two sections and a mix of criterion types (pass/fail, scored, timed), so the differing marking boxes are visible in the same frame.]**
+
+> **[SCREENSHOT NEEDED — a completed scorecard print preview showing the per-step marks, the score arithmetic, and the validating officer's sign-off block. Demo data: one validated official result with at least one failed step, so the deduction is visible in the arithmetic.]**
+
+> **[SCREENSHOT NEEDED — the same scorecard as seen by a candidate under `scores` disclosure, with the examiner's notes absent. Demo data: the template's result-disclosure override set to `scores`, viewed as the candidate. Capture beside the officer version above; the pair is the teaching point, either one alone is not.]**
 
 ---
 

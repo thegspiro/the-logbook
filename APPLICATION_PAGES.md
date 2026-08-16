@@ -71,9 +71,12 @@ Complete reference of all pages in the application, organized by module.
 
 ## Dashboard
 
-| URL          | Page           | Permission    |
-| ------------ | -------------- | ------------- |
-| `/dashboard` | Main Dashboard | Authenticated |
+| URL          | Page            | Permission    |
+| ------------ | --------------- | ------------- |
+| `/dashboard` | Main Dashboard  | Authenticated |
+| `/learning`  | Learning Center | Authenticated |
+
+> **Learning Center (`/learning`)** _(added 2026-08-11)_. The in-app guide index, sitting beside the dashboard inside `AppLayout`. Authenticated-only by design — it teaches the application rather than exposing any department record, so gating it on a permission would hide the help from the members most likely to need it.
 
 > _(2026-05-02)_ The volunteer dashboard "Now" section has been redesigned. The dashboard "Upcoming Events" stat now counts only events in the **next 30 days** (card labeled "Next 30 days") rather than all future events. The top navigation shows an **offline / pending-sync pill** indicating queued training submissions and RSVPs that will sync when connectivity returns.
 
@@ -212,12 +215,14 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ## Locations (when Facilities module is off)
 
-| URL                   | Page                 | Permission    |
-| --------------------- | -------------------- | ------------- |
-| `/locations`          | Locations Management | Authenticated |
-| `/locations/qr-codes` | Check-In QR Codes    | Authenticated |
+| URL                   | Page                 | Permission                                    |
+| --------------------- | -------------------- | --------------------------------------------- |
+| `/locations`          | Locations Management | Authenticated                                 |
+| `/locations/qr-codes` | Room QR Codes        | `locations.manage` **OR** `facilities.manage` |
 
-> Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
+> Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Room QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
+
+> **The QR directory is restricted, unlike the rest of Locations** _(corrected 2026-08-16)_. This page was previously listed here as Authenticated; it is not. The route is registered by the Facilities module (so it resolves in both Locations and Facilities modes) behind `locations.manage` **OR** `facilities.manage`. The restriction is the point: a kiosk display code is a check-in credential, so a bulk directory of every room's code is a different object from any one room's QR. Regenerating a display code invalidates the previous one, and codes are tenant-bound.
 
 ---
 
@@ -268,6 +273,10 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/training/skills-testing/test/new`            | Start Skill Test                                                  | **Authenticated** |
 | `/training/skills-testing/test/:testId`        | Active Skill Test (review)                                        | **Authenticated** |
 | `/training/skills-testing/test/:testId/active` | Active Skill Test (scoring)                                       | **Authenticated** |
+| `/training/skills-testing/print/template`      | Blank skill sheet (print)                                         | **Authenticated** |
+| `/training/skills-testing/print/scorecard`     | Completed scorecard (print)                                       | **Authenticated** |
+
+> **The two print pages are authenticated-only, and that is not an oversight** _(added 2026-08-11)_. A **blank skill sheet** carries no member data — it is the empty form, and the templates list that links to it already applies the template's own visibility rules; the backend's template fetch enforces visibility and org scoping. A **completed scorecard** is redacted by the backend to the reader's disclosure level _before the data leaves the server_, which is why the route is not gated on `training.manage`: doing so would stop a member printing a result they are already allowed to read, without withholding anything from anyone else. Same principle as the route guards below — the API decides what the page can contain.
 
 > **`/training/skills-testing` is the member's entry point, not the officer console** _(2026-08-08)_. When skills testing opened to members, this page became **Available Tests / My Results** — a member browses published sheets and reads their own results. The officer-facing **Templates** and **Test Records** tabs live under the Training Admin hub (`/training/admin?tab=templates` and `?tab=tests`), which is where validating, voiding and releasing happen.
 >

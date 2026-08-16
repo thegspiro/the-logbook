@@ -7,6 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Six-day release documentation rollup (2026-08-16)
+
+**Documentation**
+
+- Published [`docs/CHANGE_AUDIT_2026-08-10_TO_16.md`](docs/CHANGE_AUDIT_2026-08-10_TO_16.md),
+  the six-day frame around the existing three-day audit. It adds what a
+  three-day window could not show: the five routes added across the window with
+  their real permission gates, the full 26-revision Alembic route from
+  `20260810_0001` to the single head `20260814_0004`, the supply-loop and
+  restock data paths, a client-side storage map, and the 08-15 → 08-16 changes
+  that had no coverage anywhere. The
+  [three-day audit](docs/CHANGE_AUDIT_2026-08-12_TO_14.md) remains authoritative
+  for 08-12 → 08-14.
+- **A YouTube script told installers to do the thing that now loses their
+  work.** Script 02's Welcome Screen narration read _"the wizard auto-saves your
+  progress, so if you need to step away or your browser closes, you'll pick up
+  right where you left off."_ That became false on 2026-08-15, and it was already
+  misleading — the onboarding session has always expired after 30 minutes idle.
+  Nothing in the series had been recorded yet, which is the cheap moment to catch
+  this. Rewritten in `02-first-time-setup-and-onboarding.md` with the
+  one-tab/one-sitting caution and the refilled-form trap, plus an EDITOR note:
+  every timecode from Chapter 2 onward re-times (~45–70 seconds added).
+- The skills-testing guide had **no printing section at all**, though both print
+  routes shipped 2026-08-11. Added, with the disclosure rules that decide what a
+  printed scorecard may contain and why neither route is gated on
+  `training.manage`.
+- **Four trackers had drifted and are corrected at the source.** The Alembic
+  "Current Head" banner still named `20260812_0001` — four revisions and one
+  merge behind the real head, which is exactly the staleness that causes a new
+  migration to be chained onto a dead branch. `APPLICATION_PAGES.md` was missing
+  five routes that had been live for days (`/learning`, `/locations/qr-codes`,
+  `/scheduling/apparatus-inventory`, and the two skills-testing print pages).
+  `ONBOARDING.md` still described the session identifier as living in
+  `localStorage`. The public-page dark-mode troubleshooting entry still said
+  `body` carries the canvas.
+
+### Onboarding: the setup session no longer outlives the tab (2026-08-15)
+
+**Security**
+
+- **The onboarding session identifier moved from `localStorage` to
+  `sessionStorage`.** It is a bearer credential — presented as `X-Session-ID`, it
+  authorizes the mutations that create the organization, its stations and
+  apparatus, the IT team, and the first System Owner. In `localStorage` it
+  survived browser restarts indefinitely and was readable from every tab on the
+  origin, which on a shared or station-kiosk machine is a standing grant to
+  finish somebody else's installation. It now ends with the tab.
+- Identifiers written by the previous build are deleted on the first page load
+  of the new one, in both `loadSession()` and `clearSession()`, so a browser
+  carrying a stale identifier drops it rather than presenting it.
+- The CSRF companion (`onboarding_csrf_token`, `SameSite=Strict` cookie) and the
+  server's 30-minute sliding session TTL are unchanged. No endpoint, schema,
+  model, migration, or permission changed.
+
+**Edge cases worth teaching**
+
+- **Onboarding is now one tab, one sitting.** A second tab does not inherit the
+  wizard — it starts a new server session, and a step that needs an established
+  one answers `401` / `ONBD_SESSION_INVALID`. (A _duplicated_ tab does carry the
+  identifier, because Chrome and Firefox copy `sessionStorage` into duplicates.
+  That is browser behavior, not a supported resume path.)
+- **The wizard can look resumable when it is not.** The typed answers live in
+  `localStorage` under `onboarding-storage` and are untouched by this change, so
+  reopening `/onboarding` after a restart repaints them. The failure surfaces at
+  the next mutating step, not at the repaint. The recovery is to restart the
+  wizard, not to re-type.
+- Seeing "Onboarding has already been completed" (`403` /
+  `ONBD_ALREADY_COMPLETED`) is a _different_ condition — the install finished and
+  the operator should sign in, not restart setup.
+
+### Interface: the scrollbar gutter stopped showing through in dark mode (2026-08-15)
+
+**Fixed**
+
+- **A bright strip ran down the right edge of every page in dark mode.** The
+  dark-mode surface tokens are translucent white by design — they composite over
+  the themed gradient. `scrollbar-gutter: stable` reserves its gutter on `html`,
+  **outside the body box**, so painting the gradient on `body` left that strip
+  showing the browser's default canvas. The gradient now sits on `html`, which is
+  also what reserves the gutter, and `scrollbar-gutter` folds into the same rule.
+  Painting the gutter a flat fallback colour was the alternative and was
+  rejected: it trades the seam for a different seam.
+- `overscroll-behavior: none` deliberately stayed on `body` — iOS bounce
+  suppression is a body concern.
+
+**Known edge case (open, not fixed)**
+
+- The `@media print` reset forces a white background on `body, main, .dark` but
+  does not name `html`. Browsers do not print background images by default, so
+  ordinary printing is unaffected — but a user who enables "Background graphics"
+  to print a scorecard, blank skill sheet, barcode label or QR sign may now get
+  the gradient behind it. Recorded in `docs/KNOWN_LIMITATIONS.md` for an owner
+  decision; it has an ink cost either way.
+
+**Screenshot impact**
+
+- Because this is a global rule, **every full-window dark-mode capture taken
+  before 2026-08-15 may show the unpainted gutter**, in every guide rather than
+  one module's. Triage by looking at the right edge of each image — light-mode
+  captures and captures cropped inside the content column are unaffected. Queued
+  in `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ### YouTube scripts: August release changes are written into the takes (2026-08-14)
 
 **Documentation**
@@ -22,7 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   intentionally a recording-production task because narration pacing determines
   them; no behavioral content remains only in `SCRIPT_CURRENCY.md`.
 
-
 ### Events: reminder audience and check-in teaching update (2026-08-14)
 
 **Changed**
@@ -34,7 +135,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   training/schema references and documented Strict/Window behavior, early-member
   notices, guest blocking, actual-time boundaries, and the overlapping-meeting
   15-minute exception. Added exact screenshot and YouTube B-roll requirements.
-
 
 ### Security, privacy, permissions, and dashboard follow-up (2026-08-14)
 
@@ -157,7 +257,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ballot_template_created` / `ballot_template_deleted`.
 
   Three design decisions worth knowing:
-
   - **Configuration only, by construction.** A template snapshots ballot
     _structure_ — never candidates, voter rosters, votes, tokens, or
     attendance. The create schema is `extra="forbid"`, so a payload that tries
@@ -507,7 +606,6 @@ reading it. This batch:
   page held its tab in plain `useState('templates')`, so `?tab=footers` — or any
   other value — landed on Templates. Two costs, and the second is what made this
   worth fixing rather than noting:
-
   - A secretary could not send a colleague a link to the **footer library**,
     which is the tab a colleague is most likely to be pointed at.
   - The screenshot harness could only ever capture the default tab. That is
@@ -1403,7 +1501,6 @@ reported by a test.
   plausible success rather than an error it can adapt to.
 
   **Edge cases worth knowing:**
-
   - **Guests get the organizer's check-in window, minus the early-arrival
     grace.** A member may check in before a flexible window opens because a
     member checking in early is identifiable and correctable. An anonymous early
@@ -1445,7 +1542,6 @@ reported by a test.
 
 - **A cleared field came back after a reload, with a success toast in between.**
   Both ends of the request dropped the clear, independently:
-
   - **Backend.** Every update method guarded its writes with
     `if value is not None: setattr(...)`. Update payloads are `exclude_unset`
     dumps, so a null arriving at the service is an _explicit_ null — the user
@@ -1516,7 +1612,6 @@ reported by a test.
 
   All 33 `window.confirm` call sites across 23 files, and all four
   `window.prompt` call sites, now use in-app dialogs. Notably:
-
   - **Voiding a paper-ballot batch** also dropped any reason shorter than three
     characters the same silent way — a secretary who typed "PM" got no batch
     voided and no message.
@@ -8233,16 +8328,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario | Behavior |
+| Scenario                                      | Behavior                                                                         |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
-| Template with bare string positions | Backward-compatible: defaults to `required=true` |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
-| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
-| All positions filled via bulk assign | "Fill All Open" button hidden |
-| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
-| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
+| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
+| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
+| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
+| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
+| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
+| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 
