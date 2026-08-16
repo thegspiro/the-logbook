@@ -23,6 +23,7 @@ from app.models.training import (
     TrainingProgram,
 )
 from app.models.user import Organization, User
+from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
 
 # Mapping from training program target_position values to the shift
@@ -547,6 +548,7 @@ class ShiftEligibilityService:
         auto_generate_weeks: Optional[int] = None,
         require_end_of_shift_checks: Optional[bool] = None,
         restrict_checkin_to_assigned: Optional[bool] = None,
+        enforce_evoc: Optional[bool] = None,
     ) -> dict:
         """Update scheduling eligibility settings on the organization."""
         org = await self._get_org(organization_id)
@@ -577,6 +579,8 @@ class ShiftEligibilityService:
             scheduling["require_end_of_shift_checks"] = require_end_of_shift_checks
         if restrict_checkin_to_assigned is not None:
             scheduling["restrict_checkin_to_assigned"] = restrict_checkin_to_assigned
+        if enforce_evoc is not None:
+            scheduling["enforce_evoc"] = enforce_evoc
 
         settings["scheduling"] = scheduling
         org.settings = settings
@@ -587,30 +591,54 @@ class ShiftEligibilityService:
         return (org.settings or {}).get("scheduling", {})
 
     # ------------------------------------------------------------------
-    # EVOC-aware driver eligibility (soft warnings)
+    # EVOC-aware driver eligibility (enforcement + soft warnings)
     # ------------------------------------------------------------------
 
-    async def get_driver_assignment_warnings(
+    def get_evoc_enforcement(self, org: Organization) -> bool:
+        """Whether an EVOC shortfall blocks a driver assignment outright.
+
+        Defaults to **True**. That is safe to switch on for existing orgs
+        because the check is inert until someone deliberately sets
+        ``required_evoc_level_id`` on an apparatus — an admin act. An org that
+        genuinely wants advisory-only behavior turns it off explicitly.
+        """
+        sched = self._get_scheduling_settings(org)
+        return bool(sched.get("enforce_evoc", True))
+
+    async def evaluate_driver_assignment(
         self,
         user_id: str,
         shift_id: str,
         organization_id: str,
-    ) -> List[Dict[str, Any]]:
-        """Check EVOC eligibility for a driver assignment on a shift.
+        on_date: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        """Decide whether a member may take the driver seat on a shift.
 
-        If the shift has an apparatus_id and the user is being assigned
-        as a driver, checks whether the user holds the required EVOC
-        level. Returns a list of warning dicts (empty if no issues).
+        Returns ``allowed``, a ``blocked_reason`` when it is not, any soft
+        ``warnings``, and the ``exception`` that permitted an otherwise-blocked
+        assignment so the caller can surface its operating restrictions.
 
-        This is a soft check — warnings do not block assignment.
+        The single source of truth for driver enforcement. Both the member
+        self-signup path and the officer assignment path route through it, so
+        there is one place where the rule can be read and no second
+        implementation to drift.
         """
+        outcome: Dict[str, Any] = {
+            "allowed": True,
+            "blocked_reason": None,
+            "warnings": [],
+            "exception": None,
+        }
+
         shift = await self._get_shift(shift_id, organization_id)
         if not shift:
-            return []
+            return outcome
 
         apparatus_id = getattr(shift, "apparatus_id", None)
         if not apparatus_id:
-            return []
+            # No apparatus on the shift means no EVOC requirement to check
+            # against — the position is a label, not a seat behind a wheel.
+            return outcome
 
         evoc_service = EvocLevelService(self.db)
         result = await evoc_service.check_driver_evoc_eligibility(
@@ -618,15 +646,75 @@ class ShiftEligibilityService:
             apparatus_id=apparatus_id,
             organization_id=organization_id,
         )
+        if result["eligible"]:
+            return outcome
 
-        warnings: List[Dict[str, Any]] = []
-        if not result["eligible"] and result["warning"]:
-            warnings.append(
+        warning_text = result["warning"] or "EVOC requirement not met."
+        outcome["warnings"] = [
+            {
+                "type": "evoc_mismatch",
+                "message": warning_text,
+                "severity": "warning",
+            }
+        ]
+
+        org = await self._get_org(organization_id)
+        if not org or not self.get_evoc_enforcement(org):
+            return outcome
+
+        # Blocked on certification — unless a chief has approved an exception
+        # covering this member, this unit, and this date.
+        exception = await DriverExceptionService(self.db).find_active_exception(
+            user_id=user_id,
+            organization_id=organization_id,
+            apparatus_id=str(apparatus_id),
+            on_date=on_date or getattr(shift, "shift_date", None),
+        )
+        if exception:
+            outcome["exception"] = exception
+            outcome["warnings"] = [
                 {
-                    "type": "evoc_mismatch",
-                    "message": result["warning"],
+                    "type": "evoc_exception",
+                    "message": (
+                        f"{warning_text} Driving under a chief-approved "
+                        f"exception valid through "
+                        f"{exception.valid_until.isoformat()}."
+                        + (
+                            f" Restrictions: {exception.restrictions}"
+                            if exception.restrictions
+                            else ""
+                        )
+                    ),
                     "severity": "warning",
                 }
-            )
+            ]
+            return outcome
 
-        return warnings
+        outcome["allowed"] = False
+        outcome["blocked_reason"] = (
+            f"{warning_text} Driver assignment is blocked until the "
+            "certification is on file, or a chief approves a driver "
+            "qualification exception for this member."
+        )
+        return outcome
+
+    async def get_driver_assignment_warnings(
+        self,
+        user_id: str,
+        shift_id: str,
+        organization_id: str,
+    ) -> List[Dict[str, Any]]:
+        """Advisory EVOC warnings for a driver assignment that already passed.
+
+        Thin wrapper over ``evaluate_driver_assignment`` — the decision lives
+        there so enforcement and display cannot describe the same assignment
+        differently. Reaching this method means the assignment was permitted,
+        so any warning here is informational: either enforcement is off, or a
+        chief-approved exception carried it.
+        """
+        outcome = await self.evaluate_driver_assignment(
+            user_id=user_id,
+            shift_id=shift_id,
+            organization_id=organization_id,
+        )
+        return outcome["warnings"]

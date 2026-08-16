@@ -2356,6 +2356,7 @@ async def get_scheduling_feature_settings(
         restrict_checkin_to_assigned=bool(
             lifecycle.get("restrict_checkin_to_assigned", False)
         ),
+        enforce_evoc=service.get_evoc_enforcement(org),
     )
 
 
@@ -2402,6 +2403,7 @@ async def update_scheduling_feature_settings(
                 if "restrict_checkin_to_assigned" in fields_set
                 else None
             ),
+            enforce_evoc=(data.enforce_evoc if "enforce_evoc" in fields_set else None),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -2417,6 +2419,7 @@ async def update_scheduling_feature_settings(
         restrict_checkin_to_assigned=bool(
             result.get("restrict_checkin_to_assigned", False)
         ),
+        enforce_evoc=bool(result.get("enforce_evoc", True)),
     )
 
 

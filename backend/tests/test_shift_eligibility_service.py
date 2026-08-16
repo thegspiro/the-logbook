@@ -8,6 +8,7 @@ defined positions, the training target_position mapping, settings updates
 (deepcopy-safe), and the EVOC soft-warning path. DB mocked; no MySQL.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -206,8 +207,13 @@ class TestDriverWarnings:
         assert out == []
 
     async def test_evoc_mismatch_produces_warning(self, monkeypatch):
+        # Advisory mode. With enforcement on (the default) this assignment
+        # would be blocked outright rather than warned about, and the caller
+        # would never reach the warnings — see TestEvaluateDriverAssignment.
         shift = _shift(["driver"], apparatus_id="ap1")
-        svc = ShiftEligibilityService(_db([_one(shift)]))
+        svc = ShiftEligibilityService(
+            _db([_one(shift), _one(_org({"enforce_evoc": False}))])
+        )
 
         async def _check(**kwargs):
             return {"eligible": False, "warning": "Needs EVOC II"}
@@ -380,6 +386,139 @@ class TestPositionRoster:
         )
         out = await ShiftEligibilityService(db).get_position_roster("org-1", "driver")
         assert out["members"] == []
+
+
+class TestEvaluateDriverAssignment:
+    """The single decision point for driver enforcement.
+
+    A member without the EVOC level the apparatus requires does not take the
+    wheel — unless a chief has approved a time-boxed exception. Both the
+    self-signup and officer-assignment paths route through this method, so
+    these tests pin the behavior both inherit.
+    """
+
+    def _svc(self, monkeypatch, db, *, eligible, warning=None, exception=None):
+        monkeypatch.setattr(
+            "app.services.shift_eligibility_service.EvocLevelService",
+            lambda _db: SimpleNamespace(
+                check_driver_evoc_eligibility=AsyncMock(
+                    return_value={
+                        "eligible": eligible,
+                        "warning": warning,
+                        "required_level": None,
+                        "user_level": None,
+                    }
+                )
+            ),
+        )
+        monkeypatch.setattr(
+            "app.services.shift_eligibility_service.DriverExceptionService",
+            lambda _db: SimpleNamespace(
+                find_active_exception=AsyncMock(return_value=exception)
+            ),
+        )
+        return ShiftEligibilityService(db)
+
+    async def test_shift_without_apparatus_is_never_blocked(self):
+        # No apparatus means no EVOC requirement to check — the position is a
+        # label, not a seat behind a wheel.
+        db = _db([_one(_shift(["driver"]))])
+        out = await ShiftEligibilityService(db).evaluate_driver_assignment(
+            "u1", "sh1", "org-1"
+        )
+        assert out["allowed"] is True
+        assert out["warnings"] == []
+
+    async def test_certified_driver_is_allowed_with_no_warnings(self, monkeypatch):
+        db = _db([_one(_shift(["driver"], apparatus_id="ap1"))])
+        svc = self._svc(monkeypatch, db, eligible=True)
+        out = await svc.evaluate_driver_assignment("u1", "sh1", "org-1")
+        assert out["allowed"] is True
+        assert out["warnings"] == []
+
+    async def test_uncertified_driver_is_blocked_by_default(self, monkeypatch):
+        # Enforcement defaults on; no org setting present.
+        db = _db([_one(_shift(["driver"], apparatus_id="ap1")), _one(_org())])
+        svc = self._svc(
+            monkeypatch, db, eligible=False, warning="Requires EVOC Level 3."
+        )
+        out = await svc.evaluate_driver_assignment("u1", "sh1", "org-1")
+
+        assert out["allowed"] is False
+        assert "Requires EVOC Level 3." in out["blocked_reason"]
+        # The message must say what to do about it.
+        assert "exception" in out["blocked_reason"]
+
+    async def test_enforcement_can_be_turned_off_leaving_a_warning(self, monkeypatch):
+        db = _db(
+            [
+                _one(_shift(["driver"], apparatus_id="ap1")),
+                _one(_org({"enforce_evoc": False})),
+            ]
+        )
+        svc = self._svc(
+            monkeypatch, db, eligible=False, warning="Requires EVOC Level 3."
+        )
+        out = await svc.evaluate_driver_assignment("u1", "sh1", "org-1")
+
+        assert out["allowed"] is True
+        assert out["warnings"][0]["type"] == "evoc_mismatch"
+
+    async def test_approved_exception_permits_the_assignment(self, monkeypatch):
+        exception = SimpleNamespace(
+            id="exc-1",
+            valid_until=date(2026, 9, 5),
+            restrictions="Parade route only, no emergency response.",
+        )
+        db = _db([_one(_shift(["driver"], apparatus_id="ap1")), _one(_org())])
+        svc = self._svc(
+            monkeypatch,
+            db,
+            eligible=False,
+            warning="Requires EVOC Level 3.",
+            exception=exception,
+        )
+        out = await svc.evaluate_driver_assignment("u1", "sh1", "org-1")
+
+        assert out["allowed"] is True
+        assert out["exception"] is exception
+        # The officer must see the limits the exception was granted under.
+        assert out["warnings"][0]["type"] == "evoc_exception"
+        assert "Parade route only" in out["warnings"][0]["message"]
+        assert "2026-09-05" in out["warnings"][0]["message"]
+
+    async def test_missing_shift_does_not_block(self):
+        db = _db([_one(None)])
+        out = await ShiftEligibilityService(db).evaluate_driver_assignment(
+            "u1", "nope", "org-1"
+        )
+        assert out["allowed"] is True
+
+    async def test_warnings_wrapper_reports_the_same_decision(self, monkeypatch):
+        # get_driver_assignment_warnings delegates, so enforcement and display
+        # cannot describe the same assignment differently.
+        db = _db(
+            [
+                _one(_shift(["driver"], apparatus_id="ap1")),
+                _one(_org({"enforce_evoc": False})),
+            ]
+        )
+        svc = self._svc(monkeypatch, db, eligible=False, warning="Requires EVOC 3.")
+        warnings = await svc.get_driver_assignment_warnings("u1", "sh1", "org-1")
+        assert warnings[0]["message"] == "Requires EVOC 3."
+
+
+class TestEvocEnforcementSetting:
+    def test_defaults_to_enforcing(self):
+        # Safe to default on: the check is inert until an admin sets
+        # required_evoc_level_id on an apparatus.
+        svc = ShiftEligibilityService(_db([]))
+        assert svc.get_evoc_enforcement(_org()) is True
+        assert svc.get_evoc_enforcement(_org({})) is True
+
+    def test_can_be_disabled_explicitly(self):
+        svc = ShiftEligibilityService(_db([]))
+        assert svc.get_evoc_enforcement(_org({"enforce_evoc": False})) is False
 
 
 if __name__ == "__main__":  # pragma: no cover

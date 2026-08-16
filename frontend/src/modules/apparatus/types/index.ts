@@ -624,6 +624,68 @@ export interface EvocLevelListItem {
   code: string;
 }
 
+// =============================================================================
+// Driver Qualification Exception
+// =============================================================================
+
+export const DriverExceptionStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DENIED: 'denied',
+  REVOKED: 'revoked',
+} as const;
+export type DriverExceptionStatus = (typeof DriverExceptionStatus)[keyof typeof DriverExceptionStatus];
+
+export const DriverExceptionReason = {
+  PARADE: 'parade',
+  SPECIAL_EVENT: 'special_event',
+  NON_EMERGENCY_TRANSPORT: 'non_emergency_transport',
+  MUTUAL_AID: 'mutual_aid',
+  OTHER: 'other',
+} as const;
+export type DriverExceptionReason = (typeof DriverExceptionReason)[keyof typeof DriverExceptionReason];
+
+export const DRIVER_EXCEPTION_REASON_LABELS: Record<string, string> = {
+  parade: 'Parade',
+  special_event: 'Special event',
+  non_emergency_transport: 'Non-emergency transport',
+  mutual_aid: 'Mutual aid',
+  other: 'Other',
+};
+
+export interface DriverException {
+  id: string;
+  organizationId: string;
+  userId: string;
+  userName: string | null;
+  /** Null means the exception covers any apparatus. */
+  apparatusId: string | null;
+  apparatusUnitNumber: string | null;
+  reason: string;
+  justification: string;
+  restrictions: string | null;
+  validFrom: string;
+  validUntil: string;
+  status: DriverExceptionStatus;
+  requestedBy: string | null;
+  requestedByName: string | null;
+  requestedAt: string | null;
+  reviewedBy: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewNotes: string | null;
+}
+
+export interface DriverExceptionCreate {
+  userId: string;
+  apparatusId?: string | undefined;
+  reason: string;
+  justification: string;
+  restrictions?: string | undefined;
+  validFrom: string;
+  validUntil: string;
+}
+
 export interface EvocEligibilityCheck {
   eligible: boolean;
   warning: string | null;

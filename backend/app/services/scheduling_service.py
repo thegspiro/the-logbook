@@ -2395,6 +2395,43 @@ class SchedulingService:
     # Shift Assignment Management
     # ============================================
 
+    @staticmethod
+    def _is_driver_position(position: Any) -> bool:
+        """Whether a position value names the driver seat."""
+        if position is None:
+            return False
+        value = getattr(position, "value", position)
+        return str(value).strip().lower() == "driver"
+
+    async def _check_driver_qualification(
+        self,
+        user_id: str,
+        shift_id: str,
+        organization_id: str,
+        position: Any,
+    ) -> Optional[str]:
+        """Return a blocking message when a member may not drive this shift.
+
+        A safety control, not a convenience check: without the EVOC level the
+        apparatus requires, the member does not take the wheel. The sanctioned
+        override is a chief-approved ``DriverException``, which
+        ``evaluate_driver_assignment`` consults — nothing here needs to know
+        about it beyond honouring the answer.
+        """
+        if not self._is_driver_position(position):
+            return None
+
+        # Imported here rather than at module scope: the eligibility service
+        # imports scheduling models, and a top-level import closes the cycle.
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        outcome = await ShiftEligibilityService(self.db).evaluate_driver_assignment(
+            user_id=user_id,
+            shift_id=shift_id,
+            organization_id=organization_id,
+        )
+        return None if outcome["allowed"] else outcome["blocked_reason"]
+
     async def create_assignment(
         self,
         organization_id: UUID,
@@ -2516,6 +2553,20 @@ class SchedulingService:
                 )
                 if leaves:
                     return None, "Member is on leave of absence for this date"
+
+            # Driver qualification. Enforced here rather than at the endpoints
+            # so member self-signup and officer assignment cannot diverge —
+            # both paths reach this one call, and a future third path inherits
+            # the check for free.
+            if user_id:
+                driver_error = await self._check_driver_qualification(
+                    user_id=str(user_id),
+                    shift_id=str(shift_id),
+                    organization_id=str(organization_id),
+                    position=assignment_data.get("position"),
+                )
+                if driver_error:
+                    return None, driver_error
 
             assignment = ShiftAssignment(
                 organization_id=organization_id,
@@ -2733,6 +2784,22 @@ class SchedulingService:
                         "Confirmation must be done by the member; "
                         "it cannot be set on their behalf.",
                     )
+
+            # Re-check qualification when an edit moves someone into the
+            # driver seat. Without this, an officer blocked at create time
+            # could assign the member as a firefighter and PATCH the position
+            # to driver — the same unqualified driver, one request later.
+            if "position" in update_data and self._is_driver_position(
+                update_data.get("position")
+            ):
+                driver_error = await self._check_driver_qualification(
+                    user_id=str(assignment.user_id),
+                    shift_id=str(assignment.shift_id),
+                    organization_id=str(organization_id),
+                    position=update_data.get("position"),
+                )
+                if driver_error:
+                    return None, driver_error
 
             old_status = assignment.assignment_status
             position = assignment.position

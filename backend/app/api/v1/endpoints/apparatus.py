@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
@@ -69,6 +70,10 @@ from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Ap
     ApparatusTypeResponse,
     ApparatusTypeUpdate,
     ApparatusUpdate,
+    DriverExceptionCreate,
+    DriverExceptionResponse,
+    DriverExceptionReview,
+    DriverExceptionRevoke,
     EvocLevelCreate,
     EvocLevelResponse,
     EvocLevelUpdate,
@@ -77,6 +82,7 @@ from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Ap
 from app.schemas.documents import FoldersListResponse
 from app.services.apparatus_service import ApparatusService
 from app.services.documents_service import DocumentsService
+from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
 
 router = APIRouter()
@@ -2908,6 +2914,239 @@ async def check_evoc_eligibility(
             else None
         ),
     }
+
+
+# ============================================================================
+# Driver Qualification Exceptions
+# ============================================================================
+
+
+def _exception_to_response(exc) -> DriverExceptionResponse:
+    """Flatten the eager-loaded relationships into displayable names."""
+    return DriverExceptionResponse(
+        id=exc.id,
+        organization_id=exc.organization_id,
+        user_id=exc.user_id,
+        user_name=exc.user.full_name if exc.user else None,
+        apparatus_id=exc.apparatus_id,
+        apparatus_unit_number=(exc.apparatus.unit_number if exc.apparatus else None),
+        reason=(exc.reason.value if hasattr(exc.reason, "value") else str(exc.reason)),
+        justification=exc.justification,
+        restrictions=exc.restrictions,
+        valid_from=exc.valid_from,
+        valid_until=exc.valid_until,
+        status=(exc.status.value if hasattr(exc.status, "value") else str(exc.status)),
+        requested_by=exc.requested_by,
+        requested_by_name=(exc.requester.full_name if exc.requester else None),
+        requested_at=exc.requested_at,
+        reviewed_by=exc.reviewed_by,
+        reviewed_by_name=(exc.reviewer.full_name if exc.reviewer else None),
+        reviewed_at=exc.reviewed_at,
+        review_notes=exc.review_notes,
+    )
+
+
+@router.get(
+    "/driver-exceptions",
+    response_model=list[DriverExceptionResponse],
+    tags=["Driver Exceptions"],
+)
+async def list_driver_exceptions(
+    status_filter: str | None = Query(
+        None, alias="status", description="pending, approved, denied, or revoked"
+    ),
+    user_id: str | None = Query(None, description="Filter by member"),
+    include_expired: bool = Query(
+        False, description="Include exceptions whose window has closed"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage", "scheduling.manage")
+    ),
+):
+    """
+    List driver qualification exceptions for the organization.
+
+    **Permissions required:** apparatus.view, apparatus.manage, or
+    scheduling.manage
+    """
+    service = DriverExceptionService(db)
+    exceptions = await service.list_exceptions(
+        organization_id=current_user.organization_id,
+        status=status_filter,
+        user_id=user_id,
+        include_expired=include_expired,
+    )
+    return [_exception_to_response(exc) for exc in exceptions]
+
+
+@router.post(
+    "/driver-exceptions",
+    response_model=DriverExceptionResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Driver Exceptions"],
+)
+async def request_driver_exception(
+    data: DriverExceptionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("scheduling.assign", "scheduling.manage", "apparatus.manage")
+    ),
+):
+    """
+    Request an exception to the EVOC driving requirement.
+
+    Creates a **pending** request only — it confers nothing until a chief
+    approves it, and the approver must be someone other than the requester.
+
+    **Permissions required:** scheduling.assign, scheduling.manage, or
+    apparatus.manage
+    """
+    service = DriverExceptionService(db)
+    try:
+        exception = await service.request_exception(
+            organization_id=current_user.organization_id,
+            requested_by=str(current_user.id),
+            data=data.model_dump(),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="driver_exception_requested",
+        event_category="apparatus",
+        severity="info",
+        event_data={
+            "exception_id": str(exception.id),
+            "subject_user_id": str(exception.user_id),
+            "apparatus_id": str(exception.apparatus_id or ""),
+            "reason": data.reason,
+            "valid_from": data.valid_from.isoformat(),
+            "valid_until": data.valid_until.isoformat(),
+        },
+        user_id=str(current_user.id),
+    )
+
+    refreshed = await service.get_exception(
+        str(exception.id), current_user.organization_id
+    )
+    return _exception_to_response(refreshed or exception)
+
+
+@router.post(
+    "/driver-exceptions/{exception_id}/review",
+    response_model=DriverExceptionResponse,
+    tags=["Driver Exceptions"],
+)
+async def review_driver_exception(
+    exception_id: str,
+    data: DriverExceptionReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.approve_driver_exception")
+    ),
+):
+    """
+    Approve or deny a pending driver qualification exception.
+
+    Approving puts a member without the required EVOC certification behind the
+    wheel, so this is gated on a chief-level permission and refuses when the
+    reviewer is the requester or the member the exception is for.
+
+    **Permissions required:** apparatus.approve_driver_exception
+    """
+    service = DriverExceptionService(db)
+    try:
+        exception = await service.review_exception(
+            exception_id=exception_id,
+            organization_id=current_user.organization_id,
+            reviewer_id=str(current_user.id),
+            approve=data.approve,
+            review_notes=data.review_notes,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type=(
+            "driver_exception_approved" if data.approve else "driver_exception_denied"
+        ),
+        event_category="apparatus",
+        severity="warning" if data.approve else "info",
+        event_data={
+            "exception_id": str(exception.id),
+            "subject_user_id": str(exception.user_id),
+            "apparatus_id": str(exception.apparatus_id or ""),
+            "valid_from": exception.valid_from.isoformat(),
+            "valid_until": exception.valid_until.isoformat(),
+            "requested_by": str(exception.requested_by or ""),
+        },
+        user_id=str(current_user.id),
+    )
+
+    refreshed = await service.get_exception(
+        str(exception.id), current_user.organization_id
+    )
+    return _exception_to_response(refreshed or exception)
+
+
+@router.post(
+    "/driver-exceptions/{exception_id}/revoke",
+    response_model=DriverExceptionResponse,
+    tags=["Driver Exceptions"],
+)
+async def revoke_driver_exception(
+    exception_id: str,
+    data: DriverExceptionRevoke,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.approve_driver_exception")
+    ),
+):
+    """
+    Withdraw an approved exception before its end date.
+
+    **Permissions required:** apparatus.approve_driver_exception
+    """
+    service = DriverExceptionService(db)
+    try:
+        exception = await service.revoke_exception(
+            exception_id=exception_id,
+            organization_id=current_user.organization_id,
+            reviewer_id=str(current_user.id),
+            review_notes=data.review_notes,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="driver_exception_revoked",
+        event_category="apparatus",
+        severity="info",
+        event_data={
+            "exception_id": str(exception.id),
+            "subject_user_id": str(exception.user_id),
+            "apparatus_id": str(exception.apparatus_id or ""),
+        },
+        user_id=str(current_user.id),
+    )
+
+    refreshed = await service.get_exception(
+        str(exception.id), current_user.organization_id
+    )
+    return _exception_to_response(refreshed or exception)
 
 
 # ============================================================================

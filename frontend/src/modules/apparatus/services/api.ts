@@ -42,6 +42,8 @@ import type {
   EvocLevelCreate,
   EvocLevelUpdate,
   EvocEligibilityCheck,
+  DriverException,
+  DriverExceptionCreate,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -487,6 +489,43 @@ export const evocLevelService = {
 
   async checkEligibility(apparatusId: string, userId: string): Promise<EvocEligibilityCheck> {
     const response = await api.get<EvocEligibilityCheck>(`/apparatus/evoc-check/${apparatusId}/${userId}`);
+    return response.data;
+  },
+};
+
+// =============================================================================
+// Driver Qualification Exceptions
+// =============================================================================
+
+export const driverExceptionService = {
+  async list(params?: { status?: string; userId?: string; includeExpired?: boolean }): Promise<DriverException[]> {
+    const response = await api.get<DriverException[]>('/apparatus/driver-exceptions', {
+      params: {
+        status: params?.status,
+        user_id: params?.userId,
+        include_expired: params?.includeExpired ?? false,
+      },
+    });
+    return asArray(response.data);
+  },
+
+  async request(data: DriverExceptionCreate): Promise<DriverException> {
+    const response = await api.post<DriverException>('/apparatus/driver-exceptions', data);
+    return response.data;
+  },
+
+  async review(exceptionId: string, approve: boolean, reviewNotes?: string): Promise<DriverException> {
+    const response = await api.post<DriverException>(`/apparatus/driver-exceptions/${exceptionId}/review`, {
+      approve,
+      reviewNotes: reviewNotes || undefined,
+    });
+    return response.data;
+  },
+
+  async revoke(exceptionId: string, reviewNotes?: string): Promise<DriverException> {
+    const response = await api.post<DriverException>(`/apparatus/driver-exceptions/${exceptionId}/revoke`, {
+      reviewNotes: reviewNotes || undefined,
+    });
     return response.data;
   },
 };

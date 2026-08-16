@@ -1022,6 +1022,85 @@ class EvocLevelResponse(EvocLevelBase):
 
 
 # =============================================================================
+# Driver Qualification Exception Schemas
+# =============================================================================
+
+
+class DriverExceptionCreate(BaseModel):
+    """Request a chief-approved exception to the EVOC driving requirement."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    user_id: str = Field(..., description="Member the exception is for")
+    apparatus_id: Optional[str] = Field(
+        None, description="Specific apparatus, or null for any"
+    )
+    reason: str = Field(
+        default="parade",
+        description="parade, special_event, non_emergency_transport, "
+        "mutual_aid, or other",
+    )
+    justification: str = Field(..., min_length=1, max_length=2000)
+    restrictions: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description="Operating limits, e.g. 'parade route only, no emergency "
+        "response'",
+    )
+    valid_from: date
+    valid_until: date
+
+    @model_validator(mode="after")
+    def check_dates(self):
+        if self.valid_until < self.valid_from:
+            raise ValueError("The end date cannot be before the start date")
+        return self
+
+
+class DriverExceptionReview(BaseModel):
+    """Approve or deny a pending exception request."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    approve: bool
+    review_notes: Optional[str] = Field(None, max_length=2000)
+
+
+class DriverExceptionRevoke(BaseModel):
+    """Withdraw an approved exception before its end date."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    review_notes: Optional[str] = Field(None, max_length=2000)
+
+
+class DriverExceptionResponse(BaseModel):
+    """An exception request with the names needed to review it."""
+
+    id: str
+    organization_id: str
+    user_id: str
+    user_name: Optional[str] = None
+    apparatus_id: Optional[str] = None
+    apparatus_unit_number: Optional[str] = None
+    reason: str
+    justification: str
+    restrictions: Optional[str] = None
+    valid_from: date
+    valid_until: date
+    status: str
+    requested_by: Optional[str] = None
+    requested_by_name: Optional[str] = None
+    requested_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None
+    reviewed_by_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_notes: Optional[str] = None
+
+    model_config = _response_config
+
+
+# =============================================================================
 # Apparatus Operator Schemas
 # =============================================================================
 

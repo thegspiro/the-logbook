@@ -1808,3 +1808,84 @@ Only _current_ operator records count (active, certified, unexpired), matching
 ---
 
 _Last Updated: August 16, 2026_
+
+## EVOC Enforcement & Chief-Approved Driver Exceptions (2026-08-16)
+
+The EVOC check was advisory: `_attach_assignment_warnings` attached a
+non-blocking `evoc_warnings` entry and the assignment went through regardless.
+An officer could seat any member as the driver of any apparatus. It is now a
+hard block with a sanctioned, auditable override.
+
+### Enforcement
+
+`ShiftEligibilityService.evaluate_driver_assignment()` is the single decision
+point, returning `allowed`, `blocked_reason`, `warnings`, and the `exception`
+that carried an otherwise-blocked assignment.
+
+The block is applied in **`SchedulingService.create_assignment`**, not at the
+endpoints. Member self-signup and officer assignment both reach that one call,
+so the rule is written once and a future third write path inherits it.
+`update_assignment` re-checks when an edit moves someone into the driver seat —
+otherwise an officer blocked at create time could assign the member as a
+firefighter and PATCH the position to `driver`.
+
+`get_driver_assignment_warnings()` is now a thin wrapper over the same
+evaluation, so enforcement and display cannot describe one assignment
+differently.
+
+**`org.settings.scheduling.enforce_evoc` defaults to `true`.** Safe to switch on
+for existing organizations because the check is inert until an admin
+deliberately sets `required_evoc_level_id` on an apparatus. Turning it off
+downgrades the block to the previous advisory warning; the toggle is in
+Scheduling → Settings → General.
+
+### Driver exceptions
+
+New `driver_exceptions` table and `/api/v1/apparatus/driver-exceptions`
+endpoints, surfaced at `/scheduling/qualifications` under the **Driver
+exceptions** tab. Four controls make the override trustworthy:
+
+| Control                                                            | Where                                |
+| ------------------------------------------------------------------ | ------------------------------------ |
+| A request grants nothing — approval is a separate act              | `status` starts `pending`            |
+| Requester ≠ approver, and the beneficiary cannot approve their own | `assert_different_person`, twice     |
+| Chief-level permission to approve                                  | `apparatus.approve_driver_exception` |
+| Bounded validity — `valid_until` required, ≤ 366 days              | `MAX_VALIDITY_DAYS`                  |
+
+`apparatus.approve_driver_exception` is granted by default to fire chief,
+deputy chief, and assistant chief only — deliberately not to captain,
+lieutenant, or the president, who hold `apparatus.manage`. Authorizing an
+uncertified driver is an operational safety call.
+
+Request, approve, deny, and revoke are audit-logged (`driver_exception_*`,
+category `apparatus`; approval logs at `warning` severity). Revocation
+deliberately has **no** separation-of-duties bar: withdrawing permission is
+always the safe direction, and requiring a second signature to take an unsafe
+driver off a truck would be a hazard rather than a control.
+
+A NULL `apparatus_id` means "any apparatus" — the broader grant, so the request
+form asks for a unit first and the enforcement lookup prefers a unit-specific
+exception over a blanket one when both match, surfacing the narrower
+restrictions.
+
+### Edge Cases
+
+| Scenario                                             | Behavior                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------ |
+| Uncertified member assigned as driver                | 400 with the shortfall and how to resolve it                 |
+| Uncertified member self-signs up as driver           | Same block, same message                                     |
+| Assigned as firefighter, then PATCHed to driver      | Re-checked and blocked                                       |
+| Shift has no apparatus                               | No EVOC requirement to check; never blocked                  |
+| Apparatus has no `required_evoc_level_id`            | Never blocked                                                |
+| `enforce_evoc` off                                   | Advisory warning only, as before                             |
+| Approved exception covers the member, unit, and date | Allowed, with the restrictions surfaced to the officer       |
+| Exception pending, denied, or revoked                | Block stays in place                                         |
+| Exception expired before the shift date              | Block stays in place                                         |
+| Chief approves their own request, or one naming them | 400 (separation of duties); the UI hides the button          |
+| Re-deciding an already approved/denied request       | 400 — raise a new request                                    |
+| Approving a request whose window already closed      | 400                                                          |
+| Exception's apparatus deleted                        | `SET NULL` — widens to any apparatus, keeps the audit record |
+
+---
+
+_Last Updated: August 16, 2026_

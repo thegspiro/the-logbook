@@ -152,6 +152,8 @@ export interface SchedulingFeatureSettings {
   auto_generate_weeks: number;
   require_end_of_shift_checks: boolean;
   restrict_checkin_to_assigned: boolean;
+  /** Block seating a driver who lacks the apparatus's required EVOC level. */
+  enforce_evoc: boolean;
 }
 
 export interface PlatoonMember {

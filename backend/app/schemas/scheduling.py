@@ -836,6 +836,11 @@ class SchedulingFeatureSettings(BaseModel):
     # Lifecycle enforcement
     require_end_of_shift_checks: bool = False
     restrict_checkin_to_assigned: bool = False
+    # Driver qualification. Defaults on: a member without the EVOC level an
+    # apparatus requires cannot be seated as its driver. Inert until an admin
+    # sets required_evoc_level_id on an apparatus, so switching it on for
+    # existing orgs changes nothing until they opt into the requirement.
+    enforce_evoc: bool = True
 
 
 # ============================================
