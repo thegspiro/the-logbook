@@ -1520,14 +1520,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             </div>
           )}
 
-          {/* Pass-down from this shift */}
-          {shift.pass_down_notes && (
-            <div className="bg-theme-surface border-theme-surface-border rounded-lg border px-3 py-2">
-              <p className="text-theme-text-secondary mb-0.5 text-xs font-semibold">Pass-down for next crew</p>
-              <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{shift.pass_down_notes}</p>
-            </div>
-          )}
-
           {/* Edit Form */}
           {isEditing && (
             <div className="space-y-3 rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">

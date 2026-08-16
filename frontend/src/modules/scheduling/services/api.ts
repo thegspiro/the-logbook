@@ -111,7 +111,6 @@ export interface ShiftRecord {
   color?: string | null;
   notes?: string;
   activities?: unknown;
-  pass_down_notes?: string | null;
   open_to_all_members?: boolean;
   attendee_count: number;
   call_count: number;
