@@ -58,6 +58,19 @@ class RecurrencePattern(str, Enum):
     CUSTOM = "custom"  # Uses recurrence_custom_days
 
 
+def default_reminder_target(is_mandatory: bool) -> str:
+    """Reminder audience for an event whose creator did not choose one.
+
+    Mandatory events remind every active member; everything else reminds the
+    members who RSVP'd. The EventCreate-family schemas apply this default in a
+    validator, but any path constructing Event(...) directly bypasses Pydantic
+    and inherits the column default "going" — which silently shrinks a
+    mandatory event's reminder audience. Those paths must pass
+    reminder_target=default_reminder_target(is_mandatory) instead.
+    """
+    return "all" if is_mandatory else "going"
+
+
 class Event(Base):
     """
     Event model for managing department events

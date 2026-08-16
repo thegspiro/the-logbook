@@ -28,6 +28,7 @@ from app.models.event import (
     RecurrencePattern,
     RSVPHistory,
     RSVPStatus,
+    default_reminder_target,
 )
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingSession, TrainingStatus
@@ -2745,6 +2746,7 @@ class EventService:
                         location=location,
                         description=description,
                         is_mandatory=is_mandatory,
+                        reminder_target=default_reminder_target(is_mandatory),
                     )
                     self.db.add(event)
                 imported_count += 1

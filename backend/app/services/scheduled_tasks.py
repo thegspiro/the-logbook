@@ -99,14 +99,15 @@ from loguru import logger
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.event import default_reminder_target
 from app.models.user import Organization, User
 from app.services.email_service import _redact_email
 
 
 def _resolve_event_reminder_target(event: Any) -> str:
     """Return the stored audience, retaining legacy mandatory-event behavior."""
-    return getattr(event, "reminder_target", None) or (
-        "all" if event.is_mandatory else "going"
+    return getattr(event, "reminder_target", None) or default_reminder_target(
+        event.is_mandatory
     )
 
 
