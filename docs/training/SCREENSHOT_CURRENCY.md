@@ -143,6 +143,53 @@ earlier** and remain stale.
 
 ---
 
+## The 2026-08-16 guide-02 re-capture — 66 applied images, every one opened
+
+The full guide-02 set was re-shot against the merged build and read against
+its captions. Five capture failures and one empty state all traced to data
+or contract gaps, each fixed at the root:
+
+- **Review Submissions was empty** — nothing seeded a member training
+  submission. The seeder now files one as the demo member (org defaults
+  route it to pending review), and the queue also printed the submitter's
+  raw UUID where a reviewer expects a name — the service now resolves
+  display names in one batch query (`submitter_name` on the response).
+- **The demo member had no approved shift report**, so My Reports and the
+  My Shift Progress card were blank. Two causes: the filing loop's
+  states-present early return never checked her, and when she was picked it
+  could be as the trailing save-as-draft pair — a draft is invisible in My
+  Reports, the same trap as the positional flag. The loop now swaps her off
+  the tail and `_ensure_demo_member_report` files-and-approves one when the
+  early return would otherwise skip filing.
+- **Nothing locked, so the "Locked until you finish" line had no subject.**
+  Hour auto-credit had quietly completed the old Hose Deployment gate. The
+  probationary pipeline now also gates on the written exam — a knowledge
+  test only an explicitly recorded result can complete — and 02-99 resolves
+  the probationary enrollment directly instead of trusting list order.
+- **Officer-only checklist steps existed nowhere.** The blueprint gained
+  three (`member_visible: false`) with a backfill for existing databases,
+  and a product fix: the member serializer **stripped** hidden steps, so
+  the "+N more steps your officer records" fold line was unreachable in
+  the real app while its component test asserted it against a payload the
+  API never produced. Hidden steps now survive as anonymous stubs — count
+  preserved, text and id redacted — with endpoint tests pinning the
+  contract. 02-88 (member fold line), 02-87/02-94 (officer view with
+  Officer-only badges) picture it end to end.
+- **Label drift**: 02-32/33/35/36 were shot before the ReportContentDisplay
+  fix landed here and read "5/5 — Excellent"; re-shot reading the
+  department's configured "Exemplary".
+- **02-89 removed as redundant** (02-100 pictures the same steps editor);
+  **02-68-vector-category-mapping's stray file removed** and the entry now
+  carries `holdBack` — the mapping table it describes is only creatable by
+  a live vendor sync, per the "Held back deliberately" note.
+
+Observations recorded, not fixed: course-type requirements completed via
+certification equivalency read "Completed · 0 / 1 courses" (02-93, 02-105);
+the print pages' "Active Certifications 0" and "Enrolled: 0" stats disagree
+with the tables beside them (02-62, 02-63); the compliance-matrix print
+overflows its sheet at 26 columns (02-65). All are what the product renders
+today; they read as stat-wiring gaps worth a product pass.
+
 ## The 2026-08-16 guide-03 re-capture — 67 of 67, every changed image opened
 
 The full guide-03 set was re-shot against the fresh database and the current

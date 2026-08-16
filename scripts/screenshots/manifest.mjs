@@ -4096,6 +4096,12 @@ export const SHOTS = [
     // mapping table is the subject — so an empty state here means the seed
     // data cannot support the shot yet, which is worth surfacing rather than
     // publishing an empty table under a placeholder describing a full one.
+    holdBack:
+      "Category mappings are created only by POST /providers/{id}/sync-categories, " +
+      "which fetches the live vendor catalogue — no seeder-reachable create " +
+      "exists, so the capture lands on the provider card, not the mapping " +
+      "table the caption describes. See SCREENSHOT_CURRENCY.md, 'Held back " +
+      "deliberately'.",
   },
 
   // ── 03 Scheduling ───────────────────────────────────────────────────
