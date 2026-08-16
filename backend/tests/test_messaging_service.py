@@ -91,6 +91,22 @@ class TestIsTargeted:
         assert _targeted(msg, roles=["chief"]) is True
 
 
+class TestTargetedUsers:
+    async def test_only_queries_active_non_deleted_users(self):
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(return_value=result)
+
+        assert await MessagingService(db)._targeted_users(_msg(), "org-1") == []
+
+        query = db.execute.await_args.args[0]
+        sql = str(query)
+        assert "users.organization_id = :organization_id_1" in sql
+        assert "users.status = :status_1" in sql
+        assert "users.deleted_at IS NULL" in sql
+
+
 class TestUnreadCount:
     def _user(self, roles=("officer",), status="active"):
         return SimpleNamespace(
