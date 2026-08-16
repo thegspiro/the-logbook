@@ -2878,11 +2878,14 @@ class TrainingProgramService:
         applied_by: Optional[UUID] = None,
         progress_notes: Optional[Dict] = None,
         mark_in_progress: bool = False,
+        mark_completed: bool = False,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
-        """Idempotently accrue ``units`` of numeric progress onto a requirement,
-        recording the originating record in the credit ledger.
+        """Idempotently apply source-backed progress to a requirement.
 
-        The ledger's unique key is (progress_id, source_type, source_id). If that
+        Positive ``units`` accrue numeric progress. A zero-unit credit may mark a
+        status-based requirement complete when ``mark_completed`` is true, making
+        that sign-off reversible through the same ledger. The ledger's unique key
+        is (progress_id, source_type, source_id). If that
         source has already been credited to this requirement, the call is a no-op
         that returns the current progress — a retry, an external re-sync, or a
         re-finalized session lands here and changes nothing, so a single real
@@ -2895,10 +2898,10 @@ class TrainingProgramService:
         richer feeds (shift completion tracks call-type history and forces the
         row to IN_PROGRESS) keep their behavior while gaining idempotency.
 
-        Returns (progress, error). All feed callers should route their numeric
-        accruals through here rather than mutating ``progress_value`` directly.
+        Returns (progress, error). Feed callers should route source-backed
+        accruals and sign-offs through here rather than mutating progress directly.
         """
-        if units is None or units <= 0:
+        if units is None or units < 0 or (units == 0 and not mark_completed):
             return None, None
 
         progress = await self._get_org_scoped_progress(progress_id, organization_id)
@@ -2938,6 +2941,8 @@ class TrainingProgramService:
         update_kwargs: Dict[str, Any] = {"progress_value": new_value}
         if mark_in_progress:
             update_kwargs["status"] = RequirementProgressStatus.IN_PROGRESS.value
+        if mark_completed:
+            update_kwargs["status"] = RequirementProgressStatus.COMPLETED.value
         if progress_notes is not None:
             update_kwargs["progress_notes"] = progress_notes
         return await self.update_requirement_progress(
@@ -2982,10 +2987,25 @@ class TrainingProgramService:
         await self.db.flush()
 
         new_value = max(0.0, float(progress.progress_value or 0) - units)
+        update_kwargs: Dict[str, Any] = {"progress_value": new_value}
+        if units == 0:
+            # A zero-unit row represents a source-backed sign-off for a
+            # status-based requirement. Keep the requirement complete while
+            # another source still supports it; otherwise undo the sign-off.
+            remaining_result = await self.db.execute(
+                select(RequirementProgressCredit.id)
+                .where(
+                    RequirementProgressCredit.progress_id == str(progress_id),
+                    RequirementProgressCredit.units == 0,
+                )
+                .limit(1)
+            )
+            if remaining_result.scalar_one_or_none() is None:
+                update_kwargs["status"] = RequirementProgressStatus.NOT_STARTED.value
         return await self.update_requirement_progress(
             progress_id=progress.id,
             organization_id=organization_id,
-            updates=RequirementProgressUpdate(progress_value=new_value),
+            updates=RequirementProgressUpdate(**update_kwargs),
             verified_by=verified_by,
         )
 
@@ -3307,14 +3327,27 @@ class TrainingProgramService:
                 )
         else:
             # Certification / skills / checklist / knowledge-test: the officer is
-            # signing off that this training satisfies the requirement. Marking a
-            # requirement complete is naturally idempotent, so no ledger entry.
-            _, error = await self.update_requirement_progress(
-                progress_id=progress.id,
-                organization_id=organization_id,
-                updates=RequirementProgressUpdate(status="completed"),
-                verified_by=verified_by,
-            )
+            # signing off that this training satisfies the requirement. When a
+            # source is available, record a zero-unit completion in the ledger so
+            # reversing that source can also reverse the status-based sign-off.
+            if source_id:
+                _, error = await self.apply_requirement_credit(
+                    progress_id=progress.id,
+                    organization_id=organization_id,
+                    source_type=ProgressCreditSource.OFFICER_APPLY,
+                    source_id=str(source_id),
+                    units=0.0,
+                    verified_by=verified_by,
+                    applied_by=verified_by,
+                    mark_completed=True,
+                )
+            else:
+                _, error = await self.update_requirement_progress(
+                    progress_id=progress.id,
+                    organization_id=organization_id,
+                    updates=RequirementProgressUpdate(status="completed"),
+                    verified_by=verified_by,
+                )
         if error:
             return False, error
         return True, None

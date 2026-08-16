@@ -117,6 +117,24 @@ class TestApplyCredit:
         assert error is None
         svc.update_requirement_progress.assert_not_awaited()
 
+    async def test_zero_unit_completion_is_recorded(self):
+        progress = _progress(value=0.0)
+        db = RecordingSession([_one(progress), _one(None)])
+        svc = _svc(db)
+
+        await svc.apply_requirement_credit(
+            progress_id=progress.id,
+            organization_id=uuid4(),
+            source_type=ProgressCreditSource.OFFICER_APPLY,
+            source_id="submission-1",
+            units=0.0,
+            mark_completed=True,
+        )
+
+        assert len(db.added) == 1
+        updates = svc.update_requirement_progress.await_args.kwargs["updates"]
+        assert updates.status == "completed"
+
     async def test_missing_progress_returns_error(self):
         db = RecordingSession([_one(None)])
         svc = _svc(db)
@@ -214,6 +232,48 @@ class TestRevokeCredit:
 
         updates = svc.update_requirement_progress.await_args.kwargs["updates"]
         assert updates.progress_value == 0.0
+
+    async def test_revoke_last_zero_unit_completion_resets_status(self):
+        progress = _progress(value=0.0)
+        credit = RequirementProgressCredit(
+            progress_id=progress.id,
+            source_type=ProgressCreditSource.OFFICER_APPLY,
+            source_id="submission-1",
+            units=0.0,
+        )
+        db = RecordingSession([_one(progress), _one(credit), _one(None)])
+        svc = _svc(db)
+
+        await svc.revoke_requirement_credit(
+            progress_id=progress.id,
+            organization_id=uuid4(),
+            source_type=ProgressCreditSource.OFFICER_APPLY,
+            source_id="submission-1",
+        )
+
+        updates = svc.update_requirement_progress.await_args.kwargs["updates"]
+        assert updates.status == "not_started"
+
+    async def test_revoke_zero_unit_completion_keeps_other_signoff(self):
+        progress = _progress(value=0.0)
+        credit = RequirementProgressCredit(
+            progress_id=progress.id,
+            source_type=ProgressCreditSource.OFFICER_APPLY,
+            source_id="submission-1",
+            units=0.0,
+        )
+        db = RecordingSession([_one(progress), _one(credit), _one("other-credit")])
+        svc = _svc(db)
+
+        await svc.revoke_requirement_credit(
+            progress_id=progress.id,
+            organization_id=uuid4(),
+            source_type=ProgressCreditSource.OFFICER_APPLY,
+            source_id="submission-1",
+        )
+
+        updates = svc.update_requirement_progress.await_args.kwargs["updates"]
+        assert updates.status is None
 
     async def test_revoke_missing_credit_is_noop(self):
         progress = _progress(value=10.0)
