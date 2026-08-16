@@ -18,6 +18,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
+import { hasAdministrationAccess } from './adminNavigation';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
@@ -95,20 +96,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  const hasAnyAdminPermission =
-    // users.view alone opens the Admin menu: the member ID scanner lives here,
-    // and validating a scanned card only needs users.view (see /members/scan).
-    checkPermission('users.view') ||
-    checkPermission('members.manage') ||
-    checkPermission('prospective_members.manage') ||
-    checkPermission('events.manage') ||
-    checkPermission('training.manage') ||
-    checkPermission('inventory.manage') ||
-    checkPermission('admin_hours.manage') ||
-    checkPermission('positions.manage_permissions') ||
-    checkPermission('settings.manage') ||
-    checkPermission('forms.view') ||
-    checkPermission('analytics.view');
+  // The shared helper's list mirrors the Admin menu items' gates — extend it
+  // there, never inline, so Side/Top navigation cannot drift apart.
+  const hasAnyAdminPermission = hasAdministrationAccess(checkPermission);
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
