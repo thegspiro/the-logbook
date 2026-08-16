@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
 from loguru import logger
-from sqlalchemy import and_, desc, func, or_, select
+from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -78,7 +78,15 @@ from app.schemas.facilities import (
     FacilityUtilityReadingCreate,
     FacilityUtilityReadingUpdate,
 )
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+
+# How many levels of room nesting are allowed (a top-level room is level 1).
+# Rooms within rooms are for real spatial containment — a storage cage inside
+# the volunteer office inside the apparatus bay — not an org chart, and the
+# room list becomes unreadable past a handful of levels. The cap also bounds
+# every ancestor/descendant walk below.
+MAX_ROOM_NESTING_DEPTH = 5
 
 
 class FacilitiesService:
@@ -1998,10 +2006,18 @@ class FacilitiesService:
         room_type: Optional[str] = None,
         floor: Optional[str] = None,
         is_active: Optional[bool] = None,
+        parent_room_id: Optional[str] = None,
+        top_level_only: bool = False,
         skip: int = 0,
         limit: int = 100,
     ) -> List[FacilityRoom]:
-        """List facility rooms"""
+        """List facility rooms.
+
+        Returns the flat set by default — including nested rooms — so callers
+        can assemble the tree themselves. ``parent_room_id`` narrows to one
+        room's direct children; ``top_level_only`` to rooms that sit directly
+        on the facility.
+        """
         conditions = [FacilityRoom.organization_id == organization_id]
 
         if facility_id:
@@ -2012,6 +2028,10 @@ class FacilitiesService:
             conditions.append(FacilityRoom.floor == floor)
         if is_active is not None:
             conditions.append(FacilityRoom.is_active == is_active)
+        if parent_room_id:
+            conditions.append(FacilityRoom.parent_room_id == parent_room_id)
+        elif top_level_only:
+            conditions.append(FacilityRoom.parent_room_id.is_(None))
 
         query = (
             select(FacilityRoom)
@@ -2061,6 +2081,112 @@ class FacilitiesService:
         for room in rooms:
             room.display_code = codes.get(room.id)
 
+    async def _room_descendants(
+        self, room_id: str, organization_id: str
+    ) -> Tuple[set, int]:
+        """Walk down from a room.
+
+        Returns ``(descendant_ids, height)`` where height counts the room
+        itself as 1, so a room with one level of sub-rooms has height 2. Used
+        to reject a move that would put a room inside its own subtree, and to
+        keep the resulting tree within MAX_ROOM_NESTING_DEPTH.
+        """
+        descendants: set = set()
+        frontier = [room_id]
+        height = 1
+
+        # Bounded by the nesting cap plus slack, so data that predates the cap
+        # (or a cycle written by an older code path) can't spin here forever.
+        while frontier and height <= MAX_ROOM_NESTING_DEPTH * 2:
+            result = await self.db.execute(
+                select(FacilityRoom.id).where(
+                    FacilityRoom.parent_room_id.in_(frontier),
+                    FacilityRoom.organization_id == organization_id,
+                )
+            )
+            children = [
+                child_id
+                for child_id in result.scalars().all()
+                if child_id != room_id and child_id not in descendants
+            ]
+            if not children:
+                break
+            descendants.update(children)
+            frontier = children
+            height += 1
+
+        return descendants, height
+
+    async def _room_depth(self, room_id: str, organization_id: str) -> int:
+        """Count levels from the facility's top level down to this room.
+
+        A room sitting directly on the facility is at depth 1.
+        """
+        depth = 1
+        current_id = room_id
+        seen = {room_id}
+
+        while depth <= MAX_ROOM_NESTING_DEPTH * 2:
+            result = await self.db.execute(
+                select(FacilityRoom.parent_room_id).where(
+                    FacilityRoom.id == current_id,
+                    FacilityRoom.organization_id == organization_id,
+                )
+            )
+            parent_id = result.scalar_one_or_none()
+            if not parent_id or parent_id in seen:
+                break
+            seen.add(parent_id)
+            current_id = parent_id
+            depth += 1
+
+        return depth
+
+    async def _assert_parent_room_valid(
+        self,
+        parent_room_id: Optional[str],
+        organization_id: str,
+        facility_id: str,
+        room_id: Optional[str] = None,
+    ) -> None:
+        """Validate a client-supplied parent room before nesting under it.
+
+        Guards the four ways nesting goes wrong: a parent in another org
+        (XC-1), a parent in another facility (which would put a room in two
+        buildings at once), a cycle, and a tree deeper than the cap.
+        ``room_id`` is None on create, where there is no subtree yet.
+        """
+        if not parent_room_id:
+            return
+
+        if room_id and parent_room_id == room_id:
+            raise ValueError("A room cannot be placed inside itself")
+
+        parent = await self.get_room(parent_room_id, organization_id)
+        if not parent:
+            raise ValueError("Invalid parent room")
+
+        if parent.facility_id != facility_id:
+            raise ValueError(
+                "A room can only be nested inside another room in the same facility"
+            )
+
+        subtree_height = 1
+        if room_id:
+            descendant_ids, subtree_height = await self._room_descendants(
+                room_id, organization_id
+            )
+            if parent_room_id in descendant_ids:
+                raise ValueError(
+                    "A room cannot be placed inside one of its own sub-rooms"
+                )
+
+        parent_depth = await self._room_depth(parent_room_id, organization_id)
+        if parent_depth + subtree_height > MAX_ROOM_NESTING_DEPTH:
+            raise ValueError(
+                f"Rooms can only be nested {MAX_ROOM_NESTING_DEPTH} levels deep"
+            )
+
     async def create_room(
         self,
         room_data: FacilityRoomCreate,
@@ -2074,6 +2200,10 @@ class FacilitiesService:
         )
         if not facility:
             raise ValueError("Invalid facility")
+
+        await self._assert_parent_room_valid(
+            room_data.parent_room_id, organization_id, room_data.facility_id
+        )
 
         room = FacilityRoom(
             organization_id=organization_id,
@@ -2107,8 +2237,31 @@ class FacilitiesService:
         await self._assert_facility_in_org(room_data.facility_id, organization_id)
 
         update_data = room_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(room, field, value)
+
+        target_facility_id = update_data.get("facility_id") or room.facility_id
+        facility_changed = target_facility_id != room.facility_id
+        # Re-validate nesting when either side of the relationship moves. A
+        # facility change alone can invalidate an untouched parent, which now
+        # sits in a different building.
+        if "parent_room_id" in update_data or facility_changed:
+            await self._assert_parent_room_valid(
+                update_data.get("parent_room_id", room.parent_room_id),
+                organization_id,
+                target_facility_id,
+                room_id=room.id,
+            )
+
+        # A rename or a building change rewrites the linked Location name of
+        # every room underneath this one, since those names carry the path.
+        name_changed = "name" in update_data and update_data["name"] != room.name
+        descendant_ids: set = set()
+        if facility_changed or name_changed:
+            descendant_ids, _ = await self._room_descendants(room.id, organization_id)
+
+        # apply_updates rather than a bare setattr loop: a null against a NOT
+        # NULL column (name, facility_id) becomes a 400 instead of a
+        # flush-time IntegrityError, and tenancy columns stay off-limits.
+        apply_updates(room, update_data, skip={"id", "organization_id"})
 
         if updated_by:
             room.updated_by = updated_by
@@ -2119,17 +2272,70 @@ class FacilitiesService:
         )
         if facility:
             await self._sync_room_location(room, facility, organization_id)
+            if descendant_ids:
+                await self._resync_descendant_locations(
+                    descendant_ids,
+                    facility,
+                    organization_id,
+                    move_to_facility=facility_changed,
+                )
 
         await self.db.commit()
         await self.db.refresh(room)
 
         return room
 
+    async def _resync_descendant_locations(
+        self,
+        descendant_ids: set,
+        facility: Facility,
+        organization_id: str,
+        move_to_facility: bool = False,
+    ) -> None:
+        """Refresh the linked Locations of a moved or renamed room's subtree.
+
+        When the room itself changes buildings the whole subtree goes with it:
+        a storage closet cannot stay behind in the old station because its
+        parent moved.
+        """
+        result = await self.db.execute(
+            select(FacilityRoom).where(
+                FacilityRoom.id.in_(descendant_ids),
+                FacilityRoom.organization_id == organization_id,
+            )
+        )
+        for descendant in result.scalars().all():
+            if move_to_facility:
+                descendant.facility_id = facility.id
+            await self._sync_room_location(descendant, facility, organization_id)
+
     async def delete_room(self, room_id: str, organization_id: str) -> bool:
-        """Delete room and its linked Location."""
+        """Delete room and its linked Location.
+
+        Sub-rooms are kept and re-parented onto the deleted room's own parent
+        (or to the facility's top level). Deleting the volunteer office must
+        not take the quartermaster's storage — and whatever is stored in it —
+        down with it.
+        """
         room = await self.get_room(room_id, organization_id)
         if not room:
             return False
+
+        # Read off the instance before the delete expires it.
+        facility_id = room.facility_id
+        grandparent_id = room.parent_room_id
+
+        descendant_ids, _ = await self._room_descendants(room_id, organization_id)
+
+        await self.db.execute(
+            update(FacilityRoom)
+            .where(
+                FacilityRoom.parent_room_id == room_id,
+                FacilityRoom.organization_id == organization_id,
+            )
+            .values(parent_room_id=grandparent_id)
+            .execution_options(synchronize_session=False)
+        )
 
         # Remove the linked Location (cascade won't handle this since FK is SET NULL)
         result = await self.db.execute(
@@ -2143,9 +2349,58 @@ class FacilitiesService:
             await self.db.delete(linked_location)
 
         await self.db.delete(room)
+        await self.db.flush()
+
+        # The subtree's Location names embed the path that just lost a level.
+        if descendant_ids:
+            facility = await self.get_facility(
+                facility_id, organization_id, include_relations=False
+            )
+            if facility:
+                await self._resync_descendant_locations(
+                    descendant_ids, facility, organization_id
+                )
+
         await self.db.commit()
 
         return True
+
+    async def _room_location_name(
+        self,
+        room: FacilityRoom,
+        facility: Facility,
+        organization_id: str,
+    ) -> str:
+        """Name for a room's linked Location, innermost space first.
+
+        Top-level rooms keep the original "Room — Facility" shape; a nested
+        room names the space that contains it, so an events location picker
+        can tell the volunteer office's storage from the apparatus bay's.
+        """
+        parts = [room.name]
+        parent_id = room.parent_room_id
+        seen = {room.id}
+
+        while (
+            parent_id and parent_id not in seen and len(parts) < MAX_ROOM_NESTING_DEPTH
+        ):
+            result = await self.db.execute(
+                select(FacilityRoom.name, FacilityRoom.parent_room_id).where(
+                    FacilityRoom.id == parent_id,
+                    FacilityRoom.organization_id == organization_id,
+                )
+            )
+            ancestor = result.first()
+            if not ancestor:
+                break
+            seen.add(parent_id)
+            parts.append(ancestor.name)
+            parent_id = ancestor.parent_room_id
+
+        parts.append(facility.name)
+        # locations.name is String(200); a deep path plus a long facility name
+        # can outrun it, and MySQL would reject the insert outright.
+        return " — ".join(parts)[:200]
 
     async def _sync_room_location(
         self,
@@ -2167,11 +2422,14 @@ class FacilitiesService:
         )
         location = result.scalar_one_or_none()
 
-        # Build a descriptive name: "Room Name — Facility Name"
-        loc_name = f"{room.name} — {facility.name}"
+        loc_name = await self._room_location_name(room, facility, organization_id)
 
         if location:
             location.name = loc_name
+            # The room can change buildings (on its own, or carried along when
+            # the room containing it moves); the Location has to follow, or it
+            # keeps pointing at the facility the room just left.
+            location.facility_id = facility.id
             location.building = facility.name
             location.floor = str(room.floor) if room.floor is not None else None
             location.room_number = room.room_number

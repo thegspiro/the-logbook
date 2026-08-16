@@ -21,12 +21,32 @@ from fastapi import HTTPException
 from app.api.v1.endpoints.inventory import create_storage_area, update_storage_area
 from app.models.inventory import StorageArea, StorageLocationType
 from app.schemas.inventory import StorageAreaCreate, StorageAreaUpdate
+from app.services.inventory_service import InventoryService
 
 
 def _result(value):
     r = MagicMock()
     r.scalar_one_or_none.return_value = value
     return r
+
+
+@pytest.fixture(autouse=True)
+def stub_barcode():
+    """Stub the sequential-barcode allocator out.
+
+    Storage areas were made always-scannable after these tests were written:
+    create assigns the next code in the org's series, and update backfills one
+    for an area that predates the rule. Both reach for the organization row and
+    its settings JSON, which this DB-free fixture has no way to answer — and
+    none of it is what these tests are about. Barcode allocation has its own
+    coverage; this file is about which foreign keys are allowed through.
+    """
+    with patch.object(
+        InventoryService,
+        "next_storage_area_barcode",
+        new=AsyncMock(return_value="SA-000001"),
+    ) as stub:
+        yield stub
 
 
 @pytest.fixture(autouse=True)

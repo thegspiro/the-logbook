@@ -14,6 +14,7 @@ import { shiftCompletionService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import type { ShiftCompletionReport } from '../../types/training';
+import PrintPageStyles from '../../components/print/PrintPageStyles';
 
 const ShiftReportPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -72,11 +73,7 @@ const ShiftReportPrintPage: React.FC = () => {
 
   return (
     <>
-      <style>{`
-        @page { size: letter; margin: 0.6in 0.75in; }
-        @media print { body { margin: 0; padding: 0; } }
-        @media screen { body { background: #f3f4f6; } }
-      `}</style>
+      <PrintPageStyles margin="0.6in 0.75in" />
 
       <div className="mx-auto my-8 max-w-[8.5in] bg-white shadow-lg print:my-0 print:shadow-none">
         <div

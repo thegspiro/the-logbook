@@ -33,6 +33,7 @@ import {
   Store,
   Sparkles,
   ArrowRight,
+  Building2,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -415,6 +416,13 @@ export const InventoryAdminHub: React.FC = () => {
                 icon={<MapPin className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
                 title="Storage Areas"
                 description="Manage storage locations within facilities"
+                iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+              />
+              <NavCard
+                to="/inventory/admin/vendors"
+                icon={<Building2 className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
+                title="Vendors"
+                description="Suppliers, their contacts, and what we buy from them"
                 iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
               />
             </div>

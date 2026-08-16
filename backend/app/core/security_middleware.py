@@ -181,6 +181,7 @@ async def public_rate_limit(
                 limit=max_requests,
                 window_seconds=window_seconds,
                 fail_closed=False,
+                raise_on_error=True,
             )
             return limited, ("rate_limited" if limited else None)
         except Exception:

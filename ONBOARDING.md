@@ -513,7 +513,7 @@ The onboarding security check detects insecure defaults using substring matching
    - Recommended minimum 12 characters
 
 3. **CORS Configuration**
-   - Don't allow all origins (*) in production
+   - Don't allow all origins (\*) in production
 
 ## Disabling Onboarding
 
@@ -586,7 +586,13 @@ The onboarding module is designed to be integrated with a frontend wizard:
 
 ### Data Persistence
 
-Frontend onboarding state is stored in a Zustand store persisted to **localStorage** (key: `onboarding-storage`). Sensitive data (session IDs, CSRF tokens) is excluded from persistence. The API client stores the session ID separately in localStorage under `onboarding_session_id`.
+Frontend onboarding state is stored in a Zustand store persisted to **localStorage** (key: `onboarding-storage`). Sensitive data (session IDs, CSRF tokens) is excluded from persistence.
+
+The API client stores the session identifier separately, in **`sessionStorage`** under `onboarding_session_id` _(moved from `localStorage` on 2026-08-15)_. That identifier is a bearer credential — presented as the `X-Session-ID` header, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs. Its CSRF companion, `onboarding_csrf_token`, is a `SameSite=Strict` cookie. Identifiers left in `localStorage` by an older client are deleted on load.
+
+**The two stores have different lifetimes, and that is visible to installers.** The wizard's typed answers (`onboarding-storage`) outlive the tab; the session identifier does not. Reopening `/onboarding` after closing the browser therefore repaints the answers already entered while the server session is gone — the failure surfaces at the next mutating step as `401` / `ONBD_SESSION_INVALID`, not at the repaint. **Onboarding should be completed in one tab, in one sitting**; the recovery from an expired run is to restart the wizard, not to re-type into a dead session. A second tab does not inherit the wizard either (a _duplicated_ tab does, because Chrome and Firefox copy `sessionStorage` into duplicates — browser behavior, not a supported resume path).
+
+Server-side, the session row carries a **30-minute sliding expiry** (`SESSION_EXPIRY_HOURS = 0.5`), pushed forward on each authenticated activity.
 
 ## Database Schema
 

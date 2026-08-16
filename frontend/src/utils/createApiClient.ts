@@ -14,7 +14,7 @@
 
 import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
-import { performSharedRefresh } from '../services/apiClient';
+import { handleExpiredSession, performSharedRefresh } from '../services/apiClient';
 import { reportApiError } from '../services/errorReporting';
 
 declare module 'axios' {
@@ -75,8 +75,12 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
           await performSharedRefresh();
           return api(originalRequest);
         } catch {
-          localStorage.removeItem('has_session');
-          window.location.href = '/login';
+          // Redirecting is a side effect, not a response. Reject the request as
+          // well so callers cannot continue with an `undefined` Axios response
+          // while the browser is navigating to the login page.
+          handleExpiredSession();
+          reportApiError(error);
+          return Promise.reject(error instanceof Error ? error : new Error(String(error)));
         }
       }
 

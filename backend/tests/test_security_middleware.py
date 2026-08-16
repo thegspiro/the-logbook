@@ -20,6 +20,8 @@ from app.core.security_middleware import (
     InputSanitizer,
     RateLimiter,
     SecurityHeadersMiddleware,
+    public_rate_limit,
+    rate_limiter,
     verify_csrf_token,
 )
 
@@ -29,6 +31,44 @@ from app.core.security_middleware import (
 
 
 class TestRateLimiter:
+
+    @pytest.mark.unit
+    async def test_public_limiter_falls_back_when_redis_command_fails(
+        self, monkeypatch
+    ):
+        """A connected but failing Redis must not disable public throttling."""
+        from app.core.cache import cache_manager
+
+        class FailingPipeline:
+            def __getattr__(self, _name):
+                return lambda *args, **kwargs: self
+
+            async def execute(self):
+                raise TimeoutError("Redis command timed out")
+
+        class FailingRedis:
+            def pipeline(self):
+                return FailingPipeline()
+
+        monkeypatch.setattr(cache_manager, "redis_client", FailingRedis())
+        monkeypatch.setattr(cache_manager, "_connected", True)
+        monkeypatch.setattr(
+            "app.core.security_middleware.settings.RATE_LIMIT_ENABLED", True
+        )
+
+        key = "redis-error-fallback"
+        rate_limiter.requests.pop(key, None)
+        rate_limiter.lockouts.pop(key, None)
+        try:
+            results = [
+                await public_rate_limit(key, max_requests=2, window_seconds=60)
+                for _ in range(3)
+            ]
+        finally:
+            rate_limiter.requests.pop(key, None)
+            rate_limiter.lockouts.pop(key, None)
+
+        assert [limited for limited, _ in results] == [False, False, True]
 
     @pytest.mark.unit
     def test_first_request_is_not_limited(self):
