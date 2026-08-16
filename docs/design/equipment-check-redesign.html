@@ -489,6 +489,71 @@
   .streak i[data-s="fail"] { background: var(--crit); }
   .streak i[data-s="miss"] { background: var(--warn); opacity: 0.55; }
 
+  /* Readiness matrix — apparatus down, check occasions across */
+  .matrix {
+    border-collapse: collapse;
+    font-size: 0.76rem;
+  }
+  .matrix th {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    color: var(--app-ink-3);
+    text-align: center;
+    padding: 0 0.15rem 0.45rem;
+    white-space: nowrap;
+  }
+  .matrix th.mx-u {
+    text-align: left;
+    padding-right: 0.9rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+  .matrix td {
+    padding: 0.32rem 0.15rem;
+    border-top: 1px solid var(--app-line);
+    text-align: center;
+  }
+  .matrix td.mx-u {
+    text-align: left;
+    padding-right: 0.9rem;
+    white-space: nowrap;
+  }
+  .matrix td.mx-rate {
+    text-align: right;
+    padding-left: 0.9rem;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--app-ink-2);
+  }
+  .cellpair { display: flex; gap: 2px; justify-content: center; }
+  .cell {
+    width: 0.95rem;
+    height: 1.3rem;
+    border-radius: 3px;
+    background: var(--app-card-2);
+    border: 1px solid var(--app-line);
+    display: block;
+  }
+  .cell[data-s="ok"] { background: var(--ok); border-color: var(--ok); }
+  .cell[data-s="fail"] { background: var(--crit); border-color: var(--crit); }
+  .cell[data-s="miss"] { background: var(--warn); border-color: var(--warn); opacity: 0.6; }
+  .cell[data-s="part"] {
+    background: repeating-linear-gradient(135deg, var(--warn) 0 3px, transparent 3px 6px);
+    border-color: var(--warn);
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    font-size: 0.68rem;
+    color: var(--app-ink-3);
+    align-items: center;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 0.32rem; }
+  .legend .cell { width: 0.7rem; height: 0.7rem; }
+
   .ui-grid-3 {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
@@ -713,10 +778,14 @@
       today, then three rebuilds — from a one-week reordering to a new deficiency lifecycle —
       each drawn as the screen it would actually be.
     </p>
+    <p class="standfirst" style="color: var(--accent); font-weight: 600;">
+      Decided: build B, and give it a check log of its own.
+      <a href="#direction" style="color: inherit;">Skip to the direction &rarr;</a>
+    </p>
     <p class="byline">
       <span>The Logbook</span>
       <span>Officer &middot; Inventory manager &middot; Member</span>
-      <span>Design options, not a spec</span>
+      <span>Design options &rarr; one direction</span>
     </p>
   </header>
 
@@ -970,7 +1039,7 @@
       <div class="screen__body">
         <div class="ui-h">
           <strong>Equipment &amp; Readiness</strong>
-          <span class="ui-sub">Tue 16 Aug &middot; 07:41 &nbsp;&nbsp;<span class="btn btn--ghost">Unscheduled check</span></span>
+          <span class="ui-sub">Tue 16 Aug &middot; 07:41 &nbsp;&nbsp;<span class="btn btn--ghost">Check log</span> <span class="btn btn--ghost">Unscheduled check</span></span>
         </div>
 
         <div class="ui-row ui-row--stripe" data-tone="crit" style="background:var(--app-card-2);">
@@ -1051,7 +1120,7 @@
         </div>
       </div>
     </div>
-    <p class="screen__caption">Option B, fleet level. The seven squares are the last seven days of that rig's checks — green passed, red found something, faded amber missed. A pattern an officer can read without opening anything.</p>
+    <p class="screen__caption">Option B, fleet level. The seven squares are the last seven days of that rig's checks — green passed, red found something, faded amber missed. A pattern an officer can read without opening anything, and the way into the check log below.</p>
 
     <div class="screen" style="margin-top:1rem;">
       <div class="screen__bar">
@@ -1067,7 +1136,7 @@
           <span class="ui-tab" data-on>Checks</span>
           <span class="ui-tab">Inventory</span>
           <span class="ui-tab">Deficiencies &nbsp;1</span>
-          <span class="ui-tab">History</span>
+          <span class="ui-tab">Check log</span>
         </div>
 
         <div class="ui-split">
@@ -1365,9 +1434,276 @@
   </section>
 
   <!-- ============================================================== -->
+  <section class="section" id="direction">
+    <p class="rule-label">The direction</p>
+    <div class="opt-head">
+      <span class="opt-tag">B &nbsp;+&nbsp; Check log</span>
+      <h2>Fleet Board, with the seven squares opened up into a page</h2>
+      <p class="opt-thesis">
+        Option B unchanged: the apparatus is the unit, the fleet board is the front door. The
+        seven-day strip on each rig card stops being decoration and becomes the summary of a real
+        sub-page — the last <em>N</em> checks across the whole fleet, so &ldquo;are things
+        okay?&rdquo; is a question you can answer by looking rather than by trusting.
+      </p>
+    </div>
+
+    <div class="col" style="display:grid; gap:0.9rem;">
+      <h3>Where it sits</h3>
+      <p class="lede">
+        One component, two scopes. At <span class="unit">/scheduling/equipment/checks</span> it covers
+        the fleet and is reached from the board header or by tapping any rig's strip. Scoped to one
+        rig it is the <strong>Check log</strong> tab of the apparatus detail — same filters, same
+        rows, apparatus filter pinned. It replaces today's &ldquo;Completed checklists&rdquo;
+        accordion, which only ever showed you your own checks.
+      </p>
+    </div>
+
+    <div class="screen">
+      <div class="screen__bar">
+        <div class="screen__dots"><i></i><i></i><i></i></div>
+        <div class="screen__url">/scheduling/equipment/checks</div>
+      </div>
+      <div class="screen__body">
+        <div class="ui-h">
+          <span><span class="btn btn--quiet">&larr; Fleet</span> &nbsp; <strong>Check log</strong></span>
+          <span class="ui-sub">
+            <span class="btn btn--ghost">Last 7</span>
+            <span class="btn btn--primary">Last 14</span>
+            <span class="btn btn--ghost">Last 30</span>
+            <span class="btn btn--ghost">Custom range</span>
+          </span>
+        </div>
+        <div class="ui-row__m" style="margin-top:-0.35rem;">
+          All apparatus &middot; all members &middot; 03&ndash;16 Aug
+          <span class="pill" data-tone="mute">Grid</span>
+          <span class="pill" data-tone="mute">Log</span>
+          <span class="btn btn--quiet">Export CSV</span>
+        </div>
+
+        <div class="ui-stats">
+          <div class="ui-stat" data-tone="ok"><b>94%</b><span>Checks completed</span></div>
+          <div class="ui-stat" data-tone="crit"><b>3</b><span>Missed entirely</span></div>
+          <div class="ui-stat" data-tone="warn"><b>5</b><span>Found a problem</span></div>
+          <div class="ui-stat" data-tone="info"><b>07:09</b><span>Median completion</span></div>
+        </div>
+
+        <div class="ui-label">Last 14 days &mdash; each column is one duty day, each square one check</div>
+        <div class="scroll-x">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th class="mx-u">Apparatus</th>
+                <th>03</th><th>04</th><th>05</th><th>06</th><th>07</th><th>08</th><th>09</th>
+                <th>10</th><th>11</th><th>12</th><th>13</th><th>14</th><th>15</th><th>16</th>
+                <th style="text-align:right; padding-left:0.9rem;">Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mx-u"><span class="unit">E-1</span></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="fail"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="fail"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="part"></i><i class="cell"></i></div></td>
+                <td class="mx-rate">96%</td>
+              </tr>
+              <tr>
+                <td class="mx-u"><span class="unit">E-2</span></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="fail"></i><i class="cell" data-s="miss"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="miss"></i><i class="cell" data-s="miss"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="miss"></i><i class="cell" data-s="miss"></i></div></td>
+                <td class="mx-rate">72%</td>
+              </tr>
+              <tr>
+                <td class="mx-u"><span class="unit">M-2</span></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="fail"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell"></i></div></td>
+                <td class="mx-rate">100%</td>
+              </tr>
+              <tr>
+                <td class="mx-u"><span class="unit">T-3</span></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="miss"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i><i class="cell"></i></div></td>
+                <td class="mx-rate">98%</td>
+              </tr>
+              <tr>
+                <td class="mx-u"><span class="unit">B-7</span></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell"></i></div></td>
+                <td><div class="cellpair"><i class="cell" data-s="ok"></i></div></td>
+                <td class="mx-rate">100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="legend">
+          <span><i class="cell" data-s="ok"></i> Passed</span>
+          <span><i class="cell" data-s="fail"></i> Found a problem</span>
+          <span><i class="cell" data-s="part"></i> Started, not finished</span>
+          <span><i class="cell" data-s="miss"></i> Missed</span>
+          <span><i class="cell"></i> Not scheduled</span>
+          <span style="margin-left:auto;">Left square = start of shift, right = end of shift. B-7 runs a weekly check, so it has one.</span>
+        </div>
+
+        <div class="ui-label" style="margin-top:0.35rem;">Log &mdash; newest first</div>
+        <div class="ui-stack">
+          <div class="ui-row ui-row--stripe" data-tone="warn">
+            <div class="ui-row__main">
+              <span class="ui-row__t"><span class="unit">E-1</span> &nbsp;Engine Daily Check &nbsp;<span class="pill" data-tone="warn">Started, not finished</span></span>
+              <span class="ui-row__m">Today 07:22 &middot; K. Moreno &middot; 6 of 9 items &middot; open 19 min</span>
+            </div>
+            <span class="btn btn--quiet">View</span>
+          </div>
+          <div class="ui-row ui-row--stripe" data-tone="ok">
+            <div class="ui-row__main">
+              <span class="ui-row__t"><span class="unit">T-3</span> &nbsp;Truck Daily Check &nbsp;<span class="pill" data-tone="ok">Passed</span></span>
+              <span class="ui-row__m">Today 07:12 &middot; S. Okafor &middot; 22 of 22 items &middot; took 6 min</span>
+            </div>
+            <span class="btn btn--quiet">View</span>
+          </div>
+          <div class="ui-row ui-row--stripe" data-tone="ok">
+            <div class="ui-row__main">
+              <span class="ui-row__t"><span class="unit">M-2</span> &nbsp;Medic Daily Check &nbsp;<span class="pill" data-tone="ok">Passed</span></span>
+              <span class="ui-row__m">Today 06:58 &middot; D. Whitfield &middot; 31 of 31 items &middot; took 11 min</span>
+            </div>
+            <span class="btn btn--quiet">View</span>
+          </div>
+          <div class="ui-row ui-row--stripe" data-tone="crit">
+            <div class="ui-row__main">
+              <span class="ui-row__t"><span class="unit">E-2</span> &nbsp;Engine Daily Check &nbsp;<span class="pill" data-tone="crit">Missed</span></span>
+              <span class="ui-row__m">11 Aug &middot; nobody assigned &middot; rig was out of service from 11 Aug</span>
+            </div>
+            <span class="btn btn--quiet">Why?</span>
+          </div>
+          <div class="ui-row ui-row--stripe" data-tone="crit">
+            <div class="ui-row__main">
+              <span class="ui-row__t"><span class="unit">E-2</span> &nbsp;Engine Daily Check &nbsp;<span class="pill" data-tone="crit">1 failed</span></span>
+              <span class="ui-row__m">11 Aug 07:04 &middot; R. Alvarez &middot; 8 of 9 items &middot; hydraulic spreader &mdash; will not hold pressure</span>
+            </div>
+            <span class="btn btn--quiet">View</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="screen__caption">
+      The check log at fleet scope. Grid answers &ldquo;is the pattern okay?&rdquo; — E-2's block of
+      amber reads at a glance, and so does T-3's single missed morning on the 5th. Log answers
+      &ldquo;what happened on that one?&rdquo;
+    </p>
+
+    <div class="col" style="display:grid; gap:0.9rem;">
+      <h3>Four decisions worth making explicitly</h3>
+    </div>
+    <div class="findings">
+      <div class="finding">
+        <span class="finding__n">01</span>
+        <span class="finding__t">A missed check has to be a row</span>
+        <p class="finding__b">
+          Today nothing is written when a check does not happen — the absence is only visible as a card
+          that never left &ldquo;Not started&rdquo;. The grid needs the negative, so the log is built
+          from <em>expected</em> checks (shift &times; active template) left-joined onto submitted ones,
+          not from the check records alone. This is the one genuinely new query.
+        </p>
+      </div>
+      <div class="finding">
+        <span class="finding__n">02</span>
+        <span class="finding__t">&ldquo;Last X&rdquo; means duty days, not calendar days</span>
+        <p class="finding__b">
+          A rig that runs a weekly check would show six empty columns in a seven-day window and look
+          neglected. Columns are check occasions for that apparatus, so B-7's weekly check gives it
+          four squares in a fortnight and a 100% rate — correct, and legible next to E-1's twenty-eight.
+        </p>
+      </div>
+      <div class="finding">
+        <span class="finding__n">03</span>
+        <span class="finding__t">Out of service is not the same as missed</span>
+        <p class="finding__b">
+          E-2 was OOS from the 11th. Marking those days as missed punishes the crew for a rig in the
+          shop and makes the rate meaningless. Out-of-service days render as not-scheduled and are
+          excluded from the denominator, with the reason available on the row.
+        </p>
+      </div>
+      <div class="finding">
+        <span class="finding__n">04</span>
+        <span class="finding__t">Who sees whose checks</span>
+        <p class="finding__b">
+          The log names members, so it is not the current my-checks-only accordion with a wider query.
+          Fleet scope sits behind <span class="unit">equipment_check.view</span>; a member with only
+          <span class="unit">equipment_check.submit</span> gets the same component filtered to their own
+          checks, which is strictly more than they have today.
+        </p>
+      </div>
+    </div>
+
+    <dl class="facets">
+      <div class="facet"><dt>Member</dt><dd>Their own log, finally filterable by rig and date instead of a flat list searchable by name.</dd></div>
+      <div class="facet"><dt>Officer</dt><dd>The assurance view. Two weeks of the fleet in one screen, and the pattern &mdash; not the incident &mdash; is what shows.</dd></div>
+      <div class="facet"><dt>Inventory manager</dt><dd>Filter to failures across the window to see which items keep coming back. Exports as CSV for the same reason the reports page does.</dd></div>
+      <div class="facet"><dt>Added cost over plain B</dt><dd><strong>Small.</strong> One expected-vs-actual endpoint with a window parameter, one route, one component used at two scopes.</dd></div>
+      <div class="facet"><dt>What it retires</dt><dd>The &ldquo;Completed checklists&rdquo; accordion, and the compliance tab of Check Reports becomes a thin wrapper over the same data.</dd></div>
+    </dl>
+  </section>
+
+  <!-- ============================================================== -->
   <section class="section">
     <p class="rule-label">Side by side</p>
-    <h2>Choosing between them</h2>
+    <h2>How the three compared</h2>
 
     <div class="scroll-x">
       <table class="cmp">
@@ -1433,35 +1769,41 @@
     </div>
 
     <div class="verdict">
-      <h3>If you want a recommendation</h3>
+      <h3>What is being built</h3>
       <p>
-        <strong>B is the right destination</strong> — the apparatus is the object every one of these three
-        people is actually thinking about, and it is the only option that dissolves the link farm rather
-        than tidying it. But A is not a throwaway on the way there:
+        <strong>B, plus the check log</strong> — the apparatus is the object all three people are
+        actually thinking about, and the log turns the one number an officer most wants
+        (&ldquo;has this been getting done?&rdquo;) from a report they have to go and pull into a page
+        they can glance at. A and C are not on the plan; the parts of them worth keeping fold in.
       </p>
       <ol>
         <li>
-          <strong>Ship A first.</strong> The readiness band, the urgency ranking and the collapsed future
-          are days of frontend work and fix findings 04 and 06 outright. The deficiency roll-up endpoint
-          it needs is the same one B and C need.
+          <strong>Fleet board and apparatus detail.</strong> The new front door at
+          <span class="unit">/scheduling/equipment</span>, with per-rig detail absorbing
+          <span class="unit">/scheduling/apparatus-inventory</span> and
+          <span class="unit">/scheduling/supply/expiring</span> as tabs. Settle the in-service rule with
+          the department before writing it — the pill is a claim the app is making.
         </li>
         <li>
-          <strong>Then B.</strong> Promote the roll-up to a fleet board and build the apparatus detail
-          route. Retire <span class="unit">/scheduling/apparatus-inventory</span> and
-          <span class="unit">/scheduling/supply/expiring</span> into its tabs. Agree the in-service rule
-          with the department before writing it.
+          <strong>Check log, both scopes.</strong> Fleet-wide at
+          <span class="unit">/scheduling/equipment/checks</span>, and the same component as the apparatus
+          detail's Check log tab. Needs the expected-vs-actual query so missed checks exist as rows.
         </li>
         <li>
-          <strong>C only on demand.</strong> The deficiency lifecycle is the biggest build and the one
-          that fails silently if the department will not work it. Ask an officer whether they would
-          actually verify a repair before signing a rig back in service — if the answer is no, A and B
-          are the whole job.
+          <strong>Borrowed from A:</strong> the urgency band and the collapsed future, applied to the
+          member's strip at the top of the fleet board. Cheap, and it fixes the &ldquo;due today looks
+          like due Tuesday&rdquo; problem without needing A's page.
+        </li>
+        <li>
+          <strong>Borrowed from C:</strong> nothing yet, deliberately. If the deficiency lifecycle ever
+          gets built, the fleet board is already the right surface for it — the per-rig counts on each
+          card become links into a worklist instead of into a filtered log.
         </li>
       </ol>
       <p>
-        C's officer lens is worth stealing regardless: <em>who has not done their check this shift</em> is
-        a question B does not answer, and it can be added to B's fleet board as a fifth column without
-        any of C's schema.
+        The one question C answers that this does not is <em>who</em> skipped their check, as opposed to
+        which rig went unchecked. If that turns out to matter, it is a column on the check log rather
+        than a new lens — the log already names the member on every row.
       </p>
     </div>
   </section>
