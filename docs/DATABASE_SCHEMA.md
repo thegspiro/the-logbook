@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**243 tables · 4202 columns · 789 foreign keys**
+**243 tables · 4203 columns · 790 foreign keys**
 
 ---
 
@@ -204,7 +204,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`facility_maintenance_types`](#facility_maintenance_types) | `FacilityMaintenanceType` | 11 | Types of maintenance work that can be performed on facilities. |
 | [`facility_occupants`](#facility_occupants) | `FacilityOccupant` | 14 | Units, crews, or teams assigned to a facility |
 | [`facility_photos`](#facility_photos) | `FacilityPhoto` | 10 | Photos associated with a facility |
-| [`facility_rooms`](#facility_rooms) | `FacilityRoom` | 18 | Individual rooms and spaces within a facility |
+| [`facility_rooms`](#facility_rooms) | `FacilityRoom` | 19 | Individual rooms and spaces within a facility |
 | [`facility_shutoff_locations`](#facility_shutoff_locations) | `FacilityShutoffLocation` | 11 | Utility shutoff locations within a facility (water main, gas main, etc.) |
 | [`facility_statuses`](#facility_statuses) | `FacilityStatus` | 10 | Facility statuses (e.g. Operational, Under Renovation). |
 | [`facility_systems`](#facility_systems) | `FacilitySystem` | 29 | Segments a facility into logical building systems (HVAC, electrical, |
@@ -2942,6 +2942,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `facility_id` | VARCHAR(36) | no | FK, IDX |  | → `facilities.id` ON DELETE CASCADE |
+| `parent_room_id` | VARCHAR(36) | yes | FK, IDX |  | → `facility_rooms.id` ON DELETE SET NULL |
 | `name` | VARCHAR(200) | no |  |  |  |
 | `room_number` | VARCHAR(50) | yes |  |  |  |
 | `floor` | INTEGER | yes |  |  |  |
@@ -2963,6 +2964,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_facility_rooms_floor` (`facility_id`, `floor`)
 - `idx_facility_rooms_type` (`room_type`)
 - `ix_facility_rooms_organization_id` (`organization_id`)
+- `ix_facility_rooms_parent_room_id` (`parent_room_id`)
 
 ### `facility_shutoff_locations`
 
@@ -9573,6 +9575,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus` | `required_evoc_level_id` | SET NULL | yes |
 | `apparatus_operators` | `evoc_level_id` | SET NULL | yes |
 
+### → `facility_rooms` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `facility_rooms` | `parent_room_id` | SET NULL | yes |
+| `locations` | `facility_room_id` | SET NULL | yes |
+
 ### → `form_submissions` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -9709,12 +9718,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `facility_maintenance` | `maintenance_type_id` | NO ACTION | no |
-
-### → `facility_rooms` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `locations` | `facility_room_id` | SET NULL | yes |
 
 ### → `facility_statuses` (1 references)
 
