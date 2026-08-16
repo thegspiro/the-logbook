@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { DollarSign, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import type { IssuanceChargeListItem } from '../services/eventServices';
@@ -279,7 +280,10 @@ const ChargeManagementPanel: React.FC = () => {
               onClick={() => setActionModal({ open: false, item: null, action: '' })}
               aria-hidden="true"
             />
-            <div className="modal-panel relative w-full max-w-md">
+            <DialogPanel
+              onClose={() => setActionModal({ open: false, item: null, action: '' })}
+              className="relative w-full max-w-md"
+            >
               <div className="px-4 pt-5 pb-4 sm:px-6">
                 <div className="mb-4 flex items-center gap-2">
                   {actionModal.action === 'charged' ? (
@@ -357,7 +361,7 @@ const ChargeManagementPanel: React.FC = () => {
                   {submitting ? 'Processing...' : actionModal.action === 'charged' ? 'Apply Charge' : 'Waive Charge'}
                 </button>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         </div>
       )}

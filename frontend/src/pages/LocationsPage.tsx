@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { Link } from 'react-router';
 import {
   MapPin,
@@ -297,7 +298,10 @@ function LocationSetupWizard({
   /* ── Render ── */
   return (
     <div className="modal-overlay flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="modal-panel flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden">
+      <DialogPanel
+        onClose={() => onDismiss?.()}
+        className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden"
+      >
         {/* Progress bar */}
         <div className="px-6 pt-5 pb-2">
           <div className="mb-2 flex items-center justify-between">
@@ -792,7 +796,7 @@ function LocationSetupWizard({
             </>
           )}
         </div>
-      </div>
+      </DialogPanel>
     </div>
   );
 }
@@ -1466,7 +1470,7 @@ export default function LocationsPage() {
             if (e.key === 'Escape') setShowStationModal(false);
           }}
         >
-          <div className="modal-panel w-full max-w-md">
+          <DialogPanel onClose={() => setShowStationModal(false)} className="w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingStation ? 'Edit Station' : 'Add Station'}
@@ -1560,7 +1564,7 @@ export default function LocationsPage() {
                 {editingStation ? 'Update' : 'Add Station'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
 
@@ -1574,7 +1578,7 @@ export default function LocationsPage() {
             if (e.key === 'Escape') setShowRoomModal(false);
           }}
         >
-          <div className="modal-panel w-full max-w-md">
+          <DialogPanel onClose={() => setShowRoomModal(false)} className="w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}
@@ -1659,7 +1663,7 @@ export default function LocationsPage() {
                 {editingRoom ? 'Update' : 'Add Room'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

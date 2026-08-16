@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { getErrorMessage } from '@/utils/errorHandling';
 import {
   FormInput,
@@ -1022,7 +1023,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="modal-panel relative w-full max-w-lg">
+              <DialogPanel onClose={() => setShowCreateModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 id="create-form-title" className="text-theme-text-primary text-lg font-medium">
@@ -1118,7 +1119,7 @@ const FormsPage: React.FC = () => {
                     {creating ? 'Creating...' : 'Create Form'}
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -1136,7 +1137,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" onClick={() => setShowShareModal(false)} aria-hidden="true" />
-              <div className="modal-panel relative w-full max-w-lg">
+              <DialogPanel onClose={() => setShowShareModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3
@@ -1327,7 +1328,7 @@ const FormsPage: React.FC = () => {
                     Done
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -1345,7 +1346,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" onClick={() => setShowIntegrationModal(false)} aria-hidden="true" />
-              <div className="modal-panel relative w-full max-w-lg">
+              <DialogPanel onClose={() => setShowIntegrationModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3
@@ -1587,7 +1588,7 @@ const FormsPage: React.FC = () => {
                     Done
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}

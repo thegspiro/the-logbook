@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -242,7 +243,10 @@ export const RoleManagementPage: React.FC = () => {
               if (e.key === 'Escape') setShowCreateModal(false);
             }}
           >
-            <div className="modal-panel mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden">
+            <DialogPanel
+              onClose={() => setShowCreateModal(false)}
+              className="mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden"
+            >
               <div className="border-theme-surface-border shrink-0 border-b px-6 py-4">
                 <h3 id="role-modal-title" className="text-theme-text-primary text-lg font-medium">
                   {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
@@ -374,7 +378,7 @@ export const RoleManagementPage: React.FC = () => {
                   {editingRole ? 'Save Changes' : 'Create Role'}
                 </button>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         )}
       </div>

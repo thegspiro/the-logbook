@@ -20,6 +20,7 @@ import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
+import { DialogPanel } from '../components/ux/DialogPanel';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -572,7 +573,10 @@ export const ElectionsPage: React.FC = () => {
               if (e.key === 'Escape') setShowCreateModal(false);
             }}
           >
-            <div className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
+            <DialogPanel
+              onClose={() => setShowCreateModal(false)}
+              className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto"
+            >
               <div className="border-theme-surface-border border-b px-6 py-4">
                 <h3 id="create-election-title" className="text-theme-text-primary text-lg font-medium">
                   Create New Election
@@ -1167,7 +1171,7 @@ export const ElectionsPage: React.FC = () => {
                   </button>
                 </div>
               </form>
-            </div>
+            </DialogPanel>
           </div>
         )}
       </div>

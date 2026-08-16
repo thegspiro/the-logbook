@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
 import { BookOpen, Plus, Search, Edit2, Trash2, X, Clock, Award, Filter, ChevronDown, ListOrdered } from 'lucide-react';
 import { trainingService } from '../services/api';
@@ -150,7 +151,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel max-h-[90dvh] w-full max-w-3xl overflow-y-auto">
+      <DialogPanel onClose={onClose} className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 className="text-theme-text-primary text-xl font-bold">{isEdit ? 'Edit Course' : 'Add New Course'}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary">
@@ -332,7 +333,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
             </button>
           </div>
         </form>
-      </div>
+      </DialogPanel>
     </div>
   );
 };
@@ -735,7 +736,10 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
           aria-modal="true"
           aria-label={`Classes for ${syllabusCourse.name}`}
         >
-          <div className="modal-panel max-h-[90dvh] w-full max-w-3xl overflow-y-auto">
+          <DialogPanel
+            onClose={() => setSyllabusCourse(null)}
+            className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto"
+          >
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <div>
                 <h2 className="text-theme-text-primary text-xl font-bold">{syllabusCourse.name}</h2>
@@ -755,7 +759,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
             <div className="modal-body">
               <CourseSyllabusBuilder course={syllabusCourse} onCreateCourse={requestNewCourse} />
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

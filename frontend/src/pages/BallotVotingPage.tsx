@@ -20,6 +20,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { electionService } from '../services/api';
 import type {
   BallotElection,
@@ -619,7 +620,10 @@ export const BallotVotingPage: React.FC = () => {
             if (e.key === 'Escape' && !submitting) setShowConfirmation(false);
           }}
         >
-          <div className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
+          <DialogPanel
+            onClose={() => setShowConfirmation(false)}
+            className="max-h-[90dvh] w-full max-w-lg overflow-y-auto"
+          >
             <div className="border-theme-surface-border bg-theme-surface-secondary border-b px-6 py-4">
               <h3 id="confirm-ballot-title" className="text-theme-text-primary text-lg font-bold">
                 Confirm Your Ballot
@@ -687,7 +691,7 @@ export const BallotVotingPage: React.FC = () => {
                 {submitting ? 'Submitting...' : 'Cast Ballot'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

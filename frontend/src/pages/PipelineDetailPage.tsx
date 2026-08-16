@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -438,7 +439,7 @@ const EnrollModal: React.FC<{
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel flex max-h-[90dvh] w-full max-w-lg flex-col">
+      <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-lg flex-col">
         <div className="border-theme-surface-border border-b p-6">
           <h2 className="text-theme-text-primary text-xl font-bold">Enroll Members</h2>
           <p className="text-theme-text-muted mt-1 text-sm">Enroll members into {programName}</p>
@@ -604,7 +605,7 @@ const EnrollModal: React.FC<{
             </button>
           </div>
         </form>
-      </div>
+      </DialogPanel>
     </div>
   );
 };
@@ -1015,7 +1016,7 @@ const EnrollmentProgressModal: React.FC<{
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-panel flex max-h-[90dvh] w-full max-w-2xl flex-col">
+      <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-2xl flex-col">
         <div className="border-theme-surface-border border-b p-6">
           <div className="flex items-start justify-between">
             <div>
@@ -1196,7 +1197,7 @@ const EnrollmentProgressModal: React.FC<{
             Done
           </button>
         </div>
-      </div>
+      </DialogPanel>
     </div>
   );
 };

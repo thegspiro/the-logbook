@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -1706,7 +1707,13 @@ const IntegrationsPage: React.FC = () => {
                     }}
                     aria-hidden="true"
                   />
-                  <div className="modal-panel relative w-full max-w-lg">
+                  <DialogPanel
+                    onClose={() => {
+                      setShowConnectModal(null);
+                      resetFormState();
+                    }}
+                    className="relative w-full max-w-lg"
+                  >
                     <div className="px-6 pt-5 pb-4">
                       <div className="mb-4 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
@@ -1775,7 +1782,7 @@ const IntegrationsPage: React.FC = () => {
                         {connecting ? 'Connecting...' : 'Connect'}
                       </button>
                     </div>
-                  </div>
+                  </DialogPanel>
                 </div>
               </div>
             );

@@ -6,6 +6,7 @@
  */
 
 import { useEffect } from 'react';
+import { DialogPanel } from '../../../components/ux/DialogPanel';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
   Wrench,
@@ -248,7 +249,7 @@ export default function MaintenanceListPage() {
             if (e.key === 'Escape') setShowModal(false);
           }}
         >
-          <div className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
+          <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRecord ? 'Edit Maintenance Record' : 'New Maintenance Record'}
@@ -395,7 +396,7 @@ export default function MaintenanceListPage() {
                 {editingRecord ? 'Update' : 'Create'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

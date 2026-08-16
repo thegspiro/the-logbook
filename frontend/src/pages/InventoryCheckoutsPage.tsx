@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
 import { Package, AlertTriangle, RefreshCw, ArrowDownToLine, Clock, Search, CalendarClock } from 'lucide-react';
 import { inventoryService } from '../services/api';
@@ -402,7 +403,10 @@ export const InventoryCheckoutsPage: React.FC = () => {
                 aria-hidden="true"
                 onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
               ></div>
-              <div className="modal-panel relative z-10 w-full max-w-md">
+              <DialogPanel
+                onClose={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
+                className="relative z-10 w-full max-w-md"
+              >
                 <div className="px-4 pt-5 pb-4 sm:px-6">
                   <h3 id="checkin-modal-title" className="text-theme-text-primary mb-4 text-lg font-medium">
                     Check In: {checkInModal.itemName}
@@ -464,7 +468,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                     <span>{submitting ? 'Checking In...' : 'Check In'}</span>
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -486,7 +490,10 @@ export const InventoryCheckoutsPage: React.FC = () => {
                 aria-hidden="true"
                 onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
               ></div>
-              <div className="modal-panel relative z-10 w-full max-w-sm">
+              <DialogPanel
+                onClose={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
+                className="relative z-10 w-full max-w-sm"
+              >
                 <div className="px-4 pt-5 pb-4 sm:px-6">
                   <h3 id="extend-modal-title" className="text-theme-text-primary mb-1 text-lg font-medium">
                     Extend Return Date
@@ -536,7 +543,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                     {submitting ? 'Extending...' : 'Extend'}
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}

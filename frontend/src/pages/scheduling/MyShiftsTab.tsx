@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { DialogPanel } from '../../components/ux/DialogPanel';
 import {
   Clock,
   Check,
@@ -663,7 +664,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           aria-modal="true"
           aria-label="Request shift swap"
         >
-          <div ref={swapModalRef} className="modal-panel w-full max-w-md">
+          <DialogPanel onClose={() => setShowSwapModal(false)} ref={swapModalRef} className="w-full max-w-md">
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Shift Swap</h2>
               <p className="text-theme-text-secondary mt-1 text-sm">
@@ -765,7 +766,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 {submittingSwap ? 'Submitting...' : 'Submit Request'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
 
@@ -777,7 +778,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           aria-modal="true"
           aria-label="Request time off"
         >
-          <div ref={timeOffModalRef} className="modal-panel w-full max-w-md">
+          <DialogPanel onClose={() => setShowTimeOffModal(false)} ref={timeOffModalRef} className="w-full max-w-md">
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Time Off</h2>
             </div>
@@ -862,7 +863,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 {submittingTimeOff ? 'Submitting...' : 'Submit Request'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

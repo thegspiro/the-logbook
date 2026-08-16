@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { FileText, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, ArrowLeft, Clock } from 'lucide-react';
@@ -287,7 +288,7 @@ export const EventTemplatesPage: React.FC = () => {
           aria-modal="true"
         >
           <div className="modal-overlay" onClick={handleFormCancel} aria-hidden="true" />
-          <div className="modal-panel relative mx-4 w-full max-w-3xl">
+          <DialogPanel onClose={handleFormCancel} className="relative mx-4 w-full max-w-3xl">
             <div className="border-theme-surface-border border-b px-6 py-4">
               <h2 className="text-theme-text-primary text-lg font-semibold">
                 {editingTemplate ? 'Edit Template' : 'Create Template'}
@@ -302,7 +303,7 @@ export const EventTemplatesPage: React.FC = () => {
                 submitLabel={editingTemplate ? 'Update Template' : 'Create Template'}
               />
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { ArrowDownToLine, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import type { ReturnRequestItem } from '../services/eventServices';
@@ -193,7 +194,10 @@ const ReturnRequestsPanel: React.FC = () => {
               onClick={() => setReviewModal({ open: false, request: null })}
               aria-hidden="true"
             />
-            <div className="modal-panel relative w-full max-w-md">
+            <DialogPanel
+              onClose={() => setReviewModal({ open: false, request: null })}
+              className="relative w-full max-w-md"
+            >
               <div className="px-4 pt-5 pb-4 sm:px-6">
                 <h3 className="text-theme-text-primary mb-4 text-lg font-medium">
                   {reviewAction === RequestStatus.APPROVED ? 'Approve Return' : 'Deny Return'}
@@ -276,7 +280,7 @@ const ReturnRequestsPanel: React.FC = () => {
                   {submitting ? 'Processing...' : reviewAction === RequestStatus.APPROVED ? 'Approve & Return' : 'Deny'}
                 </button>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         </div>
       )}

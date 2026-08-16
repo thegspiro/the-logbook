@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -1174,7 +1175,7 @@ export const EventsPage: React.FC = () => {
 
       {/* Floating Bulk Action Bar */}
       {selectedEvents.size > 0 && (
-        <div className="modal-panel fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 px-6 py-3">
+        <div className="popover-panel fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 px-6 py-3">
           <span className="text-theme-text-primary text-sm font-medium">{selectedEvents.size} selected</span>
           <div className="bg-theme-surface-border h-5 w-px" />
           <button
@@ -1213,7 +1214,7 @@ export const EventsPage: React.FC = () => {
           aria-label="Import Events from CSV"
         >
           <div className="modal-overlay" onClick={handleCloseImportModal} aria-hidden="true" />
-          <div className="modal-panel relative mx-4 w-full max-w-lg p-6">
+          <DialogPanel onClose={handleCloseImportModal} className="relative mx-4 w-full max-w-lg p-6">
             <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Import Events from CSV</h3>
 
             {!importResult ? (
@@ -1362,7 +1363,7 @@ export const EventsPage: React.FC = () => {
                 </div>
               </>
             )}
-          </div>
+          </DialogPanel>
         </div>
       )}
 
@@ -1370,7 +1371,7 @@ export const EventsPage: React.FC = () => {
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
           <div className="modal-overlay" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
-          <div className="modal-panel relative mx-4 w-full max-w-md p-6">
+          <DialogPanel onClose={() => setShowCancelConfirm(false)} className="relative mx-4 w-full max-w-md p-6">
             <h3 className="text-theme-text-primary mb-2 text-lg font-medium">
               Cancel {selectedEvents.size} Event{selectedEvents.size !== 1 ? 's' : ''}?
             </h3>
@@ -1395,7 +1396,7 @@ export const EventsPage: React.FC = () => {
                 {bulkActionLoading ? 'Cancelling...' : 'Confirm Cancel'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

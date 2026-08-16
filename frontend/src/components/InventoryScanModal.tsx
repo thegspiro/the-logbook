@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { Modal } from './Modal';
 import { Camera, Check, AlertTriangle, Package, Trash2, Loader2, Search } from 'lucide-react';
 import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
@@ -734,7 +735,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                     {showDropdown && searchResults.length > 0 && (
                       <div
                         ref={dropdownRef}
-                        className="modal-panel absolute top-full right-0 left-0 z-20 mt-1 max-h-60 overflow-y-auto"
+                        className="popover-panel absolute top-full right-0 left-0 z-20 mt-1 max-h-60 overflow-y-auto"
                       >
                         {searchResults.map((result, i) => {
                           const isAlreadyAdded = scannedItems.some((si) => si.itemId === result.item.id);
@@ -947,7 +948,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         {/* Confirmation overlay */}
         {showConfirm && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-black/50">
-            <div className="modal-panel mx-4 max-w-sm p-5">
+            <DialogPanel onClose={() => setShowConfirm(false)} className="mx-4 max-w-sm p-5">
               <h4 className="text-theme-text-primary mb-2 font-medium">
                 Confirm {mode === 'checkout' ? 'Assignment' : 'Return'}
               </h4>
@@ -972,7 +973,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                   Confirm
                 </button>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         )}
       </div>

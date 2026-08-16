@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../../components/ux/DialogPanel';
 import { Clock, Users, UserPlus, Truck, Loader2, CalendarDays, Filter, Check, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -261,7 +262,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 if (e.key === 'Escape') setSignupShiftId(null);
               }}
             >
-              <div className="modal-panel w-full max-w-sm">
+              <DialogPanel onClose={() => setSignupShiftId(null)} className="w-full max-w-sm">
                 <div className="border-theme-surface-border border-b p-5">
                   <h2 className="text-theme-text-primary text-lg font-bold">Sign Up for Shift</h2>
                   {targetShift && (
@@ -331,7 +332,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                     </button>
                   )}
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           );
         })()}

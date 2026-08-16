@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { DialogPanel } from '../../components/ux/DialogPanel';
 import { useNavigate } from 'react-router';
 import {
   Search,
@@ -315,8 +316,9 @@ export const CommandPalette: React.FC = () => {
     <div className="fixed inset-0 z-60 overflow-y-auto">
       <div className="modal-overlay backdrop-blur-xs" onClick={() => setIsOpen(false)} aria-hidden="true" />
       <div className="relative flex min-h-screen items-start justify-center px-4 pt-[15dvh]">
-        <div
-          className="modal-panel w-full max-w-lg overflow-hidden"
+        <DialogPanel
+          onClose={() => setIsOpen(false)}
+          className="w-full max-w-lg overflow-hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Command palette"
@@ -406,7 +408,7 @@ export const CommandPalette: React.FC = () => {
               <kbd className="bg-theme-surface-secondary rounded-sm px-1.5 py-0.5 font-mono text-[10px]">Esc</kbd> Close
             </span>
           </div>
-        </div>
+        </DialogPanel>
       </div>
     </div>
   );

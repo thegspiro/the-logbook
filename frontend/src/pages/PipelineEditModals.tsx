@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
 import { X, AlertCircle } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
@@ -69,7 +70,7 @@ const ModalShell: React.FC<{
       if (e.key === 'Escape') onClose();
     }}
   >
-    <div className="modal-panel flex max-h-[90dvh] w-full max-w-lg flex-col">
+    <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-lg flex-col">
       <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
         <h2 className="text-theme-text-primary text-lg font-bold">{title}</h2>
         <button
@@ -102,7 +103,7 @@ const ModalShell: React.FC<{
           </button>
         </div>
       </form>
-    </div>
+    </DialogPanel>
   </div>
 );
 

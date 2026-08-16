@@ -20,6 +20,7 @@ import { inputCls, labelCls } from '../constants';
 import { useMaintenanceForm } from '../hooks/useMaintenanceForm';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
+import { DialogPanel } from '../../../components/ux/DialogPanel';
 
 interface Props {
   facilityId: string;
@@ -212,7 +213,7 @@ export default function MaintenanceSection({ facilityId, canManage }: Props) {
             if (e.key === 'Escape') setShowModal(false);
           }}
         >
-          <div className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
+          <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRecord ? 'Edit Record' : 'New Maintenance Record'}
@@ -342,7 +343,7 @@ export default function MaintenanceSection({ facilityId, canManage }: Props) {
                 {editingRecord ? 'Update' : 'Create'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>
