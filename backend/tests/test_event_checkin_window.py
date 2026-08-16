@@ -46,10 +46,12 @@ class TestGetCheckInWindow:
         assert end == END
 
     def test_flexible_custom_before(self):
+        # Deliberately not 60 — that is the default, so it would pass even if
+        # the configured lead time were ignored entirely.
         start, _ = EventService._get_check_in_window(
-            _event(CheckInWindowType.FLEXIBLE, before=60)
+            _event(CheckInWindowType.FLEXIBLE, before=90)
         )
-        assert start == START - timedelta(minutes=60)
+        assert start == START - timedelta(minutes=90)
 
     def test_flexible_uses_actual_end_when_present(self):
         actual_end = datetime(2026, 6, 1, 20, 30, tzinfo=tz.utc)
