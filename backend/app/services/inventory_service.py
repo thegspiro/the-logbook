@@ -923,6 +923,194 @@ class InventoryService:
             logger.error(f"Error deleting vendor contact: {e}")
             return str(e)
 
+    # ------------------------------------------------------------------
+    # Cleaning up what the free-text era left behind
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _name_key(name: Optional[str]) -> str:
+        """Fold a supplier name for comparison: trimmed and case-insensitive."""
+        return (name or "").strip().lower()
+
+    async def list_unlinked_vendor_names(
+        self, organization_id: UUID
+    ) -> List[Dict[str, Any]]:
+        """Supplier names typed onto rows that were never attached to a vendor.
+
+        These are the rows with nothing behind the name — no contact, no
+        purchase history — so the screen can offer to attach them all at once
+        rather than leaving someone to find them by eye.
+
+        Grouped case-insensitively, because "Galls Inc." and "galls inc" are
+        one supplier to whoever has to make the call. The first spelling seen
+        is the one shown, and the rest fold into it.
+        """
+        org_id = str(organization_id)
+        counts: Dict[str, Dict[str, Any]] = {}
+
+        def tally(raw_name: Optional[str], field: str, count: int) -> None:
+            key = self._name_key(raw_name)
+            if not key:
+                return
+            entry = counts.setdefault(
+                key,
+                {"name": (raw_name or "").strip(), "item_count": 0, "reorder_count": 0},
+            )
+            entry[field] += count or 0
+
+        item_rows = await self.db.execute(
+            select(InventoryItem.vendor, func.count(InventoryItem.id))
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.vendor_id.is_(None),
+                InventoryItem.vendor.isnot(None),
+                InventoryItem.active.is_(True),
+            )
+            .group_by(InventoryItem.vendor)
+        )
+        for name, count in item_rows.all():
+            tally(name, "item_count", count)
+
+        reorder_rows = await self.db.execute(
+            select(ReorderRequest.vendor, func.count(ReorderRequest.id))
+            .where(
+                ReorderRequest.organization_id == org_id,
+                ReorderRequest.vendor_id.is_(None),
+                ReorderRequest.vendor.isnot(None),
+            )
+            .group_by(ReorderRequest.vendor)
+        )
+        for name, count in reorder_rows.all():
+            tally(name, "reorder_count", count)
+
+        # Busiest first: the name on forty items is the one worth attaching.
+        return sorted(
+            counts.values(),
+            key=lambda e: (-(e["item_count"] + e["reorder_count"]), e["name"].lower()),
+        )
+
+    async def attach_vendor_name(
+        self, vendor_id: UUID, organization_id: UUID, name: str
+    ) -> Tuple[Optional[Dict[str, int]], Optional[str]]:
+        """Point every row carrying this typed-in name at a real vendor.
+
+        Only rows that are not already linked are touched: an item somebody
+        attached to a different supplier by hand is a decision, not a leftover.
+        """
+        try:
+            key = self._name_key(name)
+            if not key:
+                return None, "A supplier name is required"
+
+            vendor = await self.get_vendor(vendor_id, organization_id)
+            if not vendor:
+                return None, "Vendor not found"
+
+            org_id = str(organization_id)
+            item_result = await self.db.execute(
+                update(InventoryItem)
+                .where(
+                    InventoryItem.organization_id == org_id,
+                    InventoryItem.vendor_id.is_(None),
+                    func.lower(func.trim(InventoryItem.vendor)) == key,
+                )
+                .values(vendor_id=str(vendor_id))
+            )
+            reorder_result = await self.db.execute(
+                update(ReorderRequest)
+                .where(
+                    ReorderRequest.organization_id == org_id,
+                    ReorderRequest.vendor_id.is_(None),
+                    func.lower(func.trim(ReorderRequest.vendor)) == key,
+                )
+                .values(vendor_id=str(vendor_id))
+            )
+            await self.db.commit()
+            return (
+                {
+                    "items_linked": item_result.rowcount or 0,
+                    "reorders_linked": reorder_result.rowcount or 0,
+                },
+                None,
+            )
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error attaching vendor name: {e}")
+            return None, str(e)
+
+    async def merge_vendors(
+        self, target_id: UUID, source_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Fold one vendor into another: same supplier, entered twice.
+
+        Everything that points at the source is repointed at the target — items,
+        reorder requests, contacts — and the source row is then removed. It is
+        removed rather than deactivated so the name is free again: a merged
+        duplicate left on file keeps its name reserved by the unique
+        constraint, and shows up forever under "show inactive".
+
+        The target's own details win; nothing on it is overwritten.
+        """
+        try:
+            if str(target_id) == str(source_id):
+                return None, "A vendor cannot be merged into itself"
+
+            org_id = str(organization_id)
+            target = await self.get_vendor(target_id, organization_id)
+            if not target:
+                return None, "Vendor not found"
+            source = await self.get_vendor(source_id, organization_id)
+            if not source:
+                return None, "The vendor to merge was not found"
+
+            source_name = source.name
+
+            item_result = await self.db.execute(
+                update(InventoryItem)
+                .where(
+                    InventoryItem.organization_id == org_id,
+                    InventoryItem.vendor_id == str(source_id),
+                )
+                .values(vendor_id=str(target_id))
+            )
+            reorder_result = await self.db.execute(
+                update(ReorderRequest)
+                .where(
+                    ReorderRequest.organization_id == org_id,
+                    ReorderRequest.vendor_id == str(source_id),
+                )
+                .values(vendor_id=str(target_id))
+            )
+            contact_result = await self.db.execute(
+                update(InventoryVendorContact)
+                .where(
+                    InventoryVendorContact.organization_id == org_id,
+                    InventoryVendorContact.vendor_id == str(source_id),
+                )
+                .values(vendor_id=str(target_id))
+            )
+
+            await self.db.delete(source)
+            await self.db.flush()
+            # Both vendors may have had a primary; the target keeps one.
+            await self._normalize_primary_contact(str(target_id), org_id)
+            await self.db.commit()
+
+            return (
+                {
+                    "items_moved": item_result.rowcount or 0,
+                    "reorders_moved": reorder_result.rowcount or 0,
+                    "contacts_moved": contact_result.rowcount or 0,
+                    "merged_name": source_name,
+                    "vendor_name": target.name,
+                },
+                None,
+            )
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error merging vendors: {e}")
+            return None, str(e)
+
     # ============================================
     # Item Management
     # ============================================

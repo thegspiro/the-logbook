@@ -52,6 +52,9 @@ import type {
   InventoryVendorContact,
   InventoryVendorContactCreate,
   InventoryVendorContactUpdate,
+  UnlinkedVendorName,
+  VendorAttachNameResult,
+  VendorMergeResult,
   ItemVariantGroup,
   ItemVariantGroupCreate,
   EquipmentKit,
@@ -801,6 +804,26 @@ export const inventoryService = {
 
   async deleteVendorContact(vendorId: string, contactId: string): Promise<void> {
     await api.delete(`/inventory/vendors/${vendorId}/contacts/${contactId}`);
+  },
+
+  /** Supplier names on rows that were never attached to a vendor. */
+  async getUnlinkedVendorNames(): Promise<UnlinkedVendorName[]> {
+    const response = await api.get<UnlinkedVendorName[]>('/inventory/vendors/unlinked-names');
+    return asArray(response.data);
+  },
+
+  /** Point every row carrying `name` at this vendor. */
+  async attachVendorName(vendorId: string, name: string): Promise<VendorAttachNameResult> {
+    const response = await api.post<VendorAttachNameResult>(`/inventory/vendors/${vendorId}/attach-name`, { name });
+    return response.data;
+  },
+
+  /** Fold `sourceVendorId` into `vendorId`; the duplicate is removed. */
+  async mergeVendors(vendorId: string, sourceVendorId: string): Promise<VendorMergeResult> {
+    const response = await api.post<VendorMergeResult>(`/inventory/vendors/${vendorId}/merge`, {
+      source_vendor_id: sourceVendorId,
+    });
+    return response.data;
   },
 
   // Variant Groups

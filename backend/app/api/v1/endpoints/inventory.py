@@ -158,7 +158,12 @@ from app.schemas.inventory import (
     StorageAreaResponse,
     StorageAreaUpdate,
     UnassignItemRequest,
+    UnlinkedVendorName,
     UserInventoryResponse,
+    VendorAttachNameRequest,
+    VendorAttachNameResult,
+    VendorMergeRequest,
+    VendorMergeResult,
     WriteOffRequestCreate,
     WriteOffRequestResponse,
     WriteOffReview,
@@ -3825,6 +3830,26 @@ async def list_vendors(
     return [_vendor_response(v, stats.get(v.id)) for v in vendors]
 
 
+@router.get("/vendors/unlinked-names", response_model=list[UnlinkedVendorName])
+async def list_unlinked_vendor_names(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Supplier names typed onto items and reorder requests that were never
+    attached to a vendor — the rows with nothing behind the name.
+
+    Declared before ``/vendors/{vendor_id}`` on purpose: routes match in
+    order, and the id route would otherwise swallow this path and reject
+    "unlinked-names" as a malformed UUID.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    return await service.list_unlinked_vendor_names(current_user.organization_id)
+
+
 @router.get("/vendors/{vendor_id}", response_model=InventoryVendorResponse)
 async def get_vendor(
     vendor_id: UUID,
@@ -4058,6 +4083,100 @@ async def delete_vendor_contact(
         raise HTTPException(
             status_code=status_code, detail=sanitize_error_message(error)
         )
+
+
+@router.post(
+    "/vendors/{vendor_id}/attach-name",
+    response_model=VendorAttachNameResult,
+)
+async def attach_vendor_name(
+    vendor_id: UUID,
+    data: VendorAttachNameRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Point every item and reorder request carrying a typed-in supplier name at
+    this vendor. Rows already linked to some other vendor are left alone.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    result, error = await service.attach_vendor_name(
+        vendor_id=vendor_id,
+        organization_id=current_user.organization_id,
+        name=data.name,
+    )
+    if error:
+        status_code = 404 if error == "Vendor not found" else 400
+        raise HTTPException(
+            status_code=status_code, detail=sanitize_error_message(error)
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_vendor_name_attached",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "vendor_id": str(vendor_id),
+            "name": data.name,
+            "items_linked": result["items_linked"],
+            "reorders_linked": result["reorders_linked"],
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    return VendorAttachNameResult(**result)
+
+
+@router.post("/vendors/{vendor_id}/merge", response_model=VendorMergeResult)
+async def merge_vendors(
+    vendor_id: UUID,
+    data: VendorMergeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Fold one vendor into another — the same supplier entered twice. Items,
+    reorder requests and contacts move to the vendor in the path, and the
+    merged duplicate is removed so its name is free again.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    result, error = await service.merge_vendors(
+        target_id=vendor_id,
+        source_id=data.source_vendor_id,
+        organization_id=current_user.organization_id,
+    )
+    if error:
+        status_code = 404 if error.endswith("not found") else 400
+        raise HTTPException(
+            status_code=status_code, detail=sanitize_error_message(error)
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_vendors_merged",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "vendor_id": str(vendor_id),
+            "merged_vendor_id": str(data.source_vendor_id),
+            "merged_name": result["merged_name"],
+            "items_moved": result["items_moved"],
+            "reorders_moved": result["reorders_moved"],
+            "contacts_moved": result["contacts_moved"],
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    return VendorMergeResult(**result)
 
 
 # ============================================

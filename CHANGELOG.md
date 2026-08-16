@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: cleaning up duplicate and unattached suppliers (2026-08-16)
+
+**Added**
+
+- **Merging duplicate vendors.** A department that has been typing supplier
+  names for years ends up with "Galls" and "Galls Inc." as separate rows — the
+  migration folds case, not spelling. Merge moves the duplicate's items, reorder
+  requests and contacts to the vendor you chose and removes the duplicate, so
+  its name is free again rather than reserved by an inactive row nobody can see.
+  The target's own details are never overwritten.
+- **Attaching names that were never linked.** The vendors screen now counts the
+  supplier names typed onto items and reorder requests with no vendor behind
+  them, and offers each one as a new vendor or an attachment to an existing one
+  — linking every row carrying that name in a single pass. Rows already pointing
+  at a different vendor are left alone; that is a decision, not a leftover.
+
+**Changed**
+
+- The vendor card's purchase total counts every item ever bought from that
+  vendor, not just the ones still in the catalog. Retiring a coat was quietly
+  reducing what the department had spent with the vendor who sold it. The item
+  count still means the catalog as it stands, matching the list it links to.
+
 ### Inventory: vendors are records, not a typed-in name (2026-08-16)
 
 **Added**

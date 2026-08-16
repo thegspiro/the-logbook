@@ -1330,6 +1330,28 @@ export interface InventoryVendorUpdate {
   is_active?: boolean | undefined;
 }
 
+/** A supplier name typed onto rows that were never attached to a vendor. */
+export interface UnlinkedVendorName {
+  name: string;
+  item_count: number;
+  reorder_count: number;
+}
+
+export interface VendorAttachNameResult {
+  items_linked: number;
+  reorders_linked: number;
+}
+
+export interface VendorMergeResult {
+  items_moved: number;
+  reorders_moved: number;
+  contacts_moved: number;
+  /** The duplicate that was folded in and removed. */
+  merged_name: string;
+  /** The vendor everything moved to. */
+  vendor_name: string;
+}
+
 // Reorder Request Types
 export interface ReorderRequest {
   id: string;

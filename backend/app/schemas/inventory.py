@@ -309,6 +309,50 @@ class InventoryVendorResponse(UTCResponseBase):
     model_config = _response_config
 
 
+class UnlinkedVendorName(UTCResponseBase):
+    """A supplier name typed onto rows that were never attached to a vendor."""
+
+    name: str
+    item_count: int = 0
+    reorder_count: int = 0
+
+    model_config = _response_config
+
+
+class VendorAttachNameRequest(BaseModel):
+    """Attach every row carrying this typed-in name to a vendor."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+
+
+class VendorAttachNameResult(UTCResponseBase):
+    """What the attach touched."""
+
+    items_linked: int = 0
+    reorders_linked: int = 0
+
+    model_config = _response_config
+
+
+class VendorMergeRequest(BaseModel):
+    """Fold `source_vendor_id` into the vendor named in the path."""
+
+    source_vendor_id: UUID
+
+
+class VendorMergeResult(UTCResponseBase):
+    """What the merge moved, and between which two vendors."""
+
+    items_moved: int = 0
+    reorders_moved: int = 0
+    contacts_moved: int = 0
+    # Named so the confirmation can say what happened rather than echo ids.
+    merged_name: str
+    vendor_name: str
+
+    model_config = _response_config
+
+
 # ============================================
 # Category Schemas
 # ============================================

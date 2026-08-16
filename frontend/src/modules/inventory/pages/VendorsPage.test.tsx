@@ -10,6 +10,9 @@ const mockUpdateVendor = vi.fn();
 const mockDeactivateVendor = vi.fn();
 const mockAddVendorContact = vi.fn();
 const mockDeleteVendorContact = vi.fn();
+const mockGetUnlinkedVendorNames = vi.fn();
+const mockAttachVendorName = vi.fn();
+const mockMergeVendors = vi.fn();
 const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/api', () => ({
@@ -21,6 +24,9 @@ vi.mock('../../../services/api', () => ({
     addVendorContact: (...a: unknown[]) => mockAddVendorContact(...a) as unknown,
     updateVendorContact: vi.fn(),
     deleteVendorContact: (...a: unknown[]) => mockDeleteVendorContact(...a) as unknown,
+    getUnlinkedVendorNames: (...a: unknown[]) => mockGetUnlinkedVendorNames(...a) as unknown,
+    attachVendorName: (...a: unknown[]) => mockAttachVendorName(...a) as unknown,
+    mergeVendors: (...a: unknown[]) => mockMergeVendors(...a) as unknown,
   },
 }));
 
@@ -90,6 +96,15 @@ describe('VendorsPage', () => {
     mockAddVendorContact.mockResolvedValue(makeContact());
     mockDeleteVendorContact.mockResolvedValue(undefined);
     mockCheckPermission.mockReturnValue(true);
+    mockGetUnlinkedVendorNames.mockResolvedValue([]);
+    mockAttachVendorName.mockResolvedValue({ items_linked: 4, reorders_linked: 2 });
+    mockMergeVendors.mockResolvedValue({
+      items_moved: 12,
+      reorders_moved: 3,
+      contacts_moved: 1,
+      merged_name: 'Galls Inc.',
+      vendor_name: 'Galls',
+    });
   });
 
   it('loads active vendors on mount', async () => {
@@ -216,6 +231,106 @@ describe('VendorsPage', () => {
     await user.click(screen.getByLabelText('Show inactive'));
     await waitFor(() => {
       expect(mockGetVendors).toHaveBeenCalledWith({ search: undefined, active_only: false });
+    });
+  });
+
+  describe('names that were never attached to a vendor', () => {
+    const unlinked = [{ name: 'Corner Medical Supply', item_count: 9, reorder_count: 2 }];
+
+    it('counts them in a banner', async () => {
+      mockGetUnlinkedVendorNames.mockResolvedValue(unlinked);
+      renderWithRouter(<VendorsPage />);
+
+      expect(await screen.findByText(/1 supplier name not on the list/)).toBeInTheDocument();
+      expect(screen.getByText(/9 items and 2 reorders/)).toBeInTheDocument();
+    });
+
+    it('says nothing when every name is on the list', async () => {
+      renderWithRouter(<VendorsPage />);
+      await screen.findByText('No vendors yet');
+      expect(screen.queryByText(/not on the list/)).not.toBeInTheDocument();
+    });
+
+    it('keeps the banner from members who cannot act on it', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      mockGetUnlinkedVendorNames.mockResolvedValue(unlinked);
+      renderWithRouter(<VendorsPage />);
+
+      await screen.findByText('No vendors yet');
+      expect(screen.queryByText(/not on the list/)).not.toBeInTheDocument();
+    });
+
+    it('adds the name as a vendor and attaches its rows in one action', async () => {
+      const user = userEvent.setup();
+      mockGetUnlinkedVendorNames.mockResolvedValue(unlinked);
+      mockCreateVendor.mockResolvedValue(makeVendor({ id: 'v-new', name: 'Corner Medical Supply' }));
+      renderWithRouter(<VendorsPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Review and attach/ }));
+      await user.click(await screen.findByRole('button', { name: 'Add as vendor' }));
+
+      await waitFor(() => {
+        expect(mockCreateVendor).toHaveBeenCalledWith({ name: 'Corner Medical Supply' });
+      });
+      expect(mockAttachVendorName).toHaveBeenCalledWith('v-new', 'Corner Medical Supply');
+    });
+
+    it('attaches the name to a vendor already on the list', async () => {
+      const user = userEvent.setup();
+      mockGetUnlinkedVendorNames.mockResolvedValue(unlinked);
+      mockGetVendors.mockResolvedValue([makeVendor()]);
+      renderWithRouter(<VendorsPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Review and attach/ }));
+      await user.selectOptions(
+        await screen.findByLabelText('Attach Corner Medical Supply to an existing vendor'),
+        'v-1'
+      );
+      await user.click(screen.getByRole('button', { name: 'Attach' }));
+
+      await waitFor(() => {
+        expect(mockAttachVendorName).toHaveBeenCalledWith('v-1', 'Corner Medical Supply');
+      });
+    });
+  });
+
+  describe('merging a duplicate', () => {
+    it('folds the chosen duplicate into the vendor whose card was used', async () => {
+      const user = userEvent.setup();
+      mockGetVendors.mockResolvedValue([
+        makeVendor(),
+        makeVendor({ id: 'v-2', name: 'Galls Inc.', is_preferred: false }),
+      ]);
+      renderWithRouter(<VendorsPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Merge a duplicate into Galls' }));
+      await user.selectOptions(await screen.findByLabelText('Duplicate to merge in'), 'v-2');
+      await user.click(screen.getByRole('button', { name: 'Merge Vendors' }));
+
+      await waitFor(() => {
+        expect(mockMergeVendors).toHaveBeenCalledWith('v-1', 'v-2');
+      });
+    });
+
+    it('will not merge until a duplicate is chosen', async () => {
+      const user = userEvent.setup();
+      mockGetVendors.mockResolvedValue([makeVendor(), makeVendor({ id: 'v-2', name: 'Galls Inc.' })]);
+      renderWithRouter(<VendorsPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Merge a duplicate into Galls' }));
+      expect(await screen.findByRole('button', { name: 'Merge Vendors' })).toBeDisabled();
+    });
+
+    it('does not offer a vendor as its own duplicate', async () => {
+      const user = userEvent.setup();
+      mockGetVendors.mockResolvedValue([makeVendor(), makeVendor({ id: 'v-2', name: 'Galls Inc.' })]);
+      renderWithRouter(<VendorsPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Merge a duplicate into Galls' }));
+      const select = await screen.findByLabelText('Duplicate to merge in');
+      const options = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
+      expect(options).toContain('Galls Inc.');
+      expect(options).not.toContain('Galls');
     });
   });
 });

@@ -63,6 +63,13 @@ def _rows(rows):
     return result
 
 
+def _rowcount(n):
+    """A result from an UPDATE, whose .rowcount reports the rows touched."""
+    result = MagicMock()
+    result.rowcount = n
+    return result
+
+
 def _scalar_one_or_none(value):
     result = MagicMock()
     result.scalar_one_or_none.return_value = value
@@ -298,6 +305,121 @@ class TestVendorStats:
     async def test_no_vendors_runs_no_queries(self, service, mock_db, org_id):
         assert await service.get_vendor_stats(org_id, []) == {}
         mock_db.execute.assert_not_called()
+
+
+class TestUnlinkedVendorNames:
+    """The rows still carrying a typed-in supplier name and nothing else."""
+
+    async def test_items_and_reorders_fold_into_one_entry_per_name(
+        self, service, mock_db, org_id
+    ):
+        mock_db.execute.side_effect = [
+            _rows([("Corner Medical Supply", 4)]),
+            _rows([("corner medical supply", 2)]),
+        ]
+
+        names = await service.list_unlinked_vendor_names(org_id)
+
+        # One supplier, two spellings, one row to act on.
+        assert names == [
+            {"name": "Corner Medical Supply", "item_count": 4, "reorder_count": 2}
+        ]
+
+    async def test_busiest_name_comes_first(self, service, mock_db, org_id):
+        mock_db.execute.side_effect = [
+            _rows([("Ace Hardware", 1), ("Corner Medical Supply", 9)]),
+            _rows([]),
+        ]
+
+        names = await service.list_unlinked_vendor_names(org_id)
+
+        assert [n["name"] for n in names] == ["Corner Medical Supply", "Ace Hardware"]
+
+    async def test_blank_names_are_not_offered(self, service, mock_db, org_id):
+        mock_db.execute.side_effect = [_rows([("   ", 3), (None, 2)]), _rows([])]
+        assert await service.list_unlinked_vendor_names(org_id) == []
+
+
+class TestAttachVendorName:
+    async def test_links_items_and_reorders_and_reports_counts(
+        self, service, mock_db, org_id
+    ):
+        vendor = _vendor(org_id)
+        mock_db.execute.side_effect = [_first(vendor), _rowcount(4), _rowcount(2)]
+
+        result, error = await service.attach_vendor_name(
+            vendor.id, org_id, "Corner Medical Supply"
+        )
+
+        assert error is None
+        assert result == {"items_linked": 4, "reorders_linked": 2}
+
+    async def test_blank_name_is_rejected(self, service, org_id):
+        result, error = await service.attach_vendor_name(str(uuid4()), org_id, "   ")
+        assert result is None
+        assert error == "A supplier name is required"
+
+    async def test_missing_vendor_is_reported(self, service, mock_db, org_id):
+        mock_db.execute.side_effect = [_first(None)]
+        result, error = await service.attach_vendor_name(str(uuid4()), org_id, "Galls")
+        assert result is None
+        assert error == "Vendor not found"
+
+
+class TestMergeVendors:
+    async def test_moves_everything_and_removes_the_duplicate(
+        self, service, mock_db, org_id
+    ):
+        target = _vendor(org_id, name="Galls")
+        source = _vendor(org_id, name="Galls Inc.")
+        mock_db.execute.side_effect = [
+            _first(target),
+            _first(source),
+            _rowcount(12),
+            _rowcount(3),
+            _rowcount(2),
+            _all([]),  # _normalize_primary_contact on the target
+        ]
+
+        result, error = await service.merge_vendors(target.id, source.id, org_id)
+
+        assert error is None
+        assert result["items_moved"] == 12
+        assert result["reorders_moved"] == 3
+        assert result["contacts_moved"] == 2
+        # Named, so the confirmation can say what happened.
+        assert result["merged_name"] == "Galls Inc."
+        assert result["vendor_name"] == "Galls"
+        # Removed rather than deactivated: a merged duplicate left on file keeps
+        # its name reserved and haunts "show inactive" forever.
+        mock_db.delete.assert_awaited_once_with(source)
+
+    async def test_a_vendor_cannot_be_merged_into_itself(self, service, org_id):
+        vendor_id = str(uuid4())
+        result, error = await service.merge_vendors(vendor_id, vendor_id, org_id)
+        assert result is None
+        assert error == "A vendor cannot be merged into itself"
+
+    async def test_missing_target_is_reported(self, service, mock_db, org_id):
+        mock_db.execute.side_effect = [_first(None)]
+        result, error = await service.merge_vendors(str(uuid4()), str(uuid4()), org_id)
+        assert result is None
+        assert error == "Vendor not found"
+
+    async def test_missing_source_is_reported_distinctly(
+        self, service, mock_db, org_id
+    ):
+        mock_db.execute.side_effect = [_first(_vendor(org_id)), _first(None)]
+        result, error = await service.merge_vendors(str(uuid4()), str(uuid4()), org_id)
+        assert result is None
+        assert error == "The vendor to merge was not found"
+
+    async def test_nothing_is_deleted_when_the_source_is_missing(
+        self, service, mock_db, org_id
+    ):
+        mock_db.execute.side_effect = [_first(_vendor(org_id)), _first(None)]
+        await service.merge_vendors(str(uuid4()), str(uuid4()), org_id)
+        mock_db.delete.assert_not_called()
 
 
 class TestVendorFkScoping:

@@ -25,6 +25,8 @@ import {
   Pencil,
   Archive,
   ArchiveRestore,
+  Merge,
+  AlertTriangle,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -35,7 +37,13 @@ import { blankToNull } from '../../../utils/formValues';
 import { Modal } from '../../../components/Modal';
 import { formatVendorAddress, primaryContact } from '../utils/vendorHelpers';
 import { EmptyState } from '../../../components/ux';
-import type { InventoryVendor, InventoryVendorContact, InventoryVendorCreate, InventoryVendorUpdate } from '../types';
+import type {
+  InventoryVendor,
+  InventoryVendorContact,
+  InventoryVendorCreate,
+  InventoryVendorUpdate,
+  UnlinkedVendorName,
+} from '../types';
 
 const lbl = 'form-label';
 const inp = 'form-input';
@@ -736,6 +744,236 @@ const VendorContactsModal: React.FC<{
   );
 };
 
+// -- Merge Modal --
+const MergeVendorModal: React.FC<{
+  vendor: InventoryVendor | null;
+  vendors: InventoryVendor[];
+  onClose: () => void;
+  onMerged: () => void;
+}> = ({ vendor, vendors, onClose, onMerged }) => {
+  const [sourceId, setSourceId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setSourceId('');
+  }, [vendor?.id]);
+
+  // Every other vendor is a merge candidate; a vendor cannot absorb itself.
+  const candidates = useMemo(
+    () => vendors.filter((v) => v.id !== vendor?.id).sort((a, b) => a.name.localeCompare(b.name)),
+    [vendors, vendor?.id]
+  );
+  const source = candidates.find((v) => v.id === sourceId);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vendor || !source) {
+      toast.error('Choose the duplicate to merge in');
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await inventoryService.mergeVendors(vendor.id, source.id);
+      toast.success(
+        `Merged ${result.merged_name} into ${result.vendor_name} — ${result.items_moved} item${
+          result.items_moved === 1 ? '' : 's'
+        } and ${result.reorders_moved} reorder${result.reorders_moved === 1 ? '' : 's'} moved`
+      );
+      onMerged();
+      onClose();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to merge vendors'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={vendor !== null} onClose={onClose} title={vendor ? `Merge into ${vendor.name}` : 'Merge'} size="md">
+      <form
+        onSubmit={(e) => {
+          void submit(e);
+        }}
+        className="space-y-4 p-4"
+      >
+        <p className="text-theme-text-muted text-sm">
+          The same supplier entered twice. Everything on the duplicate — items, reorder requests and contacts — moves to{' '}
+          <span className="text-theme-text-primary font-medium">{vendor?.name}</span>, and the duplicate is removed.
+        </p>
+
+        <div>
+          <label className={lbl} htmlFor="merge-source">
+            Duplicate to merge in
+          </label>
+          <select id="merge-source" className={inp} value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
+            <option value="">— Select a vendor —</option>
+            {candidates.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+                {v.is_active ? '' : ' (inactive)'}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {source && (
+          <div className="card-secondary p-3 text-sm">
+            <p className="text-theme-text-primary font-medium">Moving from {source.name}</p>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              {source.item_count} item{source.item_count === 1 ? '' : 's'} · {source.open_reorder_count} open reorder
+              {source.open_reorder_count === 1 ? '' : 's'} · {source.contacts.length} contact
+              {source.contacts.length === 1 ? '' : 's'}
+            </p>
+            <p className="text-theme-text-muted mt-2 text-xs">
+              Nothing on {vendor?.name} is overwritten — its own details are kept.
+            </p>
+          </div>
+        )}
+
+        <div className="border-theme-surface-border flex flex-col-reverse items-stretch justify-end gap-2 border-t pt-2 sm:flex-row sm:items-center">
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving || !source}
+            className="btn-info btn-md text-center disabled:opacity-50"
+          >
+            {saving ? 'Merging...' : 'Merge Vendors'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+// -- Unlinked names cleanup --
+const UnlinkedNamesModal: React.FC<{
+  isOpen: boolean;
+  names: UnlinkedVendorName[];
+  vendors: InventoryVendor[];
+  onClose: () => void;
+  onChanged: () => void;
+}> = ({ isOpen, names, vendors, onClose, onChanged }) => {
+  // Which vendor each row is being attached to, keyed by the typed-in name.
+  const [targets, setTargets] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) setTargets({});
+  }, [isOpen]);
+
+  const sorted = useMemo(() => [...vendors].sort((a, b) => a.name.localeCompare(b.name)), [vendors]);
+
+  const attach = async (name: string, vendorId: string) => {
+    setBusy(name);
+    try {
+      const result = await inventoryService.attachVendorName(vendorId, name);
+      toast.success(
+        `Linked ${result.items_linked} item${result.items_linked === 1 ? '' : 's'} and ${
+          result.reorders_linked
+        } reorder${result.reorders_linked === 1 ? '' : 's'}`
+      );
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to attach the name'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Creating the vendor and attaching in one go is the common case: the name is
+  // a real supplier nobody has entered yet.
+  const createAndAttach = async (name: string) => {
+    setBusy(name);
+    try {
+      const created = await inventoryService.createVendor({ name });
+      const result = await inventoryService.attachVendorName(created.id, name);
+      toast.success(
+        `Added ${created.name} and linked ${result.items_linked} item${result.items_linked === 1 ? '' : 's'}`
+      );
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add the vendor'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Supplier names not on the list" size="lg">
+      <div className="space-y-4 p-4">
+        <p className="text-theme-text-muted text-sm">
+          These names were typed onto items and reorder requests before the vendor list existed, so nothing sits behind
+          them. Add each one as a vendor, or attach it to one already on the list.
+        </p>
+
+        {names.length === 0 ? (
+          <p className="text-theme-text-muted text-sm">Every supplier name is on the list. Nothing to clean up.</p>
+        ) : (
+          <ul className="space-y-2">
+            {names.map((entry) => (
+              <li key={entry.name} className="card-secondary flex flex-col gap-3 p-3">
+                <div className="min-w-0">
+                  <p className="text-theme-text-primary text-sm font-medium">{entry.name}</p>
+                  <p className="text-theme-text-muted text-xs">
+                    {entry.item_count} item{entry.item_count === 1 ? '' : 's'} · {entry.reorder_count} reorder
+                    {entry.reorder_count === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      void createAndAttach(entry.name);
+                    }}
+                    className="btn-info btn-sm shrink-0 disabled:opacity-50"
+                  >
+                    {busy === entry.name ? 'Working...' : 'Add as vendor'}
+                  </button>
+                  <div className="flex flex-1 gap-2">
+                    <select
+                      className={`${inp} flex-1`}
+                      aria-label={`Attach ${entry.name} to an existing vendor`}
+                      value={targets[entry.name] ?? ''}
+                      onChange={(e) => setTargets((p) => ({ ...p, [entry.name]: e.target.value }))}
+                    >
+                      <option value="">— or attach to —</option>
+                      {sorted.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={busy !== null || !targets[entry.name]}
+                      onClick={() => {
+                        const target = targets[entry.name];
+                        if (target) void attach(entry.name, target);
+                      }}
+                      className="btn-secondary btn-sm shrink-0 disabled:opacity-50"
+                    >
+                      Attach
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="border-theme-surface-border flex justify-end border-t pt-3">
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Done
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 // -- Main Page --
 export const VendorsPage: React.FC = () => {
   const { confirm } = useConfirm();
@@ -748,15 +986,24 @@ export const VendorsPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editVendor, setEditVendor] = useState<InventoryVendor | null>(null);
   const [contactsVendorId, setContactsVendorId] = useState<string | null>(null);
+  const [mergeVendorId, setMergeVendorId] = useState<string | null>(null);
+  const [unlinked, setUnlinked] = useState<UnlinkedVendorName[]>([]);
+  const [showUnlinked, setShowUnlinked] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await inventoryService.getVendors({
-        search: search || undefined,
-        active_only: !includeInactive,
-      });
+      const [data, names] = await Promise.all([
+        inventoryService.getVendors({
+          search: search || undefined,
+          active_only: !includeInactive,
+        }),
+        // Never fatal: the list is worth showing even if the cleanup prompt
+        // cannot be worked out.
+        inventoryService.getUnlinkedVendorNames().catch(() => [] as UnlinkedVendorName[]),
+      ]);
       setVendors(data);
+      setUnlinked(names);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load vendors'));
     } finally {
@@ -773,6 +1020,15 @@ export const VendorsPage: React.FC = () => {
   const contactsVendor = useMemo(
     () => vendors.find((v) => v.id === contactsVendorId) ?? null,
     [vendors, contactsVendorId]
+  );
+  const mergeVendor = useMemo(() => vendors.find((v) => v.id === mergeVendorId) ?? null, [vendors, mergeVendorId]);
+
+  const unlinkedTotals = useMemo(
+    () => ({
+      items: unlinked.reduce((sum, entry) => sum + entry.item_count, 0),
+      reorders: unlinked.reduce((sum, entry) => sum + entry.reorder_count, 0),
+    }),
+    [unlinked]
   );
 
   const stats = useMemo(() => {
@@ -863,6 +1119,23 @@ export const VendorsPage: React.FC = () => {
           </div>
         </div>
 
+        {canManage && unlinked.length > 0 && (
+          <div className="mb-4 flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              {unlinked.length} supplier name{unlinked.length === 1 ? '' : 's'} not on the list — named by{' '}
+              {unlinkedTotals.items} item{unlinkedTotals.items === 1 ? '' : 's'} and {unlinkedTotals.reorders} reorder
+              {unlinkedTotals.reorders === 1 ? '' : 's'}
+            </p>
+            <button
+              onClick={() => setShowUnlinked(true)}
+              className="text-xs font-medium text-amber-700 hover:underline sm:ml-auto dark:text-amber-300"
+            >
+              Review and attach &rarr;
+            </button>
+          </div>
+        )}
+
         <div className="card-secondary mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
           <div className="relative w-full sm:flex-1">
             <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -949,6 +1222,17 @@ export const VendorsPage: React.FC = () => {
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
+                        {vendors.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setMergeVendorId(vendor.id)}
+                            className="btn-icon"
+                            aria-label={`Merge a duplicate into ${vendor.name}`}
+                            title="Merge a duplicate into this vendor"
+                          >
+                            <Merge className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -1072,6 +1356,23 @@ export const VendorsPage: React.FC = () => {
           vendor={contactsVendor}
           onClose={() => setContactsVendorId(null)}
           onSaved={() => {
+            void load();
+          }}
+        />
+        <MergeVendorModal
+          vendor={mergeVendor}
+          vendors={vendors}
+          onClose={() => setMergeVendorId(null)}
+          onMerged={() => {
+            void load();
+          }}
+        />
+        <UnlinkedNamesModal
+          isOpen={showUnlinked}
+          names={unlinked}
+          vendors={vendors}
+          onClose={() => setShowUnlinked(false)}
+          onChanged={() => {
             void load();
           }}
         />
