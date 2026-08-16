@@ -586,7 +586,16 @@ async def check_rate_limit(
                 key=f"auth:{scope}:{client_ip}",
                 limit=max_requests,
                 window_seconds=window_seconds,
-                fail_closed=False,  # Fall back to in-memory on error
+                fail_closed=False,
+                # CI-11: without raise_on_error the helper swallows its own
+                # Redis errors and returns False ("not limited"), so the
+                # ``except`` below never ran and the request was limited by
+                # neither backend. Re-raising is what makes the documented
+                # in-memory fallback reachable when Redis is connected but a
+                # command transiently fails. ``fail_closed=False`` still governs
+                # the separate "Redis not connected at all" case, which the
+                # ``is_connected`` guard above already routes to the fallback.
+                raise_on_error=True,
             )
             if exceeded:
                 raise HTTPException(
