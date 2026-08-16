@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Facilities: rooms can sit inside other rooms (2026-08-16)
+
+**Added**
+
+- A room can now be placed inside another room in the same facility — the
+  quartermaster's storage space within the volunteer office — via a "Located
+  inside" picker on the room form and an add-a-room-inside action on each row.
+  The rooms list renders the resulting tree, and each room reports how many
+  sub-rooms it holds. Nesting is capped at five levels.
+- `GET /api/v1/facilities/rooms` returns `parentRoomId` on every room and
+  accepts `parent_room_id` / `top_level_only` to fetch a single level.
+- The cross-module room picker (events, training, scheduling) lists sub-rooms
+  indented under their container and shows the containment path for the
+  selected room. A nested room's linked Location now carries the same path, so
+  "Quartermaster's Storage — Volunteer Office — Station 1" is distinguishable
+  from a storage room elsewhere in the building.
+
+**Changed**
+
+- Deleting a room keeps its sub-rooms, re-parenting them onto the deleted
+  room's own container rather than cascading the delete through everything
+  stored below it. The confirmation says so before you commit.
+- The room form now sends explicit nulls on save, so clearing a field (floor,
+  capacity, description) persists instead of silently keeping the old value.
+
 ### Six-day release documentation rollup (2026-08-16)
 
 **Documentation**
@@ -14,8 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Published [`docs/CHANGE_AUDIT_2026-08-10_TO_16.md`](docs/CHANGE_AUDIT_2026-08-10_TO_16.md),
   the six-day frame around the existing three-day audit. It adds what a
   three-day window could not show: the five routes added across the window with
-  their real permission gates, the full 26-revision Alembic route from
-  `20260810_0001` to the single head `20260814_0004`, the supply-loop and
+  their real permission gates, the full 28-revision Alembic route from
+  `20260809_0002` to the then-head `20260814_0004`, the supply-loop and
   restock data paths, a client-side storage map, and the 08-15 → 08-16 changes
   that had no coverage anywhere. The
   [three-day audit](docs/CHANGE_AUDIT_2026-08-12_TO_14.md) remains authoritative

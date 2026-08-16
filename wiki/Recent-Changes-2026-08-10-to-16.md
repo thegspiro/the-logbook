@@ -110,7 +110,9 @@ August 15 and 16.
 ## Database upgrade route
 
 Back up the database and encryption keys **separately**. Require exactly one
-result from `alembic heads` — the head is **`20260814_0004`** — then run
+result from `alembic heads` — **`20260814_0004`** at the close of this
+window, and **`20260816_0001`** once the facility-room-nesting change landed
+later the same day — then run
 `alembic upgrade head`. Never downgrade to repair a fork.
 
 **Before upgrading**, run the active-prospect duplicate check: group active

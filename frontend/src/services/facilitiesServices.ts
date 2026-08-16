@@ -116,6 +116,8 @@ export interface InspectionCreate {
 export interface RoomCreate {
   facility_id: string;
   name: string;
+  /** Room this one sits inside; omit for a room that hangs off the facility */
+  parent_room_id?: string;
   room_number?: string;
   floor?: number;
   room_type?: string;
@@ -124,6 +126,28 @@ export interface RoomCreate {
   capacity?: number;
   description?: string;
   equipment?: string;
+}
+
+/**
+ * Update payload for a room.
+ *
+ * Nullable where a create is `undefined`: the backend dumps updates with
+ * `exclude_unset`, so clearing a field means sending an explicit `null` —
+ * omitting the key leaves the old value in place (CLAUDE.md pitfall #1).
+ */
+export interface RoomUpdate {
+  facility_id?: string;
+  name?: string;
+  parent_room_id?: string | null;
+  room_number?: string | null;
+  floor?: number | null;
+  room_type?: string;
+  zone_classification?: string;
+  square_footage?: number | null;
+  capacity?: number | null;
+  description?: string | null;
+  equipment?: string | null;
+  is_active?: boolean;
 }
 
 export interface FacilitySystemCreate {
@@ -565,7 +589,13 @@ export const facilitiesService = {
   },
 
   // Rooms
-  async getRooms(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Room[]> {
+  async getRooms(params?: {
+    facility_id?: string;
+    parent_room_id?: string;
+    top_level_only?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<Room[]> {
     const response = await api.get<Room[]>('/facilities/rooms', { params });
     return asArray(response.data);
   },
@@ -577,7 +607,7 @@ export const facilitiesService = {
     const response = await api.post<Room>('/facilities/rooms', data);
     return response.data;
   },
-  async updateRoom(roomId: string, data: Partial<RoomCreate>): Promise<Room> {
+  async updateRoom(roomId: string, data: RoomUpdate): Promise<Room> {
     const response = await api.patch<Room>(`/facilities/rooms/${roomId}`, data);
     return response.data;
   },

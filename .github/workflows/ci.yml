@@ -176,13 +176,33 @@ jobs:
 
       - name: Run unit tests (no DB required)
         # Coverage floor is a RATCHET set ~2 points under measured coverage
-        # (48% on 2026-07-31) — it blocks regressions, not an aspiration.
+        # (53.1% on 2026-08-16) — it blocks regressions, not an aspiration.
         # Raise it as coverage grows; never lower it.
         run: |
           pytest tests/ \
             -m "not integration and not slow and not docker" \
             -v --tb=short \
-            --cov=app --cov-fail-under=46
+            --cov=app --cov-fail-under=51
+
+      # The whole-app number above is structurally optimistic. app/models and
+      # app/schemas are 25.8% of the denominator and sit at ~97%, but they are
+      # declarative: a Column(...) definition and a Pydantic field are executed
+      # by the import itself, so they count as covered without any test
+      # asserting anything about them. That mass damps every movement in the
+      # code that can actually hold a defect — on 2026-08-16 the app-wide
+      # figure was 53.1% while api/services/core/utils together were 37.6%.
+      #
+      # This second gate measures only the layers where a bug can live, so a
+      # real regression there cannot be absorbed by the declarative bulk. It
+      # reads the .coverage data the run above already wrote, so it costs a
+      # second and cannot disagree with it. Same ratchet convention: ~2 points
+      # under measured, raise as it grows.
+      - name: Check business-logic coverage floor
+        if: "!cancelled()"
+        run: |
+          coverage report \
+            --include="app/api/*,app/services/*,app/core/*,app/utils/*" \
+            --fail-under=35
 
   backend-test-integration:
     name: Backend Integration Tests (${{ matrix.db.name }})

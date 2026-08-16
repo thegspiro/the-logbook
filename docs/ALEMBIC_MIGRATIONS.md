@@ -16,9 +16,15 @@
 
 ## Current Head
 
-> **Update (2026-08-16):** The current head is **`20260814_0004`**
-> (`20260814_0004_revoke_captain_facilities_view_sensitive.py`). **New migrations
-> must set `down_revision = "20260814_0004"`.**
+> **Update (2026-08-16, later):** The current head is **`20260816_0001`**
+> (`20260816_0001_add_facility_room_parent.py` — `facility_rooms.parent_room_id`,
+> for rooms nested inside other rooms). **New migrations must set
+> `down_revision = "20260816_0001"`.** It chains onto `20260814_0004`, so the
+> route below is unchanged behind it.
+>
+> **Superseded within the same day (2026-08-16):** the head was
+> **`20260814_0004`**
+> (`20260814_0004_revoke_captain_facilities_view_sensitive.py`).
 >
 > That revision is a **merge**: `down_revision = ("20260814_0003",
 "20260813_0020")`. It joins the event-reminder branch to the published

@@ -12,11 +12,12 @@
  *   />
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Building2, DoorOpen, ChevronDown, Loader2 } from 'lucide-react';
 import { facilitiesService } from '../services/api';
 import type { Facility, Room } from '../modules/facilities/types';
 import { enumLabel } from '../modules/facilities/types';
+import { orderRoomsByHierarchy, roomPathLabel } from '../modules/facilities/roomTree';
 import { formatNumber } from '../utils/dateFormatting';
 
 interface FacilityRoomPickerProps {
@@ -74,21 +75,28 @@ export default function FacilityRoomPicker({
     }
     setIsLoading(true);
     try {
-      let data = await facilitiesService.getRooms({ facility_id: fid });
-      if (roomType) {
-        data = data.filter((r) => r.roomType === roomType);
-      }
+      // The whole facility, unfiltered: nested rooms come back in the same
+      // flat list, and an ancestor filtered out here would leave its
+      // sub-rooms without a path to display.
+      const data = await facilitiesService.getRooms({ facility_id: fid, limit: 500 });
       setRooms(data);
     } catch {
       setRooms([]);
     } finally {
       setIsLoading(false);
     }
-  }, [facilityId, selectedFacilityId, roomType]);
+  }, [facilityId, selectedFacilityId]);
 
   useEffect(() => {
     void loadRooms();
   }, [loadRooms]);
+
+  // Selectable rooms in nesting order, so a storage space appears indented
+  // under the office that contains it rather than alphabetically adrift.
+  const selectableRooms = useMemo(
+    () => orderRoomsByHierarchy(roomType ? rooms.filter((r) => r.roomType === roomType) : rooms),
+    [rooms, roomType]
+  );
 
   const handleFacilityChange = (fid: string) => {
     setSelectedFacilityId(fid);
@@ -105,6 +113,7 @@ export default function FacilityRoomPicker({
   };
 
   const selectedRoom = rooms.find((r) => r.id === value);
+  const selectedRoomPath = selectedRoom?.parentRoomId ? roomPathLabel(rooms, selectedRoom.id) : '';
 
   const inputCls =
     'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring appearance-none';
@@ -145,15 +154,16 @@ export default function FacilityRoomPicker({
           <select
             value={value ?? ''}
             onChange={(e) => handleRoomChange(e.target.value)}
-            disabled={disabled || rooms.length === 0}
+            disabled={disabled || selectableRooms.length === 0}
             className={`${inputCls} pl-9`}
             aria-label="Select room"
           >
-            <option value="">{rooms.length === 0 ? 'No rooms available' : placeholder}</option>
-            {rooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-                {r.roomNumber ? ` (#${r.roomNumber})` : ''} — {enumLabel(r.roomType)}
+            <option value="">{selectableRooms.length === 0 ? 'No rooms available' : placeholder}</option>
+            {selectableRooms.map(({ room, depth }) => (
+              <option key={room.id} value={room.id}>
+                {/* Non-breaking spaces: a select collapses ordinary option indentation */}
+                {`${'  '.repeat(depth)}${room.name}`}
+                {room.roomNumber ? ` (#${room.roomNumber})` : ''} — {enumLabel(room.roomType)}
               </option>
             ))}
           </select>
@@ -172,6 +182,7 @@ export default function FacilityRoomPicker({
               {selectedRoom.name}
               {selectedRoom.roomNumber ? ` (#${selectedRoom.roomNumber})` : ''}
             </p>
+            {selectedRoomPath && <p className="text-theme-text-muted mt-0.5 text-xs">{selectedRoomPath}</p>}
             <div className="text-theme-text-muted mt-1 flex flex-wrap items-center gap-2 text-xs">
               {selectedRoom.roomType && (
                 <span className="bg-theme-surface-hover rounded-full px-2 py-0.5">
