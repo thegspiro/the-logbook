@@ -38,6 +38,8 @@ interface CommandItem {
   section: string;
   keywords?: string[];
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
   /**
    * Hide this command when the named module is explicitly enabled — for
    * fallback pages that a module supersedes (e.g. /locations when the
@@ -123,6 +125,9 @@ const COMMANDS: CommandItem[] = [
     icon: QrCode,
     section: 'Navigation',
     keywords: ['qr', 'kiosk', 'display', 'check-in', 'checkin', 'print', 'rooms', 'apparatus', 'shift'],
+    // Mirror the route gate — offering the page to anyone else just
+    // navigates them into an Access Denied screen.
+    anyPermission: ['locations.manage', 'facilities.manage', 'apparatus.view'],
   },
   {
     id: 'documents',
@@ -220,6 +225,7 @@ export const CommandPalette: React.FC = () => {
     const accessible = COMMANDS.filter(
       (cmd) =>
         (!cmd.permission || checkPermission(cmd.permission)) &&
+        (!cmd.anyPermission || cmd.anyPermission.some(checkPermission)) &&
         // enabledModules is null while loading/unconfigured — hide nothing then
         !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn))
     );

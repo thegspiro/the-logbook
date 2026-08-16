@@ -2010,6 +2010,7 @@ class FacilitiesService:
         top_level_only: bool = False,
         skip: int = 0,
         limit: int = 100,
+        include_display_codes: bool = True,
     ) -> List[FacilityRoom]:
         """List facility rooms.
 
@@ -2017,6 +2018,11 @@ class FacilitiesService:
         can assemble the tree themselves. ``parent_room_id`` narrows to one
         room's direct children; ``top_level_only`` to rooms that sit directly
         on the facility.
+
+        ``include_display_codes=False`` skips attaching kiosk display codes —
+        they are bearer credentials for the public kiosk endpoints, so read
+        endpoints must withhold them from callers the shared
+        ``can_view_kiosk_display_codes`` check rejects.
         """
         conditions = [FacilityRoom.organization_id == organization_id]
 
@@ -2043,11 +2049,15 @@ class FacilitiesService:
 
         result = await self.db.execute(query)
         rooms = list(result.scalars().all())
-        await self._attach_display_codes(rooms, organization_id)
+        if include_display_codes:
+            await self._attach_display_codes(rooms, organization_id)
         return rooms
 
     async def get_room(
-        self, room_id: str, organization_id: str
+        self,
+        room_id: str,
+        organization_id: str,
+        include_display_codes: bool = True,
     ) -> Optional[FacilityRoom]:
         """Get room by ID"""
         result = await self.db.execute(
@@ -2056,7 +2066,7 @@ class FacilitiesService:
             .where(FacilityRoom.organization_id == organization_id)
         )
         room = result.scalar_one_or_none()
-        if room:
+        if room and include_display_codes:
             await self._attach_display_codes([room], organization_id)
         return room
 

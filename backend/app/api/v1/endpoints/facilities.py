@@ -22,7 +22,11 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission, user_has_permission
+from app.api.dependencies import (
+    can_view_kiosk_display_codes,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -2162,6 +2166,7 @@ async def list_facility_rooms(
         top_level_only=top_level_only,
         skip=skip,
         limit=limit,
+        include_display_codes=can_view_kiosk_display_codes(current_user),
     )
     return rooms
 
@@ -2221,6 +2226,7 @@ async def get_facility_room(
     room = await service.get_room(
         room_id=room_id,
         organization_id=current_user.organization_id,
+        include_display_codes=can_view_kiosk_display_codes(current_user),
     )
 
     if not room:
@@ -2266,6 +2272,12 @@ async def update_facility_room(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Room not found"
         )
+
+    # facilities.edit alone does not clear the kiosk-code read bar
+    # (can_view_kiosk_display_codes) — strip the transient attribute the
+    # service's internal get_room attached.
+    if not can_view_kiosk_display_codes(current_user):
+        room.display_code = None
 
     return room
 
