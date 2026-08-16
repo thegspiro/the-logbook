@@ -1096,9 +1096,9 @@ async def get_user_with_roles(
 
     This endpoint is for the member profile page and digital ID card.
     Users can always view their own record; viewing another member's record
-    requires `users.view` or `members.manage`. The baseline `members.view`
-    directory permission is intentionally insufficient because this response
-    contains account and role metadata beyond directory-safe fields.
+    requires `users.view`, `members.view`, or `members.manage` — members.view
+    is the directory permission every default position carries, so any
+    department member can open a colleague's (redacted) profile.
 
     Contact information is redacted against the organization's
     `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
@@ -1116,10 +1116,13 @@ async def get_user_with_roles(
     # Self-access needs no permission grant: MemberIdCardPage, MemberProfilePage
     # and UserSettingsPage all load the caller's own record through here, and a
     # user can be stripped of every position without losing their own record.
-    # Other members' full profiles include account state and role permissions,
-    # so the directory-only members.view grant must not authorize this route.
+    # For other members' records, members.view (the directory permission) is
+    # enough — the redaction below withholds contact info per org settings and
+    # keeps DOB/emergency contacts leadership-only, so the profile a plain
+    # member sees matches what the roster already shows them.
     if not is_self and not (
         _has_permission("users.view", user_permissions)
+        or _has_permission("members.view", user_permissions)
         or _has_permission("members.manage", user_permissions)
     ):
         raise HTTPException(

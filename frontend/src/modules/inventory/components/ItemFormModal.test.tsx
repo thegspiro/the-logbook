@@ -1,17 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { InventoryItem } from '../types';
+import type { InventoryItem, InventoryVendor } from '../types';
 
 const mockCreateItem = vi.fn();
 const mockUpdateItem = vi.fn();
 const mockCreateSizeVariants = vi.fn();
+const mockGetVendors = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
     createItem: (...a: unknown[]) => mockCreateItem(...a) as unknown,
     updateItem: (...a: unknown[]) => mockUpdateItem(...a) as unknown,
     createSizeVariants: (...a: unknown[]) => mockCreateSizeVariants(...a) as unknown,
+    getVendors: (...a: unknown[]) => mockGetVendors(...a) as unknown,
   },
 }));
 
@@ -53,6 +55,20 @@ const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   ...overrides,
 });
 
+const makeVendor = (overrides: Partial<InventoryVendor> = {}): InventoryVendor => ({
+  id: 'v-1',
+  organization_id: 'org-1',
+  name: 'Galls',
+  is_preferred: false,
+  is_active: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  contacts: [],
+  item_count: 0,
+  open_reorder_count: 0,
+  ...overrides,
+});
+
 // The Name field has no associated label; it is the first textbox in the form.
 const nameInput = (): HTMLElement => {
   const [el] = screen.getAllByRole('textbox');
@@ -66,6 +82,7 @@ describe('ItemFormModal', () => {
     mockCreateItem.mockResolvedValue({});
     mockUpdateItem.mockResolvedValue({});
     mockCreateSizeVariants.mockResolvedValue({ created_count: 1, items: [] });
+    mockGetVendors.mockResolvedValue([]);
   });
 
   it('renders nothing when closed', () => {
@@ -129,5 +146,44 @@ describe('ItemFormModal', () => {
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Created 1 variant items');
     expect(mockCreateItem).not.toHaveBeenCalled();
+  });
+
+  it('links a new item to the picked vendor', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([makeVendor()]);
+    render(<ItemFormModal {...baseProps} isOpen />);
+
+    await user.type(nameInput(), 'Bunker Coat');
+    await user.click(screen.getByRole('button', { name: /Financial/ }));
+    await user.selectOptions(await screen.findByLabelText('Vendor'), 'v-1');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
+    expect(mockCreateItem.mock.calls[0]?.[0]).toMatchObject({ vendor_id: 'v-1' });
+  });
+
+  it('offers the free-text name only while no vendor is linked', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([makeVendor()]);
+    render(<ItemFormModal {...baseProps} isOpen />);
+
+    await user.click(screen.getByRole('button', { name: /Financial/ }));
+    expect(await screen.findByLabelText('Vendor name (not on file)')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Vendor'), 'v-1');
+    expect(screen.queryByLabelText('Vendor name (not on file)')).not.toBeInTheDocument();
+  });
+
+  it('sends an explicit null when an edit unlinks the vendor', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([makeVendor()]);
+    render(<ItemFormModal {...baseProps} isOpen editItem={makeItem({ vendor_id: 'v-1' })} />);
+
+    await user.click(screen.getByRole('button', { name: /Financial/ }));
+    await user.selectOptions(await screen.findByLabelText('Vendor'), '');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+    expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ vendor_id: null });
   });
 });

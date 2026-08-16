@@ -44,6 +44,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
+import { VendorName } from '../components/VendorName';
 import StockLotsPanel from '../components/StockLotsPanel';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
@@ -406,7 +407,9 @@ const ItemDetailPage: React.FC = () => {
             <Field label="Current Value" value={fmtCurrency(item.current_value)} />
             <Field label="Replacement Cost" value={fmtCurrency(item.replacement_cost)} />
             <Field label="Purchase Date" value={formatDate(item.purchase_date, tz)} />
-            <Field label="Vendor" value={item.vendor || '--'} />
+            {/* The tracked vendor is the answer when the item has one; a name
+                that is only free text is muted, the same as in the reorder queue. */}
+            <Field label="Vendor" value={<VendorName record={item} fallback="--" />} />
             <Field label="Warranty Exp." value={formatDate(item.warranty_expiration, tz)} />
           </Card>
         )}
