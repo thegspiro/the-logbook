@@ -1,20 +1,110 @@
 # Script currency
 
+## Flagged by the 2026-08-15 → 08-16 changes
+
+One **Wrong** and one **B-roll only**.
+
+### 02 — First-Time Setup & Onboarding · **WRONG — corrected in-script 2026-08-16**
+
+The installation wizard's session identifier moved to tab-scoped storage on
+2026-08-15. Onboarding is now **one tab, one sitting**: a second tab does not
+inherit the run, and closing the browser ends it.
+
+**Chapter 2 promised the exact opposite, on camera.** The Welcome Screen
+narration read:
+
+> ~~"The wizard auto-saves your progress, so if you need to step away or your
+> browser closes, you'll pick up right where you left off."~~
+
+That is now flatly false, and it was already misleading before 08-15 — the server
+session has always expired after 30 minutes idle, so "step away" was never safe
+for long. An installer following it would close the browser on purpose,
+confidently, and lose the run. Recorded, it would have been the most expensive
+kind of error in this series: a viewer does what the narrator told them to and
+the product punishes them for it.
+
+**This has been rewritten in `02-first-time-setup-and-onboarding.md` rather than
+left in this queue**, per the standing rule that no behavioural content lives
+only in SCRIPT_CURRENCY. The replacement narration covers:
+
+- Finish in one tab, in one sitting. Gather the department address, station list,
+  apparatus list and first administrator's details **before** starting.
+- A second tab starts its own session; the step you were on will refuse to save.
+- Closing the browser ends the run. So does 30 minutes idle — the server session
+  always expired on a sliding 30-minute timer.
+- **The trap worth saying out loud on camera:** reopening the wizard after a
+  restart **repaints your typed answers while the session behind them is gone**.
+  Nothing warns you until the next step fails. The filled-in form is a local
+  draft, not a resumed session — restart the wizard rather than re-typing into
+  it.
+- "Onboarding has already been completed" is a _different_ message: a department
+  already exists, so sign in instead of starting setup.
+
+**B-roll check:** any planned shot showing the presenter leaving the wizard and
+coming back must be re-planned — it will now fail on camera, which is either a
+ruined take or, if left in, a demonstration of the opposite of what the narration
+says. If the shot is kept deliberately as a teaching moment, it needs the
+two-frame sequence (repainted form, then the error) rather than a single frame.
+
+**EDITOR:** the replacement is net-longer than the two sentences it removes, so
+Chapter 2's `1:00 – 4:00` band and **every chapter marker and clip-table entry
+after it** re-time. Budget roughly **45–70 seconds added**, depending on delivery
+and on whether the optional two-shot insert is used. Final timecodes are a
+recording-production task — narration pacing determines them.
+
+### 01 — Installing The Logbook · **Incomplete — written in-script 2026-08-16**
+
+Chapter 7 hands the viewer to script 02 and explicitly invites them to "jump
+ahead and explore on your own" — which is exactly the viewer who will lose a
+session. A short form of the caution now sits there: one tab, one sitting, what
+to have ready, and the 30-minute idle limit. **No re-timing needed** beyond
+Chapter 7's own band; it lands inside an existing chapter near the end.
+
+### 03 — IT Manager · **retired, not applicable**
+
+Flagged on 08-16 alongside 01, then withdrawn on inspection. Script 03 is a
+**post-setup** administration guide — it opens with "if you've been handed the
+System Owner account" — and has no install walkthrough to attach the caution to.
+Its nearest neighbour, the Chapter 9 backup/restore drill, is about restoring a
+database, and **a restored install already has an organization, so the onboarding
+wizard cannot run against it at all.** Adding the caution here would teach a
+constraint the viewer will never meet. Recorded rather than silently dropped, so
+the next pass does not re-flag it.
+
+### Any script with full-screen dark-mode B-roll · **B-roll only**
+
+The themed background moved to the root element on 2026-08-15 so it covers the
+browser's scrollbar gutter; before that, dark content showed a **15px white strip**
+down the right edge (measured against the affected training captures — see
+`SCREENSHOT_CURRENCY.md`).
+
+Audio is unaffected — no script describes the page background. **This is a
+per-clip edit decision, not a re-record and not a blanket re-shoot.** Note the
+trigger is _dark content at the right edge_, not dark mode as such: the same
+strip appears on a light page under a **modal overlay**, which is how two of the
+three affected training screenshots picked it up.
+
+Since nothing in the series has been recorded yet, the practical action is to
+**capture new B-roll against a build dated 2026-08-15 or later** and note it in
+the shot list, rather than to audit footage that does not exist.
+
+---
+
 ## Resolved in-script for the 2026-08-12 → 08-14 changes
 
 The previously flagged material is now written word-for-word in the actual
 scripts rather than living only in this queue:
 
-| Scripts | Applied update |
-|---|---|
-| **01, 03** | Fail-closed TLS, duplicate preflight, single Alembic head, audit legacy boundary, reset ceiling, archive modes, export visibility |
-| **04, 06** | Personal/Organization dashboard scopes, conditional cards, directory/scanner permissions, privacy exports |
+| Scripts    | Applied update                                                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **01, 03** | Fail-closed TLS, duplicate preflight, single Alembic head, audit legacy boundary, reset ceiling, archive modes, export visibility  |
+| **04, 06** | Personal/Organization dashboard scopes, conditional cards, directory/scanner permissions, privacy exports                          |
 | **04, 07** | Event reminder audience, defaults, email preferences, 60-minute Flexible window, overlap/guest edges, related-notification cleanup |
-| **08** | New Short **8AF**: Room QR search, PNG/print, rotation invalidation, safe demo handling |
-| **12** | Saved ballot boundaries/settings verification, fresh IDs, frozen roll at issuance/redemption, paper turnout bounds |
-| **13** | Store banner, member payment-method change, activity/status counts and filters, recipient privacy |
-| **14, 16** | Session requirement/course/program linkage and ownership/cross-org edges |
-| **15, 16** | Point deduction vs overall failure, per-test resume conflicts, server policy and result/export visibility |
+| **08**     | New Short **8AF**: Room QR search, PNG/print, rotation invalidation, safe demo handling                                            |
+| **12**     | Saved ballot boundaries/settings verification, fresh IDs, frozen roll at issuance/redemption, paper turnout bounds                 |
+| **13**     | Store banner, member payment-method change, activity/status counts and filters, recipient privacy                                  |
+| **14, 16** | Session requirement/course/program linkage and ownership/cross-org edges                                                           |
+| **15, 16** | Point deduction vs overall failure, per-test resume conflicts, server policy and result/export visibility                          |
 
 Every affected file carries an **EDITOR** instruction giving the inserted runtime
 and the chapters/clip tables that must be re-timed. Script text is current; final
