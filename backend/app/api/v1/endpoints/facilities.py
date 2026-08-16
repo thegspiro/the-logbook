@@ -12,9 +12,10 @@ insurance policies, occupants) requires ``facilities.view_sensitive``,
 ``facilities.edit``, or ``facilities.manage``: door/alarm codes, account
 numbers, budgets, and lease terms must not be exposed to every member just
 because the module is visible to them. ``facilities.view_sensitive`` exists
-so ranks that need facility knowledge (captain, vice president, treasurer)
-can read this data without facility write access. Keep new endpoints on the
-correct side of this line.
+so offices that need facility knowledge (vice president, treasurer) can
+read this data without facility write access — station-scoped ranks like
+captain deliberately do NOT hold it (least privilege; the 2026-08 grant was
+revoked). Keep new endpoints on the correct side of this line.
 """
 
 from datetime import date
