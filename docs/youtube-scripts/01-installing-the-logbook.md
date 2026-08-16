@@ -90,9 +90,16 @@ docker --version
 docker compose version
 ```
 
-> "You'll want Docker 20 or newer and Docker Compose v2. If you don't have
-> these installed yet, Docker's official documentation has guides for every
+> "You'll want Docker 20 or newer and Docker Compose v2 — specifically
+> 2.24.4 or newer, because the production configuration uses a Compose
+> feature that older versions don't understand. If you don't have these
+> installed yet, Docker's official documentation has guides for every
 > operating system. I'll link those in the description."
+
+**[EDITOR (2026-08-16): version line updated — the production override now
+uses `volumes: !override`, which requires Compose v2.24.4+. Same take, no
+timing change; the on-screen `docker compose version` output should show
+≥ 2.24.4.]**
 
 > "For the one-line installer, you'll also need `curl` and `git`, which come
 > pre-installed on most systems."

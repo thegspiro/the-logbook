@@ -102,7 +102,11 @@ security gate and marks auth cookies `Secure`:
   (`COOKIE_SECURE=false` in `.env`) so logins work over plain HTTP on a
   trusted LAN; before real use, front the app with an HTTPS reverse proxy
   (Swag, Nginx Proxy Manager), point `ALLOWED_ORIGINS` at your `https://`
-  origin, and delete the `COOKIE_SECURE` line.
+  origin, and delete the `COOKIE_SECURE` line. As of 2026-08-16 the shipped
+  `unraid/.env.example` shows the HTTPS form
+  (`ALLOWED_ORIGINS=https://logbook.yourdomain.com`) rather than a plain-HTTP
+  LAN IP, because the default production posture cannot actually serve logins
+  over `http://` — copy it and substitute your reverse-proxy hostname.
 - **Leave `TRUSTED_PROXY_IPS` empty** unless you add a reverse proxy — the
   compose publishes the backend port directly, so the connecting peer is the
   real client.
