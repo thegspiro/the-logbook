@@ -86,3 +86,29 @@ async def test_public_form_rejects_repeat_member_submission():
     assert error == "You have already submitted this form"
     assert db.execute.await_count == 2
     db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_invalid_public_form_does_not_consume_daily_cap(monkeypatch):
+    db = AsyncMock()
+    field = SimpleNamespace(id="field-id", label="Required", required=True)
+    service = FormsService(db)
+    service.get_form_by_slug = AsyncMock(
+        return_value=SimpleNamespace(
+            id="form-id",
+            fields=[field],
+            require_authentication=False,
+            allow_multiple_submissions=True,
+        )
+    )
+    cap = AsyncMock(return_value=False)
+    monkeypatch.setattr("app.services.forms_service.daily_cap_exceeded", cap)
+
+    result, error = await service.submit_public_form(
+        "abc123abc123", {}, enforce_daily_cap=True
+    )
+
+    assert result is None
+    assert error == "Required field 'Required' is missing"
+    cap.assert_not_awaited()
+    db.add.assert_not_called()
