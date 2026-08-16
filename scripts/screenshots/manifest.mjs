@@ -723,10 +723,54 @@ async function openBatchReportForm(page) {
     .first()
     .click({ timeout: 20_000 });
   await page.waitForTimeout(2500);
-  // The shift picker is a list of cards, not a select — the first ladder shift
-  // in it is the one whose crew carries a trainee.
-  await page
+  // The shift picker is a list of cards, not a select, listed oldest-first —
+  // so "the first ladder card" is a lottery on who crewed it, and on a fresh
+  // seed the trainee-carrying ladder shifts sit at the bottom of the list.
+  // Resolve the date whose crew actually holds an evaluable trainee through
+  // the same endpoint the form itself reads, restricted to the dates the
+  // picker is showing, and click that exact card.
+  const listedCards = await page
     .getByText(/Ladder 4 — \d{4}-\d{2}-\d{2}/)
+    .allInnerTexts();
+  const listedDates = listedCards
+    .map((text) => text.match(/Ladder 4 — (\d{4}-\d{2}-\d{2})/)?.[1])
+    .filter(Boolean);
+  const targetDate = await page.evaluate(
+    async ([dates]) => {
+      const listed = await fetch("/api/v1/scheduling/shifts?limit=200", {
+        credentials: "include",
+      });
+      if (!listed.ok) return null;
+      const ladders = ((await listed.json()).shifts ?? [])
+        .filter(
+          (shift) =>
+            (shift.apparatus_name ?? "") === "Ladder 4" &&
+            dates.includes(shift.shift_date),
+        )
+        .sort((a, b) => (a.shift_date < b.shift_date ? 1 : -1));
+      for (const shift of ladders) {
+        const crewRes = await fetch(
+          `/api/v1/training/shift-reports/shift-crew/${shift.id}`,
+          { credentials: "include" },
+        );
+        if (!crewRes.ok) continue;
+        const body = await crewRes.json();
+        const crew = Array.isArray(body) ? body : (body.crew ?? []);
+        if (crew.some((m) => m.program_name && !m.already_reported)) {
+          return shift.shift_date;
+        }
+      }
+      return null;
+    },
+    [listedDates],
+  );
+  if (!targetDate) {
+    throw new Error(
+      "openBatchReportForm: no listed Ladder 4 shift carries an evaluable trainee",
+    );
+  }
+  await page
+    .getByText(`Ladder 4 — ${targetDate}`)
     .first()
     .click({ timeout: 20_000 });
   await page.waitForTimeout(3000);
@@ -924,6 +968,10 @@ export const SHOTS = [
     route: "/scheduling",
     prepare: openPartStaffedShift("03-57"),
     fullPage: false,
+    // "No calls logged for this shift." belongs to the Calls sub-panel further
+    // down the same drawer, and the shift is deliberately in the future — the
+    // crew board this pictures is populated.
+    allowEmptyState: true,
   },
   {
     id: "03-58-assign-member-form",
@@ -937,7 +985,7 @@ export const SHOTS = [
       // The form is behind "Assign Member" on a board with riding positions,
       // and behind "Assign" on one without. Either name opens the same form.
       await page
-        .getByRole("button", { name: /^Assign( Member)?$/ })
+        .getByRole("button", { name: /^Assign( someone| Member)?$/ })
         .first()
         .click({ timeout: 15_000 });
       // Wait for the member list to load rather than for a fixed pause: the
@@ -948,8 +996,9 @@ export const SHOTS = [
     // Clipped to the form. The panel scrolls in its own container, so
     // `window.scrollBy` moves the calendar behind it and leaves the form
     // hanging off the bottom of the frame; an element screenshot brings it
-    // into view by itself, and the form is the subject anyway.
-    selector: "div.rounded-lg:has(> h4:text-is('Assign Member'))",
+    // into view by itself, and the form is the subject anyway. The heading
+    // reads "Assign someone to this shift" since the crew-board redesign.
+    selector: "div.rounded-lg:has(> h4:text-is('Assign someone to this shift'))",
   },
   {
     id: "03-59-open-shifts-signup",
@@ -978,25 +1027,21 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1304,
     anchor: 'Screenshot of the Dashboard "My Upcoming Shifts" panel',
-    alt: "The dashboard's My Upcoming Shifts panel, listing only shifts the member is still on",
+    alt: "The dashboard's Next 7 Days timeline, listing the member's own shifts alongside open slots and events",
     auth: "member",
     route: "/dashboard",
     prepare: async (page) => {
-      // The heading text sits in a span inside the h3, so `text-is` on the h3
-      // does not match it; `has-text` does. Scrolled into view first because a
-      // clipped element still below the fold never settles for a screenshot.
+      // The dashboard redesign merged "My Upcoming Shifts" into the Next 7
+      // Days timeline — one seven-day list of the member's shifts, open slots
+      // and events. It is a <section class="card">, not a div.
       const panel = page
-        .locator("div.card:has(h3:has-text('My Upcoming Shifts'))")
+        .locator("section.card:has(h3:has-text('Next 7 Days'))")
         .first();
       await panel.waitFor({ timeout: 20_000 });
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(1200);
     },
-    // Clipped to the card, trailing space and all: it is a grid cell stretched
-    // to match the notifications panel beside it. The viewport alternative puts
-    // that panel in half the frame, and it is a column of near-identical
-    // skills-test notices that reads as the subject of the shot.
-    selector: "div.card:has(h3:has-text('My Upcoming Shifts'))",
+    selector: "section.card:has(h3:has-text('Next 7 Days'))",
   },
   {
     id: "03-62-dashboard-signup-positions",
@@ -1009,9 +1054,10 @@ export const SHOTS = [
     prepare: async (page) => {
       // The eligibility check happens on press, not on render — every open
       // shift shows Sign Up regardless of rank — so the dropdown this pictures
-      // only exists after the card is expanded.
+      // only exists after the card is expanded. Open slots live inside the
+      // Next 7 Days timeline since the dashboard redesign.
       const panel = page
-        .locator("div.card:has(h3:has-text('Open Shifts'))")
+        .locator("section.card:has(h3:has-text('Next 7 Days'))")
         .first();
       await panel.waitFor({ timeout: 20_000 });
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -1024,7 +1070,7 @@ export const SHOTS = [
       await panel.locator("select").first().waitFor({ timeout: 15_000 });
       await page.waitForTimeout(400);
     },
-    selector: "div.card:has(h3:has-text('Open Shifts'))",
+    selector: "section.card:has(h3:has-text('Next 7 Days'))",
   },
   {
     id: "03-63-offline-banner",
@@ -1193,7 +1239,9 @@ export const SHOTS = [
     prepare: async (page) => {
       // The bar renders only with more than one pending assignment, and the
       // buttons only once something is selected.
-      const selectAll = page.getByText(/Select all \d+ pending/).first();
+      // The bar's label changed from "… pending" to "… awaiting your
+      // confirmation" in the My Shifts redesign.
+      const selectAll = page.getByText(/Select all \d+ awaiting/).first();
       await selectAll.waitFor({ timeout: 15_000 });
       await selectAll.click();
       await page.waitForTimeout(700);
@@ -1264,6 +1312,10 @@ export const SHOTS = [
       await page.waitForTimeout(1500);
     },
     fullPage: false,
+    // "No calls logged for this shift." is the Calls sub-panel on a shift that
+    // is deliberately in the future; the open-slots crew board is the subject
+    // and it is populated.
+    allowEmptyState: true,
   },
   {
     id: "03-52-apparatus-required-evoc",
@@ -1316,6 +1368,9 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     selector: "div.grid:has(label:has-text('Required EVOC Level'))",
+    // "No EVOC requirement" is the select's placeholder option, present in the
+    // DOM on every render — including this one, where a real level is chosen.
+    allowEmptyState: true,
   },
   {
     id: "03-53-template-position-required",
@@ -4130,6 +4185,10 @@ export const SHOTS = [
     alt: "Expiring on Apparatus: the summary pills, the 30/60/90 window, and three rows — one expiring, one reported used, one short of par",
     route: "/scheduling/supply/expiring",
     fullPage: true,
+    // "No stock" is the per-row label on the deliberately-unlinked traffic
+    // cones position ("No stock · Not linked to inventory") — the page's
+    // summary pills and the other rows are populated.
+    allowEmptyState: true,
   },
 
   {
@@ -7050,7 +7109,10 @@ export const SHOTS = [
       "Screenshot of the Shift Detail Panel (slide-out drawer) showing shift details at",
     alt: "Shift detail panel with the crew roster and shift information",
     route: "/scheduling",
-    prepare: openStaffedShift(),
+    // Not the finalized shift: this is the guide's introduction to the panel,
+    // and the closed-out state (banner, Reopen link, locked actions) has its
+    // own shot in 03-46.
+    prepare: openStaffedShift((shift) => !shift.is_finalized),
     fullPage: true,
   },
   {
@@ -7060,8 +7122,20 @@ export const SHOTS = [
     anchor: "Screenshot of the Calls / Runs section on the shift detail panel",
     alt: "Calls and runs logged against a shift",
     route: "/scheduling",
-    prepare: openStaffedShift((shift) => (shift.call_count ?? 0) > 0),
-    fullPage: true,
+    prepare: async (page) => {
+      // Non-finalized, so the section carries its Log Call control. Clipped to
+      // the Calls block: the drawer scrolls internally now, so a full-page
+      // frame stops at the crew board and never reaches the calls at all.
+      await openStaffedShift(
+        (shift) => (shift.call_count ?? 0) > 0 && !shift.is_finalized,
+      )(page);
+      const section = page
+        .locator("div.space-y-3:has(h3:has-text('Calls'))")
+        .first();
+      await section.scrollIntoViewIfNeeded({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    selector: "div.space-y-3:has(h3:has-text('Calls'))",
   },
   {
     id: "03-09-log-call-form",
@@ -7072,7 +7146,13 @@ export const SHOTS = [
     alt: "Inline log call form with incident type and times",
     route: "/scheduling",
     prepare: async (page) => {
-      await openStaffedShift((shift) => (shift.call_count ?? 0) > 0)(page);
+      // Not the finalized shift: a closed-out shift locks its actions, so the
+      // Log Call button never renders there — and the oldest called shift,
+      // which this filter reaches first, is exactly the one the seeder
+      // finalizes.
+      await openStaffedShift(
+        (shift) => (shift.call_count ?? 0) > 0 && !shift.is_finalized,
+      )(page);
       await clickByName(/log call/i)(page);
     },
     fullPage: true,
@@ -7092,7 +7172,9 @@ export const SHOTS = [
         (shift) => ({ shift: shift.id }),
         isFutureShift,
       )(page);
-      await clickByName(/^assign$/i)(page);
+      // The open seat's button reads "Assign someone" since the crew-board
+      // redesign; "Assign" alone is its phone-width label, hidden on desktop.
+      await clickByName(/^assign someone$/i)(page);
     },
     fullPage: true,
   },
@@ -7111,7 +7193,9 @@ export const SHOTS = [
         (shift) => ({ shift: shift.id }),
         isFutureShift,
       )(page);
-      await clickByName(/edit shift/i)(page);
+      // The panel header's button is labelled just "Edit" now; anchored so the
+      // aria-labelled "Edit call" / "Edit notes" buttons cannot match.
+      await clickByName(/^edit$/i)(page);
     },
     fullPage: true,
   },
@@ -7494,6 +7578,24 @@ export const SHOTS = [
     // Cropped to the block rather than the whole form: 01-07 already shows the
     // full page, and the point here is the one field.
     selector: "div:has(> h2:text-is('Department Information'))",
+  },
+  {
+    id: "01-37-elected-package-badge",
+    doc: "01-membership.md",
+    line: 1156,
+    anchor: "The Elections module showing Alex Rivera's election package",
+    alt: "The applicant drawer's Election Package section after a successful vote — the status badge reading elected and the banner offering conversion to membership",
+    route: "/prospective-members",
+    // The tally itself (Approve/Deny counts) lives on the election results
+    // screen guide 14 photographs; no single screen joins it to the package.
+    // The seeder's "elected membership vote" step plays the March election to
+    // a close so the applicant at the vote stage carries an elected package.
+    prepare: openApplicantAtStage("Membership Vote"),
+    fullPage: true,
+    // Same false positive as 15-08: a board spread across six stages leaves
+    // columns reading "No applicants", and a drawer for an applicant with no
+    // uploads reads "No documents yet". The package section is populated.
+    allowEmptyState: true,
   },
   {
     id: "01-07-admin-member-edit",
