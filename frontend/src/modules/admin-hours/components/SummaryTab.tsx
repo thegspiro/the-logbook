@@ -4,6 +4,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock3, Info, ListChecks } from 'lucide-react';
+import { addCalendarDays, formatDateCustom, getTodayLocalDate, localToUTC } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 
 type DatePreset = 'all' | '30-days' | 'year' | 'custom';
@@ -12,22 +14,27 @@ interface SummaryTabProps {
   onNavigate?: (tab: 'pending' | 'all') => void;
 }
 
-const toDateInput = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+const dateRangeFor = (preset: DatePreset, tz: string): { startDate?: string; endDate?: string } => {
+  if (preset === 'all' || preset === 'custom') return {};
+  const today = getTodayLocalDate(tz);
+  const start = preset === 'year' ? `${today.slice(0, 4)}-01-01` : addCalendarDays(today, -29);
+  return { startDate: start, endDate: today };
 };
 
-const dateRangeFor = (preset: DatePreset): { startDate?: string; endDate?: string } => {
-  if (preset === 'all' || preset === 'custom') return {};
-  const today = new Date();
-  const start = preset === 'year' ? new Date(today.getFullYear(), 0, 1) : new Date(today);
-  if (preset === '30-days') start.setDate(today.getDate() - 29);
-  return { startDate: toDateInput(start), endDate: toDateInput(today) };
+// The backend compares these boundaries against UTC clock_in_at values, so the
+// selected calendar dates must be converted from the department's timezone —
+// not sent as naive strings, which land a day off by the org's UTC offset.
+const startOfDayUTC = (dateOnly: string, tz: string): string => localToUTC(`${dateOnly}T00:00`, tz);
+
+const endOfDayUTC = (dateOnly: string, tz: string): string => {
+  // Next local midnight minus 1ms includes the whole selected end day and
+  // stays correct across DST transitions (a fixed +24h would not).
+  const nextMidnightMs = new Date(localToUTC(`${addCalendarDays(dateOnly, 1)}T00:00`, tz)).getTime();
+  return new Date(nextMidnightMs - 1).toISOString();
 };
 
 const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
+  const tz = useTimezone();
   const summary = useAdminHoursStore((s) => s.summary);
   const fetchSummary = useAdminHoursStore((s) => s.fetchSummary);
   const [preset, setPreset] = useState<DatePreset>('all');
@@ -35,30 +42,34 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
   const [customEnd, setCustomEnd] = useState('');
 
   useEffect(() => {
-    const range = dateRangeFor(preset);
     if (preset === 'custom') return;
+    const range = dateRangeFor(preset, tz);
     void fetchSummary({
-      ...range,
-      // Include the whole selected end day rather than stopping at midnight.
-      ...(range.endDate ? { endDate: `${range.endDate}T23:59:59.999` } : {}),
+      ...(range.startDate ? { startDate: startOfDayUTC(range.startDate, tz) } : {}),
+      ...(range.endDate ? { endDate: endOfDayUTC(range.endDate, tz) } : {}),
     });
-  }, [fetchSummary, preset]);
+  }, [fetchSummary, preset, tz]);
 
   const applyCustomRange = () => {
     void fetchSummary({
-      ...(customStart ? { startDate: customStart } : {}),
-      ...(customEnd ? { endDate: `${customEnd}T23:59:59.999` } : {}),
+      ...(customStart ? { startDate: startOfDayUTC(customStart, tz) } : {}),
+      ...(customEnd ? { endDate: endOfDayUTC(customEnd, tz) } : {}),
     });
   };
 
   const periodLabel = useMemo(() => {
     if (!summary?.periodStart && !summary?.periodEnd) return 'All recorded time';
     const format = (value: string | null) =>
-      value
-        ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value))
-        : 'first record';
+      value ? formatDateCustom(value, { dateStyle: 'medium' }, tz) : 'first record';
     return `${format(summary.periodStart)} – ${format(summary.periodEnd)}`;
-  }, [summary]);
+  }, [summary, tz]);
+
+  // Percentages come from exact minutes: the rounded per-category and
+  // top-level totalHours round independently, so their ratio drifts.
+  const categoryMinutesTotal = useMemo(
+    () => (summary ? summary.byCategory.reduce((sum, category) => sum + category.totalMinutes, 0) : 0),
+    [summary]
+  );
 
   return (
     <div className="space-y-6">
@@ -67,7 +78,8 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
           <div>
             <h2 className="text-theme-text-primary text-xl font-semibold">Hours summary</h2>
             <p className="text-theme-text-secondary mt-1 max-w-2xl text-sm">
-              Organization-wide completed sessions, grouped by the category assigned when each entry was logged.
+              Organization-wide completed sessions, grouped by each entry&rsquo;s current category (including any
+              recategorization made during review).
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
@@ -202,11 +214,11 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
             ) : (
               <div className="mt-5 space-y-4">
                 {[...summary.byCategory]
-                  .sort((a, b) => b.totalHours - a.totalHours)
+                  .sort((a, b) => b.totalMinutes - a.totalMinutes)
                   .map((category) => {
                     const exactShare =
-                      summary.totalHours > 0
-                        ? Math.min(100, Math.max(0, (category.totalHours / summary.totalHours) * 100))
+                      categoryMinutesTotal > 0
+                        ? Math.min(100, Math.max(0, (category.totalMinutes / categoryMinutesTotal) * 100))
                         : 0;
                     const share = Math.round(exactShare);
                     return (
