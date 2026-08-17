@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Pull requests get a template, aimed at what CI cannot check (2026-08-17)
+
+**Added**
+
+- **`.github/pull_request_template.md`** — Summary, Changes, Testing, and a
+  short **Risk checks** list. The checks are deliberately not a restatement of
+  the CI gates: lint, formatting, import order, the migration chain, the
+  endpoint-permission docs check and the coverage floors are already enforced in
+  `ci.yml`, and a box asking whether they passed only teaches a reviewer to skip
+  the block. The list covers the failures no job can catch by reading the
+  diff — a by-id query missing its `organization_id` filter, an update payload
+  that omits a cleared field so the old value survives behind a success toast, a
+  new PHI endpoint absent from `UNCACHEABLE_PREFIXES`, a setting stored with
+  nothing reading it, an unregistered seed migration, an export written with
+  bare `csv.writer`.
+- **Lines are deleted rather than ticked.** Every item names the pitfall it
+  guards and is meant to be removed when the diff does not touch it, so what
+  remains is a claim someone made rather than a block that arrives pre-checked.
+- Descriptions had also drifted into two house styles across recent PRs —
+  Motivation/Description/Testing and Summary/Changes/Implementation Details. One
+  template settles it, and `CONTRIBUTING.md` now points at it from the Pull
+  Request Process section.
+
 ### Events: public request intake is opt-in and spam-controlled (2026-08-17)
 
 **Security / Added**
@@ -131,7 +154,6 @@ the existing `test_captcha.py`.
   tracks them — their medical screening compliance.
 
   Three rules keep it from overstating, and each is tested:
-
   - **It renders nothing when there is nothing to judge.** A member with no
     tracked certifications and no screening requirements is _unknown_, not
     clear, and a green verdict from an empty set asserts a clearance the
@@ -9191,16 +9213,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario | Behavior |
+| Scenario                                      | Behavior                                                                         |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
-| Template with bare string positions | Backward-compatible: defaults to `required=true` |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
-| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
-| All positions filled via bulk assign | "Fill All Open" button hidden |
-| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
-| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
+| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
+| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
+| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
+| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
+| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
+| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 
