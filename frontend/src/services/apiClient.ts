@@ -156,6 +156,11 @@ export function clearTempAccessToken(): void {
 export async function handleExpiredSession(): Promise<void> {
   localStorage.removeItem('has_session');
   clearCache();
+  // Awaited, not voided: the IndexedDB stores are cleared asynchronously, and
+  // the purge sweeps localStorage a second time afterwards to catch a draft an
+  // in-flight form recreated during that window. Letting the redirect race it
+  // is what leaves the next user of a shared device with the previous member's
+  // draft. Every caller already awaits this function.
   await purgeLocalMemberData();
   if (!window.location.pathname.startsWith('/onboarding')) {
     window.location.href = '/login';

@@ -1,5 +1,41 @@
 # Screenshot currency
 
+## Tracker corrected 2026-08-17 — the count was never 421 of 423
+
+Two defects in the pipeline were found while capturing the nested-room shots,
+both fixed in the same pass:
+
+1. **`MARKER` did not match a descriptive request.** The pattern required
+   `[SCREENSHOT NEEDED]` as a closed token, so every
+   `**[SCREENSHOT NEEDED — what to capture]**` marker — the form both August
+   documentation passes used — was invisible to `status_report.py` _and_
+   `apply_placeholders.py`. 41 outstanding captures across 12 guides were
+   uncounted; the tracker read **421 of 423 filled (2 remaining)** while the
+   real figure was 40 outstanding. The honest count is now **424 of 464**.
+2. **Applying one placeholder deleted its neighbours.** `block_end` consumed to
+   the end of the blockquote, and guides stack two or three requests in one
+   quote separated by a bare `>`. The first replacement swallowed the rest —
+   image applied, sibling requests gone, unshot and unrecorded. It happened
+   once for real (the "Located Inside" request) before the behavior was found.
+   11 markers across three guides were in that position. `block_end` now stops
+   at the next marker.
+
+**If you have applied placeholders on a branch since 2026-08-12, check for
+silently dropped requests** — the symptom is a request that was in the guide
+and is now neither a marker nor an image.
+
+## Captured 2026-08-17
+
+- `06-24-rooms-nested-tree` — Rooms section as a three-level tree (Volunteer
+  Office → Quartermaster's Storage → Locker Cage, plus Records Closet), with
+  sub-room counts and the hovered row actions.
+- `06-25-room-located-inside` — the room form's "Located Inside" field.
+- `06-26-room-delete-subrooms` — the delete confirmation naming the sub-room
+  consequence.
+
+All three are driven from `manifest.mjs` (ids `06-24`…`06-26`) against a
+seeded demo department, so they re-shoot rather than going stale.
+
 ## Flagged by the 2026-08-15 → 08-16 changes
 
 Full reason/data-path context in
@@ -29,6 +65,20 @@ opened and checked against its guide caption.
 - **Hire-date restriction** (guide 19): profile edit rejecting a `hire_date`
   change without leadership/secretary/membership-coordinator permission,
   showing the explanation in the toast.
+
+### Added by the post-audit August 16 merges
+
+- **Storage Areas page** (guide 05): now shows all areas by default and every
+  area is assigned a barcode (auto-assigned `SA-…` series). Re-verify any
+  storage-areas capture; a new capture should show the barcode column
+  populated on every row. **Do not caption it as scannable** — the code is
+  assigned and printable, but the inventory scanner cannot resolve it yet
+  (KNOWN_LIMITATIONS INV-8).
+- **Equipment-check rejection vs. offline queue** (guides 03/10): capture a
+  server-rejected check showing the real error message — **not** the
+  "queued for sync" toast — and, separately, the abandoned-after-retries
+  loss notice. Requires demo setup that forces a 4xx (e.g. a
+  revoked-permission account).
 
 ### REPLACE / re-verify
 
@@ -591,22 +641,27 @@ and is committed**; the other ten were reverted unopened. They are not wrong,
 they are unverified, and the rule that has caught every real defect this session
 is that those are not the same thing.
 
-### Program phases carry no requirements, so the caption's counts come from elsewhere
+### The program detail has requirement totals, but not the caption's member progress
 
 `01-membership.md:1282` wants Phase 1 (Complete, 4/4), Phase 2 (In Progress,
 0/6) and so on. A program's detail response — `GET
-/training/programs/programs/{id}` — returns phases with `name`,
-`phase_number`, `prerequisite_phase_ids`, `requires_manual_advancement` and
-`time_limit_days`, and **no requirements at all**. So the fractions in the
-caption cannot come from this screen; they belong to a member's enrolment view,
-which is guide 02's territory and where `02-90-phase-prerequisites` already
-looks.
+/training/programs/programs/{id}` — returns phases (`name`, `phase_number`,
+`prerequisite_phase_ids`, `requires_manual_advancement`, `time_limit_days`)
+**and top-level `requirements`, `total_requirements` and `total_required`**.
+Those are structural totals for the program as designed, though — the
+caption's Complete/In-Progress fractions are a member's progress, which
+belongs to an enrolment view. Note that `02-90-phase-prerequisites` is a
+structural shot too (the phase editor's prerequisite picker, no member
+progress in frame), so it is not the cross-reference for the enrolment
+fractions; that screenshot still needs to come from a member's enrolment
+screen.
 
 That makes this the same split as `09-18` and `01-membership.md:1156`: the
-program detail can show the phase structure and its gating, and the per-phase
-progress belongs to a cross-reference. Confirm against the enrolment view before
-rewriting the caption — this was established from the API shape alone, and the
-screen has not been opened yet.
+program detail can show the phase structure, its gating, and the designed
+requirement counts; the per-phase member progress belongs to a
+cross-reference. Confirm against the enrolment view before rewriting the
+caption — this was established from the API shape alone, and the screen has
+not been opened yet.
 
 ### The skip banner is right; the toast beside it is a demo artifact
 

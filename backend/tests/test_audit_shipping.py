@@ -122,7 +122,7 @@ class TestAuditShipping:
 
         assert result["shipped_entries"] == 0
         assert result["error"] == ("unsafe collector URL: private/internal IP address")
-        guard.assert_called_once_with(url)
+        guard.assert_called_once_with(url, allow_private=False)
         assert captured == []
         assert await _watermark(db_session) == before
 

@@ -96,6 +96,75 @@ describe('extended facility sections', () => {
     expect(getUtilityAccounts).toHaveBeenCalledTimes(1);
   });
 
+  it('renders loaded readings with date, usage and cost, newest first', async () => {
+    getUtilityReadings.mockResolvedValue([
+      {
+        id: 'reading-june',
+        utilityAccountId: 'utility-1',
+        readingDate: '2026-06-01',
+        amount: 120.5,
+        usageQuantity: 900,
+        usageUnit: 'kWh',
+        createdAt: '2026-06-02T00:00:00Z',
+      },
+      {
+        id: 'reading-july',
+        utilityAccountId: 'utility-1',
+        readingDate: '2026-07-01',
+        amount: 132,
+        usageQuantity: 1050,
+        usageUnit: 'kWh',
+        createdAt: '2026-07-02T00:00:00Z',
+      },
+    ]);
+
+    render(
+      <ConfirmProvider>
+        <UtilitiesSection facilityId="facility-1" canManage={false} canEdit={false} />
+      </ConfirmProvider>
+    );
+
+    expect(await screen.findByText('2 recent readings')).toBeInTheDocument();
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Jul 1, 2026');
+    expect(rows[0]).toHaveTextContent('1,050 kWh');
+    expect(rows[0]).toHaveTextContent('$132.00');
+    expect(rows[1]).toHaveTextContent('Jun 1, 2026');
+    expect(rows[1]).toHaveTextContent('900 kWh');
+    expect(rows[1]).toHaveTextContent('$120.50');
+  });
+
+  it('ignores a second click while a reading save is in flight', async () => {
+    let resolveCreate: (value: unknown) => void = () => {};
+    createUtilityReading.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        })
+    );
+
+    render(
+      <ConfirmProvider>
+        <UtilitiesSection facilityId="facility-1" canManage={false} canEdit />
+      </ConfirmProvider>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add reading' }));
+    fireEvent.change(screen.getByLabelText('Reading date'), { target: { value: '2026-08-01' } });
+    const saveButton = screen.getByRole('button', { name: 'Save reading' });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+
+    expect(saveButton).toBeDisabled();
+    expect(createUtilityReading).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveCreate({});
+    });
+    expect(createUtilityReading).toHaveBeenCalledTimes(1);
+  });
+
   it('sends the account id in the reading payload (backend schema requires it)', async () => {
     render(
       <ConfirmProvider>

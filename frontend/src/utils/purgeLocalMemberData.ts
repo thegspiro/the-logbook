@@ -104,14 +104,13 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
     // As above.
   }
 
-  // A still-mounted form can finish an in-flight request and rewrite its
-  // autosaved localStorage draft while the asynchronous IndexedDB stores are
-  // being cleared. Sweep again after every await so logout/expiry cannot leave
-  // behind a draft recreated during the purge window.
+  // A mounted form can have an API request in flight when termination starts.
+  // Sweep again after the asynchronous IndexedDB work so a late state update
+  // cannot leave a localStorage draft behind for the next device user.
   try {
     result.drafts += clearAllDrafts();
   } catch {
-    // localStorage may become unavailable; the first sweep still ran.
+    // localStorage may have become unavailable; the initial sweep still ran.
   }
 
   result.unsyncedDiscarded = result.queuedChecks + result.queuedReports + result.queuedGeneric;

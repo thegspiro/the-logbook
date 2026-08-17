@@ -35,6 +35,7 @@ describe('purgeLocalMemberData', () => {
     // These clear functions genuinely take no arguments, so the zero-arg
     // form of toHaveBeenCalledWith is the accurate assertion here (see the
     // Pitfall #13 note in CLAUDE.md — this is the narrow case it allows).
+    expect(mockClearAllDrafts).toHaveBeenCalledWith();
     expect(mockClearAllDrafts).toHaveBeenCalledTimes(2);
     expect(mockClearAllQueuedChecks).toHaveBeenCalledWith();
     expect(mockClearAllQueuedReports).toHaveBeenCalledWith();
@@ -60,10 +61,20 @@ describe('purgeLocalMemberData', () => {
 
   it('sweeps drafts again after asynchronous queue cleanup', async () => {
     mockClearAllDrafts.mockReturnValueOnce(1).mockReturnValueOnce(2);
+    let finishQueue!: (count: number) => void;
+    mockClearAllQueuedChecks.mockReturnValue(
+      new Promise<number>((resolve) => {
+        finishQueue = resolve;
+      })
+    );
 
-    const result = await purgeLocalMemberData();
+    const pending = purgeLocalMemberData();
+    expect(mockClearAllDrafts).toHaveBeenCalledTimes(1);
+    finishQueue(0);
+    const result = await pending;
 
     expect(mockClearAllDrafts).toHaveBeenCalledTimes(2);
+    // Both sweeps count towards the reported total.
     expect(result.drafts).toBe(3);
   });
 
