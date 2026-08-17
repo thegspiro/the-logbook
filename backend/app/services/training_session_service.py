@@ -968,7 +968,9 @@ class TrainingSessionService:
             and not training_session.requirement_id
         ):
             category_requirement_ids = await self._resolve_category_requirement_ids(
-                training_session.program_id, training_session.category_id
+                training_session.program_id,
+                training_session.category_id,
+                training_session.phase_id,
             )
 
         # Process each attendee
@@ -1106,11 +1108,12 @@ class TrainingSessionService:
         return pipeline_updates
 
     async def _resolve_category_requirement_ids(
-        self, program_id: str, category_id: str
+        self, program_id: str, category_id: str, phase_id: Optional[str]
     ) -> List[str]:
         """HOURS requirement ids in ``program_id`` whose training requirement is
-        tagged with ``category_id`` — used to advance category-linked (rather than
-        requirement-linked) sessions.
+        tagged with ``category_id`` and belongs to ``phase_id`` — used to advance
+        category-linked (rather than requirement-linked) sessions. A null phase
+        only matches program-level requirements, never requirements in a phase.
 
         Restricted to HOURS requirements on purpose: a session credits *hours*,
         so fanning those hours out to a COURSES/SHIFTS/CALLS requirement would
@@ -1131,6 +1134,8 @@ class TrainingSessionService:
             )
             .where(
                 ProgramRequirement.program_id == str(program_id),
+                ProgramRequirement.phase_id
+                == (str(phase_id) if phase_id is not None else None),
                 TrainingRequirement.category_ids.contains([str(category_id)]),
                 TrainingRequirement.requirement_type == RequirementType.HOURS,
             )
