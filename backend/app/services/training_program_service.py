@@ -2943,6 +2943,8 @@ class TrainingProgramService:
         progress_notes: Optional[Dict] = None,
         mark_in_progress: bool = False,
         mark_completed: bool = False,
+        acting_user_id: Optional[UUID] = None,
+        can_manage: bool = False,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """Idempotently apply source-backed progress to a requirement.
 
@@ -2971,6 +2973,16 @@ class TrainingProgramService:
         progress = await self._get_org_scoped_progress(progress_id, organization_id)
         if progress is None:
             return None, "Requirement progress not found"
+
+        # Preserve the authorization boundary of the real progress updater.
+        # Feed callers handling a user request must identify that user; otherwise
+        # the downstream updater treats the write as a trusted system action.
+        if (
+            acting_user_id is not None
+            and not can_manage
+            and str(progress.enrollment.user_id) != str(acting_user_id)
+        ):
+            return None, "You are not authorized to update this training progress"
 
         existing = await self.db.execute(
             select(RequirementProgressCredit).where(
@@ -3030,6 +3042,8 @@ class TrainingProgramService:
             updates=RequirementProgressUpdate(**update_kwargs),
             verified_by=verified_by,
             completion_credit_id=str(ledger.id) if mark_completed else None,
+            acting_user_id=acting_user_id,
+            can_manage=can_manage,
         )
         if mark_completed:
             phase_after_result = await self.db.execute(

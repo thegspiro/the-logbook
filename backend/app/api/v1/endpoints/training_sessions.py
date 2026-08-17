@@ -12,7 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.event import Event
@@ -264,6 +269,7 @@ async def finalize_training_session(
         training_session_id=training_session_id,
         organization_id=current_user.organization_id,
         finalized_by=current_user.id,
+        can_manage_training=user_has_permission(current_user, "training.manage"),
     )
 
     if error:
@@ -344,6 +350,7 @@ async def submit_training_approval(
         approval_notes=approval_data.approval_notes,
         approved_by=current_user.id,
         organization_id=current_user.organization_id,
+        can_manage_training=user_has_permission(current_user, "training.manage"),
     )
 
     if error:
