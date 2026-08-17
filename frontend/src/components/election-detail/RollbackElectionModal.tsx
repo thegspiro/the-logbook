@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 
 interface RollbackElectionModalProps {
   currentStatus: string;
@@ -17,6 +18,8 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [rollbackReason, setRollbackReason] = useState('');
 
   const handleKeyDown = useCallback(
@@ -30,13 +33,13 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="rollback-election-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal w-full max-w-lg rounded-lg shadow-xl">
+      <div ref={dialogRef} className="modal-panel w-full max-w-lg">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="rollback-election-modal-title" className="text-theme-text-primary text-lg font-medium">
             Rollback Election

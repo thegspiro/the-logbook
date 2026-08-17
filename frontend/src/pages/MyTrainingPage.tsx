@@ -651,7 +651,7 @@ const MyTrainingPage: React.FC = () => {
         <div className="space-y-6">
           {/* Records range + export toolbar */}
           {(v?.show_training_history || v?.allow_member_report_export) && (
-            <div className="bg-theme-surface border-theme-surface-border flex flex-wrap items-end justify-between gap-4 rounded-lg border p-4">
+            <div className="card flex flex-wrap items-end justify-between gap-4 p-4">
               <div>
                 <DateRangePicker
                   label="Training records date range"
@@ -672,7 +672,7 @@ const MyTrainingPage: React.FC = () => {
                   <button
                     onClick={() => void handleExport('csv')}
                     disabled={exporting}
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                    className="btn-secondary text-theme-text-secondary flex items-center space-x-2 text-sm font-medium"
                   >
                     <Download className="h-4 w-4" />
                     <span>Export CSV</span>
@@ -680,7 +680,7 @@ const MyTrainingPage: React.FC = () => {
                   <button
                     onClick={() => void handleExport('pdf')}
                     disabled={exporting}
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                    className="btn-secondary text-theme-text-secondary flex items-center space-x-2 text-sm font-medium"
                   >
                     <Download className="h-4 w-4" />
                     <span>Export PDF</span>
@@ -737,15 +737,7 @@ const MyTrainingPage: React.FC = () => {
                     return (
                       <div
                         key={req.id}
-                        className={`bg-theme-surface rounded-lg border p-4 ${
-                          isOverdue
-                            ? 'border-red-500/40'
-                            : isDueSoon
-                              ? 'border-yellow-500/30'
-                              : req.is_met
-                                ? 'border-green-500/20'
-                                : 'border-theme-surface-border'
-                        }`}
+                        className={`card p-4 ${isOverdue ? 'border-red-500/40' : isDueSoon ? 'border-yellow-500/30' : req.is_met ? 'border-green-500/20' : 'border-theme-surface-border'}`}
                       >
                         <div className="mb-2 flex items-start justify-between">
                           <div className="flex items-center space-x-2">

@@ -12,6 +12,9 @@ export type {
   InventoryItemCreate,
   InventoryCategoryCreate,
   InventorySummary,
+  InventorySetupStatus,
+  CategoryPreset,
+  CategoryPresetApplyResponse,
   LocationInventorySummary,
   InventoryItemsListResponse,
   InventoryImportResult,
@@ -45,6 +48,15 @@ export type {
   ReorderRequest,
   ReorderRequestCreate,
   ReorderRequestUpdate,
+  InventoryVendor,
+  InventoryVendorCreate,
+  InventoryVendorUpdate,
+  InventoryVendorContact,
+  InventoryVendorContactCreate,
+  InventoryVendorContactUpdate,
+  UnlinkedVendorName,
+  VendorAttachNameResult,
+  VendorMergeResult,
   ReturnRequestItem,
   UserInventoryResponse,
   UserCheckoutItem,
@@ -81,10 +93,17 @@ export type {
 
 import type { InventoryCategory } from '../../../services/eventServices';
 
-export type { Location } from '../../../services/communicationsServices';
+export type { Location, LocationCreate } from '../../../services/communicationsServices';
 export type { Role } from '../../../types/role';
 
-/** Item type options for category classification */
+/**
+ * Item type options for category classification.
+ *
+ * `medical` is deliberately absent: medical categories are created on the
+ * Medical Supplies page, and the gear endpoints exclude that domain from
+ * their listings. Adding it here would offer a category this page cannot
+ * then show back to the user.
+ */
 export const ITEM_TYPES = [
   { value: 'uniform', label: 'Uniform' },
   { value: 'ppe', label: 'PPE' },

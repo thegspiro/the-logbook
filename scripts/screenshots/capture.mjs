@@ -12,7 +12,7 @@
  *   - `bootstrap_demo.py` and `seed_demo_data.py` already run
  *
  * Usage:
- *   node scripts/screenshots/capture.mjs [--only <id-prefix>] [--headed]
+ *   node scripts/screenshots/capture.mjs [--only <id-prefix>[,<id-prefix>...]] [--headed]
  */
 
 import { chromium } from "@playwright/test";
@@ -94,7 +94,10 @@ function viewportFor(shot) {
 
 const args = process.argv.slice(2);
 const onlyIndex = args.indexOf("--only");
-const only = onlyIndex >= 0 ? args[onlyIndex + 1] : null;
+// Comma-separated prefixes, so a run can target exactly the shots that
+// failed ("--only 03-09,03-31,03-58") instead of a whole guide per invocation.
+const only =
+  onlyIndex >= 0 ? args[onlyIndex + 1].split(",").filter(Boolean) : null;
 const headed = args.includes("--headed");
 
 /**
@@ -165,6 +168,43 @@ async function pageText(page) {
 async function detectCrash(page) {
   const text = await pageText(page);
   return CRASHED.test(text);
+}
+
+/**
+ * A page wider than its own viewport, and the widest in-flow elements causing it.
+ *
+ * This is the one layout fault a screenshot cannot show you: a full-page
+ * capture widens to the document, so a phone shot of a sideways-scrolling page
+ * comes out looking perfectly composed at 690px and only the pixel dimensions
+ * give it away. Checking it here caught a wizard footer whose three no-wrap
+ * controls did not fit in 390px.
+ *
+ * Fixed and absolute elements are skipped: they stretch to whatever the
+ * document already is, so they report the symptom rather than the cause.
+ */
+async function detectHorizontalOverflow(page) {
+  return page
+    .evaluate(() => {
+      const de = document.documentElement;
+      if (de.scrollWidth <= de.clientWidth + 1) return null;
+      const culprits = [...document.querySelectorAll("body *")]
+        .filter((el) => {
+          const position = getComputedStyle(el).position;
+          if (position === "fixed" || position === "absolute") return false;
+          return el.getBoundingClientRect().right > de.clientWidth + 1;
+        })
+        .slice(0, 3)
+        .map(
+          (el) =>
+            `<${el.tagName.toLowerCase()} class="${String(el.className).slice(0, 70)}">`,
+        );
+      return {
+        scrollWidth: de.scrollWidth,
+        clientWidth: de.clientWidth,
+        culprits,
+      };
+    })
+    .catch(() => null);
 }
 
 /**
@@ -380,9 +420,36 @@ async function main() {
   const sessions = makeSessions(browser, contextOptions);
 
   const results = [];
-  const shots = SHOTS.filter((shot) => !only || shot.id.startsWith(only));
+  const shots = SHOTS.filter(
+    (shot) => !only || only.some((prefix) => shot.id.startsWith(prefix)),
+  );
   for (const shot of shots) {
     const target = resolve(OUTPUT_DIR, `${shot.id}.png`);
+
+    // Some states cannot exist in a seeded department — a first-run prompt is
+    // gone the moment the thing it prompts for is seeded, and an empty-state
+    // screen is the absence of seed data, not a shape of it. Those images come
+    // from a fixture-driven harness instead. Skipping is the point: this loop
+    // would otherwise capture the *populated* page under the same filename and
+    // overwrite a correct picture with a wrong one on every run, silently,
+    // because the capture itself succeeds.
+    if (shot.capturedElsewhere) {
+      results.push({
+        id: shot.id,
+        status: "skipped",
+        file: `${shot.id}.png`,
+        doc: shot.doc,
+        line: shot.line,
+        anchor: shot.anchor,
+        alt: shot.alt,
+        capturedElsewhere: shot.capturedElsewhere,
+      });
+      console.log(
+        `  = ${shot.id} (captured elsewhere: ${shot.capturedElsewhere})`,
+      );
+      continue;
+    }
+
     const page = await sessions.pageFor(shot);
     try {
       await page.setViewportSize(viewportFor(shot));
@@ -466,6 +533,7 @@ async function main() {
       if (pageError) {
         throw new Error(`page rendered an error: "${pageError}"`);
       }
+      const overflow = await detectHorizontalOverflow(page);
       results.push({
         id: shot.id,
         status: "ok",
@@ -475,11 +543,20 @@ async function main() {
         anchor: shot.anchor,
         alt: shot.alt,
         ...(emptyState ? { emptyState } : {}),
+        ...(overflow ? { horizontalOverflow: overflow } : {}),
         ...(shot.holdBack ? { holdBack: shot.holdBack } : {}),
       });
       console.log(
         `  ${emptyState ? "~" : "+"} ${shot.id}${emptyState ? ` (empty: "${emptyState}")` : ""}`,
       );
+      if (overflow) {
+        console.log(
+          `      scrolls sideways: ${overflow.scrollWidth}px in a ${overflow.clientWidth}px viewport` +
+            (overflow.culprits.length
+              ? ` — widest: ${overflow.culprits.join(", ")}`
+              : ""),
+        );
+      }
     } catch (error) {
       results.push({
         id: shot.id,
@@ -494,13 +571,30 @@ async function main() {
   await browser.close();
 
   const failed = results.filter((r) => r.status === "failed");
+  const skipped = results.filter((r) => r.status === "skipped");
   const empty = results.filter((r) => r.emptyState);
+  const overflowing = results.filter((r) => r.horizontalOverflow);
   console.log(
-    `\n${results.length - failed.length}/${results.length} screenshots captured.`,
+    `\n${results.length - failed.length - skipped.length}/${results.length - skipped.length} screenshots captured.`,
   );
+  if (skipped.length) {
+    console.log(
+      `${skipped.length} left alone (captured elsewhere): ` +
+        skipped.map((r) => r.id).join(", "),
+    );
+  }
   if (empty.length) {
     console.log(
       `${empty.length} show an empty state and need richer seed data before they can be applied.`,
+    );
+  }
+  // Reported, not fatal: an overflowing page still captures, and the shot is
+  // usually the fastest way to see what is sticking out. Failing the run would
+  // block documentation on an unrelated layout bug.
+  if (overflowing.length) {
+    console.log(
+      `${overflowing.length} page(s) scroll sideways at the width they were shot: ` +
+        overflowing.map((r) => r.id).join(", "),
     );
   }
   if (failed.length) {

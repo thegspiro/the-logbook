@@ -103,7 +103,7 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) =>
     <button
       type="button"
       onClick={() => void navigate(`/grants/applications/${application.id}`)}
-      className="border-theme-surface-border bg-theme-surface w-full rounded-lg border p-3 text-left shadow-sm transition-shadow hover:shadow-md"
+      className="card w-full p-3 text-left transition-shadow hover:shadow-md"
     >
       <p className="text-theme-text-primary line-clamp-2 text-sm font-medium">{application.grantProgramName}</p>
 
@@ -344,7 +344,7 @@ export const GrantApplicationsPage: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {/* View toggle */}
-            <div className="border-theme-surface-border bg-theme-surface flex rounded-lg border p-0.5">
+            <div className="card flex p-0.5">
               <button
                 type="button"
                 onClick={() => setViewMode('pipeline')}
@@ -482,7 +482,7 @@ export const GrantApplicationsPage: React.FC = () => {
           /* ================================================================ */
           /* Table View                                                       */
           /* ================================================================ */
-          <div className="border-theme-surface-border bg-theme-surface mt-6 overflow-hidden rounded-lg border">
+          <div className="card mt-6 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>

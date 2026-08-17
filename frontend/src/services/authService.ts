@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import { clearCache } from '../utils/apiCache';
+import { CAPTCHA_HEADER } from '../hooks/useCaptcha';
 import type {
   CurrentUser,
   LoginCredentials,
@@ -123,8 +124,14 @@ export const authService = {
   /**
    * Request password reset (sends email with reset link)
    */
-  async requestPasswordReset(data: PasswordResetRequest): Promise<{ message: string }> {
-    const response = await api.post<{ message: string }>('/auth/forgot-password', data);
+  async requestPasswordReset(data: PasswordResetRequest, captchaToken?: string): Promise<{ message: string }> {
+    // Header rather than body: the backend verifies the challenge in a
+    // dependency, before the request body is parsed.
+    const response = await api.post<{ message: string }>(
+      '/auth/forgot-password',
+      data,
+      captchaToken ? { headers: { [CAPTCHA_HEADER]: captchaToken } } : {}
+    );
     return response.data;
   },
 

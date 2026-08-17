@@ -230,16 +230,69 @@ The app uses an **autoUpdate** service worker strategy:
 3. The update is applied the next time you close and reopen the app
 4. You do not need to take any action — updates happen automatically
 
-In addition, the app includes a **proactive version detection** system:
+In addition, the app includes a **proactive version detection** system
+_(reworked 2026-08-12 so updates land on installed PWAs in one reload)_:
 
 1. A build timestamp is embedded in the app at build time
-2. The `useAppUpdate` hook periodically checks if a newer version has been deployed
+2. The `useAppUpdate` hook periodically checks if a newer version has been
+   deployed; the service worker is also re-checked when you return to the app
+   (and on a 30-minute fallback interval), not just on rare full navigations
 3. If a new version is detected, an **Update Available** notification bar appears
    — at the **top** of the screen on desktop and tablet, and at the **bottom** on
-   phones _(2026-08-07)_
-4. Click the notification to refresh and load the new version
+   phones _(2026-08-07)_ — and the new service worker is fetched in the
+   background so it is usually ready before you tap
+4. Tap **Reload now**: the app waits for the fresh worker to take control and
+   then reloads **once** with the new version. Previously the reload was often
+   served by the old worker's cached shell, so the update appeared to do
+   nothing until a second reload
 
-> **Hint:** If you don't see the update notification and suspect you're on an old version, you can always force a refresh with `Ctrl+Shift+R` (desktop) or by closing and reopening the app (mobile).
+> **Hint:** If you don't see the update notification and suspect you're on an
+> old version, use **Settings → App** (below) rather than guessing. Since
+> 2026-08-12 a stale-chunk load after a deployment also self-heals through the
+> same one-reload path instead of landing on the error page.
+
+### Checking and Forcing an Update Yourself _(2026-08-16)_
+
+Everything above is automatic, but an installed app has no address bar and no
+`Ctrl+Shift+R` — so when a device _does_ get stuck on an old build, there was
+previously nothing to press. **Settings → App** is that button. It shows:
+
+- **Installed version** — the build this device is actually running. Read it
+  out when you report a problem; it tells whoever is helping exactly which
+  version you are seeing, which is otherwise guesswork.
+- **Check for updates** — asks the server whether a newer version has been
+  released. If one has, the app swaps in the new version and reloads onto it.
+  If not, it says so, which is itself useful: it rules the app out.
+- **Force refresh** — the escape hatch. It deletes every stored copy of the app
+  on this device (the offline app shell and every cached screen) and reloads it
+  from the server.
+
+Reach for **Force refresh** when the app still looks out of date after an
+update, or when it shows an old department name or logo — that branding is
+stored on the device the first time you open the app and is otherwise never
+re-read, so a department that renames itself or changes its logo can leave
+existing phones showing the old one indefinitely.
+
+**It needs a working connection.** A force refresh throws away this device's
+offline copy of the app and downloads a replacement, so doing it with no signal
+would leave you with neither. The app checks before it clears anything: if it
+cannot reach the server it refuses, tells you so, and leaves the device exactly
+as it was. Get back in signal and try again.
+
+Note it checks by actually reaching The Logbook, not just by asking the phone
+whether it has a connection — station Wi-Fi behind a captive portal reports a
+perfectly good connection while answering every request with a login page.
+
+Otherwise a force refresh is safe:
+
+- **You stay signed in.** It is a refresh, not a sign-out.
+- **Offline work is kept.** Anything saved offline but not yet synced is left
+  untouched — a force refresh will never be the thing that loses a shift report.
+- **Push notifications keep working.** This device's notification subscription
+  is deliberately left alone, so you do not have to re-enable it afterwards.
+
+The only cost is speed: the next few screens load a little slower while the app
+re-downloads what it just discarded.
 
 > **Fixed 2026-08-07:** on a phone the update banner was rendered _behind_ the
 > fixed mobile header and was therefore invisible. For an installed app that
@@ -296,8 +349,11 @@ This is a deliberate design decision for data integrity and HIPAA compliance —
 Station computers are shared: whoever is on duty signs in on the same browser.
 Anything left on the device is readable by the next person to sit down, so
 **signing out erases everything held locally** — queued equipment checks and
-their photos, queued shift reports, queued training submissions and RSVPs, and
-saved shift-report drafts.
+their photos, queued shift reports, queued training submissions and RSVPs,
+saved shift-report drafts, and **in-progress equipment-check drafts**
+_(added 2026-08-16; previously these drafts survived logout, so the next
+person at the terminal could read apparatus results and notes — flagged and
+fixed as red-team finding RT-08)_.
 
 **If you have queued work, get back online and let it sync before you sign
 out.** Anything still waiting is discarded. The app is not silent about it: if
@@ -478,7 +534,7 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 | "Add to Home Screen" not appearing (iOS)                            | You must use **Safari**. Chrome, Firefox, and other browsers on iOS cannot install PWAs. Also verify you are on the actual Logbook URL, not a redirect page.                                                                                                                                                                                                                                                                                                                            |
 | "Add to Home Screen" not appearing (Android)                        | Ensure you are using Chrome. The option may be in the three-dot menu under "Install app" or "Add to Home screen." Some browsers use different wording.                                                                                                                                                                                                                                                                                                                                  |
 | App shows blank screen after install                                | Close the app completely and reopen. If it persists, uninstall from home screen, clear browser cache for the site, and reinstall.                                                                                                                                                                                                                                                                                                                                                       |
-| App stuck on old version                                            | The autoUpdate service worker should handle this. If it doesn't: close the app completely, wait 30 seconds, reopen. On iOS, you can also clear Safari's website data for the Logbook URL in Settings > Safari > Advanced > Website Data.                                                                                                                                                                                                                                                |
+| App stuck on old version                                            | **Settings > App > Force refresh** _(2026-08-16)_. It clears every stored copy of the app on this device and reloads from the server, while keeping you signed in, keeping unsynced offline work, and keeping push enabled. The same screen shows the build you are actually running, so you can confirm the refresh worked rather than assuming it did.                                                                                                                                |
 | QR code scan not opening the app                                    | On iOS, the camera app opens QR links in Safari, not the installed PWA. This is an iOS limitation. The check-in still works — it just opens in Safari instead.                                                                                                                                                                                                                                                                                                                          |
 | Member ID scan not finding member                                   | Verify the member has a `membership_number` assigned and the ID card was generated by The Logbook. Fall back to name search if scanning fails.                                                                                                                                                                                                                                                                                                                                          |
 | Barcode scanner not activating                                      | Your browser needs camera permission. Go to your phone's Settings > Privacy > Camera and ensure the browser (or the PWA) has camera access. On desktop, verify your webcam is not in use by another app.                                                                                                                                                                                                                                                                                |
@@ -492,7 +548,7 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 | Form submission did not synchronize                                 | Training submissions and event RSVPs queue in IndexedDB while offline. Restore connectivity, use the sync indicator to retry if needed, and verify the durable result in Training or Events. Other forms may still require connectivity; preserve the entered values and follow the error shown by that form.                                                                                                                                                                           |
 | App icon disappeared from home screen                               | Some devices remove PWA icons after system updates or storage cleanups. Reinstall following the steps above.                                                                                                                                                                                                                                                                                                                                                                            |
 | Dark mode not applying in PWA                                       | Dark mode follows the app's theme setting (My Account > Appearance), not the device's system setting. Toggle it from within the app.                                                                                                                                                                                                                                                                                                                                                    |
-| "Update Available" notification not appearing                       | The version detection checks periodically. If you suspect you're on an old version, force refresh with Ctrl+Shift+R or close and reopen the app.                                                                                                                                                                                                                                                                                                                                        |
+| "Update Available" notification not appearing                       | The version detection checks periodically. If you suspect you're on an old version, open **Settings > App > Check for updates** — it answers the question directly instead of leaving you to guess, and reloads onto the new version if there is one.                                                                                                                                                                                                                                   |
 | Layout looks wrong on mobile                                        | Mobile responsiveness has been significantly improved (major updates 2026-03-22 and 2026-08-07). Clear your browser cache to load the latest styles. Use landscape orientation for complex tables.                                                                                                                                                                                                                                                                                      |
 | Login page shows "Too many attempts"                                | Rate limiting is active. Wait for the countdown timer to expire before trying again.                                                                                                                                                                                                                                                                                                                                                                                                    |
 | A page went blank / "Something went wrong"                          | Fixed 2026-08-07/08. An unexpected response from the server used to take a whole screen down instead of showing an empty list — most often on station Wi-Fi behind a captive portal or a carrier interception page, which answer with a web page where the app expects data. If it still happens, note the page and report it; those failures are now recorded on the Error Monitoring page for your IT manager.                                                                        |

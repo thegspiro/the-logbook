@@ -34,6 +34,12 @@ const SupplyExpiringPage = lazyWithRetry(() => import('../../pages/scheduling/Su
 
 const ApparatusInventoryPage = lazyWithRetry(() => import('../../pages/scheduling/ApparatusInventoryPage'));
 
+const FleetBoardPage = lazyWithRetry(() => import('../../pages/scheduling/FleetBoardPage'));
+
+const CheckLogPage = lazyWithRetry(() => import('../../pages/scheduling/CheckLogPage'));
+
+const ApparatusDetailPage = lazyWithRetry(() => import('../../pages/scheduling/ApparatusDetailPage'));
+
 const ShiftCheckInPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftCheckInPage'));
 
 const ShiftCheckInPrintPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftCheckInPrintPage'));
@@ -150,6 +156,44 @@ export const getSchedulingRoutes = () => {
               requiredAnyPermission={['equipment_check.submit', 'equipment_check.view', 'inventory.view']}
             >
               <ApparatusInventoryPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      {/* Fleet board and its sub-pages. `/checks` is declared before the
+          dynamic apparatus route so the literal segment cannot be swallowed
+          as an apparatus id. */}
+      <Route
+        path="/scheduling/equipment"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredAnyPermission={['equipment_check.view', 'scheduling.manage']}>
+              <FleetBoardPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/equipment/checks"
+        element={
+          <Suspense fallback={null}>
+            {/* Crew-level: the server narrows a member without
+                equipment_check.view to their own checks rather than 403ing,
+                so the route opens for anyone who can submit one. */}
+            <ProtectedRoute
+              requiredAnyPermission={['equipment_check.submit', 'equipment_check.view', 'scheduling.manage']}
+            >
+              <CheckLogPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/equipment/:apparatusId"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredAnyPermission={['equipment_check.view', 'scheduling.manage']}>
+              <ApparatusDetailPage />
             </ProtectedRoute>
           </Suspense>
         }

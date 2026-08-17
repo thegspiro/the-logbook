@@ -46,7 +46,7 @@ export const MfaPolicyCard: React.FC = () => {
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+    <div className="card p-5">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
