@@ -6360,13 +6360,17 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 86,
     anchor: "Screenshot of the QR code display page showing a large QR code",
-    alt: "Event QR code display page for member self check-in",
+    alt: "Event QR code display page for member self check-in, its check-in window open",
     route: "/events",
+    // The in-progress event, not merely an upcoming one: the page gates the
+    // code behind its check-in window, so an event days away pictures a
+    // "Check-in Not Available" badge under a caption about members scanning
+    // to check in. This is the screen an officer actually puts on the wall.
     prepare: openFirstFromApi(
       "/events?limit=100",
       (id) => `/events/${id}/qr-code`,
       "events",
-      isUpcoming,
+      isInProgress,
     ),
   },
   {

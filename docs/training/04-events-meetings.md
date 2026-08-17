@@ -86,7 +86,7 @@ Events support QR code-based check-in for tracking attendance:
 2. Click **QR Code** to display or print the check-in QR code.
 3. Display the QR code on a screen or print it for the venue entrance.
 
-![Event QR code display page for member self check-in](./images/04-04-event-qr-code.png)
+![Event QR code display page for member self check-in, its check-in window open](./images/04-04-event-qr-code.png)
 
 ### For Members (Checking In)
 
@@ -1468,11 +1468,11 @@ Event and event-template forms now separate **when** reminders are sent from
 **who** receives them. In **Notifications → Who should receive reminders?**,
 choose:
 
-| Choice | In-app reminder audience | Email behavior |
-| --- | --- | --- |
-| **Members who sign up** | Active members whose RSVP is `going` | Email follows each recipient's event-notification preference |
-| **All active members** | Every active member in the event's organization | Email follows each recipient's event-notification preference |
-| **No reminders** | Nobody; saving also disables scheduled reminders | No reminder email |
+| Choice                  | In-app reminder audience                         | Email behavior                                               |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| **Members who sign up** | Active members whose RSVP is `going`             | Email follows each recipient's event-notification preference |
+| **All active members**  | Every active member in the event's organization  | Email follows each recipient's event-notification preference |
+| **No reminders**        | Nobody; saving also disables scheduled reminders | No reminder email                                            |
 
 New optional events and templates default to **Members who sign up**. New
 mandatory events default to **All active members** unless the organizer has
