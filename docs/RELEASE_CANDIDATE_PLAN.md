@@ -157,10 +157,13 @@ which is pure, so it runs in CI's unit job rather than needing MySQL.
 
 **Companion closed.** `POST /finance/dues/{id}/unwaive` under `finance.manage`
 reverses a waiver and lets the ledger decide what the record becomes — PENDING
-when nothing was paid, PARTIAL or PAID when something was. The erased waive
-reason is carried into a `finance.dues_waiver_reversed` audit event, since a
-waive_reason left on an un-waived record would be the same contradictory row
-FIN-6 was about. Requires a reason, like the waive it reverses.
+when nothing was paid, PARTIAL or PAID when something was. The waive reason is
+erased, since a waive_reason left on an un-waived record would be the same
+contradictory row FIN-6 was about — and *(revised 2026-08-13)* it is erased
+outright rather than carried into the `finance.dues_waiver_reversed` audit
+event: free-text waiver reasons may contain personal information, and the
+immutable log must stay reachable by privacy scrubbing. Requires a reason,
+like the waive it reverses.
 
 ORU-8 was originally carried here as a single item needing a product decision on
 what `users.view` may see. On reading the code it is two narrow gaps left behind

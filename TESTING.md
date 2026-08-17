@@ -207,15 +207,40 @@ cd backend && pytest -m "not slow"   # Skip slow tests
 | **schemathesis** | API contract testing from OpenAPI spec | `cd backend && pytest tests/test_api_contract.py` |
 | **pytest-timeout** | Prevents hanging async tests | 30s default; override with `@pytest.mark.timeout(60)` |
 
-### Coverage Ratcheting
+### Coverage Ratcheting *(re-based 2026-08-16)*
 
-Coverage thresholds are enforced and cannot decrease between PRs:
-- **Lines**: 80% minimum
-- **Functions**: 80% minimum
-- **Statements**: 80% minimum
-- **Branches**: 75% minimum
+Coverage floors are a **ratchet** set a couple of points under the measured
+number — they block regressions, not express an aspiration. Raise them as
+coverage grows; never lower them.
 
-The ratchet script compares coverage against the previous run and fails CI if any metric decreases.
+**Frontend** (`frontend/vitest.config.ts`): coverage is measured against the
+**entire source tree** (`coverage.include: ['src/**/*.{ts,tsx}']`), not just
+files a test happens to import. Vitest 4's default (no `include`) counted only
+imported files, which hid 384 of 758 source files and reported 60.32% lines
+where the honest figure was 33.10% — a module with no test contributed nothing
+to the denominator, so adding one *raised* the percentage. Playwright specs
+under `src/e2e` are excluded (they are tests, not application source). The
+floors were re-based against the corrected denominator:
+
+- **Lines**: 31% · **Functions**: 23% · **Branches**: 25% · **Statements**: 30%
+
+These are not comparable to the pre-fix 53/40/44/51 floor — same suite,
+honest denominator.
+
+**Backend** (`.github/workflows/ci.yml`): the pytest run gates the whole app
+at `--cov-fail-under=51` (measured 53.1% on 2026-08-16), and a second step
+gates `app/api` + `app/services` + `app/core` + `app/utils` separately at 35%
+(measured 37.6%). The separate gate exists because `app/models` and
+`app/schemas` are ~26% of the denominator at ~97% coverage — declarative code
+is "covered" by the import itself — and that mass would otherwise absorb a
+real regression in business logic.
+
+**Mutation testing pilot**: `frontend/stryker.pilot.json` +
+`vitest.stryker.config.ts` run Stryker over three well-covered utilities
+(90.6% mutation score measured). Line coverage says a statement executed;
+mutation score says a test would notice if it were wrong. The known gap is
+the `apiCache.ts` eviction path, where mutants survive despite 89% line
+coverage.
 
 ### Accessibility Testing Pattern (Frontend)
 

@@ -109,7 +109,7 @@ const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz
 
       {/* Event picker dropdown */}
       {showEventPicker && (
-        <div className="bg-theme-surface border-theme-surface-border mb-3 overflow-hidden rounded-lg border shadow-lg">
+        <div className="card mb-3 overflow-hidden shadow-lg">
           <div className="border-theme-surface-border border-b p-2">
             <div className="bg-theme-input-bg border-theme-surface-border flex items-center gap-2 rounded-sm border px-2 py-1.5">
               <Search className="text-theme-text-muted h-3.5 w-3.5" />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import {
   Clock,
   CalendarDays,
@@ -585,6 +586,8 @@ const SchedulingPage: React.FC = () => {
 
   const hasShifts = shifts.length > 0;
 
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showCreateShift, onClose: () => setShowCreateShift(false) });
+
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -664,7 +667,7 @@ const SchedulingPage: React.FC = () => {
                     key={link.path}
                     to={link.path}
                     title={link.description}
-                    className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-primary mobile-touch-target inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+                    className="btn-secondary mobile-touch-target inline-flex shrink-0 items-center gap-2 px-3 text-sm font-medium"
                   >
                     <Icon className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
                     {link.label}
@@ -1157,8 +1160,8 @@ const SchedulingPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateShift(false)} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowCreateShift(false)} aria-hidden="true" />
+              <div ref={dialogRef} className="modal-panel relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 id="create-schedule-title" className="text-theme-text-primary text-lg font-medium">

@@ -69,7 +69,7 @@ const KpiCard: React.FC<{
   icon: React.ReactNode;
   color?: string;
 }> = ({ label, value, icon, color }) => (
-  <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+  <div className="card p-4">
     <div className="flex items-center gap-3">
       <div className={`rounded-lg p-2 ${color ?? 'bg-theme-surface-secondary'}`}>{icon}</div>
       <div>
@@ -212,7 +212,7 @@ const GrantsReportsPage: React.FC = () => {
       </div>
 
       {/* Date Range Filter */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+      <div className="card p-4">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-theme-text-secondary text-sm font-medium">Date Range</span>
           <input
@@ -227,7 +227,7 @@ const GrantsReportsPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-theme-surface-border bg-theme-surface hscroll flex space-x-1 rounded-lg border p-1">
+      <div className="card hscroll flex space-x-1 p-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -297,7 +297,7 @@ const GrantsReportsPage: React.FC = () => {
               </div>
 
               {/* Compliance Summary */}
-              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-5">
+              <div className="card p-5">
                 <h3 className="text-theme-text-primary mb-3 font-semibold">Compliance Summary</h3>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="flex items-center gap-2">
@@ -340,14 +340,14 @@ const GrantsReportsPage: React.FC = () => {
 
               {/* Spending by Category */}
               {spendingByCategory.length > 0 && (
-                <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-5">
+                <div className="card p-5">
                   <h3 className="text-theme-text-primary mb-4 font-semibold">Spending by Category</h3>
                   <HorizontalBarChart items={spendingByCategory} formatValue={formatCurrencyWhole} />
                 </div>
               )}
             </div>
           ) : (
-            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-8 text-center">
+            <div className="card p-8 text-center">
               <FileText className="text-theme-text-secondary mx-auto mb-2 h-8 w-8 opacity-40" />
               <p className="text-theme-text-secondary text-sm">
                 No grant report data available for the selected period.
@@ -398,7 +398,7 @@ const GrantsReportsPage: React.FC = () => {
 
               {/* Donations by Payment Method */}
               {donationsByMethod.length > 0 && (
-                <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-5">
+                <div className="card p-5">
                   <h3 className="text-theme-text-primary mb-4 font-semibold">Donations by Payment Method</h3>
                   <ul className="divide-theme-surface-border divide-y">
                     {donationsByMethod.map(([method, amount]) => {
@@ -426,7 +426,7 @@ const GrantsReportsPage: React.FC = () => {
 
               {/* Monthly Totals */}
               {monthlyTotals.length > 0 && (
-                <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-5">
+                <div className="card p-5">
                   <h3 className="text-theme-text-primary mb-4 font-semibold">Monthly Totals</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -456,7 +456,7 @@ const GrantsReportsPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-8 text-center">
+            <div className="card p-8 text-center">
               <DollarSign className="text-theme-text-secondary mx-auto mb-2 h-8 w-8 opacity-40" />
               <p className="text-theme-text-secondary text-sm">
                 No fundraising report data available for the selected period.

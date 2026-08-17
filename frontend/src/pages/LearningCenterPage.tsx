@@ -131,10 +131,7 @@ export default function LearningCenterPage() {
         </button>
       </div>
 
-      <section
-        aria-label="Overall learning progress"
-        className="bg-theme-surface border-theme-surface-border mb-6 rounded-xl border p-5"
-      >
+      <section aria-label="Overall learning progress" className="card mb-6 p-5">
         <div className="mb-2 flex items-center justify-between gap-4 text-sm">
           <span className="text-theme-text-primary font-semibold">Overall progress</span>
           <span className="text-theme-text-muted" aria-live="polite">
@@ -160,10 +157,7 @@ export default function LearningCenterPage() {
         {visiblePaths.map((path) => {
           const pathCompleted = path.steps.filter((step) => progress[`${path.id}.${step.id}`]).length;
           return (
-            <section
-              key={path.id}
-              className="bg-theme-surface border-theme-surface-border flex flex-col rounded-xl border p-5 shadow-sm"
-            >
+            <section key={path.id} className="card flex flex-col p-5">
               <div className="mb-4">
                 <p className="text-theme-text-muted mb-1 text-xs font-semibold tracking-wide uppercase">
                   {path.audience} · {path.duration}

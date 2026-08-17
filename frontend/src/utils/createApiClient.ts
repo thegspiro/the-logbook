@@ -75,7 +75,12 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
           await performSharedRefresh();
           return api(originalRequest);
         } catch {
+          // Redirecting is a side effect, not a response. Reject the request as
+          // well so callers cannot continue with an `undefined` Axios response
+          // while the browser is navigating to the login page.
           handleExpiredSession();
+          reportApiError(error);
+          return Promise.reject(error instanceof Error ? error : new Error(String(error)));
         }
       }
 
