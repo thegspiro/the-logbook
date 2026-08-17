@@ -114,11 +114,16 @@ class TestMemberEmailEnabled:
         m = SimpleNamespace(notification_preferences={"email_notifications": False})
         assert self._svc()._member_has_email_enabled(m) is False
 
-    def test_email_channel_off(self):
+    def test_a_leftover_email_key_no_longer_suppresses_mail(self):
+        # `email` was a second master switch that only this sender read, while
+        # the member's own settings screen wrote `email_notifications`.
+        # Migration 20260816_0007 folds it in; a blob still carrying the dead
+        # key (written by an old client mid-deploy) must be inert, not a
+        # silent opt-out nobody can see or clear from the UI.
         m = SimpleNamespace(
             notification_preferences={"email_notifications": True, "email": False}
         )
-        assert self._svc()._member_has_email_enabled(m) is False
+        assert self._svc()._member_has_email_enabled(m) is True
 
     def test_training_reminders_off(self):
         # Cert expiration alerts are training reminders; disabling that
@@ -126,7 +131,6 @@ class TestMemberEmailEnabled:
         m = SimpleNamespace(
             notification_preferences={
                 "email_notifications": True,
-                "email": True,
                 "training_reminders": False,
             }
         )
@@ -136,7 +140,6 @@ class TestMemberEmailEnabled:
         m = SimpleNamespace(
             notification_preferences={
                 "email_notifications": True,
-                "email": True,
                 "training_reminders": True,
             }
         )
@@ -158,18 +161,26 @@ class TestProcessAlertsGuards:
     async def test_org_missing_returns_zeros(self):
         # get_alert_config sees enabled config, then org lookup returns None.
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_one(_org({"enabled": True})), _one(None)])
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(_org({"enabled": True})),
+                _scalars([]),  # no notification rules -> enabled
+                _one(None),
+            ]
+        )
         out = await CertAlertService(db).process_alerts("org-1")
         assert out["in_app_sent"] == 0
 
 
 class TestTieredAlerts:
     def _db(self, record, member):
-        # config org, process org, expiring [record], member, expired []
+        # config org, TRAINING_EXPIRY rules, process org, expiring [record],
+        # member, expired []
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
                 _one(_org({"enabled": True})),
+                _scalars([]),  # no notification rules -> trigger stays enabled
                 _one(_org({"enabled": True})),
                 _scalars([record] if record else []),
                 _one(member),
@@ -205,6 +216,7 @@ class TestTieredAlerts:
         db.execute = AsyncMock(
             side_effect=[
                 _one(_org({"enabled": True})),  # config
+                _scalars([]),  # no notification rules -> enabled
                 _one(_org({"enabled": True})),  # process org
                 _scalars([record]),  # expiring
                 _one(member),  # member
@@ -229,6 +241,7 @@ class TestTieredAlerts:
         db.execute = AsyncMock(
             side_effect=[
                 _one(_org({"enabled": True})),  # config
+                _scalars([]),  # no notification rules -> enabled
                 _one(_org({"enabled": True})),  # process org
                 _scalars([record]),  # expiring
                 _one(member),  # member
@@ -253,6 +266,7 @@ class TestExpiredEscalation:
         db.execute = AsyncMock(
             side_effect=[
                 _one(_org({"enabled": True})),  # config
+                _scalars([]),  # no notification rules -> enabled
                 _one(_org({"enabled": True})),  # process org
                 _scalars([]),  # expiring: none
                 _scalars([record]),  # expired

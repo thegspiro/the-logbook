@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { complianceOfficerService, reportExportService } from '../services/trainingServices';
 import { formatDate, formatNumber } from '../utils/dateFormatting';
+import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import type {
   ISOReadiness,
@@ -732,6 +733,7 @@ const AttestationsSection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -766,8 +768,12 @@ const AttestationsSection: React.FC = () => {
       });
       setAttestations((prev) => [result, ...prev]);
       setShowForm(false);
-    } catch {
-      // Error will show in form
+      setSubmitError(null);
+    } catch (err: unknown) {
+      // Kept out of the page-level `error`, which replaces the whole dashboard
+      // with an ErrorMessage — that would discard the form the officer just
+      // filled in. Shown inline instead, above the submit button.
+      setSubmitError(getErrorMessage(err, 'Failed to record attestation'));
     } finally {
       setSubmitting(false);
     }
@@ -873,6 +879,11 @@ const AttestationsSection: React.FC = () => {
               placeholder="Observations, exceptions, recommendations..."
             />
           </div>
+          {submitError && (
+            <p className="alert-danger" role="alert">
+              {submitError}
+            </p>
+          )}
           <button type="submit" disabled={submitting} className="btn-success flex items-center gap-2 text-sm">
             <CheckCircle className="h-4 w-4" />
             {submitting ? 'Submitting...' : 'Submit Attestation'}

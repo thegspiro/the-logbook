@@ -33,7 +33,7 @@ const ReportCard: React.FC<{
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
+    <div className="card overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="hover:bg-theme-surface-hover w-full p-4 text-left transition-colors"
@@ -235,7 +235,7 @@ const ShiftReportPage: React.FC = () => {
 
         {/* New Report — route to scheduling or manual entry */}
         {activeTab === 'new' && (
-          <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-lg border p-8 text-center">
+          <div className="card space-y-4 p-8 text-center">
             <ClipboardList className="mx-auto h-12 w-12 text-red-500" />
             <h2 className="text-theme-text-primary text-lg font-semibold">File Shift Completion Report</h2>
             {schedulingEnabled ? (

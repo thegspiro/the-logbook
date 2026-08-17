@@ -4,6 +4,7 @@ from pathlib import Path
 
 SETUP_SCRIPT = Path(__file__).parents[2] / "unraid" / "unraid-setup.sh"
 UPDATE_SCRIPT = Path(__file__).parents[2] / "unraid" / "update.sh"
+EXAMPLE_ENV = Path(__file__).parents[2] / "unraid" / ".env.example"
 
 
 def test_generated_environment_requires_public_https_origin():
@@ -26,3 +27,10 @@ def test_update_backup_uses_private_permissions():
     assert "umask 077" in script
     assert 'chmod 700 "$BACKUP_DIR"' in script
     assert 'chmod 600 "$BACKUP_FILE"' in script
+
+
+def test_example_environment_uses_https_origin():
+    example = EXAMPLE_ENV.read_text()
+
+    assert "ALLOWED_ORIGINS=https://" in example
+    assert "ALLOWED_ORIGINS=http://" not in example

@@ -301,35 +301,37 @@ class NotificationsService:
         common, idempotent way to remove stale prompts without coupling the
         notification table to every resource table in the application.
         """
+        now = datetime.now(timezone.utc)
         try:
-            now = datetime.now(timezone.utc)
-            result = await self.db.execute(
-                update(NotificationLog)
-                .where(NotificationLog.organization_id == str(organization_id))
-                .where(NotificationLog.channel == NotificationChannel.IN_APP)
-                .where(NotificationLog.category == category)
-                .where(
-                    or_(
-                        NotificationLog.expires_at.is_(None),
-                        NotificationLog.expires_at > now,
+            # The session is shared with the caller, which may hold staged but
+            # uncommitted work (e.g. a just-flushed audit record). Run the
+            # archival inside a SAVEPOINT so a failure rolls back only the
+            # archival — a session-level rollback() here would silently
+            # discard the caller's staged work as well.
+            async with self.db.begin_nested():
+                result = await self.db.execute(
+                    update(NotificationLog)
+                    .where(NotificationLog.organization_id == str(organization_id))
+                    .where(NotificationLog.channel == NotificationChannel.IN_APP)
+                    .where(NotificationLog.category == category)
+                    .where(
+                        or_(
+                            NotificationLog.expires_at.is_(None),
+                            NotificationLog.expires_at > now,
+                        )
+                    )
+                    .where(
+                        NotificationLog.notification_metadata[resource_key].as_string()
+                        == str(resource_id)
+                    )
+                    .values(
+                        expires_at=now,
+                        read=True,
+                        read_at=func.coalesce(NotificationLog.read_at, now),
                     )
                 )
-                .where(
-                    NotificationLog.notification_metadata[resource_key].as_string()
-                    == str(resource_id)
-                )
-                .values(
-                    expires_at=now,
-                    read=True,
-                    read_at=func.coalesce(NotificationLog.read_at, now),
-                )
-            )
-            matched = result.rowcount or 0
-            if matched > 0:
-                await self.db.commit()
-            return matched
+                matched = result.rowcount or 0
         except Exception:
-            await self.db.rollback()
             logger.exception(
                 "Failed to archive %s notification for %s=%s",
                 category,
@@ -337,6 +339,21 @@ class NotificationsService:
                 resource_id,
             )
             return 0
+        if matched > 0:
+            try:
+                await self.db.commit()
+            except Exception:
+                logger.exception(
+                    "Failed to commit archival of %s notification for %s=%s",
+                    category,
+                    resource_key,
+                    resource_id,
+                )
+                # A failed commit has already lost the transaction; rollback
+                # only resets the session so the caller can keep using it.
+                await self.db.rollback()
+                return 0
+        return matched
 
     async def mark_all_user_notifications_read(
         self, organization_id: UUID, user_id: UUID

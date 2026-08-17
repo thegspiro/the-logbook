@@ -163,6 +163,24 @@ describe('MyOrdersPage', () => {
     });
   });
 
+  it('hides change payment method on a cancelled order', async () => {
+    // The backend rejects the change for cancelled orders, so the button
+    // must not be offered even while a balance remains on the order.
+    mockGetMyOrders.mockResolvedValue([{ ...unpaidOrder, status: 'cancelled' }]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    expect(screen.queryByRole('button', { name: /change payment method/i })).not.toBeInTheDocument();
+  });
+
+  it('hides change payment method while a payment report awaits verification', async () => {
+    mockGetMyOrders.mockResolvedValue([{ ...unpaidOrder, paymentStatus: 'pending_verification' }]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    expect(screen.queryByRole('button', { name: /change payment method/i })).not.toBeInTheDocument();
+  });
+
   it('lets the member cancel an unfulfilled order', async () => {
     const user = userEvent.setup();
     mockCancelMyOrder.mockResolvedValue({ ...unpaidOrder, status: 'cancelled' });
@@ -188,5 +206,25 @@ describe('MyOrdersPage', () => {
     mockGetMyOrders.mockResolvedValue([]);
     renderPage();
     expect(await screen.findByText('No orders yet')).toBeInTheDocument();
+  });
+  it('reports a failed load instead of claiming the member has no orders', async () => {
+    mockGetMyOrders.mockRejectedValue(new Error('Network Error'));
+    renderPage();
+
+    // The empty state is a statement about the member's account; a load
+    // failure must not be dressed up as one.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/network error/i);
+    expect(screen.queryByText('No orders yet')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it('retries the load from the error state', async () => {
+    mockGetMyOrders.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValueOnce([unpaidOrder]);
+    renderPage();
+    await screen.findByRole('alert');
+
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(await screen.findByRole('heading', { name: 'ORD-2026-0001' })).toBeInTheDocument();
   });
 });

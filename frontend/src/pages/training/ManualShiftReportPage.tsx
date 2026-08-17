@@ -281,7 +281,7 @@ export const ManualShiftReportPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-theme-surface border-theme-surface-border space-y-5 rounded-xl border p-5">
+      <div className="card space-y-5 p-5">
         {/* Apparatus Selection */}
         <div>
           <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
@@ -441,7 +441,7 @@ export const ManualShiftReportPage: React.FC = () => {
           </div>
 
           {filteredMembers.length > 0 && (
-            <div className="border-theme-surface-border bg-theme-surface mb-3 max-h-40 overflow-y-auto rounded-lg border">
+            <div className="card mb-3 max-h-40 overflow-y-auto">
               {filteredMembers.map((m) => (
                 <button
                   key={m.id}

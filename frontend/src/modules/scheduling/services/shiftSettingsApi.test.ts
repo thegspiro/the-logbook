@@ -76,7 +76,7 @@ describe('loadShiftSettings', () => {
   });
 
   it('migrates the localStorage copy to the backend once when nothing is stored', async () => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(localOnly));
+    localStorage.setItem(mirrorKeyFor('org-a'), JSON.stringify(localOnly));
     mockGet.mockResolvedValue({ data: { settings: DEFAULT_SETTINGS, stored: false } });
     mockPut.mockImplementation((_url: unknown, body: unknown) =>
       Promise.resolve({ data: { settings: body as ShiftSettings, stored: true } })
@@ -93,7 +93,7 @@ describe('loadShiftSettings', () => {
   });
 
   it('does not attempt the migration PUT without migrateLocal, but still uses the local copy', async () => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(localOnly));
+    localStorage.setItem(mirrorKeyFor('org-a'), JSON.stringify(localOnly));
     mockGet.mockResolvedValue({ data: { settings: DEFAULT_SETTINGS, stored: false } });
 
     const result = await loadShiftSettings();
@@ -103,7 +103,7 @@ describe('loadShiftSettings', () => {
   });
 
   it('keeps the local copy as the working value when the migration PUT fails', async () => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(localOnly));
+    localStorage.setItem(mirrorKeyFor('org-a'), JSON.stringify(localOnly));
     mockGet.mockResolvedValue({ data: { settings: DEFAULT_SETTINGS, stored: false } });
     mockPut.mockRejectedValue(new Error('403'));
 
@@ -114,7 +114,7 @@ describe('loadShiftSettings', () => {
   });
 
   it('ignores localStorage once the backend has stored settings', async () => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(localOnly));
+    localStorage.setItem(mirrorKeyFor('org-a'), JSON.stringify(localOnly));
     mockGet.mockResolvedValue({ data: { settings: serverSettings, stored: true } });
 
     const result = await loadShiftSettings({ migrateLocal: true });
@@ -124,7 +124,7 @@ describe('loadShiftSettings', () => {
   });
 
   it('falls back to the localStorage mirror when the API call fails', async () => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(localOnly));
+    localStorage.setItem(mirrorKeyFor('org-a'), JSON.stringify(localOnly));
     mockGet.mockRejectedValue(new Error('network down'));
 
     const result = await loadShiftSettings();
@@ -158,7 +158,7 @@ describe('getCachedShiftSettings', () => {
   });
 
   it('reads the localStorage mirror before any load completes', () => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(localOnly));
+    localStorage.setItem(mirrorKeyFor('org-a'), JSON.stringify(localOnly));
     expect(getCachedShiftSettings().defaultDurationHours).toBe(8);
   });
 
@@ -249,26 +249,14 @@ describe('organization scoping', () => {
     expect(readMirror('org-a').defaultDurationHours).toBe(24);
   });
 
-  it('lets only one organization adopt the untagged pre-backend copy', async () => {
+  it('never adopts an untagged legacy copy into the current organization', async () => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(localOnly));
     mockGet.mockResolvedValue({ data: { settings: DEFAULT_SETTINGS, stored: false } });
-    mockPut.mockImplementation((_url: unknown, body: unknown) =>
-      Promise.resolve({ data: { settings: body as ShiftSettings, stored: true } })
-    );
-
-    const adopted = await loadShiftSettings({ migrateLocal: true });
-    expect(adopted.defaultDurationHours).toBe(8);
-    expect(localStorage.getItem(SETTINGS_KEY)).toBeNull();
-
-    resetShiftSettingsCache();
-    mockOrgId = 'org-b';
-    vi.clearAllMocks();
-    mockGet.mockResolvedValue({ data: { settings: DEFAULT_SETTINGS, stored: false } });
-
     const forOrgB = await loadShiftSettings({ migrateLocal: true });
 
     expect(mockPut).not.toHaveBeenCalled();
     expect(forOrgB).toEqual(DEFAULT_SETTINGS);
+    expect(localStorage.getItem(SETTINGS_KEY)).toBe(JSON.stringify(localOnly));
   });
 
   it('never writes a mirror when no organization is known yet', async () => {

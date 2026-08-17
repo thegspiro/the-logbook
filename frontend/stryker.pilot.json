@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.stryker.config.ts"
+  },
+  "reporters": ["clear-text", "json"],
+  "jsonReporter": {
+    "fileName": "reports/mutation/pilot.json"
+  },
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/modules/onboarding/utils/security.ts",
+    "src/modules/onboarding/utils/validation.ts",
+    "src/modules/onboarding/utils/errorHandler.ts"
+  ],
+  "concurrency": 4,
+  "timeoutMS": 20000,
+  "dryRunTimeoutMinutes": 10
+}

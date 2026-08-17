@@ -45,6 +45,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
+import { canOpenAdministrationSection } from './adminNavigation';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -149,21 +150,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const themeLabel =
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
-  // Determine if user has any admin permission (to show/hide Administration section)
-  const hasAnyAdminPermission =
-    // users.view alone opens the section: the member ID scanner lives here,
-    // and validating a scanned card only needs users.view (see /members/scan).
-    checkPermission('users.view') ||
-    checkPermission('members.manage') ||
-    checkPermission('prospective_members.manage') ||
-    checkPermission('events.manage') ||
-    checkPermission('training.manage') ||
-    checkPermission('inventory.manage') ||
-    checkPermission('admin_hours.manage') ||
-    checkPermission('positions.manage_permissions') ||
-    checkPermission('settings.manage') ||
-    checkPermission('forms.view') ||
-    checkPermission('analytics.view');
+  // Determine if user has any admin permission (to show/hide the
+  // Administration section). The shared helper's list mirrors the
+  // section items' gates — extend it there, never inline, so Side/Top
+  // navigation cannot drift apart.
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
@@ -227,11 +218,24 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         ...(isModuleOn('inventory')
           ? [
               {
-                label: 'My Equipment',
+                label: 'My Issued Gear',
                 path: '/inventory/my-equipment',
                 icon: Package,
               },
-              { label: 'Inventory', path: '/inventory', icon: Package },
+              { label: 'Gear & Uniforms', path: '/inventory', icon: Package },
+            ]
+          : []),
+        // Its own entry rather than a child of Gear & Uniforms: the two are
+        // run by different officers in departments that split the role, and
+        // burying one under the other implies a hierarchy that isn't there.
+        ...(isModuleOn('medical_supplies')
+          ? [
+              {
+                label: 'Medical Supplies',
+                path: '/medical-supplies',
+                icon: Stethoscope,
+                anyPermission: ['inventory.view_medical', 'inventory.view'],
+              },
             ]
           : []),
         // Full apparatus module or lightweight version
@@ -376,10 +380,20 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           ...(isModuleOn('inventory')
             ? [
                 {
-                  label: 'Inventory Admin',
+                  label: 'Gear Admin',
                   path: '/inventory/admin',
                   icon: Package,
                   permission: 'inventory.manage',
+                } as NavItem,
+              ]
+            : []),
+          ...(isModuleOn('medical_supplies')
+            ? [
+                {
+                  label: 'Medical Categories',
+                  path: '/medical-supplies/categories',
+                  icon: Stethoscope,
+                  anyPermission: ['inventory.manage_medical', 'inventory.manage'],
                 } as NavItem,
               ]
             : []),

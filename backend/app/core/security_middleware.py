@@ -181,6 +181,7 @@ async def public_rate_limit(
                 limit=max_requests,
                 window_seconds=window_seconds,
                 fail_closed=False,
+                raise_on_error=True,
             )
             return limited, ("rate_limited" if limited else None)
         except Exception:
@@ -474,6 +475,9 @@ class SecurityHeadersMiddleware:
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        # Built once at startup, not per request: the CAPTCHA provider is fixed
+        # by env config and cannot change while the process runs.
+        self._headers = self._build_headers()
 
     # Pre-build the static header list once (all values are constant).
     _STATIC_HEADERS: list[tuple[bytes, bytes]] = [
@@ -485,23 +489,53 @@ class SecurityHeadersMiddleware:
         # Camera scanners are a first-party platform feature. ``self`` keeps
         # camera access unavailable to embedded third-party origins.
         (b"permissions-policy", b"geolocation=(), microphone=(), camera=(self)"),
-        (
-            b"content-security-policy",
-            b"default-src 'self'; "
-            b"script-src 'self'; "
-            b"style-src 'self' 'unsafe-inline'; "
-            b"style-src-elem 'self' 'unsafe-inline'; "
-            b"style-src-attr 'unsafe-inline'; "
-            b"img-src 'self' data: blob:; "
-            b"font-src 'self'; "
-            b"connect-src 'self'; "
-            b"object-src 'none'; "
-            b"frame-ancestors 'none'; "
-            b"base-uri 'self'; "
-            b"form-action 'self'; "
-            b"upgrade-insecure-requests",
-        ),
     ]
+
+    @staticmethod
+    def _build_headers() -> list[tuple[bytes, bytes]]:
+        """Static headers plus a CSP widened for the configured CAPTCHA widget.
+
+        The CAPTCHA widget loads a script from, and renders an iframe served by,
+        the provider's origin. Under the default ``script-src 'self'`` CSP the
+        browser blocks both, and the failure presents as "the challenge never
+        appears" rather than as anything naming the CSP — so the policy has to
+        know about the provider. Origins are added only for the provider that is
+        actually configured; with CAPTCHA off the policy is byte-for-byte what
+        it was before.
+
+        Imported here rather than at module scope because app.core.captcha
+        imports get_client_ip from this module. __init__ runs at app startup,
+        well after both modules have finished importing.
+        """
+        from app.core.captcha import get_widget_origins
+
+        origins = get_widget_origins()
+        extra = (" " + " ".join(origins)) if origins else ""
+        # frame-src is omitted entirely when CAPTCHA is off: default-src 'self'
+        # already covers frames, so emitting it would change the header for
+        # every deployment without changing what any of them allow.
+        frame_src = f"frame-src 'self'{extra}; " if origins else ""
+
+        csp = (
+            "default-src 'self'; "
+            f"script-src 'self'{extra}; "
+            "style-src 'self' 'unsafe-inline'; "
+            "style-src-elem 'self' 'unsafe-inline'; "
+            "style-src-attr 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self'; "
+            f"connect-src 'self'{extra}; "
+            "object-src 'none'; "
+            f"{frame_src}"
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
+            "upgrade-insecure-requests"
+        )
+        return [
+            *SecurityHeadersMiddleware._STATIC_HEADERS,
+            (b"content-security-policy", csp.encode("ascii")),
+        ]
 
     _API_CACHE_HEADERS: list[tuple[bytes, bytes]] = [
         (b"cache-control", b"no-store, no-cache, must-revalidate, proxy-revalidate"),
@@ -520,7 +554,7 @@ class SecurityHeadersMiddleware:
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                headers.extend(self._STATIC_HEADERS)
+                headers.extend(self._headers)
                 if is_api:
                     headers.extend(self._API_CACHE_HEADERS)
                 message = {**message, "headers": headers}
@@ -585,7 +619,16 @@ async def check_rate_limit(
                 key=f"auth:{scope}:{client_ip}",
                 limit=max_requests,
                 window_seconds=window_seconds,
-                fail_closed=False,  # Fall back to in-memory on error
+                fail_closed=False,
+                # CI-11: without raise_on_error the helper swallows its own
+                # Redis errors and returns False ("not limited"), so the
+                # ``except`` below never ran and the request was limited by
+                # neither backend. Re-raising is what makes the documented
+                # in-memory fallback reachable when Redis is connected but a
+                # command transiently fails. ``fail_closed=False`` still governs
+                # the separate "Redis not connected at all" case, which the
+                # ``is_connected`` guard above already routes to the fallback.
+                raise_on_error=True,
             )
             if exceeded:
                 raise HTTPException(

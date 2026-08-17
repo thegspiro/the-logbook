@@ -1068,6 +1068,34 @@ class TestImpactPlanPdf:
         )
         assert buf.getvalue()[:4] == b"%PDF"
 
+    def test_untrusted_paragraph_values_are_escaped(self):
+        from app.utils.impact_plan_pdf import render_impact_plan_pdf
+
+        image_markup = '<img src="http://127.0.0.1/internal.png"/>'
+        data = self._data(
+            members=[
+                {
+                    **self._data()["members"][0],
+                    "full_name": f"Amy & {image_markup}",
+                    "email": f"amy@example.org<{image_markup}",
+                }
+            ]
+        )
+
+        buf = render_impact_plan_pdf(
+            data,
+            {
+                "org_name": f"Test & {image_markup}",
+                "generated_at": datetime(2026, 6, 22, 12, 0),
+                "parameters": [f"Existing item: Gear & {image_markup}"],
+                "show_size": False,
+                "show_existing": False,
+                "show_contact": True,
+            },
+        )
+
+        assert buf.getvalue()[:4] == b"%PDF"
+
 
 # ============================================
 # get_impact_planner_options

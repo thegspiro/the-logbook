@@ -49,6 +49,7 @@ def setup_logging(
             _json_sink,
             level=effective_level,
             colorize=False,
+            diagnose=False,
         )
     else:
         logger.add(
@@ -60,6 +61,7 @@ def setup_logging(
                 "<level>{message}</level>"
             ),
             level=effective_level,
+            diagnose=False,
         )
 
     # 3. Add file logging (optional – failure does not block startup)
@@ -76,6 +78,7 @@ def setup_logging(
             retention="30 days",
             compression="gz",
             level="INFO",
+            diagnose=False,
         )
         # Restrict log file permissions to owner read/write only
         if os.path.exists(_log_path):

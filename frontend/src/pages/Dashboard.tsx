@@ -8,6 +8,9 @@ import DashboardNeedsYou from '../components/dashboard/DashboardNeedsYou';
 import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
+import DashboardReadiness from '../components/dashboard/DashboardReadiness';
+import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
+import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
 import {
   Calendar,
@@ -41,8 +44,9 @@ import {
   organizationService,
   inventoryService,
   eventService,
+  medicalScreeningService,
 } from '../services/api';
-import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
+import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert, MyComplianceSummary } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -182,15 +186,20 @@ const Dashboard: React.FC = () => {
   });
   const [loadingHours, setLoadingHours] = useState(true);
 
-  // Expiring certifications for the current user (feeds the "Needs you" panel)
-  type MyCert = {
-    id: string;
-    course_name: string;
-    expiration_date: string | null;
-    is_expired: boolean;
-    days_until_expiry: number | null;
-  };
-  const [myCerts, setMyCerts] = useState<MyCert[]>([]);
+  // Certifications for the current user. One source for both the readiness
+  // verdict and the "Needs you" rows, so the summary and the detail below it
+  // cannot disagree about what is expiring.
+  const [myCerts, setMyCerts] = useState<ReadinessCert[]>([]);
+
+  // Shift positions this member may hold, resolved by the backend from rank,
+  // completed training and membership type. Distinct from the per-shift
+  // eligibility fetched when a signup row is expanded.
+  const [mySeats, setMySeats] = useState<string[]>([]);
+
+  // The member's own screening compliance, as counts. Left null when the read
+  // fails so the verdict states a narrower scope rather than implying
+  // screenings were checked and passed.
+  const [myScreenings, setMyScreenings] = useState<MyComplianceSummary | null>(null);
 
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
@@ -269,6 +278,8 @@ const Dashboard: React.FC = () => {
     void loadOpenShifts();
     void loadDeptMessages();
     void loadHours();
+    void loadMySeats();
+    void loadMyScreenings();
     void loadTrainingProgress();
     void loadMyEquipment();
     void loadUpcomingEvents();
@@ -309,7 +320,10 @@ const Dashboard: React.FC = () => {
       const data = await inventoryService.getUserInventory(currentUser.id);
       setMyEquipment({
         assigned:
-          data.permanent_assignments.reduce((total, item) => total + (item.quantity ?? 1), 0) +
+          // Each permanent assignment is one physical unit — count rows, not
+          // the response's quantity field, which historically carried the
+          // catalog's on-hand stock and inflated this figure.
+          data.permanent_assignments.length +
           data.issued_items.reduce((total, item) => total + item.quantity_issued, 0),
         checkedOut: data.active_checkouts.length,
         overdue: data.active_checkouts.filter((item) => item.is_overdue).length,
@@ -470,10 +484,7 @@ const Dashboard: React.FC = () => {
         start_date: today,
         end_date: nextMonth,
       });
-      // Filter out shifts the user is already signed up for (defense-in-depth;
-      // the backend also filters these, but guard against race conditions)
-      const myShiftIds = new Set(myShifts.map((s) => s.id));
-      setOpenShifts(data.filter((s) => !myShiftIds.has(s.id)));
+      setOpenShifts(data);
     } catch {
       // Open shifts are non-critical
     } finally {
@@ -511,6 +522,33 @@ const Dashboard: React.FC = () => {
       toast.error(getErrorMessage(error, 'Failed to sign up for shift'));
     } finally {
       setSigningUpShiftId(null);
+    }
+  };
+
+  const loadMySeats = async () => {
+    try {
+      // No shift id: the positions the member may hold in general, not the
+      // ones open on a particular shift.
+      const data = await schedulingService.getEligiblePositions();
+      // A member the department excludes from shift signup has no seats to
+      // report, and "no seats" is not a readiness finding about them — the
+      // verdict simply says nothing on the subject.
+      setMySeats(data.is_excluded ? [] : data.positions);
+    } catch {
+      // Seat eligibility is non-critical; the verdict falls back to
+      // certifications alone and says so.
+    }
+  };
+
+  const loadMyScreenings = async () => {
+    try {
+      setMyScreenings(await medicalScreeningService.getMyCompliance());
+    } catch {
+      // Clear rather than keep the last good answer. A pull-to-refresh that
+      // fails would otherwise leave stale counts on screen while the scope note
+      // still claims screenings were checked — and a member who has since gone
+      // overdue would keep reading "Clear to respond".
+      setMyScreenings(null);
     }
   };
 
@@ -595,22 +633,42 @@ const Dashboard: React.FC = () => {
   const windowStart = getTodayLocalDate(tz);
   const windowEnd = addCalendarDays(windowStart, TIMELINE_DAYS - 1);
 
-  const shiftTimeRange = (shift: ShiftRecord) => {
-    const start = formatTimeOfDay(shift.start_time);
-    const end = formatTimeOfDay(shift.end_time);
-    return end ? `${start}–${end}` : start;
-  };
+  // Open slots the member is not already on. The backend excludes their own
+  // shifts, but this is the defence-in-depth pass — and it has to happen here
+  // rather than inside loadOpenShifts, where `myShifts` is read from a render
+  // closure that is still empty because both lists are fetched concurrently.
+  const availableOpenShifts = useMemo(() => {
+    const mine = new Set(myShifts.map((s) => s.id));
+    return openShifts.filter((s) => !mine.has(s.id));
+  }, [myShifts, openShifts]);
 
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
 
+    // start_time is "HH:MM" on some shift payloads and a full UTC datetime on
+    // others (my-shifts). formatTimeOfDay falls back to the raw string on
+    // anything it cannot parse, which put bare ISO timestamps on the timeline.
+    const formatShiftTime = (value: string | null | undefined) =>
+      value && value.includes('T') ? formatTime(value, tz) : formatTimeOfDay(value);
+
+    const shiftTimeRange = (shift: ShiftRecord) => {
+      const start = formatShiftTime(shift.start_time);
+      const end = formatShiftTime(shift.end_time);
+      return end ? `${start}–${end}` : start;
+    };
+
     const shiftSortAt = (shift: ShiftRecord) =>
-      new Date(`${shift.shift_date}T${shift.start_time || '00:00'}`).getTime();
+      shift.start_time?.includes('T')
+        ? new Date(shift.start_time).getTime()
+        : new Date(`${shift.shift_date}T${shift.start_time || '00:00'}`).getTime();
 
     for (const shift of myShifts) {
       const details = [shiftTimeRange(shift)];
       if (shift.shift_officer_name) details.push(`Officer ${shift.shift_officer_name}`);
-      if (shift.min_staffing != null) details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
+      // The my-shifts payload carries no attendee_count; interpolating it
+      // unguarded printed "undefined of 4 filled" on the member's own rows.
+      if (shift.min_staffing != null && shift.attendee_count != null)
+        details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
       entries.push({
         key: `my-${shift.id}`,
         kind: 'my-shift',
@@ -622,9 +680,10 @@ const Dashboard: React.FC = () => {
       });
     }
 
-    for (const shift of openShifts) {
+    for (const shift of availableOpenShifts) {
       const details = [shiftTimeRange(shift)];
-      if (shift.min_staffing != null) details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
+      if (shift.min_staffing != null && shift.attendee_count != null)
+        details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
       entries.push({
         key: `open-${shift.id}`,
         kind: 'open-shift',
@@ -653,11 +712,11 @@ const Dashboard: React.FC = () => {
     return entries
       .filter((e) => e.dateOnly >= windowStart && e.dateOnly <= windowEnd)
       .sort((a, b) => a.sortAt - b.sortAt);
-  }, [myShifts, openShifts, upcomingEvents, tz, windowStart, windowEnd]);
+  }, [myShifts, availableOpenShifts, upcomingEvents, tz, windowStart, windowEnd]);
 
   const visibleTimeline = timeline.slice(0, TIMELINE_ROWS_SHOWN);
-  const laterOpenShifts = openShifts.filter((s) => s.shift_date > windowEnd).length;
-  const shortStaffedOpenShifts = openShifts.filter(
+  const laterOpenShifts = availableOpenShifts.filter((s) => s.shift_date > windowEnd).length;
+  const shortStaffedOpenShifts = availableOpenShifts.filter(
     (s) => s.min_staffing != null && s.attendee_count < s.min_staffing
   ).length;
   const timelineLoading = loadingMyShifts || loadingOpenShifts || loadingUpcomingEvents;
@@ -665,8 +724,11 @@ const Dashboard: React.FC = () => {
   // ── "Needs you" ───────────────────────────────────────────────────────────
   const urgentCerts = useMemo(
     () =>
-      myCerts
-        .filter((c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= 60))
+      // currentCredentials first: my-training returns a history, so a renewed
+      // certification still has its lapsed row in the list. Without this the
+      // panel names an expiry the verdict above has already discounted.
+      currentCredentials(myCerts)
+        .filter((c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= READINESS_WINDOW_DAYS))
         .sort((a, b) => (a.days_until_expiry ?? -Infinity) - (b.days_until_expiry ?? -Infinity)),
     [myCerts]
   );
@@ -778,6 +840,8 @@ const Dashboard: React.FC = () => {
       loadOpenShifts(),
       loadDeptMessages(),
       loadHours(),
+      loadMySeats(),
+      loadMyScreenings(),
       loadTrainingProgress(),
       loadMyEquipment(),
       loadUpcomingEvents(),
@@ -846,7 +910,7 @@ const Dashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void navigate(`/events/${evt.id}`)}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] shrink-0 items-center rounded-lg border px-4 text-sm font-semibold transition-colors"
+                className="btn-secondary inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold"
               >
                 {evt.requires_rsvp ? 'RSVP' : 'Open'}
               </button>
@@ -979,6 +1043,20 @@ const Dashboard: React.FC = () => {
           >
             {/* ── Main column ── */}
             <div className="flex min-w-0 flex-col gap-5">
+              {/* Both carry the default flex order, so source order puts the
+                  verdict above the panel it summarises — on phones too, where
+                  the actions and timeline swap around them. */}
+              <DashboardReadiness
+                certs={myCerts}
+                positions={mySeats}
+                screenings={myScreenings}
+                // A verdict driven only by screenings has nothing to say on
+                // the training page. Send those members to the department feed,
+                // where a screening notice would reach them, rather than to a
+                // page that cannot explain what grounded them.
+                onOpen={() => void navigate(myCerts.length > 0 ? '/training/my-training' : '/notifications?tab=inbox')}
+              />
+
               <DashboardNeedsYou items={needsYouItems} />
 
               {/* Three actions, not one. The page's own data says taking a
@@ -1001,7 +1079,7 @@ const Dashboard: React.FC = () => {
 
                 <button
                   onClick={() => void navigate('/scheduling')}
-                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left transition-colors hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
                 >
                   <span className="bg-theme-accent-green-muted text-theme-accent-green flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
                     <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
@@ -1011,7 +1089,7 @@ const Dashboard: React.FC = () => {
                       Take a Shift
                     </span>
                     <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      <span className="font-bold tabular-nums">{openShifts.length}</span> open
+                      <span className="font-bold tabular-nums">{availableOpenShifts.length}</span> open
                       {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
                     </span>
                   </span>
@@ -1019,7 +1097,7 @@ const Dashboard: React.FC = () => {
 
                 <button
                   onClick={() => void navigate('/admin-hours')}
-                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left transition-colors hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
                 >
                   <span className="bg-theme-accent-purple-muted text-theme-accent-purple flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
                     <ClipboardCheck className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
@@ -1160,6 +1238,34 @@ const Dashboard: React.FC = () => {
                   <ul>
                     {feed.slice(0, FEED_ROWS_SHOWN).map((entry) => {
                       const msg = entry.message;
+                      const rowClass =
+                        'focus:ring-theme-focus-ring min-w-0 flex-1 cursor-pointer rounded text-left focus:ring-2 focus:outline-hidden';
+                      const rowInner = (
+                        <>
+                          <span className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
+                            {msg?.is_pinned && (
+                              <Pin className="text-theme-accent-yellow h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            )}
+                            <span className="truncate">{entry.title}</span>
+                            {entry.unread && (
+                              <span
+                                className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
+                                role="img"
+                                aria-label="Unread"
+                              />
+                            )}
+                            {msg?.is_persistent && (
+                              <span className="bg-theme-surface-hover text-theme-text-muted shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase">
+                                Persistent
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-theme-text-secondary mt-0.5 line-clamp-2 block text-[13px] whitespace-pre-line">
+                            {entry.body}
+                          </span>
+                          <span className="text-theme-text-muted mt-1 block text-xs">{entry.meta}</span>
+                        </>
+                      );
                       return (
                         <li
                           key={entry.key}
@@ -1169,34 +1275,41 @@ const Dashboard: React.FC = () => {
                               nested buttons: a <button> inside a <button> is
                               invalid HTML, and the browser closes the outer
                               element early, handing assistive technology a
-                              broken tree. */}
-                          <button
-                            onClick={entry.onClick}
-                            className="focus:ring-theme-focus-ring min-w-0 flex-1 rounded text-left focus:ring-2 focus:outline-hidden"
-                          >
-                            <span className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
-                              {msg?.is_pinned && (
-                                <Pin className="text-theme-accent-yellow h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                              )}
-                              <span className="truncate">{entry.title}</span>
-                              {entry.unread && (
-                                <span
-                                  className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
-                                  role="img"
-                                  aria-label="Unread"
-                                />
-                              )}
-                              {msg?.is_persistent && (
-                                <span className="bg-theme-surface-hover text-theme-text-muted shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase">
-                                  Persistent
-                                </span>
-                              )}
-                            </span>
-                            <span className="text-theme-text-secondary mt-0.5 line-clamp-2 block text-[13px] whitespace-pre-line">
-                              {entry.body}
-                            </span>
-                            <span className="text-theme-text-muted mt-1 block text-xs">{entry.meta}</span>
-                          </button>
+                              broken tree. For the same reason, message rows —
+                              whose bodies go through LinkifiedText and can
+                              contain <a> elements — render as div[role=button]
+                              rather than <button>: an anchor inside a button is
+                              equally invalid and split apart by the parser.
+                              LinkifiedText stops click propagation on its
+                              anchors, so following a link doesn't also fire the
+                              row's navigation to /messages. */}
+                          {msg ? (
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={entry.onClick}
+                              onKeyDown={(e) => {
+                                // Only the row itself activates the row. A
+                                // linkified body can hold focusable anchors,
+                                // and Enter on one bubbles here — without this
+                                // guard the row would swallow the keypress and
+                                // navigate to /messages instead of opening the
+                                // link (the anchor's guard covers clicks only).
+                                if (e.target !== e.currentTarget) return;
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  entry.onClick();
+                                }
+                              }}
+                              className={rowClass}
+                            >
+                              {rowInner}
+                            </div>
+                          ) : (
+                            <button onClick={entry.onClick} className={rowClass}>
+                              {rowInner}
+                            </button>
+                          )}
                           {msg?.is_persistent && canManageMessages && (
                             <button
                               onClick={() => void clearPersistentMessage(msg.id)}
@@ -1317,12 +1430,12 @@ const Dashboard: React.FC = () => {
 
               <DashboardHoursCard monthLabel={monthLabel} segments={hoursSegments} loading={loadingHours} />
 
-              {/* Equipment — compact in the rail; the full picture is in Organization */}
+              {/* Issued gear — compact in the rail; the full picture is in Organization */}
               {!loadingMyEquipment && (myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
                 <section className="card p-4" aria-labelledby="my-equipment-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="my-equipment-heading" className="text-theme-text-primary text-[15px] font-bold">
-                      My Equipment
+                      My Issued Gear
                     </h3>
                     <button
                       onClick={() => void navigate('/inventory/my-equipment')}
@@ -1503,7 +1616,7 @@ const Dashboard: React.FC = () => {
                 <DashboardCardHeader
                   icon={Package}
                   iconColor="text-emerald-500"
-                  title={isInventoryAdmin ? 'Equipment & Inventory' : 'My Equipment'}
+                  title={isInventoryAdmin ? 'Gear & Uniforms' : 'My Issued Gear'}
                   viewAllColor="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300"
                   onViewAll={() => void navigate('/inventory')}
                 />
@@ -1572,7 +1685,7 @@ const Dashboard: React.FC = () => {
                     onClick={() => void navigate('/inventory/my-equipment')}
                     className="rounded-lg bg-emerald-600 px-4 py-2 text-center text-sm text-white transition-colors hover:bg-emerald-700"
                   >
-                    My Equipment
+                    My Issued Gear
                   </button>
                   {isInventoryAdmin && (
                     <button

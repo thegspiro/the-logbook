@@ -28,3 +28,11 @@ def test_inventory_mutations_require_management_permission(path, method):
 
     assert permissions == {"equipment_check.manage", "inventory.manage"}
     assert "equipment_check.submit" not in permissions
+
+
+def test_supply_overview_requires_officer_permission():
+    """Check and inventory officers, but not baseline viewers, get access."""
+    permissions = _permission_set("/supply/expiring-items", "GET")
+
+    assert permissions == {"equipment_check.view", "inventory.manage"}
+    assert "inventory.view" not in permissions

@@ -26,6 +26,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useLocation } from 'react-router';
 import { nudgeServiceWorkerUpdate, reloadForNewVersion } from '../utils/serviceWorkerUpdate';
+import { fetchServerBuildId, getCurrentBuildId } from '../utils/appVersion';
 
 /** Minimum time between two consecutive version checks (60 seconds). */
 const MIN_CHECK_INTERVAL_MS = 60_000;
@@ -35,17 +36,6 @@ const POLL_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
 /** Re-prompt after a deferral so a security update is not ignored forever. */
 const UPDATE_REMINDER_MS = 60 * 60_000; // 1 hour
-
-/**
- * Build ID baked into this bundle at compile time.
- * Evaluated lazily (not at module-load) so that test stubs have time
- * to set the global before the first call.
- * In development (where versionJsonPlugin doesn't run) this returns
- * `undefined`, and the hook is a no-op.
- */
-function getCurrentBuildId(): string | undefined {
-  return typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : undefined;
-}
 
 export interface AppUpdateState {
   /** True once a newer build has been detected on the server. */
@@ -77,22 +67,14 @@ export function useAppUpdate(): AppUpdateState {
     // check — is what lets an installed PWA apply a deployment in one reload.
     nudgeServiceWorkerUpdate();
 
-    try {
-      const res = await fetch('/version.json', { cache: 'no-store' });
-      if (!res.ok) return;
+    const serverBuildId = await fetchServerBuildId();
+    if (serverBuildId === null) return; // offline, or the check itself failed
 
-      const data: unknown = await res.json();
-      if (typeof data === 'object' && data !== null && 'buildId' in data && typeof data.buildId === 'string') {
-        const serverBuildId = (data as { buildId: string }).buildId;
-        const deferred = deferredBuildRef.current;
-        const isStillDeferred = deferred?.buildId === serverBuildId && Date.now() < deferred.until;
-        if (serverBuildId !== getCurrentBuildId() && !isStillDeferred) {
-          detectedBuildRef.current = serverBuildId;
-          setUpdateAvailable(true);
-        }
-      }
-    } catch {
-      // Network error — silently ignore
+    const deferred = deferredBuildRef.current;
+    const isStillDeferred = deferred?.buildId === serverBuildId && Date.now() < deferred.until;
+    if (serverBuildId !== getCurrentBuildId() && !isStillDeferred) {
+      detectedBuildRef.current = serverBuildId;
+      setUpdateAvailable(true);
     }
   }, []);
 

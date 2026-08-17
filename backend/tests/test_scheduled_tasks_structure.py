@@ -83,6 +83,28 @@ class TestOrgIterationInvariants:
         )
 
 
+class TestRollingRecurrenceInvariants:
+    def test_generated_occurrences_do_not_share_parent_attachments(self):
+        """Deleting a child attachment must not unlink the parent's file."""
+        runner = next(
+            node
+            for node in TREE.body
+            if isinstance(node, ast.AsyncFunctionDef)
+            and node.name == "run_rolling_recurrence_extend"
+        )
+        copied_fields = next(
+            node.iter
+            for node in ast.walk(runner)
+            if isinstance(node, ast.For)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "field"
+            and isinstance(node.iter, ast.Tuple)
+        )
+        field_names = {element.value for element in copied_fields.elts}
+
+        assert "attachments" not in field_names
+
+
 def _in_app_notification_logs() -> list[tuple[int, str, dict[str, ast.expr]]]:
     """Every in-app NotificationLog(...) built in this module.
 
