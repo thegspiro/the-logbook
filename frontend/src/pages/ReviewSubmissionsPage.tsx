@@ -629,7 +629,7 @@ const SubmissionCard: React.FC<{
             <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span className="flex items-center space-x-1">
                 <User className="h-3 w-3" />
-                <span>{submission.submitted_by}</span>
+                <span>{submission.submitter_name || submission.submitted_by}</span>
               </span>
               <span className="flex items-center space-x-1">
                 <Calendar className="h-3 w-3" />
