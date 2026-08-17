@@ -6,6 +6,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import { electionService, eventService, meetingsService, ranksService } from '../services/api';
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
 import type { EventListItem } from '../types/event';
@@ -29,6 +30,7 @@ export const ElectionsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const { busy, run } = useSubmitGuard();
   const [createError, setCreateError] = useState<string | null>(null);
   const [formData, setFormData] = useState<ElectionCreate>({
     title: '',
@@ -194,45 +196,47 @@ export const ElectionsPage: React.FC = () => {
     setFormData({ ...formData, end_date: formatForDateTimeInput(end, tz) });
   };
 
-  const handleCreateElection = async (e: React.FormEvent) => {
+  const handleCreateElection = (e: React.FormEvent) => {
     e.preventDefault();
-    setCreateError(null);
+    return run(async () => {
+      setCreateError(null);
 
-    try {
-      // Convert local datetime-local values to UTC before sending to backend
-      const submitData = {
-        ...formData,
-        description: formData.description?.trim() || undefined,
-        start_date: localToUTC(formData.start_date, tz),
-        end_date: localToUTC(formData.end_date, tz),
-      };
-      await electionService.createElection(submitData);
-      setShowCreateModal(false);
-      setFormData({
-        title: '',
-        description: '',
-        election_type: 'general',
-        positions: [],
-        start_date: '',
-        end_date: '',
-        anonymous_voting: true,
-        allow_write_ins: false,
-        max_votes_per_position: 1,
-        results_visible_immediately: false,
-        voting_method: VM.SIMPLE_MAJORITY,
-        victory_condition: VC.MOST_VOTES,
-        enable_runoffs: false,
-        runoff_type: RunoffType.TOP_TWO,
-        max_runoff_rounds: 3,
-        auto_open: false,
-        reminder_hours_before_close: undefined,
-        tie_policy: 'co_winners',
-      });
-      setPositionInput('');
-      await fetchElections();
-    } catch (err: unknown) {
-      setCreateError(getErrorMessage(err, 'Failed to create election'));
-    }
+      try {
+        // Convert local datetime-local values to UTC before sending to backend
+        const submitData = {
+          ...formData,
+          description: formData.description?.trim() || undefined,
+          start_date: localToUTC(formData.start_date, tz),
+          end_date: localToUTC(formData.end_date, tz),
+        };
+        await electionService.createElection(submitData);
+        setShowCreateModal(false);
+        setFormData({
+          title: '',
+          description: '',
+          election_type: 'general',
+          positions: [],
+          start_date: '',
+          end_date: '',
+          anonymous_voting: true,
+          allow_write_ins: false,
+          max_votes_per_position: 1,
+          results_visible_immediately: false,
+          voting_method: VM.SIMPLE_MAJORITY,
+          victory_condition: VC.MOST_VOTES,
+          enable_runoffs: false,
+          runoff_type: RunoffType.TOP_TWO,
+          max_runoff_rounds: 3,
+          auto_open: false,
+          reminder_hours_before_close: undefined,
+          tie_policy: 'co_winners',
+        });
+        setPositionInput('');
+        await fetchElections();
+      } catch (err: unknown) {
+        setCreateError(getErrorMessage(err, 'Failed to create election'));
+      }
+    });
   };
 
   const addPosition = () => {
@@ -1166,7 +1170,11 @@ export const ElectionsPage: React.FC = () => {
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn-info rounded-md">
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="btn-info rounded-md disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     Create Election
                   </button>
                 </div>

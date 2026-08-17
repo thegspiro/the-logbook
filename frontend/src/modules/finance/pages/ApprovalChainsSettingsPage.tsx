@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowLeft, Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GitBranch, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
@@ -182,6 +183,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
   } = useFinanceStore();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const { busy, run } = useSubmitGuard();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -197,39 +199,40 @@ const ApprovalChainsSettingsPage: React.FC = () => {
     void fetchBudgetCategories();
   }, [fetchApprovalChains, fetchBudgetCategories]);
 
-  const handleCreate = async () => {
-    if (!formData.name.trim()) {
-      toast.error('Chain name is required');
-      return;
-    }
+  const handleCreate = () =>
+    run(async () => {
+      if (!formData.name.trim()) {
+        toast.error('Chain name is required');
+        return;
+      }
 
-    try {
-      await createApprovalChain({
-        name: formData.name.trim(),
-        description: formData.description.trim() || undefined,
-        appliesTo: formData.appliesTo,
-        minAmount: formData.minAmount ? parseFloat(formData.minAmount) : undefined,
-        maxAmount: formData.maxAmount ? parseFloat(formData.maxAmount) : undefined,
-        budgetCategoryId: formData.budgetCategoryId || undefined,
-        isDefault: formData.isDefault,
-        isActive: true,
-        steps: [],
-      } as Partial<ApprovalChain>);
-      toast.success('Approval chain created');
-      setShowCreateForm(false);
-      setFormData({
-        name: '',
-        description: '',
-        appliesTo: ApprovalEntityType.PURCHASE_REQUEST,
-        minAmount: '',
-        maxAmount: '',
-        budgetCategoryId: '',
-        isDefault: false,
-      });
-    } catch {
-      // Error handled by store
-    }
-  };
+      try {
+        await createApprovalChain({
+          name: formData.name.trim(),
+          description: formData.description.trim() || undefined,
+          appliesTo: formData.appliesTo,
+          minAmount: formData.minAmount ? parseFloat(formData.minAmount) : undefined,
+          maxAmount: formData.maxAmount ? parseFloat(formData.maxAmount) : undefined,
+          budgetCategoryId: formData.budgetCategoryId || undefined,
+          isDefault: formData.isDefault,
+          isActive: true,
+          steps: [],
+        } as Partial<ApprovalChain>);
+        toast.success('Approval chain created');
+        setShowCreateForm(false);
+        setFormData({
+          name: '',
+          description: '',
+          appliesTo: ApprovalEntityType.PURCHASE_REQUEST,
+          minAmount: '',
+          maxAmount: '',
+          budgetCategoryId: '',
+          isDefault: false,
+        });
+      } catch {
+        // Error handled by store
+      }
+    });
 
   const handleDelete = async (id: string) => {
     if (
@@ -413,8 +416,9 @@ const ApprovalChainsSettingsPage: React.FC = () => {
             </button>
             <button
               type="button"
+              disabled={busy}
               onClick={() => void handleCreate()}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Create Chain
             </button>

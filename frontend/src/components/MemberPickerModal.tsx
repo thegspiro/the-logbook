@@ -51,6 +51,12 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
   const searchRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  // One pick per opening. Every consumer turns a selection into a write —
+  // assigning an item, issuing a kit — and none of them can disable this list
+  // while that request is in flight, so a double-click on a member row issued
+  // the same equipment to them twice. The ref is reset when the modal reopens.
+  const picked = useRef(false);
+
   // Load the member roster once each time the modal opens.
   useEffect(() => {
     if (!isOpen) {
@@ -59,6 +65,7 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
       setScannerOpen(false);
       return;
     }
+    picked.current = false;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -112,6 +119,8 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
 
   const handleSelect = useCallback(
     (m: MemberInventorySummary) => {
+      if (picked.current) return;
+      picked.current = true;
       onSelect({ userId: m.user_id, memberName: memberDisplayName(m) });
     },
     [onSelect]

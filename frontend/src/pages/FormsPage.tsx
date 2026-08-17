@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { getErrorMessage } from '@/utils/errorHandling';
 import {
@@ -63,6 +64,7 @@ const FormsPage: React.FC = () => {
   const [forms, setForms] = useState<FormDef[]>([]);
   const [summary, setSummary] = useState<FormsSummary | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const { busy: integrationBusy, run: runIntegration } = useSubmitGuard();
   const [submissionsView, setSubmissionsView] = useState<'list' | 'results'>('list');
   const [selectedFormDetail, setSelectedFormDetail] = useState<FormDetailDef | null>(null);
 
@@ -265,42 +267,43 @@ const FormsPage: React.FC = () => {
     }
   };
 
-  const handleAddIntegration = async () => {
-    if (!selectedFormId) return;
+  const handleAddIntegration = () =>
+    runIntegration(async () => {
+      if (!selectedFormId) return;
 
-    // Validate that required mappings are present
-    const targetFields = INTEGRATION_TARGET_FIELDS[integrationType] ?? [];
-    const missingRequired = targetFields.filter((tf) => tf.required && !fieldMappings[tf.key]).map((tf) => tf.label);
-    if (missingRequired.length > 0) {
-      setError(`Required field mappings missing: ${missingRequired.join(', ')}`);
-      return;
-    }
-
-    // Build mappings: { formFieldId → targetFieldName }
-    // The backend expects this direction: form field ID as key, target field name as value
-    const mappings: Record<string, string> = {};
-    for (const [targetKey, formFieldId] of Object.entries(fieldMappings)) {
-      if (formFieldId) {
-        mappings[formFieldId] = targetKey;
+      // Validate that required mappings are present
+      const targetFields = INTEGRATION_TARGET_FIELDS[integrationType] ?? [];
+      const missingRequired = targetFields.filter((tf) => tf.required && !fieldMappings[tf.key]).map((tf) => tf.label);
+      if (missingRequired.length > 0) {
+        setError(`Required field mappings missing: ${missingRequired.join(', ')}`);
+        return;
       }
-    }
 
-    try {
-      const data: FormIntegrationCreate = {
-        target_module: integrationTarget,
-        integration_type: integrationType,
-        field_mappings: mappings,
-        is_active: true,
-      };
-      await formsService.addIntegration(selectedFormId, data);
-      const detail = await formsService.getForm(selectedFormId);
-      setSelectedFormDetail(detail);
-      setFieldMappings({});
-    } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to add integration');
-      setError(message);
-    }
-  };
+      // Build mappings: { formFieldId → targetFieldName }
+      // The backend expects this direction: form field ID as key, target field name as value
+      const mappings: Record<string, string> = {};
+      for (const [targetKey, formFieldId] of Object.entries(fieldMappings)) {
+        if (formFieldId) {
+          mappings[formFieldId] = targetKey;
+        }
+      }
+
+      try {
+        const data: FormIntegrationCreate = {
+          target_module: integrationTarget,
+          integration_type: integrationType,
+          field_mappings: mappings,
+          is_active: true,
+        };
+        await formsService.addIntegration(selectedFormId, data);
+        const detail = await formsService.getForm(selectedFormId);
+        setSelectedFormDetail(detail);
+        setFieldMappings({});
+      } catch (err: unknown) {
+        const message = getErrorMessage(err, 'Failed to add integration');
+        setError(message);
+      }
+    });
 
   const handleDeleteIntegration = async (integrationId: string) => {
     if (!selectedFormId) return;
@@ -1569,10 +1572,11 @@ const FormsPage: React.FC = () => {
                       )}
 
                       <button
+                        disabled={integrationBusy}
                         onClick={() => {
                           void handleAddIntegration();
                         }}
-                        className="flex w-full items-center justify-center space-x-2 rounded-lg bg-orange-600/20 px-4 py-2 text-orange-700 transition-colors hover:bg-orange-600/30 dark:text-orange-400"
+                        className="flex w-full items-center justify-center space-x-2 rounded-lg bg-orange-600/20 px-4 py-2 text-orange-700 transition-colors hover:bg-orange-600/30 disabled:cursor-not-allowed disabled:opacity-50 dark:text-orange-400"
                       >
                         <Plus className="h-4 w-4" aria-hidden="true" />
                         <span>Add Integration</span>

@@ -28,7 +28,10 @@ import {
 
 const MyOrdersPage: React.FC = () => {
   const tz = useTimezone();
-  const { myOrders, isLoading, loadMyOrders } = useStorefrontStore();
+  // `error` is read here deliberately: without it a failed load fell through to
+  // the "No orders yet" empty state, telling a member who has orders that they
+  // have none — a load failure presented as fact about their account.
+  const { myOrders, isLoading, error, loadMyOrders } = useStorefrontStore();
 
   const [reportOrder, setReportOrder] = useState<StoreOrder | null>(null);
   const [reportMethod, setReportMethod] = useState('');
@@ -122,6 +125,15 @@ const MyOrdersPage: React.FC = () => {
         {isLoading ? (
           <div className="flex justify-center py-12" role="status" aria-live="polite">
             <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="space-y-3">
+            <p className="alert-danger" role="alert">
+              {error}
+            </p>
+            <button type="button" onClick={() => void loadMyOrders()} className="btn-secondary btn-md">
+              Try again
+            </button>
           </div>
         ) : myOrders.length === 0 ? (
           <EmptyState

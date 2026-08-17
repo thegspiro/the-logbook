@@ -12,6 +12,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import {
   RefreshCw,
   Plus,
@@ -715,16 +716,18 @@ const RecertificationSection: React.FC = () => {
   } = useLoadData(loadRecertData, { pathways: [] as RecertificationPathway[], renewalTasks: [] as RenewalTask[] });
   const { pathways, renewalTasks } = data;
   const [showAddModal, setShowAddModal] = useState(false);
+  const { busy: generateBusy, run: runGenerate } = useSubmitGuard();
 
-  const handleGenerateTasks = async () => {
-    try {
-      const result = await recertificationService.generateRenewalTasks();
-      toast.success(`Generated ${result.tasks_created} renewal tasks`);
-      void loadData();
-    } catch {
-      toast.error('Failed to generate renewal tasks');
-    }
-  };
+  const handleGenerateTasks = () =>
+    runGenerate(async () => {
+      try {
+        const result = await recertificationService.generateRenewalTasks();
+        toast.success(`Generated ${result.tasks_created} renewal tasks`);
+        void loadData();
+      } catch {
+        toast.error('Failed to generate renewal tasks');
+      }
+    });
 
   if (loading) {
     return (
@@ -745,10 +748,11 @@ const RecertificationSection: React.FC = () => {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
+            disabled={generateBusy}
             onClick={() => {
               void handleGenerateTasks();
             }}
-            className="btn-secondary flex items-center gap-1 rounded-lg px-3 py-2 text-sm"
+            className="btn-secondary flex items-center gap-1 rounded-lg px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RefreshCw className="h-4 w-4" />
             <span>Generate Tasks</span>

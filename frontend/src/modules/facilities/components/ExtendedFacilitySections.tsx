@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { facilitiesService } from '../../../services/api';
 import type {
   AccessKey,
@@ -283,8 +284,8 @@ interface SectionProps {
 function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: boolean }) {
   const [readings, setReadings] = useState<UtilityReading[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [readingDate, setReadingDate] = useState('');
+  const { busy, run } = useSubmitGuard();
   const [amount, setAmount] = useState('');
   const [usage, setUsage] = useState('');
 
@@ -300,34 +301,29 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
     void loadReadings();
   }, [loadReadings]);
 
-  const addReading = async () => {
-    if (!readingDate) {
-      toast.error('Reading date is required');
-      return;
-    }
-    // No server-side uniqueness constraint — a double-click would file the
-    // same reading twice, so the guard has to live here.
-    if (isSaving) return;
-    setIsSaving(true);
-    try {
-      await facilitiesService.createUtilityReading(accountId, {
-        utility_account_id: accountId,
-        reading_date: readingDate,
-        ...(amount ? { amount: Number(amount) } : {}),
-        ...(usage ? { usage_quantity: Number(usage) } : {}),
-      });
-    } catch {
-      toast.error('Failed to add reading');
-      return;
-    } finally {
-      setIsSaving(false);
-    }
-    setReadingDate('');
-    setAmount('');
-    setUsage('');
-    setShowForm(false);
-    await loadReadings();
-  };
+  const addReading = () =>
+    run(async () => {
+      if (!readingDate) {
+        toast.error('Reading date is required');
+        return;
+      }
+      try {
+        await facilitiesService.createUtilityReading(accountId, {
+          utility_account_id: accountId,
+          reading_date: readingDate,
+          ...(amount ? { amount: Number(amount) } : {}),
+          ...(usage ? { usage_quantity: Number(usage) } : {}),
+        });
+      } catch {
+        toast.error('Failed to add reading');
+        return;
+      }
+      setReadingDate('');
+      setAmount('');
+      setUsage('');
+      setShowForm(false);
+      await loadReadings();
+    });
 
   // The API returns newest-first, but the order is a display guarantee here,
   // so it is not left to the server.
@@ -390,11 +386,11 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
             onChange={(event) => setUsage(event.target.value)}
           />
           <button
-            className="btn-primary col-span-3 py-1.5 text-xs"
+            disabled={busy}
+            className="btn-primary col-span-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void addReading()}
-            disabled={isSaving}
           >
-            {isSaving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Save reading'}
+            {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Save reading'}
           </button>
         </div>
       )}
