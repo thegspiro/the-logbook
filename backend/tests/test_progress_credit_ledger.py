@@ -58,6 +58,27 @@ def _svc(db):
 
 
 class TestApplyCredit:
+    async def test_unprivileged_actor_cannot_credit_another_member(self):
+        progress = _progress()
+        progress.enrollment = SimpleNamespace(user_id="member-1")
+        db = RecordingSession([_one(progress)])
+        svc = _svc(db)
+
+        result, error = await svc.apply_requirement_credit(
+            progress_id=progress.id,
+            organization_id=uuid4(),
+            source_type=ProgressCreditSource.TRAINING_SESSION,
+            source_id="sess-1",
+            units=5.0,
+            acting_user_id="events-manager",
+            can_manage=False,
+        )
+
+        assert result is None
+        assert error == "You are not authorized to update this training progress"
+        assert db.added == []
+        svc.update_requirement_progress.assert_not_awaited()
+
     async def test_first_apply_records_ledger_and_accrues_units(self):
         progress = _progress(value=10.0)
         db = RecordingSession([_one(progress), _one(None)])

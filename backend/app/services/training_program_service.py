@@ -2878,6 +2878,8 @@ class TrainingProgramService:
         applied_by: Optional[UUID] = None,
         progress_notes: Optional[Dict] = None,
         mark_in_progress: bool = False,
+        acting_user_id: Optional[UUID] = None,
+        can_manage: bool = False,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """Idempotently accrue ``units`` of numeric progress onto a requirement,
         recording the originating record in the credit ledger.
@@ -2904,6 +2906,16 @@ class TrainingProgramService:
         progress = await self._get_org_scoped_progress(progress_id, organization_id)
         if progress is None:
             return None, "Requirement progress not found"
+
+        # Preserve the authorization boundary of the real progress updater.
+        # Feed callers handling a user request must identify that user; otherwise
+        # the downstream updater treats the write as a trusted system action.
+        if (
+            acting_user_id is not None
+            and not can_manage
+            and str(progress.enrollment.user_id) != str(acting_user_id)
+        ):
+            return None, "You are not authorized to update this training progress"
 
         existing = await self.db.execute(
             select(RequirementProgressCredit).where(
@@ -2945,6 +2957,8 @@ class TrainingProgramService:
             organization_id=organization_id,
             updates=RequirementProgressUpdate(**update_kwargs),
             verified_by=verified_by,
+            acting_user_id=acting_user_id,
+            can_manage=can_manage,
         )
 
     async def revoke_requirement_credit(
