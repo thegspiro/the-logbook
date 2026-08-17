@@ -31,15 +31,19 @@ async def test_delete_training_program_records_audit_event(monkeypatch):
 
     await training_programs.delete_training_program(program_id, db, _user())
 
+    # The module logs every training-program mutation under one event_type
+    # and discriminates with `action`; the delete is warning-severity rather
+    # than info because it cascades to enrollments and member progress.
+    # organization_id is not passed: create_log_entry resolves it from
+    # user_id, so stamping it here would only duplicate that lookup.
     audit.assert_awaited_once_with(
         db=db,
-        event_type="training_program_deleted",
+        event_type="training_program_updated",
         event_category="training",
         severity="warning",
-        event_data={"program_id": str(program_id)},
+        event_data={"program_id": str(program_id), "action": "program_deleted"},
         user_id="user-1",
         username="chief",
-        organization_id="org-1",
     )
     db.commit.assert_awaited_once()
 

@@ -790,17 +790,6 @@ async def delete_training_program(
         user_id=str(current_user.id),
         username=current_user.username,
     )
-
-    await log_audit_event(
-        db=db,
-        event_type="training_program_deleted",
-        event_category="training",
-        severity="warning",
-        event_data={"program_id": str(program_id)},
-        user_id=str(current_user.id),
-        username=current_user.username,
-        organization_id=str(current_user.organization_id),
-    )
     await db.commit()
 
 
