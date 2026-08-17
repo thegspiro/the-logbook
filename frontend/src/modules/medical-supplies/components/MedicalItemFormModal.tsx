@@ -13,6 +13,7 @@ import { medicalSuppliesService } from '../../../services/medicalSuppliesService
 import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
+import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import { MEDICAL_UNITS } from '../types';
 
@@ -52,6 +53,10 @@ function initialState(item?: InventoryItem): FormState {
 
 export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({ categories, item, onClose, onSaved }) => {
   const isEdit = Boolean(item);
+  // A lot-stocked item's real count is the sum of its in-date lots. `quantity`
+  // is a separate ledger that receiving a lot never touches, so this form must
+  // neither show it as the count nor write to it.
+  const isLotStocked = Boolean(item?.is_lot_stocked);
   const [form, setForm] = useState<FormState>(() => initialState(item));
   const [isSaving, setIsSaving] = useState(false);
 
@@ -80,7 +85,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({ cate
           category_id: form.category_id,
           description: blankToNull(form.description),
           manufacturer: blankToNull(form.manufacturer),
-          quantity: numberOrNull(form.quantity),
+          ...(isLotStocked ? {} : { quantity: numberOrNull(form.quantity) }),
           unit_of_measure: blankToNull(form.unit_of_measure),
           reorder_point: numberOrNull(form.reorder_point),
           storage_location: blankToNull(form.storage_location),
@@ -162,14 +167,26 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({ cate
               <label htmlFor="ms-qty" className="form-label">
                 On hand
               </label>
-              <input
-                id="ms-qty"
-                type="number"
-                min="0"
-                className="form-input w-full"
-                value={form.quantity}
-                onChange={(e) => set('quantity', e.target.value)}
-              />
+              {isLotStocked ? (
+                // The count for a lot-stocked item lives in its lots, and this
+                // field writes `quantity` — a separate ledger the page never
+                // displays for such an item. Editing it would change nothing
+                // visible behind a success toast, so the field states where the
+                // real number comes from instead of pretending to own it.
+                <p className="text-theme-text-muted border-theme-surface-border rounded-md border border-dashed px-3 py-2 text-sm">
+                  {formatNumber(item?.lot_stock ?? 0)} from stock lots — adjust by receiving a delivery or editing the
+                  item&apos;s lots.
+                </p>
+              ) : (
+                <input
+                  id="ms-qty"
+                  type="number"
+                  min="0"
+                  className="form-input w-full"
+                  value={form.quantity}
+                  onChange={(e) => set('quantity', e.target.value)}
+                />
+              )}
             </div>
             <div>
               <label htmlFor="ms-unit" className="form-label">

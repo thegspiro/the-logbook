@@ -73,20 +73,41 @@ def _deployed(name, ready_stock, days=10):
     }
 
 
-def _lot(item_name="4x4 Gauze", expiration=SOON, quantity=6):
+_lot_counter = 0
+
+
+def _lot(item_name="4x4 Gauze", expiration=SOON, quantity=6, lot_id=None):
+    """A shelf lot. ``id`` matters: the task subtracts the medical lots from
+    the full set by id to derive the gear ones."""
+    global _lot_counter
+    _lot_counter += 1
     lot = MagicMock()
-    lot.lot_number = "LOT-1"
+    lot.id = lot_id or f"lot-{_lot_counter}"
+    lot.lot_number = f"LOT-{_lot_counter}"
     lot.expiration_date = expiration
     lot.quantity = quantity
     return (lot, item_name)
+
+
+def _lots_by_domain(medical, gear):
+    """Answer ``get_expiring_lots`` per its ``item_types`` argument."""
+
+    async def _side_effect(_org, _days=30, item_types=None):
+        return list(medical) if item_types else list(medical) + list(gear)
+
+    return _side_effect
 
 
 @pytest.fixture
 def sent():
     """Patch the pieces the task composes; collect the email that goes out."""
     captured = {}
+    # Every send, not just the last: the task now emits one message per
+    # audience, and the whole point of the split is what each one contains.
+    captured["all"] = []
 
     async def _send_email(**kwargs):
+        captured["all"].append(kwargs)
         captured.update(kwargs)
         return 1, []
 
@@ -119,7 +140,7 @@ class TestSupplyExpirationAlerts:
 
         result = await run_supply_expiration_alerts(_db())
 
-        assert captured == {}
+        assert captured["all"] == []
         assert result["total"] == 0
 
     async def test_reorders_and_swaps_are_reported_separately(self, sent):
@@ -172,7 +193,7 @@ class TestSupplyExpirationAlerts:
 
         result = await run_supply_expiration_alerts(_db(users=[member]))
 
-        assert captured == {}
+        assert captured["all"] == []
         assert result["total"] == 0
 
     async def test_any_role_granted_inventory_manage_is_notified(self, sent):
@@ -246,3 +267,83 @@ class TestSupplyExpirationAlerts:
         await run_supply_expiration_alerts(_db(users=[seeded]))
 
         assert captured["to_emails"] == ["seeded@example.org"]
+
+
+class TestDomainIsolationInAlerts:
+    """Widening the recipient list must not widen what each one is shown.
+
+    The body is a rendered table, so mailing every row to everyone is the same
+    disclosure as serving it — and the API refuses a medical-only officer the
+    gear rows on purpose.
+    """
+
+    def _mixed(self, lots):
+        """One medical lot and one gear lot on the shelf."""
+        medical = [_lot(item_name="Epi 1:1000", lot_id="med-1")]
+        gear = [_lot(item_name="Turnout Hood", lot_id="gear-1")]
+        lots.side_effect = _lots_by_domain(medical, gear)
+
+    async def test_a_medical_only_officer_is_not_mailed_gear_lots(self, sent):
+        captured, overview, lots = sent
+        overview.return_value = {"items": []}
+        self._mixed(lots)
+
+        ems = _user_with(
+            ["inventory.manage_medical"], user_id="u-9", email="ems@example.org"
+        )
+        await run_supply_expiration_alerts(_db(users=[ems]))
+
+        assert len(captured["all"]) == 1
+        body = captured["all"][0]["html_body"]
+        assert "Epi 1:1000" in body
+        assert "Turnout Hood" not in body
+
+    async def test_a_broad_manager_is_mailed_both(self, sent):
+        captured, overview, lots = sent
+        overview.return_value = {"items": []}
+        self._mixed(lots)
+
+        boss = _user_with(["inventory.manage"], user_id="u-10", email="qm@example.org")
+        await run_supply_expiration_alerts(_db(users=[boss]))
+
+        assert len(captured["all"]) == 1
+        body = captured["all"][0]["html_body"]
+        assert "Epi 1:1000" in body
+        assert "Turnout Hood" in body
+
+    async def test_each_audience_gets_its_own_message(self, sent):
+        """Two officers, two different emails — not one shared blast."""
+        captured, overview, lots = sent
+        overview.return_value = {"items": []}
+        self._mixed(lots)
+
+        ems = _user_with(
+            ["inventory.manage_medical"], user_id="u-11", email="ems@example.org"
+        )
+        boss = _user_with(["inventory.manage"], user_id="u-12", email="qm@example.org")
+        await run_supply_expiration_alerts(_db(users=[ems, boss]))
+
+        by_recipient = {
+            tuple(send["to_emails"]): send["html_body"] for send in captured["all"]
+        }
+        assert len(by_recipient) == 2
+        assert "Turnout Hood" not in by_recipient[("ems@example.org",)]
+        assert "Turnout Hood" in by_recipient[("qm@example.org",)]
+
+    async def test_a_holder_of_both_grants_gets_one_complete_email(self, sent):
+        """Not two partial ones — the broad grant already covers medical."""
+        captured, overview, lots = sent
+        overview.return_value = {"items": []}
+        self._mixed(lots)
+
+        both = _user_with(
+            ["inventory.manage", "inventory.manage_medical"],
+            user_id="u-13",
+            email="chief@example.org",
+        )
+        await run_supply_expiration_alerts(_db(users=[both]))
+
+        assert len(captured["all"]) == 1
+        body = captured["all"][0]["html_body"]
+        assert "Epi 1:1000" in body
+        assert "Turnout Hood" in body

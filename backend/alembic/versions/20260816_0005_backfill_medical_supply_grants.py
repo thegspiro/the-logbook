@@ -159,28 +159,23 @@ def downgrade() -> None:
     if "positions" not in sa.inspect(bind).get_table_names():
         return
 
-    # Remove only the grants this migration adds, and only from the system
-    # positions it touched — a department that granted them by hand keeps them.
-    for slug, grants in _BACKFILL.items():
-        rows = bind.execute(
-            sa.text(
-                "SELECT id, permissions FROM positions "
-                "WHERE slug = :slug AND is_system = 1"
-            ),
-            {"slug": slug},
-        ).fetchall()
-        for row in rows:
-            granted = _load(row.permissions)
-            remaining = [g for g in granted if g not in grants]
-            if len(remaining) == len(granted):
-                continue
-            bind.execute(
-                sa.text("UPDATE positions SET permissions = :perms WHERE id = :id"),
-                {"perms": json.dumps(remaining), "id": row.id},
-            )
+    # Grants are deliberately NOT removed.
+    #
+    # The upgrade is idempotent by skipping rows that already hold a grant, so
+    # nothing records which rows it actually changed. A department may well
+    # have granted `equipment_check.*` to its apparatus officer by hand years
+    # ago — those permissions long predate this migration — and stripping them
+    # here would destroy configuration this migration never created.
+    #
+    # The two failure modes are not symmetric. A grant left behind is visible
+    # in the role editor and removable in a click; a grant silently taken away
+    # locks an officer out of a screen they were using, with nothing on screen
+    # to explain why. Leaving them is the recoverable direction.
 
-    # The position itself is dropped only where no member holds it, so a
-    # department that already staffed the office does not lose the assignment.
+    # The position itself is different: it did not exist before this migration,
+    # so removing it reverses something this migration really did do. Dropped
+    # only where no member holds it, so a department that already staffed the
+    # office does not lose the assignment.
     bind.execute(
         sa.text(
             "DELETE FROM positions WHERE slug = :slug AND is_system = 1 "
