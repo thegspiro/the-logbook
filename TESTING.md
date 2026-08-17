@@ -75,6 +75,44 @@ docker compose exec backend ./run_onboarding_tests.sh
 docker compose exec backend ./run_onboarding_tests.sh -v
 ```
 
+## Mutation Testing (diagnostic, not part of CI)
+
+Coverage says a line executed. It does not say a test would notice if that line
+were wrong. `frontend/stryker.pilot.json` runs Stryker over a few well-covered
+files to measure the difference — it has found real gaps that 89%-line-coverage
+files were hiding (TTL boundaries in `apiCache.ts`, the no-response case in
+`createApiClient.ts`, and 34 unkillable mutants that identified a dead IPv4
+branch in the onboarding host validator).
+
+**Stryker is deliberately NOT a declared dependency.** It pulls in a transitive
+`qs` advisory via `typed-rest-client` that has no released fix, which would take
+`npm audit` from 0 findings to 2 moderate for every developer — a poor trade for
+a tool CI never runs. Install it for the run, then drop it:
+
+```bash
+cd frontend
+npm install --no-save @stryker-mutator/core @stryker-mutator/vitest-runner
+
+# Whole pilot set, or one file:
+npx stryker run stryker.pilot.json
+npx stryker run stryker.pilot.json --mutate src/utils/apiCache.ts
+
+# Stryker leaves a sandbox behind if interrupted; it is gitignored and
+# eslint-ignored, but remove it so it does not confuse a later run.
+rm -rf .stryker-tmp
+```
+
+Edit the `mutate` array in `stryker.pilot.json` to point at other files.
+`vitest.stryker.config.ts` narrows the runner to the matching test files on
+purpose: against the full suite, Stryker's dry run executes all 3,500 tests and
+times out before the first mutant.
+
+Interpreting the score: **inspect survivors by hand before treating any as a
+gap.** A meaningful share are _equivalent mutants_ — semantically identical code
+that no test can distinguish. In `formValues.ts` all three survivors were
+equivalent (removing an `undefined` check changes nothing when `Number(undefined)`
+is already `NaN`), so its effective score is 100%, not the 96% reported.
+
 ## Test Coverage
 
 ### Onboarding Tests (Backend)

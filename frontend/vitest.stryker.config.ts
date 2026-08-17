@@ -8,7 +8,15 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/utils/formValues.test.ts', 'src/utils/errorHandling.test.ts', 'src/utils/apiCache.test.ts'],
+    include: [
+      'src/utils/formValues.test.ts',
+      'src/utils/errorHandling.test.ts',
+      'src/utils/apiCache.test.ts',
+      'src/utils/createApiClient.test.ts',
+      'src/modules/onboarding/utils/security.test.ts',
+      'src/modules/onboarding/utils/validation.test.ts',
+      'src/modules/onboarding/utils/errorHandler.test.ts',
+    ],
   },
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
 });
