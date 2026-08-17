@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training: approval roster access is limited to training officers (2026-08-17)
+
+**Security / Fixed**
+
+- `GET /training/sessions/approve/{token}` now requires `training.manage`
+  instead of `events.manage`. The approval token remains organization-scoped,
+  but the response includes attendee names, email addresses, and attendance
+  timestamps that event-only roles must not be able to read.
+
 ### Pull requests get a template, aimed at what CI cannot check (2026-08-17)
 
 **Added**
