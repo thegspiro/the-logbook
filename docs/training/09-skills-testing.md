@@ -159,7 +159,10 @@ See the [Training Pipelines](./02-training.md#training-pipelines) guide for how 
 
 When a template is ready for use:
 
-1. Navigate to the template detail page.
+1. Open the template. There is no separate read-only detail page — a
+   template's own page **is** the builder, whether it is a draft or already
+   published, and `/templates/{id}` and `/templates/{id}/edit` render the
+   same screen.
 2. Click **Publish**.
 3. The system validates that the template has at least one section with at least one criterion.
 4. Once published, the template becomes available for examiners to use in test sessions.
@@ -167,8 +170,6 @@ When a template is ready for use:
 **Version control:** When you edit a published template and structural fields change (sections, criteria, scoring configuration), the version number auto-increments. Historical test results always reference the template version they were administered under.
 
 **Duplicating a template:** Click **Duplicate** on any template to create a draft copy with " (Copy)" appended to the name. This is useful for creating variants (e.g., adapting an NREMT template for department-specific requirements).
-
-![Published skill sheet template detail with its sections and criteria](./images/09-05-template-detail.png)
 
 ---
 

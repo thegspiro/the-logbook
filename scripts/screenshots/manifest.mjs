@@ -6526,21 +6526,6 @@ export const SHOTS = [
     route: "/training/admin?tab=reports",
     fullPage: true,
   },
-  {
-    id: "09-05-template-detail",
-    doc: "09-skills-testing.md",
-    line: 138,
-    anchor:
-      "Screenshot of the template detail page for a published template showing the",
-    alt: "Published skill sheet template detail with its sections and criteria",
-    route: "/training/skills-testing",
-    prepare: openFirstFromApi(
-      "/training/skills-testing/templates",
-      (id) => `/training/skills-testing/templates/${id}`,
-      "templates",
-    ),
-    fullPage: true,
-  },
 
   // ── Third batch: tab-reachable views ───────────────────────────────
   {

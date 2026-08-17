@@ -143,6 +143,52 @@ earlier** and remain stale.
 
 ---
 
+## The 2026-08-16 guide-09 re-capture — 22 images, every one opened
+
+Arithmetic checked rather than glanced at: the weighted scorecard's
+`10 + 30 = 40 of 50 = 80%` against its own per-section rows, the
+failed-at-100% result (a critical step fails the test regardless of the
+percentage — the banner says so, and it is the point of the shot), and the
+unscored-steps dialog's "1 step still has no Pass or Fail" against the
+`—/20` slider behind it.
+
+**`Avg Score 66%` looks wrong and is right.** The four scored tests average
+78%, but the stat filters on `validated_at` — 66% is the mean of the two
+_validated_ results (84 and 48). Verified against the query rather than
+assumed; recorded here because the next reader will do the same double-take.
+
+### Each capture run was littering the demo database
+
+Scoring a test is not a read. `09-16` and `09-18` drive the real scoring
+screen, so **every run filed another practice attempt** against the demo
+member — eleven had accumulated, all "Practice · Passed 100%", sorting above
+the official attempts. The member's results panel had become a wall of
+identical rows, and `09-21`'s prepare had grown a `maxHeight: 320px` clamp to
+cope, whose comment cited "fifty-odd identical passes from other seeding".
+
+`seed_skills_tests` now prunes them to one (the badge needs an example),
+through the route that refuses anything but practice records — an official
+result may carry a certification, which is why the API voids those instead.
+With the pile gone, the clamp only cut the validated PASS the caption is
+about, so it is removed and the step waits for that row instead.
+
+**Worth generalising:** a workaround for a data problem outlives the problem
+silently. The clamp still "worked" — it produced a clean image of the wrong
+rows.
+
+### A duplicate image, and a screen the guide invented
+
+`09-04-template-builder` and `09-05-template-detail` were **byte-identical**
+(same md5), the fourth instance of this shape after `02-21`/`02-41` and
+`04-20`/`17-01`. The cause is not a capture bug: `/templates/{id}` and
+`/templates/{id}/edit` both render `SkillTemplateBuilderPage`, so **there is
+no separate read-only template detail page** — the guide described UI the
+product does not have.
+
+Corrected the way the 08-13 pass corrected its five: the prose now says a
+template's own page _is_ the builder whether draft or published, the
+redundant shot and its file are removed, and `09-04` keeps the picture.
+
 ## The 2026-08-16 guide-04 re-capture — 31 images, every one opened
 
 Numbers cross-checked against the API rather than read for plausibility:
