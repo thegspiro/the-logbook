@@ -1258,6 +1258,11 @@ async def import_items_csv(
     failed = 0
     errors: List[Dict[str, Any]] = []
     warnings: List[str] = []
+    # Names that matched no vendor on file. Collected as a set and reported
+    # once at the end: a spreadsheet with one misspelling usually has it on
+    # every row, and a warning per row would bury the other warnings under
+    # the response cap.
+    unmatched_vendors: set[str] = set()
 
     rows = list(reader)
     if not rows:
@@ -1295,6 +1300,8 @@ async def import_items_csv(
             vendor_id = vendor_by_name.get(vendor_raw.lower())
             if vendor_id:
                 item_data["vendor_id"] = vendor_id
+            else:
+                unmatched_vendors.add(vendor_raw)
 
         item_data.pop("barcode", None)
         new_item, error = await service.create_item(
@@ -1327,6 +1334,25 @@ async def import_items_csv(
             str(current_user.organization_id),
             "items_imported",
             {"count": imported},
+        )
+
+    # Say so at import time. These rows keep the typed-in name and no vendor
+    # link, which is a silent way to refill the very list the vendor cleanup
+    # screen exists to drain — one misspelled column in a 200-row sheet used
+    # to import clean and surface weeks later as 200 unlinked rows.
+    if unmatched_vendors:
+        shown = sorted(unmatched_vendors)
+        listed = ", ".join(f'"{name}"' for name in shown[:10])
+        if len(shown) > 10:
+            listed += f", and {len(shown) - 10} more"
+        # Leads the list rather than trailing it: warnings are truncated at 50
+        # below, and a sheet messy enough to fill that quota is exactly the one
+        # whose vendor names need reporting.
+        warnings.insert(
+            0,
+            f"{len(shown)} vendor name(s) did not match a vendor on file and "
+            f"were left as free text: {listed}. Add them on the Vendors screen, "
+            f"or use Attach there to link every row already carrying the name.",
         )
 
     return {

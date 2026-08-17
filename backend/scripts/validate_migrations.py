@@ -13,6 +13,7 @@ Usage:
 """
 
 import ast
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -20,6 +21,27 @@ from typing import Dict, List, Tuple
 # Add the backend directory to the path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
+
+# Revision ids used to be hand-authored as YYYYMMDD_SSSS, a per-day counter.
+# Two branches open on the same day both counted from _0001 and both picked
+# _0002; git merged the two files without a word because they do not overlap,
+# and Alembic then refused to load an ambiguous chain. That happened four
+# times. The fix is entropy: `alembic revision` generates the id, so two
+# branches cannot pick the same one. The date still leads the *filename*
+# (see file_template in alembic.ini), which is what keeps listings sorted.
+#
+# Everything already written predates the change and is left alone —
+# renumbering released history would break every database that has already
+# stamped those ids. So the sunset is keyed on the date the id itself carries,
+# not on a position in the chain: a legacy-form id dated on or after this is
+# one somebody hand-authored after the convention changed.
+#
+# Keying on the date rather than "descended from revision X" is deliberate. A
+# revision anchor has to be bumped every time another branch lands a migration
+# before this check does, and whoever forgets gets a failure that blames a
+# migration written under the old rules. The date does not move.
+LEGACY_ID_SUNSET = "20260817"
+LEGACY_ID_FORM = re.compile(r"^(\d{8})_\d{3,4}$")
 
 
 def _parse_value(raw: str) -> List[str]:
@@ -143,6 +165,18 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
                     f"Orphaned migration {m['file']}: references non-existent revision '{parent}'"
                 )
 
+    # Hand-authored ids are how the same-day collisions happened, so anything
+    # written since the convention changed has to carry a generated one.
+    for rev in sorted(all_revisions):
+        match = LEGACY_ID_FORM.match(rev)
+        if match and match.group(1) >= LEGACY_ID_SUNSET:
+            errors.append(
+                f"HAND-AUTHORED REVISION ID '{rev}' in {revision_ids[rev][0]}: "
+                f'run `alembic revision -m "..."` and keep the id it writes. '
+                f"The YYYYMMDD_SSSS form collides when two branches are open "
+                f"on the same day, which is how the chain broke four times."
+            )
+
     # Check for multiple heads (migrations that nothing depends on)
     head_revisions = all_revisions - referenced_revisions
     if len(head_revisions) > 1:
@@ -161,6 +195,14 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
         f"Base migration: {base_migrations[0]['file'] if base_migrations else 'NONE'}"
     )
     print(f"Head revisions: {len(head_revisions)}")
+
+    # Printed so nobody has to record it by hand. ALEMBIC_MIGRATIONS.md used to
+    # carry a "Current Head" section that every migration PR edited — the same
+    # lines every time, so it conflicted constantly and went stale whenever
+    # someone forgot. Ask the chain instead.
+    for head in sorted(head_revisions):
+        print(f"  head -> {head}  ({revision_ids[head][0]})")
+        print(f'  new migrations set down_revision = "{head}"')
 
     if warnings:
         print("\n" + "-" * 40)
