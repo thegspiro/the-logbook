@@ -890,7 +890,7 @@ const Dashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void navigate(`/events/${evt.id}`)}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] shrink-0 items-center rounded-lg border px-4 text-sm font-semibold transition-colors"
+                className="btn-secondary inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold"
               >
                 {evt.requires_rsvp ? 'RSVP' : 'Open'}
               </button>
@@ -1055,7 +1055,7 @@ const Dashboard: React.FC = () => {
 
                 <button
                   onClick={() => void navigate('/scheduling')}
-                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left transition-colors hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
                 >
                   <span className="bg-theme-accent-green-muted text-theme-accent-green flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
                     <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
@@ -1073,7 +1073,7 @@ const Dashboard: React.FC = () => {
 
                 <button
                   onClick={() => void navigate('/admin-hours')}
-                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left transition-colors hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
                 >
                   <span className="bg-theme-accent-purple-muted text-theme-accent-purple flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
                     <ClipboardCheck className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
@@ -1371,12 +1371,12 @@ const Dashboard: React.FC = () => {
 
               <DashboardHoursCard monthLabel={monthLabel} segments={hoursSegments} loading={loadingHours} />
 
-              {/* Equipment — compact in the rail; the full picture is in Organization */}
+              {/* Issued gear — compact in the rail; the full picture is in Organization */}
               {!loadingMyEquipment && (myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
                 <section className="card p-4" aria-labelledby="my-equipment-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="my-equipment-heading" className="text-theme-text-primary text-[15px] font-bold">
-                      My Equipment
+                      My Issued Gear
                     </h3>
                     <button
                       onClick={() => void navigate('/inventory/my-equipment')}
@@ -1557,7 +1557,7 @@ const Dashboard: React.FC = () => {
                 <DashboardCardHeader
                   icon={Package}
                   iconColor="text-emerald-500"
-                  title={isInventoryAdmin ? 'Equipment & Inventory' : 'My Equipment'}
+                  title={isInventoryAdmin ? 'Gear & Uniforms' : 'My Issued Gear'}
                   viewAllColor="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300"
                   onViewAll={() => void navigate('/inventory')}
                 />
@@ -1626,7 +1626,7 @@ const Dashboard: React.FC = () => {
                     onClick={() => void navigate('/inventory/my-equipment')}
                     className="rounded-lg bg-emerald-600 px-4 py-2 text-center text-sm text-white transition-colors hover:bg-emerald-700"
                   >
-                    My Equipment
+                    My Issued Gear
                   </button>
                   {isInventoryAdmin && (
                     <button

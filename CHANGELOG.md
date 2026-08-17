@@ -7,6 +7,487 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: vendor pricing is a purchasing matter, not a directory one (2026-08-16)
+
+**Changed**
+
+- **Account numbers, payment terms and vendor spend totals now require
+  `inventory.manage`.** They were readable by anyone holding `inventory.view` —
+  a broad, member-level grant whose job is answering "who do we buy this from
+  and how do I reach them". What the department pays a supplier, on what terms,
+  and under which account is a different question. `GET /inventory/vendors` and
+  `GET /inventory/vendors/{id}` now blank `accountNumber`, `paymentTerms` and
+  `totalPurchaseValue` unless the caller can manage inventory; names, phone,
+  email, fax, website, address, contacts and the item/reorder counts are
+  unchanged, so the directory still works. No UI changes: the vendors screen
+  already sits behind `inventory.manage`, and the item and reorder pickers only
+  ever read the name.
+
+  The serializer's clearance flag is keyword-only with no default, so a call
+  site that forgets it raises rather than falls open.
+
+**Fixed**
+
+- The schema-drift measurement recipe in `docs/DATABASE_SCHEMA_DRIFT.md` created
+  its two scratch databases without naming a collation, relying on the reader
+  having set `collation-server` to match docker-compose. On a stock server
+  (`utf8mb4_0900_ai_ci` on MySQL 8, `utf8mb4_general_ci` on MariaDB) the chain
+  dies at the first cross-table FK with errno 150, because some migrations
+  hardcode `COLLATE utf8mb4_unicode_ci` and the rest inherit the database
+  default. The `CREATE DATABASE` statements now name the collation themselves.
+
+### Inventory: vendors get database-backed tests, and a guard rail for migration-id collisions (2026-08-16)
+
+**Added**
+
+- **Backend Lint now runs `validate_migrations.py`.** The vendor migration
+  collided with a same-day revision id twice in one day — first with the
+  facilities room-nesting migration, then with the storage-area barcode
+  backfill — each time leaving `alembic upgrade head` failing with "Multiple
+  head revisions" for anyone upgrading through migrations. Git merges two files
+  that declare one revision id without a word, because they do not overlap;
+  only this script notices. It is stdlib-only, needs no database, runs in under
+  a second, and sits beside flake8 so a collision is caught at PR time rather
+  than after the merge. (Both renumberings themselves landed separately; this
+  is the part that stops the third one.)
+- `test_inventory_vendors_db.py` — the vendor flows against a real database,
+  marked `integration` so CI's MySQL and MariaDB jobs run them. The mocked
+  suite passed in full while merging a vendor deleted the contacts it reported
+  as moving; a cascade is precisely what a mock cannot have. These assert on
+  what is still in the database afterwards: contacts survive a merge, links
+  survive a deactivation, the case-folded matching the cleanup screen promises
+  actually matches across spellings and departments, spend counts retired
+  items while the catalog count does not, and a relinked reorder comes back
+  naming its new vendor. Verified to fail against the pre-fix merge.
+
+### Inventory: medical supplies split onto their own page (2026-08-16)
+
+**Added**
+
+- **Medical Supplies** module at `/medical-supplies` — EMS stock with lot
+  numbers and expiration dates, on its own page rather than mixed into the gear
+  catalog. Opens on what is expiring, with an all-supplies tab, category
+  management, an add-supply form, and a receive-delivery form that books a whole
+  shipment as one dated lot per item line.
+- `ItemType.MEDICAL`, appended to the enum (never inserted — MySQL stores an
+  ENUM as its ordinal, so a mid-list insert would silently reclassify every
+  existing category). Migration `20260816_0001`.
+- Domain-scoped permissions `inventory.view_medical` and
+  `inventory.manage_medical`, so a department can appoint an EMS supply officer
+  for medical stock while the quartermaster keeps gear. Every medical route
+  accepts either these or the broad `inventory.view` / `inventory.manage`, so a
+  department running one supply line is unaffected, and `inventory.*` still
+  grants everything.
+- `ems_supply_officer` system role and matching email-signature office. It holds
+  the medical permissions plus `equipment_check.*` — both halves of the
+  shelf-to-truck loop — and no access to gear or uniforms.
+- `apparatus_officer` now states the medical permissions explicitly (it already
+  reached medical stock through the broad `inventory.manage`, so nothing is
+  widened — the role editor is simply honest about it now), and gains the
+  `equipment_check.*` set its description has always promised.
+- `medical_supplies` module toggle (off by default), so departments that do not
+  run EMS never see the page.
+
+**Changed**
+
+- Renamed the gear side so the two are distinguishable: **Inventory** →
+  **Gear & Uniforms**, **My Equipment** → **My Issued Gear**, **Inventory
+  Admin** → **Gear Admin**, **Equipment Requests** → **Gear Requests**,
+  **Equipment Kits** → **Gear Kits**. Routes and table names are unchanged, so
+  no existing link breaks.
+- Gear listings now exclude medical-domain items and categories, and the medical
+  routes are pinned to the medical domain server-side — the domain is never read
+  from a query parameter, and every by-id write re-checks that its target is in
+  the domain before touching it.
+
+**Fixed**
+
+- Low-stock, NFPA-retirement, and expiring-supply alerts had never been
+  delivered. All three filtered recipients on `u.role`, a column `User` does not
+  have (roles are the many-to-many `positions` relationship), so every send
+  raised `AttributeError` inside the per-organization guard, which logged it and
+  moved on. Recipients now resolve through the `inventory.manage` permission via
+  the roles relationship.
+
+### Inventory: vendor review fixes (2026-08-16)
+
+**Fixed**
+
+- **Merging a vendor no longer deletes the duplicate's contacts.** The source's
+  contacts were repointed with a bulk `UPDATE` while still sitting in the
+  loaded relationship, which cascades `delete-orphan` — so deleting the merged
+  vendor deleted the contacts the merge had just reported as moved. They are
+  re-parented through the ORM now, and the count comes from what actually
+  moved.
+- **A reorder's PATCH response named the previous vendor.** Re-reading the row
+  after an update returns the same identity-mapped instance and leaves loaded
+  relationships alone, so a changed `vendor_id` came back beside the old
+  vendor's name. The refresh asks for `populate_existing`.
+- **Linking a vendor on a reorder now clears the typed-in name and contact.**
+  They were serialized as omitted rather than null, so the stale supplier
+  survived behind the link and reappeared if it was ever unlinked.
+- **A vendor deactivated after being linked still shows in the edit pickers**,
+  marked "(inactive)", rather than dropping out and leaving the field reading
+  "Not linked" while it submitted the old id.
+- **Retired items count toward the cleanup list.** Attaching updates them and
+  vendor spend includes them, so a supplier named only on retired items was
+  stranded with no way to reach it from the screen.
+- The vendors screen sits behind `inventory.manage`, matching the rest of
+  `/inventory/admin`; it was reachable only by URL for anyone else.
+
+### Inventory: cleaning up duplicate and unattached suppliers (2026-08-16)
+
+**Added**
+
+- **Merging duplicate vendors.** A department that has been typing supplier
+  names for years ends up with "Galls" and "Galls Inc." as separate rows — the
+  migration folds case, not spelling. Merge moves the duplicate's items, reorder
+  requests and contacts to the vendor you chose and removes the duplicate, so
+  its name is free again rather than reserved by an inactive row nobody can see.
+  The target's own details are never overwritten.
+- **Attaching names that were never linked.** The vendors screen now counts the
+  supplier names typed onto items and reorder requests with no vendor behind
+  them, and offers each one as a new vendor or an attachment to an existing one
+  — linking every row carrying that name in a single pass. Rows already pointing
+  at a different vendor are left alone; that is a decision, not a leftover.
+
+**Changed**
+
+- The vendor card's purchase total counts every item ever bought from that
+  vendor, not just the ones still in the catalog. Retiring a coat was quietly
+  reducing what the department had spent with the vendor who sold it. The item
+  count still means the catalog as it stands, matching the list it links to.
+
+### Inventory: vendors are records, not a typed-in name (2026-08-16)
+
+**Added**
+
+- **Vendor tracking.** `inventory_vendors` gives each supplier one row per
+  organization — account number, main line, orders inbox, website, remit-to
+  address, payment terms, a preferred flag — and `inventory_vendor_contacts`
+  holds the named people at it (rep, service desk, accounts receivable) with
+  title, email, phone and extension. Exactly one contact is primary: flagging
+  one demotes the rest, and a vendor left with none promotes its first, so a
+  vendor card always names someone to call.
+- **Vendors screen** (`/inventory/admin/vendors`, `inventory.view` to read and
+  `inventory.manage` to change). Each card shows the contact details, the
+  primary contact, and live purchasing history: items bought from that vendor,
+  open reorders, and total purchased. The item count links to the catalog
+  filtered to that vendor (`/inventory/admin/items?vendor_id=…`).
+- **Items and reorder requests link to a vendor.** The item form and the reorder
+  form pick from the tracked list; picking a vendor on a reorder prefills its
+  primary contact. A name that is not on file can still be typed, exactly as
+  before.
+
+**Changed**
+
+- The CSV export and the item detail page now name the linked vendor, falling
+  back to the free-text value only for rows never linked. A CSV import whose
+  `Vendor` cell matches a vendor already on file links to it; an unrecognized
+  name stays free text rather than silently creating suppliers nobody reviewed.
+- Deactivating a vendor keeps every item and reorder pointing at it. Purchase
+  history for equipment still in service is the reason the record exists.
+
+**Migration**
+
+- `20260816_0003` (renumbered from `20260816_0002`, which the storage-area
+  barcode backfill already held) adds both tables and the `vendor_id` columns,
+  then backfills:
+  every distinct free-text vendor name already on file becomes a vendor
+  (case-folded per organization, first spelling wins) and the items and reorder
+  requests that named it are linked to it. The free-text columns are left in
+  place and unread where a link exists.
+
+### Security and privacy hardening batch (2026-08-16)
+
+Nine targeted fixes landed together, plus a follow-up red-team review
+([`docs/security/RED_TEAM_REVIEW_2026-08-16.md`](docs/security/RED_TEAM_REVIEW_2026-08-16.md))
+that confirmed no new critical or high-severity findings.
+
+**Security**
+
+- **Pending election nominations are no longer exposed through the member
+  candidate list.** `GET /elections/{id}/candidates` returns accepted
+  candidates only, unless the election is in its nominations phase (so nominees
+  can respond) or the caller holds `elections.manage`. Election managers still
+  see everything.
+- **Directory profiles no longer reveal account-security metadata.** A caller
+  with only `members.view` opening a colleague's profile no longer receives
+  `email_verified`, `mfa_enabled`, `last_login_at`, `created_at`, `updated_at`,
+  notification preferences, or the permission lists attached to the
+  colleague's roles. Role names remain visible because the profile displays
+  them. `users.view`, members-managers, and the subject themselves are exempt.
+- **`hire_date` joined the restricted profile fields.** It drives automatic
+  membership-tier advancement, so — like rank, station, platoon, and membership
+  number — it now requires leadership, the secretary, or the membership
+  coordinator, not merely `users.edit`.
+- **Finance email-approval tokens are consumed atomically.** The token row is
+  locked (`SELECT … FOR UPDATE`) while acting, and the token is cleared on
+  approve/deny, so a link can be used exactly once even under concurrent
+  clicks; a second attempt sees "already actioned," not a duplicate approval.
+- **Public form daily caps count only valid submissions.** The per-form daily
+  cap is now enforced inside the service after authorization and validation, so
+  bots tripping the honeypot and rejected payloads no longer burn a form's
+  daily allowance and deny service to legitimate submitters. Cap exhaustion
+  still returns `429`.
+- **Public rate limits survive Redis failures.** `is_rate_limited()` gained
+  `raise_on_error` so `public_rate_limit` falls back to its separate in-memory
+  limiter on Redis errors instead of silently failing open (fail-closed paths
+  such as login are unchanged).
+- **Equipment-check drafts are purged on shared-device logout** (red-team
+  finding RT-08, medium). The logout purge previously removed shift-report
+  drafts and offline queues but left `equipment-check-draft-*` keys in
+  `localStorage`, so the next member on a station computer could read the
+  previous member's apparatus results and notes.
+- **Production compose no longer inherits development bind mounts.**
+  `docker-compose.prod.yml` uses `volumes: !override` (requires Docker Compose
+  v2.24.4+) so the source-tree mounts from the development file are cleared
+  rather than merged into production.
+- **The Unraid example environment now shows an HTTPS origin.**
+  `unraid/.env.example` sets `ALLOWED_ORIGINS=https://logbook.yourdomain.com`;
+  the app enforces HTTPS in its default production posture, so the old
+  `http://192.168.1.10:7880` example could not work as shipped.
+
+### Test coverage is now measured honestly (2026-08-16)
+
+**Changed**
+
+- **Frontend coverage counts every source file.** Vitest 4 measures only files
+  a test imports unless `coverage.include` is set; that hid 384 of 758 source
+  files (48% of the frontend) and reported 60.32% lines where the honest figure
+  is 33.10%. The denominator is now the full `src/**/*.{ts,tsx}` tree
+  (Playwright specs excluded), and the ratchet floors were re-based against the
+  corrected measurement (31/23/25/30 lines/functions/branches/statements) — the
+  same suite measured honestly, not a regression.
+- **Backend coverage floor raised from 46 to 51,** matching today's 53.1%
+  measurement, and CI now gates `app/api`+`app/services`+`app/core`+`app/utils`
+  separately at 35 (measured 37.6%) so declarative model/schema bulk (~97%
+  covered by import alone) cannot absorb a regression in real business logic.
+- Added a Stryker mutation-testing pilot config (`frontend/stryker.pilot.json`
+  - `vitest.stryker.config.ts`). Pilot score: 90.6% on three well-covered
+    utilities; the surviving mutants cluster in the `apiCache.ts` eviction path.
+- Corrected CLAUDE.md pitfall #13: no lint rule guards bare
+  `toHaveBeenCalledWith()` — it is review discipline, and a blanket ban was
+  evaluated and rejected because the zero-argument form is the stronger, correct
+  assertion for genuinely zero-arity functions.
+
+### Onboarding session storage and dark-mode canvas (2026-08-15)
+
+**Security**
+
+- **The onboarding session identifier moved from `localStorage` to
+  `sessionStorage`.** An onboarding session can authorize setup mutations, so
+  it no longer survives a browser restart or leaks to unrelated tabs.
+  Identifiers persisted by older clients are removed on load, and
+  `clearSession()` sweeps both the new and legacy locations.
+  [`docs/ONBOARDING_FLOW.md`](docs/ONBOARDING_FLOW.md) documents the model.
+
+**Fixed**
+
+- **Dark mode outside the app shell no longer renders white-on-white.** The
+  themed gradient canvas moved from `body` to `html` so the stable scrollbar
+  gutter — which sits outside the body's box — is painted too, and pages
+  rendered outside `AppLayout` (public forms, ballots, status pages) composite
+  their translucent dark-mode surface tokens over the gradient instead of the
+  browser's default white.
+
+### Module API clients reject after a failed refresh (2026-08-14)
+
+**Fixed**
+
+- When a 401 retry's cookie refresh also fails, module axios clients
+  (`createApiClient`) now report the error and **reject the original request**
+  instead of returning `undefined` while the browser navigates to `/login` —
+  callers no longer continue against a missing response, and the expired
+  session is handled through the shared `handleExpiredSession()` path.
+
+### Documentation backfill: August 8–14 changes recovered by a history audit (2026-08-16)
+
+A commit-by-commit sweep of the repository's full history (which begins
+2026-08-08) found ~40 merged changes that never reached this changelog — five
+of them contradicted by the documentation then in force. The affected module
+docs, wiki pages, and training guides were corrected in the same pass; the
+disposition of every finding is recorded in
+[`docs/DOCUMENTATION_BACKFILL_2026-08-16.md`](docs/DOCUMENTATION_BACKFILL_2026-08-16.md).
+The entries below are dated by when the change actually merged.
+
+**Training & programs (2026-08-08)**
+
+- A program phase can **link an existing department requirement** instead of
+  only creating one inline (`RequirementLibraryPicker` in the create-pipeline
+  wizard and phase edit modals). Provenance is tracked in
+  `program_requirements.owns_requirement`: unlinking deletes the underlying
+  requirement only when the link created it, so removing the department's
+  shared CPR requirement from a recruit phase no longer deletes it out from
+  under every other program. Editing a linked-in requirement applies everywhere
+  it is used.
+- The **Requirements tab on `/training/programs` can edit requirements** —
+  per-card Edit and a New Requirement button using the shared
+  `RequirementModal`; previously the tab was read-only and changes required
+  the separate Training Admin page. Registry-imported requirements stay
+  read-only (the backend refuses updates to them).
+- Skills testing gained the `score_pass_fail_criteria` scoring model and
+  officer actions on the result page (candidate notification included) —
+  documented at the time in `docs/SKILLS_TESTING_FEATURE.md` §1.5/§21 but
+  never entered here.
+
+**Equipment checks & apparatus supply — authorization pass (2026-08-11)**
+
+- **Submitting a shift equipment check requires crewing the shift.**
+  `POST /equipment-checks/shifts/{id}/submit` now requires
+  `equipment_check.submit`/`.manage` and restricts ordinary submitters to
+  shifts they actively crew (`ASSIGNED`/`CONFIRMED`) or officer for; any
+  authenticated member could previously submit a check against any shift.
+- **Template reads are scoped to the submitter.** Without
+  `equipment_check.view`, template list/detail return only active templates
+  that are general or match the caller's own shift positions; a non-matching
+  template's compartment/item tree is a 404, not a disclosure.
+- **Corrections of record went manage-only.** Withdrawing a restock report and
+  swapping a lot now require `equipment_check.manage`/`inventory.manage`
+  (`equipment_check.submit` was dropped); editing a deployed lot's
+  `lot_number`/`expiration_date` is likewise guarded, while reporting usage
+  and quantity updates remain crew-level.
+- **A submitted check can no longer rewrite an item's expiration.**
+  `expiration_found` is recorded on the check but not written back onto the
+  template item — asserting a fresh date could clear an expired-item
+  auto-fail. Submitted items must belong to the named template.
+- Standalone checks **reject deactivated templates** (2026-08-12): managers
+  can still view/edit an inactive template, but no new check records can be
+  created from it.
+- **Bulk checklist→inventory link changes are audited** (`log_template_change`
+  with `inventory_links` and `changed_count`); the operation previously left
+  no trail.
+
+**Scheduling & shift reports (2026-08-11 → 08-12)**
+
+- **Shift completion reports are officer-released.** A trainee gets 404 on a
+  report that is not `approved` — unconditionally, even with the optional
+  second-review workflow off — and training/pipeline credit is applied only on
+  the transition to `approved`, never at `pending_review` (which could
+  previously credit early or double-credit). Reports also auto-populate
+  `tasks_performed` from the trainee's own equipment checks plus apparatus
+  name and shift start time.
+- **Shift check-in is bounded by a configurable window**:
+  `shift_reports.checklist_timing.checkin_opens_hours_before` (default 2) and
+  `checkin_closes_hours_after` (default 12) — a link to a shift that ended
+  last week is refused instead of stamping an arrival.
+
+**Cross-tenant, privacy, and enumeration fixes (2026-08-11)**
+
+- Instructor-qualification create/update validate that `user_id`, `course_id`,
+  `skill_evaluation_id`, and `category_id` belong to the caller's org, and
+  list joins are org-scoped — another tenant's names can no longer be resolved
+  through a colliding id.
+- Training requirement/progress reads **strip officer-only checklist steps**
+  (`member_visible: false`) and their ids for members without
+  `training.view_all`/`training.manage` — "references called" and similar
+  steps were being returned to the member they were about.
+- **Guest check-in no longer reveals prospect existence**: `prospect_created`
+  was removed from the public kiosk response (an unauthenticated caller could
+  probe whether a name/email was already a prospect); the "someone will follow
+  up" notice is driven client-side from the event's
+  `collects_prospect_details` flag.
+- `scripts/seed_skills_testing.py` dropped `--password`/`--examiner-password`
+  in favor of `LOGBOOK_PASSWORD`/`LOGBOOK_EXAMINER_PASSWORD` env vars or a
+  hidden prompt, keeping credentials out of shell history and `ps`.
+
+**Operations (2026-08-11)**
+
+- **Startup refuses the destructive fresh-database path on an unknown Alembic
+  revision.** When the stamped revision is not in the release, boot raises
+  `RuntimeError` instead of silently deleting `alembic_version` and re-running
+  fresh-install initialization — which could destroy a real installation whose
+  revision id had merely been renamed. Compatibility revision `20260809_0002`
+  keeps already-released databases upgradable. See
+  `docs/TROUBLESHOOTING.md` → "Migration version mismatch".
+
+**Security & correctness batch (2026-08-12 → 08-13)**
+
+- **Member-import rejected-rows CSV neutralizes formula injection** — cells
+  beginning `= + - @ \t \r` are apostrophe-prefixed in the client-side writer,
+  so a malicious member name can't execute when an admin opens the error file
+  in Excel (the earlier `SafeCsvWriter` fix covered server-side exports only).
+- **Duplicate skill credit closed**: shift-completion reports release
+  training/pipeline credit only when `approved` (see scheduling section
+  above); the same pass fixed crediting twice via `pending_review`.
+- **Duplicating a skill template copies its result-visibility settings**
+  (`result_disclosure`, `result_release`, `result_viewer_positions`) instead
+  of silently falling back to defaults that widened who could see results.
+- **PWA updates land in one reload.** Proactive service-worker checks on app
+  resume + a 30-minute interval; "Reload now" waits for the fresh worker to
+  take control before reloading (previously the reload was often served by the
+  old worker's cached shell); stale-chunk loads self-heal through the same
+  path; `sw.js`/`registerSW.js`/`push-sw.js` are exempted from the 1-year
+  immutable cache header in both nginx configs, and update checks bypass the
+  HTTP cache.
+- **`Permissions-Policy` camera directive changed from `camera=()` to
+  `camera=(self)`** in the app's security middleware and both nginx configs so
+  the barcode scanner works; operators mirroring headers on their own proxies
+  need the same change. A lifecycle guard releases the camera when the scanner
+  modal closes.
+- **Onboarding role saves no longer smuggle invisible grants.** The
+  two-checkbox (View/Manage) position editor rebuilds permission lists; only
+  an explicit allow-list of read-only sub-permissions (currently
+  `facilities.view_sensitive`) survives, so action grants like
+  `members.assign_positions` no longer outlive an admin clearing Manage.
+  Roles saved before this may still carry legacy invisible grants — review in
+  Role Management.
+- **Compliance permissions tightened**: report generation is `training.manage`
+  only (`reports.manage` dropped — it manages saved definitions, not
+  member-level data); config/report reads dropped `compliance.view`.
+- **Dues ledger scoped to its owner**: `GET /finance/dues/{id}/payments`
+  filters by the member's own `user_id` unless the caller holds
+  `finance.manage`.
+- **Waiver reasons stay out of the immutable audit log** — reversing this
+  changelog's earlier 2026-08-02/04 design: un-waiving dues erases the
+  free-text `waive_reason` outright instead of copying it into the
+  `finance.dues_waiver_reversed` event, because waiver reasons may carry
+  personal information that must remain reachable by privacy scrubbing.
+- **Member hard-delete rejections no longer enumerate the blocking records**,
+  closing an information-disclosure channel; the error states that dependent
+  records exist without listing them.
+- **Marking an expense report paid no longer crashes** — the
+  separation-of-duties guard referenced a nonexistent `requested_by`
+  attribute; it now compares against `submitted_by`.
+- **Waived storefront orders report a zero balance** everywhere (order detail,
+  notifications, service) instead of showing an outstanding balance and
+  generating collection notices.
+- **Election feature toggles reject explicit `null`** (`nominations_enabled`,
+  `paper_ballots_enabled`, `reminders_enabled`, `auto_open_enabled`) with a
+  validation error; legacy persisted nulls resolve to `true`.
+- **Approving a training submission verifies the credit actually applied** —
+  a failed apply (e.g. the enrollment vanished after pre-flight) returns 400
+  instead of reporting success on a no-op.
+- **Voiding a never-validated skill test no longer notifies the candidate** —
+  an unvalidated official result was only a placeholder, so its withdrawal
+  and reason stay undisclosed.
+- **Prospect pipeline concurrency hardened**: `SELECT … FOR UPDATE` locking in
+  the state machine plus a unique index on `(prospect_id, step_id)` — the
+  index lives in the model (`create_all`), so fresh installs enforce it;
+  existing installations are protected by the locking and can add the index
+  after deduplicating.
+- **Role endpoints constrain `{role_id}` to UUIDs**, so static sub-paths are
+  no longer swallowed by the dynamic detail route.
+- **Property-return delivery email moved outside the request's DB session** —
+  a slow SMTP server can no longer hold a pooled connection for its full
+  timeout.
+- Error logs **redact token-bearing route params** (`sanitize_path` covers
+  finance approval tokens, application-status tokens, `.ics` calendar
+  tokens) before persistence.
+- The public-portal timestamp migration **converts offset-aware values to UTC
+  instead of truncating the offset** — the earlier form discarded valid API-key
+  expirations, creating non-expiring keys; installations that ran the old
+  revision should review key expirations.
+
+**Navigation & UI (2026-08-13)**
+
+- The sidebar entry **"Events Admin" was renamed "Manage Events"** and points
+  at `/events`; Create and Settings deep-link into the admin hub via
+  `/events/admin?tab=create` / `?tab=settings`.
+- **Apparatus fleet-summary cards and admin actions are hidden without the
+  manage/create/edit permissions** — members see their apparatus list without
+  the admin affordances, and the summary fetch is skipped entirely.
+
 ### Facilities: rooms can sit inside other rooms (2026-08-16)
 
 **Added**
@@ -31,6 +512,143 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stored below it. The confirmation says so before you commit.
 - The room form now sends explicit nulls on save, so clearing a field (floor,
   capacity, description) persists instead of silently keeping the old value.
+
+### Six-day release documentation rollup (2026-08-16)
+
+**Documentation**
+
+- Published [`docs/CHANGE_AUDIT_2026-08-10_TO_16.md`](docs/CHANGE_AUDIT_2026-08-10_TO_16.md),
+  the six-day frame around the existing three-day audit. It adds what a
+  three-day window could not show: the five routes added across the window with
+  their real permission gates, the full 28-revision Alembic route from
+  `20260809_0002` to the then-head `20260814_0004`, the supply-loop and
+  restock data paths, a client-side storage map, and the 08-15 → 08-16 changes
+  that had no coverage anywhere. The
+  [three-day audit](docs/CHANGE_AUDIT_2026-08-12_TO_14.md) remains authoritative
+  for 08-12 → 08-14.
+- **A YouTube script told installers to do the thing that now loses their
+  work.** Script 02's Welcome Screen narration read _"the wizard auto-saves your
+  progress, so if you need to step away or your browser closes, you'll pick up
+  right where you left off."_ That became false on 2026-08-15, and it was already
+  misleading — the onboarding session has always expired after 30 minutes idle.
+  Nothing in the series had been recorded yet, which is the cheap moment to catch
+  this. Rewritten in `02-first-time-setup-and-onboarding.md` with the
+  one-tab/one-sitting caution and the refilled-form trap, plus an EDITOR note:
+  every timecode from Chapter 2 onward re-times (~45–70 seconds added).
+- The skills-testing guide had **no printing section at all**, though both print
+  routes shipped 2026-08-11. Added, with the disclosure rules that decide what a
+  printed scorecard may contain and why neither route is gated on
+  `training.manage`.
+- **Four trackers had drifted and are corrected at the source.** The Alembic
+  "Current Head" banner still named `20260812_0001` — four revisions and one
+  merge behind the real head, which is exactly the staleness that causes a new
+  migration to be chained onto a dead branch. `APPLICATION_PAGES.md` was missing
+  five routes that had been live for days (`/learning`, `/locations/qr-codes`,
+  `/scheduling/apparatus-inventory`, and the two skills-testing print pages).
+  `ONBOARDING.md` still described the session identifier as living in
+  `localStorage`. The public-page dark-mode troubleshooting entry still said
+  `body` carries the canvas.
+
+### Onboarding: the setup session no longer outlives the tab (2026-08-15)
+
+**Security**
+
+- **The onboarding session identifier moved from `localStorage` to
+  `sessionStorage`.** It is a bearer credential — presented as `X-Session-ID`, it
+  authorizes the mutations that create the organization, its stations and
+  apparatus, the IT team, and the first System Owner. In `localStorage` it
+  survived browser restarts indefinitely and was readable from every tab on the
+  origin, which on a shared or station-kiosk machine is a standing grant to
+  finish somebody else's installation. It now ends with the tab.
+- Identifiers written by the previous build are deleted on the first page load
+  of the new one, in both `loadSession()` and `clearSession()`, so a browser
+  carrying a stale identifier drops it rather than presenting it.
+- The CSRF companion (`onboarding_csrf_token`, `SameSite=Strict` cookie) and the
+  server's 30-minute sliding session TTL are unchanged. No endpoint, schema,
+  model, migration, or permission changed.
+
+**Edge cases worth teaching**
+
+- **Onboarding is now one tab, one sitting.** A second tab does not inherit the
+  wizard — it starts a new server session, and a step that needs an established
+  one answers `401` / `ONBD_SESSION_INVALID`. (A _duplicated_ tab does carry the
+  identifier, because Chrome and Firefox copy `sessionStorage` into duplicates.
+  That is browser behavior, not a supported resume path.)
+- **The wizard can look resumable when it is not.** The typed answers live in
+  `localStorage` under `onboarding-storage` and are untouched by this change, so
+  reopening `/onboarding` after a restart repaints them. The failure surfaces at
+  the next mutating step, not at the repaint. The recovery is to restart the
+  wizard, not to re-type.
+- Seeing "Onboarding has already been completed" (`403` /
+  `ONBD_ALREADY_COMPLETED`) is a _different_ condition — the install finished and
+  the operator should sign in, not restart setup.
+
+### Interface: the scrollbar gutter stopped showing through in dark mode (2026-08-15)
+
+**Fixed**
+
+- **A bright strip ran down the right edge of every page in dark mode.** The
+  dark-mode surface tokens are translucent white by design — they composite over
+  the themed gradient. `scrollbar-gutter: stable` reserves its gutter on `html`,
+  **outside the body box**, so painting the gradient on `body` left that strip
+  showing the browser's default canvas. The gradient now sits on `html`, which is
+  also what reserves the gutter, and `scrollbar-gutter` folds into the same rule.
+  Painting the gutter a flat fallback colour was the alternative and was
+  rejected: it trades the seam for a different seam.
+- `overscroll-behavior: none` deliberately stayed on `body` — iOS bounce
+  suppression is a body concern.
+
+**Two regressions it introduced, found and fixed 2026-08-16**
+
+Both follow from one CSS rule nobody restated: a `body` background propagates to
+the window **only** while the root element's `background-image` is `none` and its
+`background-color` is `transparent`. Once `html` is painted, nothing on `body`
+propagates — and two things were relying on it.
+
+- **Six in-app print routes lost their screen backdrop.** `print/template`,
+  `print/scorecard`, `training/print/member`, `training/print/program`,
+  `training/print/compliance` and `scheduling/shift-reports/print` each carried
+  their own copy of `@media screen { body { background: #f3f4f6 } }`, putting a
+  grey desk behind a white letter-size sheet. That grey had been painting the
+  body box alone while the app gradient framed it — a dark gradient around a
+  white sheet in dark mode. Cosmetic; printed output was never affected.
+
+  All six now render **`components/print/PrintPageStyles`**, which marks the root
+  element so a single `html.print-preview` rule beside the canvas rule in
+  `index.css` supplies the desk. **The duplication was the actual defect** — six
+  copies of a rule, none of them naming what they depended on, is why one global
+  change altered six pages invisibly. `InventoryBarcodePrintPage` and
+  `LabelPrintPage` were never affected: they `document.write` into a fresh
+  iframe, so the app stylesheet never reaches them.
+
+- **The `@media print` reset missed `html` — in light mode only.** It reset
+  `body, main, .dark`, and because `ThemeContext` puts the `dark` class on
+  `document.documentElement`, **dark mode was covered by accident while light
+  mode was not.** Browsers do not print background images by default, so ordinary
+  printing was unaffected; a reader who enabled "Background graphics" to print a
+  scorecard, skill sheet, label or QR sign could get the gradient behind it in
+  light mode. `html` is now named explicitly, which also makes the `.dark`
+  coverage intentional rather than incidental.
+
+**Neither would have been caught, because nothing asserted the canvas contract.**
+`PrintPageStyles.test.tsx` now guards all three invariants — the canvas belongs
+to the root, the print-preview override sits on the root beside it, and the print
+reset names the root. It reads the stylesheet rather than a rendered page on
+purpose: jsdom does not apply the real cascade, so no DOM assertion could catch
+this class of break. Each assertion was verified by re-introducing the exact
+regression it guards.
+
+**Screenshot impact**
+
+- **39 captured images show the unpainted gutter**, found with
+  `scripts/screenshots/audit_images.py --check edges`. Only one is a dark-mode
+  page; the other 38 are **light-mode captures of modal dialogs**, where the
+  overlay darkens the viewport but sits inside `body`, leaving the gutter white
+  behind it. The trigger is dark content at the right edge, not the theme — do
+  not skip light-mode captures on the assumption that this is a dark-mode defect.
+  Only the dark page (`10-11-public-form-dark`) is worth re-shooting on its own;
+  the rest change by a pale 15px strip. Queued in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
 
 ### YouTube scripts: August release changes are written into the takes (2026-08-14)
 
@@ -180,7 +798,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ballot_template_created` / `ballot_template_deleted`.
 
   Three design decisions worth knowing:
-
   - **Configuration only, by construction.** A template snapshots ballot
     _structure_ — never candidates, voter rosters, votes, tokens, or
     attendance. The create schema is `extra="forbid"`, so a payload that tries
@@ -530,7 +1147,6 @@ reading it. This batch:
   page held its tab in plain `useState('templates')`, so `?tab=footers` — or any
   other value — landed on Templates. Two costs, and the second is what made this
   worth fixing rather than noting:
-
   - A secretary could not send a colleague a link to the **footer library**,
     which is the tab a colleague is most likely to be pointed at.
   - The screenshot harness could only ever capture the default tab. That is
@@ -1426,7 +2042,6 @@ reported by a test.
   plausible success rather than an error it can adapt to.
 
   **Edge cases worth knowing:**
-
   - **Guests get the organizer's check-in window, minus the early-arrival
     grace.** A member may check in before a flexible window opens because a
     member checking in early is identifiable and correctable. An anonymous early
@@ -1468,7 +2083,6 @@ reported by a test.
 
 - **A cleared field came back after a reload, with a success toast in between.**
   Both ends of the request dropped the clear, independently:
-
   - **Backend.** Every update method guarded its writes with
     `if value is not None: setattr(...)`. Update payloads are `exclude_unset`
     dumps, so a null arriving at the service is an _explicit_ null — the user
@@ -1539,7 +2153,6 @@ reported by a test.
 
   All 33 `window.confirm` call sites across 23 files, and all four
   `window.prompt` call sites, now use in-app dialogs. Notably:
-
   - **Voiding a paper-ballot batch** also dropped any reason shorter than three
     characters the same silent way — a secretary who typed "PM" got no batch
     voided and no message.

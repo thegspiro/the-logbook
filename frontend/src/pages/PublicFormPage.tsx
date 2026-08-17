@@ -108,8 +108,7 @@ const PublicFormPage = () => {
 
   const renderField = (field: PublicFormField) => {
     const value = formData[field.id] || '';
-    const baseInputClass =
-      'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-theme-text-primary placeholder-theme-text-muted';
+    const baseInputClass = 'form-input py-3';
 
     switch (field.field_type) {
       case FieldType.TEXT:

@@ -188,7 +188,7 @@ export const EventCreatePage: React.FC = () => {
             <select
               value={selectedTemplateId}
               onChange={handleTemplateChange}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none sm:w-96"
+              className="form-input px-3 text-sm focus:ring-red-500 sm:w-96"
             >
               <option value="">— No template —</option>
               {templates.map((t) => (

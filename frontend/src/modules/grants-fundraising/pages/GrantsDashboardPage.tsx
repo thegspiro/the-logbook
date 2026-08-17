@@ -95,7 +95,7 @@ interface KpiCardProps {
 
 const KpiCard: React.FC<KpiCardProps> = ({ label, value, icon, iconBgClass, linkTo }) => {
   const content = (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 transition-shadow hover:shadow-md">
+    <div className="card p-4 transition-shadow hover:shadow-md">
       <div className="flex items-center gap-3">
         <div className={`rounded-lg p-2 ${iconBgClass}`}>{icon}</div>
         <div className="min-w-0 flex-1">
@@ -124,7 +124,7 @@ const DashboardSkeleton: React.FC = () => (
     {/* KPI Row 1 */}
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={`kpi1-${String(i)}`} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+        <div key={`kpi1-${String(i)}`} className="card p-4">
           <div className="flex items-center gap-3">
             <Skeleton className="h-10 w-10" rounded="lg" />
             <div className="flex-1 space-y-2">
@@ -139,7 +139,7 @@ const DashboardSkeleton: React.FC = () => (
     {/* KPI Row 2 */}
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={`kpi2-${String(i)}`} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+        <div key={`kpi2-${String(i)}`} className="card p-4">
           <div className="flex items-center gap-3">
             <Skeleton className="h-10 w-10" rounded="lg" />
             <div className="flex-1 space-y-2">
@@ -152,7 +152,7 @@ const DashboardSkeleton: React.FC = () => (
     </div>
 
     {/* Pipeline Summary */}
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+    <div className="card p-4">
       <Skeleton className="mb-3 h-5 w-40" />
       <div className="flex flex-wrap gap-2">
         {Array.from({ length: 8 }).map((_, i) => (
@@ -163,7 +163,7 @@ const DashboardSkeleton: React.FC = () => (
 
     {/* Two-column section */}
     <div className="grid gap-6 lg:grid-cols-2">
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+      <div className="card">
         <div className="border-theme-surface-border border-b p-4">
           <Skeleton className="h-5 w-44" />
         </div>
@@ -173,7 +173,7 @@ const DashboardSkeleton: React.FC = () => (
           </div>
         ))}
       </div>
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+      <div className="card">
         <div className="border-theme-surface-border border-b p-4">
           <Skeleton className="h-5 w-44" />
         </div>
@@ -186,7 +186,7 @@ const DashboardSkeleton: React.FC = () => (
     </div>
 
     {/* Recent Donations Table */}
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+    <div className="card">
       <div className="border-theme-surface-border border-b p-4">
         <Skeleton className="h-5 w-36" />
       </div>
@@ -222,7 +222,7 @@ const PipelineSummary: React.FC<PipelineSummaryProps> = ({ items }) => {
   const statusMap = new Map(items.map((item) => [item.status, item]));
 
   return (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+    <div className="card p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-theme-text-primary text-sm font-semibold">Grant Pipeline</h2>
         <Link to="/grants/applications" className="text-xs font-medium text-red-600 hover:text-red-700">
@@ -262,7 +262,7 @@ interface UpcomingDeadlinesProps {
 }
 
 const UpcomingDeadlines: React.FC<UpcomingDeadlinesProps> = ({ deadlines, timezone }) => (
-  <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+  <div className="card">
     <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
       <div className="flex items-center gap-2">
         <CalendarClock className="text-theme-text-secondary h-4 w-4" />
@@ -320,7 +320,7 @@ interface ComplianceTasksProps {
 }
 
 const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({ tasks, timezone }) => (
-  <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+  <div className="card">
     <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
       <div className="flex items-center gap-2">
         <ClipboardCheck className="text-theme-text-secondary h-4 w-4" />
@@ -385,7 +385,7 @@ interface RecentDonationsProps {
 }
 
 const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timezone }) => (
-  <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+  <div className="card">
     <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
       <div className="flex items-center gap-2">
         <HandCoins className="text-theme-text-secondary h-4 w-4" />

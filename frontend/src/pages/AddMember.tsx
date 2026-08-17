@@ -305,9 +305,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.firstName}
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                    errors.firstName ? 'border-red-500' : 'border-theme-input-border'
-                  } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                  className={`form-input ${errors.firstName ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="John"
                 />
                 {errors.firstName && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.firstName}</p>}
@@ -332,9 +330,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.lastName}
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                    errors.lastName ? 'border-red-500' : 'border-theme-input-border'
-                  } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                  className={`form-input ${errors.lastName ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="Doe"
                 />
                 {errors.lastName && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.lastName}</p>}
@@ -350,9 +346,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.membershipNumber}
                   onChange={(e) => handleInputChange('membershipNumber', e.target.value)}
-                  className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                    errors.membershipNumber ? 'border-red-500' : 'border-theme-input-border'
-                  } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                  className={`form-input ${errors.membershipNumber ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="FF-001"
                 />
                 {errors.membershipNumber && (
@@ -411,9 +405,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.street}
                   onChange={(e) => handleInputChange('street', e.target.value)}
-                  className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                    errors.street ? 'border-red-500' : 'border-theme-input-border'
-                  } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                  className={`form-input ${errors.street ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="123 Main Street"
                 />
                 {errors.street && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.street}</p>}
@@ -428,9 +420,7 @@ const AddMember: React.FC = () => {
                     type="text"
                     value={formData.city}
                     onChange={(e) => handleInputChange('city', e.target.value)}
-                    className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                      errors.city ? 'border-red-500' : 'border-theme-input-border'
-                    } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                    className={`form-input ${errors.city ? 'border-red-500' : 'border-theme-input-border'}`}
                     placeholder="Springfield"
                   />
                   {errors.city && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.city}</p>}
@@ -444,9 +434,7 @@ const AddMember: React.FC = () => {
                     type="text"
                     value={formData.state}
                     onChange={(e) => handleInputChange('state', e.target.value)}
-                    className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                      errors.state ? 'border-red-500' : 'border-theme-input-border'
-                    } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                    className={`form-input ${errors.state ? 'border-red-500' : 'border-theme-input-border'}`}
                     placeholder="IL"
                     maxLength={2}
                   />
@@ -461,9 +449,7 @@ const AddMember: React.FC = () => {
                     type="text"
                     value={formData.zipCode}
                     onChange={(e) => handleInputChange('zipCode', e.target.value)}
-                    className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                      errors.zipCode ? 'border-red-500' : 'border-theme-input-border'
-                    } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                    className={`form-input ${errors.zipCode ? 'border-red-500' : 'border-theme-input-border'}`}
                     placeholder="62701"
                   />
                   {errors.zipCode && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.zipCode}</p>}
@@ -488,9 +474,7 @@ const AddMember: React.FC = () => {
                   type="tel"
                   value={formData.primaryPhone}
                   onChange={(e) => handleInputChange('primaryPhone', e.target.value)}
-                  className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                    errors.primaryPhone ? 'border-red-500' : 'border-theme-input-border'
-                  } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                  className={`form-input ${errors.primaryPhone ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.primaryPhone && (
@@ -517,9 +501,7 @@ const AddMember: React.FC = () => {
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                    errors.email ? 'border-red-500' : 'border-theme-input-border'
-                  } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                  className={`form-input ${errors.email ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="john.doe@example.com"
                 />
                 {errors.email && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email}</p>}
@@ -597,9 +579,7 @@ const AddMember: React.FC = () => {
                             });
                           }
                         }}
-                        className={`bg-theme-input-bg w-full border px-4 py-2 pr-10 ${
-                          errors.password ? 'border-red-500' : 'border-theme-input-border'
-                        } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                        className={`form-input pr-10 ${errors.password ? 'border-red-500' : 'border-theme-input-border'}`}
                         placeholder="Minimum 12 characters"
                         autoComplete="new-password"
                       />
@@ -633,9 +613,7 @@ const AddMember: React.FC = () => {
                           });
                         }
                       }}
-                      className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                        errors.confirmPassword ? 'border-red-500' : 'border-theme-input-border'
-                      } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                      className={`form-input ${errors.confirmPassword ? 'border-red-500' : 'border-theme-input-border'}`}
                       placeholder="Re-enter password"
                       autoComplete="new-password"
                     />
@@ -779,9 +757,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyName1}
                   onChange={(e) => handleInputChange('emergencyName1', e.target.value)}
-                  className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                    errors.emergencyName1 ? 'border-red-500' : 'border-theme-input-border'
-                  } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                  className={`form-input ${errors.emergencyName1 ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="Jane Doe"
                 />
                 {errors.emergencyName1 && (
@@ -797,9 +773,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyRelationship1}
                   onChange={(e) => handleInputChange('emergencyRelationship1', e.target.value)}
-                  className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                    errors.emergencyRelationship1 ? 'border-red-500' : 'border-theme-input-border'
-                  } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                  className={`form-input ${errors.emergencyRelationship1 ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="Spouse"
                 />
                 {errors.emergencyRelationship1 && (
@@ -815,9 +789,7 @@ const AddMember: React.FC = () => {
                   type="tel"
                   value={formData.emergencyPhone1}
                   onChange={(e) => handleInputChange('emergencyPhone1', e.target.value)}
-                  className={`bg-theme-input-bg w-full border px-4 py-2 ${
-                    errors.emergencyPhone1 ? 'border-red-500' : 'border-theme-input-border'
-                  } text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg focus:ring-2 focus:outline-hidden`}
+                  className={`form-input ${errors.emergencyPhone1 ? 'border-red-500' : 'border-theme-input-border'}`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.emergencyPhone1 && (

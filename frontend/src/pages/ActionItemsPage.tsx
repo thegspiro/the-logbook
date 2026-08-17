@@ -146,7 +146,7 @@ const ActionItemsPage: React.FC = () => {
           {items.map((item) => (
             <div
               key={`${item.source}-${item.id}`}
-              className="card-secondary hover:bg-theme-surface-hover cursor-pointer p-4 transition-colors"
+              className="card-secondary hover:bg-theme-surface-hover cursor-pointer p-4"
               onClick={() => {
                 if (item.source === 'meeting') {
                   void navigate(`/minutes`);

@@ -526,6 +526,23 @@ class TestProfileEndpointAccessControl:
         assert result.updated_at is None
         assert result.notification_preferences is None
 
+    async def test_members_manage_reads_other_records_unredacted(self):
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.manage"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.username == "jsmith"
+        # members.manage is the leadership grant: contact info, emergency
+        # contacts and account metadata all come through unredacted.
+        assert result.phone == "555-0100"
+        assert result.emergency_contacts != []
+        assert result.email_verified is True
+
     async def test_users_view_retains_account_metadata(self):
         subject = _member()
         caller = _caller(
