@@ -9,8 +9,8 @@
  *
  * localStorage (under an org-scoped SETTINGS_KEY) is kept as a read-only
  * mirror of the last-known server value: it is the offline/API-failure
- * fallback and the source for the one-time migration of pre-backend settings —
- * never the primary store.
+ * fallback and is never the primary store. Legacy values without an
+ * organization suffix are intentionally ignored.
  *
  * Lives in its own file (not services/api.ts) with its own client from the
  * shared factory, which carries the standard cookie/CSRF/refresh setup.
@@ -61,26 +61,6 @@ const mergeWithDefaults = (partial: Partial<ShiftSettings>): ShiftSettings => ({
  *  scope it to — in which case nothing is read from or written to the mirror. */
 const mirrorKey = (orgId: string | null): string | null => (orgId ? `${SETTINGS_KEY}:${orgId}` : null);
 
-/**
- * Adopt the pre-backend, pre-org-scoping key on behalf of one organization.
- *
- * That blob carries no tenant, so it is re-filed under the first signed-in
- * organization that looks for a mirror and the untagged copy is deleted: the
- * one-time migration still works for the department whose browser this is, and
- * no second department can ever pick the same blob up.
- */
-const adoptLegacyMirror = (scopedKey: string): Partial<ShiftSettings> | null => {
-  try {
-    const legacy = localStorage.getItem(SETTINGS_KEY);
-    if (!legacy) return null;
-    localStorage.setItem(scopedKey, legacy);
-    localStorage.removeItem(SETTINGS_KEY);
-    return JSON.parse(legacy) as Partial<ShiftSettings>;
-  } catch {
-    return null;
-  }
-};
-
 const readLocalSettings = (orgId: string | null): Partial<ShiftSettings> | null => {
   const key = mirrorKey(orgId);
   if (!key) return null;
@@ -90,7 +70,7 @@ const readLocalSettings = (orgId: string | null): Partial<ShiftSettings> | null 
   } catch {
     return null;
   }
-  return adoptLegacyMirror(key);
+  return null;
 };
 
 const mirrorToLocalStorage = (settings: ShiftSettings, orgId: string | null): void => {
@@ -153,9 +133,10 @@ export const shiftSettingsService = {
  * Load the department settings, treating the backend as the source of truth.
  *
  * `migrateLocal` (settings panel only — it requires scheduling.manage):
- * when the backend has never stored settings but this browser's localStorage
- * has a pre-backend copy, push that copy up once, best-effort, so the first
- * admin to open the panel donates their settings to the whole department.
+ * when the backend has never stored settings but this browser has a mirror
+ * explicitly scoped to the current organization, push that copy up once,
+ * best-effort. Untagged legacy values are never migration candidates because
+ * their owning organization cannot be verified.
  * Other callers must not pass it: a plain member would just collect a 403.
  *
  * When the API call fails entirely (offline), the localStorage mirror is the

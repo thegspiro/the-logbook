@@ -35,8 +35,14 @@ export const isValidEmailSecure = (email: string): boolean => {
 
   if (!emailRegex.test(email)) return false;
 
-  // Prevent email injection
-  if (email.includes('\n') || email.includes('\r') || email.includes('%0a') || email.includes('%0d')) {
+  // Prevent email header injection.
+  //
+  // The percent-encoded forms are matched case-insensitively on purpose:
+  // RFC 3986 prefers UPPERCASE hex digits, so `%0A` is the canonical spelling
+  // of an encoded newline and is what an attacker is most likely to send. A
+  // case-sensitive check for `%0a` alone lets the canonical form straight
+  // through, which is the opposite of the intent.
+  if (/[\r\n]/.test(email) || /%0[ad]/i.test(email)) {
     return false;
   }
 

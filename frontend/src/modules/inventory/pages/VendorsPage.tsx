@@ -1000,7 +1000,9 @@ export const VendorsPage: React.FC = () => {
         }),
         // Never fatal: the list is worth showing even if the cleanup prompt
         // cannot be worked out.
-        inventoryService.getUnlinkedVendorNames().catch(() => [] as UnlinkedVendorName[]),
+        canManage
+          ? inventoryService.getUnlinkedVendorNames().catch(() => [] as UnlinkedVendorName[])
+          : Promise.resolve([] as UnlinkedVendorName[]),
       ]);
       setVendors(data);
       setUnlinked(names);
@@ -1009,7 +1011,7 @@ export const VendorsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, includeInactive]);
+  }, [search, includeInactive, canManage]);
 
   useEffect(() => {
     void load();

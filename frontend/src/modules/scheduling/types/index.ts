@@ -156,6 +156,39 @@ export interface SchedulingEligibilitySettings {
   open_positions: string[];
 }
 
+/** Why a member holds a position: their rank, a completed program, or an
+ *  org-wide open position. `label` names the specific rank or program. */
+export interface PositionEligibilitySource {
+  type: 'rank' | 'training' | 'open';
+  label: string;
+}
+
+export interface RosterApparatusClearance {
+  apparatus_id: string;
+  unit_number: string;
+  certification_expiration: string | null;
+}
+
+export interface PositionRosterMember {
+  user_id: string;
+  user_name: string;
+  rank: string | null;
+  rank_display_name: string | null;
+  membership_type: string;
+  platoon: string | null;
+  sources: PositionEligibilitySource[];
+  evoc_level_number: number | null;
+  evoc_level_name: string | null;
+  apparatus_cleared: RosterApparatusClearance[];
+}
+
+export interface PositionRosterResponse {
+  position: string;
+  members: PositionRosterMember[];
+  excluded_membership_types: string[];
+  is_open_position: boolean;
+}
+
 // ============================================================================
 // Pattern Create/Update/Generate
 // ============================================================================

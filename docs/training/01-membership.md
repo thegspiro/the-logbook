@@ -1393,12 +1393,23 @@ Key integration points:
 That permission does **not** authorize the ID-card scanner. Scanning requires
 `users.view` or `members.manage`, because a scan is an elevated lookup rather
 than ordinary roster browsing. Side and top navigation use the same OR rule as
-the protected routes, so a visible Scanner link should never lead to an access
+the protected routes, so a visible scanner link should never lead to an access
 denial for an otherwise authorized user.
+
+**The link is called Scan Member ID**, and it sits under **Members** in the
+Administration section — not in the member-facing roster item, which is the
+directory itself and is called simply **Members**.
 
 **Edge cases:** members can still open their own record; a redacted colleague
 profile does not expose elevated administrative fields; possessing either
 scanner permission is sufficient; removing the last qualifying permission
 removes the navigation entry and blocks direct-route access.
 
-> **[SCREENSHOT NEEDED — side-by-side navigation for a `members.view`-only role and a `users.view` role, showing Directory for both and Scanner only for the elevated role.]**
+![The Administration section's Members group expanded, Scan Member ID among its links](./images/01-39-scan-member-id-nav.png)
+
+The contrast this rule produces takes two sign-ins and so cannot be one
+picture. Above is the elevated side — the group holding **Scan Member ID**.
+For the other side, the member sidebar in the
+[Getting Started guide](./00-getting-started.md) shows what a holder of
+ordinary roster permissions sees: **Members** is present, and there is no
+Administration section for the scanner to appear in.
