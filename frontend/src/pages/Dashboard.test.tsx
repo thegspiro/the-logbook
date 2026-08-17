@@ -280,6 +280,51 @@ describe('Dashboard', () => {
       expect(screen.getByText(/1 more through/)).toBeInTheDocument();
     });
 
+    // On a phone the three quick actions sit below this list, where a thumb
+    // reaches. Six rows of shift detail push them off the first screen, so the
+    // week collapses to two rows and one line naming the rest.
+    it('shows two rows on a phone and names the rest on one line', async () => {
+      mockGetOpenShifts.mockResolvedValue(
+        Array.from({ length: 4 }, (_, i) => makeShift({ id: `open-${i}`, shift_date: inWindow(i) }))
+      );
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('button', { name: /Open Shift, and 1 more/ });
+      const shiftRows = screen.getAllByRole('listitem').filter((row) => row.textContent?.includes('Open Shift'));
+      expect(shiftRows.slice(0, 2).every((row) => !row.className.includes('hidden'))).toBe(true);
+      expect(shiftRows[2]).toHaveClass('hidden', 'sm:list-item');
+      expect(shiftRows[3]).toHaveClass('hidden', 'sm:list-item');
+      expect(screen.getByRole('button', { name: /Open Shift, and 1 more/ })).toBeInTheDocument();
+      // The footer would otherwise read "Nothing else through …" directly under
+      // a line promising another row.
+      expect(screen.getByTestId('timeline-footer')).toHaveClass('hidden', 'sm:block');
+    });
+
+    it('reveals the rest of the week, with its sign-up buttons, when the line is tapped', async () => {
+      mockGetOpenShifts.mockResolvedValue(
+        Array.from({ length: 4 }, (_, i) => makeShift({ id: `open-${i}`, shift_date: inWindow(i) }))
+      );
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /Open Shift, and 1 more/ }));
+
+      const shiftRows = screen.getAllByRole('listitem').filter((row) => row.textContent?.includes('Open Shift'));
+      expect(shiftRows.every((row) => !row.className.includes('hidden'))).toBe(true);
+      expect(screen.getAllByRole('button', { name: /^Sign Up$/ })).toHaveLength(4);
+    });
+
+    it('leaves a short week alone', async () => {
+      mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-0', shift_date: inWindow(1) })]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: /^Sign Up$/ })).toBeInTheDocument();
+      expect(screen.getByText(/Nothing else through/)).toBeInTheDocument();
+    });
+
     it('signs the member up for an open shift', async () => {
       mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1' })]);
 

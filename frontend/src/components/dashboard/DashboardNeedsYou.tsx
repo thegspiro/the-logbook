@@ -1,5 +1,5 @@
-import React from 'react';
-import { ShieldAlert, Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronDown, ShieldAlert, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /**
@@ -22,6 +22,14 @@ interface DashboardNeedsYouProps {
   items: NeedsYouItem[];
 }
 
+/**
+ * Rows a phone shows before collapsing the rest onto one tap-through line.
+ * A 44px action button per row is most of a small screen: at three rows the
+ * three quick actions below the week fall past the fold, which is the reach
+ * a member has at 2am. Every row is still one tap away.
+ */
+const MOBILE_ROWS_SHOWN = 2;
+
 const TONE_CLASSES: Record<NonNullable<NeedsYouItem['tone']>, string> = {
   primary: 'border border-transparent bg-red-600 text-white hover:bg-red-700 active:bg-red-800',
   warning:
@@ -38,6 +46,15 @@ const TONE_CLASSES: Record<NonNullable<NeedsYouItem['tone']>, string> = {
  * entirely when the list is empty, so a quiet week costs no vertical space.
  */
 const DashboardNeedsYou: React.FC<DashboardNeedsYouProps> = ({ items }) => {
+  // Collapsing is a phone concern only, and which rows are on screen is decided
+  // by CSS rather than a measured viewport — the rows exist in the markup at
+  // every width, so a resize can never leave the panel showing a summary line
+  // for rows that are already visible beside it.
+  const [showAllOnMobile, setShowAllOnMobile] = useState(false);
+  const collapsedOnMobile = !showAllOnMobile && items.length > MOBILE_ROWS_SHOWN;
+  const hiddenOnMobile = collapsedOnMobile ? items.slice(MOBILE_ROWS_SHOWN) : [];
+  const firstHidden = hiddenOnMobile[0];
+
   if (items.length === 0) return null;
 
   return (
@@ -63,10 +80,12 @@ const DashboardNeedsYou: React.FC<DashboardNeedsYouProps> = ({ items }) => {
       </div>
 
       <ul>
-        {items.map((item) => (
+        {items.map((item, index) => (
           <li
             key={item.id}
-            className="border-theme-surface-hover flex items-center gap-3 border-t px-4 py-3 first:border-t-0 sm:gap-4 sm:px-5"
+            className={`border-theme-surface-hover items-center gap-3 border-t px-4 py-3 first:border-t-0 sm:gap-4 sm:px-5 ${
+              collapsedOnMobile && index >= MOBILE_ROWS_SHOWN ? 'hidden sm:flex' : 'flex'
+            }`}
           >
             <item.icon className="text-theme-text-muted hidden h-5 w-5 shrink-0 sm:block" aria-hidden="true" />
             <div className="min-w-0 flex-1">
@@ -88,6 +107,25 @@ const DashboardNeedsYou: React.FC<DashboardNeedsYouProps> = ({ items }) => {
             </button>
           </li>
         ))}
+
+        {firstHidden && (
+          <li className="border-theme-surface-hover bg-theme-surface-secondary border-t sm:hidden">
+            <button
+              type="button"
+              onClick={() => setShowAllOnMobile(true)}
+              className="focus:ring-theme-focus-ring flex min-h-[44px] w-full items-center gap-2 px-4 text-left focus:ring-2 focus:outline-hidden focus:ring-inset"
+            >
+              <span className="text-theme-text-secondary min-w-0 flex-1 truncate text-[13px]">
+                {firstHidden.title}
+                {hiddenOnMobile.length > 1 && `, and ${hiddenOnMobile.length - 1} more`}
+              </span>
+              <span className="text-theme-accent-red inline-flex shrink-0 items-center gap-0.5 text-[13px] font-semibold">
+                Show all
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
+            </button>
+          </li>
+        )}
       </ul>
     </section>
   );

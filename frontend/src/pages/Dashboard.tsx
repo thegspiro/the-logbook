@@ -17,6 +17,7 @@ import {
   CalendarPlus,
   ClipboardCheck,
   ClipboardList,
+  ChevronDown,
   ChevronRight,
   Clock,
   GraduationCap,
@@ -92,6 +93,14 @@ const TIMELINE_DAYS = 7;
 
 /** Rows the seven-day list renders before deferring to the full schedule. */
 const TIMELINE_ROWS_SHOWN = 6;
+
+/**
+ * Rows the seven-day list shows on a phone before collapsing the rest onto one
+ * tap-through line. Six rows of shift detail push the three quick actions —
+ * which sit below the week on a phone, in the thumb's reach — off the first
+ * screen; two keep them on it, and the line names what is being held back.
+ */
+const TIMELINE_ROWS_SHOWN_MOBILE = 2;
 
 /** Rows the department feed renders before deferring to the notification inbox. */
 const FEED_ROWS_SHOWN = 5;
@@ -222,6 +231,9 @@ const Dashboard: React.FC = () => {
   // Upcoming events
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
   const [loadingUpcomingEvents, setLoadingUpcomingEvents] = useState(true);
+
+  // Phones show the first two rows of the week and name the rest on one line.
+  const [timelineExpandedOnMobile, setTimelineExpandedOnMobile] = useState(false);
 
   // Setup checklist (admin-only)
   const [setupProgress, setSetupProgress] = useState<{
@@ -715,6 +727,9 @@ const Dashboard: React.FC = () => {
   }, [myShifts, availableOpenShifts, upcomingEvents, tz, windowStart, windowEnd]);
 
   const visibleTimeline = timeline.slice(0, TIMELINE_ROWS_SHOWN);
+  const timelineCollapsedOnMobile = !timelineExpandedOnMobile && visibleTimeline.length > TIMELINE_ROWS_SHOWN_MOBILE;
+  const timelineHiddenOnMobile = timelineCollapsedOnMobile ? visibleTimeline.slice(TIMELINE_ROWS_SHOWN_MOBILE) : [];
+  const firstHiddenTimelineRow = timelineHiddenOnMobile[0];
   const laterOpenShifts = availableOpenShifts.filter((s) => s.shift_date > windowEnd).length;
   const shortStaffedOpenShifts = availableOpenShifts.filter(
     (s) => s.min_staffing != null && s.attendee_count < s.min_staffing
@@ -855,13 +870,22 @@ const Dashboard: React.FC = () => {
   const firstName = currentUser?.first_name?.trim();
   const greeting = firstName ? `Hi, ${firstName}` : `Welcome to ${departmentName}`;
 
-  const renderTimelineRow = (entry: TimelineEntry) => {
+  const renderTimelineRow = (entry: TimelineEntry, index: number) => {
     const shift = entry.shift;
     const evt = entry.event;
     const expanded = shift != null && signupExpandedId === shift.id;
+    // Held back on phones only, and by CSS: the row stays in the markup, so a
+    // rotation to landscape reveals it without the summary line below going
+    // stale about what is hidden.
+    const heldBackOnMobile = timelineCollapsedOnMobile && index >= TIMELINE_ROWS_SHOWN_MOBILE;
 
     return (
-      <li key={entry.key} className="border-theme-surface-hover border-t first:border-t-0">
+      <li
+        key={entry.key}
+        className={`border-theme-surface-hover border-t first:border-t-0 ${
+          heldBackOnMobile ? 'hidden sm:list-item' : ''
+        }`}
+      >
         <div
           className={`flex items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5 ${
             entry.kind === 'open-shift' ? 'bg-theme-surface-secondary' : ''
@@ -1139,7 +1163,31 @@ const Dashboard: React.FC = () => {
                 ) : (
                   <>
                     <ul>{visibleTimeline.map(renderTimelineRow)}</ul>
-                    <div className="border-theme-surface-border bg-theme-surface-secondary border-t px-4 py-2.5 sm:px-5">
+
+                    {firstHiddenTimelineRow && (
+                      <button
+                        type="button"
+                        onClick={() => setTimelineExpandedOnMobile(true)}
+                        className="border-theme-surface-border bg-theme-surface-secondary focus:ring-theme-focus-ring flex min-h-[44px] w-full items-center gap-2 border-t px-4 text-left focus:ring-2 focus:outline-hidden focus:ring-inset sm:hidden"
+                      >
+                        <span className="text-theme-text-secondary min-w-0 flex-1 truncate text-[13px]">
+                          {formatCalendarDate(firstHiddenTimelineRow.dateOnly, { weekday: 'short', day: 'numeric' })} ·{' '}
+                          {firstHiddenTimelineRow.title}
+                          {timelineHiddenOnMobile.length > 1 && `, and ${timelineHiddenOnMobile.length - 1} more`}
+                        </span>
+                        <ChevronDown className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
+                      </button>
+                    )}
+
+                    {/* Held back while the week is collapsed: "Nothing else
+                        through Aug 19" directly under a line promising two more
+                        rows reads as a contradiction. */}
+                    <div
+                      data-testid="timeline-footer"
+                      className={`border-theme-surface-border bg-theme-surface-secondary border-t px-4 py-2.5 sm:px-5 ${
+                        timelineCollapsedOnMobile ? 'hidden sm:block' : ''
+                      }`}
+                    >
                       <p className="text-theme-text-muted text-[13px]">
                         {timeline.length === 0
                           ? 'Nothing scheduled'
