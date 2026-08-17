@@ -81,10 +81,11 @@ describe('onboarding API client transport', () => {
       expect(headersOf(fetchMock.mock.calls[0] as FetchArgs)['X-Session-ID']).toBeUndefined();
     });
 
-    // The CSRF header is attached only to the calls that declare they need it,
-    // which is the double-submit half the server checks on mutations.
-    it('attaches the CSRF header on a mutation, reading it from the cookie', async () => {
-      document.cookie = 'onboarding_csrf_token=csrf-abc; path=/';
+    // The CSRF header is attached only to the calls that declare they need it.
+    // The token lives in tab-scoped sessionStorage rather than an origin-wide
+    // cookie, so two concurrent onboarding tabs cannot overwrite each other's.
+    it('attaches the CSRF header on a mutation, reading it from sessionStorage', async () => {
+      sessionStorage.setItem('onboarding_csrf_token', 'csrf-abc');
       const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
       vi.stubGlobal('fetch', fetchMock);
 
@@ -94,7 +95,7 @@ describe('onboarding API client transport', () => {
     });
 
     it('does not attach the CSRF header on a plain read', async () => {
-      document.cookie = 'onboarding_csrf_token=csrf-abc; path=/';
+      sessionStorage.setItem('onboarding_csrf_token', 'csrf-abc');
       const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
       vi.stubGlobal('fetch', fetchMock);
 
@@ -103,7 +104,7 @@ describe('onboarding API client transport', () => {
       expect(headersOf(fetchMock.mock.calls[0] as FetchArgs)['X-CSRF-Token']).toBeUndefined();
     });
 
-    it('stores a rotated CSRF token in a cookie, never in localStorage', async () => {
+    it('stores a rotated CSRF token tab-scoped, never in localStorage', async () => {
       const fetchMock = vi
         .fn()
         .mockResolvedValue(jsonResponse({ ok: true }, { headers: { 'X-CSRF-Token': 'rotated-token' } }));
@@ -111,7 +112,7 @@ describe('onboarding API client transport', () => {
 
       await (await freshClient()).getStatus();
 
-      expect(document.cookie).toContain('onboarding_csrf_token=rotated-token');
+      expect(sessionStorage.getItem('onboarding_csrf_token')).toBe('rotated-token');
       expect(localStorage.getItem('csrf_token')).toBeNull();
       expect(localStorage.getItem('onboarding_csrf_token')).toBeNull();
     });
@@ -135,6 +136,32 @@ describe('onboarding API client transport', () => {
       await freshClient();
 
       expect(localStorage.getItem('onboarding_session_id')).toBeNull();
+    });
+
+    // A client mid-deploy still holds the token in the old origin-wide cookie.
+    // It is adopted into this tab once and the cookie retired, so an operator
+    // part-way through setup is not forced to restart.
+    it('migrates a legacy CSRF cookie into sessionStorage and retires it', async () => {
+      sessionStorage.setItem('onboarding_session_id', 'session-1');
+      document.cookie = 'onboarding_csrf_token=legacy-token; path=/';
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await (await freshClient()).saveAuthPlatform('google');
+
+      expect(sessionStorage.getItem('onboarding_csrf_token')).toBe('legacy-token');
+      expect(document.cookie).not.toContain('legacy-token');
+      expect(headersOf(fetchMock.mock.calls[0] as FetchArgs)['X-CSRF-Token']).toBe('legacy-token');
+    });
+
+    // The migration is paired with the session id on purpose: a stray cookie
+    // with no session behind it is not a credential worth adopting.
+    it('ignores a legacy CSRF cookie when there is no session to pair it with', async () => {
+      document.cookie = 'onboarding_csrf_token=orphan-token; path=/';
+
+      await freshClient();
+
+      expect(sessionStorage.getItem('onboarding_csrf_token')).toBeNull();
     });
 
     it('reads the session id from sessionStorage, so it is scoped to the tab', async () => {
