@@ -88,7 +88,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {cards.map((c) => (
-        <div key={c.label} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+        <div key={c.label} className="card p-4">
           <p className="text-theme-text-secondary text-sm">{c.label}</p>
           <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
         </div>
@@ -169,7 +169,7 @@ const BudgetsPage: React.FC = () => {
         <select
           value={selectedFiscalYear}
           onChange={(e) => setSelectedFiscalYear(e.target.value)}
-          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:ring-2 focus:outline-none"
+          className="form-input px-3 text-sm focus:border-red-500"
         >
           <option value="">Select Fiscal Year</option>
           {fiscalYears.map((fy) => (
@@ -221,7 +221,7 @@ const BudgetsPage: React.FC = () => {
           }
         />
       ) : (
-        <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
+        <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>

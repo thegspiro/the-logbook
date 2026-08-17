@@ -9,13 +9,14 @@ import copy
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql import Select
 
 from app.core.audit import log_audit_event
 from app.models.inventory import (
@@ -30,6 +31,8 @@ from app.models.inventory import (
     InventoryImpactPlan,
     InventoryItem,
     InventoryLot,
+    InventoryVendor,
+    InventoryVendorContact,
     IssuanceAllowance,
     ItemAssignment,
     ItemCondition,
@@ -66,6 +69,7 @@ from app.models.user import (
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_value
+from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 
@@ -133,6 +137,162 @@ def _size_label(size: str) -> str:
     if "_" in code or " " in code:
         return code.replace("_", " ").title()
     return code.upper()
+
+
+# Starter categories offered by the guided setup workflow.
+#
+# A category is the switch that decides which fields the item form shows and
+# which compliance machinery runs, so a department that starts from an empty
+# list either invents its own scheme or (more often) files everything under one
+# catch-all and loses maintenance and NFPA tracking. These presets are the
+# fire-service defaults a new quartermaster would otherwise have to know to
+# ask for; they are ordinary categories once created and can be edited or
+# deleted like any other.
+CATEGORY_PRESETS: List[Dict[str, Any]] = [
+    {
+        "key": "turnout_gear",
+        "name": "Turnout Gear",
+        "description": "Coats, pants, and liners issued to a member.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": True,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": True,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "helmets",
+        "name": "Helmets",
+        "description": "Structural and wildland helmets, shields, and liners.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": True,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": True,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "boots_gloves_hoods",
+        "name": "Boots, Gloves & Hoods",
+        "description": "Sized PPE issued per member and replaced on wear.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": True,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 10,
+    },
+    {
+        "key": "scba",
+        "name": "SCBA",
+        "description": "Packs, masks, and cylinders on a flow-test cycle.",
+        "item_type": ItemType.PPE,
+        "requires_assignment": False,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": True,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "station_uniforms",
+        "name": "Station Uniforms",
+        "description": "Job shirts, t-shirts, and duty pants kept in sizes.",
+        "item_type": ItemType.UNIFORM,
+        "requires_assignment": True,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 10,
+    },
+    {
+        "key": "dress_uniforms",
+        "name": "Dress Uniforms",
+        "description": "Class A coats, trousers, covers, and insignia.",
+        "item_type": ItemType.UNIFORM,
+        "requires_assignment": True,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "hand_tools",
+        "name": "Hand Tools",
+        "description": "Irons, axes, hooks, and other truck-company tools.",
+        "item_type": ItemType.TOOL,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "power_equipment",
+        "name": "Power Equipment",
+        "description": "Saws, fans, and extrication tools on a service cycle.",
+        "item_type": ItemType.TOOL,
+        "requires_assignment": False,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "hose_appliances",
+        "name": "Hose & Appliances",
+        "description": "Hose, nozzles, and adapters carried on apparatus.",
+        "item_type": ItemType.EQUIPMENT,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "ladders",
+        "name": "Ladders",
+        "description": "Ground ladders on an annual test cycle.",
+        "item_type": ItemType.EQUIPMENT,
+        "requires_assignment": False,
+        "requires_serial_number": True,
+        "requires_maintenance": True,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "radios",
+        "name": "Radios & Pagers",
+        "description": "Portables, chargers, and pagers issued by serial.",
+        "item_type": ItemType.ELECTRONICS,
+        "requires_assignment": True,
+        "requires_serial_number": True,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": None,
+    },
+    {
+        "key": "ems_supplies",
+        "name": "EMS Supplies",
+        "description": "Consumables restocked by quantity and expiration.",
+        "item_type": ItemType.CONSUMABLE,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 20,
+    },
+    {
+        "key": "station_supplies",
+        "name": "Station Supplies",
+        "description": "Cleaning and household stock reordered by quantity.",
+        "item_type": ItemType.CONSUMABLE,
+        "requires_assignment": False,
+        "requires_serial_number": False,
+        "requires_maintenance": False,
+        "nfpa_tracking_enabled": False,
+        "low_stock_threshold": 15,
+    },
+]
 
 
 # Supported extra-line field keys that can be requested on labels.
@@ -504,17 +664,33 @@ class InventoryService:
         self,
         organization_id: UUID,
         item_type: Optional[ItemType] = None,
+        item_types: Optional[Iterable[ItemType]] = None,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
         active_only: bool = True,
         skip: int = 0,
         limit: int = 200,
     ) -> List[InventoryCategory]:
-        """Get categories for an organization with pagination"""
+        """Get categories for an organization with pagination.
+
+        ``item_types`` / ``exclude_item_types`` scope the result to a domain,
+        so the medical-supply page's category picker never offers a uniform
+        category and the gear page's never offers a medical one.
+        """
         query = select(InventoryCategory).where(
             InventoryCategory.organization_id == str(organization_id)
         )
 
+        include_types = set(item_types or ())
         if item_type:
-            query = query.where(InventoryCategory.item_type == item_type)
+            include_types.add(item_type)
+
+        if include_types:
+            query = query.where(InventoryCategory.item_type.in_(list(include_types)))
+
+        if exclude_item_types:
+            query = query.where(
+                InventoryCategory.item_type.notin_(list(exclude_item_types))
+            )
 
         if active_only:
             query = query.where(InventoryCategory.active.is_(True))
@@ -608,6 +784,566 @@ class InventoryService:
             return False, str(e)
 
     # ============================================
+    # Vendor Management
+    # ============================================
+
+    async def _vendor_name_taken(
+        self,
+        organization_id: UUID,
+        name: str,
+        exclude_vendor_id: Optional[UUID] = None,
+    ) -> Optional[InventoryVendor]:
+        """Return the vendor already holding this name in the org, if any.
+
+        Matched case-insensitively: "Galls" and "galls" are the same supplier,
+        and the unique constraint that backs this would otherwise let both in
+        (MySQL collations aside) and leave the picker showing two of them.
+        """
+        query = select(InventoryVendor).where(
+            InventoryVendor.organization_id == str(organization_id),
+            func.lower(InventoryVendor.name) == name.strip().lower(),
+        )
+        if exclude_vendor_id:
+            query = query.where(InventoryVendor.id != str(exclude_vendor_id))
+        result = await self.db.execute(query.limit(1))
+        return result.scalars().first()
+
+    async def get_vendor_stats(
+        self, organization_id: UUID, vendor_ids: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Per-vendor catalog and purchasing totals, keyed by vendor id.
+
+        Two grouped queries rather than three per vendor: the vendor list is
+        the landing screen and renders every vendor's counts at once.
+        """
+        stats: Dict[str, Dict[str, Any]] = {
+            vid: {
+                "item_count": 0,
+                "open_reorder_count": 0,
+                "total_purchase_value": None,
+            }
+            for vid in vendor_ids
+        }
+        if not vendor_ids:
+            return stats
+
+        # The two figures deliberately count different rows. "Items" means what
+        # is in the catalog now, matching the filtered list the count links to.
+        # Money spent does not un-spend when a coat is retired, so the total
+        # sums every item ever bought from the vendor, active or not.
+        item_rows = await self.db.execute(
+            select(
+                InventoryItem.vendor_id,
+                func.sum(case((InventoryItem.active.is_(True), 1), else_=0)),
+                func.sum(InventoryItem.purchase_price),
+            )
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.vendor_id.in_(vendor_ids),
+            )
+            .group_by(InventoryItem.vendor_id)
+        )
+        for vendor_id, count, spend in item_rows.all():
+            entry = stats.get(vendor_id)
+            if entry is None:
+                continue
+            entry["item_count"] = count or 0
+            entry["total_purchase_value"] = spend
+
+        reorder_rows = await self.db.execute(
+            select(ReorderRequest.vendor_id, func.count(ReorderRequest.id))
+            .where(
+                ReorderRequest.organization_id == str(organization_id),
+                ReorderRequest.vendor_id.in_(vendor_ids),
+                ReorderRequest.status.in_(
+                    [
+                        ReorderStatus.PENDING,
+                        ReorderStatus.APPROVED,
+                        ReorderStatus.ORDERED,
+                    ]
+                ),
+            )
+            .group_by(ReorderRequest.vendor_id)
+        )
+        for vendor_id, count in reorder_rows.all():
+            entry = stats.get(vendor_id)
+            if entry is None:
+                continue
+            entry["open_reorder_count"] = count or 0
+
+        return stats
+
+    async def list_vendors(
+        self,
+        organization_id: UUID,
+        search: Optional[str] = None,
+        active_only: bool = True,
+    ) -> List[InventoryVendor]:
+        """List vendors for an organization, preferred ones first."""
+        query = (
+            select(InventoryVendor)
+            .where(InventoryVendor.organization_id == str(organization_id))
+            .options(selectinload(InventoryVendor.contacts))
+            .order_by(InventoryVendor.is_preferred.desc(), InventoryVendor.name)
+        )
+        if active_only:
+            query = query.where(InventoryVendor.is_active.is_(True))
+        if search:
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
+            term = f"%{safe_search}%"
+            query = query.where(
+                or_(
+                    InventoryVendor.name.ilike(term),
+                    InventoryVendor.account_number.ilike(term),
+                    InventoryVendor.email.ilike(term),
+                    InventoryVendor.phone.ilike(term),
+                )
+            )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_vendor(
+        self, vendor_id: UUID, organization_id: UUID
+    ) -> Optional[InventoryVendor]:
+        """Get one vendor with its contacts, scoped to the caller's org."""
+        result = await self.db.execute(
+            select(InventoryVendor)
+            .where(InventoryVendor.id == str(vendor_id))
+            .where(InventoryVendor.organization_id == str(organization_id))
+            .options(selectinload(InventoryVendor.contacts))
+        )
+        return result.scalars().first()
+
+    async def create_vendor(
+        self,
+        organization_id: UUID,
+        data: Dict[str, Any],
+        created_by: Optional[UUID] = None,
+    ) -> Tuple[Optional[InventoryVendor], Optional[str]]:
+        """Create a vendor, optionally with its contacts in the same call."""
+        try:
+            contacts = data.pop("contacts", None) or []
+            name = (data.get("name") or "").strip()
+            if not name:
+                return None, "Vendor name is required"
+            data["name"] = name
+
+            existing = await self._vendor_name_taken(organization_id, name)
+            if existing is not None:
+                if not existing.is_active:
+                    return None, (
+                        f"'{existing.name}' already exists but is inactive. "
+                        "Reactivate it instead of creating a duplicate."
+                    )
+                return None, f"A vendor named '{existing.name}' already exists"
+
+            vendor = InventoryVendor(
+                organization_id=str(organization_id),
+                created_by=str(created_by) if created_by else None,
+                **data,
+            )
+            self.db.add(vendor)
+            await self.db.flush()
+
+            # The first contact entered is the one to call unless the form said
+            # otherwise — a vendor whose only contact is not flagged primary
+            # would otherwise show none on its card.
+            if contacts and not any(c.get("is_primary") for c in contacts):
+                contacts[0]["is_primary"] = True
+            for contact in contacts:
+                self.db.add(
+                    InventoryVendorContact(
+                        organization_id=str(organization_id),
+                        vendor_id=vendor.id,
+                        **contact,
+                    )
+                )
+
+            await self.db.flush()
+            await self._normalize_primary_contact(vendor.id, str(organization_id))
+            await self.db.commit()
+            refreshed = await self.get_vendor(vendor.id, organization_id)
+            return refreshed, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error creating vendor: {e}")
+            return None, str(e)
+
+    async def update_vendor(
+        self,
+        vendor_id: UUID,
+        organization_id: UUID,
+        data: Dict[str, Any],
+    ) -> Tuple[Optional[InventoryVendor], Optional[str]]:
+        """Update a vendor. Explicit nulls clear the field (see CLAUDE.md #1)."""
+        try:
+            vendor = await self.get_vendor(vendor_id, organization_id)
+            if not vendor:
+                return None, "Vendor not found"
+
+            if data.get("name"):
+                name = data["name"].strip()
+                clash = await self._vendor_name_taken(
+                    organization_id, name, exclude_vendor_id=vendor_id
+                )
+                if clash is not None:
+                    return None, f"A vendor named '{clash.name}' already exists"
+                data["name"] = name
+
+            apply_updates(vendor, data, skip={"id", "organization_id", "created_by"})
+            await self.db.commit()
+            refreshed = await self.get_vendor(vendor_id, organization_id)
+            return refreshed, None
+        except ValueError as e:
+            await self.db.rollback()
+            return None, str(e)
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error updating vendor: {e}")
+            return None, str(e)
+
+    async def deactivate_vendor(
+        self, vendor_id: UUID, organization_id: UUID
+    ) -> Tuple[bool, Optional[str]]:
+        """Deactivate a vendor, keeping its purchase history intact.
+
+        Items and reorder requests keep pointing at it: "we don't buy from them
+        anymore" must not erase where a helmet in service came from.
+        """
+        try:
+            vendor = await self.get_vendor(vendor_id, organization_id)
+            if not vendor:
+                return False, "Vendor not found"
+            vendor.is_active = False
+            await self.db.commit()
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deactivating vendor: {e}")
+            return False, str(e)
+
+    async def _normalize_primary_contact(
+        self,
+        vendor_id: str,
+        organization_id: str,
+        keep_contact_id: Optional[str] = None,
+    ) -> None:
+        """Leave at most one primary contact on a vendor.
+
+        ``keep_contact_id`` is the contact just flagged primary; every other
+        contact on the vendor is demoted. With no id given, the flag is left
+        alone unless nothing is flagged, in which case the first contact by
+        name is promoted so a vendor card always has someone to call.
+        """
+        result = await self.db.execute(
+            select(InventoryVendorContact)
+            .where(InventoryVendorContact.vendor_id == vendor_id)
+            .where(InventoryVendorContact.organization_id == organization_id)
+            .order_by(InventoryVendorContact.name)
+        )
+        contacts = list(result.scalars().all())
+        if not contacts:
+            return
+
+        if keep_contact_id:
+            for contact in contacts:
+                contact.is_primary = contact.id == keep_contact_id
+            return
+
+        flagged = [c for c in contacts if c.is_primary]
+        if not flagged:
+            contacts[0].is_primary = True
+        elif len(flagged) > 1:
+            for contact in flagged[1:]:
+                contact.is_primary = False
+
+    async def add_vendor_contact(
+        self,
+        vendor_id: UUID,
+        organization_id: UUID,
+        data: Dict[str, Any],
+    ) -> Tuple[Optional[InventoryVendorContact], Optional[str]]:
+        """Add a named contact to a vendor."""
+        try:
+            vendor = await self.get_vendor(vendor_id, organization_id)
+            if not vendor:
+                return None, "Vendor not found"
+
+            contact = InventoryVendorContact(
+                organization_id=str(organization_id),
+                vendor_id=str(vendor_id),
+                **data,
+            )
+            self.db.add(contact)
+            await self.db.flush()
+            await self._normalize_primary_contact(
+                str(vendor_id),
+                str(organization_id),
+                keep_contact_id=contact.id if contact.is_primary else None,
+            )
+            await self.db.commit()
+            await self.db.refresh(contact)
+            return contact, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error adding vendor contact: {e}")
+            return None, str(e)
+
+    async def get_vendor_contact(
+        self, contact_id: UUID, organization_id: UUID
+    ) -> Optional[InventoryVendorContact]:
+        """Get one vendor contact, scoped to the caller's org."""
+        result = await self.db.execute(
+            select(InventoryVendorContact)
+            .where(InventoryVendorContact.id == str(contact_id))
+            .where(InventoryVendorContact.organization_id == str(organization_id))
+        )
+        return result.scalars().first()
+
+    async def update_vendor_contact(
+        self,
+        contact_id: UUID,
+        organization_id: UUID,
+        data: Dict[str, Any],
+    ) -> Tuple[Optional[InventoryVendorContact], Optional[str]]:
+        """Update a vendor contact."""
+        try:
+            contact = await self.get_vendor_contact(contact_id, organization_id)
+            if not contact:
+                return None, "Contact not found"
+
+            apply_updates(contact, data, skip={"id", "organization_id", "vendor_id"})
+            await self.db.flush()
+            await self._normalize_primary_contact(
+                contact.vendor_id,
+                str(organization_id),
+                keep_contact_id=contact.id if contact.is_primary else None,
+            )
+            await self.db.commit()
+            await self.db.refresh(contact)
+            return contact, None
+        except ValueError as e:
+            await self.db.rollback()
+            return None, str(e)
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error updating vendor contact: {e}")
+            return None, str(e)
+
+    async def delete_vendor_contact(
+        self, contact_id: UUID, organization_id: UUID
+    ) -> Optional[str]:
+        """Delete a vendor contact, promoting another to primary if needed."""
+        try:
+            contact = await self.get_vendor_contact(contact_id, organization_id)
+            if not contact:
+                return "Contact not found"
+            vendor_id = contact.vendor_id
+            await self.db.delete(contact)
+            await self.db.flush()
+            await self._normalize_primary_contact(vendor_id, str(organization_id))
+            await self.db.commit()
+            return None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deleting vendor contact: {e}")
+            return str(e)
+
+    # ------------------------------------------------------------------
+    # Cleaning up what the free-text era left behind
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _name_key(name: Optional[str]) -> str:
+        """Fold a supplier name for comparison: trimmed and case-insensitive."""
+        return (name or "").strip().lower()
+
+    async def list_unlinked_vendor_names(
+        self, organization_id: UUID
+    ) -> List[Dict[str, Any]]:
+        """Supplier names typed onto rows that were never attached to a vendor.
+
+        These are the rows with nothing behind the name — no contact, no
+        purchase history — so the screen can offer to attach them all at once
+        rather than leaving someone to find them by eye.
+
+        Grouped case-insensitively, because "Galls Inc." and "galls inc" are
+        one supplier to whoever has to make the call. The first spelling seen
+        is the one shown, and the rest fold into it.
+
+        Retired items count too: attaching updates them, and the vendor's spend
+        total includes them, so leaving them out here would strand historical
+        purchases with no way to reach them from the screen.
+        """
+        org_id = str(organization_id)
+        counts: Dict[str, Dict[str, Any]] = {}
+
+        def tally(raw_name: Optional[str], field: str, count: int) -> None:
+            key = self._name_key(raw_name)
+            if not key:
+                return
+            entry = counts.setdefault(
+                key,
+                {"name": (raw_name or "").strip(), "item_count": 0, "reorder_count": 0},
+            )
+            entry[field] += count or 0
+
+        item_rows = await self.db.execute(
+            select(InventoryItem.vendor, func.count(InventoryItem.id))
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.vendor_id.is_(None),
+                InventoryItem.vendor.isnot(None),
+            )
+            .group_by(InventoryItem.vendor)
+        )
+        for name, count in item_rows.all():
+            tally(name, "item_count", count)
+
+        reorder_rows = await self.db.execute(
+            select(ReorderRequest.vendor, func.count(ReorderRequest.id))
+            .where(
+                ReorderRequest.organization_id == org_id,
+                ReorderRequest.vendor_id.is_(None),
+                ReorderRequest.vendor.isnot(None),
+            )
+            .group_by(ReorderRequest.vendor)
+        )
+        for name, count in reorder_rows.all():
+            tally(name, "reorder_count", count)
+
+        # Busiest first: the name on forty items is the one worth attaching.
+        return sorted(
+            counts.values(),
+            key=lambda e: (-(e["item_count"] + e["reorder_count"]), e["name"].lower()),
+        )
+
+    async def attach_vendor_name(
+        self, vendor_id: UUID, organization_id: UUID, name: str
+    ) -> Tuple[Optional[Dict[str, int]], Optional[str]]:
+        """Point every row carrying this typed-in name at a real vendor.
+
+        Only rows that are not already linked are touched: an item somebody
+        attached to a different supplier by hand is a decision, not a leftover.
+        """
+        try:
+            key = self._name_key(name)
+            if not key:
+                return None, "A supplier name is required"
+
+            vendor = await self.get_vendor(vendor_id, organization_id)
+            if not vendor:
+                return None, "Vendor not found"
+
+            org_id = str(organization_id)
+            item_result = await self.db.execute(
+                update(InventoryItem)
+                .where(
+                    InventoryItem.organization_id == org_id,
+                    InventoryItem.vendor_id.is_(None),
+                    func.lower(func.trim(InventoryItem.vendor)) == key,
+                )
+                .values(vendor_id=str(vendor_id))
+            )
+            reorder_result = await self.db.execute(
+                update(ReorderRequest)
+                .where(
+                    ReorderRequest.organization_id == org_id,
+                    ReorderRequest.vendor_id.is_(None),
+                    func.lower(func.trim(ReorderRequest.vendor)) == key,
+                )
+                .values(vendor_id=str(vendor_id))
+            )
+            await self.db.commit()
+            return (
+                {
+                    "items_linked": item_result.rowcount or 0,
+                    "reorders_linked": reorder_result.rowcount or 0,
+                },
+                None,
+            )
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error attaching vendor name: {e}")
+            return None, str(e)
+
+    async def merge_vendors(
+        self, target_id: UUID, source_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Fold one vendor into another: same supplier, entered twice.
+
+        Everything that points at the source is repointed at the target — items,
+        reorder requests, contacts — and the source row is then removed. It is
+        removed rather than deactivated so the name is free again: a merged
+        duplicate left on file keeps its name reserved by the unique
+        constraint, and shows up forever under "show inactive".
+
+        The target's own details win; nothing on it is overwritten.
+        """
+        try:
+            if str(target_id) == str(source_id):
+                return None, "A vendor cannot be merged into itself"
+
+            org_id = str(organization_id)
+            target = await self.get_vendor(target_id, organization_id)
+            if not target:
+                return None, "Vendor not found"
+            source = await self.get_vendor(source_id, organization_id)
+            if not source:
+                return None, "The vendor to merge was not found"
+
+            source_name = source.name
+
+            item_result = await self.db.execute(
+                update(InventoryItem)
+                .where(
+                    InventoryItem.organization_id == org_id,
+                    InventoryItem.vendor_id == str(source_id),
+                )
+                .values(vendor_id=str(target_id))
+            )
+            reorder_result = await self.db.execute(
+                update(ReorderRequest)
+                .where(
+                    ReorderRequest.organization_id == org_id,
+                    ReorderRequest.vendor_id == str(source_id),
+                )
+                .values(vendor_id=str(target_id))
+            )
+            # Contacts move through the ORM, not a bulk UPDATE. `source.contacts`
+            # is already loaded, and the relationship cascades delete-orphan: a
+            # bulk UPDATE repoints the rows in the database but leaves them in
+            # the loaded collection, so deleting the source would then cascade a
+            # DELETE onto the contacts this merge just reported as moved.
+            # Appending to the target re-parents each one on both sides.
+            moved_contacts = list(source.contacts)
+            for contact in moved_contacts:
+                target.contacts.append(contact)
+
+            await self.db.delete(source)
+            await self.db.flush()
+            # Both vendors may have had a primary; the target keeps one.
+            await self._normalize_primary_contact(str(target_id), org_id)
+            await self.db.commit()
+
+            return (
+                {
+                    "items_moved": item_result.rowcount or 0,
+                    "reorders_moved": reorder_result.rowcount or 0,
+                    "contacts_moved": len(moved_contacts),
+                    "merged_name": source_name,
+                    "vendor_name": target.name,
+                },
+                None,
+            )
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error merging vendors: {e}")
+            return None, str(e)
+
+    # ============================================
     # Item Management
     # ============================================
 
@@ -641,6 +1377,7 @@ class InventoryService:
         ("storage_area_id", StorageArea, "storage area"),
         ("variant_group_id", ItemVariantGroup, "variant group"),
         ("assigned_to_user_id", User, "assignee"),
+        ("vendor_id", InventoryVendor, "vendor"),
     )
 
     async def _assert_item_fks_in_org(
@@ -723,6 +1460,21 @@ class InventoryService:
         "updated_at": InventoryItem.updated_at,
     }
 
+    @staticmethod
+    def _category_ids_of_type(
+        organization_id: UUID, item_types: Set[ItemType]
+    ) -> "Select":
+        """Org-scoped select of category ids in the given domains.
+
+        Org-scoped inside the subquery rather than relying on the outer
+        query's filter: without it, an item could be matched against another
+        organization's category of the same type.
+        """
+        return select(InventoryCategory.id).where(
+            InventoryCategory.organization_id == str(organization_id),
+            InventoryCategory.item_type.in_(list(item_types)),
+        )
+
     async def get_items(
         self,
         organization_id: UUID,
@@ -730,9 +1482,12 @@ class InventoryService:
         status: Optional[ItemStatus] = None,
         condition: Optional[ItemCondition] = None,
         item_type: Optional[ItemType] = None,
+        item_types: Optional[Iterable[ItemType]] = None,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
         assigned_to: Optional[UUID] = None,
         location_id: Optional[UUID] = None,
         storage_area_id: Optional[UUID] = None,
+        vendor_id: Optional[UUID] = None,
         search: Optional[str] = None,
         size: Optional[str] = None,
         color: Optional[str] = None,
@@ -743,13 +1498,21 @@ class InventoryService:
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[InventoryItem], int]:
-        """Get items with filtering, sorting, and pagination"""
+        """Get items with filtering, sorting, and pagination.
+
+        ``item_types`` restricts to a domain, ``exclude_item_types`` carves one
+        out — that pair is what keeps the medical-supply page and the
+        gear-and-uniforms page from each listing the other's stock. Both are
+        applied server-side from the caller's permissions, never from a query
+        parameter, so a medical-only officer cannot widen their own view.
+        """
         query = (
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
             .options(
                 selectinload(InventoryItem.category),
                 selectinload(InventoryItem.assigned_to_user),
+                selectinload(InventoryItem.vendor_record),
             )
         )
 
@@ -762,17 +1525,32 @@ class InventoryService:
         if condition:
             query = query.where(InventoryItem.condition == condition)
 
+        include_types = set(item_types or ())
         if item_type:
-            # Filter by item_type via the category relationship
-            cat_subq = (
-                select(InventoryCategory.id)
-                .where(
-                    InventoryCategory.organization_id == str(organization_id),
-                    InventoryCategory.item_type == item_type,
+            include_types.add(item_type)
+
+        if include_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, include_types)
                 )
-                .subquery()
             )
-            query = query.where(InventoryItem.category_id.in_(select(cat_subq)))
+
+        if exclude_item_types:
+            # An uncategorized item has no domain, so it is not the excluded
+            # one — NOT IN would drop it along with the excluded rows because
+            # NULL NOT IN (...) is NULL, and the gear page would quietly lose
+            # every item nobody has filed yet.
+            query = query.where(
+                or_(
+                    InventoryItem.category_id.is_(None),
+                    InventoryItem.category_id.notin_(
+                        self._category_ids_of_type(
+                            organization_id, set(exclude_item_types)
+                        )
+                    ),
+                )
+            )
 
         if assigned_to:
             # str(): the column is String(36) and the parameter is a UUID, so
@@ -787,6 +1565,9 @@ class InventoryService:
 
         if storage_area_id:
             query = query.where(InventoryItem.storage_area_id == str(storage_area_id))
+
+        if vendor_id:
+            query = query.where(InventoryItem.vendor_id == str(vendor_id))
 
         if size:
             query = query.where(
@@ -880,6 +1661,7 @@ class InventoryService:
                 selectinload(InventoryItem.category),
                 selectinload(InventoryItem.location),
                 selectinload(InventoryItem.assigned_to_user),
+                selectinload(InventoryItem.vendor_record),
                 selectinload(InventoryItem.checkout_records),
                 selectinload(InventoryItem.maintenance_records),
                 selectinload(InventoryItem.assignment_history),
@@ -4220,6 +5002,65 @@ class InventoryService:
             )
         )
 
+    async def category_in_domain(
+        self,
+        category_id: Optional[str],
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Is this category one of ``item_types``, in this organization?
+
+        Fails closed: an unresolvable or uncategorized id is not in the
+        domain. A medical-only officer reaching for a uniform category must be
+        refused, and so must one reaching for a category that does not exist.
+        """
+        if not category_id:
+            return False
+        found = await self.db.scalar(
+            select(InventoryCategory.id).where(
+                InventoryCategory.id == str(category_id),
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(list(item_types)),
+            )
+        )
+        return found is not None
+
+    async def item_in_domain(
+        self,
+        item_id: str,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Is this item filed under a category in ``item_types``?"""
+        found = await self.db.scalar(
+            select(InventoryItem.id)
+            .join(
+                InventoryCategory,
+                InventoryCategory.id == InventoryItem.category_id,
+            )
+            .where(
+                InventoryItem.id == str(item_id),
+                InventoryItem.organization_id == organization_id,
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(list(item_types)),
+            )
+        )
+        return found is not None
+
+    async def lot_in_domain(
+        self,
+        lot_id: str,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Is this stock lot attached to an item in ``item_types``?"""
+        lot = await self._get_lot(lot_id, organization_id)
+        if not lot:
+            return False
+        return await self.item_in_domain(
+            lot.inventory_item_id, organization_id, item_types
+        )
+
     async def _get_lot(
         self, lot_id: str, organization_id: str
     ) -> Optional[InventoryLot]:
@@ -4454,11 +5295,18 @@ class InventoryService:
         return by_item
 
     async def get_expiring_lots(
-        self, organization_id: str, days_ahead: int = 30
+        self,
+        organization_id: str,
+        days_ahead: int = 30,
+        item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Tuple[InventoryLot, str]]:
-        """Get in-stock lots expiring within N days, with the item name."""
+        """Get in-stock lots expiring within N days, with the item name.
+
+        ``item_types`` narrows the result to one domain so the medical-supply
+        page reports its own expiring stock and not the whole department's.
+        """
         cutoff = date.today() + timedelta(days=days_ahead)
-        result = await self.db.execute(
+        query = (
             select(InventoryLot, InventoryItem.name)
             .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
             .where(
@@ -4467,7 +5315,15 @@ class InventoryService:
                 InventoryLot.expiration_date.isnot(None),
                 InventoryLot.expiration_date <= cutoff,
             )
-            .order_by(InventoryLot.expiration_date.asc())
+        )
+        if item_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                )
+            )
+        result = await self.db.execute(
+            query.order_by(InventoryLot.expiration_date.asc())
         )
         return [(row[0], row[1]) for row in result.all()]
 
@@ -4567,23 +5423,38 @@ class InventoryService:
         q = q.options(
             selectinload(ReorderRequest.requester),
             selectinload(ReorderRequest.approver),
+            selectinload(ReorderRequest.vendor_record),
         )
         result = await self.db.execute(q)
         return list(result.scalars().all())
 
     async def get_reorder_request(
-        self, request_id: UUID, organization_id: UUID
+        self,
+        request_id: UUID,
+        organization_id: UUID,
+        refresh_loaded: bool = False,
     ) -> Optional[ReorderRequest]:
-        """Get a single reorder request."""
-        result = await self.db.execute(
+        """Get a single reorder request.
+
+        ``refresh_loaded`` re-reads relationships the session already holds.
+        A second query returns the same identity-mapped instance and leaves
+        loaded relationships alone, so after an update changes ``vendor_id``
+        the row would otherwise be serialized with the *previous* vendor's
+        name still attached.
+        """
+        query = (
             select(ReorderRequest)
             .where(ReorderRequest.id == str(request_id))
             .where(ReorderRequest.organization_id == str(organization_id))
             .options(
                 selectinload(ReorderRequest.requester),
                 selectinload(ReorderRequest.approver),
+                selectinload(ReorderRequest.vendor_record),
             )
         )
+        if refresh_loaded:
+            query = query.execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalars().first()
 
     async def _assert_reorder_fks_in_org(
@@ -4609,6 +5480,15 @@ class InventoryService:
                 organization_id,
                 allow_none=True,
                 label="category",
+            )
+        if "vendor_id" in data:
+            await assert_in_org(
+                self.db,
+                InventoryVendor,
+                data.get("vendor_id"),
+                organization_id,
+                allow_none=True,
+                label="vendor",
             )
 
     async def create_reorder_request(
@@ -4665,7 +5545,13 @@ class InventoryService:
                 setattr(reorder, key, value)
 
             await self.db.flush()
-            await self.db.refresh(reorder)
+            # Re-fetch rather than refresh: refresh expires the relationships
+            # the response needs (requester, approver, vendor), and reloading
+            # them lazily is not an option under asyncio. populate_existing so a
+            # changed vendor_id does not come back beside the old vendor's name.
+            reorder = await self.get_reorder_request(
+                request_id, organization_id, refresh_loaded=True
+            )
             return reorder, None
         except Exception as e:
             logger.error(f"Error updating reorder request: {e}")
@@ -5947,6 +6833,17 @@ class InventoryService:
         size_label = self._SIZE_FIELD_LABELS.get(filters.get("size_field"), "")
 
         vendor = reorder_meta.get("vendor")
+        vendor_id = reorder_meta.get("vendor_id")
+        # XC-1: the vendor id comes from the client, so it must be in-org before
+        # it is stamped onto every generated reorder.
+        await assert_in_org(
+            self.db,
+            InventoryVendor,
+            vendor_id,
+            organization_id,
+            allow_none=True,
+            label="vendor",
+        )
         urgency = reorder_meta.get("urgency") or "normal"
         extra_notes = reorder_meta.get("notes")
 
@@ -5975,6 +6872,7 @@ class InventoryService:
                 item_name=f"{base_name} — {entry['size']}"[:255],
                 quantity_requested=shortfall,
                 vendor=vendor,
+                vendor_id=str(vendor_id) if vendor_id else None,
                 # Carry the plan's per-size cost estimate onto the PO so the
                 # reorder is pre-priced when it lands in the reorder queue.
                 estimated_unit_cost=entry.get("unit_cost"),
@@ -6380,3 +7278,146 @@ class InventoryService:
             "categories": categories,
             "size_fields": size_fields,
         }
+
+    # ============================================
+    # Guided Setup
+    # ============================================
+
+    async def get_setup_status(self, organization_id: UUID) -> Dict[str, Any]:
+        """Counts of the records the guided setup workflow walks through.
+
+        Each count is what the corresponding step of the workflow produces, in
+        the order an item needs them: a room holds storage areas, a storage
+        area holds items, and a category decides which fields an item has.
+        Retired items are excluded so a department that retired its way back to
+        an empty catalog is offered the workflow again.
+        """
+        org_id = str(organization_id)
+
+        rooms = await self.db.scalar(
+            select(func.count())
+            .select_from(Location)
+            .where(
+                Location.organization_id == org_id,
+                Location.is_active.is_(True),
+            )
+        )
+        storage_areas = await self.db.scalar(
+            select(func.count())
+            .select_from(StorageArea)
+            .where(
+                StorageArea.organization_id == org_id,
+                StorageArea.is_active.is_(True),
+            )
+        )
+        categories = await self.db.scalar(
+            select(func.count())
+            .select_from(InventoryCategory)
+            .where(
+                InventoryCategory.organization_id == org_id,
+                InventoryCategory.active.is_(True),
+            )
+        )
+        items = await self.db.scalar(
+            select(func.count())
+            .select_from(InventoryItem)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.status != ItemStatus.RETIRED,
+            )
+        )
+
+        counts = {
+            "rooms": rooms or 0,
+            "storage_areas": storage_areas or 0,
+            "categories": categories or 0,
+            "items": items or 0,
+        }
+        return {**counts, "is_complete": all(value > 0 for value in counts.values())}
+
+    async def _taken_category_names(self, organization_id: UUID) -> set[str]:
+        """Case-folded names of the org's *active* categories.
+
+        Active only: `delete_category` deactivates rather than deleting, so
+        matching every row would let one retired "Turnout Gear" mark the preset
+        as already-added forever — shown as done in the workflow, absent from
+        the category list beside it, and impossible to re-create from here.
+        """
+        existing = await self.db.execute(
+            select(InventoryCategory.name).where(
+                InventoryCategory.organization_id == str(organization_id),
+                InventoryCategory.active.is_(True),
+            )
+        )
+        return {name.strip().lower() for name in existing.scalars().all() if name}
+
+    async def get_category_presets(self, organization_id: UUID) -> List[Dict[str, Any]]:
+        """Starter categories, each flagged with whether the org already has it.
+
+        The flag is matched on case-insensitive name rather than on a stored
+        key: a department that already typed "Turnout Gear" by hand should not
+        be offered a second one, and presets carry no identity of their own
+        once created.
+        """
+        taken = await self._taken_category_names(organization_id)
+
+        return [
+            {
+                **preset,
+                "item_type": preset["item_type"].value,
+                "exists": preset["name"].strip().lower() in taken,
+            }
+            for preset in CATEGORY_PRESETS
+        ]
+
+    async def apply_category_presets(
+        self, organization_id: UUID, keys: List[str], created_by: UUID
+    ) -> Tuple[List[InventoryCategory], List[str], Optional[str]]:
+        """Create the named starter categories, skipping ones already present.
+
+        Returns ``(created, skipped_names, error)``. Skipping rather than
+        failing keeps the workflow re-runnable: a quartermaster who applies a
+        second batch later gets only what is missing, and a double-submitted
+        form does not duplicate the catalog.
+        """
+        requested = [key for key in dict.fromkeys(keys) if key]
+        by_key = {preset["key"]: preset for preset in CATEGORY_PRESETS}
+        unknown = [key for key in requested if key not in by_key]
+        if unknown:
+            return [], [], f"Unknown category preset: {unknown[0]}"
+
+        taken = await self._taken_category_names(organization_id)
+
+        created: List[InventoryCategory] = []
+        skipped: List[str] = []
+        try:
+            for key in requested:
+                preset = by_key[key]
+                if preset["name"].strip().lower() in taken:
+                    skipped.append(preset["name"])
+                    continue
+                category = InventoryCategory(
+                    organization_id=str(organization_id),
+                    created_by=str(created_by),
+                    name=preset["name"],
+                    description=preset["description"],
+                    item_type=preset["item_type"],
+                    requires_assignment=preset["requires_assignment"],
+                    requires_serial_number=preset["requires_serial_number"],
+                    requires_maintenance=preset["requires_maintenance"],
+                    nfpa_tracking_enabled=preset["nfpa_tracking_enabled"],
+                    low_stock_threshold=preset["low_stock_threshold"],
+                )
+                self.db.add(category)
+                created.append(category)
+                taken.add(preset["name"].strip().lower())
+
+            if created:
+                await self.db.commit()
+                for category in created:
+                    await self.db.refresh(category)
+            return created, skipped, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to apply category presets: {e}")
+            return [], [], str(e)

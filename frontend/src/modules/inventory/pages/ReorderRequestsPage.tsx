@@ -24,11 +24,14 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate as formatDateUtil } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Modal } from '../../../components/Modal';
+import { blankToNull } from '../../../utils/formValues';
+import { VendorName } from '../components/VendorName';
 import type {
   ReorderRequest,
   ReorderRequestCreate,
   ReorderRequestUpdate,
   InventoryCategory,
+  InventoryVendor,
   LowStockAlert,
 } from '../../../services/eventServices';
 
@@ -67,6 +70,7 @@ interface CreateFD {
   category_id: string;
   quantity_requested: string;
   vendor: string;
+  vendor_id: string;
   vendor_contact: string;
   estimated_unit_cost: string;
   expected_delivery_date: string;
@@ -80,6 +84,7 @@ const EMPTY_CREATE: CreateFD = {
   category_id: '',
   quantity_requested: '1',
   vendor: '',
+  vendor_id: '',
   vendor_contact: '',
   estimated_unit_cost: '',
   expected_delivery_date: '',
@@ -93,9 +98,10 @@ const ReorderFormModal: React.FC<{
   onClose: () => void;
   onSaved: () => void;
   categories: InventoryCategory[];
+  vendors: InventoryVendor[];
   lowStockAlerts: LowStockAlert[];
   editRequest?: ReorderRequest | null;
-}> = ({ isOpen, onClose, onSaved, categories, lowStockAlerts, editRequest }) => {
+}> = ({ isOpen, onClose, onSaved, categories, vendors, lowStockAlerts, editRequest }) => {
   const [f, setF] = useState<CreateFD>(EMPTY_CREATE);
   const [saving, setSaving] = useState(false);
 
@@ -108,6 +114,7 @@ const ReorderFormModal: React.FC<{
         category_id: editRequest.category_id ?? '',
         quantity_requested: String(editRequest.quantity_requested),
         vendor: editRequest.vendor ?? '',
+        vendor_id: editRequest.vendor_id ?? '',
         vendor_contact: editRequest.vendor_contact ?? '',
         estimated_unit_cost: editRequest.estimated_unit_cost != null ? String(editRequest.estimated_unit_cost) : '',
         expected_delivery_date: editRequest.expected_delivery_date ?? '',
@@ -137,8 +144,13 @@ const ReorderFormModal: React.FC<{
         const updateData: ReorderRequestUpdate = {
           item_name: f.item_name.trim(),
           quantity_requested: Number(f.quantity_requested),
-          vendor: f.vendor.trim() || undefined,
-          vendor_contact: f.vendor_contact.trim() || undefined,
+          // Explicit nulls so clearing these persists: an omitted key means
+          // "leave it alone" to the backend (CLAUDE.md pitfall #1). Linking a
+          // vendor blanks the typed-in name, and without the null the old
+          // supplier survives to reappear the moment the link is removed.
+          vendor: blankToNull(f.vendor),
+          vendor_id: f.vendor_id || null,
+          vendor_contact: blankToNull(f.vendor_contact),
           estimated_unit_cost: f.estimated_unit_cost ? Number(f.estimated_unit_cost) : undefined,
           expected_delivery_date: f.expected_delivery_date || undefined,
           urgency: f.urgency || undefined,
@@ -153,6 +165,7 @@ const ReorderFormModal: React.FC<{
           category_id: f.category_id || undefined,
           quantity_requested: Number(f.quantity_requested),
           vendor: f.vendor.trim() || undefined,
+          vendor_id: f.vendor_id || undefined,
           vendor_contact: f.vendor_contact.trim() || undefined,
           estimated_unit_cost: f.estimated_unit_cost ? Number(f.estimated_unit_cost) : undefined,
           expected_delivery_date: f.expected_delivery_date || undefined,
@@ -252,17 +265,55 @@ const ReorderFormModal: React.FC<{
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Vendor &amp; Cost</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={lbl}>Vendor</label>
-              <input
+              <label className={lbl} htmlFor="reorder-vendor">
+                Vendor
+              </label>
+              <select
+                id="reorder-vendor"
                 className={inp}
-                value={f.vendor}
-                onChange={(e) => up('vendor', e.target.value)}
-                placeholder="Vendor name"
-              />
+                value={f.vendor_id}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const picked = vendors.find((v) => v.id === id);
+                  const contact = picked?.contacts.find((c) => c.is_primary) ?? picked?.contacts[0];
+                  setF((p) => ({
+                    ...p,
+                    vendor_id: id,
+                    // Linking wins over the typed-in name, and the vendor's own
+                    // contact details save re-typing them onto every order.
+                    vendor: id ? '' : p.vendor,
+                    vendor_contact: picked
+                      ? contact?.email || contact?.phone || picked.email || picked.phone || ''
+                      : p.vendor_contact,
+                  }));
+                }}
+              >
+                <option value="">— Not linked —</option>
+                {vendors
+                  .filter((v) => v.is_active || v.id === f.vendor_id)
+                  .map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                      {v.is_active ? '' : ' (inactive)'}
+                    </option>
+                  ))}
+              </select>
+              {!f.vendor_id && (
+                <input
+                  className={`${inp} mt-2`}
+                  value={f.vendor}
+                  onChange={(e) => up('vendor', e.target.value)}
+                  aria-label="Vendor name (not on file)"
+                  placeholder="Or type a name not on file"
+                />
+              )}
             </div>
             <div>
-              <label className={lbl}>Vendor Contact</label>
+              <label className={lbl} htmlFor="reorder-vendor-contact">
+                Vendor Contact
+              </label>
               <input
+                id="reorder-vendor-contact"
                 className={inp}
                 value={f.vendor_contact}
                 onChange={(e) => up('vendor_contact', e.target.value)}
@@ -450,6 +501,7 @@ export const ReorderRequestsPage: React.FC = () => {
   const tz = useTimezone();
   const [requests, setRequests] = useState<ReorderRequest[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [vendors, setVendors] = useState<InventoryVendor[]>([]);
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -463,7 +515,7 @@ export const ReorderRequestsPage: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [reqs, cats, lowStock] = await Promise.all([
+      const [reqs, cats, lowStock, vendorList] = await Promise.all([
         inventoryService.getReorderRequests({
           status: statusFilter || undefined,
           urgency: urgencyFilter || undefined,
@@ -471,10 +523,14 @@ export const ReorderRequestsPage: React.FC = () => {
         }),
         inventoryService.getCategories().catch(() => [] as InventoryCategory[]),
         inventoryService.getLowStockItems().catch(() => [] as LowStockAlert[]),
+        // Inactive vendors are fetched too so an existing link to one still
+        // shows its name; the options below only offer the active ones.
+        inventoryService.getVendors({ active_only: false }).catch(() => [] as InventoryVendor[]),
       ]);
       setRequests(reqs);
       setCategories(cats);
       setLowStockAlerts(lowStock);
+      setVendors(vendorList);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load reorder requests'));
     } finally {
@@ -659,8 +715,8 @@ export const ReorderRequestsPage: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td data-label="Vendor" className="text-theme-text-muted px-4 py-3">
-                      {req.vendor ?? '—'}
+                    <td data-label="Vendor" className="px-4 py-3">
+                      <VendorName record={req} />
                     </td>
                     <td data-label="Est. Cost" className="text-theme-text-primary px-4 py-3">
                       {req.estimated_unit_cost != null
@@ -734,6 +790,7 @@ export const ReorderRequestsPage: React.FC = () => {
             void load();
           }}
           categories={categories}
+          vendors={vendors}
           lowStockAlerts={lowStockAlerts}
           editRequest={editRequest}
         />

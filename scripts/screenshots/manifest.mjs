@@ -1098,7 +1098,8 @@ export const SHOTS = [
       await banner.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(400);
     },
-    selector: "div:has(> svg) >> text=/You're offline\\. Reports will be saved/",
+    selector:
+      "div:has(> svg) >> text=/You're offline\\. Reports will be saved/",
   },
   {
     id: "02-90-crew-summary-table",
@@ -1112,7 +1113,9 @@ export const SHOTS = [
       // tab lives under Scheduling rather than Training — the same screen
       // guide 03 photographs, shown here for its per-crew roll-up rather than
       // its Review Queue.
-      const table = page.locator("table:has(th:text-is('Crew member'))").first();
+      const table = page
+        .locator("table:has(th:text-is('Crew member'))")
+        .first();
       await table.waitFor({ timeout: 20_000 });
       await table.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(600);
@@ -4284,7 +4287,8 @@ export const SHOTS = [
     id: "05-53-items-grid-lot-stock",
     doc: "05-inventory.md",
     line: 662,
-    anchor: "Screenshot of the inventory items grid with two consumable rows visible",
+    anchor:
+      "Screenshot of the inventory items grid with two consumable rows visible",
     alt: 'Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure',
     // Needs `seed_supply_tracking` to have run: without dated lots on at least
     // one item every row reports the pool figure and the two ledgers cannot be
@@ -5285,7 +5289,7 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     // The phone frame itself, not the dimmed page behind it.
-    selector: 'div.fixed.inset-0.z-50 > div',
+    selector: "div.fixed.inset-0.z-50 > div",
     viewport: { width: 1440, height: 1300 },
   },
   {
@@ -5857,12 +5861,20 @@ export const SHOTS = [
       await heading.scrollIntoViewIfNeeded();
       // The list is a card grid, not a table — walk up to the card and take
       // its own Issue button rather than the first one on the page.
-      const card = heading.locator("xpath=ancestor::div[contains(@class,'card-secondary')][1]");
-      await card.getByRole("button", { name: /^Issue$/ }).first().click();
+      const card = heading.locator(
+        "xpath=ancestor::div[contains(@class,'card-secondary')][1]",
+      );
+      await card
+        .getByRole("button", { name: /^Issue$/ })
+        .first()
+        .click();
       const dialog = page.locator('[role="dialog"]');
       await dialog.waitFor({ timeout: 20_000 });
       await dialog.getByPlaceholder("Search members...").fill("Belhaj");
-      await dialog.getByRole("button", { name: /Belhaj/ }).first().click();
+      await dialog
+        .getByRole("button", { name: /Belhaj/ })
+        .first()
+        .click();
       // The allowance banner only appears once the check returns.
       await page.waitForTimeout(900);
       const qty = dialog.locator('input[type="number"]').first();
@@ -7312,7 +7324,9 @@ export const SHOTS = [
     route: "/scheduling?tab=equipment-checks",
     auth: "member",
     prepare: async (page) => {
-      await page.waitForSelector("text=Engine Daily Check", { timeout: 20_000 });
+      await page.waitForSelector("text=Engine Daily Check", {
+        timeout: 20_000,
+      });
       await page.waitForTimeout(600);
     },
     fullPage: true,
@@ -7362,6 +7376,109 @@ export const SHOTS = [
     selector: "div[role='dialog'] div.bg-theme-surface-modal.relative",
   },
   {
+    id: "05-72-setup-prompt",
+    doc: "05-inventory.md",
+    line: 71,
+    anchor:
+      'Screenshot of the inventory admin hub with the "Finish inventory setup" prompt',
+    alt: 'The inventory admin hub with the "Finish inventory setup" prompt naming what is still missing',
+    route: "/inventory/admin",
+    // Verified against the seeded department: it captures a hub with no prompt
+    // at all, because the prompt is gone the moment rooms, storage areas,
+    // categories and items exist — which seeding guarantees. Capturing it here
+    // would overwrite a correct picture with a wrong one on every run.
+    capturedElsewhere: "scripts/screenshots/inventory-setup.mjs",
+    fullPage: false,
+  },
+  {
+    id: "05-73-setup-rooms",
+    doc: "05-inventory.md",
+    line: 100,
+    anchor: "Screenshot of step 1 of the inventory setup workflow",
+    alt: "Step 1 of the inventory setup workflow, with no rooms declared yet",
+    route: "/inventory/admin/setup?step=0",
+    // Same reason as 05-72: the caption describes a department with no rooms,
+    // and the seeder creates several.
+    capturedElsewhere: "scripts/screenshots/inventory-setup.mjs",
+    fullPage: false,
+  },
+  {
+    id: "05-74-setup-categories",
+    doc: "05-inventory.md",
+    line: 124,
+    anchor:
+      "Screenshot of step 3 offering the standard fire-service starter categories",
+    alt: "Step 3 offering the standard fire-service starter categories, one of them already added",
+    route: "/inventory/admin/setup?step=2",
+    fullPage: true,
+  },
+  {
+    id: "05-77-setup-storage",
+    doc: "05-inventory.md",
+    line: 112,
+    anchor: "Screenshot of step 2 of the setup workflow, adding storage areas",
+    alt: "Step 2 of the setup workflow, adding storage areas to the selected room",
+    route: "/inventory/admin/setup?step=1",
+    fullPage: false,
+  },
+  {
+    id: "05-78-setup-first-items",
+    doc: "05-inventory.md",
+    line: 138,
+    anchor:
+      "Screenshot of step 4 of the setup workflow, with the room, storage area",
+    alt: "Step 4 of the setup workflow, with the room, storage area and category pickers",
+    route: "/inventory/admin/setup?step=3",
+    fullPage: false,
+  },
+  {
+    id: "05-81-setup-categories-mobile",
+    doc: "05-inventory.md",
+    line: 160,
+    anchor: "Screenshot of the category step of the setup workflow on a phone",
+    alt: "The category step of the setup workflow on a phone",
+    route: "/inventory/admin/setup?step=2",
+    viewport: "mobile",
+    fullPage: true,
+  },
+  {
+    id: "05-75-setup-item-prefilled",
+    doc: "05-inventory.md",
+    line: 134,
+    anchor:
+      "Screenshot of the Add Item form opened from the setup workflow with room",
+    alt: "The Add Item form opened from the setup workflow with room, storage area and category pre-filled",
+    route: "/inventory/admin/setup?step=3",
+    prepare: async (page) => {
+      // Pick a storage area first — the point of the shot is that all three
+      // pickers carry into the form, and the area defaults to none.
+      const area = page.getByLabel("Storage area");
+      await area.waitFor({ timeout: 15_000 });
+      const value = await area.evaluate(
+        (el) => [...el.options].find((o) => o.value)?.value ?? "",
+      );
+      if (value) await area.selectOption(value);
+      await page
+        .getByRole("button", { name: /Add an item/i })
+        .click({ timeout: 15_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    // Taller window: the item form is a max-height dialog with its own
+    // scrollbar, so a viewport shot at 900px cuts it off mid-Location.
+    viewport: { width: 1440, height: 1300 },
+    fullPage: false,
+  },
+  {
+    id: "05-76-setup-done",
+    doc: "05-inventory.md",
+    line: 143,
+    anchor: "Screenshot of the closing step of the setup workflow",
+    alt: "The closing step of the setup workflow recapping what was created",
+    route: "/inventory/admin/setup?step=4",
+    fullPage: false,
+  },
+  {
     id: "05-71-impact-planner-replacement",
     doc: "05-inventory.md",
     line: 1968,
@@ -7383,7 +7500,8 @@ export const SHOTS = [
         );
         return option?.value ?? "";
       });
-      if (!value) throw new Error("no Structural PPE category to analyse against");
+      if (!value)
+        throw new Error("no Structural PPE category to analyse against");
       await category.selectOption(value);
       await page
         .getByText("Count worn or expired items as needing replacement")
@@ -7546,7 +7664,9 @@ export const SHOTS = [
       // applying it — which is the state the guide is describing.
       // Scoped to the popover and taken first: the built-in "Officer
       // Election" template below also matches a loose name regex.
-      const popover = page.locator("div:has(> h4:text-is('Select a Template'))");
+      const popover = page.locator(
+        "div:has(> h4:text-is('Select a Template'))",
+      );
       const saved = popover
         .getByRole("button", { name: /Annual officer election/ })
         .first();
