@@ -944,3 +944,183 @@ class InventoryLinkResponse(BaseModel):
 # CheckTemplateItemResponse references DeployedLot, which is declared with the
 # supply schemas further down; bind the forward reference now that it exists.
 CheckTemplateItemResponse.model_rebuild()
+
+
+# ============================================
+# Fleet Readiness / Check Log Schemas
+# ============================================
+
+
+class CheckStripEntry(UTCResponseBase):
+    """One square in an apparatus's recent-check strip.
+
+    ``status`` is null on a date the apparatus expected no check at all, which
+    is a different thing from a check it missed — a rig on a weekly schedule
+    should read as idle on the days between, not as neglected.
+    """
+
+    model_config = _camel_config
+
+    date: str
+    status: Optional[str] = None
+
+
+class FleetApparatusReadiness(UTCResponseBase):
+    """One apparatus on the fleet board."""
+
+    model_config = _camel_config
+
+    apparatus_id: str
+    unit_label: str
+    name: Optional[str] = None
+    apparatus_type: Optional[str] = None
+    source: str = "apparatus"
+
+    readiness: str
+    # Always populated. The pill is a claim the app makes on the department's
+    # behalf, so the reason travels with it rather than living in a tooltip.
+    readiness_reason: str
+    status_label: Optional[str] = None
+    status_reason: Optional[str] = None
+
+    last_check_at: Optional[datetime] = None
+    last_check_by: Optional[str] = None
+    last_check_by_name: Optional[str] = None
+    last_check_status: Optional[str] = None
+    last_check_id: Optional[str] = None
+    open_check_id: Optional[str] = None
+
+    failed_item_count: int = 0
+    out_of_service_item_count: int = 0
+    expiring_item_count: int = 0
+    restock_item_count: int = 0
+    due_today_count: int = 0
+    overdue_count: int = 0
+
+    expected: int = 0
+    completed: int = 0
+    completion_rate: Optional[float] = None
+    recent: List[CheckStripEntry] = []
+    as_of: str
+
+
+class FleetTotals(BaseModel):
+    """Fleet-wide counts for the board's summary band."""
+
+    model_config = _camel_config
+
+    in_service: int = 0
+    attention: int = 0
+    out_of_service: int = 0
+    no_checks: int = 0
+    due_today: int = 0
+    overdue: int = 0
+    open_findings: int = 0
+    expiring_items: int = 0
+
+
+class FleetReadinessResponse(UTCResponseBase):
+    """The fleet board payload."""
+
+    model_config = _camel_config
+
+    generated_at: datetime
+    expiring_window_days: int
+    strip_dates: int
+    apparatus: List[FleetApparatusReadiness] = []
+    totals: FleetTotals
+
+
+class CheckLogCellCheck(BaseModel):
+    """One expected check inside a grid cell."""
+
+    model_config = _camel_config
+
+    check_id: Optional[str] = None
+    template_name: str
+    check_timing: str
+    status: str
+    finding_count: int = 0
+
+
+class CheckLogCell(BaseModel):
+    """One date column for one apparatus."""
+
+    model_config = _camel_config
+
+    date: str
+    status: Optional[str] = None
+    checks: List[CheckLogCellCheck] = []
+
+
+class CheckLogRow(BaseModel):
+    """One apparatus row of the readiness matrix."""
+
+    model_config = _camel_config
+
+    apparatus_id: str
+    unit_label: str
+    apparatus_type: Optional[str] = None
+    cells: List[CheckLogCell] = []
+    expected: int = 0
+    completed: int = 0
+    completion_rate: Optional[float] = None
+
+
+class CheckLogEntry(UTCResponseBase):
+    """One chronological log row.
+
+    ``check_id`` is null for a check that was expected and never submitted —
+    the row exists precisely because the check does not.
+    """
+
+    model_config = _camel_config
+
+    check_id: Optional[str] = None
+    shift_id: str
+    shift_date: str
+    apparatus_id: str
+    unit_label: str
+    template_id: str
+    template_name: str
+    check_timing: str
+    status: str
+    checked_at: Optional[datetime] = None
+    checked_by: Optional[str] = None
+    checked_by_name: Optional[str] = None
+    total_items: Optional[int] = None
+    completed_items: Optional[int] = None
+    failed_items: Optional[int] = None
+    finding_count: int = 0
+    findings: List[str] = []
+
+
+class CheckLogSummary(BaseModel):
+    """Counts across the whole window."""
+
+    model_config = _camel_config
+
+    expected: int = 0
+    completed: int = 0
+    completion_rate: Optional[float] = None
+    missed: int = 0
+    with_findings: int = 0
+    out_of_service_days: int = 0
+
+
+class CheckLogResponse(BaseModel):
+    """Grid plus log for the requested window.
+
+    ``rows`` is empty when ``scope`` is ``own``: a matrix built from one
+    member's checks would be read as fleet coverage when it is nothing of the
+    kind, so the grid is withheld rather than mislabeled.
+    """
+
+    model_config = _camel_config
+
+    window_dates: int
+    dates: List[str] = []
+    scope: str = "fleet"
+    rows: List[CheckLogRow] = []
+    entries: List[CheckLogEntry] = []
+    summary: CheckLogSummary
