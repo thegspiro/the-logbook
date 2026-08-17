@@ -112,6 +112,15 @@ def _is_shift_officer(shift, user: User) -> bool:
     return bool(shift.shift_officer_id and str(shift.shift_officer_id) == str(user.id))
 
 
+def _can_view_platoon_roster(shift, user: User) -> bool:
+    """True when ``user`` may see the shift's staffing availability details."""
+    return (
+        user_has_permission(user, "scheduling.assign")
+        or user_has_permission(user, "scheduling.manage")
+        or _is_shift_officer(shift, user)
+    )
+
+
 async def _authorize_shift_management(
     service: SchedulingService,
     current_user: User,
@@ -484,7 +493,14 @@ async def get_shift(
         attendance_records, member_call_counts
     )
 
-    platoon_roster = await service.get_platoon_roster_for_shift(shift)
+    # The roster reveals other members' availability and leave status. Keep
+    # general shift details visible to members, but only fetch and expose these
+    # staffing details to schedulers or the officer responsible for the shift.
+    platoon_roster = (
+        await service.get_platoon_roster_for_shift(shift)
+        if _can_view_platoon_roster(shift, current_user)
+        else []
+    )
 
     # Whether check-in is open, decided by the same helper the check-in endpoint
     # enforces with. Published so the check-in screen can disable its own button
