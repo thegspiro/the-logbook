@@ -21,7 +21,7 @@ import type {
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { inputCls, labelCls } from '../constants';
 import { enumLabel } from '../types';
-import { formatNumber } from '../../../utils/dateFormatting';
+import { formatCalendarDate, formatCurrency, formatNumber } from '../../../utils/dateFormatting';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
 
 interface FieldDefinition {
@@ -124,8 +124,8 @@ function ResourceSection<T extends { id: string }>({
   };
 
   return (
-    <section className="bg-theme-surface border-theme-surface-border rounded-xl border">
-      <header className="border-theme-surface-border flex items-center justify-between border-b p-5">
+    <section className="card">
+      <header className="border-theme-surface-border flex items-center justify-between border-b p-4">
         <h2 className="text-theme-text-primary text-sm font-semibold">
           {title} {!isLoading && `(${items.length})`}
         </h2>
@@ -144,7 +144,7 @@ function ResourceSection<T extends { id: string }>({
         )}
       </header>
 
-      <div className="p-5">
+      <div className="p-4">
         {canEdit && showForm && (
           <div className="bg-theme-surface-hover/50 mb-5 grid grid-cols-1 gap-3 rounded-lg p-4 sm:grid-cols-2">
             {fields.map((field) => (
@@ -325,6 +325,10 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
       await loadReadings();
     });
 
+  // The API returns newest-first, but the order is a display guarantee here,
+  // so it is not left to the server.
+  const sortedReadings = [...readings].sort((a, b) => b.readingDate.localeCompare(a.readingDate));
+
   return (
     <div className="mt-2">
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -337,6 +341,25 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
           </button>
         )}
       </div>
+      {sortedReadings.length > 0 && (
+        <ul className="border-theme-surface-border divide-theme-surface-border mt-2 divide-y rounded-lg border">
+          {sortedReadings.map((reading) => (
+            <li key={reading.id} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
+              {/* reading_date is a backend `date` (calendar date) — the
+                  non-shifting formatter keeps it on the day that was entered */}
+              <span className="text-theme-text-secondary">{formatCalendarDate(reading.readingDate)}</span>
+              <span className="text-theme-text-muted">
+                {reading.usageQuantity != null
+                  ? `${formatNumber(reading.usageQuantity)}${reading.usageUnit ? ` ${reading.usageUnit}` : ''}`
+                  : '—'}
+              </span>
+              <span className="text-theme-text-primary">
+                {reading.amount != null ? formatCurrency(reading.amount) : '—'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {showForm && (
         <div className="mt-2 grid grid-cols-3 gap-2" onClick={(event) => event.stopPropagation()}>
           <input
@@ -367,7 +390,7 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
             className="btn-primary col-span-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void addReading()}
           >
-            Save reading
+            {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Save reading'}
           </button>
         </div>
       )}

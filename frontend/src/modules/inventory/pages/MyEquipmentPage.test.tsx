@@ -132,7 +132,7 @@ describe('MyEquipmentPage', () => {
 
   it('renders the header after loading', async () => {
     renderWithRouter(<MyEquipmentPage />);
-    expect(await screen.findByRole('heading', { name: 'My Equipment' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'My Issued Gear' })).toBeInTheDocument();
     expect(mockGetUserInventory).toHaveBeenCalledWith('me');
   });
 
@@ -191,7 +191,7 @@ describe('MyEquipmentPage', () => {
   it('loads my requests when the panel is opened', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
-    await screen.findByRole('heading', { name: 'My Equipment' });
+    await screen.findByRole('heading', { name: 'My Issued Gear' });
 
     await user.click(screen.getByRole('button', { name: /My Requests/ }));
     await waitFor(() => {
@@ -204,7 +204,7 @@ describe('MyEquipmentPage', () => {
     mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
-    await screen.findByRole('heading', { name: 'My Equipment' });
+    await screen.findByRole('heading', { name: 'My Issued Gear' });
 
     await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
     await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');

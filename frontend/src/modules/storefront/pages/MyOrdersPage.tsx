@@ -215,7 +215,10 @@ const MyOrdersPage: React.FC = () => {
                     </div>
                   )}
 
-                  {balance > 0 && order.paymentStatus !== 'pending_verification' && (
+                  {/* The backend rejects payment-method changes on cancelled
+                      orders and while a payment report awaits verification —
+                      don't offer a button that can only error. */}
+                  {balance > 0 && order.status !== 'cancelled' && order.paymentStatus !== 'pending_verification' && (
                     <button
                       type="button"
                       className="text-theme-text-muted hover:text-theme-text-primary mt-2 text-xs underline"

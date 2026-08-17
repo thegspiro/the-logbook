@@ -25,7 +25,7 @@ from app.api.v1.endpoints.users import (
     _redact_contact_fields,
     get_user_with_roles,
 )
-from app.models.user import User, UserStatus
+from app.models.user import Position, User, UserStatus
 from app.schemas.organization import OrganizationSettingsResponse
 from app.schemas.user import UserProfileResponse
 
@@ -53,7 +53,9 @@ def _member() -> User:
         # never persisted because the redaction under test is pure.
         compliance_exempt=False,
         email_verified=True,
-        mfa_enabled=False,
+        mfa_enabled=True,
+        last_login_at=datetime(2026, 8, 1, 6, 30, tzinfo=timezone.utc),
+        notification_preferences={"email": True, "sms_notifications": False},
         date_of_birth=date(1988, 4, 12),
         emergency_contacts=[
             {
@@ -66,7 +68,20 @@ def _member() -> User:
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
-    user.positions = []
+    # `User.roles` is a synonym for `positions`; giving the subject one with a
+    # real permissions list lets the role-permission redaction be observed.
+    # is_system/priority defaults only materialize on flush, so set them.
+    user.positions = [
+        Position(
+            id=str(uuid.uuid4()),
+            organization_id=user.organization_id,
+            name="Treasurer",
+            slug="treasurer",
+            permissions=["finance.view", "finance.manage"],
+            is_system=False,
+            priority=10,
+        )
+    ]
     return user
 
 
@@ -301,15 +316,21 @@ class TestProfileContactRedaction:
 
 
 class TestDirectoryProfileMetadataRedaction:
+    """Account and authorization metadata is leadership/self-only.
+
+    `members.view` opens any colleague's profile, so anything the profile
+    passes through is org-wide public. `mfa_enabled` in particular maps which
+    accounts lack MFA; the roles' permissions lists map the org's access
+    control. No contact-visibility flag exists for any of these.
+    """
+
     def test_clears_account_and_authorization_metadata(self):
         payload = UserProfileResponse.model_validate(_member())
-        payload.notification_preferences = {"email": True}
-        role = MagicMock()
-        role.permissions = ["members.manage", "users.view"]
-        payload.roles = [role]
 
         _clear_directory_only_profile_metadata(payload)
 
+        # None, not False: a neutral False would misreport an MFA-protected
+        # account as unprotected.
         assert payload.email_verified is None
         assert payload.mfa_enabled is None
         assert payload.last_login_at is None
@@ -317,6 +338,27 @@ class TestDirectoryProfileMetadataRedaction:
         assert payload.updated_at is None
         assert payload.notification_preferences is None
         assert payload.roles[0].permissions == []
+
+    def test_role_names_survive_but_permissions_are_blanked(self):
+        payload = UserProfileResponse.model_validate(_member())
+        assert payload.roles[0].permissions  # factory sanity check
+
+        _clear_directory_only_profile_metadata(payload)
+
+        # The profile page renders role names only; the permission map is the
+        # part with security value.
+        assert payload.roles[0].name == "Treasurer"
+        assert payload.roles[0].permissions == []
+
+    def test_does_not_mutate_the_orm_row(self):
+        # The helper edits the response payload; the Position row backing the
+        # role must keep its permissions or the redaction would corrupt the
+        # in-session object other code still reads.
+        member = _member()
+        payload = UserProfileResponse.model_validate(member)
+        _clear_directory_only_profile_metadata(payload)
+
+        assert member.positions[0].permissions == ["finance.view", "finance.manage"]
 
 
 def _db_returning(user: User) -> MagicMock:
@@ -433,6 +475,65 @@ class TestProfileEndpointAppliesRedaction:
         assert result.date_of_birth == date(1988, 4, 12)
         assert len(result.emergency_contacts) == 1
 
+    async def test_plain_viewer_gets_no_account_security_metadata(self):
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.view"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.mfa_enabled is None
+        assert result.email_verified is None
+        assert result.last_login_at is None
+        assert result.notification_preferences is None
+        # Role names still render on the profile page; the permission map
+        # does not leave the server.
+        assert result.roles[0].name == "Treasurer"
+        assert result.roles[0].permissions == []
+
+    async def test_members_manager_keeps_account_security_metadata(self):
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.manage"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.mfa_enabled is True
+        assert result.email_verified is True
+        assert result.last_login_at is not None
+        assert result.notification_preferences == {
+            "email": True,
+            "sms_notifications": False,
+        }
+        assert result.roles[0].permissions == ["finance.view", "finance.manage"]
+
+    async def test_members_keep_their_own_account_security_metadata(self):
+        # UserSettingsPage shows the member their own MFA state and
+        # notification preferences through this endpoint.
+        subject = _member()
+        caller = _caller(
+            user_id=subject.id,
+            org_id=subject.organization_id,
+            permissions=[],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.mfa_enabled is True
+        assert result.email_verified is True
+        assert result.last_login_at is not None
+        assert result.notification_preferences == {
+            "email": True,
+            "sms_notifications": False,
+        }
+        assert result.roles[0].permissions == ["finance.view", "finance.manage"]
+
     async def test_members_see_their_own_contact_details(self):
         # UserSettingsPage loads the member's own profile through this endpoint
         # and writes the fields back on save. Redacting for self would blank a
@@ -525,6 +626,23 @@ class TestProfileEndpointAccessControl:
         assert result.created_at is None
         assert result.updated_at is None
         assert result.notification_preferences is None
+
+    async def test_members_manage_reads_other_records_unredacted(self):
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.manage"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.username == "jsmith"
+        # members.manage is the leadership grant: contact info, emergency
+        # contacts and account metadata all come through unredacted.
+        assert result.phone == "555-0100"
+        assert result.emergency_contacts != []
+        assert result.email_verified is True
 
     async def test_users_view_retains_account_metadata(self):
         subject = _member()

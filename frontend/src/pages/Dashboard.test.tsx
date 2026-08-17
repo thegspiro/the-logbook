@@ -39,6 +39,8 @@ const {
   mockGetSetupChecklist,
   mockGetUserInventory,
   mockGetInventorySummary,
+  mockGetEligiblePositions,
+  mockGetMyCompliance,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -53,6 +55,8 @@ const {
   mockGetSetupChecklist: vi.fn(),
   mockGetUserInventory: vi.fn(),
   mockGetInventorySummary: vi.fn(),
+  mockGetEligiblePositions: vi.fn(),
+  mockGetMyCompliance: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -63,7 +67,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
       .fn()
       .mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
     signupForShift: mockSignupForShift,
-    getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'] }),
+    getEligiblePositions: mockGetEligiblePositions,
   },
 }));
 
@@ -96,6 +100,9 @@ vi.mock('../services/api', () => ({
   },
   eventService: {
     getEvents: mockGetEvents,
+  },
+  medicalScreeningService: {
+    getMyCompliance: mockGetMyCompliance,
   },
   dashboardService: {
     getStats: vi.fn().mockResolvedValue({}),
@@ -166,6 +173,16 @@ describe('Dashboard', () => {
     mockAcknowledge.mockResolvedValue(undefined);
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
+    mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+    // Default: a department that tracks no screenings.
+    mockGetMyCompliance.mockResolvedValue({
+      total_requirements: 0,
+      compliant_count: 0,
+      non_compliant_count: 0,
+      expiring_soon_count: 0,
+      is_fully_compliant: true,
+      days_until_next_expiration: null,
+    });
     mockCheckPermission.mockReturnValue(false);
     mockGetAdminSummary.mockResolvedValue({});
     mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
@@ -312,6 +329,182 @@ describe('Dashboard', () => {
     });
   });
 
+  describe('Readiness verdict', () => {
+    const withCerts = (certs: unknown[]) =>
+      mockGetMyTraining.mockResolvedValue({
+        hours_summary: { total_hours: 0, hours_this_month: 0 },
+        certifications: certs,
+      });
+
+    it('stays absent when the member has no tracked certifications', async () => {
+      renderWithRouter(<Dashboard />);
+
+      // Wait for the page to settle rather than for the call, so the absence
+      // below is a rendered absence and not a race.
+      await waitFor(() => {
+        expect(screen.getByText(/Nothing scheduled through/)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/clear to respond/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Certifications only/)).not.toBeInTheDocument();
+    });
+
+    it('reports a clear member', async () => {
+      withCerts([
+        {
+          id: 'c1',
+          course_name: 'Firefighter I',
+          expiration_date: '2028-01-01',
+          is_expired: false,
+          days_until_expiry: 500,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+    });
+
+    it('names the seats the member can hold', async () => {
+      withCerts([
+        { id: 'c1', course_name: 'Firefighter I', expiration_date: null, is_expired: false, days_until_expiry: null },
+      ]);
+      mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter', 'driver'], is_excluded: false });
+
+      renderWithRouter(<Dashboard />);
+
+      const seats = await screen.findByLabelText('Seats you can hold');
+      expect(within(seats).getByText('Firefighter')).toBeInTheDocument();
+      expect(within(seats).getByText('Driver/Operator')).toBeInTheDocument();
+    });
+
+    // A member the department excludes from shift signup — a social or
+    // administrative member — has no seats to report. "No seats" is not a
+    // readiness finding about them, so the verdict says nothing on the subject
+    // rather than implying they failed something.
+    it('says nothing about seats for a member excluded from shift signup', async () => {
+      withCerts([
+        { id: 'c1', course_name: 'Firefighter I', expiration_date: null, is_expired: false, days_until_expiry: null },
+      ]);
+      mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Seats you can hold')).not.toBeInTheDocument();
+      expect(screen.getByText(/Certifications only/)).toBeInTheDocument();
+    });
+
+    it('grounds a member whose medical screening is overdue', async () => {
+      withCerts([
+        { id: 'c1', course_name: 'Firefighter I', expiration_date: null, is_expired: false, days_until_expiry: null },
+      ]);
+      mockGetMyCompliance.mockResolvedValue({
+        total_requirements: 2,
+        compliant_count: 1,
+        non_compliant_count: 1,
+        expiring_soon_count: 0,
+        is_fully_compliant: false,
+        days_until_next_expiration: null,
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Not clear to respond')).toBeInTheDocument();
+      expect(screen.getByText(/1 screening overdue/)).toBeInTheDocument();
+    });
+
+    // The dashboard renders on tablets left at stations. The screening figures
+    // arrive as counts precisely so a passer-by cannot read which screening a
+    // member is behind on, or what it found.
+    it('never names a screening', async () => {
+      withCerts([]);
+      mockGetMyCompliance.mockResolvedValue({
+        total_requirements: 1,
+        compliant_count: 0,
+        non_compliant_count: 1,
+        expiring_soon_count: 0,
+        is_fully_compliant: false,
+        days_until_next_expiration: null,
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Not clear to respond');
+      for (const term of [/psychological/i, /drug/i, /physical exam/i, /failed/i]) {
+        expect(screen.queryByText(term)).not.toBeInTheDocument();
+      }
+    });
+
+    // A failed read is not a pass. The scope note narrows instead.
+    it('does not claim screenings when the read failed', async () => {
+      withCerts([
+        { id: 'c1', course_name: 'Firefighter I', expiration_date: null, is_expired: false, days_until_expiry: null },
+      ]);
+      mockGetMyCompliance.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+      expect(screen.getByText(/Certifications and seats/)).toBeInTheDocument();
+      expect(screen.queryByText(/screening/i)).not.toBeInTheDocument();
+    });
+
+    // The general eligibility call takes no shift id; the per-shift one used by
+    // a signup row does. Passing an id here would narrow the seats to whatever
+    // shift happened to be expanded.
+    it('asks for general eligibility, not a shift’s', async () => {
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(mockGetEligiblePositions).toHaveBeenCalledWith();
+      });
+    });
+
+    it('sits above the panel it summarises', async () => {
+      withCerts([
+        {
+          id: 'c1',
+          course_name: 'EMT-B Recertification',
+          expiration_date: '2026-09-05',
+          is_expired: false,
+          days_until_expiry: 24,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      const verdict = await screen.findByText('Clear, with conditions');
+      const panel = screen.getByRole('heading', { name: 'Needs you' });
+      const panelFollowsVerdict = Boolean(verdict.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(panelFollowsVerdict).toBe(true);
+    });
+
+    // The verdict and the rows beneath it read the same list, so an expiry can
+    // never be urgent in one and fine in the other — but they must not say the
+    // same sentence. The verdict counts; the row names it and carries the
+    // button.
+    it('summarises without restating the row beneath it', async () => {
+      withCerts([
+        {
+          id: 'c1',
+          course_name: 'EMT-B Recertification',
+          expiration_date: '2026-09-05',
+          is_expired: true,
+          days_until_expiry: -2,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Not clear to respond')).toBeInTheDocument();
+      // The verdict counts…
+      expect(screen.getByText(/1 certification expired/)).toBeInTheDocument();
+      // …the row names it, once, and carries the action.
+      expect(screen.getAllByText(/EMT-B Recertification/)).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'Start Renewal' })).toBeInTheDocument();
+    });
+  });
+
   describe('Needs you', () => {
     const makeMessage = (overrides: Record<string, unknown> = {}) => ({
       id: 'msg-1',
@@ -394,7 +587,7 @@ describe('Dashboard', () => {
     });
   });
 
-  describe('Department Feed', () => {
+  describe('My Updates', () => {
     const makeMessage = (overrides: Record<string, unknown> = {}) => ({
       id: 'msg-1',
       title: 'Station 2 Bay Doors Out of Service',
@@ -449,6 +642,70 @@ describe('Dashboard', () => {
         expect(within(feed).getByText('Nothing new')).toBeInTheDocument();
       });
     });
+
+    // Message bodies are linkified; an <a> inside a <button> is invalid HTML
+    // and the parser splits the row apart, so message rows render as
+    // div[role=button]. Following a link must not also fire the row's
+    // navigation to /messages and yank the current tab away.
+    it('lets a body link be followed without triggering the row navigation', async () => {
+      mockGetInbox.mockResolvedValue([
+        makeMessage({
+          id: 'msg-link',
+          title: 'Fill the duty survey',
+          body: 'Sign up at https://example.com/form today',
+          is_read: true,
+          is_persistent: true,
+        }),
+      ]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
+      const link = within(feed).getByRole('link', { name: 'https://example.com/form' });
+      // jsdom can't navigate; keep the click from hitting the default handler.
+      link.addEventListener('click', (e) => e.preventDefault());
+      await user.click(link);
+
+      expect(mockNavigate).not.toHaveBeenCalledWith('/messages');
+
+      // Clicking the row outside the link still opens the messages page.
+      await user.click(within(feed).getByText('Fill the duty survey'));
+      expect(mockNavigate).toHaveBeenCalledWith('/messages');
+    });
+
+    // Enter on a focused body link bubbles to the row's keydown handler; the
+    // anchor's propagation guard covers clicks only, so without a target
+    // check the row would swallow the keypress and navigate instead.
+    it('lets a body link be activated by keyboard without the row hijacking it', async () => {
+      mockGetInbox.mockResolvedValue([
+        makeMessage({
+          id: 'msg-link-kbd',
+          title: 'Fill the duty survey',
+          body: 'Sign up at https://example.com/form today',
+          is_read: true,
+          is_persistent: true,
+        }),
+      ]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
+      const link = within(feed).getByRole('link', { name: 'https://example.com/form' });
+      link.addEventListener('click', (e) => e.preventDefault());
+
+      link.focus();
+      await user.keyboard('{Enter}');
+
+      expect(mockNavigate).not.toHaveBeenCalledWith('/messages');
+
+      // The row itself still responds to keyboard activation.
+      const row = within(feed).getByRole('button', { name: /Fill the duty survey/ });
+      row.focus();
+      await user.keyboard('{Enter}');
+      expect(mockNavigate).toHaveBeenCalledWith('/messages');
+    });
   });
 
   describe('Organization tab', () => {
@@ -469,10 +726,30 @@ describe('Dashboard', () => {
 
       renderWithRouter(<Dashboard />);
 
-      const equipment = await screen.findByRole('region', { name: 'My Equipment' });
+      const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
       expect(within(equipment).getByText('1')).toBeInTheDocument();
       expect(within(equipment).queryByText('99')).not.toBeInTheDocument();
       expect(mockGetInventorySummary).not.toHaveBeenCalled();
+    });
+
+    // Each permanent assignment is one physical unit. The response's quantity
+    // field historically carried the catalog's on-hand stock, so a single
+    // assignment of an item with 50 units in stock displayed as 50.
+    it('counts assignment rows, not any stock quantity the response carries', async () => {
+      mockGetUserInventory.mockResolvedValue({
+        permanent_assignments: [
+          { item_id: 'item-1', quantity: 50 },
+          { item_id: 'item-2', quantity: 1 },
+        ],
+        active_checkouts: [],
+        issued_items: [],
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
+      expect(within(equipment).getByText('2')).toBeInTheDocument();
+      expect(within(equipment).queryByText('51')).not.toBeInTheDocument();
     });
 
     it('is hidden from members without settings.manage', async () => {

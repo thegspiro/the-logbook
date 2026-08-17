@@ -65,7 +65,7 @@ const APPROVAL_STEP_LABELS: Record<string, string> = {
 const DetailSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading purchase request" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <div className="mb-4 flex items-center gap-3">
         <Skeleton className="h-10 w-10" rounded="lg" />
         <div className="space-y-2">
@@ -82,7 +82,7 @@ const DetailSkeleton: React.FC = () => (
         ))}
       </div>
     </div>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <Skeleton className="mb-4 h-5 w-40" />
       {Array.from({ length: 3 }).map((_, i) => (
         <Skeleton key={`s-${String(i)}`} className="mb-3 h-12 w-full" />
@@ -317,7 +317,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
       )}
 
       {/* Request Header */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-3">
@@ -457,7 +457,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
       </div>
 
       {/* Approval Timeline */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
         <ApprovalTimeline steps={pr.approvalSteps} />
       </div>

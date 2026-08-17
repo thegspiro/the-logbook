@@ -64,6 +64,49 @@ describe('EventTemplateForm reminder audience', () => {
     );
   });
 
+  it('never submits the none audience when reminders are re-enabled on edit', async () => {
+    // A template saved with reminders off persists reminder_target 'none'.
+    // Re-checking "Send reminders" must submit a real audience, not 'none' —
+    // 'none' with send_reminders true makes the scheduler silently send nothing.
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <EventTemplateForm
+        initialData={{
+          id: 'template-2',
+          organization_id: 'org-1',
+          name: 'Reminders were off',
+          event_type: 'business_meeting',
+          requires_rsvp: false,
+          is_mandatory: false,
+          allow_guests: false,
+          require_checkout: false,
+          send_reminders: false,
+          reminder_target: 'none',
+          reminder_schedule: [24],
+          is_active: true,
+          created_at: '2026-08-14T00:00:00Z',
+          updated_at: '2026-08-14T00:00:00Z',
+        }}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Reminders' }));
+    await user.click(screen.getByLabelText('Send reminders'));
+    // The audience select must show the value that will actually be submitted
+    expect(screen.getByLabelText(/who should receive reminders/i)).toHaveValue('going');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        send_reminders: true,
+        reminder_target: 'going',
+      })
+    );
+  });
+
   it('does not re-enable reminders when they were explicitly disabled', async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();

@@ -98,23 +98,25 @@ export default function FacilitiesDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Facilities</h1>
-          <p className="text-theme-text-secondary mt-1">Manage stations, buildings, maintenance, and inspections</p>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Facilities</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">
+            Manage stations, buildings, maintenance, and inspections
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {facilities.length > 0 && (
             <button
               onClick={() => void navigate(`/facilities/print-labels?ids=${facilities.map((f) => f.id).join(',')}`)}
-              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors"
+              className="btn-secondary flex items-center gap-2 text-sm"
             >
               <Printer className="h-4 w-4" />
               Print Labels
             </button>
           )}
           {canCreate && (
-            <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2 py-2.5">
+            <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2 text-sm">
               <Plus className="h-4 w-4" />
               Add Facility
             </button>
@@ -170,8 +172,8 @@ export default function FacilitiesDashboard() {
           {/* Action Items & Recent Activity */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Overdue Maintenance */}
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
-              <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
+            <div className="card">
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-red-500" />
                   <h2 className="text-theme-text-primary text-sm font-semibold">Overdue Maintenance</h2>
@@ -183,14 +185,14 @@ export default function FacilitiesDashboard() {
                   View all <ArrowRight className="h-3 w-3" />
                 </button>
               </div>
-              <div className="p-5">
+              <div className="p-4">
                 {!stats?.overdueMaintenanceRecords.length ? (
-                  <div className="py-6 text-center">
+                  <div className="py-8 text-center">
                     <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-500" />
                     <p className="text-theme-text-muted text-sm">No overdue maintenance items</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {stats.overdueMaintenanceRecords.slice(0, PREVIEW_ITEM_COUNT).map((record) => {
                       const facilityName = getFacilityName(record.facilityId);
                       return (
@@ -219,8 +221,8 @@ export default function FacilitiesDashboard() {
             </div>
 
             {/* Upcoming Inspections */}
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
-              <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
+            <div className="card">
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-amber-500" />
                   <h2 className="text-theme-text-primary text-sm font-semibold">Upcoming Inspections</h2>
@@ -232,14 +234,14 @@ export default function FacilitiesDashboard() {
                   View all <ArrowRight className="h-3 w-3" />
                 </button>
               </div>
-              <div className="p-5">
+              <div className="p-4">
                 {!stats?.upcomingInspections.length ? (
-                  <div className="py-6 text-center">
+                  <div className="py-8 text-center">
                     <ClipboardCheck className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
                     <p className="text-theme-text-muted text-sm">No inspections in the next 30 days</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {stats.upcomingInspections.slice(0, PREVIEW_ITEM_COUNT).map((insp) => {
                       const facilityName = getFacilityName(insp.facilityId);
                       return (
@@ -268,8 +270,8 @@ export default function FacilitiesDashboard() {
 
           {/* Recent Activity */}
           {stats?.recentActivity && stats.recentActivity.length > 0 && (
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
-              <div className="border-theme-surface-border flex items-center gap-2 border-b p-5">
+            <div className="card">
+              <div className="border-theme-surface-border flex items-center gap-2 border-b p-4">
                 <Activity className="text-theme-text-muted h-4 w-4" />
                 <h2 className="text-theme-text-primary text-sm font-semibold">Recent Activity</h2>
               </div>
@@ -277,7 +279,7 @@ export default function FacilitiesDashboard() {
                 {stats.recentActivity.map((record) => {
                   const facilityName = getFacilityName(record.facilityId);
                   return (
-                    <div key={record.id} className="flex items-center gap-3 px-5 py-3">
+                    <div key={record.id} className="flex items-center gap-3 px-4 py-3">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                       </div>
@@ -309,13 +311,13 @@ export default function FacilitiesDashboard() {
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search name, number, or city"
                   aria-label="Search facilities"
-                  className="form-input py-2 pr-3 pl-9"
+                  className="form-input pl-10"
                 />
               </div>
             </div>
 
             {(searchResults ?? facilities).length === 0 ? (
-              <div className="bg-theme-surface border-theme-surface-border rounded-xl border py-16 text-center">
+              <div className="card px-4 py-12 text-center">
                 <Building2 className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
                 <p className="text-theme-text-muted mb-4">
                   {searchQuery
@@ -372,15 +374,10 @@ function SummaryCard({ icon: Icon, label, value, subtext, color, onClick }: Summ
   const colors = COLOR_MAP[color] ?? { bg: 'bg-blue-500/10', icon: 'text-blue-500' };
   const Wrapper = onClick ? 'button' : 'div';
   return (
-    <Wrapper
-      onClick={onClick}
-      className={`bg-theme-surface border-theme-surface-border rounded-xl border p-5 text-left transition-all ${
-        onClick ? 'hover:border-theme-surface-border cursor-pointer hover:shadow-md' : ''
-      }`}
-    >
+    <Wrapper onClick={onClick} className={`card p-4 text-left ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}>
       <div className="mb-3 flex items-center gap-3">
         <div className={`h-9 w-9 rounded-lg ${colors.bg} flex items-center justify-center`}>
-          <Icon className={`h-4.5 w-4.5 ${colors.icon}`} />
+          <Icon className={`h-5 w-5 ${colors.icon}`} />
         </div>
         <span className="text-theme-text-muted text-xs font-medium tracking-wide uppercase">{label}</span>
       </div>
@@ -401,14 +398,12 @@ function FacilityCard({ facility, onClick }: FacilityCardProps) {
   return (
     <button
       onClick={() => onClick(facility)}
-      className={`bg-theme-surface hover:border-theme-surface-border rounded-xl border p-5 text-left transition-all hover:shadow-md ${
-        facility.isArchived ? 'border-amber-500/20 opacity-60' : 'border-theme-surface-border'
-      }`}
+      className={`card p-4 text-left transition-shadow duration-200 hover:shadow-md ${facility.isArchived ? 'border-amber-500/20 opacity-60' : 'border-theme-surface-border'}`}
     >
       <div className="mb-3 flex items-start justify-between">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
-            <Building2 className="h-4.5 w-4.5 text-red-500" />
+            <Building2 className="h-5 w-5 text-red-500" />
           </div>
           <div>
             <h3 className="text-theme-text-primary font-semibold">{facility.name}</h3>

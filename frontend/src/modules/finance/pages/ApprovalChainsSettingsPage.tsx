@@ -60,7 +60,7 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
   const sortedSteps = [...chain.steps].sort((a, b) => a.stepOrder - b.stepOrder);
 
   return (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+    <div className="card">
       {/* Header */}
       <div className="flex items-center justify-between p-4">
         <button type="button" onClick={() => setExpanded(!expanded)} className="flex items-center gap-3 text-left">
@@ -318,7 +318,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
 
       {/* Create Form */}
       {showCreateForm && (
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">New Approval Chain</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">

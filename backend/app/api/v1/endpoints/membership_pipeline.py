@@ -27,7 +27,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import get_current_user, require_permission
 from app.api.prospect_privacy import (
     block_self_prospect_access,
     get_hidden_prospect_ids,
@@ -73,6 +73,7 @@ from app.schemas.membership_pipeline import (
     PurgeInactiveRequest,
     PurgeInactiveResponse,
     ReportStageGroupsUpdate,
+    StepApprovalRequest,
     StepReorderRequest,
     TransferProspectRequest,
     TransferProspectResponse,
@@ -993,6 +994,43 @@ async def complete_step(
             completed_by=current_user.id,
             notes=data.notes,
             action_result=data.action_result,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not prospect:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
+    return prospect
+
+
+@router.post("/prospects/{prospect_id}/approve-step", response_model=ProspectResponse)
+async def approve_step(
+    prospect_id: UUID,
+    data: StepApprovalRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Record the caller's own sign-off on a multi-approval pipeline step.
+
+    Multi-approval stages require separately signed approvals from members
+    holding the configured roles (chief, president, ...). Those role
+    holders do not necessarily hold members.manage — this endpoint lets an
+    authenticated signer record the one approval they are entitled to make.
+    The service only accepts an approval for a role the caller currently
+    holds, so no broader permission gate is needed; the step completes (and
+    the prospect advances) only when the last required role has signed.
+    """
+    service = MembershipPipelineService(db)
+    try:
+        prospect = await service.record_step_approval(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            step_id=str(data.step_id),
+            signer_id=current_user.id,
+            role=data.role,
+            notes=data.notes,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

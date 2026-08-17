@@ -6,7 +6,7 @@
  * can quickly see what's in stock vs what's checked out / in maintenance / etc.
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -30,6 +30,7 @@ import {
   XCircle,
   ListPlus,
   Upload,
+  Truck,
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -319,6 +320,11 @@ const ItemTable: React.FC<ItemTableProps> = ({
 /* ------------------------------------------------------------------ */
 const InventoryItemsPage: React.FC = () => {
   const navigate = useNavigate();
+  // Vendor scoping lives in the URL rather than in a filter dropdown: it is
+  // arrived at from a vendor card ("show me what we bought from them"), and a
+  // shareable link is the point.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const vendorFilter = searchParams.get('vendor_id') ?? '';
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
@@ -370,13 +376,14 @@ const InventoryItemsPage: React.FC = () => {
       condition: fCond || undefined,
       item_type: fType || undefined,
       location_id: fLoc || undefined,
+      vendor_id: vendorFilter || undefined,
       size: fSize || undefined,
       color: fColor || undefined,
       style: fStyle || undefined,
       sort_by: sortBy,
       sort_order: sortOrd,
     }),
-    [search, fCat, fStatus, fCond, fType, fLoc, fSize, fColor, fStyle, sortBy, sortOrd]
+    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, sortBy, sortOrd]
   );
 
   const loadItems = useCallback(
@@ -723,7 +730,7 @@ const InventoryItemsPage: React.FC = () => {
               onClick={() => {
                 setFLoc(loc.location_id ?? '');
               }}
-              className={`card-secondary hover:bg-theme-surface-hover p-3 text-left transition-colors ${fLoc === (loc.location_id ?? '') ? 'ring-2 ring-blue-500' : ''}`}
+              className={`card-secondary hover:bg-theme-surface-hover p-3 text-left ${fLoc === (loc.location_id ?? '') ? 'ring-2 ring-blue-500' : ''}`}
             >
               <div className="mb-1 flex items-center gap-1.5">
                 <MapPin className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
@@ -738,6 +745,29 @@ const InventoryItemsPage: React.FC = () => {
               </div>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Vendor scope, arrived at from a vendor card */}
+      {vendorFilter && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2">
+          <Truck className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <p className="text-xs text-blue-700 dark:text-blue-300">
+            Showing items purchased from{' '}
+            <span className="font-semibold">
+              {items.find((i) => i.vendor_id === vendorFilter)?.vendor_name ?? 'this vendor'}
+            </span>
+          </p>
+          <button
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('vendor_id');
+              setSearchParams(next, { replace: true });
+            }}
+            className="ml-auto text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
+          >
+            Clear vendor filter
+          </button>
         </div>
       )}
 

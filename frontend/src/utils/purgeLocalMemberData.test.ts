@@ -36,13 +36,14 @@ describe('purgeLocalMemberData', () => {
     // form of toHaveBeenCalledWith is the accurate assertion here (see the
     // Pitfall #13 note in CLAUDE.md — this is the narrow case it allows).
     expect(mockClearAllDrafts).toHaveBeenCalledWith();
+    expect(mockClearAllDrafts).toHaveBeenCalledTimes(2);
     expect(mockClearAllQueuedChecks).toHaveBeenCalledWith();
     expect(mockClearAllQueuedReports).toHaveBeenCalledWith();
     expect(mockClearAllGenericQueued).toHaveBeenCalledWith();
   });
 
   it('reports how much unsent work was discarded', async () => {
-    mockClearAllDrafts.mockReturnValue(3);
+    mockClearAllDrafts.mockReturnValueOnce(3).mockReturnValueOnce(0);
     mockClearAllQueuedChecks.mockResolvedValue(2);
     mockClearAllQueuedReports.mockResolvedValue(5);
     mockClearAllGenericQueued.mockResolvedValue(1);
@@ -56,6 +57,22 @@ describe('purgeLocalMemberData', () => {
     // Drafts are local-only work-in-progress; only the queues held items
     // that were meant to reach the server.
     expect(result.unsyncedDiscarded).toBe(8);
+  });
+
+  it('sweeps drafts again after asynchronous queue cleanup', async () => {
+    let finishQueue!: (count: number) => void;
+    mockClearAllQueuedChecks.mockReturnValue(
+      new Promise<number>((resolve) => {
+        finishQueue = resolve;
+      })
+    );
+
+    const pending = purgeLocalMemberData();
+    expect(mockClearAllDrafts).toHaveBeenCalledTimes(1);
+    finishQueue(0);
+    await pending;
+
+    expect(mockClearAllDrafts).toHaveBeenCalledTimes(2);
   });
 
   it('still clears the other stores when one throws', async () => {

@@ -11,6 +11,8 @@ import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useRanks } from '@/hooks/useRanks';
 import { POSITION_LABELS } from '@/constants/enums';
+import { getPositionOptions } from '@/modules/scheduling/components/shiftTemplateTypes';
+import { ensureShiftSettingsLoaded } from '@/modules/scheduling/services/shiftSettingsApi';
 import { useApparatusStore } from '../store/apparatusStore';
 import { apparatusService, evocLevelService } from '../services/api';
 import type { ApparatusCreate, ApparatusUpdate, EvocLevel, FuelType } from '../types';
@@ -31,11 +33,33 @@ export const ApparatusFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
-  const { ranks, loading: ranksLoading } = useRanks();
-  const crewPositionOptions = CREW_POSITION_CODES.map((code) => ({
-    code,
-    label: POSITION_LABELS[code] ?? code,
-    eligibleRanks: ranks.filter((rank) => rank.eligible_positions?.includes(code)).map((rank) => rank.display_name),
+  // Ranks only append eligibility labels to options that are already known, so
+  // the seat pickers stay usable while the fetch is in flight.
+  const { ranks } = useRanks();
+  // Department-configured custom scheduling positions (same source the shift
+  // template builder uses). getPositionOptions reads a synchronous cache and
+  // kicks a background load; re-read once that load lands so custom positions
+  // appear without a remount.
+  const [schedulingPositionOptions, setSchedulingPositionOptions] = useState(() => getPositionOptions());
+  useEffect(() => {
+    let cancelled = false;
+    void ensureShiftSettingsLoaded().then(() => {
+      if (!cancelled) setSchedulingPositionOptions(getPositionOptions());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const crewPositionOptions = [
+    ...CREW_POSITION_CODES.map((code) => ({ code, label: POSITION_LABELS[code] ?? code })),
+    ...schedulingPositionOptions
+      .filter((option) => !CREW_POSITION_CODES.includes(option.value as (typeof CREW_POSITION_CODES)[number]))
+      .map((option) => ({ code: option.value, label: option.label })),
+  ].map((option) => ({
+    ...option,
+    eligibleRanks: ranks
+      .filter((rank) => rank.eligible_positions?.includes(option.code))
+      .map((rank) => rank.display_name),
   }));
 
   const {
@@ -614,9 +638,11 @@ export const ApparatusFormPage: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   {(formData.crewPositions ?? []).map((position, index) => {
+                    // Legacy = a stored value no current option covers (a
+                    // custom position offered above is not legacy — listing it
+                    // twice would duplicate the <option> value).
                     const isLegacyPosition =
-                      position !== '' &&
-                      !CREW_POSITION_CODES.includes(position as (typeof CREW_POSITION_CODES)[number]);
+                      position !== '' && !crewPositionOptions.some((option) => option.code === position);
                     return (
                       <div key={`${index}-${position}`} className="flex items-center gap-2">
                         <span className="text-theme-text-muted w-6 text-right text-xs">{index + 1}.</span>
@@ -625,7 +651,6 @@ export const ApparatusFormPage: React.FC = () => {
                           value={position}
                           onChange={(event) => updateCrewPosition(index, event.target.value)}
                           className="form-input flex-1"
-                          disabled={ranksLoading}
                         >
                           <option value="">Select a crew position</option>
                           {isLegacyPosition && <option value={position}>{position} (legacy position)</option>}

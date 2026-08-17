@@ -51,6 +51,12 @@ export const LinkifiedText: React.FC<LinkifiedTextProps> = ({ text, linkClassNam
         href={url}
         target="_blank"
         rel="noopener noreferrer nofollow"
+        // Callers embed linkified bodies inside clickable rows (e.g. the
+        // dashboard feed, whose row onClick navigates to /messages). Following
+        // a link must never also trigger the enclosing row's action, so the
+        // click stops here unconditionally — a link opens in a new tab and has
+        // no legitimate reason to bubble into an ancestor handler.
+        onClick={(e) => e.stopPropagation()}
         className={linkClassName ?? DEFAULT_LINK_CLASS}
       >
         {url}

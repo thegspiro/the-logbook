@@ -108,7 +108,7 @@ interface StatCardProps {
 }
 
 const StatCard: React.FC<StatCardProps> = ({ label, value, icon }) => (
-  <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+  <div className="card p-4">
     <div className="flex items-center gap-3">
       <div className="bg-theme-surface-secondary rounded-lg p-2">{icon}</div>
       <div>
@@ -432,8 +432,9 @@ export const SchedulingReportsPage: React.FC = () => {
               {/* Say what the numbers are, so nobody has to infer it from a
                   column header that could mean either measure. */}
               <p className="text-theme-text-muted mb-4 text-xs">
-                Hours worked are measured from shift check-in and check-out. Scheduled hours are the assigned shift
-                length — shown for comparison, since a shift can run short or long, or be assigned and not worked.
+                Hours worked are measured from shift check-in and check-out, counting only shifts whose attendance has
+                been finalized. Scheduled hours are the assigned shift length — shown for comparison, since a shift can
+                run short or long, or be assigned and not worked.
               </p>
 
               {/* Table */}
@@ -983,10 +984,7 @@ export const SchedulingReportsPage: React.FC = () => {
                     complianceFilter === 'non-compliant' ? req.members.filter((m) => !m.compliant) : req.members;
 
                   return (
-                    <div
-                      key={req.requirement_id}
-                      className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border"
-                    >
+                    <div key={req.requirement_id} className="card overflow-hidden">
                       {/* Requirement header */}
                       <button
                         onClick={() => toggleRequirement(req.requirement_id)}

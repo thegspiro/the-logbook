@@ -19,6 +19,7 @@ vi.mock('axios', () => ({
       };
       return client;
     }),
+    isAxiosError: (value: unknown): boolean => (value as AxiosError | null)?.isAxiosError === true,
   },
 }));
 
@@ -38,8 +39,15 @@ describe('createApiClient response interceptor', () => {
     vi.clearAllMocks();
   });
 
-  it('rejects the original request when session refresh fails', async () => {
-    const refreshFailure = new Error('refresh failed');
+  it('rejects the original request and reports the refresh failure when session refresh fails', async () => {
+    // The refresh endpoint failing with a 503 is exactly the outage the
+    // report exists to record — the reporter filters out the original 401
+    // as routine session expiry, so the refresh error must be what's sent.
+    const refreshFailure = Object.assign(new Error('refresh unavailable'), {
+      config: { url: '/auth/refresh', headers: {} },
+      response: { status: 503 },
+      isAxiosError: true,
+    }) as AxiosError;
     mocks.refresh.mockRejectedValueOnce(refreshFailure);
     createApiClient();
 
@@ -56,6 +64,7 @@ describe('createApiClient response interceptor', () => {
     await expect(rejectionHandler?.(requestError)).rejects.toBe(requestError);
     expect(mocks.expireSession).toHaveBeenCalledExactlyOnceWith();
     expect(mocks.reportApiError).toHaveBeenCalledTimes(1);
-    expect(mocks.reportApiError).toHaveBeenCalledWith(requestError);
+    expect(mocks.reportApiError).toHaveBeenCalledWith(refreshFailure);
+    expect(mocks.reportApiError).not.toHaveBeenCalledWith(requestError);
   });
 });

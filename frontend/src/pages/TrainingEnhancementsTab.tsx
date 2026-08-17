@@ -58,8 +58,7 @@ import type {
   ParticipatingOrganization,
 } from '../types/training';
 
-const inputClass =
-  'w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500';
+const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
 const labelClass = 'form-label';
 const selectClass = inputClass;
 
@@ -1321,7 +1320,7 @@ const ReportsSection: React.FC = () => {
         <button
           onClick={() => void handleExport('compliance')}
           disabled={exporting}
-          className="card-secondary hover:bg-theme-surface-hover p-4 text-left transition-colors"
+          className="card-secondary hover:bg-theme-surface-hover p-4 text-left"
         >
           <Download className="mb-2 h-6 w-6 text-blue-500" />
           <h4 className="text-theme-text-primary text-sm font-medium">Compliance Report</h4>
@@ -1333,7 +1332,7 @@ const ReportsSection: React.FC = () => {
         <button
           onClick={() => void handleExport('hours_summary')}
           disabled={exporting}
-          className="card-secondary hover:bg-theme-surface-hover p-4 text-left transition-colors"
+          className="card-secondary hover:bg-theme-surface-hover p-4 text-left"
         >
           <Download className="mb-2 h-6 w-6 text-green-500" />
           <h4 className="text-theme-text-primary text-sm font-medium">Hours Summary</h4>
@@ -1345,7 +1344,7 @@ const ReportsSection: React.FC = () => {
         <button
           onClick={() => void handleExport('certification')}
           disabled={exporting}
-          className="card-secondary hover:bg-theme-surface-hover p-4 text-left transition-colors"
+          className="card-secondary hover:bg-theme-surface-hover p-4 text-left"
         >
           <Download className="mb-2 h-6 w-6 text-yellow-500" />
           <h4 className="text-theme-text-primary text-sm font-medium">Certification Report</h4>
@@ -1368,7 +1367,7 @@ const ReportsSection: React.FC = () => {
               aria-label="Member records period"
               value={memberRecordsPeriod}
               onChange={(e) => setMemberRecordsPeriod(e.target.value as TrainingExportPeriod)}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-2 text-sm"
+              className="form-input px-3 text-sm"
             >
               {Object.values(TrainingExportPeriod).map((p) => (
                 <option key={p} value={p}>

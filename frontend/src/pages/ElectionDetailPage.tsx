@@ -1533,7 +1533,7 @@ export const ElectionDetailPage: React.FC = () => {
 
                 {/* Pending Member Applications (draft only) */}
                 {election.status === ElectionStatus.DRAFT && (
-                  <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border shadow-sm">
+                  <div className="card overflow-hidden">
                     <button
                       className="flex w-full items-center justify-between px-6 py-4 text-left"
                       onClick={() => {

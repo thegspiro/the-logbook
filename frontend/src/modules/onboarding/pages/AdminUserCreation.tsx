@@ -333,11 +333,7 @@ const SystemOwnerCreation: React.FC = () => {
                     value={formData.firstName}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`form-input placeholder-theme-text-muted py-3 transition-all ${
-                      errors.firstName && touched.firstName
-                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                        : 'border-theme-input-border focus:ring-theme-focus-ring'
-                    }`}
+                    className={`form-input placeholder-theme-text-muted py-3 transition-all ${errors.firstName && touched.firstName ? 'border-theme-accent-red focus:ring-theme-focus-ring' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                     placeholder="John"
                     aria-invalid={errors.firstName && touched.firstName ? 'true' : 'false'}
                     aria-describedby={errors.firstName && touched.firstName ? 'firstName-error' : undefined}
@@ -362,11 +358,7 @@ const SystemOwnerCreation: React.FC = () => {
                     value={formData.lastName}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`form-input placeholder-theme-text-muted py-3 transition-all ${
-                      errors.lastName && touched.lastName
-                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                        : 'border-theme-input-border focus:ring-theme-focus-ring'
-                    }`}
+                    className={`form-input placeholder-theme-text-muted py-3 transition-all ${errors.lastName && touched.lastName ? 'border-theme-accent-red focus:ring-theme-focus-ring' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                     placeholder="Doe"
                     aria-invalid={errors.lastName && touched.lastName ? 'true' : 'false'}
                     aria-describedby={errors.lastName && touched.lastName ? 'lastName-error' : undefined}
@@ -419,11 +411,7 @@ const SystemOwnerCreation: React.FC = () => {
                   value={formData.username}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`form-input placeholder-theme-text-muted py-3 transition-all ${
-                    errors.username && touched.username
-                      ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                      : 'border-theme-input-border focus:ring-theme-focus-ring'
-                  }`}
+                  className={`form-input placeholder-theme-text-muted py-3 transition-all ${errors.username && touched.username ? 'border-theme-accent-red focus:ring-theme-focus-ring' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                   placeholder="johndoe"
                   autoComplete="username"
                   aria-invalid={errors.username && touched.username ? 'true' : 'false'}
@@ -449,11 +437,7 @@ const SystemOwnerCreation: React.FC = () => {
                   value={formData.email}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`form-input placeholder-theme-text-muted py-3 transition-all ${
-                    errors.email && touched.email
-                      ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                      : 'border-theme-input-border focus:ring-theme-focus-ring'
-                  }`}
+                  className={`form-input placeholder-theme-text-muted py-3 transition-all ${errors.email && touched.email ? 'border-theme-accent-red focus:ring-theme-focus-ring' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                   placeholder="itmanager@example.com"
                   autoComplete="email"
                   aria-invalid={errors.email && touched.email ? 'true' : 'false'}
@@ -480,11 +464,7 @@ const SystemOwnerCreation: React.FC = () => {
                     value={formData.password}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`form-input placeholder-theme-text-muted py-3 pr-12 transition-all ${
-                      errors.password && touched.password
-                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                        : 'border-theme-input-border focus:ring-theme-focus-ring'
-                    }`}
+                    className={`form-input placeholder-theme-text-muted py-3 pr-12 transition-all ${errors.password && touched.password ? 'border-theme-accent-red focus:ring-theme-focus-ring' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                     placeholder="Enter a strong password"
                     autoComplete="new-password"
                     aria-invalid={errors.password && touched.password ? 'true' : 'false'}
@@ -588,11 +568,7 @@ const SystemOwnerCreation: React.FC = () => {
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`form-input placeholder-theme-text-muted py-3 pr-12 transition-all ${
-                      errors.confirmPassword && touched.confirmPassword
-                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                        : 'border-theme-input-border focus:ring-theme-focus-ring'
-                    }`}
+                    className={`form-input placeholder-theme-text-muted py-3 pr-12 transition-all ${errors.confirmPassword && touched.confirmPassword ? 'border-theme-accent-red focus:ring-theme-focus-ring' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                     placeholder="Re-enter your password"
                     autoComplete="new-password"
                     aria-invalid={errors.confirmPassword && touched.confirmPassword ? 'true' : 'false'}

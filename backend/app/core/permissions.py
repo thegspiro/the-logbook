@@ -245,12 +245,30 @@ EQUIPMENT_CHECK_SUBMIT = Permission(
     PermissionCategory.SCHEDULING,
 )
 
-# Inventory
+# Inventory — gear and uniforms
 INVENTORY_VIEW = Permission(
-    "inventory.view", "View inventory", PermissionCategory.INVENTORY
+    "inventory.view", "View gear and uniforms", PermissionCategory.INVENTORY
 )
 INVENTORY_MANAGE = Permission(
-    "inventory.manage", "Manage inventory", PermissionCategory.INVENTORY
+    "inventory.manage", "Manage gear and uniforms", PermissionCategory.INVENTORY
+)
+
+# Inventory — medical supplies.
+#
+# A separate domain so a department can appoint an EMS supply officer without
+# handing over the uniform closet, and vice versa. These are additive: the
+# broad ``inventory.manage`` still covers medical stock, so a department
+# running everything through one quartermaster is unaffected, and every
+# medical route accepts either. ``inventory.*`` continues to grant all of it.
+INVENTORY_VIEW_MEDICAL = Permission(
+    "inventory.view_medical",
+    "View medical supplies",
+    PermissionCategory.INVENTORY,
+)
+INVENTORY_MANAGE_MEDICAL = Permission(
+    "inventory.manage_medical",
+    "Manage medical supplies, stock lots, and expiration tracking",
+    PermissionCategory.INVENTORY,
 )
 
 # Storefront (optional department store that sits alongside logistics)
@@ -560,6 +578,8 @@ ALL_PERMISSIONS: list[Permission] = [
     EQUIPMENT_CHECK_SUBMIT,
     INVENTORY_VIEW,
     INVENTORY_MANAGE,
+    INVENTORY_VIEW_MEDICAL,
+    INVENTORY_MANAGE_MEDICAL,
     STOREFRONT_VIEW,
     STOREFRONT_ORDER,
     STOREFRONT_MANAGE,
@@ -820,6 +840,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_REPORT.name,
             EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             MEETINGS_MANAGE.name,
             ELECTIONS_MANAGE.name,
@@ -848,10 +870,10 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
             # facilities.manage already implies the sensitive read on the
-            # endpoints, but the rank grant ceiling compares permission names
-            # literally (exact/wildcard only) — without the explicit grant a
-            # chief gets a 403 promoting a member to captain, whose defaults
-            # include facilities.view_sensitive.
+            # endpoints, but the role/rank grant ceilings compare permission
+            # names literally (exact/wildcard only) — without the explicit
+            # grant a chief gets a 403 assigning a position whose defaults
+            # include facilities.view_sensitive (vice president, treasurer).
             FACILITIES_VIEW_SENSITIVE.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
@@ -878,6 +900,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_REPORT.name,
             EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             MEETINGS_MANAGE.name,
             ELECTIONS_MANAGE.name,
@@ -903,8 +927,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             FACILITIES_DELETE.name,
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
-            # Explicit so the rank grant ceiling lets this rank assign
-            # captain — see the note on fire_chief.
+            # Explicit so the grant ceilings let this rank assign the
+            # sensitive-facility offices — see the note on fire_chief.
             FACILITIES_VIEW_SENSITIVE.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
@@ -930,6 +954,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_REPORT.name,
             EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             MEETINGS_MANAGE.name,
             EVENTS_CREATE.name,
@@ -949,8 +975,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             FACILITIES_EDIT.name,
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
-            # Explicit so the rank grant ceiling lets this rank assign
-            # captain — see the note on fire_chief.
+            # Explicit so the grant ceilings let this rank assign the
+            # sensitive-facility offices — see the note on fire_chief.
             FACILITIES_VIEW_SENSITIVE.name,
             NOTIFICATIONS_MANAGE.name,
         ],
@@ -1181,6 +1207,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             INVENTORY_MANAGE.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
@@ -1379,7 +1407,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
     "quartermaster": {
         "name": "Quartermaster",
         "slug": "quartermaster",
-        "description": "Manages department inventory, equipment, and gear assignments",
+        "description": "Manages gear, uniforms, and member issuance — and medical "
+        "supplies too, unless the department appoints an EMS supply officer",
         "is_system": True,
         "priority": 85,
         "permissions": [
@@ -1393,10 +1422,38 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             INVENTORY_MANAGE.name,
+            # Departments that run one supply line seed the quartermaster with
+            # both domains; those that split it drop these two from this role
+            # and appoint an ems_supply_officer.
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             COMPLIANCE_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
+        ],
+    },
+    "ems_supply_officer": {
+        "name": "EMS Supply Officer",
+        "slug": "ems_supply_officer",
+        "description": "Manages medical supplies, stock lots, and what is aboard "
+        "each rig — without access to gear or uniforms",
+        "is_system": True,
+        "priority": 55,
+        "permissions": [
+            USERS_VIEW.name,
+            MEMBERS_VIEW.name,
+            POSITIONS_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
+            # Both halves of the shelf-to-truck loop: stock is only useful if
+            # the same officer can put it on the apparatus checklist and see
+            # what is expiring out there.
+            EQUIPMENT_CHECK_VIEW.name,
+            EQUIPMENT_CHECK_MANAGE.name,
+            APPARATUS_VIEW.name,
+            LOCATIONS_VIEW.name,
         ],
     },
     "public_outreach": {
@@ -1464,7 +1521,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
     "apparatus_officer": {
         "name": "Apparatus Officer",
         "slug": "apparatus_officer",
-        "description": "Day-to-day fleet tracking, maintenance logging, and equipment checks",
+        "description": "Day-to-day fleet tracking, maintenance logging, and "
+        "equipment checks, including the medical stock carried on the rigs",
         "is_system": True,
         "priority": 50,
         "permissions": [
@@ -1476,9 +1534,27 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
             INVENTORY_MANAGE.name,
+            # Stated rather than inherited. The broad INVENTORY_MANAGE above
+            # already satisfies every medical route's OR check, so this widens
+            # nothing — it makes the role editor honest, where a chief deciding
+            # who runs EMS stock would otherwise read this role's permission
+            # list and see no mention of medical supplies at all.
+            #
+            # Earned on the merits too: this officer builds the equipment-check
+            # templates that consume medical stock, and a template position is
+            # only as good as the lots behind it.
+            INVENTORY_VIEW_MEDICAL.name,
+            INVENTORY_MANAGE_MEDICAL.name,
             STOREFRONT_MANAGE.name,
             COMPLIANCE_VIEW.name,
             LOCATIONS_VIEW.name,
+            # The role has been described as covering equipment checks since it
+            # was written, and held none of these — lieutenants, captains and
+            # the scheduling officer could build a rig's checklist but the
+            # apparatus officer could not open one.
+            EQUIPMENT_CHECK_VIEW.name,
+            EQUIPMENT_CHECK_MANAGE.name,
+            EQUIPMENT_CHECK_SUBMIT.name,
             APPARATUS_VIEW.name,
             APPARATUS_CREATE.name,
             APPARATUS_EDIT.name,

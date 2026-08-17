@@ -27,6 +27,7 @@ import {
   clearRevalidating,
   clearCache,
 } from '../utils/apiCache';
+import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 
 export const API_BASE_URL = '/api/v1';
 
@@ -155,6 +156,9 @@ export function clearTempAccessToken(): void {
 export function handleExpiredSession(): void {
   localStorage.removeItem('has_session');
   clearCache();
+  // The localStorage portion runs synchronously before this promise yields;
+  // IndexedDB cleanup may safely finish while the redirect proceeds.
+  void purgeLocalMemberData();
   if (!window.location.pathname.startsWith('/onboarding')) {
     window.location.href = '/login';
   }

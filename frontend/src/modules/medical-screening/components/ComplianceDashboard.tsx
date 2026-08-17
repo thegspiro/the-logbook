@@ -29,10 +29,7 @@ export const ComplianceDashboard: React.FC = () => {
         ) : (
           <div className="space-y-2">
             {expiringScreenings.map((screening) => (
-              <div
-                key={screening.record_id}
-                className="border-theme-surface-border bg-theme-surface flex items-center justify-between rounded-lg border p-3"
-              >
+              <div key={screening.record_id} className="card flex items-center justify-between p-3">
                 <div className="flex items-center gap-3">
                   {screening.days_until_expiration <= 7 ? (
                     <XCircle className="h-4 w-4 shrink-0 text-red-500" />

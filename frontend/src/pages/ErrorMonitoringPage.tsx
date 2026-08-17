@@ -199,7 +199,7 @@ const ErrorMonitoringPage: React.FC = () => {
             onClick={() => {
               void exportErrors();
             }}
-            className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-400"
+            className="btn-secondary text-sm font-medium text-blue-700 dark:text-blue-400"
           >
             Export Errors
           </button>
@@ -208,7 +208,7 @@ const ErrorMonitoringPage: React.FC = () => {
               onClick={() => {
                 void clearAllErrors();
               }}
-              className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium text-red-700 dark:text-red-400"
+              className="btn-secondary text-sm font-medium text-red-700 dark:text-red-400"
             >
               Clear All
             </button>

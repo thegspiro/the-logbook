@@ -17,6 +17,13 @@ Best practices for deploying The Logbook in a production environment.
 > in `.env`. `install.sh` sets this automatically. The app **refuses to start**
 > in production/staging if required secrets are missing or weak, if `DEBUG` or
 > API docs are enabled, or if HTTPS isn't enforced.
+>
+> **Docker Compose v2.24.4+ is required** _(2026-08-16)_: the production
+> override declares `volumes: !override` on the backend so the development
+> file's source bind mounts are **cleared**, not merged — Compose's default
+> merge would otherwise mount the live source tree into the production
+> container. Older Compose versions error on the `!override` tag; the fix is
+> to upgrade Compose, never to remove the tag.
 
 ---
 

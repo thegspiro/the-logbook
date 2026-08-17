@@ -125,8 +125,12 @@ export interface AuthSettings {
 }
 
 export interface NotificationPreferences {
-  email: boolean;
+  /** The master email switch. Absorbed the old duplicate `email` key. */
   email_notifications: boolean;
+  /**
+   * Mutes the SMS that accompanies an urgent message. Cannot switch texts
+   * *on*: the member's own SMS consent is the gate the backend enforces.
+   */
   sms_notifications: boolean;
   event_reminders: boolean;
   training_reminders: boolean;

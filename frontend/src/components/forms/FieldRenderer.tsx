@@ -386,7 +386,7 @@ const FieldRenderer = ({
       case FieldType.MULTISELECT: {
         const selected = value ? value.split(',').filter(Boolean) : [];
         return (
-          <div className="bg-theme-input-bg border-theme-input-border space-y-2 rounded-lg border p-3">
+          <div className="card bg-theme-input-bg border-theme-input-border space-y-2 p-3">
             {field.options?.map((opt) => {
               const checked = selected.includes(opt.value);
               return (
@@ -483,7 +483,7 @@ const FieldRenderer = ({
               )}
             </div>
             {memberResults.length > 0 && (
-              <div className="bg-theme-surface-modal border-theme-surface-border absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border shadow-lg">
+              <div className="popover-panel absolute z-10 mt-1 max-h-48 w-full overflow-y-auto">
                 {memberResults.map((member) => (
                   <button
                     key={member.id}

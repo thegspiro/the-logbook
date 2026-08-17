@@ -138,7 +138,7 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} role="presentation" />
-      <div className="border-theme-surface-border bg-theme-surface relative z-10 mx-4 w-full max-w-lg rounded-xl border p-6 shadow-xl">
+      <div className="card relative z-10 mx-4 w-full max-w-lg p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-theme-text-primary text-lg font-semibold">{title}</h3>
           <button
@@ -160,10 +160,9 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
 // =============================================================================
 
 const inputClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+  'form-input px-3 text-sm placeholder:text-theme-text-secondary focus:border-red-500 focus:ring-red-500';
 
-const selectClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+const selectClass = 'form-input px-3 text-sm focus:border-red-500 focus:ring-red-500';
 
 const labelClass = 'form-label';
 
@@ -557,7 +556,7 @@ export const GrantDetailPage: React.FC = () => {
       {/* Tabs                                                               */}
       {/* ================================================================== */}
       <div className="mx-auto max-w-7xl px-6 pt-6">
-        <div className="border-theme-surface-border bg-theme-surface hscroll flex space-x-1 rounded-lg border p-1">
+        <div className="card hscroll flex space-x-1 p-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -586,7 +585,7 @@ export const GrantDetailPage: React.FC = () => {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Project description */}
-            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+            <div className="card p-6">
               <h3 className="text-theme-text-primary text-lg font-semibold">Project Description</h3>
               <p className="text-theme-text-secondary mt-2 text-sm leading-relaxed whitespace-pre-wrap">
                 {application.projectDescription ?? 'No description provided.'}
@@ -595,7 +594,7 @@ export const GrantDetailPage: React.FC = () => {
 
             {/* Narrative summary */}
             {application.narrativeSummary && (
-              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+              <div className="card p-6">
                 <h3 className="text-theme-text-primary text-lg font-semibold">Narrative Summary</h3>
                 <p className="text-theme-text-secondary mt-2 text-sm leading-relaxed whitespace-pre-wrap">
                   {application.narrativeSummary}
@@ -604,7 +603,7 @@ export const GrantDetailPage: React.FC = () => {
             )}
 
             {/* Key contacts */}
-            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+            <div className="card p-6">
               <h3 className="text-theme-text-primary text-lg font-semibold">Key Contacts</h3>
               <p className="text-theme-text-secondary mt-2 text-sm whitespace-pre-wrap">
                 {application.keyContacts ?? 'No contacts recorded.'}
@@ -612,7 +611,7 @@ export const GrantDetailPage: React.FC = () => {
             </div>
 
             {/* Key dates timeline */}
-            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+            <div className="card p-6">
               <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Key Dates</h3>
               <div className="space-y-3">
                 {[
@@ -675,15 +674,15 @@ export const GrantDetailPage: React.FC = () => {
           <div className="space-y-6">
             {/* Summary bar */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 text-center">
+              <div className="card p-4 text-center">
                 <p className="text-theme-text-secondary text-sm">Total Budgeted</p>
                 <p className="text-theme-text-primary mt-1 text-xl font-bold">{formatCurrency(budgetTotal)}</p>
               </div>
-              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 text-center">
+              <div className="card p-4 text-center">
                 <p className="text-theme-text-secondary text-sm">Total Spent</p>
                 <p className="mt-1 text-xl font-bold text-red-600">{formatCurrency(spentTotal)}</p>
               </div>
-              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 text-center">
+              <div className="card p-4 text-center">
                 <p className="text-theme-text-secondary text-sm">Remaining</p>
                 <p className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {formatCurrency(remainingTotal)}
@@ -704,7 +703,7 @@ export const GrantDetailPage: React.FC = () => {
             </div>
 
             {/* Budget table */}
-            <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
+            <div className="card overflow-hidden">
               {budgetItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Wallet className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
@@ -832,7 +831,7 @@ export const GrantDetailPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
+            <div className="card overflow-hidden">
               {expenditures.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Receipt className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
@@ -943,14 +942,14 @@ export const GrantDetailPage: React.FC = () => {
             </div>
 
             {complianceTasks.length === 0 ? (
-              <div className="border-theme-surface-border bg-theme-surface flex flex-col items-center justify-center rounded-lg border py-12">
+              <div className="card flex flex-col items-center justify-center py-12">
                 <ClipboardCheck className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
                 <p className="text-theme-text-secondary">No compliance tasks yet</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {complianceTasks.map((task) => (
-                  <div key={task.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+                  <div key={task.id} className="card p-4">
                     <div className="flex flex-wrap items-start gap-4">
                       {/* Type icon */}
                       <div className="mt-0.5 flex-shrink-0">
@@ -1027,7 +1026,7 @@ export const GrantDetailPage: React.FC = () => {
 
             {/* Timeline */}
             {grantNotes.length === 0 ? (
-              <div className="border-theme-surface-border bg-theme-surface flex flex-col items-center justify-center rounded-lg border py-12">
+              <div className="card flex flex-col items-center justify-center py-12">
                 <MessageSquare className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
                 <p className="text-theme-text-secondary">No activity yet</p>
               </div>
@@ -1060,7 +1059,7 @@ export const GrantDetailPage: React.FC = () => {
             )}
 
             {/* Add note */}
-            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+            <div className="card p-4">
               <label htmlFor="new-note" className={labelClass}>
                 Add Note
               </label>

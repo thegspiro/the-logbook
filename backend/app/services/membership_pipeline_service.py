@@ -13,7 +13,7 @@ import secrets
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from loguru import logger
 from sqlalchemy import and_, delete, func, or_, select, update
@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.core.constants import OFFICE_CATALOG
 from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate
 from app.models.event import Event
@@ -1137,8 +1138,16 @@ class MembershipPipelineService:
                 approvals = self._effective_action_result(
                     prospect, step, action_result
                 ).get("approvals", [])
-                approved_roles = {a.get("role") for a in approvals}
-                missing = [r for r in required_approvers if r not in approved_roles]
+                approved_roles = {
+                    str(a.get("role", "")).casefold()
+                    for a in approvals
+                    if isinstance(a, dict)
+                }
+                missing = [
+                    r
+                    for r in required_approvers
+                    if str(r).casefold() not in approved_roles
+                ]
                 if missing:
                     raise ValueError(
                         f"Approval still needed from: {', '.join(missing)}."
@@ -1191,7 +1200,7 @@ class MembershipPipelineService:
     async def _authorized_multi_approval_result(
         self,
         organization_id: str,
-        completed_by: str,
+        completed_by: Optional[str],
         action_result: Optional[Dict[str, Any]],
     ) -> Optional[Dict[str, Any]]:
         """Replace client-claimed approval identities with the authenticated signer."""
@@ -1224,6 +1233,21 @@ class MembershipPipelineService:
             for value in (position.slug, position.name)
             if value
         }
+        # Stage presets store office keys ("chief"), while the matching
+        # default position is slugged differently ("fire_chief"). Resolve
+        # through the office catalog so a Fire Chief is recognized as
+        # holding the "chief" approval role.
+        signer_slugs = {
+            position.slug.casefold() for position in signer.positions if position.slug
+        }
+        for office in OFFICE_CATALOG:
+            office_slugs = {
+                str(slug).casefold() for slug in office.get("position_slugs", [])
+            }
+            if signer_slugs & office_slugs:
+                signer_roles.add(str(office["key"]).casefold())
+                signer_roles.add(str(office["label"]).casefold())
+
         authorized: List[Dict[str, str]] = []
         for approval in approvals:
             role = approval.get("role") if isinstance(approval, dict) else None
@@ -1233,12 +1257,146 @@ class MembershipPipelineService:
 
         return {**action_result, "approvals": authorized}
 
+    def _accumulate_approvals(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+        action_result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Merge the authenticated approval into the stored approvals list.
+
+        Approvals are signed one per request — each signer signs only for
+        themselves — so a submission must ADD to previously recorded
+        sign-offs, never replace them. A plain ``{**stored, **submitted}``
+        merge replaces the whole ``approvals`` list, which made stages
+        requiring two or more roles impossible to complete. Keyed by role
+        (casefolded): re-approving a role updates that entry.
+        """
+        progress = next(
+            (p for p in prospect.step_progress if str(p.step_id) == str(step.id)),
+            None,
+        )
+        stored = (
+            progress.action_result
+            if progress and isinstance(progress.action_result, dict)
+            else {}
+        )
+        merged: Dict[str, Dict[str, Any]] = {}
+        for approval in list(stored.get("approvals") or []) + list(
+            action_result.get("approvals") or []
+        ):
+            if isinstance(approval, dict) and approval.get("role"):
+                merged[str(approval["role"]).casefold()] = approval
+        return {**stored, **action_result, "approvals": list(merged.values())}
+
+    async def _record_partial_approval(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        prospect: ProspectiveMember,
+        step_id: str,
+        recorded_by: str,
+        action_result: Dict[str, Any],
+        notes: Optional[str],
+        missing_roles: List[str],
+    ) -> Optional[ProspectiveMember]:
+        """Persist an approval that does not yet complete the stage.
+
+        Separately signed approvals have to accumulate across requests, so
+        an incomplete set is recorded progress, not a validation error — the
+        stage stays current and completes when the last required role signs.
+        """
+        progress = next(
+            (p for p in prospect.step_progress if str(p.step_id) == str(step_id)),
+            None,
+        )
+        if not progress:
+            progress = ProspectStepProgress(
+                id=generate_uuid(),
+                prospect_id=prospect_id,
+                step_id=step_id,
+                status=StepProgressStatus.IN_PROGRESS,
+                notes=notes,
+                action_result=action_result,
+            )
+            self.db.add(progress)
+        else:
+            progress.status = StepProgressStatus.IN_PROGRESS
+            if notes:
+                progress.notes = notes
+            # Fresh dict reassignment so the JSON column registers the change.
+            progress.action_result = action_result
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="approval_recorded",
+            details={
+                "step_id": str(step_id),
+                "missing_roles": missing_roles,
+                "notes": notes,
+            },
+            performed_by=recorded_by,
+        )
+        await self.db.commit()
+        return await self.get_prospect(prospect_id, organization_id)
+
+    async def record_step_approval(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        step_id: str,
+        signer_id: str,
+        role: str,
+        notes: Optional[str] = None,
+    ) -> Optional[ProspectiveMember]:
+        """Signer-accessible approval path — multi-approval steps only.
+
+        The complete-step endpoint is manager-gated, but the members who
+        hold a stage's required approval roles do not necessarily hold
+        members.manage. This records the caller's one authenticated
+        sign-off; the step-type guard keeps the ungated endpoint from
+        completing any other kind of stage.
+        """
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+        pipeline_steps = prospect.pipeline.steps if prospect.pipeline else []
+        step = next(
+            (s for s in pipeline_steps if str(s.id) == str(step_id)),
+            None,
+        )
+        if not step:
+            raise ValueError("Step does not belong to this prospect's pipeline")
+        if step.step_type != PipelineStepType.MULTI_APPROVAL:
+            raise ValueError("Only multi-approval steps accept signer approvals")
+        # This route is deliberately not manager-gated — the roles a stage
+        # asks for are rarely held by members.manage holders. The caller's
+        # authority therefore comes entirely from the stage asking for a role
+        # they hold, so a role the stage never requested is not an approval at
+        # all: without this check any member could write their own position
+        # into any prospect's workflow (with arbitrary notes, receiving the
+        # full prospect record back), and a stage with no configured approvers
+        # would leave nothing "missing" — completing and advancing the
+        # prospect outright.
+        required = [str(r) for r in (step.config or {}).get("required_approvers") or []]
+        if not required:
+            raise ValueError("This step has no approver roles configured")
+        if role.casefold() not in {r.casefold() for r in required}:
+            raise ValueError("This step does not require approval from that role")
+        return await self.complete_step(
+            prospect_id=prospect_id,
+            organization_id=organization_id,
+            step_id=step_id,
+            completed_by=signer_id,
+            notes=notes,
+            action_result={"approvals": [{"role": role}]},
+        )
+
     async def complete_step(
         self,
         prospect_id: str,
         organization_id: str,
         step_id: str,
-        completed_by: str,
+        completed_by: Optional[str],
         notes: Optional[str] = None,
         action_result: Optional[Dict[str, Any]] = None,
         *,
@@ -1276,6 +1434,48 @@ class MembershipPipelineService:
             action_result = await self._authorized_multi_approval_result(
                 organization_id, completed_by, action_result
             )
+            if action_result and "approvals" in action_result:
+                required = (step.config or {}).get("required_approvers", [])
+                # An approval for a role the stage never asked for is not an
+                # approval — recording it would store misleading sign-off
+                # evidence against the prospect's file.
+                if required:
+                    wanted = {str(r).casefold() for r in required}
+                    for approval in action_result.get("approvals") or []:
+                        role_name = (
+                            approval.get("role") if isinstance(approval, dict) else None
+                        )
+                        if str(role_name or "").casefold() not in wanted:
+                            raise ValueError(
+                                "This step does not require approval from that role"
+                            )
+                # Each request carries exactly one authenticated approval;
+                # merge it over the stored list so separately signed
+                # approvals accumulate instead of replacing each other.
+                action_result = self._accumulate_approvals(
+                    prospect, step, action_result
+                )
+                approved_roles = {
+                    str(a.get("role", "")).casefold()
+                    for a in action_result.get("approvals", [])
+                    if isinstance(a, dict)
+                }
+                missing = [
+                    r for r in required if str(r).casefold() not in approved_roles
+                ]
+                if missing:
+                    # Not a validation failure: record the sign-off and keep
+                    # the stage current until the remaining roles sign.
+                    return await self._record_partial_approval(
+                        prospect_id=prospect_id,
+                        organization_id=organization_id,
+                        prospect=prospect,
+                        step_id=step_id,
+                        recorded_by=completed_by,
+                        action_result=action_result,
+                        notes=notes,
+                        missing_roles=missing,
+                    )
 
         # Only the dedicated coordinator skip path may bypass a stage gate.
         # Keeping this server-side avoids accepting a client-controlled
@@ -1870,7 +2070,7 @@ class MembershipPipelineService:
     async def _do_transfer(
         self,
         prospect: ProspectiveMember,
-        transferred_by: str,
+        transferred_by: Optional[str],
         username: Optional[str] = None,
         membership_id: Optional[str] = None,
         rank: Optional[str] = None,
@@ -2871,7 +3071,7 @@ class MembershipPipelineService:
         prospect_id: str,
         organization_id: str,
         step_id: str,
-        completed_by: str,
+        completed_by: Optional[str],
         trigger: str,
         action_result: Optional[Dict[str, Any]] = None,
     ) -> bool:
@@ -2917,11 +3117,73 @@ class MembershipPipelineService:
                 f"past step '{step.name}' on {trigger}"
             )
             return True
+        except ValueError as e:
+            # The stage gate is not satisfied yet — two of three screenings
+            # passed, one of two interviews recorded. For an event-driven
+            # advance that is the ordinary case, not a fault: the stage stays
+            # put and the next event re-tries. Logging it at ERROR buried the
+            # real failures below in routine noise.
+            logger.debug(
+                f"Auto-advance for prospect {prospect_id} on {trigger} "
+                f"deferred; stage requirements not met yet: {e}"
+            )
+            return False
         except Exception as e:
             logger.error(
                 f"Failed to auto-advance prospect " f"{prospect_id} on {trigger}: {e}"
             )
             return False
+
+    async def try_auto_advance_current_step(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        *,
+        step_type: PipelineStepType,
+        trigger: str,
+        completed_by: Optional[str] = None,
+        action_result: Optional[Dict[str, Any]] = None,
+        config_matches: Optional[Callable[[Dict[str, Any]], bool]] = None,
+    ) -> bool:
+        """Auto-advance a prospect whose current stage is of ``step_type``.
+
+        Completion evidence often arrives from another module — a medical
+        screening result, an attendance record — which knows the event that
+        happened but not which pipeline stage, if any, is waiting on it. Resolve
+        the prospect's current stage here, require it to be a type this event
+        can satisfy, and let :meth:`_try_auto_advance_step` apply the
+        ``auto_advance`` opt-in and the stage's own completion gate.
+
+        ``config_matches`` narrows further on the stage config, so an attendance
+        record only advances a meeting stage pointed at *that* event.
+
+        Returns True only if the prospect actually advanced.
+        """
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect or not prospect.pipeline or not prospect.current_step_id:
+            return False
+
+        step = next(
+            (
+                s
+                for s in prospect.pipeline.steps
+                if str(s.id) == str(prospect.current_step_id)
+            ),
+            None,
+        )
+        if step is None or step.step_type != step_type:
+            return False
+        if config_matches and not config_matches(step.config or {}):
+            return False
+
+        return await self._try_auto_advance_step(
+            prospect_id=prospect_id,
+            organization_id=organization_id,
+            step_id=str(step.id),
+            completed_by=completed_by,
+            trigger=trigger,
+            action_result=action_result,
+        )
 
     # =========================================================================
     # Template Seeding
@@ -3758,7 +4020,7 @@ class MembershipPipelineService:
                 prospect_id=prospect_id,
                 organization_id=organization_id,
                 step_id=step_id,
-                completed_by=uploaded_by or "system",
+                completed_by=uploaded_by,
                 trigger="document upload",
                 action_result={"document_id": doc.id},
             )
