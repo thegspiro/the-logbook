@@ -2322,7 +2322,9 @@ async def get_position_roster(
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("scheduling.view", "scheduling.manage")
+        require_permission(
+            "scheduling.manage", "training.view_all", "training.manage"
+        )
     ),
 ):
     """
@@ -2333,7 +2335,7 @@ async def get_position_roster(
     completed training, or the org's open-position list), their current EVOC
     level, and the apparatus they hold an operator record on.
 
-    **Permissions required:** scheduling.view or scheduling.manage
+    **Permissions required:** scheduling.manage, training.view_all, or training.manage
     """
     service = ShiftEligibilityService(db)
     roster = await service.get_position_roster(
