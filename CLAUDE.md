@@ -151,37 +151,47 @@ All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps 
 
 ### Two TypeScript installs — do not "tidy" this away
 
-The frontend depends on TypeScript twice, on purpose:
+Two TypeScripts are resolved, on purpose. **The arrangement changed on
+2026-08-17** and is currently held together by npm's peer auto-install rather
+than by a declaration — read the drift note at the end of this section before
+touching any of it.
+
+**What `frontend/package.json` declares today:**
 
 | Declared as                                     | Version | Used by                                          |
 | ----------------------------------------------- | ------- | ------------------------------------------------ |
-| `typescript`                                    | 5.9.3   | typescript-eslint (type-aware lint rules)        |
+| `typescript`                                    | 7.0.2   | *(nothing intentionally — see below)*            |
 | `typescript-native` (npm alias of `typescript`) | 7.0.2   | `npm run typecheck`, `npm run build`, the editor |
 
-**typescript-eslint cannot run on TypeScript 7.** It throws `typescript-eslint does
-not support TS 7.0` from a hard version guard, and every published version caps
-its peer range at `<6.1.0` (typescript-eslint#10940 tracks TS >=7.1 support). A
-workspace can only declare one package named `typescript`, and npm resolves a
-peer against the workspace's own copy — so the linter's TypeScript has to be the
-one named `typescript`, and the compiler gets the alias.
+**What actually resolves in `package-lock.json`:**
 
-This is not cosmetic. Before it was set up this way, `rm package-lock.json &&
-npm install` failed outright with ERESOLVE: the lockfile in the repo could not be
-regenerated, and any bump of typescript-eslint broke the install.
+| Lock path                          | Version | Why it is there                                   |
+| ---------------------------------- | ------- | ------------------------------------------------- |
+| `node_modules/typescript`          | 5.9.3   | `"peer": true` — npm auto-installed it to satisfy typescript-eslint |
+| `node_modules/typescript-native`   | 7.0.2   | The aliased compiler, hoisted                     |
+| `frontend/node_modules/typescript` | 7.0.2   | The frontend's own declaration, nested            |
+
+**typescript-eslint still cannot run on TypeScript 7.** It throws
+`typescript-eslint does not support TS 7.0` from a hard version guard, and
+every published version — including the `^8.67.0` this repo uses — caps its
+peer range at `>=4.8.4 <6.1.0` (typescript-eslint#10940 tracks TS >=7.1
+support). Type-aware lint therefore runs against a 5.9.3 that **no manifest in
+this repository asks for**.
+
+This is not cosmetic. Before the split existed, `rm package-lock.json && npm
+install` failed outright with ERESOLVE: the lockfile could not be regenerated,
+and any bump of typescript-eslint broke the install.
 
 Consequences worth knowing:
 
 - `npm run typecheck` / `npm run build` go through `frontend/scripts/tsc-native.mjs`,
-  which resolves the aliased compiler. Plain `tsc` on `PATH` is the **5.9.3** one —
-  both installs ship a `tsc` bin and npm links only one, so do not "simplify" the
-  scripts back to bare `tsc` or you will silently typecheck with 5.9.3 (~12x
-  slower: ~41s vs ~3.5s, measured).
-- **Point your editor at the aliased compiler**, or it will report 5.9.3's
-  errors while CI reports 7.0.2's. In VS Code, set this in your local
-  `.vscode/settings.json` (the directory is gitignored, so this cannot be
-  committed for you — and the tracked copy's stale
-  `frontend/node_modules/typescript/lib` no longer exists, since npm hoists
-  both installs to the repo root):
+  which resolves the aliased compiler explicitly. Keep it that way — the
+  wrapper is what makes "which compiler ran" a fact rather than a hoisting
+  outcome. (Bare `tsc` inside the frontend workspace now resolves to 7.0.2,
+  not 5.9.3 as this section previously warned; that changed with the bump.)
+- **Point your editor at the aliased compiler.** In VS Code, set this in your
+  local `.vscode/settings.json` (the directory is gitignored, so this cannot
+  be committed for you):
 
   ```json
   "typescript.tsdk": "node_modules/typescript-native/lib"
@@ -189,8 +199,24 @@ Consequences worth knowing:
 
 - Type-aware lint runs against 5.9.3 while the build uses 7.0.2. That gap is
   forced by upstream, not chosen. **When typescript-eslint ships TS 7 support,
-  collapse this back to a single `typescript` dependency** and delete the alias,
-  the wrapper script, and this section.
+  collapse this to a single `typescript` dependency** and delete the alias, the
+  wrapper script, and this section.
+
+#### Drift note (2026-08-17) — the arrangement is currently incidental
+
+Dependabot bumped `typescript` from `5.9.3` to `7.0.2` in
+`frontend/package.json`. `typescript` and `typescript-native` now name the same
+version, so the alias is redundant, and **the 5.9.3 the linter runs against
+survives only because npm chose to auto-install it as a peer.** CI is green, so
+nothing is broken today — but the pin went from declared to incidental, and a
+different npm version, a `--strict-peer-deps` install, or a future lockfile
+regeneration is not guaranteed to reproduce it.
+
+Do not "fix" this by deleting the alias without deciding what the linter
+compiles with. The two honest options are: re-pin `typescript` at `5.9.3`
+(restoring the declared split), or keep 7.0.2 and pin the linter's compiler
+some other way. Tracked as **BUILD-1** in
+[`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
 
 ## Testing
 

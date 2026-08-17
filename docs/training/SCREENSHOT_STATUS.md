@@ -9,14 +9,14 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**434 of 473 placeholders filled** (39 remaining).
+**434 of 486 placeholders filled** (52 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
 | [00-getting-started.md](./00-getting-started.md) | 14 | 1 |
 | [01-membership.md](./01-membership.md) | 27 | 0 |
 | [02-training.md](./02-training.md) | 70 | 0 |
-| [03-scheduling.md](./03-scheduling.md) | 66 | 0 |
+| [03-scheduling.md](./03-scheduling.md) | 66 | 1 |
 | [04-events-meetings.md](./04-events-meetings.md) | 31 | 4 |
 | [05-inventory.md](./05-inventory.md) | 57 | 2 |
 | [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 19 | 1 |
@@ -32,8 +32,8 @@ regenerated wholesale, so that audit cannot live here.
 | [16-integrations.md](./16-integrations.md) | 5 | 0 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 2 | 2 |
 | [18-storefront.md](./18-storefront.md) | 4 | 0 |
-| [19-august-2026-release-changes.md](./19-august-2026-release-changes.md) | 0 | 20 |
+| [19-august-2026-release-changes.md](./19-august-2026-release-changes.md) | 0 | 32 |
 | [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) | 0 | 2 |
 | [TRAINING_MATERIALS_REVIEW.md](./TRAINING_MATERIALS_REVIEW.md) | 0 | 1 |
-| **Total** | **434** | **39** |
+| **Total** | **434** | **52** |
 

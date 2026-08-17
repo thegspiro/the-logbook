@@ -261,6 +261,36 @@ organization's settings (`enabled_modules`), configured inside the app
 > is in this list. If left empty behind a proxy, all clients appear to share the
 > proxy's IP. See [Security Configuration](Configuration-Security#client-ip-resolution--geoip-2026-05-29).
 
+### Brute-Force Controls _(2026-08-17)_
+
+Full descriptions and the failure-direction reasoning are in
+[Configuration → Security](Configuration-Security#brute-force-controls-2026-08-17).
+
+| Variable                            | Description                                                                                                                                                                 | Default                                 |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `SUSPICIOUS_IP_THROTTLE_ENABLED`    | Count **failed** auth attempts per IP across **all** accounts and block the IP past a threshold. Closes the password-spray gap between the per-IP rate limit and per-account lockout | **`true`**                              |
+| `SUSPICIOUS_IP_MAX_FAILURES`        | Failures per window before the IP is blocked                                                                                                                                 | `50`                                    |
+| `SUSPICIOUS_IP_WINDOW_SECONDS`      | Counting window                                                                                                                                                              | `3600`                                  |
+| `SUSPICIOUS_IP_BLOCK_SECONDS`       | Block duration once the threshold is crossed                                                                                                                                 | `900`                                   |
+| `BREACHED_PASSWORD_CHECK_ENABLED`   | Reject passwords found in known breach corpora. **Requires outbound HTTPS.** **Fails open** — an unreachable provider accepts the password and logs the degradation           | `false`                                 |
+| `BREACHED_PASSWORD_MIN_COUNT`       | Appearances in the corpus before rejecting; `1` rejects anything ever seen                                                                                                    | `1`                                     |
+| `BREACHED_PASSWORD_API_URL`         | Range-API endpoint. Only the **first 5 characters** of the password's SHA-1 are ever sent (k-anonymity)                                                                        | `https://api.pwnedpasswords.com/range`  |
+| `BREACHED_PASSWORD_TIMEOUT_SECONDS` | Lookup timeout; on timeout the password is accepted                                                                                                                          | `3.0`                                   |
+| `CAPTCHA_ENABLED`                   | Human challenge on public form submit and forgot-password. **Fails closed** — a provider outage refuses those submissions                                                      | `false`                                 |
+| `CAPTCHA_PROVIDER`                  | `turnstile` \| `hcaptcha` \| `recaptcha`                                                                                                                                      | `turnstile`                             |
+| `CAPTCHA_SECRET_KEY`                | Provider secret. **Enabling CAPTCHA without this logs an error and enforces nothing** — deliberately, so a half-finished setup does not read as an outage                      | `""`                                    |
+| `CAPTCHA_SITE_KEY`                  | Public site key, served to the browser by `GET /api/v1/auth/captcha-config`                                                                                                   | `""`                                    |
+| `CAPTCHA_TIMEOUT_SECONDS`           | Verification timeout                                                                                                                                                          | `5.0`                                   |
+| `CAPTCHA_MIN_SCORE`                 | reCAPTCHA v3 score floor; ignored by Turnstile and hCaptcha                                                                                                                   | `0.5`                                   |
+
+> **Enabling `CAPTCHA_ENABLED` also widens the Content-Security-Policy** to the
+> configured provider's widget origins. Without that the browser silently blocks
+> the widget script and iframe, and the symptom is *"the challenge never
+> appears"* rather than anything naming the CSP. With CAPTCHA off the policy is
+> byte-for-byte unchanged. The challenge token travels in an `X-Captcha-Token`
+> header — if a reverse proxy in front of the app maintains its own header
+> allowlist, add it there too.
+
 ---
 
 ## OAuth Sign-In

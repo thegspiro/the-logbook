@@ -1,5 +1,73 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-16 → 08-17 changes
+
+Full reason and data-path context in
+[`../CHANGE_AUDIT_2026-08-16_TO_17.md`](../CHANGE_AUDIT_2026-08-16_TO_17.md).
+Nothing in this section is a verified capture — each item stays open until the
+image is opened and checked against its caption.
+
+### REPLACE — the pictured screen changed, the image on file is now wrong
+
+These are **not** missing captures. An image is applied in a guide today and no
+longer shows what the guide says it shows, which is worse than a placeholder:
+the reader has no reason to doubt it.
+
+| Image | Guide | Why it is now wrong |
+| --- | --- | --- |
+| Any Minutes-page card capture (`04-*`, the meeting card grid) | 04 | The cards rendered **"0 attendees · 0 action items"** over meetings that had both. Every capture taken before 2026-08-17 shows the zeros as if they were the data. Re-shoot against the seeded department, which now populates `/meetings` with an approved business meeting (attendees, motions, open action items), a draft board meeting, and a pending public event request on the Requests tab. |
+| Shift detail showing a populated hold-over / availability roster | 03 | The roster is now returned only to `scheduling.assign`, `scheduling.manage`, or the shift's own officer. A capture taken from a member account will no longer reproduce, and one taken from a scheduler account is only half the story — the guide now teaches the **pair**. |
+| Platoon Management (`/scheduling/platoons`) | 03 | Its permission moved from `scheduling.view` to `scheduling.manage`. Any capture whose caption or surrounding text implies a member can reach it is now teaching a permission error. |
+| Medical Supplies → edit supply, for a **lot-stocked** item | 05 | The "On hand" input is gone for lot-stocked items, replaced by the lot figure and a pointer to **Receive delivery**. A capture showing an editable box teaches an edit that silently did nothing. |
+| Dashboard readiness line, if the pictured member holds a renewed certification | 00 | The verdict counted the lapsed row of a renewed pair, so a "Not clear to respond" capture may be picturing the defect rather than the rule. Re-shoot or confirm the pictured member has no renewed credential. |
+| Any Settings → App capture that shows Force refresh without the unreachable-server state | 10 | Not wrong, but incomplete — the refusal path is now the more instructive frame. See the capture request below rather than replacing the existing one. |
+
+### SCREENSHOT NEEDED — new screens and states with no capture
+
+- **Challenge widget on forgot-password** — requires `CAPTCHA_ENABLED=true`
+  with a valid site key. Caption which of the three providers is pictured; the
+  widget looks materially different for each, so an uncaptioned shot will read
+  as wrong to two-thirds of readers.
+- **Challenge widget on public form submission, after a rejected submission**,
+  showing the widget reset. Tokens are single-use, so this is the state a
+  member actually hits when a submission fails validation and they retry.
+- **Breached-password refusal** on the change-password screen. Requires
+  `BREACHED_PASSWORD_CHECK_ENABLED=true` and a known-leaked test password.
+  Caption that the message deliberately omits the breach count.
+- **Shift detail, scheduler vs. member** — the roster pair described above.
+  Seed at least one member on approved leave so the availability distinction
+  is visible.
+- **Permission error at `/scheduling/platoons`** for a member holding only
+  `scheduling.view`.
+- **Driver-seat refusal at assignment time**, showing the reason and the
+  request-an-exception affordance in the same place the block happens.
+- **Chief's driver-exception review screen** with a pending request —
+  justification, restrictions, validity window.
+- **Pattern generation result reporting a skipped driver seat.** This is the
+  state that proves generation no longer silently seats an uncertified driver;
+  a successful generation screenshot cannot show it.
+- **Force refresh refusing on an unreachable server**, button re-enabled.
+  **Capture with the backend stopped, not with the device offline** — the
+  check fetches `/version.json` rather than trusting `navigator.onLine`, so an
+  offline device may produce a different frame than the one being documented.
+- **Minutes page cards with populated counts** — this is the replacement for
+  the row in the table above, not an additional capture.
+- **Dashboard readiness "Clear, with conditions"** for a member with one
+  renewed certification and one screening inside the 60-day window. Caption
+  that the renewed certification is *not* what produced the condition — that
+  is the exact confusion the fix addressed.
+
+### Explicitly NOT flagged
+
+- **Guest check-in captures are unaffected.** The challenge is deliberately
+  not applied there, so no guest check-in image needs re-shooting for CAPTCHA.
+- **Sign-in page captures are unaffected.** Suspicious-IP throttling adds no
+  UI; a blocked address gets the existing rate-limit response.
+- **Impact Planner PDF captures** are unaffected unless the pictured
+  department or member name contains `<` or `&`, which no seeded name does.
+
+---
+
 ## Tracker corrected 2026-08-17 — the count was never 421 of 423
 
 Two defects in the pipeline were found while capturing the nested-room shots,

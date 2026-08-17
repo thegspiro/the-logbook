@@ -82,6 +82,25 @@ The one exception is **422**, where `detail` is an array of per-field objects:
 > protocol violations. An automated contract suite (`backend-test-contract`
 > in CI) checks that the schema and the application stay in agreement.
 
+### Token parameters declare their alphabet *(2026-08-17)*
+
+Path/query parameters that carry an opaque access token — the application-status
+token and the finance approval token — now declare a **base64url pattern**
+(`A–Z a–z 0–9 - _`) in the published schema alongside their existing length
+bounds. These are `secrets.token_urlsafe` values, so that is the truth about
+them, and a generated client can validate before sending.
+
+This was not cosmetic. The schema constrained length but not alphabet, so the
+contract fuzzer generated arbitrary Unicode; percent-encoding is byte-oriented
+and lossy for anything that will not round-trip through UTF-8, so a ten-character
+string arrived as eight and tripped `min_length=10` — reported as the API
+rejecting valid data.
+
+> **The calendar feed token deliberately has no pattern.** It answers `404` for a
+> malformed token rather than `422`, so it cannot trip that check — and adding a
+> pattern would turn the 404 into a 422, which would leak "wrong format" apart
+> from "not found" on a publicly reachable feed.
+
 ---
 
 ## Endpoints

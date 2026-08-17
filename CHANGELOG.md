@@ -7,6 +7,412 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Scheduling: the platoon roster is staffing information, not a directory (2026-08-17)
+
+**Security**
+
+- **A shift's platoon roster is no longer returned to every member.**
+  `GET /scheduling/shifts/{id}` carried `platoon_roster` — the hold-over list
+  of who is available, which is derived from **who is on approved leave**.
+  Every authenticated member could read it, because the shift detail endpoint
+  is gated on `scheduling.view`, which is implicit for all members. It now
+  requires `scheduling.assign`, `scheduling.manage`, or being the shift's own
+  `shift_officer_id`; everyone else gets an empty list and the roster is not
+  fetched at all. General shift details — time, apparatus, assignments,
+  check-in state — are unchanged for everyone.
+- **Platoon Management moved from `scheduling.view` to `scheduling.manage`.**
+  `GET /scheduling/platoons/overview` is the department-wide roster: every
+  platoon, every member in it, plus the unassigned bucket. `scheduling.view`
+  never gated it meaningfully. **Anyone who reached `/scheduling/platoons`
+  with only `scheduling.view` will now get a permission error** — grant
+  `scheduling.manage` to the roles that legitimately need it.
+
+**Fixed**
+
+- **Deleted members were being staffed onto generated platoon shifts.**
+  Generation filtered `User.status == "active"`, but `status` and `is_active`
+  are different columns — a soft-deleted or anonymized member can still carry
+  a `status` of `active`. It filters `User.is_active` now.
+- **The Patterns tab crashed on a malformed platoon list.**
+  `schedule_config` is unvalidated JSON; a non-array `platoons` value (or an
+  array holding non-strings) reached `.map()` and took the whole tab down.
+  Non-string entries are filtered out and a missing or non-array value reads
+  as empty.
+
+### Auth: three controls between the brute-force gaps (2026-08-16 → 08-17)
+
+**Security / Added**
+
+- **Challenge-response (CAPTCHA) on the two internet-exposed forms** —
+  public form submission and forgot-password. Both are reachable by anyone and
+  were defended only by rate limiting, a honeypot and a daily cap: controls
+  that raise the cost of automation without ever requiring a human, so a bot
+  pacing itself under the limit still got through. Turnstile, hCaptcha and
+  reCAPTCHA are all supported — operators do not share constraints, and the
+  first two offer accessible challenges without a Google dependency. Off by
+  default (`CAPTCHA_ENABLED`).
+
+  **This control fails closed**, the opposite of the breached-password check
+  below. That asymmetry is the point: there, complexity rules and password
+  history still guard the account when the lookup is skipped, so an outage
+  costs a supplementary signal. Here there is no fallback, and accepting
+  unverified traffic during an outage is exactly the state an attacker wants —
+  one they can bring about by attacking the provider or waiting for a bad day.
+  An operator who cannot accept that availability tradeoff should leave the
+  feature off rather than run it bypassable.
+
+  Decisions worth keeping:
+
+  - **Enabling it without a secret logs an error and enforces nothing**,
+    rather than rejecting every public submission. A half-finished setup
+    should not read as an outage.
+  - **The token rides in an `X-Captcha-Token` header**, so verification is a
+    pure dependency that runs before body parsing and needs no schema changes.
+    The header is in the CORS allowlist; a reverse proxy with its own header
+    allowlist needs the same entry.
+  - **Enabling it widens the CSP** for the configured provider's widget
+    origins. Without that the browser blocks the script and iframe, and the
+    failure presents as "the challenge never appears" rather than as anything
+    naming the CSP. With CAPTCHA off the policy is byte-for-byte unchanged,
+    `frame-src` included. A new provider needs an entry in **both**
+    `_VERIFY_URLS` and `_WIDGET_ORIGINS`.
+  - **Rejections are generic.** The provider's error codes separate "bad
+    secret" from "token already redeemed" from "forged", which is a map of
+    what to probe.
+  - **The frontend mirrors the server's decision** rather than making its own,
+    and treats an unreachable config endpoint as "not required" — the server
+    still enforces independently, so that cannot bypass a live challenge,
+    while the opposite default would make every anonymous form unsubmittable.
+  - **Tokens are single-use**, so a rejected submission resets the widget
+    instead of replaying a token the provider already burned.
+  - **Deliberately not applied to guest check-in**, which is reached by
+    scanning a QR code on a station display — a challenge there is hostile to
+    someone standing in a firehouse.
+
+  `GET /api/v1/auth/captcha-config` is unauthenticated by necessity (its
+  callers have no session) and is registered in the endpoint-auth allowlist
+  with that reasoning. It returns the provider and the **public** site key,
+  never the secret, and reports `enabled: false` when CAPTCHA is switched on
+  but misconfigured — matching what the server actually enforces.
+
+- **Passwords that appear in known breach corpora are rejected.**
+  "Firetruck2024!" clears every rule the platform enforces — length, all four
+  character classes, no sequences, not in the hardcoded common-passwords list
+  — and sits in public breach corpora, which is exactly what credential
+  stuffing tries first. The hardcoded list covers a few dozen of the hundreds
+  of millions that have leaked.
+
+  Checked via the Have I Been Pwned range API under **k-anonymity**: the
+  password is SHA-1'd locally and only the **first five hex characters** of
+  the hash are sent. The provider returns every suffix sharing that prefix and
+  the match is made in-process, so it never sees the password, its full hash,
+  or which suffix was being asked about. (That SHA-1 is the corpus's lookup
+  index, not a storage decision — password storage is bcrypt/Argon2,
+  elsewhere. It is marked `usedforsecurity=False`, which is a declaration
+  rather than a suppression and also keeps the call working on FIPS builds.)
+
+  **The check fails open, deliberately:** an unreachable or slow provider, an
+  HTTP error, or an unparseable body all accept the password. This is
+  supplementary to complexity rules, password history, MFA and lockout, and a
+  third-party outage must not stop a department setting passwords during an
+  incident. The degradation is logged so operators can alert on it.
+
+  **The rejection message omits the breach count.** A precise count is a free
+  oracle over the corpus for anyone who can reach a password form, and it
+  tells the member nothing they can act on — they need a different password
+  either way.
+
+  Wired into all five paths that set a password: registration, self-service
+  change, reset-by-token, admin user creation, and admin reset. Off by default
+  (`BREACHED_PASSWORD_CHECK_ENABLED`), since it needs outbound network access
+  some deployments do not permit.
+
+- **Suspicious-IP throttling** (`app/core/suspicious_ip.py`). The per-IP rate
+  limit caps burst speed and the per-account lockout caps guesses against one
+  user, but a spray slips between them: one IP trying two passwords each
+  against a thousand usernames stays under 5/min and never reaches
+  `MAX_LOGIN_ATTEMPTS` on any single account, because no account is tried more
+  than twice. This counts **failed** attempts per IP across **all** accounts
+  over a long window and blocks the IP once the total crosses the threshold.
+
+  Two security-relevant defaults, both load-bearing:
+
+  - **A fully successful sign-in clears the IP's counter**, so a shared NAT
+    egress (station computers, where ordinary typos accumulate) does not drift
+    into a block. The clear happens only after **full** authentication, never
+    on a correct password alone — otherwise an attacker holding one leaked
+    password for an MFA-protected account could zero the tally at will.
+  - **Clearing never lifts an already-active block**, for the same reason.
+
+  Wired into `/login` and `/mfa/login`, **including the pre-verification
+  challenge rejections**, which resolve no account and so would otherwise be
+  the one unmetered door into the auth surface. Redis-backed and shared across
+  workers, degrading to a per-process counter that is capped and evicted per
+  Pitfall #9. On by default (`SUSPICIOUS_IP_THROTTLE_ENABLED`) at 50 failures
+  per hour per IP with a 15-minute block.
+
+**Fixed**
+
+- **The auth rate limiter's documented fallback was unreachable (CI-11).**
+  `check_rate_limit` asked `is_rate_limited` for the Redis verdict with
+  `fail_closed=False` and a comment saying it would fall back to the in-memory
+  limiter on error. It never did: the helper catches its own exceptions and
+  returns `False` ("not limited") unless `raise_on_error` is set, so the outer
+  `except` → in-memory path could not be reached. In the window where Redis is
+  connected but a command transiently fails, the request was limited by
+  **neither** backend. The sibling `public_rate_limit` helper already passed
+  the flag; the auth path did not.
+- **Loguru no longer prints local variables in tracebacks.** `diagnose=False`
+  is now set on all three sinks — JSON, console and the rotating file. On a
+  password-set or token-verification frame those locals are the credential
+  itself, written to disk with 30-day retention and shipped wherever logs are
+  shipped.
+
+### Fixes: exposure, correctness and crash paths (2026-08-17)
+
+**Security**
+
+- **A form submission advanced only the prospect who submitted it.**
+  `FormsService._auto_advance_pipeline_step` found *every* active prospect
+  parked on the auto-advancing step and completed the step for all of them —
+  so one applicant returning a form advanced the whole cohort behind it. It is
+  now bound to the submission's own prospect
+  (`ProspectiveMember.form_submission_id == submission.id`), and the audit
+  row records `form_submission_id` so the cause of an advance is legible
+  afterwards.
+- **Impact-plan PDFs escape untrusted text.** ReportLab's `Paragraph` parses a
+  mini-HTML dialect, so an organization name, a filter parameter, a member's
+  full name or a contact string containing `<` or `&` was interpreted as
+  markup — corrupting or failing the render, on text under a member's own
+  control. All four are escaped now. Cells drawn as plain strings (membership
+  number, rank, station) were never affected.
+- **Stock alerts no longer cross domains.** Widening low-stock and
+  expiring-supply recipients to medical-only officers handed them a single
+  rendered table built from *every* row — gear item names, categories and
+  counts the API refuses them by design. Mailing the data is the same
+  disclosure as serving it. Recipients are now grouped by the domains they may
+  actually see and each group receives only its own rows; someone holding both
+  grants lands in the two-domain group and gets **one** complete email rather
+  than two partial ones. Expiring lots are fetched per domain. The
+  deployed-on-apparatus sections stay with every recipient — that is checklist
+  content governed by `equipment_check.*`, a different permission axis — and
+  the SMS carries only a count, so it is not split, and says so.
+- **`/approve-step` now checks that the stage asked for the role.** The route
+  is deliberately not manager-gated: the caller's only authority is that the
+  stage requests a role they hold. The service checked only that they hold the
+  submitted role, so any member could write their own position into any
+  prospect's workflow, with arbitrary notes, receiving the full prospect
+  record back — and a stage with no configured approvers left nothing
+  "missing", completing and advancing the prospect outright. Unrequested roles
+  are rejected, and a stage with no approver roles configured is refused. The
+  manager route rejects unrequested roles too, since recording one files
+  misleading sign-off evidence.
+- **The frontend's email header-injection guard was case-sensitive.**
+  `isValidEmailSecure` rejected `%0a`/`%0d` with a case-sensitive
+  `includes()`; RFC 3986 prefers uppercase hex, so `%0A` — the canonical
+  spelling, and the one an attacker is most likely to send — went straight
+  through. The backend's equivalent check is unaffected: it lowercases the
+  address before testing.
+- **The onboarding CSRF token moved from an origin-wide cookie to tab-scoped
+  `sessionStorage`,** so two concurrent onboarding tabs can no longer
+  overwrite each other's token. A client still holding the legacy cookie has
+  it adopted into the tab and the cookie retired; a stray cookie with **no
+  session id behind it** is ignored rather than adopted as a credential. Both
+  migration paths are covered by tests, because one-time migration code fails
+  silently once the deploy needing it has rolled past.
+
+**Fixed**
+
+- **Meeting cards showed "0 attendees · 0 action items"** over meetings whose
+  detail view showed eight and two. `MeetingResponse` declared both counts and
+  `MinutesPage` rendered them, but the list query loaded no children. Two
+  grouped `COUNT()`s now populate them — totals, not loaded rows, since totals
+  are all that is rendered. The demo seeder also populates `/meetings` (the
+  Minutes page was rebuilt onto it while the seeder still filled the older
+  `/minutes-records` model, so a real record sat behind a "No Meeting Minutes"
+  empty state).
+- **A renewed certification grounded the member permanently.** The dashboard
+  readiness verdict read `my-training`, which returns a *history* — a member
+  who renewed EMT-B has both the lapsed 2024 row and the valid 2026 one, and
+  the verdict counted the lapsed one: "Not clear to respond", forever, for
+  having done the right thing. Only the newest credential per course is
+  considered, by both the verdict and the "Needs you" filter.
+- **Screenings were judged on a narrower window than certifications** — the
+  backend's `expiring_soon_count` covers 30 days while the readiness window is
+  60, so a screening lapsing in 45 days read as current beside a certification
+  at the same distance that read as a condition. The verdict reads
+  `days_until_next_expiration` against its own window, which also catches one
+  lapsing **today** (excluded by the backend's `0 < days` bound).
+- **A failed screening refresh kept stale counts**, leaving a scope note still
+  claiming screenings were checked and a member who had since gone overdue
+  still reading "Clear to respond". It clears now.
+- **A screening-only verdict opened the training page**, which has nothing to
+  say about a screening. Those members go to the department feed.
+- **Driver/EVOC enforcement had five ways around it.** Certification expiry is
+  judged on the **shift's** date, not today — scheduling is forward-looking,
+  and a card that lapses before the shift does not qualify anyone to drive it.
+  Pattern generation wrote assignments directly and bypassed the block
+  entirely (a recurring pattern would seat an uncertified driver on every
+  occurrence); it now checks each driver seat, leaves the seat empty rather
+  than failing the whole run, and reports the skip. A shift edit that moves
+  `apparatus_id` or `shift_date` revalidates the drivers already on it —
+  otherwise the block was side-stepped by seating a driver on an
+  apparatus-less shift and then setting the apparatus. Concurrent chief
+  reviews are settled by a conditional `UPDATE` rather than both committing
+  with the later write deciding silently. **Every** certification a member
+  holds is considered, not just the highest: cumulative Level 3 plus
+  non-cumulative Level 4 was refused for a Level 2 apparatus.
+  `driver_exceptions.apparatus_id` is now `ON DELETE CASCADE` — a `SET NULL`
+  left a grant for one retired unit indistinguishable from a blanket one,
+  silently widening it to the whole fleet; the audit log retains the approval.
+- **Editing "On hand" on a lot-stocked medical supply did nothing.** The field
+  writes `quantity`, but a lot-stocked item's count comes from its lots — the
+  ledger the page and summary actually display. A manager could change the
+  box, get a success toast, and watch the number stay put. The field is
+  replaced for such items by the lot figure and a pointer to **Receive
+  delivery**, and `quantity` is left out of the payload entirely rather than
+  sent as a null that would clear a column nothing shows.
+- **The medical-supplies migration's downgrade destroyed pre-existing grants.**
+  It removed the medical and `equipment_check` permissions unconditionally,
+  including ones a department had granted by hand long before the migration —
+  while the comment above it claimed the opposite.
+- **Copying an event carried its finalized marker.** Duplication and
+  rolling-series extension stripped the older lifecycle markers but not
+  `attendance_finalized`, so a copy of a finalized event looked finalized and
+  never got its own validation prompt. The key list is a single shared
+  constant on the event model now, applied at both copy sites.
+- **Reopening a finalized shift left `validation_notification_sent` set,** so
+  the post-shift task skipped it forever and nobody was reminded to
+  re-finalize.
+- **Date-only event-request values were stamped UTC midnight**, displaying the
+  previous day for every negative-offset department. They are anchored to
+  midnight in the organization's timezone.
+- **CSV vendor import reported three pieces of work for one.** Unmatched names
+  were deduplicated on the exact string while matching, the cleanup list and
+  Attach-all compare case-folded — so "Gals", "gals" and "GALS" were listed
+  separately although Attach handles all three in one pass. Keyed on the fold
+  now, displaying the first spelling seen. A name is recorded only once its
+  row actually imported (`create_item` still rejects rows the CSV parse
+  accepted — duplicate serial, pool item with no quantity — so a failed import
+  sent the reader to Attach for rows that were never written). And a name
+  matching a **deactivated** vendor now links to it rather than being reported
+  as unmatched: vendor creation rejects inactive duplicates, so the advice was
+  a dead end.
+- **The migration validator handed out single-parent guidance for a forked
+  chain.** "New migrations set `down_revision = X`" was printed once per head,
+  naming two parents that cannot both be right; following either extends one
+  branch and leaves the fork in place.
+
+### Migrations: four pull requests each repaired the same fork (2026-08-17)
+
+**Fixed**
+
+- **The Alembic chain is one head again: `8050e5a61f34`.**
+  `20260816_0006` (shift-finalization backfill) and `20260816_0007` (email
+  preference unification) both revise `20260816_0005` — two branches open at
+  once. Five pull requests independently noticed the fork and each wrote a
+  merge for it; **all five merged within the hour**, so the repair became the
+  fork. `main` was left with four heads and two files claiming revision id
+  `20260816_0008`, which makes the versions directory unloadable: `alembic
+  upgrade head` fails outright, a fresh install cannot migrate, and the
+  head-count tests fail on every open pull request.
+
+  - `20260816_0008_merge_finalization_and_email_prefs.py` was **deleted**. The
+    duplicate id has to be resolved for Alembic to load either revision, and
+    this file is a no-op merge — the only member of the set whose removal has
+    no schema consequence. The driver-exceptions revision keeps the id.
+  - The two redundant no-op merges (`71d86eba9a9e`, `bb34f8937c89`) were
+    **kept**: a deployment may already have stamped them, and deleting a
+    recorded revision strands that database at an id its chain no longer
+    contains.
+  - One merge revision names all four surviving heads as parents. Alembic runs
+    each ancestor exactly once however many merge paths reach it.
+
+  Backend suite after the repair: 5,092 passed, 2 skipped. **If you pulled
+  `main` between roughly 17:30 and 18:50 UTC on 2026-08-17, pull again** — the
+  broken state prevented migration rather than corrupting anything.
+
+### Public API: token parameters declare their alphabet (2026-08-17)
+
+**Fixed**
+
+- **`GET /api/public/v1/application-status/{token}` rejected schema-compliant
+  requests.** The published schema constrained the token's length but not its
+  alphabet, so the contract fuzzer generated arbitrary Unicode;
+  percent-encoding is byte-oriented and lossy for anything that will not
+  round-trip through UTF-8, so a string of ten characters arrived as eight and
+  tripped `min_length=10`. These are `secrets.token_urlsafe` values, so
+  base64url is the truth about them and declaring the pattern makes the
+  published schema honest. The finance approval-by-token parameter carries the
+  identical hazard and is covered too.
+- **The calendar feed's token is deliberately left alone.** It answers `404`
+  for a malformed token rather than `422`, so it cannot trip the check, and
+  adding a pattern would turn that into a `422` — leaking "wrong format" apart
+  from "not found" on a public feed.
+
+### Dependencies (2026-08-17)
+
+**Changed**
+
+- `bcrypt` 4.3.0 → **5.0.0** (major); the python-minor-patch group (12
+  packages); the npm-minor-patch group (4 packages).
+- **`typescript` bumped 5.9.3 → 7.0.2 in `frontend/package.json`,** which
+  collapses the two-install arrangement documented in CLAUDE.md: `typescript`
+  and `typescript-native` now resolve to the same 7.0.2. `typescript-eslint`
+  still caps its peer at `<6.1.0`, and the tree resolves only because npm
+  auto-installed a second TypeScript (5.9.3) at the repository root as a
+  **peer** dependency. CI is green, so nothing is broken today — but the
+  arrangement went from declared to incidental, and the linter's compiler is
+  no longer pinned by anything the repository controls. Recorded as **BUILD-1**
+  in [KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md); CLAUDE.md has been
+  corrected to describe the current state rather than the intended one.
+
+**Documentation**
+
+- **TESTING.md now says how to install Stryker before telling anyone to run
+  it.** `stryker.pilot.json` and `vitest.stryker.config.ts` were committed
+  without the packages — Stryker was installed with `--no-save`, so after a
+  fresh `npm ci` the documented command could never have worked. Worse than an
+  unpinned download: `stryker` is an unrelated registry package (last
+  published as `stryker@1.0.1`, the pre-scoped name), so `npx` offers to fetch
+  *that* and never reads the config. The packages are deliberately kept out of
+  `package.json` — `@stryker-mutator/core` pulls a transitive `qs` advisory
+  through `typed-rest-client` with no released fix, taking `npm audit` from 0
+  findings to 2 moderate for every developer, which is a poor trade for a
+  diagnostic CI never runs. The pinned install line, both invocation forms,
+  the sandbox cleanup, and the reason `vitest.stryker.config.ts` narrows the
+  runner are all recorded there.
+
+### Tests: guards that fail instead of vanishing (2026-08-16 → 08-17)
+
+**Changed**
+
+- **Eighteen backend guards skipped themselves when their subject moved.**
+  `test_changelog_fixes.py` checks are written against tracked paths —
+  `errorHandling.ts`, `portal.py`, `main.py`, the Makefile,
+  `alembic/versions` — so "file not found" does not mean "not applicable", it
+  means someone moved the file. A guard that retires itself exactly when its
+  subject is renamed is worse than no guard: CI stays green and nobody learns
+  the check stopped running. Several assert on **frontend** TypeScript by
+  reading it as text, so a routine frontend refactor was enough to disarm
+  them. They now assert the path exists, with a message saying to repoint it.
+  Three more skipped on an empty migrations glob, which would let the
+  chain-integrity checks pass over an empty set.
+- **`test_push_service.py` imports `py_vapid` through
+  `pytest.importorskip`.** It ships with `pywebpush`, which is optional (Web
+  Push is gated behind `PUSH_ENABLED`) and whose wheel does not build on every
+  platform. A failed module-level import is a **collection** error and pytest
+  aborts the whole session on one, so a developer without that optional
+  dependency got 0 tests rather than 4,535.
+
+**Added**
+
+- Coverage for the shared axios factory every module's auth depends on; the
+  API cache's TTL boundaries and eviction ordering; onboarding storage and the
+  API client transport; the onboarding utility modules (validation 0 → 100%,
+  security 0 → 100%, errorHandler 0 → 93.4%, module 5.6% → 12.2%); and the
+  offline queue, the one path where a defect loses field data.
+
 ### Events: public request intake is opt-in and spam-controlled (2026-08-17)
 
 **Security / Added**

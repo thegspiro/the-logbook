@@ -1,5 +1,145 @@
 # Script currency
 
+## Flagged by the 2026-08-16 → 08-17 changes
+
+Full context in
+[`../CHANGE_AUDIT_2026-08-16_TO_17.md`](../CHANGE_AUDIT_2026-08-16_TO_17.md).
+This window produced one **Incomplete** (script 03's password-policy
+narration, now materially short of what the product does), one **Wrong on
+camera** (script 03's platoon-roster implication), and a set of B-roll notes.
+Nothing here has been rewritten in-script yet — unlike the 08-15 → 08-16
+onboarding fix, none of these narrate an instruction that would actively harm
+a viewer who followed it.
+
+### 03 — IT Manager / System Admin · **Incomplete — `16:30 – 17:30`**
+
+The **Session & Password Policies** chapter enumerates what an administrator
+can configure:
+
+> "Password policies are also configurable — minimum length, complexity
+> requirements, maximum age before forced rotation. The defaults are HIPAA-
+> compliant, but you can make them stricter."
+
+That list is now short by three controls, and the two omissions that matter
+are the ones whose **failure directions are opposite** — which is exactly the
+kind of thing a viewer will get wrong if nobody says it out loud:
+
+- **Breached-password rejection** (off by default). Complexity rules say
+  nothing about whether a password has already leaked, and this is the control
+  that closes that gap. **It fails open**: if the lookup cannot be made, the
+  password is accepted. Worth stating on camera, because an administrator who
+  assumes otherwise will believe they have coverage they do not have during an
+  outage. Also worth the ten seconds to say what leaves the building — five
+  characters of a hash, nothing identifying — because that is the first
+  question a chief asks and the answer is genuinely reassuring.
+- **Human challenge (CAPTCHA)** on the two internet-exposed forms (off by
+  default). **It fails closed**: a provider outage refuses public form and
+  password-reset submissions. The trap to name is that **enabling it without a
+  secret key enforces nothing and logs an error** — so "I ticked the box" is
+  not "it is running", and the screen gives no indication either way.
+- **Suspicious-IP throttling** (on by default). Worth one sentence: the
+  platform already limited attempt speed and locked accounts, and this counts
+  failures from one address across *all* accounts, which is the gap a password
+  spray walks through. If the presenter records this at all, the useful detail
+  for the audience is that a station's shared connection clears its own tally
+  on a successful sign-in.
+
+**EDITOR:** covering all three properly is roughly **60–90 seconds** added to a
+chapter currently budgeted at one minute. That re-times every marker after
+`17:30` in this script. If the runtime cannot absorb it, the honest minimum is
+the two failure directions — one sentence each — because a viewer who knows
+the controls exist but not which way they fail will configure them
+confidently and wrongly.
+
+### 03 — IT Manager / System Admin · **WRONG on camera — line 142 area**
+
+The member-record walkthrough narration lists what an administrator fills in:
+
+> "…rank, role, station, platoon, and two emergency contacts."
+
+The line itself is still accurate. **The B-roll around it is not.** If the
+planned shot reaches Platoon Management (`/scheduling/platoons`) from a
+demonstration account that holds only `scheduling.view`, it now renders a
+**permission error** — the page moved to `scheduling.manage` on 2026-08-17.
+The take will either fail on camera or, worse, be quietly re-shot from an
+account that hides the change from the audience it most affects.
+
+**Two things must happen before this chapter is recorded:**
+
+1. Record the demonstration from an account holding `scheduling.manage`.
+2. **Say that it changed.** This is the one change in the window that removes
+   access somebody already had. A department upgrading will have members who
+   could reach that page yesterday and cannot today, and the support call is
+   cheaper to prevent than to answer.
+
+### Any script with shift-detail B-roll · **B-roll only**
+
+The shift detail page's **hold-over / availability roster** is now returned
+only to `scheduling.assign`, `scheduling.manage`, or the officer named on that
+shift. Any planned shot that opens a shift from a rank-and-file member account
+and pans over the availability list **will not reproduce** — the roster is not
+rendered at all for that viewer.
+
+This is not a ruined take so much as a better one waiting: the roster is built
+from who is on approved leave, so the member-vs-scheduler pair is the shot
+that actually teaches the rule. If the presenter is showing the shift board
+from a member's perspective, the roster's absence is the point, not an
+omission to be edited around.
+
+### 04 — Fire Chief · 07 — Secretary · **B-roll only**
+
+Both scripts have Minutes-page B-roll. Meeting cards rendered
+**"0 attendees · 0 action items"** over meetings whose detail view listed real
+numbers, and that defect was fixed on 2026-08-17. **Any footage already shot
+against the old build shows the zeros as if they were the data** — it is
+usable only if the shot never rests on a card long enough to read the counts.
+Re-shoot against a current build; the demo seeder now populates `/meetings`
+with an approved business meeting (attendees, motions, open action items), a
+draft board meeting, and a pending public event request on the Requests tab,
+so the cards have something honest to show.
+
+### 05 / 16 — Training Officer · **verify before recording**
+
+The EVOC driver requirement's enforcement changed materially on 2026-08-17 and
+now behaves differently in ways a demonstration will surface:
+
+- A certification is judged against **the shift's date**, not today — so a
+  driver who is legal on the day of recording can be refused for a shift a
+  fortnight out. On camera that looks like a bug unless the narration explains
+  it.
+- **Pattern generation no longer seats an uncertified driver.** It leaves the
+  seat empty and reports the skip. If a planned shot generates a rotation and
+  pans over a fully-staffed result, confirm the demo data still produces one.
+- Retiring an apparatus now **removes** the exception written for it rather
+  than leaving a grant that silently applies to the whole fleet.
+
+No narration is known to be wrong here — these chapters predate the driver
+block and mostly do not mention it — but any *new* material written for it
+should carry the shift-date rule, which is the counter-intuitive one.
+
+### 06 — The Member Experience · **verify only**
+
+Chapter narration around signing in and changing a password is unaffected: all
+three new controls are invisible on a successful sign-in, and the two optional
+ones are off by default, so a recording made against a stock deployment shows
+exactly what it always did. **Only re-check this if the recording deployment
+has `CAPTCHA_ENABLED` or `BREACHED_PASSWORD_CHECK_ENABLED` turned on** — in
+which case the forgot-password screen carries a widget the narration does not
+mention, and a deliberately weak demonstration password may be refused
+mid-take.
+
+### Explicitly not flagged
+
+- **Guest check-in footage.** The human challenge is deliberately not applied
+  there — it is reached by scanning a QR code on a station display — so no
+  guest check-in narration or B-roll changes.
+- **Sign-in page footage.** Suspicious-IP throttling adds no interface; a
+  blocked address receives the existing rate-limit response.
+- **Scripts 08–15, 02.** Nothing in this window touches the surfaces they
+  cover.
+
+---
+
 ## Flagged by the 2026-08-15 → 08-16 changes
 
 The window produced one **Wrong** (script 02's auto-save promise), several

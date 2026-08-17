@@ -1,0 +1,110 @@
+# Recent changes: August 16–17, 2026
+
+This wiki handoff is intentionally usable without the repository `docs/` tree.
+The deeper engineering audit is available in the source repository at
+[`docs/CHANGE_AUDIT_2026-08-16_TO_17.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-16_TO_17.md).
+Predecessor: [August 15–16](Recent-Changes-2026-08-15-to-16).
+
+**The headline for administrators:** three new anti-brute-force controls (two
+of them opt-in), one permission that tightened and **will** lock people out
+until it is regranted, and an Alembic chain that briefly had four heads.
+
+## Pages and connection points
+
+| Area | Pages | API/data connection | Boundary and important edge cases |
+| --- | --- | --- | --- |
+| **Challenge-response (CAPTCHA)** | Forgot password; public form submission. **Not** guest check-in | `GET /api/v1/auth/captcha-config` (anonymous, returns provider + public site key only); token sent in the `X-Captcha-Token` header | Off by default. **Fails closed** — if the provider is unreachable, submissions are refused; that is deliberate, since nothing else guards these two forms. Turning it on **without a secret key** logs an error and enforces nothing rather than refusing everything. Turning it on also widens the Content-Security-Policy for the provider's widget; with it off the policy is unchanged. A rejected submission resets the widget (tokens are single-use). Guest check-in is excluded on purpose — it is reached by scanning a QR code on a station display. |
+| **Breached-password rejection** | Registration; change password; reset by token; admin creates a user; admin resets a password | Have I Been Pwned range API. Only the **first five characters** of the password's SHA-1 leave the deployment | Off by default (it needs outbound internet). **Fails open** — if the lookup fails, the password is accepted, because complexity rules, password history, MFA and lockout still apply and a third-party outage must not stop a department setting passwords during an incident. The rejection deliberately does **not** say how many times the password was seen. |
+| **Suspicious-IP throttling** | All sign-in surfaces (no new screen) | Redis counters per IP; wired into `/auth/login`, `/auth/mfa/login`, and the pre-verification challenge rejections | **On by default**: 50 failed attempts per IP per hour, 15-minute block. Counts failures across *all* accounts, which is the gap a password spray walks through. A **fully** successful sign-in from that IP clears the counter, so a station's shared connection does not drift into a block on ordinary typos — but a correct password alone does not clear it, and clearing never lifts a block already in force. |
+| **Platoon Management** | `/scheduling/platoons` | `GET /scheduling/platoons/overview` now requires **`scheduling.manage`** (was `scheduling.view`) | ⚠️ **Breaking for existing users.** `scheduling.view` is implicit for every member, so the department-wide platoon roster was effectively public inside the department. Anyone who reached this page before and does not hold `scheduling.manage` will now see a permission error. Grant `scheduling.manage` to the roles that need it. |
+| **Shift detail — availability roster** | Shift detail page | `GET /scheduling/shifts/{id}` → `platoon_roster` | The hold-over roster is derived from **who is on approved leave**, so it is now returned only to `scheduling.assign`, `scheduling.manage`, or the shift's own shift officer. Everyone else sees an empty roster; all other shift details — time, apparatus, assignments, check-in — are unchanged. |
+| **Generated platoon shifts** | Scheduling → generate from pattern | Generation filters active members correctly | Soft-deleted and anonymized members were being staffed onto generated shifts. |
+| **Scheduling → Patterns** | Patterns tab | — | A pattern whose stored configuration held a malformed platoon list crashed the tab. It now renders with that list treated as empty. |
+| **Prospective members — form stages** | Pipeline stage of type "form submission" with auto-advance | Advance is bound to the submitting prospect | **One applicant's submission used to advance every prospect sitting on that step.** Now only the person who submitted advances, and the history entry records which submission caused it. |
+| **Prospective members — stage approval** | Pipeline stage approval | `/approve-step` | A member can only sign off with a role **the stage actually asked for**. Previously any member could record their own position as an approval on any prospect. A stage with no approver roles configured is now refused instead of completing outright. |
+| **Meeting minutes** | Minutes page cards | Attendee and action-item counts | Cards read "0 attendees · 0 action items" over meetings whose detail view showed real numbers. |
+| **Dashboard readiness** | Dashboard | Certification and screening reads | A **renewed** certification no longer grounds the member — only the newest credential per course counts. Screenings are judged on the same 60-day window as certifications (they were on 30), including one lapsing today. A failed screening load now clears the counts rather than leaving "Clear to respond" standing on stale data. |
+| **Driver / EVOC enforcement** | Shift assignment; pattern generation; shift edit; exception review | `driver_exceptions` table | Certification expiry is judged on the **shift's** date, not today. Recurring pattern generation no longer bypasses the block — it leaves an unqualified driver's seat empty and reports the skip. Changing a shift's apparatus or date revalidates the drivers already on it. Two chiefs reviewing the same exception at once no longer both succeed. Deleting an apparatus now removes the exception written for it, rather than turning it into a fleet-wide grant. |
+| **Medical supplies — alerts** | Low-stock / expiring-supply emails | Per-domain recipient grouping | An EMS supply officer no longer receives gear item names and counts in the alert body. Someone holding both grants gets **one** complete email, not two partial ones. |
+| **Medical supplies — On hand** | Edit supply | — | For a lot-stocked item the "On hand" box wrote a value nothing displayed: the count comes from its lots. The field now shows the lot figure and points to **Receive delivery**. |
+| **Inventory — Impact Planner PDF** | Export PDF | — | Names containing `<` or `&` corrupted or failed the export. |
+| **Inventory — CSV import** | Gear Admin → import | Unmatched-vendor report | Spelling variants of one name are reported once, not three times. A name matching a **deactivated** vendor now links to it instead of sending you to a form that would reject it. A name is only reported once its row actually imported. |
+| **Installed app (PWA)** | Settings → App → Force refresh | `/version.json` probe | Force refresh now **refuses to run when the server is unreachable** and says so. Running it offline used to delete the app's only offline copy and reload into nothing. |
+| **Setup wizard** | Onboarding | CSRF token in tab-scoped storage | Two onboarding tabs can no longer overwrite each other's token. Clients still holding the old cookie are migrated automatically. |
+| **Logging** | — | — | Exception tracebacks no longer include local variable values, which on a password or token frame meant the credential itself in the log file. |
+
+## Configuration added
+
+All of these live in `.env` — see
+[Configuration → Security](Configuration-Security) for the full descriptions.
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `SUSPICIOUS_IP_THROTTLE_ENABLED` | `true` | The only one of these that is on out of the box |
+| `SUSPICIOUS_IP_MAX_FAILURES` | `50` | Failed attempts per IP per window |
+| `SUSPICIOUS_IP_WINDOW_SECONDS` | `3600` | |
+| `SUSPICIOUS_IP_BLOCK_SECONDS` | `900` | |
+| `BREACHED_PASSWORD_CHECK_ENABLED` | `false` | Needs outbound HTTPS |
+| `BREACHED_PASSWORD_MIN_COUNT` | `1` | Appearances before rejecting; 1 rejects anything ever seen |
+| `BREACHED_PASSWORD_API_URL` | HIBP range API | |
+| `BREACHED_PASSWORD_TIMEOUT_SECONDS` | `3.0` | On timeout the password is accepted |
+| `CAPTCHA_ENABLED` | `false` | |
+| `CAPTCHA_PROVIDER` | `turnstile` | `turnstile` \| `hcaptcha` \| `recaptcha` |
+| `CAPTCHA_SECRET_KEY` | — | Enabling without this enforces nothing |
+| `CAPTCHA_SITE_KEY` | — | Public; served to the browser |
+| `CAPTCHA_TIMEOUT_SECONDS` | `5.0` | On timeout the submission is **refused** |
+| `CAPTCHA_MIN_SCORE` | `0.5` | reCAPTCHA v3 only |
+
+## Database upgrade route
+
+The window opened at a single head (`20260816_0005`) and closed at a single
+head (`8050e5a61f34`), by way of a four-head fork that made the migrations
+directory unloadable for about an hour.
+
+Two branches both revised `20260816_0005`: `20260816_0006` (shift-finalization
+backfill) and `20260816_0007` (email preference unification). Five pull
+requests each noticed the fork and each wrote a merge for it; all five merged
+within the hour, leaving four heads and two files claiming revision id
+`20260816_0008`.
+
+**What to do:** pull the current `main` and run `alembic upgrade head`. If you
+pulled between roughly 17:30 and 18:50 UTC on 2026-08-17, your checkout's
+migrations directory may not load at all — pull again. **No database recovery
+is needed**; the broken state prevented migration rather than corrupting
+anything.
+
+Two schema changes landed in the window:
+
+| Revision | What it does |
+| --- | --- |
+| `20260816_0008` | Creates `driver_exceptions` — chief-approved exceptions to the EVOC driver requirement, with justification, restrictions, a validity window and review fields |
+| `20260816_0009` | Adds `previous_status`, `phase_before_id`, `phase_after_id`, `completion_credit_id` for reversible training completions |
+
+`driver_exceptions.apparatus_id` deletes with its apparatus (`ON DELETE
+CASCADE`). That is intentional and is the safe direction here: an exception
+whose apparatus reference was nulled looks identical to a blanket fleet-wide
+grant, so retiring a truck would silently widen an authorization. The audit
+log retains the approval record.
+
+Standard procedure is unchanged: back up, confirm `alembic heads` returns
+exactly one result, then upgrade.
+
+## Administrator checklist
+
+1. **Regrant `scheduling.manage`** to whoever needs Platoon Management. This
+   is the one change in the window that removes access someone already had.
+2. **Decide on CAPTCHA.** If your public forms or password-reset page are
+   reachable from the internet, this is the control that stops a paced bot.
+   Remember it fails closed — a provider outage means those two forms refuse
+   submissions until it recovers.
+3. **Decide on breached-password checking.** It needs outbound HTTPS to the
+   HIBP range API. Only five characters of a hash ever leave the deployment.
+   If your deployment cannot make outbound requests, leave it off — it will
+   simply accept every password rather than erroring.
+4. **Check the suspicious-IP threshold against your roster.** 50 failures per
+   hour from one IP is generous, but a large department behind a single NAT
+   egress should confirm it suits them. A successful sign-in from that IP
+   clears the counter.
+5. **If you front the app with a reverse proxy on a different origin,** make
+   sure `X-Captcha-Token` survives it. It is in the application's own CORS
+   allowlist; a proxy with its own header allowlist needs the same entry.

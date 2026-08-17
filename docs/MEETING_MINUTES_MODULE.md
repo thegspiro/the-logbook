@@ -269,6 +269,32 @@ Users with `meetings.manage` permission can:
 | `POST` | `/api/v1/minutes/templates` | `meetings.manage` | Create template |
 | `DELETE` | `/api/v1/minutes/templates/{id}` | `meetings.manage` | Delete template |
 
+### List Response Counts *(2026-08-17)*
+
+`MeetingResponse` declares `attendee_count` and `action_item_count`, and the
+Minutes page renders them on every card. The list query loaded no children, so
+**every card read "0 attendees · 0 action items"** over meetings whose detail
+view showed real numbers.
+
+`MeetingsService.attach_child_counts(meetings)` now populates both, using two
+grouped `COUNT()` queries keyed on `meeting_id` rather than loading the rows —
+only the totals are rendered here. It is attached the same way `creator_name`
+is, and a meeting with no children reports `0` rather than being absent from
+the result map.
+
+> **Same shape of gap, worth checking for elsewhere:** a response schema that
+> declares a derived field the list query never populates fails silently and
+> plausibly. `0` is a legitimate value, so nothing errors and nothing looks
+> broken — it just quietly misreports.
+
+The demo seeder was also rebuilt for this page: the Minutes UI moved onto
+`/meetings` while the seeder still populated the older `/minutes-records`
+model, so a seeded department showed a "No Meeting Minutes" empty state over
+real data. It now seeds an approved business meeting (attendees, motions, open
+action items), a draft board meeting, and a pending public event request for
+the Requests tab — each guarded per title, so a run that dies midway adds what
+is missing rather than deciding the step is done.
+
 ### Document Endpoints
 
 | Method | Path | Permission | Description |

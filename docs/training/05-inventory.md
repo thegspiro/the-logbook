@@ -875,6 +875,20 @@ trucks") is the supply worklist at **Scheduling → Supply**; see
 | An Add Several line names an item that already exists    | Skipped and reported. The rest of the list is still created                                                                       |
 | A CSV field contains a comma                             | Quote it (`"Gauze Pads, 4x4 Sterile"`). It is parsed as one field                                                                 |
 | A lot has no expiration date                             | It counts toward on hand, and it sorts **last** for consumption — an undated unit is never the one that needs using up            |
+| Editing "On hand" on a **lot-stocked** item              | _(2026-08-17)_ The field is no longer editable. It shows the lot figure and points you to **Receive delivery**, because the count comes from the lots — typing into the old box wrote a number nothing displayed, returned a success toast, and left the figure unchanged |
+
+### CSV Import: Supplier Names _(2026-08-17)_
+
+When a CSV's `Vendor` cell names a supplier that is not on file, the row still
+imports and the name is kept as free text. The import result now reports those
+names so you can attach them afterwards from the Vendors screen — with three
+corrections that change what you see:
+
+| Scenario                                                    | Behavior                                                                                                                                              |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The CSV spells one supplier three ways (`Gals`, `gals`, `GALS`) | Reported **once**, showing the first spelling seen. Attach handles all three in one pass, so listing them separately implied three pieces of work       |
+| A row fails to import (duplicate serial, pool item with no quantity) | Its supplier name is **not** reported. The name used to be banked before the row was written, so a failed import sent you to Attach for rows that never existed |
+| The name matches a **deactivated** supplier                 | It **links to that supplier** rather than being reported as unmatched. Vendor creation rejects inactive duplicates, so the old advice was a dead end. Deactivating a supplier deliberately keeps every existing link — purchase history for equipment still in service is why the record exists |
 
 ---
 

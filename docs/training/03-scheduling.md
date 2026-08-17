@@ -369,6 +369,47 @@ Each platoon works every third day. The system generates the full rotation from 
 
 > **Hint:** For departments using a Kelly schedule, set up the pattern as Platoon with a 9-day cycle: 1 on, 1 off, 1 on, 1 off, 1 on, 4 off. The system handles the irregular spacing within the cycle.
 
+**Generation excludes members who are no longer active** _(fixed 2026-08-17)_.
+A member who has been removed or anonymized is not staffed onto generated
+shifts. If you generated a rotation before that date and see a departed member
+on future shifts, regenerate the affected range.
+
+**A pattern's platoon list is validated when it renders** _(2026-08-17)_. A
+pattern whose stored configuration was written by an older client with a
+malformed platoon list used to take the whole Patterns tab down; it now
+renders with that list treated as empty. If a pattern shows no platoons where
+you expect some, re-save it from the pattern editor.
+
+### Who Can See the Platoon Roster _(2026-08-17)_
+
+The platoon roster is **staffing information, not a member directory** — it is
+built from who is on approved leave, so it says something about individual
+members that the rest of the schedule does not.
+
+| Screen | Who sees it |
+| --- | --- |
+| **Platoon Management** (`/scheduling/platoons`) — the department-wide roster and bulk assignment | `scheduling.manage` only |
+| **Shift detail → hold-over / availability roster** | `scheduling.assign`, `scheduling.manage`, or **the officer named on that shift** |
+| Everything else on a shift — time, apparatus, who is assigned, check-in state | Any member |
+
+**Edge cases:**
+
+- A shift officer sees the roster **only for their own shift**. The authority
+  comes from being named on the shift, not from a permission grant, so it
+  appears and disappears as they are assigned and unassigned.
+- A member without the permission does not see an error or an empty panel —
+  the roster simply is not part of what they are shown, and the rest of the
+  shift page works normally.
+- **This removed access somebody already had.** Both screens previously
+  required only `scheduling.view`, which every signed-in member holds
+  implicitly. Anyone who used Platoon Management before and does not hold
+  `scheduling.manage` will now get a permission error there.
+
+> **[SCREENSHOT NEEDED — the shift detail page as a scheduler with the
+> hold-over roster populated, paired with the same shift as an ordinary member
+> with the roster absent. Seed at least one member on approved leave so the
+> availability distinction is visible, and caption which account is which.]**
+
 ---
 
 ## Minimum Staffing and Coverage Rules
