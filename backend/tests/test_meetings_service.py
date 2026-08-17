@@ -205,6 +205,33 @@ class TestAttachCreatorNames:
         db.execute.assert_not_awaited()
 
 
+class TestAttachChildCounts:
+    """Same gap as creator_name: the list response declares attendee_count and
+    action_item_count, and the cards render them, but the list query loads no
+    children — so every card read "0 attendees   0 action items" over a
+    meeting whose detail showed eight and two."""
+
+    async def test_populates_both_counts(self):
+        m1 = SimpleNamespace(id="m1", attendee_count=0, action_item_count=0)
+        m2 = SimpleNamespace(id="m2", attendee_count=0, action_item_count=0)
+        attendees = MagicMock()
+        attendees.all.return_value = [("m1", 8)]
+        actions = MagicMock()
+        actions.all.return_value = [("m1", 2)]
+        db = _db([attendees, actions])
+
+        await MeetingsService(db).attach_child_counts([m1, m2])
+
+        assert (m1.attendee_count, m1.action_item_count) == (8, 2)
+        # A meeting with no children keeps zeroes rather than going None.
+        assert (m2.attendee_count, m2.action_item_count) == (0, 0)
+
+    async def test_empty_list_makes_no_query(self):
+        db = _db([])
+        await MeetingsService(db).attach_child_counts([])
+        db.execute.assert_not_awaited()
+
+
 if __name__ == "__main__":  # pragma: no cover
     import pytest
 
