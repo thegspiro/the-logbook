@@ -691,3 +691,169 @@ export interface TemplateChangeLogResponse {
   items: TemplateChangeLogEntry[];
   total: number;
 }
+
+// ─── Fleet Readiness & Check Log ────────────────────────────────────────────
+
+/**
+ * How one expected check turned out.
+ *
+ * `missed` and `out_of_service` only exist because the backend reconstructs
+ * the *expected* side of the ledger (shift x template) rather than reading
+ * submitted checks alone — a check that never happened has no record of its
+ * own, and without these two values the page could never show below 100%.
+ */
+export const CheckOutcome = {
+  PASSED: 'passed',
+  FAILED: 'failed',
+  PARTIAL: 'partial',
+  MISSED: 'missed',
+  DUE: 'due',
+  SCHEDULED: 'scheduled',
+  OUT_OF_SERVICE: 'out_of_service',
+} as const;
+export type CheckOutcome = (typeof CheckOutcome)[keyof typeof CheckOutcome];
+
+export const CHECK_OUTCOME_LABELS: Record<CheckOutcome, string> = {
+  passed: 'Passed',
+  failed: 'Found a problem',
+  partial: 'Started, not finished',
+  missed: 'Missed',
+  due: 'Due today',
+  scheduled: 'Scheduled',
+  out_of_service: 'Out of service',
+};
+
+export const Readiness = {
+  IN_SERVICE: 'in_service',
+  ATTENTION: 'attention',
+  OUT_OF_SERVICE: 'out_of_service',
+  NO_CHECKS: 'no_checks',
+} as const;
+export type Readiness = (typeof Readiness)[keyof typeof Readiness];
+
+export const READINESS_LABELS: Record<Readiness, string> = {
+  in_service: 'In service',
+  attention: 'Needs attention',
+  out_of_service: 'Out of service',
+  no_checks: 'No checks set up',
+};
+
+export interface CheckStripEntry {
+  date: string;
+  /** Null on a date this apparatus expected no check — idle, not neglected. */
+  status?: CheckOutcome | null;
+}
+
+export interface FleetApparatusReadiness {
+  apparatusId: string;
+  unitLabel: string;
+  name?: string;
+  apparatusType?: string;
+  source: string;
+  readiness: Readiness;
+  /** Always present — the pill never ships without the reason behind it. */
+  readinessReason: string;
+  statusLabel?: string;
+  statusReason?: string;
+  lastCheckAt?: string;
+  lastCheckBy?: string;
+  lastCheckByName?: string;
+  lastCheckStatus?: CheckOutcome;
+  lastCheckId?: string;
+  openCheckId?: string;
+  failedItemCount: number;
+  outOfServiceItemCount: number;
+  expiringItemCount: number;
+  restockItemCount: number;
+  dueTodayCount: number;
+  overdueCount: number;
+  expected: number;
+  completed: number;
+  completionRate?: number | null;
+  recent: CheckStripEntry[];
+  asOf: string;
+}
+
+export interface FleetTotals {
+  inService: number;
+  attention: number;
+  outOfService: number;
+  noChecks: number;
+  dueToday: number;
+  overdue: number;
+  openFindings: number;
+  expiringItems: number;
+}
+
+export interface FleetReadinessResponse {
+  generatedAt: string;
+  expiringWindowDays: number;
+  stripDates: number;
+  apparatus: FleetApparatusReadiness[];
+  totals: FleetTotals;
+}
+
+export interface CheckLogCellCheck {
+  checkId?: string;
+  templateName: string;
+  checkTiming: string;
+  status: CheckOutcome;
+  findingCount: number;
+}
+
+export interface CheckLogCell {
+  date: string;
+  status?: CheckOutcome | null;
+  checks: CheckLogCellCheck[];
+}
+
+export interface CheckLogRow {
+  apparatusId: string;
+  unitLabel: string;
+  apparatusType?: string;
+  cells: CheckLogCell[];
+  expected: number;
+  completed: number;
+  /** Measured against this apparatus's own occasions, not the columns. */
+  completionRate?: number | null;
+}
+
+export interface CheckLogEntry {
+  /** Null for a check that was expected and never submitted. */
+  checkId?: string;
+  shiftId: string;
+  shiftDate: string;
+  apparatusId: string;
+  unitLabel: string;
+  templateId: string;
+  templateName: string;
+  checkTiming: string;
+  status: CheckOutcome;
+  checkedAt?: string;
+  checkedBy?: string;
+  checkedByName?: string;
+  totalItems?: number;
+  completedItems?: number;
+  failedItems?: number;
+  findingCount: number;
+  findings: string[];
+}
+
+export interface CheckLogSummary {
+  expected: number;
+  completed: number;
+  completionRate?: number | null;
+  missed: number;
+  withFindings: number;
+  outOfServiceDays: number;
+}
+
+export interface CheckLogResponse {
+  windowDates: number;
+  dates: string[];
+  /** `own` when the caller lacks equipment_check.view; the grid is withheld. */
+  scope: 'fleet' | 'own';
+  rows: CheckLogRow[];
+  entries: CheckLogEntry[];
+  summary: CheckLogSummary;
+}

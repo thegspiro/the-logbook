@@ -199,7 +199,7 @@ const EmailPlatformChoice: React.FC = () => {
 
                   {/* Setup Info */}
                   {platform.setupInfo && (
-                    <div className="bg-theme-surface-secondary border-theme-input-border rounded-lg border p-3">
+                    <div className="card-secondary border-theme-input-border p-3">
                       <div className="flex items-start space-x-2">
                         <Info aria-hidden="true" className="text-theme-accent-blue mt-0.5 h-4 w-4 shrink-0" />
                         <p className="text-theme-text-muted text-xs">{platform.setupInfo}</p>

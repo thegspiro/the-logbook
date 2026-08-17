@@ -217,7 +217,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
             placeholder="Search by name or agency..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="border-theme-surface-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-secondary w-full rounded-lg border py-2 pr-4 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none"
+            className="form-input placeholder:text-theme-text-secondary pr-4 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500"
           />
         </div>
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="form-input">
@@ -246,7 +246,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {FEDERAL_PROGRAMS.map((program) => (
-            <div key={program.code} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+            <div key={program.code} className="card p-4">
               <div className="mb-2 flex items-start justify-between">
                 <div>
                   <h3 className="text-theme-text-primary font-semibold">{program.name}</h3>
@@ -284,7 +284,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
               const urgency = getDeadlineUrgency(opp.deadlineDate, tz);
 
               return (
-                <div key={opp.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+                <div key={opp.id} className="card p-4">
                   {/* Card Header */}
                   <div className="mb-3 flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">

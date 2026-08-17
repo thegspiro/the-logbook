@@ -181,13 +181,13 @@ export class ErrorBoundary extends Component<Props, State> {
                 </button>
                 <button
                   onClick={this.handleReload}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:ring-theme-focus-ring inline-flex items-center justify-center rounded-md border px-6 py-3 text-base font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden"
+                  className="btn-secondary inline-flex items-center justify-center px-6 py-3 text-base font-medium focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg)"
                 >
                   Reload Page
                 </button>
                 <button
                   onClick={this.handleGoHome}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:ring-theme-focus-ring inline-flex items-center justify-center rounded-md border px-6 py-3 text-base font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden"
+                  className="btn-secondary inline-flex items-center justify-center px-6 py-3 text-base font-medium focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg)"
                 >
                   Go to Dashboard
                 </button>

@@ -742,7 +742,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={savingProfile}
-                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
+                className="btn-secondary text-theme-text-secondary w-full text-sm font-medium focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) sm:w-auto"
               >
                 Cancel
               </button>
@@ -758,7 +758,7 @@ export const MembersAdminPage: React.FC = () => {
                   type="text"
                   value={profileForm.first_name}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input px-3 text-sm"
                   disabled={savingProfile}
                 />
               </div>
@@ -768,7 +768,7 @@ export const MembersAdminPage: React.FC = () => {
                   type="text"
                   value={profileForm.middle_name}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, middle_name: e.target.value }))}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input px-3 text-sm"
                   disabled={savingProfile}
                 />
               </div>
@@ -778,7 +778,7 @@ export const MembersAdminPage: React.FC = () => {
                   type="text"
                   value={profileForm.last_name}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input px-3 text-sm"
                   disabled={savingProfile}
                 />
               </div>
@@ -792,7 +792,7 @@ export const MembersAdminPage: React.FC = () => {
                   type="tel"
                   value={profileForm.phone}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input px-3 text-sm"
                   disabled={savingProfile}
                 />
               </div>
@@ -802,7 +802,7 @@ export const MembersAdminPage: React.FC = () => {
                   type="tel"
                   value={profileForm.mobile}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, mobile: e.target.value }))}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input px-3 text-sm"
                   disabled={savingProfile}
                 />
               </div>
@@ -816,7 +816,7 @@ export const MembersAdminPage: React.FC = () => {
                   type="text"
                   value={profileForm.membership_number}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, membership_number: e.target.value }))}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input px-3 text-sm"
                   disabled={savingProfile}
                 />
               </div>
@@ -825,7 +825,7 @@ export const MembersAdminPage: React.FC = () => {
                 <select
                   value={profileForm.rank}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input px-3 text-sm"
                   disabled={savingProfile}
                 >
                   <option value="">Select Rank</option>
@@ -841,7 +841,7 @@ export const MembersAdminPage: React.FC = () => {
                 <select
                   value={profileForm.station}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, station: e.target.value }))}
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input px-3 text-sm"
                   disabled={savingProfile}
                 >
                   <option value="">Select Station</option>
@@ -887,7 +887,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={savingReset}
-                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
+                className="btn-secondary text-theme-text-secondary w-full text-sm font-medium focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) sm:w-auto"
               >
                 Cancel
               </button>
@@ -901,7 +901,7 @@ export const MembersAdminPage: React.FC = () => {
                 type="password"
                 value={resetNewPassword}
                 onChange={(e) => setResetNewPassword(e.target.value)}
-                className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input bg-theme-surface-secondary px-3 text-sm"
                 placeholder="Minimum 12 characters"
                 disabled={savingReset}
                 autoComplete="new-password"
@@ -914,7 +914,7 @@ export const MembersAdminPage: React.FC = () => {
                 type="password"
                 value={resetConfirmPassword}
                 onChange={(e) => setResetConfirmPassword(e.target.value)}
-                className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input bg-theme-surface-secondary px-3 text-sm"
                 placeholder="Re-enter password"
                 disabled={savingReset}
                 autoComplete="new-password"
@@ -964,7 +964,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={savingMfaReset}
-                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
+                className="btn-secondary text-theme-text-secondary w-full text-sm font-medium focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) sm:w-auto"
               >
                 Cancel
               </button>
@@ -1011,7 +1011,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
+                className="btn-secondary text-theme-text-secondary w-full text-sm font-medium focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) sm:w-auto"
               >
                 Cancel
               </button>
@@ -1075,7 +1075,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
+                className="btn-secondary text-theme-text-secondary w-full text-sm font-medium focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) sm:w-auto"
               >
                 Cancel
               </button>

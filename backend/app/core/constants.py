@@ -184,6 +184,13 @@ OFFICE_CATALOG: list[dict[str, object]] = [
         "category": "administrative",
         "position_slugs": ["quartermaster"],
     },
+    {
+        "key": "ems_supply_officer",
+        "label": "EMS Supply Officer",
+        "default_title": "EMS Supply Officer",
+        "category": "operational",
+        "position_slugs": ["ems_supply_officer"],
+    },
 ]
 
 # Per-office variable suffixes, paired with the description shown in the

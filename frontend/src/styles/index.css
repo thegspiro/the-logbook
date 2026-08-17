@@ -355,14 +355,17 @@
 
 @utility form-checkbox {
   @apply bg-theme-input-bg border-theme-input-border focus:ring-theme-focus-ring h-4 w-4 rounded-sm text-blue-700 dark:text-blue-500;
-  /* A 16px box is the smallest thing on any form. The box stays 16px so
-     layouts are unchanged, but outline-style padding grows the hit area to
-     44px on touch; the negative margin keeps it from displacing neighbours. */
-  @media (max-width: 767px) {
-    padding: 14px;
-    margin: -14px;
-    background-clip: content-box;
-  }
+  /* No padding/negative-margin trick here. A checkbox is a *replaced* element
+     — `appearance: auto` — and every browser discards padding on it, so the
+     `padding: 14px; margin: -14px` pair that used to sit in a max-width:767px
+     block grew no hit area at all while the negative margin stayed fully in
+     effect, pulling the next flex item 14px left. Measured on a 390px
+     viewport, that turned a `gap-3` beside a checkbox into a 2px *overlap*,
+     at every one of the ~100 call sites at once.
+
+     The 44px touch target comes from the <label> the checkbox is paired with,
+     which is what was actually absorbing these taps all along. Give a bare
+     checkbox `mobile-touch-target` on its label, not padding on the box. */
 }
 
 @utility form-label {
@@ -741,6 +744,71 @@
   @media (min-width: 640px) {
     max-height: 90dvh;
   }
+}
+
+/* --- Modals & Overlays --- */
+@utility modal-overlay {
+  /* The scrim behind a dialog. This lived at the call site and had drifted into
+     two different opacities for the same thing (bg-black/50 at 43 sites,
+     bg-black/60 at 47); it settles here on the shared <Modal> component's /50.
+     Layout — flex centring, padding, a raised z-index for a dialog stacked over
+     another — stays at the call site. */
+  @apply fixed inset-0 z-50 bg-black/50;
+}
+
+@utility modal-panel {
+  /* The dialog surface itself. Hand-rolled copies disagreed about whether the
+     panel carried a border (60 sites) or an elevation (46); it carries both.
+     Width caps (max-w-*) and scroll behaviour (see modal-body) are per-dialog
+     and stay at the call site. */
+  @apply bg-theme-surface-modal border-theme-surface-border rounded-lg border shadow-xl;
+}
+
+@utility modal-header {
+  /* The standard dialog header block, as rendered by components/Modal.tsx. The
+     same string was copied into nine sibling modals verbatim. */
+  @apply bg-theme-surface-modal px-4 pt-5 pb-4;
+  @media (min-width: 640px) {
+    padding: 1.5rem 1.5rem 1rem;
+  }
+}
+
+@utility modal-header-sticky {
+  /* Header that stays put while a tall dialog body scrolls under it. Padding is
+     per-dialog and stays at the call site. */
+  @apply bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b;
+}
+
+@utility modal-footer-sticky {
+  /* Pinned action bar for a scrolling dialog. action-bar-safe is what keeps the
+     buttons clear of the iPhone home indicator — the reason this must not be
+     re-typed per page, since dropping it is invisible on a desktop browser. */
+  @apply bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t;
+}
+
+@utility popover-panel {
+  /* Floating surface anchored to a trigger — dropdown menus, autocomplete
+     results, action menus. Shares the modal surface token but is deliberately
+     NOT modal-panel: a popover is dismissed by clicking away and must not take
+     the focus trap, scroll lock or dialog semantics a dialog needs. */
+  @apply bg-theme-surface-modal border-theme-surface-border rounded-lg border shadow-lg;
+}
+
+/* --- Drag & Drop Surfaces --- */
+@utility drop-surface {
+  /* Resting state of a droppable target — kanban columns and reorderable rows. */
+  @apply bg-theme-input-bg border-theme-surface-border rounded-lg border transition-all;
+}
+
+@utility drop-surface-active {
+  /* Pointer is over a valid drop target. Shared with FileDropzone, which keeps
+     its own dashed resting border but signals acceptance the same way. */
+  @apply border-red-500 bg-red-500/5;
+}
+
+@utility drop-surface-dragging {
+  /* The row currently being dragged, as distinct from the target under it. */
+  @apply bg-theme-surface border-red-500/50 opacity-50;
 }
 
 @utility shimmer-skeleton {
@@ -1294,6 +1362,22 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* A print route replaces that canvas with a neutral grey desk behind its white
+   sheet. It has to be set here, on the root, for the same reason the gradient
+   is: a background on `body` reaches the window only while the root's own
+   background is transparent, and the rule above means it is not. Six print
+   routes set `body` instead and silently lost their desk when the canvas moved
+   here on 2026-08-15.
+
+   The mark is applied by `components/print/PrintPageStyles`, which every print
+   route renders. Anything moving the canvas rule above must keep this one with
+   it. */
+@media screen {
+  html.print-preview {
+    background: #f3f4f6;
+  }
+}
+
 /* Body defaults */
 body {
   @apply antialiased;
@@ -1519,7 +1603,15 @@ tbody tr:last-child {
     display: none !important;
   }
 
-  /* Reset backgrounds for ink savings */
+  /* Reset backgrounds for ink savings.
+   *
+   * `html` is named explicitly because the root carries the themed canvas. It
+   * used to be covered only by `.dark` — which ThemeContext puts on
+   * documentElement — so dark mode was reset by accident and **light mode was
+   * not**, and printing with "Background graphics" enabled put the gradient
+   * behind a scorecard, label or QR sign. Do not drop `html` from this list on
+   * the grounds that `.dark` appears to cover it. */
+  html,
   body,
   main,
   .dark {

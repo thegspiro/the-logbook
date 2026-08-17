@@ -202,7 +202,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     <div>
       {/* Bulk Actions Bar */}
       {selected.size > 0 && (
-        <div className="bg-theme-surface border-theme-surface-border mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3">
+        <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
           <span className="text-theme-text-secondary text-sm">{selected.size} selected</span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
@@ -265,7 +265,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       )}
 
       {/* Table */}
-      <div className="bg-theme-input-bg border-theme-surface-border overflow-hidden rounded-lg border">
+      <div className="card bg-theme-input-bg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -446,7 +446,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
                         {actionMenuId === applicant.id && (
-                          <div className="bg-theme-surface-modal border-theme-surface-border absolute top-full right-0 z-10 mt-1 w-40 rounded-lg border py-1 shadow-xl">
+                          <div className="popover-panel absolute top-full right-0 z-10 mt-1 w-40 py-1">
                             <button
                               onClick={() => {
                                 onApplicantClick(applicant);

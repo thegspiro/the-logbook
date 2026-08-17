@@ -95,3 +95,29 @@ async def test_update_validates_changed_reference_before_assignment():
 
     db.flush.assert_not_awaited()
     assert qualification.course_id != "tenant-b-course"
+
+
+@pytest.mark.asyncio
+async def test_create_binds_uuid_references_as_dashed_strings():
+    # The request schema types id fields as ``uuid.UUID``, but the model
+    # columns are dashed ``String(36)``. SQLAlchemy renders a UUID bound
+    # against a String column as 32-char dashless hex, so the org-scope
+    # lookup rejected every real member with "Invalid user_id" until the
+    # service normalised UUIDs to their canonical string form.
+    import uuid as uuid_module
+
+    user_id = uuid_module.UUID("ac430b64-c85c-4f19-8170-d1eff4cfd1dd")
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=_scalar_result(None))
+    service = InstructorQualificationService(db)
+
+    with pytest.raises(ValueError, match="Invalid user_id"):
+        await service.create_qualification(
+            "tenant-a",
+            {"user_id": user_id, "qualification_type": "instructor"},
+            "creator",
+        )
+
+    statement = db.execute.await_args.args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "users.id = 'ac430b64-c85c-4f19-8170-d1eff4cfd1dd'" in sql

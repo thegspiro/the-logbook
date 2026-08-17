@@ -42,7 +42,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLot } from '../../services/eventServices';
-import { getErrorMessage } from '../../utils/errorHandling';
+import { getErrorMessage, isNetworkError } from '../../utils/errorHandling';
 import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -52,6 +52,7 @@ import {
   dequeueCheck,
   markRetry,
   pendingCount as getPendingCount,
+  CHECK_QUEUE_MAX_RETRIES,
   type SyncStatus,
 } from '../../utils/offlineQueue';
 import type {
@@ -349,6 +350,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     try {
       const pending = await listPendingChecks();
       let failed = 0;
+      let discarded = 0;
+      let photosLost = 0;
 
       for (const entry of pending) {
         try {
@@ -366,25 +369,43 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             try {
               await schedulingService.uploadCheckItemPhotos(record.id, itemId, files);
             } catch {
-              // Photo upload failure is non-fatal
+              // The check itself is recorded, so this is not fatal — but the
+              // entry (and with it the only copy of these blobs) is about to be
+              // dequeued. Count them so the loss is reported rather than
+              // discovered later by whoever went looking for the photo of the
+              // damaged item.
+              photosLost += files.length;
             }
           }
 
           await dequeueCheck(entry.id);
         } catch {
-          failed++;
-          await markRetry(entry.id);
+          const updated = await markRetry(entry.id);
+          if (updated && updated.retries >= CHECK_QUEUE_MAX_RETRIES) {
+            // Rejected on every attempt — keeping it would wedge the queue and
+            // keep promising a sync that cannot happen.
+            await dequeueCheck(entry.id);
+            discarded++;
+          } else {
+            failed++;
+          }
         }
       }
 
       const remaining = await getPendingCount();
       setPendingQueueCount(remaining);
-      setSyncStatus(failed > 0 ? 'error' : 'idle');
+      setSyncStatus(failed > 0 || discarded > 0 ? 'error' : 'idle');
 
-      if (pending.length > 0 && failed === 0) {
+      if (pending.length > 0 && failed === 0 && discarded === 0) {
         toast.success(`Synced ${pending.length} queued check(s)`);
       } else if (failed > 0) {
         toast.error(`${failed} check(s) failed to sync — will retry`);
+      }
+      if (discarded > 0) {
+        toast.error(`${discarded} queued check(s) were rejected repeatedly and have been discarded`);
+      }
+      if (photosLost > 0) {
+        toast.error(`${photosLost} photo(s) could not be uploaded and were not saved`);
       }
     } catch {
       setSyncStatus('error');
@@ -1081,8 +1102,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       }
       toast.success('Equipment check submitted successfully');
       onComplete?.();
-    } catch {
-      // Network error during submit — fall back to offline queue
+    } catch (err: unknown) {
+      // Only a transport failure may fall back to the offline queue. A server
+      // that answered has *rejected* this check — a validation error, a lost
+      // permission, a shift already checked — and the queue would re-send the
+      // identical body on every reconnect, failing every time, while the member
+      // was told it was safely queued and the draft was deleted underneath
+      // them. Surface the rejection and keep the draft so it can be corrected.
+      if (!isNetworkError(err)) {
+        toast.error(getErrorMessage(err, 'Failed to submit equipment check'));
+        return;
+      }
       try {
         const fallbackItems: CheckItemResultSubmit[] = [];
         const fallbackPhotos: { itemId: string; files: File[] }[] = [];
@@ -1457,9 +1487,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 min="0"
                 step="0.1"
                 inputMode="decimal"
-                className={`text-theme-text-primary bg-theme-surface min-h-[48px] w-24 rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:outline-none ${
-                  belowMin ? 'border-red-500 focus:ring-red-500' : 'border-theme-surface-border focus:ring-blue-500'
-                }`}
+                className={`form-input min-h-[48px] w-24 px-3 py-2.5 text-sm ${belowMin ? 'border-red-500 focus:ring-red-500' : 'border-theme-surface-border focus:ring-blue-500'}`}
                 value={result?.levelReading ?? ''}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -1516,7 +1544,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <input
                   id={`serial-${item.id}`}
                   type="text"
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="form-input min-h-[48px] px-3 py-2.5 text-sm focus:ring-blue-500"
                   placeholder={item.serialNumber ?? 'Serial number'}
                   value={result?.serialNumber ?? ''}
                   onChange={(e) => updateResult(item.id, { serialNumber: e.target.value })}
@@ -1529,7 +1557,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <input
                   id={`lot-${item.id}`}
                   type="text"
-                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="form-input min-h-[48px] px-3 py-2.5 text-sm focus:ring-blue-500"
                   placeholder={item.lotNumber ?? 'Lot number'}
                   value={result?.lotNumber ?? ''}
                   onChange={(e) => updateResult(item.id, { lotNumber: e.target.value })}
@@ -1563,7 +1591,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       spellCheck={false}
                       id={`new-serial-${item.id}`}
                       type="text"
-                      className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      className="form-input min-h-[48px] border-blue-500/30 px-3 py-2.5 text-sm focus:ring-blue-500"
                       placeholder="New serial number"
                       value={result?.serialFound ?? ''}
                       onChange={(e) =>
@@ -1580,7 +1608,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     <input
                       id={`new-lot-${item.id}`}
                       type="text"
-                      className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      className="form-input min-h-[48px] border-blue-500/30 px-3 py-2.5 text-sm focus:ring-blue-500"
                       placeholder="New lot number"
                       value={result?.lotFound ?? ''}
                       onChange={(e) =>
@@ -1601,7 +1629,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       <input
                         id={`new-expiration-${item.id}`}
                         type="date"
-                        className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        className="form-input min-h-[48px] border-blue-500/30 px-3 py-2.5 text-sm focus:ring-blue-500"
                         value={result?.expirationFound ?? ''}
                         onChange={(e) =>
                           updateResult(item.id, {
@@ -1632,7 +1660,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 type="number"
                 step="0.01"
                 inputMode="decimal"
-                className="border-theme-surface-border text-theme-text-primary bg-theme-surface min-h-[48px] w-32 rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="form-input min-h-[48px] w-32 px-3 py-2.5 text-sm focus:ring-blue-500"
                 value={result?.levelReading ?? ''}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -1675,7 +1703,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
     if (item.checkType === 'text') {
       return (
-        <div key={item.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+        <div key={item.id} className="card p-4">
           <div className="flex items-start gap-2">
             <MessageSquare className="text-theme-text-muted mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
             <div>
@@ -1845,7 +1873,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <input
                 id={`replaced-expiration-${item.id}`}
                 type="date"
-                className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none sm:w-56"
+                className="form-input min-h-[48px] border-blue-500/30 px-3 py-2.5 text-sm focus:ring-blue-500 sm:w-56"
                 value={result?.expirationFound ?? ''}
                 onChange={(e) => updateResult(item.id, { expirationFound: e.target.value })}
               />
@@ -1867,7 +1895,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         {showNotesField && (
           <textarea
             rows={2}
-            className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="form-input px-3 text-sm focus:ring-blue-500"
             placeholder="Notes for this item..."
             aria-label={`Notes for ${item.name}`}
             value={result?.notes ?? ''}
@@ -2089,7 +2117,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <textarea
                 id="overall-notes"
                 rows={3}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="form-input px-3 text-sm focus:ring-blue-500"
                 placeholder="Any overall notes or observations..."
                 value={overallNotes}
                 onChange={(e) => setOverallNotes(e.target.value)}
@@ -2244,7 +2272,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           carry-over is a standing rule about the whole check, and repeating it
           per item turned one sentence into sixty pieces of chrome. */}
       {hasCarriedCounts && (
-        <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-secondary mx-4 mt-3 flex items-start gap-2 rounded-lg border p-3 text-xs">
+        <div className="card-secondary text-theme-text-secondary mx-4 mt-3 flex items-start gap-2 p-3 text-xs">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden="true" />
           <span>
             Counts are carried over from the last recorded count. Change what is different — anything you leave alone
@@ -2258,7 +2286,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       {/* Lot swap modal — pick a ready replacement to put on the apparatus */}
       {swapTarget && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+        <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">

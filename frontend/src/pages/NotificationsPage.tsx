@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
   Bell,
@@ -833,8 +834,8 @@ const NotificationsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
+              <DialogPanel onClose={() => setShowCreateModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-theme-text-primary text-lg font-medium">Create Notification Rule</h3>
@@ -935,7 +936,7 @@ const NotificationsPage: React.FC = () => {
                     <span>Create Rule</span>
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}

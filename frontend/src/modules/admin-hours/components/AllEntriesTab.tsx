@@ -73,7 +73,7 @@ const AllEntriesTab: React.FC = () => {
         <h2 className="text-theme-text-primary text-xl font-semibold">All Entries</h2>
         <button
           onClick={handleExportCSV}
-          className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition"
+          className="btn-secondary text-theme-text-secondary flex items-center gap-2 px-3 text-sm transition"
         >
           <Download className="h-4 w-4" />
           Export CSV
@@ -88,7 +88,7 @@ const AllEntriesTab: React.FC = () => {
             setAllStatusFilter(e.target.value);
             setAllPage(0);
           }}
-          className="bg-theme-surface border-theme-surface-border text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm"
+          className="form-input px-3 py-1.5 text-sm"
         >
           <option value="">All Statuses</option>
           <option value="approved">Approved</option>
@@ -102,7 +102,7 @@ const AllEntriesTab: React.FC = () => {
             setAllCategoryFilter(e.target.value);
             setAllPage(0);
           }}
-          className="bg-theme-surface border-theme-surface-border text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm"
+          className="form-input px-3 py-1.5 text-sm"
         >
           <option value="">All Categories</option>
           {categories.map((cat) => (
