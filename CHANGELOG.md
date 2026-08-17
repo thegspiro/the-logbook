@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dashboard: the station board answers whether you can respond tonight (2026-08-17)
+
+**Added**
+
+- **A readiness line above "Needs you"** — _Clear to respond_, _Clear, with
+  conditions_, or _Not clear to respond_. The station board answered "what needs
+  me" and "what am I doing this week"; it never answered the question a fire
+  department asks first. It reads three things a member already has: their
+  certifications, the shift positions they may hold, and — where the department
+  tracks them — their medical screening compliance.
+
+  Three rules keep it from overstating, and each is tested:
+
+  - **It renders nothing when there is nothing to judge.** A member with no
+    tracked certifications and no screening requirements is _unknown_, not
+    clear, and a green verdict from an empty set asserts a clearance the
+    department has no basis for.
+  - **It names its inputs on screen** ("Certifications, screenings and seats"),
+    so it can never imply a check it did not make. SCBA fit-test dates are not
+    modelled anywhere in the product and are never among them.
+  - **A failed read is not a pass.** If the screening read fails, those
+    requirements drop out and the scope note narrows to what was confirmed.
+
+  It counts rather than names: the verdict says "2 certifications expiring", the
+  "Needs you" rows below name them and carry the buttons. Naming the soonest one
+  reproduced the row beneath it word for word — the "said twice" fault the
+  dashboard redesign existed to remove.
+
+- **`GET /medical-screening/compliance/me`** — a member's own screening
+  compliance, as counts. The existing compliance route takes a `user_id` and
+  requires `medical_screening.view`, which is the officer permission that reads
+  _anybody's_; there was no way for a member to see their own. The new route
+  takes no id — the subject comes from the authenticated session, so there is
+  nothing to substitute — and is registered before `/compliance/{user_id}` so
+  `me` is not captured as a user id. Both properties are structural rather than
+  runtime checks, so tests assert them.
+
+  It returns counts only: no requirement name, screening type, date or result.
+  The dashboard is a shared surface — The Logbook is installed as a kiosk on
+  tablets left at stations — so a line reading "Psychological evaluation
+  expired" would be legible to whoever walks past. A test asserts the serialized
+  shape, because the detail is one attribute access away in the summary it is
+  built from.
+
+**Changed**
+
+- **Concurrent identical GETs now make one request.** `useEnabledModules`
+  carried a comment promising that mounting it in several components did not
+  mean several round trips. Measured against the running app, the dashboard made
+  three requests for `/organization/modules` and two for `/auth/branding` on a
+  single mount: the response cache only helps a caller arriving _after_ an
+  identical request finishes, and the navigation surfaces all mount together
+  against a cold cache. `dedupeInFlight` shares the promise instead, and retains
+  nothing once it settles — so it adds no caching to the endpoints the HIPAA
+  rules exclude from caching. It wraps at the service layer, where the response
+  interceptor's 401 → refresh → retry has already run, so followers get the
+  retried result rather than the pre-refresh failure. Both endpoints now measure
+  at one request per mount.
+
+**Fixed**
+
+- **Shift times on the dashboard read "N/A – N/A".** A shift's `start_time` is a
+  time of day (`"08:00"`), and it was being formatted by a function that parses
+  an instant, so every row rendered `Invalid Date`. They go through
+  `formatTimeOfDay` now.
+- **The open-shift de-duplication never ran.** `loadOpenShifts` filtered its
+  response against `myShifts` read from its render closure, but both lists are
+  fetched concurrently from the same effect, so that set was always empty on
+  mount — the guard was defeated by exactly the race its comment described. It
+  now happens in a memo over both arrays, and every consumer reads the deduped
+  list.
+
+**Documentation**
+
+- `docs/training/13-medical-screening.md` records what the audit trail actually
+  covers. It claimed all access to the module is logged; only creates, updates
+  and deletes are. Reads are not — including one officer reading another
+  member's records or compliance, which is the access an audit trail most exists
+  to detect. This is documented as an open gap, not fixed here.
+
 ### Inventory: vendor pricing is a purchasing matter, not a directory one (2026-08-16)
 
 **Changed**
