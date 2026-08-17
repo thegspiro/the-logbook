@@ -42,9 +42,15 @@ def _hash_prefix_and_suffix(password: str) -> tuple[str, str]:
 
     Uppercase hex throughout: the API returns uppercase suffixes and the
     comparison below is a plain string match.
+
+    ``usedforsecurity=False`` is accurate, not a way to quiet the linter: this
+    SHA-1 is the breach corpus's lookup index, fixed by the provider's API, and
+    the digest is never stored, compared against a stored credential, or used to
+    authenticate anything. Password storage is bcrypt/Argon2, elsewhere. Marking
+    it also keeps the hash usable on FIPS builds, where an unmarked SHA-1 raises.
     """
-    digest = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
-    return digest[:5], digest[5:]
+    digest = hashlib.sha1(password.encode("utf-8"), usedforsecurity=False).hexdigest()
+    return digest[:5].upper(), digest[5:].upper()
 
 
 def _parse_range_response(body: str, suffix: str) -> int:
