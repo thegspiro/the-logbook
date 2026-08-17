@@ -29,6 +29,7 @@ def _one(obj):
 class RecordingSession:
     def __init__(self, results=None):
         self._results = list(results or [])
+        self.statements = []
         self.commit = AsyncMock()
         self.refresh = AsyncMock()
         self.rollback = AsyncMock()
@@ -37,6 +38,8 @@ class RecordingSession:
         pass
 
     async def execute(self, *args, **kwargs):
+        if args:
+            self.statements.append(args[0])
         return self._results.pop(0) if self._results else MagicMock()
 
 
@@ -46,13 +49,25 @@ class TestResolveCategoryRequirementIds:
             [MagicMock(all=MagicMock(return_value=[("r1",), ("r2",)]))]
         )
         svc = TrainingSessionService(db)
-        ids = await svc._resolve_category_requirement_ids("prog-1", "cat-1")
+        ids = await svc._resolve_category_requirement_ids("prog-1", "cat-1", "phase-1")
         assert ids == ["r1", "r2"]
+        assert "phase-1" in db.statements[0].compile().params.values()
 
     async def test_empty_when_no_matches(self):
         db = RecordingSession([MagicMock(all=MagicMock(return_value=[]))])
         svc = TrainingSessionService(db)
-        assert await svc._resolve_category_requirement_ids("prog-1", "cat-1") == []
+        assert (
+            await svc._resolve_category_requirement_ids("prog-1", "cat-1", "phase-1")
+            == []
+        )
+
+    async def test_null_phase_only_matches_program_level_requirements(self):
+        db = RecordingSession([MagicMock(all=MagicMock(return_value=[]))])
+        svc = TrainingSessionService(db)
+
+        await svc._resolve_category_requirement_ids("prog-1", "cat-1", None)
+
+        assert "program_requirements.phase_id IS NULL" in str(db.statements[0])
 
 
 class TestApplyPipelineProgress:
