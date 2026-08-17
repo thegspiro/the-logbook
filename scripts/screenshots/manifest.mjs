@@ -2730,19 +2730,23 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 1153,
     anchor:
-      "Screenshot of the dashboard Notifications panel showing the dismiss control",
-    alt: "The dashboard Notifications panel — a dismiss control on each card and Clear All in the header",
+      "the My Updates feed — unread rows dotted amber",
+    alt: "The dashboard's My Updates feed — unread rows dotted amber, the unread count in the header, and Older Items linking to the full inbox",
     route: "/dashboard",
+    // The station-board rebuild replaced the Notifications panel (per-card ✕,
+    // Clear All header) with the My Updates feed: notifications and
+    // department messages merged, an amber dot per unread row, and a clear
+    // control only on persistent messages. The old selector waited on a
+    // "Mark all as read" button that no longer exists anywhere on the page.
     prepare: async (page) => {
       const panel = page
-        .locator("div.card")
-        .filter({ hasText: "Notifications" })
+        .locator("section.card:has(h3:has-text('My Updates'))")
         .first();
       await panel.waitFor({ timeout: 15_000 });
       await panel.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
       await page.waitForTimeout(600);
     },
-    selector: "div.card:has(button[title='Mark all as read'])",
+    selector: "section.card:has(h3:has-text('My Updates'))",
   },
   {
     id: "08-61-notification-channel-filter",
@@ -2809,6 +2813,9 @@ export const SHOTS = [
   },
   {
     id: "04-35-recurring-event-form",
+    // Same blank-create-form false positive as 04-05 — the recurrence panel
+    // this pictures is populated.
+    allowEmptyState: true,
     doc: "04-events-meetings.md",
     line: 267,
     anchor: "Screenshot of the event form with recurrence switched on, showing",
@@ -4197,6 +4204,10 @@ export const SHOTS = [
   },
   {
     id: "04-05-create-event",
+    // "No reminders" is a line inside the notification defaults on a blank
+    // create form; the Reminder Schedule beside it carries its 1-day chip and
+    // the audience selector the caption is about.
+    allowEmptyState: true,
     doc: "04-events-meetings.md",
     line: 126,
     anchor:
@@ -4374,8 +4385,8 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 67,
     anchor:
-      "Screenshot of the Organization Settings page showing the department name, type selector,",
-    alt: "Organization Settings page with department name, type, and timezone",
+      "Screenshot of the Organization Settings page showing the department name, timezone,",
+    alt: "Organization Settings page with department name, timezone and contact details",
     route: "/settings",
     fullPage: true,
   },
@@ -4797,7 +4808,7 @@ export const SHOTS = [
     doc: "09-skills-testing.md",
     line: 418,
     anchor: 'The Test Records tab filtered to "Awaiting',
-    alt: "Officer review queue — completed results awaiting validation, with Validate and Void actions",
+    alt: "Officer review queue — completed results awaiting validation, each row with its accept, notify and void controls and a bulk Accept above them",
     route: "/training/admin?tab=tests",
     fullPage: true,
     // The queue is a filter on the records tab rather than a page of its own,
@@ -6399,6 +6410,9 @@ export const SHOTS = [
   },
   {
     id: "04-31-guest-check-in-settings",
+    // Same blank-create-form false positive as 04-05; the guest sign-in
+    // toggles this pictures render set.
+    allowEmptyState: true,
     doc: "04-events-meetings.md",
     line: 139,
     anchor: "The Check-In Settings section of the Edit Event form",
@@ -6454,6 +6468,10 @@ export const SHOTS = [
   },
   {
     id: "04-34-guest-prospect-card",
+    // "No documents yet" is the drawer's Documents section for a guest who
+    // has uploaded nothing — correct for a sign-in made at a kiosk minutes
+    // ago. The Linked Events panel this pictures is populated.
+    allowEmptyState: true,
     doc: "04-events-meetings.md",
     line: 177,
     anchor: "The prospective-members board showing a card created",
@@ -7206,7 +7224,7 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 865,
     anchor:
-      "Screenshot of the ScreeningRecordForm showing fields for member selection, requirement dropdown, scheduled",
+      "Screenshot of the ScreeningRecordForm showing fields for linked requirement, screening type, scheduled",
     alt: "Screening record form with member, requirement and result fields",
     route: "/medical-screening",
     prepare: async (page) => {
@@ -7561,7 +7579,16 @@ export const SHOTS = [
     route: "/elections",
     // The member's own view, not an officer's: the ballot is what a voter sees.
     auth: "member",
-    prepare: openElectionTab("voting", isOpenElection),
+    // An open election WITH positions: the in-app ballot renders position
+    // races only, and the first open election in list order is the
+    // restricted issue vote — its ballot reads "No candidates for this
+    // position", which is the known in-app-ballot limitation, not the race
+    // this caption is about.
+    prepare: openElectionTab(
+      "voting",
+      (election) =>
+        isOpenElection(election) && (election.positions?.length ?? 0) > 0,
+    ),
     fullPage: true,
   },
   {
@@ -7913,6 +7940,10 @@ export const SHOTS = [
   },
   {
     id: "06-21-apparatus-evoc-level",
+    // "No EVOC requirement" is the select's placeholder option, in the DOM on
+    // every render including this one, where a real level is selected — the
+    // same false positive recorded for 03-52 and 06-23.
+    allowEmptyState: true,
     doc: "06-apparatus-facilities.md",
     line: 650,
     anchor:
@@ -7947,7 +7978,7 @@ export const SHOTS = [
     doc: "06-apparatus-facilities.md",
     line: 672,
     anchor:
-      "Screenshot of an engine's Operators tab listing three operators by name",
+      "Screenshot of an engine's Operators tab listing its certified operators by name",
     alt: "The Operators tab: certified operators by name, with EVOC level and certification dates",
     route: "/apparatus",
     prepare: async (page) => {
@@ -8516,7 +8547,7 @@ export const SHOTS = [
     id: "09-04-template-builder",
     doc: "09-skills-testing.md",
     line: 111,
-    anchor: "Screenshot of the template builder showing two sections",
+    anchor: "Screenshot of the template builder showing its sections",
     alt: "Skill template builder with its sections and scored criteria",
     route: "/training/skills-testing",
     prepare: openFirstFromApi(
@@ -9187,6 +9218,10 @@ export const SHOTS = [
   },
   {
     id: "08-37-email-officers",
+    // "No holder" is a deliberately vacant office on the officers list — the
+    // seeder fills the elected offices and leaves the rest open, which is
+    // what a real department's list looks like.
+    allowEmptyState: true,
     doc: "08-admin-reports.md",
     line: 1437,
     anchor:
@@ -9328,7 +9363,7 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 142,
     anchor:
-      "Screenshot of the Module Management section showing the three categories",
+      "Screenshot of the Module Management section showing the module categories",
     alt: "Module management with a toggle for each optional feature",
     route: "/settings?tab=modules",
     fullPage: true,
@@ -9378,7 +9413,7 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 1383,
     anchor:
-      "Screenshot of the Email Templates sidebar showing seven collapsible category",
+      "Screenshot of the Email Templates sidebar showing its collapsible category",
     alt: "Email template categories in the editor sidebar",
     route: "/communications/email-templates",
     fullPage: true,

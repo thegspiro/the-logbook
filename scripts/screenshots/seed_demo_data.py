@@ -11206,10 +11206,6 @@ class Seeder:
         self.step("apparatus activity", lambda: self.seed_apparatus_activity(apparatus))
         events = self.step("events", self.seed_events) or []
         self.step(
-            "guest check-in event",
-            lambda: self.seed_guest_check_in_event(stations),
-        )
-        self.step(
             "event rsvps",
             lambda: self.seed_event_rsvps(self.base_url, events, members),
         )
@@ -11301,6 +11297,15 @@ class Seeder:
         self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}
+        )
+        # After the pipeline exists, deliberately: a guest sign-in creates a
+        # prospect in the DEFAULT pipeline's first stage, and on a fresh
+        # database this step used to run before any pipeline existed — the
+        # guest prospect then had no stage, no kanban card, and the
+        # guest-prospect screenshot had nothing to open.
+        self.step(
+            "guest check-in event",
+            lambda: self.seed_guest_check_in_event(stations),
         )
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []

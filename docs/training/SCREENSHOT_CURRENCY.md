@@ -143,6 +143,61 @@ earlier** and remain stale.
 
 ---
 
+## The 2026-08-17 pass — guides 04, 09, 06 and 08, 103 changed images verified
+
+All four guides were re-captured against the rebuilt database and the merged
+build, and **every changed image was opened and read against its caption** by
+three parallel verification passes before anything was committed. Ninety-two
+came through verified; the rest were dispositioned rather than trusted:
+
+- **Thirteen kept their previously verified bytes** instead of the fresh
+  capture, because the new frame showed a data regression, not a code change:
+  the meetings module, event requests, QR-scan analytics, apparatus fuel
+  logs, permanent equipment assignments and overdue facility maintenance are
+  all **unseeded on a fresh database** (the long-lived one had accumulated
+  them), the compliance dashboard's rate cards need screening data the seed
+  does not create, two inbox shots need read notifications the fresh inbox
+  lacks, and the event QR shot caught a check-in window that had closed.
+  Each is an open seed gap recorded here so a future pass fixes the seeder
+  rather than re-diagnosing the empty frame.
+- **Time-sensitive fixtures expired twice mid-pass** — two container restarts
+  cost hours each, and the "live right now" open house had ended by capture
+  time. Re-seeded and re-shot: check-in monitoring, the room display, the
+  guest sign-in pair and End Event. A side effect stands recorded: the guest
+  event slides to the seed moment, so captures taken late at night carry an
+  open house timed in the small hours, and the five guest-flow images were
+  shot across different slides of that window — each internally right,
+  mutually a few hours apart.
+- **The guest sign-in prospect had no pipeline card on a fresh database** —
+  the open-house step ran before any pipeline existed, so Rosa Delgado
+  landed stage-less and unopenable. The step now runs after the pipeline
+  seeding, and the one stranded record was rebuilt through the same public
+  sign-in path.
+- **The cast-ballot shot picked the wrong open election**: list order put the
+  restricted issue vote first, whose in-app ballot correctly reads "No
+  candidates for this position" (the documented position-races-only
+  limitation). The shot now demands an open election with positions.
+- **08-60 retargeted**: the station-board rebuild replaced the dashboard
+  Notifications panel (per-card ✕, Clear All) with the My Updates feed; the
+  guide section is rewritten against it. One stored notification still spelt
+  a raw enum ("ShiftPosition.FIREFIGHTER") — written before the formatting
+  fix landed; the row was removed rather than pictured, since the shipped
+  code no longer produces it.
+- **Caption drift corrected against the build** (the 03-45 pattern): the
+  validation queue's controls are accept/notify/void icons with a bulk
+  Accept, not "Validate and Void" buttons; module management has two
+  category headers, the email-template sidebar six; organization settings
+  carries no department-type selector; the screening record form opens from
+  a member's row and so has no member picker; the template builder's section
+  count and the operators-tab roster size are no longer promised as numbers.
+
+Cross-image drift noted and accepted: notification badges differ between
+shots captured minutes apart, and the apparatus label print reads six labels
+against a seven-unit fleet — the missing one is U-1, unexplained and worth a
+look next pass. The stray "Oakville Fire Department" facility record the
+bootstrap creates also fronts two facility shots; real demo data, but the
+sparse record makes a poor face for the detail page.
+
 ## The 2026-08-16 guide-03 re-capture — 67 of 67, every changed image opened
 
 The full guide-03 set was re-shot against the fresh database and the current
