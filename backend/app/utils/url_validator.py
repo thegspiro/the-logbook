@@ -119,7 +119,7 @@ def _assert_hostname_resolves_public(hostname: str) -> None:
             )
 
 
-def assert_outbound_url_safe(url: str) -> None:
+def assert_outbound_url_safe(url: str, *, allow_private: bool = False) -> None:
     """Re-validate a stored URL at REQUEST time, immediately before dispatch.
 
     validate_integration_url() runs at config-save time, but the hostname is
@@ -130,6 +130,13 @@ def assert_outbound_url_safe(url: str) -> None:
     resolved-IP checks, shrinking the rebinding window to the interval between
     this resolve and the connection (versus save-time-to-send). Raises ValueError
     on any violation so callers fail closed.
+
+    ``allow_private=True`` skips ONLY the private-resolution check, for
+    operator-controlled destinations (never user-supplied URLs) that
+    legitimately live on a trusted private network — e.g. an on-prem SIEM
+    collector behind AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION. The structural
+    checks (HTTPS scheme, hostname presence, metadata-endpoint blocklist)
+    still apply.
     """
     parsed = urlparse((url or "").strip())
     is_dev = getattr(settings, "ENVIRONMENT", "production") == "development"
@@ -140,4 +147,5 @@ def assert_outbound_url_safe(url: str) -> None:
         raise ValueError("Outbound URL must contain a valid hostname")
     if hostname in BLOCKED_HOSTNAMES:
         raise ValueError(f"Outbound URL hostname '{hostname}' is not allowed")
-    _assert_hostname_resolves_public(hostname)
+    if not allow_private:
+        _assert_hostname_resolves_public(hostname)

@@ -26,7 +26,10 @@ docs/COMPLIANCE.md):
   are official election records and are retained.
 - The member's original prospective-member record (linked via
   transferred_user_id): full PII block, notes, interview assessments,
-  prospect-linked medical results, and the source form submission.
+  prospect-linked medical results, every linked source form submission
+  (including later duplicate applications referenced only from step
+  progress), and the mapped_data applicant copies that form-driven
+  pipeline steps store in prospect_step_progress.action_result.
 
 What is deliberately NOT touched:
 - audit_logs — append-only and hash-chained; rewriting them is tampering.
@@ -43,7 +46,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import case, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import EventRSVP
@@ -55,6 +58,7 @@ from app.models.membership_pipeline import (
     ProspectDocument,
     ProspectInterview,
     ProspectiveMember,
+    ProspectStepProgress,
 )
 from app.models.training import ExternalUserMapping, ShiftTimeOff, TrainingWaiver
 from app.models.user import (
@@ -227,6 +231,7 @@ class MemberAnonymizationService:
         counts["prospect_records_scrubbed"] = prospect_counts["prospects"]
         counts["screening_records_scrubbed"] += prospect_counts["screenings"]
         counts["form_submissions_scrubbed"] = prospect_counts["form_submissions"]
+        counts["step_progress_scrubbed"] = prospect_counts["step_progress"]
 
         await self.db.flush()
         return {
@@ -246,10 +251,18 @@ class MemberAnonymizationService:
         prospects = result.scalars().all()
         screenings_scrubbed = 0
         form_submissions_scrubbed = 0
+        step_progress_scrubbed = 0
         for prospect in prospects:
+            # Rows linked to BOTH user_id and prospect_id were already
+            # scrubbed (and counted) by the user-scoped update in
+            # anonymize_member — exclude them here so the summary counts
+            # each record exactly once.
             result = await self.db.execute(
                 update(ScreeningRecord)
-                .where(ScreeningRecord.prospect_id == prospect.id)
+                .where(
+                    ScreeningRecord.prospect_id == prospect.id,
+                    ScreeningRecord.user_id.is_(None),
+                )
                 .values(
                     result_summary=None,
                     result_data=None,
@@ -259,25 +272,60 @@ class MemberAnonymizationService:
             )
             screenings_scrubbed += result.rowcount or 0
 
+            # Form-driven pipeline steps copy the full mapped applicant data
+            # (name, email, address, date of birth, ...) into
+            # ProspectStepProgress.action_result, and a later duplicate
+            # application's submission id lives ONLY there —
+            # prospect.form_submission_id keeps pointing at the original.
+            # Collect every linked submission id and redact the mapped_data
+            # copies, or the erasure leaves the applicant fully identifiable.
+            submission_ids: set[str] = set()
             if prospect.form_submission_id:
+                submission_ids.add(str(prospect.form_submission_id))
+                prospect.form_submission_id = None
+
+            progress_result = await self.db.execute(
+                select(ProspectStepProgress).where(
+                    ProspectStepProgress.prospect_id == prospect.id
+                )
+            )
+            for progress in progress_result.scalars().all():
+                action_result = progress.action_result
+                if not isinstance(action_result, dict):
+                    continue
+                linked_submission = action_result.get("form_submission_id")
+                if linked_submission:
+                    submission_ids.add(str(linked_submission))
+                if action_result.get("mapped_data") is not None:
+                    # New top-level dict — a nested in-place edit would be
+                    # invisible to the plain JSON column (pitfall #12).
+                    progress.action_result = {**action_result, "mapped_data": None}
+                    step_progress_scrubbed += 1
+
+            if submission_ids:
                 result = await self.db.execute(
                     update(FormSubmission)
                     .where(
-                        FormSubmission.id == prospect.form_submission_id,
+                        FormSubmission.id.in_(submission_ids),
                         FormSubmission.organization_id == user.organization_id,
                     )
                     .values(
                         data={},
                         submitter_name=None,
                         submitter_email=None,
-                        submitted_by=None,
+                        # submitted_by may identify a coordinator who filed
+                        # the application on the member's behalf — clear it
+                        # only when it names the member being anonymized.
+                        submitted_by=case(
+                            (FormSubmission.submitted_by == user.id, None),
+                            else_=FormSubmission.submitted_by,
+                        ),
                         ip_address=None,
                         user_agent=None,
                         integration_result=None,
                     )
                 )
                 form_submissions_scrubbed += result.rowcount or 0
-                prospect.form_submission_id = None
 
             prospect.first_name = "Former"
             prospect.last_name = f"Member-{token[:8]}"
@@ -323,4 +371,5 @@ class MemberAnonymizationService:
             "prospects": len(prospects),
             "screenings": screenings_scrubbed,
             "form_submissions": form_submissions_scrubbed,
+            "step_progress": step_progress_scrubbed,
         }

@@ -17,6 +17,7 @@ Covers:
   - Status transition matrix
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
@@ -1253,3 +1254,67 @@ class TestMemberOrgValidation:
         assert assignment is None
         assert err == "Item not found"
         assert mock_db.execute.await_count == 1
+
+
+# ============================================
+# User Inventory (dashboard) Tests
+# ============================================
+
+
+class TestGetUserInventory:
+    """get_user_inventory shapes the dashboard's personal-equipment payload."""
+
+    def _assignment(self, stock_quantity):
+        item = SimpleNamespace(
+            id="item-1",
+            name="Structure Helmet",
+            serial_number="SN-001",
+            asset_tag=None,
+            condition=ItemCondition.GOOD,
+            category=SimpleNamespace(name="PPE"),
+            quantity=stock_quantity,
+        )
+        return SimpleNamespace(
+            id="assign-1", item=item, assigned_date="2026-08-01T00:00:00Z"
+        )
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_permanent_assignment_reports_one_unit_not_stock(
+        self, service, org_id, user_id
+    ):
+        # PR #1456: the payload used a.item.quantity — the catalog's on-hand
+        # stock — so a single assignment of an item with 50 units in stock
+        # displayed as 50 on the dashboard. ItemAssignment has no
+        # per-assignment quantity column; each assignment is one unit.
+        service.get_user_assignments = AsyncMock(
+            return_value=[self._assignment(stock_quantity=50)]
+        )
+        service.get_active_checkouts = AsyncMock(return_value=[])
+        service.get_user_issuances = AsyncMock(return_value=[])
+
+        result = await service.get_user_inventory(user_id, org_id)
+
+        assert len(result["permanent_assignments"]) == 1
+        assert result["permanent_assignments"][0]["quantity"] == 1
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_pool_issuance_keeps_its_issued_quantity(
+        self, service, org_id, user_id
+    ):
+        # Pool issuances carry a real per-record quantity — that one must keep
+        # flowing through unchanged.
+        item = SimpleNamespace(
+            id="item-2", name="Dept T-Shirt", size="M", quantity=20, category=None
+        )
+        issuance = SimpleNamespace(
+            id="iss-1", item=item, quantity_issued=3, issued_at="2026-08-01T00:00:00Z"
+        )
+        service.get_user_assignments = AsyncMock(return_value=[])
+        service.get_active_checkouts = AsyncMock(return_value=[])
+        service.get_user_issuances = AsyncMock(return_value=[issuance])
+
+        result = await service.get_user_inventory(user_id, org_id)
+
+        assert result["issued_items"][0]["quantity_issued"] == 3

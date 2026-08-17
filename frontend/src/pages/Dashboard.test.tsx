@@ -642,6 +642,70 @@ describe('Dashboard', () => {
         expect(within(feed).getByText('Nothing new')).toBeInTheDocument();
       });
     });
+
+    // Message bodies are linkified; an <a> inside a <button> is invalid HTML
+    // and the parser splits the row apart, so message rows render as
+    // div[role=button]. Following a link must not also fire the row's
+    // navigation to /messages and yank the current tab away.
+    it('lets a body link be followed without triggering the row navigation', async () => {
+      mockGetInbox.mockResolvedValue([
+        makeMessage({
+          id: 'msg-link',
+          title: 'Fill the duty survey',
+          body: 'Sign up at https://example.com/form today',
+          is_read: true,
+          is_persistent: true,
+        }),
+      ]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
+      const link = within(feed).getByRole('link', { name: 'https://example.com/form' });
+      // jsdom can't navigate; keep the click from hitting the default handler.
+      link.addEventListener('click', (e) => e.preventDefault());
+      await user.click(link);
+
+      expect(mockNavigate).not.toHaveBeenCalledWith('/messages');
+
+      // Clicking the row outside the link still opens the messages page.
+      await user.click(within(feed).getByText('Fill the duty survey'));
+      expect(mockNavigate).toHaveBeenCalledWith('/messages');
+    });
+
+    // Enter on a focused body link bubbles to the row's keydown handler; the
+    // anchor's propagation guard covers clicks only, so without a target
+    // check the row would swallow the keypress and navigate instead.
+    it('lets a body link be activated by keyboard without the row hijacking it', async () => {
+      mockGetInbox.mockResolvedValue([
+        makeMessage({
+          id: 'msg-link-kbd',
+          title: 'Fill the duty survey',
+          body: 'Sign up at https://example.com/form today',
+          is_read: true,
+          is_persistent: true,
+        }),
+      ]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
+      const link = within(feed).getByRole('link', { name: 'https://example.com/form' });
+      link.addEventListener('click', (e) => e.preventDefault());
+
+      link.focus();
+      await user.keyboard('{Enter}');
+
+      expect(mockNavigate).not.toHaveBeenCalledWith('/messages');
+
+      // The row itself still responds to keyboard activation.
+      const row = within(feed).getByRole('button', { name: /Fill the duty survey/ });
+      row.focus();
+      await user.keyboard('{Enter}');
+      expect(mockNavigate).toHaveBeenCalledWith('/messages');
+    });
   });
 
   describe('Organization tab', () => {
@@ -666,6 +730,26 @@ describe('Dashboard', () => {
       expect(within(equipment).getByText('1')).toBeInTheDocument();
       expect(within(equipment).queryByText('99')).not.toBeInTheDocument();
       expect(mockGetInventorySummary).not.toHaveBeenCalled();
+    });
+
+    // Each permanent assignment is one physical unit. The response's quantity
+    // field historically carried the catalog's on-hand stock, so a single
+    // assignment of an item with 50 units in stock displayed as 50.
+    it('counts assignment rows, not any stock quantity the response carries', async () => {
+      mockGetUserInventory.mockResolvedValue({
+        permanent_assignments: [
+          { item_id: 'item-1', quantity: 50 },
+          { item_id: 'item-2', quantity: 1 },
+        ],
+        active_checkouts: [],
+        issued_items: [],
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
+      expect(within(equipment).getByText('2')).toBeInTheDocument();
+      expect(within(equipment).queryByText('51')).not.toBeInTheDocument();
     });
 
     it('is hidden from members without settings.manage', async () => {

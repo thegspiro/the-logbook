@@ -63,7 +63,18 @@ does. It is not the source of truth for the current head.
 > (`20260816_0003_add_inventory_vendors.py`). Past `20260814_0004` the chain runs
 > `20260816_0001` (`facility_rooms.parent_room_id`, nested rooms) →
 > `20260816_0002` (backfill storage-area barcodes) → `20260816_0003`
-> (inventory vendors + contact backfill).
+> (inventory vendors + contact backfill) → `_0004` (medical item type) →
+> `_0005` (backfill medical supply grants) → `20260816_0007` (fold the
+> duplicate `email` notification preference into `email_notifications`).
+>
+> **`20260816_0007` was renumbered from `20260816_0002`** — the **fifth**
+> same-day collision, and the second one on this date alone: it claimed `_0002`
+> off `_0001` while the storage-area barcode backfill held it on main. The
+> duplicate-revision guards in `tests/test_alembic_migrations.py` and
+> `tests/test_changelog_fixes.py` caught it after merging main, which is what
+> they are for — but the cheaper catch is `alembic heads` **before** writing
+> the file and **again after merging main**, as the note below has been asking
+> for since the third occurrence.
 >
 > **`20260816_0003` was renumbered from `20260816_0002`** — the vendor branch
 > and the storage-area barcode branch both claimed `_0002` off `_0001` on the
@@ -412,7 +423,7 @@ Three revisions, linear, revising `20260814_0004`. `20260816_0003` is the
 | `20260816_0001` | `20260814_0004` | Adds `facility_rooms.parent_room_id` (VARCHAR(36), nullable), index `idx_facility_rooms_parent`, and self-referential FK `fk_facility_rooms_parent_room` with `ON DELETE SET NULL` — nested facility rooms                                                                                                                |
 | `20260816_0002` | `20260816_0001` | Backfills barcodes for storage areas that predate auto-assignment                                                                                                                                                                                                                                                         |
 | `20260816_0003` | `20260816_0002` | Creates `inventory_vendors` + `inventory_vendor_contacts`, adds `vendor_id` to items and reorder requests, and backfills a vendor per distinct free-text supplier name (case-folded per org), linking the rows that named it. **Renumbered from `20260816_0002`** after a same-day id collision with the barcode backfill |
-
+| `20260816_0007` | `20260816_0005` | Folds the duplicate `users.notification_preferences.email` key into `email_notifications` — the key every sender actually reads — carrying an explicit `email: false` opt-out across before dropping the dead key. Written in Python rather than `JSON_SET`/`JSON_REMOVE`: MariaDB 10.11 is a supported target and has no `CAST(... AS JSON)`. **Renumbered from `20260816_0002`** after the same-day id collision with the barcode backfill |
 Notes:
 
 - **`ON DELETE SET NULL`, deliberately never CASCADE.** Removing a room must

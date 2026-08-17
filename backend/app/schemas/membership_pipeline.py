@@ -430,6 +430,14 @@ class CompleteStepRequest(BaseModel):
     action_result: Optional[Dict[str, Any]] = None
 
 
+class StepApprovalRequest(BaseModel):
+    """Schema for a signer recording their own multi-approval sign-off"""
+
+    step_id: UUID
+    role: str = Field(..., min_length=1, max_length=255)
+    notes: Optional[str] = None
+
+
 class AdvanceProspectRequest(BaseModel):
     """Schema for advancing a prospect to the next step"""
 

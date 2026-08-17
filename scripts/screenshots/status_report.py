@@ -19,8 +19,12 @@ from pathlib import Path
 DOCS_DIR = Path(__file__).resolve().parent.parent.parent / "docs" / "training"
 OUTPUT = DOCS_DIR / "SCREENSHOT_STATUS.md"
 
+# Keep in step with apply_placeholders.py, which explains why the `[` is
+# optional and unterminated: descriptive `**[SCREENSHOT NEEDED — …]**` markers
+# were invisible to this count, so the tracker read as nearly complete while 41
+# requested captures went unscheduled.
 MARKER = re.compile(
-    r"^>\s*\*\*(?:Screenshot placeholder|Screenshot needed|\[SCREENSHOT NEEDED\])",
+    r"^>\s*\*\*\[?(?:Screenshot placeholder|Screenshot needed)",
     re.IGNORECASE,
 )
 IMAGE = re.compile(r"^!\[.*\]\(\./images/.*\.png\)$")

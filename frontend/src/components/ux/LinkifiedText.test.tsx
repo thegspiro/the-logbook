@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { LinkifiedText } from './LinkifiedText';
 
 describe('LinkifiedText', () => {
@@ -52,5 +52,28 @@ describe('LinkifiedText', () => {
       </p>
     );
     expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  // Linkified bodies get embedded in clickable rows (dashboard feed); following
+  // a link must not also fire the enclosing row's action, which would drag the
+  // current tab off to another page while the link opens in a new one.
+  it('does not let link clicks bubble into an enclosing clickable row', () => {
+    const rowClick = vi.fn();
+    render(
+      <div role="button" tabIndex={0} onClick={rowClick}>
+        <LinkifiedText text="Sign up at https://example.com/form now" />
+      </div>
+    );
+
+    const link = screen.getByRole('link');
+    // jsdom can't navigate; keep the click from hitting the default handler.
+    link.addEventListener('click', (e) => e.preventDefault());
+    fireEvent.click(link);
+
+    expect(rowClick).not.toHaveBeenCalled();
+
+    // Clicking the row outside the link still fires the row action.
+    fireEvent.click(screen.getByRole('button'));
+    expect(rowClick).toHaveBeenCalledTimes(1);
   });
 });

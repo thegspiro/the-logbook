@@ -98,7 +98,11 @@ export const getFacilitiesRoutes = () => (
       path="/locations/qr-codes"
       element={
         <Suspense fallback={null}>
-          <ProtectedRoute requiredAnyPermission={['locations.manage', 'facilities.manage']}>
+          {/* apparatus.view may enter for the apparatus shift check-in cards
+              (permanent id-based URLs, no secret). Room kiosk codes are bearer
+              credentials the backend redacts for non-managers, so those cards
+              simply don't render for apparatus-only viewers. */}
+          <ProtectedRoute requiredAnyPermission={['locations.manage', 'facilities.manage', 'apparatus.view']}>
             <RoomQRCodesPage />
           </ProtectedRoute>
         </Suspense>

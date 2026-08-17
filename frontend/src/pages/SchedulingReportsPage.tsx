@@ -432,8 +432,9 @@ export const SchedulingReportsPage: React.FC = () => {
               {/* Say what the numbers are, so nobody has to infer it from a
                   column header that could mean either measure. */}
               <p className="text-theme-text-muted mb-4 text-xs">
-                Hours worked are measured from shift check-in and check-out. Scheduled hours are the assigned shift
-                length — shown for comparison, since a shift can run short or long, or be assigned and not worked.
+                Hours worked are measured from shift check-in and check-out, counting only shifts whose attendance has
+                been finalized. Scheduled hours are the assigned shift length — shown for comparison, since a shift can
+                run short or long, or be assigned and not worked.
               </p>
 
               {/* Table */}

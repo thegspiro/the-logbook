@@ -6,19 +6,24 @@ channels members actually watch:
 
 * an in-app notification (bell inbox) for every targeted member;
 * an email to every targeted member — always;
-* an SMS when the message is urgent, Twilio is configured, and the member has
-  granted SMS consent.
+* an SMS when the message is urgent and the member cleared both SMS opt-in
+  gates (see ``notification_channels``).
 
 **Email is the channel of record and is deliberately unconditional.** It is not
 gated by consent and not gated by the member's notification preferences: a
 member must not be able to opt out of the record that they were told something,
 or the department loses its answer to "I never got that update". SMS, by
-contrast, *is* consent-gated — US TCPA requires express consent for text
-messaging, and consent that is collected but never checked is worse than none,
-because the UI represents to the member that their choice took effect.
+contrast, is an opt-in addition on top of that email — US TCPA requires express
+consent for text messaging, and consent that is collected but never checked is
+worse than none, because the UI represents to the member that their choice took
+effect.
 
 That pairing is the invariant to preserve if this is ever changed: SMS may be
 suppressed for a member, but the same message always reaches them by email.
+
+An urgent department message is the only notification in the application
+allowed to escalate to SMS; ``notification_channels.SmsAlert`` holds that list
+and the recipient filter that enforces it.
 
 The fan-out is dispatched to FastAPI ``BackgroundTasks`` so the HTTP response
 returns immediately, and runs on its own database session (the request's
@@ -60,12 +65,6 @@ def _priority_value(message: DepartmentMessage) -> str:
         if hasattr(message.priority, "value")
         else str(message.priority)
     )
-
-
-def _wants(prefs: Optional[dict], key: str) -> bool:
-    """Whether a member opts in to a channel. Defaults to True when unset, so a
-    member only stops receiving a channel by explicitly turning it off."""
-    return (prefs or {}).get(key, True) is not False
 
 
 def _text_to_html(text: str) -> str:
@@ -223,31 +222,19 @@ class MessageDeliveryService:
         org: Optional[Organization],
     ) -> None:
         try:
-            from app.services.sms_service import SMSService
-
-            sms_svc = SMSService()
-            if not sms_svc.enabled:
-                return
-
-            # TCPA: text messaging requires express consent, so the recorded
-            # consent gates the send in addition to the channel preference.
-            # granted_user_ids fails closed — a member who was never asked is
-            # simply absent from the set, i.e. treated as having refused. They
-            # still receive this message by email (see deliver()).
-            from app.models.consent import ConsentType
-            from app.services.consent_service import ConsentService
-
-            consented = await ConsentService(self.db).granted_user_ids(
-                [str(u.id) for u in recipients], ConsentType.SMS_NOTIFICATIONS
+            # Twilio configuration, TCPA consent (fails closed — a member who
+            # was never asked counts as having refused) and the member's own
+            # sms_notifications preference are all applied here. Everyone
+            # dropped has already received this message by email (see
+            # deliver()), which is the invariant that makes the filter safe.
+            from app.services.notification_channels import (
+                SmsAlert,
+                resolve_sms_recipients,
             )
 
-            numbers = [
-                (u.mobile or u.phone)
-                for u in recipients
-                if (u.mobile or u.phone)
-                and str(u.id) in consented
-                and _wants(u.notification_preferences, "sms_notifications")
-            ]
+            numbers = await resolve_sms_recipients(
+                self.db, recipients, SmsAlert.URGENT_DEPARTMENT_MESSAGE
+            )
             if not numbers:
                 return
 
@@ -270,7 +257,10 @@ class MessageDeliveryService:
             body = f"{org_name} URGENT: {message.title}"
             if len(body) > _SMS_MAX_LEN:
                 body = body[: _SMS_MAX_LEN - 1].rstrip() + "…"
-            await sms_svc.send_bulk_sms(numbers, body)
+
+            from app.services.sms_service import SMSService
+
+            await SMSService().send_bulk_sms(numbers, body)
         except Exception as e:  # pragma: no cover - defensive
             logger.warning("Department message SMS escalation failed: {}", e)
 

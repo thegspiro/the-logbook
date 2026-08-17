@@ -201,9 +201,15 @@ problem the dashboard says you do not have.
   logged loudly on every boot, so the acceptance does not quietly outlive the
   person who made it. Clear the flag once a CA is configured.
 
-Plaintext DB/Redis (`DB_SSL` unset) remains a **warning**, not a block — a
-container-internal network is a legitimate deployment, and promoting it would
-break every existing install at startup.
+Plaintext DB/Redis (`DB_SSL` unset) **blocks startup in production and
+staging** unless the deployment opts out: `SECURITY_REQUIRE_TLS` defaults to
+`true`, and without `DB_SSL`/`REDIS_SSL` configured the backend refuses to
+start. A container-internal network is still a legitimate deployment — the
+bundled installers (`install.sh`, `scripts/universal-install.sh`, the Unraid
+setup) write an explicit `SECURITY_REQUIRE_TLS=false` risk acceptance into the
+generated `.env` because their bundled MySQL/Redis do not terminate TLS. Set
+the flag `false` yourself only when a trusted topology (private VPC, service
+mesh, sidecar) provides equivalent transport protection.
 
 ### Rate limiting is now a real switch
 
