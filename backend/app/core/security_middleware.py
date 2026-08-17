@@ -901,11 +901,6 @@ class IPBlockingMiddleware:
         self.app = app
         self.enabled = enabled
         self.log_blocked_attempts = log_blocked_attempts
-        # In-process TTL cache for the allowlist so we don't hit Redis/DB on
-        # every request. Refreshed at most once per _ALLOWLIST_TTL seconds.
-        self._allowlist_cache: set = set()
-        self._allowlist_cached_at: float = 0.0
-        self._ALLOWLIST_TTL = 60.0
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Process request and check IP/country restrictions."""
@@ -940,10 +935,11 @@ class IPBlockingMiddleware:
 
         geoip = get_geoip_service()
         if geoip:
-            # Get allowed IPs from database (cached)
-            allowed_ips = await self._get_allowed_ips()
-
-            is_blocked, reason = geoip.is_ip_blocked(client_ip, allowed_ips)
+            # This middleware runs before authentication and therefore has no
+            # trustworthy tenant context. Tenant-scoped IP exceptions cannot
+            # safely be applied here: doing so would let one tenant relax the
+            # geo-blocking policy for every other tenant.
+            is_blocked, reason = geoip.is_ip_blocked(client_ip, set())
 
             if is_blocked:
                 # Log the blocked attempt
@@ -984,55 +980,6 @@ class IPBlockingMiddleware:
             scope["state"]["client_ip"] = client_ip
 
         await self.app(scope, receive, send)
-
-    async def _get_allowed_ips(self) -> set:
-        """
-        Get the set of currently-approved allowlist IPs (across all orgs).
-
-        Bounded by an in-process TTL cache and a shared Redis cache so the
-        geo-blocking hot path does not query the database on every request.
-        An approved IP exception lets a member through a country block; on any
-        failure we fail closed to an empty allowlist (geo-block still applies).
-        """
-        import time as _time
-
-        now = _time.monotonic()
-        if (
-            self._allowlist_cached_at
-            and (now - self._allowlist_cached_at) < self._ALLOWLIST_TTL
-        ):
-            return self._allowlist_cache
-
-        ips: set | None = None
-        try:
-            from app.core.cache import cache_manager
-
-            if cache_manager.is_connected:
-                cached = await cache_manager.get("ip_allowlist")
-                if cached is not None:
-                    ips = set(cached)
-
-            if ips is None:
-                # Cache miss — load from the DB and repopulate the shared cache.
-                from app.core.database import async_session_factory
-                from app.services.ip_security_service import ip_security_service
-
-                async with async_session_factory() as db:
-                    ips = await ip_security_service.get_all_active_allowed_ips_global(
-                        db
-                    )
-
-                if cache_manager.is_connected:
-                    await cache_manager.set(
-                        "ip_allowlist", list(ips), ttl=int(self._ALLOWLIST_TTL)
-                    )
-        except Exception:
-            ips = set()
-
-        ips = ips or set()
-        self._allowlist_cache = ips
-        self._allowlist_cached_at = now
-        return ips
 
     async def _log_blocked_attempt(
         self, request: Request, client_ip: str, reason: str
