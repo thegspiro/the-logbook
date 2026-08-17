@@ -791,15 +791,19 @@ class MessagingService:
     ) -> List[User]:
         """Resolve the concrete set of users a message is targeted at.
 
-        Loads the org's users (with roles) once and reuses _is_targeted so the
-        report and the stats denominator agree exactly with what the inbox
-        delivers. Bounded by org size, so an in-Python filter is acceptable for
-        this admin-only, low-frequency path.
+        Loads the org's active users (with roles) once and reuses _is_targeted
+        so delivery, reports, and the stats denominator agree exactly with what
+        the inbox delivers. Deleted or inactive accounts must not receive
+        external message delivery. Bounded by org size, so an in-Python filter
+        is acceptable for this admin-only, low-frequency path.
         """
         users_result = await self.db.execute(
             select(User)
             .options(selectinload(User.roles))
-            .where(User.organization_id == organization_id)
+            .where(
+                User.organization_id == organization_id,
+                User.is_active,
+            )
         )
         users = users_result.scalars().all()
         targeted = []
