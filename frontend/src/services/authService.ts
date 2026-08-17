@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import { clearCache } from '../utils/apiCache';
+import { clearInFlight } from '../utils/inFlight';
 import { CAPTCHA_HEADER } from '../hooks/useCaptcha';
 import type {
   CurrentUser,
@@ -104,6 +105,7 @@ export const authService = {
   async logout(): Promise<void> {
     await api.post('/auth/logout');
     clearCache();
+    clearInFlight();
   },
 
   /**
