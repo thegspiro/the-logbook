@@ -16,12 +16,23 @@
 
 ## Current Head
 
-> **Update (2026-08-16, latest):** The current head is **`20260816_0003`**
-> (`20260816_0003_add_inventory_vendors.py`). **New migrations must set
-> `down_revision = "20260816_0003"`.** Past `20260814_0004` the chain runs
-> `20260816_0001` (`facility_rooms.parent_room_id`, nested rooms) →
+> **Update (2026-08-16, latest):** The current head is **`20260816_0006`**
+> (`20260816_0006_unify_email_notification_preference.py`). **New migrations
+> must set `down_revision = "20260816_0006"`.** Past `20260814_0004` the chain
+> runs `20260816_0001` (`facility_rooms.parent_room_id`, nested rooms) →
 > `20260816_0002` (backfill storage-area barcodes) → `20260816_0003`
-> (inventory vendors + contact backfill).
+> (inventory vendors + contact backfill) → `_0004` (medical item type) →
+> `_0005` (backfill medical supply grants) → `20260816_0006` (fold the
+> duplicate `email` notification preference into `email_notifications`).
+>
+> **`20260816_0006` was renumbered from `20260816_0002`** — the **fifth**
+> same-day collision, and the second one on this date alone: it claimed `_0002`
+> off `_0001` while the storage-area barcode backfill held it on main. The
+> duplicate-revision guards in `tests/test_alembic_migrations.py` and
+> `tests/test_changelog_fixes.py` caught it after merging main, which is what
+> they are for — but the cheaper catch is `alembic heads` **before** writing
+> the file and **again after merging main**, as the note below has been asking
+> for since the third occurrence.
 >
 > **`20260816_0003` was renumbered from `20260816_0002`** — the vendor branch
 > and the storage-area barcode branch both claimed `_0002` off `_0001` on the
