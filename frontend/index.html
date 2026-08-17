@@ -59,6 +59,7 @@
 
     <!-- Accessibility -->
     <meta name="accessibility" content="WCAG 2.1 Level AA" />
+    <link rel="stylesheet" href="/noscript.css" />
 
   </head>
   <body>
@@ -73,25 +74,15 @@
 
     <!-- Noscript fallback -->
     <noscript>
-      <div style="
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-        background: linear-gradient(to bottom right, #0f172a, #7f1d1d, #0f172a);
-        color: white;
-        font-family: system-ui, -apple-system, sans-serif;
-        padding: 20px;
-        text-align: center;
-      ">
-        <div style="max-width: 600px;">
-          <h1 style="font-size: 2rem; margin-bottom: 1rem;">JavaScript Required</h1>
-          <p style="font-size: 1.125rem; opacity: 0.9;">
+      <main class="noscript-page">
+        <div class="noscript-message">
+          <h1>JavaScript Required</h1>
+          <p>
             The Logbook requires JavaScript to be enabled in your browser.
             Please enable JavaScript and reload the page.
           </p>
         </div>
-      </div>
+      </main>
     </noscript>
   </body>
 </html>
