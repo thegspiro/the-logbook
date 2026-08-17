@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeReadiness } from './readiness';
+import { computeReadiness, currentCredentials } from './readiness';
 import type { ReadinessCert, ReadinessScreenings } from './readiness';
 
 const cert = (overrides: Partial<ReadinessCert> = {}): ReadinessCert => ({
@@ -21,7 +21,7 @@ describe('computeReadiness', () => {
   });
 
   it('reports clear when every certification is current', () => {
-    const result = computeReadiness([cert(), cert({ id: 'c2', days_until_expiry: 200 })]);
+    const result = computeReadiness([cert(), cert({ id: 'c2', course_name: 'CPR', days_until_expiry: 200 })]);
 
     expect(result?.level).toBe('clear');
     expect(result?.headline).toBe('Clear to respond');
@@ -75,7 +75,10 @@ describe('computeReadiness', () => {
   // Expired outranks expiring: a member who is grounded should not be told
   // they are clear because a different card also happens to be near renewal.
   it('lets an expired certification outrank an expiring one', () => {
-    const result = computeReadiness([cert({ id: 'c1', days_until_expiry: 10 }), cert({ id: 'c2', is_expired: true })]);
+    const result = computeReadiness([
+      cert({ id: 'c1', days_until_expiry: 10 }),
+      cert({ id: 'c2', course_name: 'CPR', is_expired: true }),
+    ]);
 
     expect(result?.level).toBe('not-clear');
   });
@@ -130,10 +133,10 @@ describe('computeReadiness', () => {
     });
 
     it('treats an expiring screening as a condition', () => {
-      const result = computeReadiness([cert()], screenings({ expiring_soon_count: 1 }));
+      const result = computeReadiness([cert()], screenings({ days_until_next_expiration: 20 }));
 
       expect(result?.level).toBe('conditions');
-      expect(result?.detail).toBe('1 screening expiring');
+      expect(result?.detail).toBe('a screening expiring in 20 days');
     });
 
     it('counts both when everything is current', () => {
@@ -167,6 +170,77 @@ describe('computeReadiness', () => {
       expect(withRead?.level).toBe('not-clear');
       expect(withoutRead?.detail).toBe('1 certification current');
       expect(withoutRead?.detail).not.toContain('screening');
+    });
+  });
+
+  // /training/module-config/my-training returns every record carrying an
+  // expiration date — a history, not a current-credential list. Judging the
+  // lapsed row grounds a member for having renewed.
+  describe('certification history', () => {
+    it('judges only the newest credential for a course', () => {
+      const result = computeReadiness([
+        cert({ id: 'old', expiration_date: '2024-09-05', is_expired: true, days_until_expiry: -700 }),
+        cert({ id: 'new', expiration_date: '2028-09-05', is_expired: false, days_until_expiry: 700 }),
+      ]);
+
+      expect(result?.level).toBe('clear');
+      expect(result?.detail).toBe('1 certification current');
+    });
+
+    it('still grounds a member whose newest credential has lapsed', () => {
+      const result = computeReadiness([
+        cert({ id: 'old', expiration_date: '2022-01-01', is_expired: true, days_until_expiry: -1500 }),
+        cert({ id: 'new', expiration_date: '2026-01-01', is_expired: true, days_until_expiry: -30 }),
+      ]);
+
+      expect(result?.level).toBe('not-clear');
+      expect(result?.detail).toBe('1 certification expired');
+    });
+
+    it('keeps distinct courses apart', () => {
+      const result = computeReadiness([
+        cert({ id: 'a', course_name: 'EMT-B', expiration_date: '2028-01-01', days_until_expiry: 700 }),
+        cert({ id: 'b', course_name: 'CPR', expiration_date: '2028-01-01', days_until_expiry: 700 }),
+      ]);
+
+      expect(result?.detail).toBe('2 certifications current');
+    });
+
+    it('treats a credential with no expiry as never superseded', () => {
+      const kept = currentCredentials([
+        cert({ id: 'forever', expiration_date: null, days_until_expiry: null }),
+        cert({ id: 'dated', expiration_date: '2028-01-01', days_until_expiry: 700 }),
+      ]);
+
+      expect(kept).toHaveLength(1);
+      expect(kept[0]?.id).toBe('forever');
+    });
+  });
+
+  // The backend counts expiring_soon over 30 days; certifications use 60. A
+  // screening lapsing in 45 days must not read as current beside a
+  // certification at the same distance that reads as a condition.
+  describe('screening expiry window', () => {
+    const base = { total_requirements: 2, non_compliant_count: 0, expiring_soon_count: 0 };
+
+    it('treats a screening inside the readiness window as a condition', () => {
+      const result = computeReadiness([cert()], { ...base, days_until_next_expiration: 45 });
+
+      expect(result?.level).toBe('conditions');
+      expect(result?.detail).toBe('a screening expiring in 45 days');
+    });
+
+    it('includes one lapsing today, which the backend window excludes', () => {
+      const result = computeReadiness([cert()], { ...base, days_until_next_expiration: 0 });
+
+      expect(result?.level).toBe('conditions');
+      expect(result?.detail).toBe('a screening expiring in 0 days');
+    });
+
+    it('leaves one beyond the window alone', () => {
+      const result = computeReadiness([cert()], { ...base, days_until_next_expiration: 61 });
+
+      expect(result?.level).toBe('clear');
     });
   });
 });

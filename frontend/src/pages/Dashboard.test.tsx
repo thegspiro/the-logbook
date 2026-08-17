@@ -449,6 +449,34 @@ describe('Dashboard', () => {
       expect(screen.queryByText(/screening/i)).not.toBeInTheDocument();
     });
 
+    // A renewed certification keeps its lapsed row in the my-training history.
+    // The verdict and the panel read the same deduped list, so neither names an
+    // expiry the other has discounted.
+    it('does not ground a member who renewed a certification', async () => {
+      withCerts([
+        {
+          id: 'old',
+          course_name: 'EMT-B Recertification',
+          expiration_date: '2024-09-05',
+          is_expired: true,
+          days_until_expiry: -700,
+        },
+        {
+          id: 'new',
+          course_name: 'EMT-B Recertification',
+          expiration_date: '2028-09-05',
+          is_expired: false,
+          days_until_expiry: 700,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+      expect(screen.queryByText(/is expired/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Needs you' })).not.toBeInTheDocument();
+    });
+
     // The general eligibility call takes no shift id; the per-shift one used by
     // a signup row does. Passing an id here would narrow the seats to whatever
     // shift happened to be expanded.

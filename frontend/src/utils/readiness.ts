@@ -44,7 +44,39 @@ export interface ReadinessScreenings {
   total_requirements: number;
   non_compliant_count: number;
   expiring_soon_count: number;
+  /** Days until the soonest still-valid screening lapses; null when none is due. */
+  days_until_next_expiration?: number | null | undefined;
 }
+
+/**
+ * Reduce a certification list to the credential currently held for each course.
+ *
+ * `/training/module-config/my-training` returns every training record carrying
+ * an expiration date, which is a *history*: a member who renewed EMT-B has both
+ * the lapsed 2024 record and the valid 2026 one. Counting the lapsed row would
+ * ground them permanently for having done the right thing, so only the newest
+ * credential per course is judged.
+ *
+ * A record with no expiry outranks any dated one — it does not lapse, so no
+ * later renewal supersedes it.
+ */
+export const currentCredentials = (certs: ReadinessCert[]): ReadinessCert[] => {
+  const newest = new Map<string, ReadinessCert>();
+
+  for (const cert of certs) {
+    const held = newest.get(cert.course_name);
+    if (!held) {
+      newest.set(cert.course_name, cert);
+      continue;
+    }
+    if (held.expiration_date === null) continue;
+    if (cert.expiration_date === null || cert.expiration_date > held.expiration_date) {
+      newest.set(cert.course_name, cert);
+    }
+  }
+
+  return [...newest.values()];
+};
 
 /** "a, b and c" — the Oxford-less list the scope note and details read as. */
 export const joinClauses = (parts: string[]): string => {
@@ -66,13 +98,14 @@ export const joinClauses = (parts: string[]): string => {
  */
 export const computeReadiness = (certs: ReadinessCert[], screenings?: ReadinessScreenings | null): Readiness | null => {
   const trackedScreenings = screenings && screenings.total_requirements > 0 ? screenings : null;
+  const held = currentCredentials(certs);
 
   // Nothing tracked at all is *unknown*, not clear. With either input present
   // there is something real to say.
-  if (certs.length === 0 && !trackedScreenings) return null;
+  if (held.length === 0 && !trackedScreenings) return null;
 
-  const expired = certs.filter((c) => c.is_expired);
-  const expiring = certs
+  const expired = held.filter((c) => c.is_expired);
+  const expiring = held
     .filter((c) => !c.is_expired && c.days_until_expiry !== null && c.days_until_expiry <= READINESS_WINDOW_DAYS)
     .sort((a, b) => (a.days_until_expiry ?? Infinity) - (b.days_until_expiry ?? Infinity));
 
@@ -94,8 +127,14 @@ export const computeReadiness = (certs: ReadinessCert[], screenings?: ReadinessS
   if (expiring.length > 0) {
     soon.push(`${plural(expiring.length, 'certification')} expiring within ${READINESS_WINDOW_DAYS} days`);
   }
-  if (trackedScreenings && trackedScreenings.expiring_soon_count > 0) {
-    soon.push(`${plural(trackedScreenings.expiring_soon_count, 'screening')} expiring`);
+  // Not expiring_soon_count: the backend counts a 30-day window, so a
+  // screening lapsing in 45 days would read as current while a certification at
+  // the same distance is a condition. The countdown is judged against the same
+  // window as certifications, and includes one lapsing today, which the
+  // backend's `0 < days` bound excludes.
+  const screeningDays = trackedScreenings?.days_until_next_expiration ?? null;
+  if (screeningDays !== null && screeningDays >= 0 && screeningDays <= READINESS_WINDOW_DAYS) {
+    soon.push(`a screening expiring in ${plural(screeningDays, 'day')}`);
   }
 
   if (overdue.length > 0) {
@@ -115,7 +154,7 @@ export const computeReadiness = (certs: ReadinessCert[], screenings?: ReadinessS
   }
 
   const current: string[] = [];
-  if (certs.length > 0) current.push(`${plural(certs.length, 'certification')}`);
+  if (held.length > 0) current.push(`${plural(held.length, 'certification')}`);
   if (trackedScreenings) current.push(`${plural(trackedScreenings.total_requirements, 'screening')}`);
 
   return {
