@@ -6421,6 +6421,10 @@ export const SHOTS = [
       (event) => event.title === "Volunteer Interest Night",
     ),
     fullPage: true,
+    // "No reminders" is the reminder-audience select's own option, in the
+    // DOM on every render; the guest sign-in settings this shot is about
+    // are both ticked.
+    allowEmptyState: true,
   },
   {
     id: "04-32-guest-sign-in-form",
@@ -7575,7 +7579,48 @@ export const SHOTS = [
     route: "/elections",
     // The member's own view, not an officer's: the ballot is what a voter sees.
     auth: "member",
-    prepare: openElectionTab("voting", isOpenElection),
+    // Not merely the first *open* election: the elections list carries no
+    // candidate count, so a list-level match cannot tell a contested race from
+    // an empty one — and the first open election is the restricted-ballot seat
+    // with no candidates, which rendered "No candidates for this position"
+    // under a caption about choosing between two. Resolved through each open
+    // election's candidates endpoint instead.
+    prepare: async (page) => {
+      const id = await page.evaluate(async () => {
+        const listed = await fetch("/api/v1/elections?limit=20", {
+          credentials: "include",
+        });
+        if (!listed.ok) return null;
+        const body = await listed.json();
+        const rows = Array.isArray(body) ? body : (body.elections ?? []);
+        for (const election of rows) {
+          if (String(election.status ?? "").toLowerCase() !== "open") continue;
+          const detail = await fetch(
+            `/api/v1/elections/${election.id}/candidates`,
+            { credentials: "include" },
+          );
+          if (!detail.ok) continue;
+          const listedCandidates = await detail.json();
+          const candidates = Array.isArray(listedCandidates)
+            ? listedCandidates
+            : (listedCandidates.candidates ?? []);
+          if (candidates.filter((c) => c.accepted).length >= 2) {
+            return election.id;
+          }
+        }
+        return null;
+      });
+      if (!id) {
+        throw new Error("04-42: no open election has a contested position");
+      }
+      await page.goto(new URL(`/elections/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      const tab = page.locator("#tab-voting");
+      await tab.waitFor({ timeout: 10_000 });
+      await tab.click({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+    },
     fullPage: true,
   },
   {

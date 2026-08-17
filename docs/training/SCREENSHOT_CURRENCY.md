@@ -143,6 +143,59 @@ earlier** and remain stale.
 
 ---
 
+## The 2026-08-16 guide-04 re-capture — 31 images, every one opened
+
+Numbers cross-checked against the API rather than read for plausibility:
+the event detail's 20/16/4 against its own twenty-row roster (four "Not
+Going" badges, counted), the check-in monitor's 9-of-22 at 40.91% with a
+134-minute average that matches its check-in timestamps, the analytics
+type distribution summing to its 29-event total, and the voter-eligibility
+roster's 22/22.
+
+### One product defect, two shots pointed at the wrong state
+
+**Meeting cards read "0 attendees 0 action items"** over a meeting whose
+detail view showed eight and two. `MeetingResponse` declares both counts
+and the cards render them, but the list query loads no children — the same
+shape of gap as `creator_name` one method above it, which had already been
+fixed this way. Two grouped counts, attached like the names, with tests.
+
+- **`04-04-event-qr-code` pictured "Check-in Not Available".** It matched
+  on `isUpcoming`, and the page gates the code behind its check-in window,
+  so an event days out shows a disabled badge under a caption about members
+  scanning to check in. Now matched on the in-progress event — the screen
+  an officer actually puts on the wall.
+- **`04-42-cast-ballot` pictured "No candidates for this position".** It
+  took the first _open_ election, which is the restricted-ballot seat with
+  an empty ballot. The elections list carries no candidate count, so no
+  list-level match could tell a contested race from an empty one — it now
+  resolves through each open election's candidates endpoint and lands on
+  the Captain race with its two candidates, which is what the caption
+  describes.
+
+### Seeder: the Minutes page had moved out from under it
+
+The page was rebuilt onto `/meetings` — first-class meeting records with
+attendees, motions and action items — while the seeder still populated only
+the older `/minutes-records` model. So a real minutes record sat behind a
+"No Meeting Minutes" empty state, and the Action Items page was empty too.
+Now seeded: an approved business meeting with attendees, motions and two
+open action items, plus a draft board meeting; and a pending public event
+request for the Requests tab. Both guarded **per title**, so a run that
+dies between the two creates adds the missing one next pass rather than
+deciding the step is done because one row exists.
+
+**A step written and then deleted.** A `seed_guest_prospect` step was added
+for the guest-sign-in prospect card before noticing that `04-33`'s prepare
+already creates Rosa Delgado by submitting the public form — and says so in
+its own comment. The manifest is part of the fixture surface; check it for
+an existing producer before adding a seeder step for a record a shot needs.
+
+Empty-state flags with their reasons: `04-31` ("No reminders" is the
+reminder-audience select's own option; both guest settings are ticked) and
+`04-34` (a walk-in guest has uploaded no documents; the Linked Events panel
+the shot is about is populated).
+
 ## The 2026-08-16 guide-02 re-capture — 66 applied images, every one opened
 
 The full guide-02 set was re-shot against the merged build and read against
