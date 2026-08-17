@@ -7,6 +7,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { FieldType } from '../constants/enums';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
+import { useCaptcha } from '../hooks/useCaptcha';
 
 // Sanitize any text content that came from the server
 const clean = (text: string | null | undefined): string => {
@@ -25,6 +26,7 @@ const PublicFormPage = () => {
   const [submitMessage, setSubmitMessage] = useState('');
   // Honeypot ref - hidden from real users, bots will fill it
   const honeypotRef = useRef<HTMLInputElement>(null);
+  const captcha = useCaptcha('form_submit');
 
   useEffect(() => {
     if (slug) {
@@ -68,15 +70,32 @@ const PublicFormPage = () => {
       }
     }
 
+    let captchaToken: string | null = null;
+    if (captcha.required) {
+      captchaToken = await captcha.getToken();
+      if (!captchaToken) {
+        setError('Please complete the challenge below before submitting.');
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
       setError(null);
-      const result = await publicFormsService.submitForm(slug ?? '', formData, honeypotRef.current?.value || undefined);
+      const result = await publicFormsService.submitForm(
+        slug ?? '',
+        formData,
+        honeypotRef.current?.value || undefined,
+        captchaToken || undefined
+      );
       setSubmitted(true);
       setSubmitMessage(result.message);
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to submit form. Please try again.');
       setError(msg);
+      // Provider tokens are single-use: a rejected submission must solve a new
+      // challenge, or every retry replays a token the server already burned.
+      captcha.reset();
     } finally {
       setSubmitting(false);
     }
@@ -409,6 +428,18 @@ const PublicFormPage = () => {
             <label htmlFor="website">Website</label>
             <input type="text" id="website" name="website" tabIndex={-1} autoComplete="off" ref={honeypotRef} />
           </div>
+
+          {/* Challenge — renders nothing unless the server enforces one */}
+          {captcha.required && (
+            <div className="mt-6">
+              <div ref={captcha.containerRef} />
+              {captcha.error && (
+                <p className="mt-2 text-sm text-red-700 dark:text-red-500" role="alert">
+                  {captcha.error}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Submit */}
           <div className="border-theme-surface-border mt-8 border-t pt-6">
