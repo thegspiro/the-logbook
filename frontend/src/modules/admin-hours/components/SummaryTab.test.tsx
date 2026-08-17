@@ -145,6 +145,25 @@ describe('SummaryTab', () => {
     expect(onNavigate).toHaveBeenCalledWith('all');
   });
 
+  it('computes category shares from exact minutes, not rounded hours', () => {
+    // 50 of 90 minutes is 56%; dividing the independently rounded hour totals
+    // (1 of 2) would report 50% — materially wrong at small totals.
+    summary = {
+      ...populatedSummary,
+      totalHours: 2,
+      byCategory: [
+        { ...populatedSummary.byCategory[0]!, totalMinutes: 50, totalHours: 1 },
+        { ...populatedSummary.byCategory[1]!, totalMinutes: 40, totalHours: 1 },
+      ],
+    };
+    render(<SummaryTab />);
+
+    expect(screen.getByRole('progressbar', { name: /Administration: 56% of counted hours/ })).toHaveAttribute(
+      'aria-valuenow',
+      '56'
+    );
+  });
+
   it('renders loading and empty states', () => {
     summary = null;
     const { rerender } = render(<SummaryTab />);

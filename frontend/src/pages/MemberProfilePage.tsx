@@ -239,13 +239,24 @@ export const MemberProfilePage: React.FC = () => {
     }
   }, []);
 
+  // The training-records and admin-hours APIs silently substitute the
+  // CALLER's id for non-managers, so fetching them for a colleague would
+  // render the VIEWER's own records and hours as the colleague's. Only
+  // fetch (and render) these sections for self, or for holders of the
+  // permission the backend honors for target-scoped reads.
+  const isSelf = currentUser?.id === userId;
+  const canViewTargetTraining = isSelf || checkPermission('training.manage');
+  const canViewTargetAdminHours = isSelf || checkPermission('admin_hours.manage');
+
   useEffect(() => {
     if (userId) {
       void fetchUserData(userId);
       void fetchModuleStatus(userId);
       void fetchLeaves(userId);
-      void fetchAdminHours(userId);
-      if (trainingEnabled) {
+      if (canViewTargetAdminHours) {
+        void fetchAdminHours(userId);
+      }
+      if (trainingEnabled && canViewTargetTraining) {
         void fetchTrainingRecords(userId);
         void fetchComplianceSummary(userId);
       }
@@ -253,6 +264,8 @@ export const MemberProfilePage: React.FC = () => {
   }, [
     userId,
     trainingEnabled,
+    canViewTargetTraining,
+    canViewTargetAdminHours,
     fetchUserData,
     fetchModuleStatus,
     fetchLeaves,
@@ -677,8 +690,10 @@ export const MemberProfilePage: React.FC = () => {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Left Column */}
           <div className="space-y-6 lg:col-span-2">
-            {/* Training & Certifications */}
-            {trainingEnabled && (
+            {/* Training & Certifications — hidden when the viewer has no
+                target-scoped access; an empty card would wrongly imply the
+                member has no training. */}
+            {trainingEnabled && canViewTargetTraining && (
               <TrainingSection
                 userId={userId ?? ''}
                 trainings={trainings}
@@ -1002,7 +1017,7 @@ export const MemberProfilePage: React.FC = () => {
             <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
               <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Quick Stats</h2>
               <div className="space-y-3">
-                {trainingEnabled && (
+                {trainingEnabled && canViewTargetTraining && (
                   <>
                     <div className="flex items-center justify-between">
                       <span className="text-theme-text-secondary text-sm">Active Training</span>

@@ -99,6 +99,10 @@ from loguru import logger
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.event import (
+    EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
+    default_reminder_target,
+)
 from app.models.inventory import MEDICAL_ITEM_TYPES
 from app.models.user import Organization, User
 from app.services.email_service import _redact_email
@@ -106,8 +110,8 @@ from app.services.email_service import _redact_email
 
 def _resolve_event_reminder_target(event: Any) -> str:
     """Return the stored audience, retaining legacy mandatory-event behavior."""
-    return getattr(event, "reminder_target", None) or (
-        "all" if event.is_mandatory else "going"
+    return getattr(event, "reminder_target", None) or default_reminder_target(
+        event.is_mandatory
     )
 
 
@@ -1166,7 +1170,13 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
             for event in events:
                 custom = event.custom_fields or {}
-                if custom.get("validation_notification_sent"):
+                # attendance_finalized is stamped by the finalize flow itself
+                # (end_event / record_actual_times / manual finalize), so an
+                # event finalized before this task ever ran must not get a
+                # stale "validate attendance" prompt.
+                if custom.get("validation_notification_sent") or custom.get(
+                    "attendance_finalized"
+                ):
                     continue
 
                 # Find the event creator
@@ -1364,6 +1374,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 .where(Shift.end_time <= now)
                 .where(Shift.end_time >= lookback)
                 .where(Shift.shift_officer_id.isnot(None))
+                # A shift finalized after it ended but before this task runs
+                # has already been validated — never prompt for it.
+                .where(Shift.is_finalized.is_(False))
             )
             shifts = list(shifts_result.scalars().all())
 
@@ -4488,11 +4501,7 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
 
             custom_fields = copy.deepcopy(parent.custom_fields)
             if custom_fields:
-                for lifecycle_key in (
-                    "reminders_sent",
-                    "validation_notification_sent",
-                    "series_end_reminder_sent",
-                ):
+                for lifecycle_key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS:
                     custom_fields.pop(lifecycle_key, None)
                 child_fields["custom_fields"] = custom_fields
 

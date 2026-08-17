@@ -29,6 +29,43 @@ interface Props {
   canManage: boolean;
 }
 
+/**
+ * Height of a room's subtree, counting the room itself as 1 — a room with one
+ * level of sub-rooms has height 2. Mirrors `_room_descendants` in
+ * `backend/app/services/facilities_service.py`, which is the authority.
+ */
+function subtreeHeight(rooms: Room[], roomId: string): number {
+  const childrenByParent = new Map<string, string[]>();
+  for (const room of rooms) {
+    // Self-parenting is rejected by the API, but corrupt data must not loop.
+    if (!room.parentRoomId || room.parentRoomId === room.id) continue;
+    const siblings = childrenByParent.get(room.parentRoomId);
+    if (siblings) {
+      siblings.push(room.id);
+    } else {
+      childrenByParent.set(room.parentRoomId, [room.id]);
+    }
+  }
+
+  let height = 1;
+  const seen = new Set<string>([roomId]);
+  let frontier = [roomId];
+  while (frontier.length > 0) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      for (const childId of childrenByParent.get(id) ?? []) {
+        if (seen.has(childId)) continue;
+        seen.add(childId);
+        next.push(childId);
+      }
+    }
+    if (next.length === 0) break;
+    height += 1;
+    frontier = next;
+  }
+  return height;
+}
+
 const emptyForm = {
   name: '',
   room_number: '',
@@ -76,13 +113,22 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
   /**
    * Rooms that may hold the one being edited: everything in the facility
    * except the room itself and its own sub-rooms (which would make a cycle),
-   * and except rooms already deep enough that nesting under them would
-   * breach the depth cap.
+   * and except rooms deep enough that nesting the edited room's whole subtree
+   * under them would breach the depth cap.
    */
   const parentOptions = useMemo(() => {
     const excluded = editingRoom ? collectSubtreeIds(rooms, editingRoom.id) : new Set<string>();
+    // The backend (_assert_parent_room_valid) rejects when
+    //   parent_depth + subtree_height > MAX_ROOM_NESTING_DEPTH
+    // with a 1-based parent_depth (a top-level room is depth 1) and
+    // subtree_height counting the moved room itself as 1. node.depth here is
+    // 0-based, so a candidate is offered iff
+    //   (node.depth + 1) + movedSubtreeHeight <= MAX_ROOM_NESTING_DEPTH.
+    // On create there is no subtree yet (height 1), which reduces to the
+    // node.depth + 2 <= cap check used for the "add a room inside" button.
+    const movedSubtreeHeight = editingRoom ? subtreeHeight(rooms, editingRoom.id) : 1;
     return orderRoomsByHierarchy(rooms).filter(
-      (node) => !excluded.has(node.room.id) && node.depth + 2 <= MAX_ROOM_NESTING_DEPTH
+      (node) => !excluded.has(node.room.id) && node.depth + 1 + movedSubtreeHeight <= MAX_ROOM_NESTING_DEPTH
     );
   }, [rooms, editingRoom]);
 

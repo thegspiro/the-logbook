@@ -85,6 +85,11 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
     return `${format(summary.periodStart)} – ${format(summary.periodEnd)}`;
   }, [summary, timezone]);
 
+  const totalCategoryMinutes = useMemo(
+    () => (summary?.byCategory ?? []).reduce((total, category) => total + category.totalMinutes, 0),
+    [summary]
+  );
+
   return (
     <div className="space-y-6">
       <section className="card p-5">
@@ -92,7 +97,8 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
           <div>
             <h2 className="text-theme-text-primary text-xl font-semibold">Hours summary</h2>
             <p className="text-theme-text-secondary mt-1 max-w-2xl text-sm">
-              Organization-wide completed sessions, grouped by the category assigned when each entry was logged.
+              Organization-wide completed sessions, grouped by each entry&apos;s current category (including any
+              recategorization made during review).
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
@@ -227,11 +233,16 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
             ) : (
               <div className="mt-5 space-y-4">
                 {[...summary.byCategory]
-                  .sort((a, b) => b.totalHours - a.totalHours)
+                  .sort((a, b) => b.totalMinutes - a.totalMinutes)
                   .map((category) => {
+                    // Shares divide exact minutes, not the independently
+                    // rounded totalHours: with small totals the rounded basis
+                    // is materially wrong (two 1-minute categories each showed
+                    // as 67%). The summary exposes no total-minutes field, so
+                    // the denominator is the categories' own minutes.
                     const exactShare =
-                      summary.totalHours > 0
-                        ? Math.min(100, Math.max(0, (category.totalHours / summary.totalHours) * 100))
+                      totalCategoryMinutes > 0
+                        ? Math.min(100, Math.max(0, (category.totalMinutes / totalCategoryMinutes) * 100))
                         : 0;
                     const share = Math.round(exactShare);
                     return (

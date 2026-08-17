@@ -170,6 +170,15 @@ class Settings(BaseSettings):
     # archive), giving the audit trail a copy outside the database host.
     AUDIT_SHIP_WEBHOOK_URL: str | None = None
     AUDIT_SHIP_BATCH_SIZE: int = 500
+    # Explicit operator risk acceptance: allow AUDIT_SHIP_WEBHOOK_URL to
+    # resolve to a private/internal address (RFC1918, internal DNS). A normal
+    # on-prem SIEM topology puts the collector on the trusted network, which
+    # the outbound-URL guard otherwise rejects. The default stays closed
+    # because skipping that check lets the shipping task POST signed batches
+    # at arbitrary internal services if the URL is ever mis-set — only the
+    # private-resolution check is waived; HTTPS-scheme and cloud-metadata-
+    # endpoint checks still apply.
+    AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION: bool = False
     # Platform-level retention for blocked-access-attempt telemetry (IP +
     # user-agent rows with no org column). Days; 0 disables the purge.
     # Org-scoped record classes are configured per organization instead —

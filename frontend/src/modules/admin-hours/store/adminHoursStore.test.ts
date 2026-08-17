@@ -556,6 +556,46 @@ describe('adminHoursStore', () => {
 
       expect(getState().error).toBeTypeOf('string');
     });
+
+    it('should ignore a stale response that resolves after a newer request', async () => {
+      const staleSummary = makeSummary({ totalHours: 999 });
+      const freshSummary = makeSummary({ totalHours: 1 });
+
+      let resolveStale: (value: unknown) => void = () => {};
+      mockGetSummary
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveStale = resolve)))
+        .mockResolvedValueOnce(freshSummary);
+
+      const stalePromise = getState().fetchSummary({ startDate: '2025-01-01' });
+      await getState().fetchSummary({ startDate: '2025-06-01' });
+
+      expect(getState().summary).toEqual(freshSummary);
+
+      // The first (slower) request resolves last — it must not overwrite the
+      // summary for the range the user selected afterwards.
+      resolveStale(staleSummary);
+      await stalePromise;
+
+      expect(getState().summary).toEqual(freshSummary);
+    });
+
+    it('should ignore a stale rejection that settles after a newer request', async () => {
+      const freshSummary = makeSummary({ totalHours: 2 });
+
+      let rejectStale: (reason: unknown) => void = () => {};
+      mockGetSummary
+        .mockImplementationOnce(() => new Promise((_resolve, reject) => (rejectStale = reject)))
+        .mockResolvedValueOnce(freshSummary);
+
+      const stalePromise = getState().fetchSummary({ startDate: '2025-01-01' });
+      await getState().fetchSummary({ startDate: '2025-06-01' });
+
+      rejectStale(new Error('Old request failed'));
+      await stalePromise;
+
+      expect(getState().summary).toEqual(freshSummary);
+      expect(getState().error).toBeNull();
+    });
   });
 
   describe('fetchPendingCount', () => {

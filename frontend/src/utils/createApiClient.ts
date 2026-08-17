@@ -74,12 +74,20 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
         try {
           await performSharedRefresh();
           return api(originalRequest);
-        } catch {
+        } catch (refreshError) {
           // Redirecting is a side effect, not a response. Reject the request as
           // well so callers cannot continue with an `undefined` Axios response
           // while the browser is navigating to the login page.
           handleExpiredSession();
-          reportApiError(error);
+          // Report the refresh failure, not the original request's 401: the
+          // reporter deliberately filters 401s as routine session expiry, so
+          // reporting the original error recorded nothing. A refresh 401 is
+          // still filtered (ordinary expiry), while a refresh-endpoint outage
+          // (5xx / network failure) — what this report exists to capture —
+          // reaches Error Monitoring.
+          if (axios.isAxiosError(refreshError)) {
+            reportApiError(refreshError);
+          }
           return Promise.reject(error instanceof Error ? error : new Error(String(error)));
         }
       }

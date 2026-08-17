@@ -137,8 +137,14 @@ class UserResponse(UserBase, UTCResponseBase):
     status: str
     membership_type: Optional[str] = None
     compliance_exempt: bool = False
-    email_verified: bool
-    mfa_enabled: bool
+    # Optional so profile redaction can withhold them from directory-only
+    # callers (see `_clear_directory_only_profile_metadata` in the users
+    # endpoint). None means "not disclosed to this caller" — a neutral False
+    # would misreport an MFA-enabled account as unprotected, so absence must
+    # stay distinguishable from a real value. Always populated from the ORM
+    # for self/leadership.
+    email_verified: Optional[bool] = None
+    mfa_enabled: Optional[bool] = None
     last_login_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
