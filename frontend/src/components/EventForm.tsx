@@ -119,16 +119,13 @@ const DEFAULT_FORM_DATA: EventCreate = {
 };
 
 /* Shared Tailwind classes for consistency */
-const inputClass =
-  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+const inputClass = 'form-input py-3';
 
-const selectClass =
-  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+const selectClass = 'form-input py-3';
 
 const labelClass = 'block text-sm font-semibold text-theme-text-primary mb-2';
 
-const checkboxClass =
-  'w-4 h-4 rounded-sm border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring';
+const checkboxClass = 'form-input w-4 h-4 text-blue-600';
 
 const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -1542,7 +1539,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:ring-theme-focus-ring rounded-lg border px-6 py-3 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+            className="btn-secondary text-theme-text-secondary hover:bg-theme-surface-secondary px-6 py-3 text-sm font-medium focus:ring-offset-2"
           >
             Cancel
           </button>

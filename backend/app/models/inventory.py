@@ -36,16 +36,33 @@ def _enum_values(enum_cls):
 
 
 class ItemType(str, enum.Enum):
-    """Type of inventory item"""
+    """Type of inventory item.
+
+    Also the domain axis: ``MEDICAL`` is what separates the medical-supply
+    page from the gear-and-uniforms page, so a department can hand EMS stock
+    to a supply officer without handing over the uniform closet.
+
+    New members are appended, never inserted. MySQL stores an ENUM as the
+    member's ordinal, so reordering this list silently reassigns the type of
+    every existing category.
+    """
 
     UNIFORM = "uniform"  # Shirts, jackets, Class A brass
     PPE = "ppe"  # Personal Protective Equipment
     TOOL = "tool"  # Hand tools, power tools
-    EQUIPMENT = "equipment"  # Rescue equipment, medical supplies
+    EQUIPMENT = "equipment"  # Rescue equipment, hand-carried tools
     VEHICLE = "vehicle"  # Fire engines, ambulances, utility vehicles
     ELECTRONICS = "electronics"  # Radios, tablets, computers, cameras
     CONSUMABLE = "consumable"  # Items that get used up
     OTHER = "other"
+    MEDICAL = "medical"  # EMS supplies — lot- and expiration-tracked
+
+
+# The medical-supply domain, as a set rather than an equality check so a
+# department that later splits it further (controlled substances kept apart
+# from consumables, say) widens the domain in one place and every permission
+# gate, list filter and nav entry follows.
+MEDICAL_ITEM_TYPES: frozenset[ItemType] = frozenset({ItemType.MEDICAL})
 
 
 class ItemCondition(str, enum.Enum):
@@ -233,6 +250,146 @@ class TrackingType(str, enum.Enum):
     POOL = "pool"  # Quantity-tracked pool; units are issued to members and returned
 
 
+class InventoryVendor(Base):
+    """
+    Vendor model
+
+    A supplier the department buys equipment from. Items, reorder requests and
+    purchase history point here instead of repeating a hand-typed company name,
+    so "who did we buy this from, and who do we call about it" has one answer
+    per organization rather than one per record.
+
+    Company-level contact details (main line, orders inbox, remit-to address)
+    live on this row; named people at the vendor live in
+    :class:`InventoryVendorContact`.
+    """
+
+    __tablename__ = "inventory_vendors"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Identity
+    name = Column(String(255), nullable=False)
+    account_number = Column(String(100))  # Our account number with this vendor
+    website = Column(String(255))
+
+    # Company-level contact details
+    phone = Column(String(50))
+    email = Column(String(255))
+    fax = Column(String(50))
+
+    # Address
+    address_line1 = Column(String(255))
+    address_line2 = Column(String(255))
+    city = Column(String(100))
+    state = Column(String(100))
+    postal_code = Column(String(20))
+    country = Column(String(100))
+
+    # Ordering details
+    payment_terms = Column(String(100))  # e.g. "Net 30", "Credit card on order"
+    notes = Column(Text)
+
+    # Preferred vendors sort first in pickers — departments usually have one or
+    # two shops they buy from and a long tail of one-off suppliers.
+    is_preferred = Column(Boolean, default=False, nullable=False, server_default="0")
+
+    # Deactivated rather than deleted: items and reorder requests keep pointing
+    # at a vendor the department no longer buys from, so its purchase history
+    # stays readable.
+    is_active = Column(
+        Boolean, default=True, nullable=False, server_default="1", index=True
+    )
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Relationships
+    contacts = relationship(
+        "InventoryVendorContact",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+        order_by="(InventoryVendorContact.is_primary.desc(), "
+        "InventoryVendorContact.name)",
+    )
+
+    __table_args__ = (
+        Index("idx_inventory_vendors_org_active", "organization_id", "is_active"),
+        # One row per supplier per organization: the whole point of the table is
+        # that "Galls" is one vendor, not one per item that named it.
+        UniqueConstraint(
+            "organization_id", "name", name="uq_inventory_vendor_org_name"
+        ),
+    )
+
+    def __repr__(self):
+        return f"<InventoryVendor(name={self.name}, org={self.organization_id})>"
+
+
+class InventoryVendorContact(Base):
+    """
+    A named person at a vendor — sales rep, service desk, accounts receivable.
+
+    Separate from the vendor row because departments deal with more than one
+    person at the same company, and the rep who quotes turnout gear is not the
+    number to call about a warranty claim.
+    """
+
+    __tablename__ = "inventory_vendor_contacts"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    vendor_id = Column(
+        String(36),
+        ForeignKey("inventory_vendors.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    name = Column(String(255), nullable=False)
+    title = Column(String(150))  # e.g. "Account Manager", "Service Coordinator"
+    email = Column(String(255))
+    phone = Column(String(50))
+    phone_extension = Column(String(20))
+    notes = Column(Text)
+
+    # The contact shown on the vendor card and pre-filled on a reorder.
+    is_primary = Column(Boolean, default=False, nullable=False, server_default="0")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    vendor = relationship("InventoryVendor", back_populates="contacts")
+
+    __table_args__ = (
+        Index(
+            "idx_inventory_vendor_contacts_org_vendor",
+            "organization_id",
+            "vendor_id",
+        ),
+    )
+
+    def __repr__(self):
+        return f"<InventoryVendorContact(name={self.name}, vendor={self.vendor_id})>"
+
+
 class InventoryCategory(Base):
     """
     Inventory Category model
@@ -337,7 +494,16 @@ class InventoryItem(Base):
     purchase_date = Column(Date)
     purchase_price = Column(Numeric(10, 2))
     purchase_order = Column(String(255))
+    # Legacy free-text vendor name. Kept because CSV imports still carry it and
+    # historical rows were never linked; `vendor_id` is the canonical link and
+    # wins wherever both are set.
     vendor = Column(String(255))
+    vendor_id = Column(
+        String(36),
+        ForeignKey("inventory_vendors.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     warranty_expiration = Column(Date)
 
     # Depreciation
@@ -459,6 +625,7 @@ class InventoryItem(Base):
     )
     location = relationship("Location", foreign_keys=[location_id])
     storage_area = relationship("StorageArea", foreign_keys=[storage_area_id])
+    vendor_record = relationship("InventoryVendor", foreign_keys=[vendor_id])
     assigned_to_user = relationship("User", foreign_keys=[assigned_to_user_id])
     checkout_records = relationship(
         "CheckOutRecord", back_populates="item", cascade="all, delete-orphan"
@@ -1871,9 +2038,17 @@ class ReorderRequest(Base):
     quantity_requested = Column(Integer, nullable=False, default=1, server_default="1")
     quantity_received = Column(Integer, nullable=True)
 
-    # Vendor / ordering details
+    # Vendor / ordering details. `vendor` / `vendor_contact` are the legacy
+    # free-text fields; `vendor_id` links the request to a tracked vendor and
+    # wins for display wherever both are set.
     vendor = Column(String(255))
     vendor_contact = Column(String(255))
+    vendor_id = Column(
+        String(36),
+        ForeignKey("inventory_vendors.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     estimated_unit_cost = Column(Numeric(10, 2))
     actual_unit_cost = Column(Numeric(10, 2))
     purchase_order_number = Column(String(255))
@@ -1917,6 +2092,7 @@ class ReorderRequest(Base):
     category = relationship("InventoryCategory", foreign_keys=[category_id])
     requester = relationship("User", foreign_keys=[requested_by])
     approver = relationship("User", foreign_keys=[approved_by])
+    vendor_record = relationship("InventoryVendor", foreign_keys=[vendor_id])
 
     __table_args__ = (
         Index("idx_reorder_org_status", "organization_id", "status"),

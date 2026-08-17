@@ -155,7 +155,7 @@ const MemberRow: React.FC<{
       {expanded && hasItems && (
         <tr>
           <td colSpan={6} className="px-4 pt-0 pb-3">
-            <div className="bg-theme-surface border-theme-surface-border ml-6 rounded-lg border p-3">
+            <div className="card ml-6 p-3">
               <div className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
                 Per-Item Eligibility
               </div>

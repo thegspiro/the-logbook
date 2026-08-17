@@ -20,7 +20,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1.endpoints.users import (
-    _clear_account_security_fields,
+    _clear_directory_only_profile_metadata,
     _clear_hidden_contact_fields,
     _redact_contact_fields,
     get_user_with_roles,
@@ -315,8 +315,8 @@ class TestProfileContactRedaction:
         assert payload.username == "jsmith"
 
 
-class TestAccountSecurityFieldRedaction:
-    """Account-security metadata is leadership/self-only (PR #1451/#1456 review).
+class TestDirectoryProfileMetadataRedaction:
+    """Account and authorization metadata is leadership/self-only.
 
     `members.view` opens any colleague's profile, so anything the profile
     passes through is org-wide public. `mfa_enabled` in particular maps which
@@ -324,22 +324,26 @@ class TestAccountSecurityFieldRedaction:
     control. No contact-visibility flag exists for any of these.
     """
 
-    def test_clears_security_metadata(self):
+    def test_clears_account_and_authorization_metadata(self):
         payload = UserProfileResponse.model_validate(_member())
-        _clear_account_security_fields(payload)
+
+        _clear_directory_only_profile_metadata(payload)
 
         # None, not False: a neutral False would misreport an MFA-protected
         # account as unprotected.
-        assert payload.mfa_enabled is None
         assert payload.email_verified is None
+        assert payload.mfa_enabled is None
         assert payload.last_login_at is None
+        assert payload.created_at is None
+        assert payload.updated_at is None
         assert payload.notification_preferences is None
+        assert payload.roles[0].permissions == []
 
     def test_role_names_survive_but_permissions_are_blanked(self):
         payload = UserProfileResponse.model_validate(_member())
         assert payload.roles[0].permissions  # factory sanity check
 
-        _clear_account_security_fields(payload)
+        _clear_directory_only_profile_metadata(payload)
 
         # The profile page renders role names only; the permission map is the
         # part with security value.
@@ -352,7 +356,7 @@ class TestAccountSecurityFieldRedaction:
         # in-session object other code still reads.
         member = _member()
         payload = UserProfileResponse.model_validate(member)
-        _clear_account_security_fields(payload)
+        _clear_directory_only_profile_metadata(payload)
 
         assert member.positions[0].permissions == ["finance.view", "finance.manage"]
 
@@ -617,6 +621,41 @@ class TestProfileEndpointAccessControl:
         assert result.address_street is None
         assert result.date_of_birth is None
         assert result.emergency_contacts == []
+        assert result.email_verified is None
+        assert result.mfa_enabled is None
+        assert result.created_at is None
+        assert result.updated_at is None
+        assert result.notification_preferences is None
+
+    async def test_members_manage_reads_other_records_unredacted(self):
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.manage"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.username == "jsmith"
+        # members.manage is the leadership grant: contact info, emergency
+        # contacts and account metadata all come through unredacted.
+        assert result.phone == "555-0100"
+        assert result.emergency_contacts != []
+        assert result.email_verified is True
+
+    async def test_users_view_retains_account_metadata(self):
+        subject = _member()
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["users.view"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.email_verified is True
+        assert result.created_at is not None
 
     async def test_wildcard_grant_satisfies_the_gate(self):
         # `users.*` must satisfy `users.view` — the gate goes through

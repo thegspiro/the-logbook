@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { DialogPanel } from '../../../components/ux/DialogPanel';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle } from 'lucide-react';
@@ -1244,7 +1245,7 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Link Event Modal */}
         {showLinkEventModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="modal-overlay flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="link-event-title"
@@ -1252,7 +1253,7 @@ export const MinutesDetailPage: React.FC = () => {
               if (e.key === 'Escape') setShowLinkEventModal(false);
             }}
           >
-            <div className="bg-theme-surface-modal w-full max-w-lg rounded-lg shadow-xl">
+            <DialogPanel onClose={() => setShowLinkEventModal(false)} className="w-full max-w-lg">
               <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
                 <h3 id="link-event-title" className="text-theme-text-primary text-lg font-medium">
                   Link to Meeting Event
@@ -1300,14 +1301,14 @@ export const MinutesDetailPage: React.FC = () => {
                   Cancel
                 </button>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         )}
 
         {/* Reject Modal */}
         {showRejectModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="modal-overlay flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="reject-title"
@@ -1318,7 +1319,7 @@ export const MinutesDetailPage: React.FC = () => {
               }
             }}
           >
-            <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+            <DialogPanel onClose={() => setShowRejectModal(false)} className="w-full max-w-md">
               <div className="border-theme-surface-border border-b px-6 py-4">
                 <h3 id="reject-title" className="text-theme-text-primary text-lg font-medium">
                   Reject Minutes
@@ -1360,7 +1361,7 @@ export const MinutesDetailPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         )}
       </div>

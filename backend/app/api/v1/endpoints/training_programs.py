@@ -69,15 +69,29 @@ router = APIRouter()
 
 
 def _member_requirement(requirement) -> TrainingRequirementEnhancedResponse:
-    """Return a requirement without checklist steps reserved for officers."""
+    """Return a requirement with officer-only checklist steps redacted.
+
+    Redacted, not stripped: the member-facing progress view folds hidden
+    steps into "+N more steps your officer records", and the step arithmetic
+    on their progress bar has to add up against the officer's ticks — both
+    need the *count* of hidden steps. Neither the text nor the id of a
+    hidden step may leak, so each one is replaced by an anonymous stub.
+    Stripping them entirely made the fold line unreachable in the real app
+    while the component test asserted it against a payload the API never
+    produced.
+    """
     response = TrainingRequirementEnhancedResponse.model_validate(requirement)
-    return response.model_copy(
-        update={
-            "checklist_items": [
-                item for item in (response.checklist_items or []) if item.member_visible
-            ]
-        }
-    )
+    redacted = [
+        (
+            item
+            if item.member_visible
+            else item.model_copy(
+                update={"id": None, "text": "Recorded by your officer"}
+            )
+        )
+        for item in (response.checklist_items or [])
+    ]
+    return response.model_copy(update={"checklist_items": redacted})
 
 
 def _member_progress(progress) -> RequirementProgressResponse:

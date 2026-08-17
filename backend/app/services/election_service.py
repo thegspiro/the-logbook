@@ -231,12 +231,15 @@ class ElectionService:
     async def list_candidates(
         self,
         election_id,
+        *,
+        accepted_only: bool = False,
     ) -> List[Candidate]:
-        """List accepted/all candidates for an election ordered by position."""
+        """List candidates for an election ordered by position."""
+        query = select(Candidate).where(Candidate.election_id == str(election_id))
+        if accepted_only:
+            query = query.where(Candidate.accepted.is_(True))
         result = await self.db.execute(
-            select(Candidate)
-            .where(Candidate.election_id == str(election_id))
-            .order_by(Candidate.position, Candidate.display_order)
+            query.order_by(Candidate.position, Candidate.display_order)
         )
         return list(result.scalars().all())
 

@@ -4,9 +4,9 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock3, Info, ListChecks } from 'lucide-react';
-import { addCalendarDays, formatDateCustom, getTodayLocalDate, localToUTC } from '../../../utils/dateFormatting';
-import { useTimezone } from '../../../hooks/useTimezone';
 import { useAdminHoursStore } from '../store/adminHoursStore';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDateCustom, localToUTC } from '../../../utils/dateFormatting';
 
 type DatePreset = 'all' | '30-days' | 'year' | 'custom';
 
@@ -14,71 +14,90 @@ interface SummaryTabProps {
   onNavigate?: (tab: 'pending' | 'all') => void;
 }
 
-const dateRangeFor = (preset: DatePreset, tz: string): { startDate?: string; endDate?: string } => {
-  if (preset === 'all' || preset === 'custom') return {};
-  const today = getTodayLocalDate(tz);
-  const start = preset === 'year' ? `${today.slice(0, 4)}-01-01` : addCalendarDays(today, -29);
-  return { startDate: start, endDate: today };
+const toDateInput = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
-// The backend compares these boundaries against UTC clock_in_at values, so the
-// selected calendar dates must be converted from the department's timezone —
-// not sent as naive strings, which land a day off by the org's UTC offset.
-const startOfDayUTC = (dateOnly: string, tz: string): string => localToUTC(`${dateOnly}T00:00`, tz);
+const toDateInputUTC = (date: Date): string => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
-const endOfDayUTC = (dateOnly: string, tz: string): string => {
-  // Next local midnight minus 1ms includes the whole selected end day and
-  // stays correct across DST transitions (a fixed +24h would not).
-  const nextMidnightMs = new Date(localToUTC(`${addCalendarDays(dateOnly, 1)}T00:00`, tz)).getTime();
-  return new Date(nextMidnightMs - 1).toISOString();
+const dateRangeFor = (preset: DatePreset): { startDate?: string; endDate?: string } => {
+  if (preset === 'all' || preset === 'custom') return {};
+  const today = new Date();
+  const start = preset === 'year' ? new Date(today.getFullYear(), 0, 1) : new Date(today);
+  if (preset === '30-days') start.setDate(today.getDate() - 29);
+  return { startDate: toDateInput(start), endDate: toDateInput(today) };
+};
+
+// Entries are stored in UTC, so a reporting day picked in the department's
+// timezone has to be converted before it becomes an API bound. Sending the bare
+// "YYYY-MM-DDT23:59:59.999" the picker produces drops every entry logged in the
+// UTC-offset-sized tail of the last day for any department west of UTC.
+const startOfReportingDayUTC = (date: string, timezone: string): string => localToUTC(`${date}T00:00`, timezone);
+
+// The exclusive end is midnight opening the *next* day, less a millisecond, so
+// the whole selected end day is covered without spilling into the day after.
+const endOfReportingDayUTC = (date: string, timezone: string): string => {
+  const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  const nextDate = toDateInputUTC(nextDay);
+  return new Date(new Date(localToUTC(`${nextDate}T00:00`, timezone)).getTime() - 1).toISOString();
 };
 
 const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
-  const tz = useTimezone();
   const summary = useAdminHoursStore((s) => s.summary);
   const fetchSummary = useAdminHoursStore((s) => s.fetchSummary);
+  const timezone = useTimezone();
   const [preset, setPreset] = useState<DatePreset>('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
   useEffect(() => {
+    const range = dateRangeFor(preset);
     if (preset === 'custom') return;
-    const range = dateRangeFor(preset, tz);
     void fetchSummary({
-      ...(range.startDate ? { startDate: startOfDayUTC(range.startDate, tz) } : {}),
-      ...(range.endDate ? { endDate: endOfDayUTC(range.endDate, tz) } : {}),
+      ...(range.startDate ? { startDate: startOfReportingDayUTC(range.startDate, timezone) } : {}),
+      ...(range.endDate ? { endDate: endOfReportingDayUTC(range.endDate, timezone) } : {}),
     });
-  }, [fetchSummary, preset, tz]);
+  }, [fetchSummary, preset, timezone]);
 
   const applyCustomRange = () => {
     void fetchSummary({
-      ...(customStart ? { startDate: startOfDayUTC(customStart, tz) } : {}),
-      ...(customEnd ? { endDate: endOfDayUTC(customEnd, tz) } : {}),
+      ...(customStart ? { startDate: startOfReportingDayUTC(customStart, timezone) } : {}),
+      ...(customEnd ? { endDate: endOfReportingDayUTC(customEnd, timezone) } : {}),
     });
   };
 
   const periodLabel = useMemo(() => {
     if (!summary?.periodStart && !summary?.periodEnd) return 'All recorded time';
+    // The echoed bounds are UTC instants converted from reporting-day edges,
+    // so they must be rendered back in the reporting timezone — in UTC, the
+    // end bound of "Mar 31" west of UTC lands on Apr 1.
     const format = (value: string | null) =>
-      value ? formatDateCustom(value, { dateStyle: 'medium' }, tz) : 'first record';
+      value ? formatDateCustom(value, { dateStyle: 'medium' }, timezone) : 'first record';
     return `${format(summary.periodStart)} – ${format(summary.periodEnd)}`;
-  }, [summary, tz]);
+  }, [summary, timezone]);
 
-  // Percentages come from exact minutes: the rounded per-category and
-  // top-level totalHours round independently, so their ratio drifts.
-  const categoryMinutesTotal = useMemo(
-    () => (summary ? summary.byCategory.reduce((sum, category) => sum + category.totalMinutes, 0) : 0),
+  const totalCategoryMinutes = useMemo(
+    () => (summary?.byCategory ?? []).reduce((total, category) => total + category.totalMinutes, 0),
     [summary]
   );
 
   return (
     <div className="space-y-6">
-      <section className="bg-theme-surface border-theme-surface-border rounded-lg border p-5 shadow-sm">
+      <section className="card p-5">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
           <div>
             <h2 className="text-theme-text-primary text-xl font-semibold">Hours summary</h2>
             <p className="text-theme-text-secondary mt-1 max-w-2xl text-sm">
-              Organization-wide completed sessions, grouped by each entry&rsquo;s current category (including any
+              Organization-wide completed sessions, grouped by each entry&apos;s current category (including any
               recategorization made during review).
             </p>
           </div>
@@ -94,7 +113,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
             <select
               value={preset}
               onChange={(event) => setPreset(event.target.value as DatePreset)}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary min-w-44 rounded-md border px-3 py-2"
+              className="form-input min-w-44 px-3"
             >
               <option value="all">All time</option>
               <option value="30-days">Last 30 days</option>
@@ -110,7 +129,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                   type="date"
                   value={customStart}
                   onChange={(event) => setCustomStart(event.target.value)}
-                  className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-md border px-3 py-2"
+                  className="form-input px-3"
                 />
               </label>
               <label className="text-theme-text-secondary text-sm">
@@ -120,7 +139,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                   value={customEnd}
                   min={customStart || undefined}
                   onChange={(event) => setCustomEnd(event.target.value)}
-                  className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-md border px-3 py-2"
+                  className="form-input px-3"
                 />
               </label>
               <button
@@ -143,7 +162,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <article className="bg-theme-surface border-theme-surface-border rounded-lg border p-5 shadow-sm">
+            <article className="card p-5">
               <div className="flex items-center justify-between">
                 <p className="text-theme-text-secondary text-sm font-medium">Counted hours</p>
                 <Clock3 className="h-5 w-5 text-blue-500" aria-hidden="true" />
@@ -154,7 +173,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
               </p>
               <p className="text-theme-text-muted mt-1 text-xs">{summary.totalEntries} approved or pending entries</p>
             </article>
-            <article className="bg-theme-surface rounded-lg border border-green-200 p-5 shadow-sm dark:border-green-900">
+            <article className="card border-green-200 p-5 dark:border-green-900">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-green-700 dark:text-green-400">Approved</p>
                 <CheckCircle2 className="h-5 w-5 text-green-600" aria-hidden="true" />
@@ -165,7 +184,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
               </p>
               <p className="text-theme-text-muted mt-1 text-xs">{summary.approvedEntries} finalized entries</p>
             </article>
-            <article className="bg-theme-surface rounded-lg border border-amber-200 p-5 shadow-sm dark:border-amber-900">
+            <article className="card border-amber-200 p-5 dark:border-amber-900">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Needs review</p>
                 <ListChecks className="h-5 w-5 text-amber-600" aria-hidden="true" />
@@ -189,7 +208,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
             </article>
           </div>
 
-          <section className="bg-theme-surface border-theme-surface-border rounded-lg border p-5 shadow-sm">
+          <section className="card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-theme-text-primary font-semibold">Where the hours came from</h3>
@@ -216,9 +235,14 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                 {[...summary.byCategory]
                   .sort((a, b) => b.totalMinutes - a.totalMinutes)
                   .map((category) => {
+                    // Shares divide exact minutes, not the independently
+                    // rounded totalHours: with small totals the rounded basis
+                    // is materially wrong (two 1-minute categories each showed
+                    // as 67%). The summary exposes no total-minutes field, so
+                    // the denominator is the categories' own minutes.
                     const exactShare =
-                      categoryMinutesTotal > 0
-                        ? Math.min(100, Math.max(0, (category.totalMinutes / categoryMinutesTotal) * 100))
+                      totalCategoryMinutes > 0
+                        ? Math.min(100, Math.max(0, (category.totalMinutes / totalCategoryMinutes) * 100))
                         : 0;
                     const share = Math.round(exactShare);
                     return (

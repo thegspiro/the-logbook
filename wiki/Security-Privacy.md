@@ -207,6 +207,34 @@ Disclosure is recorded on the `user_viewed` audit event, so the trail
 distinguishes *who saw the restricted fields* from who merely opened a
 profile.
 
+**Directory profiles no longer disclose account-security metadata**
+*(2026-08-16)*. `members.view` lets a member find and open a colleague's
+directory entry; it does not entitle them to the colleague's account state.
+A caller relying only on `members.view` now receives the profile with
+`email_verified`, `mfa_enabled`, `last_login_at`, `created_at`,
+`updated_at`, and notification preferences cleared, and with the permission
+lists stripped from the colleague's roles (role *names* remain, because the
+profile displays them). The redaction matters because MFA status plus last
+login is a target-selection map — it tells an attacker which accounts are
+soft. `users.view` holders, members-managers, and the member themselves see
+the full record.
+
+**Profile edits cannot move a member's hire date** *(2026-08-16)*.
+`hire_date` joined rank, station, platoon, and membership number in the
+restricted-field set on profile updates: it drives automatic membership-tier
+advancement, so changing it with only `users.edit` amounted to
+self-service seniority. It now requires leadership, the secretary, or the
+membership coordinator.
+
+**Shared-device logout purges every draft namespace** *(2026-08-16, red-team
+RT-08)*. The logout purge on shared/station computers removed shift-report
+drafts and the offline queues, but equipment-check drafts
+(`equipment-check-draft-*` in `localStorage`) survived, leaving the previous
+member's apparatus results and narrative notes readable by the next person
+at the browser. The purge now sweeps both draft namespaces, including
+orphaned keys, and leaves unrelated browser preferences intact. See
+[`docs/security/RED_TEAM_REVIEW_2026-08-16.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/security/RED_TEAM_REVIEW_2026-08-16.md).
+
 **Organization settings leaked infrastructure.** `GET /organization/settings`
 is open to every authenticated member — the page needs branding, module
 enablement and visibility flags. It redacted credentials, but not the

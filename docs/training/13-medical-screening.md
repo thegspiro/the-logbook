@@ -14,6 +14,7 @@ Medical Screening is a standalone module accessible from the sidebar. It integra
 4. [Screening Records](#screening-records)
 5. [Recording a Screening](#recording-a-screening)
 6. [Compliance Dashboard](#compliance-dashboard)
+   - [What Members See on Their Own Dashboard](#what-members-see-on-their-own-dashboard)
 7. [Expiring Screenings](#expiring-screenings)
 8. [Prospect Screening](#prospect-screening)
 9. [Realistic Example: Annual Physical Compliance](#realistic-example-annual-physical-compliance)
@@ -39,13 +40,26 @@ The Medical Screening page uses a **three-tab layout**:
 
 ### Permissions
 
-| Action                                          | Required Permission        |
-| ----------------------------------------------- | -------------------------- |
-| View requirements, records, and compliance data | `medical_screening.view`   |
-| Create, update, or delete requirements          | `medical_screening.manage` |
-| Create, update, or delete screening records     | `medical_screening.manage` |
+| Action                                              | Required Permission         |
+| --------------------------------------------------- | --------------------------- |
+| View requirements, records, and compliance data     | `medical_screening.view`    |
+| Create, update, or delete requirements              | `medical_screening.manage`  |
+| Create, update, or delete screening records         | `medical_screening.manage`  |
+| See your **own** compliance counts on the dashboard | None — any signed-in member |
 
-> **HIPAA Note:** Medical screening records contain protected health information (PHI). Access to this module should be restricted to authorized personnel only. Assign the `medical_screening.view` and `medical_screening.manage` permissions exclusively to roles that have a legitimate need to access medical compliance data (e.g., Chief Officers, Health & Safety Officers, HR administrators). All access to medical screening endpoints is logged in the audit trail.
+The last row is the only part of this module a member sees without holding a
+medical screening permission, and it is counts only. See
+[What members see on their own dashboard](#what-members-see-on-their-own-dashboard).
+
+> **HIPAA Note:** Medical screening records contain protected health information (PHI). Access to this module should be restricted to authorized personnel only. Assign the `medical_screening.view` and `medical_screening.manage` permissions exclusively to roles that have a legitimate need to access medical compliance data (e.g., Chief Officers, Health & Safety Officers, HR administrators).
+>
+> **Audit trail — what is and is not recorded.** Creating, updating and deleting
+> requirements and records are written to the audit trail. **Reads are not.**
+> That includes one officer reading another member's records or compliance
+> (`GET /medical-screening/records`, `/records/{id}`, `/compliance/{user_id}`),
+> which is the access an audit trail most exists to detect. If your department
+> needs read access to PHI logged for its HIPAA obligations, treat that as an
+> open gap rather than an implemented control.
 
 ### Screening Types
 
@@ -263,6 +277,28 @@ The top of the Compliance tab displays four summary metrics:
 | **Compliant**          | Number of members who meet all applicable requirements                |
 | **Non-Compliant**      | Number of members missing one or more required screenings             |
 | **Expiring Soon**      | Number of members with at least one screening expiring within 60 days |
+
+### What Members See on Their Own Dashboard
+
+A member does not need `medical_screening.view` to know whether they are behind
+on a screening — that permission reads _everybody's_ records. Instead, the
+dashboard's readiness line reads `GET /medical-screening/compliance/me`, which
+is scoped to the signed-in member by the session and takes no id, so there is
+nothing a caller can substitute to read someone else.
+
+It returns **counts only** — how many screenings are outstanding and how soon
+the next one lapses. It carries no requirement name, screening type, date or
+result. The dashboard is a shared surface: The Logbook is installed as a kiosk
+on tablets left at stations, so a line reading "Psychological evaluation
+expired" would be legible to whoever walks past. A member sees, for example:
+
+> **Not clear to respond** — 1 screening overdue · _Certifications, screenings and seats_
+
+To find out _which_ screening, the member asks whoever holds
+`medical_screening.view`. Departments that track no screening requirements see
+no mention of screenings on the dashboard at all, and if the read fails the
+line silently narrows to what it could confirm rather than implying screenings
+were checked and passed.
 
 ### How Compliance Is Calculated
 

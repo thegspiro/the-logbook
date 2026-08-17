@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { enumLabel } from '../../../utils/displayValue';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -53,6 +54,8 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
   apparatusOptions,
   apparatusSource,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
+
   const [formData, setFormData] = useState<TemplateFormData>(initialData || emptyTemplateForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const positionOptions = getPositionOptions();
@@ -212,7 +215,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="template-modal-title"
@@ -225,7 +228,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
           mid-option with nothing on screen to say it continued, and no way to
           submit without scrolling for it. Header and footer are fixed now, and
           only the fields move. */}
-      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-lg flex-col rounded-lg">
+      <div ref={dialogRef} className="modal-panel flex max-h-[90dvh] w-full max-w-lg flex-col">
         <div className="border-theme-surface-border flex shrink-0 items-center justify-between border-b p-6">
           <h2 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">
             {title}

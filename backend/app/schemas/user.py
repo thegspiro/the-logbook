@@ -137,11 +137,12 @@ class UserResponse(UserBase, UTCResponseBase):
     status: str
     membership_type: Optional[str] = None
     compliance_exempt: bool = False
-    # Optional so profile redaction can withhold them from ordinary members
-    # (see `_clear_account_security_fields` in the users endpoint). None means
-    # "not disclosed to this caller" — a neutral False would misreport an
-    # MFA-enabled account as unprotected, so absence must stay distinguishable
-    # from a real value. Always populated from the ORM for self/leadership.
+    # Optional so profile redaction can withhold them from directory-only
+    # callers (see `_clear_directory_only_profile_metadata` in the users
+    # endpoint). None means "not disclosed to this caller" — a neutral False
+    # would misreport an MFA-enabled account as unprotected, so absence must
+    # stay distinguishable from a real value. Always populated from the ORM
+    # for self/leadership.
     email_verified: Optional[bool] = None
     mfa_enabled: Optional[bool] = None
     last_login_at: Optional[datetime] = None
@@ -264,6 +265,13 @@ class ContactInfoUpdate(BaseModel):
 class UserProfileResponse(UserResponse):
     """Extended user response with roles and notification preferences"""
 
+    # These account-management fields are cleared when this schema is used as
+    # a directory profile for a caller who has only ``members.view``.
+    email_verified: Optional[bool] = None
+    mfa_enabled: Optional[bool] = None
+    last_login_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     roles: List[RoleResponse] = []
     notification_preferences: Optional[dict] = None
 

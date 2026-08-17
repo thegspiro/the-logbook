@@ -15,7 +15,8 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security_middleware import InputSanitizer
+from app.core.config import settings
+from app.core.security_middleware import InputSanitizer, daily_cap_exceeded
 from app.core.utils import safe_error_detail
 from app.models.forms import (
     FieldType,
@@ -42,6 +43,7 @@ class FormsService:
     MAX_TEXTAREA_LENGTH = 50000
     MAX_NAME_LENGTH = 255
     MAX_EMAIL_LENGTH = 254
+    PUBLIC_DAILY_CAP_ERROR = "This form is not accepting further submissions today."
 
     # ------------------------------------------------------------------
     # Required target fields and label-based fallback maps per
@@ -946,6 +948,7 @@ class FormsService:
         user_agent: Optional[str] = None,
         honeypot_value: Optional[str] = None,
         submitted_by: Optional[str] = None,
+        enforce_daily_cap: bool = False,
     ) -> Tuple[Optional[FormSubmission], Optional[str]]:
         """Submit a public form while enforcing its identity policy."""
         try:
@@ -1001,6 +1004,14 @@ class FormsService:
             )
             if info_error:
                 return None, info_error
+
+            # Reserve daily capacity only after the request has passed every
+            # rejection path. Invalid and honeypot requests must not be able
+            # to consume the quota and deny service to legitimate submitters.
+            if enforce_daily_cap and await daily_cap_exceeded(
+                f"pub_form:{slug}", settings.PUBLIC_FORM_DAILY_LIMIT
+            ):
+                return None, self.PUBLIC_DAILY_CAP_ERROR
 
             submission = FormSubmission(
                 organization_id=form.organization_id,

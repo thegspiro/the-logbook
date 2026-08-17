@@ -469,7 +469,7 @@ export default function ComplianceRequirementsConfigPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-theme-surface-border bg-theme-surface hscroll flex gap-1 rounded-lg border p-1">
+      <div className="card hscroll flex gap-1 p-1">
         {tabs.map((tab: { id: ActiveTab; label: string; icon: ReactElement }) => (
           <button
             key={tab.id}
@@ -486,7 +486,7 @@ export default function ComplianceRequirementsConfigPage() {
 
       {/* Tab Content */}
       {activeTab === 'thresholds' && (
-        <div className="border-theme-surface-border bg-theme-surface space-y-6 rounded-lg border p-6">
+        <div className="card space-y-6 p-6">
           <div className="flex items-center gap-2">
             <Settings className="text-theme-text-secondary h-5 w-5" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Compliance Thresholds</h2>
@@ -693,7 +693,7 @@ export default function ComplianceRequirementsConfigPage() {
 
           {/* Profile Form */}
           {showProfileForm && (
-            <div className="bg-theme-surface rounded-lg border border-blue-200 p-6 dark:border-blue-800">
+            <div className="card border-blue-200 p-6 dark:border-blue-800">
               <h3 className="text-theme-text-primary mb-4 text-base font-semibold">
                 {editingProfileId ? 'Edit Profile' : 'New Profile'}
               </h3>
@@ -956,7 +956,7 @@ export default function ComplianceRequirementsConfigPage() {
 
           {/* Existing Profiles */}
           {config?.profiles.map((profile: ComplianceProfile) => (
-            <div key={profile.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+            <div key={profile.id} className="card p-4">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1057,7 +1057,7 @@ export default function ComplianceRequirementsConfigPage() {
       )}
 
       {activeTab === 'schedule' && (
-        <div className="border-theme-surface-border bg-theme-surface space-y-6 rounded-lg border p-6">
+        <div className="card space-y-6 p-6">
           <div className="flex items-center gap-2">
             <Clock className="text-theme-text-secondary h-5 w-5" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Automated Report Scheduling</h2>
@@ -1156,7 +1156,7 @@ export default function ComplianceRequirementsConfigPage() {
       {activeTab === 'reports' && (
         <div className="space-y-6">
           {/* Generate Report */}
-          <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <div className="card p-6">
             <div className="flex items-center gap-2">
               <FileText className="text-theme-text-secondary h-5 w-5" />
               <h2 className="text-theme-text-primary text-lg font-semibold">Generate Report</h2>
@@ -1251,7 +1251,7 @@ export default function ComplianceRequirementsConfigPage() {
           </div>
 
           {/* Report History */}
-          <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <div className="card p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-theme-text-primary text-lg font-semibold">Report History ({reportsTotal})</h2>
               <button
@@ -1350,7 +1350,7 @@ export default function ComplianceRequirementsConfigPage() {
 
       {/* Email Modal */}
       {emailModalReportId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="modal-overlay flex items-center justify-center">
           <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-theme-text-primary text-lg font-semibold">Email Report</h3>

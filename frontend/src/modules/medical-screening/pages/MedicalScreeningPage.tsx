@@ -245,10 +245,7 @@ export const MedicalScreeningPage: React.FC = () => {
             </div>
           ) : (
             requirements.map((req) => (
-              <div
-                key={req.id}
-                className="border-theme-surface-border bg-theme-surface flex items-center justify-between rounded-lg border p-4"
-              >
+              <div key={req.id} className="card flex items-center justify-between p-4">
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-theme-text-primary text-sm font-medium">{req.name}</h3>
@@ -309,10 +306,7 @@ export const MedicalScreeningPage: React.FC = () => {
             </div>
           ) : (
             records.map((record) => (
-              <div
-                key={record.id}
-                className="border-theme-surface-border bg-theme-surface flex items-center justify-between rounded-lg border p-4"
-              >
+              <div key={record.id} className="card flex items-center justify-between p-4">
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-theme-text-primary text-sm font-medium">

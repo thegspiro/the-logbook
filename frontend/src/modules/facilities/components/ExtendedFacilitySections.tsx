@@ -123,8 +123,8 @@ function ResourceSection<T extends { id: string }>({
   };
 
   return (
-    <section className="bg-theme-surface border-theme-surface-border rounded-xl border">
-      <header className="border-theme-surface-border flex items-center justify-between border-b p-5">
+    <section className="card">
+      <header className="border-theme-surface-border flex items-center justify-between border-b p-4">
         <h2 className="text-theme-text-primary text-sm font-semibold">
           {title} {!isLoading && `(${items.length})`}
         </h2>
@@ -143,7 +143,7 @@ function ResourceSection<T extends { id: string }>({
         )}
       </header>
 
-      <div className="p-5">
+      <div className="p-4">
         {canEdit && showForm && (
           <div className="bg-theme-surface-hover/50 mb-5 grid grid-cols-1 gap-3 rounded-lg p-4 sm:grid-cols-2">
             {fields.map((field) => (

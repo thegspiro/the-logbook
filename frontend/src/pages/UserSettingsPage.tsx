@@ -534,7 +534,7 @@ export const UserSettingsPage: React.FC = () => {
                           type="text"
                           value={profileForm.membership_number || ''}
                           readOnly
-                          className="border-theme-input-border bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted block w-full cursor-not-allowed rounded-md border px-3 py-2 opacity-60 sm:text-sm"
+                          className="form-input bg-theme-surface-secondary placeholder-theme-text-muted block cursor-not-allowed px-3 opacity-60 sm:text-sm"
                           disabled
                         />
                       </div>
@@ -549,7 +549,7 @@ export const UserSettingsPage: React.FC = () => {
                             rankOptions.find((r) => r.value === profileForm.rank)?.label || profileForm.rank || '—'
                           }
                           readOnly
-                          className="border-theme-input-border bg-theme-surface-secondary text-theme-text-primary block w-full cursor-not-allowed rounded-md border px-3 py-2 opacity-60 sm:text-sm"
+                          className="form-input bg-theme-surface-secondary block cursor-not-allowed px-3 opacity-60 sm:text-sm"
                           disabled
                         />
                       </div>
@@ -562,7 +562,7 @@ export const UserSettingsPage: React.FC = () => {
                           type="text"
                           value={profileForm.station || ''}
                           readOnly
-                          className="border-theme-input-border bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted block w-full cursor-not-allowed rounded-md border px-3 py-2 opacity-60 sm:text-sm"
+                          className="form-input bg-theme-surface-secondary placeholder-theme-text-muted block cursor-not-allowed px-3 opacity-60 sm:text-sm"
                           disabled
                         />
                       </div>

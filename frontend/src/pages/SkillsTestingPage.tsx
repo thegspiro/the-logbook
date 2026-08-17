@@ -44,7 +44,7 @@ const TemplateCard: React.FC<{
 }> = ({ template, onClick }) => (
   <button
     onClick={onClick}
-    className="bg-theme-surface border-theme-surface-border group w-full rounded-lg border p-5 text-left transition-all hover:border-red-500/50 hover:shadow-xs"
+    className="card group w-full p-5 text-left transition-all hover:border-red-500/50 hover:shadow-xs"
   >
     <div className="flex items-start justify-between">
       <div className="min-w-0 flex-1">
@@ -79,10 +79,7 @@ const TestHistoryCard: React.FC<{
 }> = ({ test, onClick }) => {
   const tz = useTimezone();
   return (
-    <button
-      onClick={onClick}
-      className="bg-theme-surface border-theme-surface-border w-full rounded-lg border p-4 text-left transition-colors hover:border-red-500/50"
-    >
+    <button onClick={onClick} className="card w-full p-4 text-left hover:border-red-500/50">
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -228,7 +225,7 @@ export const SkillsTestingPage: React.FC = () => {
             placeholder={activeTab === 'available' ? 'Search available tests...' : 'Search your results...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-2 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
+            className="form-input placeholder:text-theme-text-muted pr-4 pl-10"
           />
         </div>
 
@@ -244,7 +241,7 @@ export const SkillsTestingPage: React.FC = () => {
                 <span className="sr-only">Loading...</span>
               </div>
             ) : filteredTemplates.length === 0 ? (
-              <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
+              <div className="card py-12 text-center">
                 <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
                 <p className="text-theme-text-muted">
                   {searchQuery ? 'No tests match your search' : 'No tests are available yet'}
@@ -281,7 +278,7 @@ export const SkillsTestingPage: React.FC = () => {
                 <span className="sr-only">Loading...</span>
               </div>
             ) : filteredTests.length === 0 ? (
-              <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
+              <div className="card py-12 text-center">
                 <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
                 <p className="text-theme-text-muted">
                   {searchQuery ? 'No results match your search' : "You haven't taken any tests yet"}

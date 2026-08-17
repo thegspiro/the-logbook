@@ -18,7 +18,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
-import { hasAdministrationAccess } from './adminNavigation';
+import { canOpenAdministrationSection } from './adminNavigation';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
@@ -110,9 +110,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  // The shared helper's list mirrors the Admin menu items' gates — extend it
-  // there, never inline, so Side/Top navigation cannot drift apart.
-  const hasAnyAdminPermission = hasAdministrationAccess(checkPermission);
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
@@ -148,8 +146,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       subItems: [
         ...(isModuleOn('inventory')
           ? [
-              { label: 'My Equipment', path: '/inventory/my-equipment' },
-              { label: 'Inventory', path: '/inventory' },
+              { label: 'My Issued Gear', path: '/inventory/my-equipment' },
+              { label: 'Gear & Uniforms', path: '/inventory' },
+            ]
+          : []),
+        ...(isModuleOn('medical_supplies')
+          ? [
+              {
+                label: 'Medical Supplies',
+                path: '/medical-supplies',
+                anyPermission: ['inventory.view_medical', 'inventory.view'],
+              },
             ]
           : []),
         ...(isModuleOn('apparatus')
@@ -211,7 +218,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
               ...(isModuleOn('inventory')
-                ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
+                ? [{ label: 'Gear Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
                 : []),
               ...(isModuleOn('storefront')
                 ? [{ label: 'Store Admin', path: '/store/admin', permission: 'storefront.manage' }]
@@ -294,22 +301,20 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   return (
     <>
       {/* Mobile menu backdrop — tap anywhere outside the menu to dismiss.
-          Mirrors SideNavigation's overlay. Rendered before the header so the
-          header (menu included, with its opaque background, lifted to z-50
-          while open) and the bottom bar (z-50) stay above it: the "More"
-          toggle remains usable while the page behind is inert. */}
+          Mirrors the side-nav drawer's overlay; without it (and before the
+          Escape handler above) navigating away was the only way out. */}
       {mobileMenuOpen && (
         <div
-          data-testid="mobile-menu-backdrop"
           className="fixed inset-0 z-40 bg-black/50 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
+          data-testid="mobile-menu-backdrop"
           aria-hidden="true"
         />
       )}
       <header
-        // While the mobile menu is open the header (menu included, with its
+        // While the menu is open the header (which carries the menu and its
         // opaque background) is lifted above the backdrop rendered above.
-        className={`safe-top border-b ${mobileMenuOpen ? 'relative z-50' : ''}`}
+        className={`safe-top border-b${mobileMenuOpen ? 'relative z-50' : ''}`}
         style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }}
         role="banner"
       >
@@ -384,9 +389,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
                       {openDropdown === item.label && (
                         <div
-                          className={`bg-theme-surface-modal border-theme-surface-border animate-scale-in absolute top-full z-50 mt-1 rounded-lg border py-1 shadow-xl ${
-                            item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'
-                          }`}
+                          className={`popover-panel animate-scale-in absolute top-full z-50 mt-1 py-1 ${item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'}`}
                         >
                           {cleanedSubItems.map((subItem, idx) => {
                             if (subItem.isDivider) {
