@@ -47,6 +47,7 @@ def parse_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
         "event": event,
         "completed": event.upper() in COMPLETION_EVENTS,
         "external_id": str(data.get("externalId") or ""),
+        "template_id": str(data.get("templateId") or ""),
         "title": str(data.get("title") or ""),
         "recipient_emails": emails,
     }
