@@ -785,7 +785,9 @@ export const PatternsTab: React.FC = () => {
             const config: Record<string, unknown> = pattern.schedule_config ?? {};
             const weekdays = config.weekdays as number[] | undefined;
             const cyclePattern = config.cycle_pattern as string[] | undefined;
-            const patternPlatoons = config.platoons as string[] | undefined;
+            const patternPlatoons = Array.isArray(config.platoons)
+              ? config.platoons.filter((platoon): platoon is string => typeof platoon === 'string')
+              : [];
 
             return (
               <div key={pattern.id} className="card overflow-hidden">
