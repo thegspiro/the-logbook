@@ -89,6 +89,20 @@ class TestKioskCheckInWindow:
         assert horizons, "expected a start_datetime bound param in the prefilter"
         assert all(h >= NOW + timedelta(hours=23) for h in horizons)
 
+    async def test_prefilter_excludes_draft_events(self):
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        await LocationService(db).get_current_events_in_check_in_window(
+            "loc-1", "org-1"
+        )
+
+        query = db.execute.await_args.args[0]
+        where_clause = str(query.whereclause)
+        assert "events.is_draft IS false" in where_clause
+
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

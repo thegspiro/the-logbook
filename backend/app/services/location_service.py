@@ -253,6 +253,7 @@ class LocationService:
             .where(Event.location_id == str(location_id))
             .where(Event.organization_id == str(organization_id))
             .where(Event.is_cancelled.is_(False))
+            .where(Event.is_draft.is_(False))
             .where(Event.start_datetime <= prefilter_horizon)
             .where(
                 or_(
