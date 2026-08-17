@@ -1859,9 +1859,9 @@ class EventService:
 
         Window-type policy:
         - STRICT is a hard gate by design — no check-in before the window opens.
-        - FLEXIBLE / WINDOW allow an *early* check-in but return an informational
-          notice telling the member when the official window (set by the event
-          creator) begins.
+        - FLEXIBLE / WINDOW allow a check-in up to one hour before the official
+          window and return an informational notice telling the member when the
+          window (set by the event creator) begins.
         - A check-in after the window has closed is never self-served; it
           requires an event organizer to record it (via the manager override).
 
@@ -1887,8 +1887,14 @@ class EventService:
 
         if now < check_in_start:
             opens_at = _local_time(check_in_start)
-            if window_type == CheckInWindowType.STRICT:
-                # Hard gate: strict events only permit check-in once open.
+            earliest_flexible_check_in = check_in_start - timedelta(hours=1)
+            if (
+                window_type == CheckInWindowType.STRICT
+                or now < earliest_flexible_check_in
+            ):
+                # Strict events have no grace period. Flexible/window events
+                # retain the kiosk's one-hour early-arrival grace, but cannot
+                # be checked into arbitrarily far in advance.
                 return (
                     False,
                     f"Check-in is not available yet. Opens at {opens_at}.",
