@@ -22,9 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import PaginationParams, require_permission
+from app.core.captcha import require_captcha
 from app.core.database import get_db
 from app.core.public_portal_security import check_ip_rate_limit
-from app.core.security_middleware import get_client_ip
+from app.core.security_middleware import daily_cap_exceeded, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.event_request import (
     EventRequest,
@@ -389,7 +390,11 @@ VALID_TRANSITIONS = {
 # ============================================
 
 
-@router.post("/public", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/public",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_captcha)],
+)
 async def submit_public_event_request(
     data: EventRequestCreate,
     request: Request,
@@ -399,8 +404,11 @@ async def submit_public_event_request(
     """
     Submit a public event request.
 
-    No authentication required. Creates an event request that enters
-    the review pipeline. Auto-assigns the default coordinator if configured.
+    No authentication required, but the organization must have opted in
+    (**Events → Request pipeline → accept public requests**), the caller must
+    pass the human challenge, and the department's daily ceiling must not be
+    spent. Creates an event request that enters the review pipeline and
+    auto-assigns the default coordinator if configured.
     """
     # Per-IP rate limit (uses the real client IP via X-Forwarded-For): this
     # endpoint writes DB rows and sends email, so throttle abuse/amplification.
@@ -421,8 +429,39 @@ async def submit_public_event_request(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Check default assignee from pipeline settings
     pipeline = _get_pipeline_settings(org)
+
+    # EV-5: public intake is opt-in. Answer exactly as we do for an
+    # organization that does not exist — a distinguishable response turns this
+    # endpoint into an oracle for "which departments accept public requests",
+    # which is the reconnaissance step before the flood this gate exists to
+    # stop.
+    if not pipeline.get("accept_public_requests", False):
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Bot check before any write. Answer like a success so the bot has nothing
+    # to tune against, and take no action — same contract as the forms module.
+    if data.hp_website:
+        return {
+            "id": None,
+            "status": EventRequestStatus.SUBMITTED.value,
+            "message": "Request submitted successfully",
+        }
+
+    # Per-organization daily ceiling, checked only once the submission has
+    # passed authorization and the honeypot. Counting rejected traffic is what
+    # let anonymous submitters exhaust a department's allowance in the forms
+    # module and deny service to legitimate ones.
+    if await daily_cap_exceeded(
+        f"pub_event_request:{organization_id}",
+        int(pipeline.get("public_daily_limit", 50)),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="This department is not accepting further requests today.",
+        )
+
+    # Check default assignee from pipeline settings
     default_assignee = pipeline.get("default_assignee_id")
 
     event_request = EventRequest(

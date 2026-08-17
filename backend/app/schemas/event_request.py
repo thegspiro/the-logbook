@@ -9,7 +9,7 @@ assignment, scheduling with room booking, and postponement.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.schemas.base import UTCResponseBase
 
@@ -53,6 +53,14 @@ class EventRequestCreate(BaseModel):
     )
     venue_address: Optional[str] = Field(None, max_length=500)
     special_requests: Optional[str] = Field(None, max_length=2000)
+
+    # Honeypot: hidden from real users, filled in by bots. Aliased to a
+    # plausible field name for the same reason the forms module does it — a
+    # field called "honeypot" is one a scraper skips. Only the public route
+    # reads it; an authenticated create ignores it.
+    hp_website: Optional[str] = Field(None, alias="website", max_length=255)
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class EventRequestStatusUpdate(BaseModel):
