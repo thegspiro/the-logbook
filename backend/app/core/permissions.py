@@ -415,6 +415,15 @@ APPARATUS_MANAGE = Permission(
     "Full apparatus and fleet management",
     PermissionCategory.APPARATUS,
 )
+# Deliberately separate from apparatus.manage and scheduling.assign. Approving
+# a waiver of the EVOC driving requirement puts an uncertified member behind
+# the wheel of an apparatus; that is a chief's call, not something every
+# officer who can edit the fleet or fill a roster should be able to sign off.
+APPARATUS_APPROVE_DRIVER_EXCEPTION = Permission(
+    "apparatus.approve_driver_exception",
+    "Approve exceptions to the EVOC driving requirement",
+    PermissionCategory.APPARATUS,
+)
 
 # Facilities
 FACILITIES_VIEW = Permission(
@@ -623,6 +632,7 @@ ALL_PERMISSIONS: list[Permission] = [
     APPARATUS_DELETE,
     APPARATUS_MAINTENANCE,
     APPARATUS_MANAGE,
+    APPARATUS_APPROVE_DRIVER_EXCEPTION,
     # Facilities
     FACILITIES_VIEW,
     FACILITIES_VIEW_SENSITIVE,
@@ -864,16 +874,20 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             APPARATUS_DELETE.name,
             APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
+            # Chief ranks only. Deliberately not granted to captain,
+            # lieutenant, or the president: authorizing an uncertified driver
+            # on an apparatus is an operational safety call.
+            APPARATUS_APPROVE_DRIVER_EXCEPTION.name,
             FACILITIES_CREATE.name,
             FACILITIES_EDIT.name,
             FACILITIES_DELETE.name,
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
             # facilities.manage already implies the sensitive read on the
-            # endpoints, but the rank grant ceiling compares permission names
-            # literally (exact/wildcard only) — without the explicit grant a
-            # chief gets a 403 promoting a member to captain, whose defaults
-            # include facilities.view_sensitive.
+            # endpoints, but the role/rank grant ceilings compare permission
+            # names literally (exact/wildcard only) — without the explicit
+            # grant a chief gets a 403 assigning a position whose defaults
+            # include facilities.view_sensitive (vice president, treasurer).
             FACILITIES_VIEW_SENSITIVE.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
@@ -922,13 +936,17 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             APPARATUS_DELETE.name,
             APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
+            # Chief ranks only. Deliberately not granted to captain,
+            # lieutenant, or the president: authorizing an uncertified driver
+            # on an apparatus is an operational safety call.
+            APPARATUS_APPROVE_DRIVER_EXCEPTION.name,
             FACILITIES_CREATE.name,
             FACILITIES_EDIT.name,
             FACILITIES_DELETE.name,
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
-            # Explicit so the rank grant ceiling lets this rank assign
-            # captain — see the note on fire_chief.
+            # Explicit so the grant ceilings let this rank assign the
+            # sensitive-facility offices — see the note on fire_chief.
             FACILITIES_VIEW_SENSITIVE.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
@@ -971,12 +989,16 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             APPARATUS_EDIT.name,
             APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
+            # Chief ranks only. Deliberately not granted to captain,
+            # lieutenant, or the president: authorizing an uncertified driver
+            # on an apparatus is an operational safety call.
+            APPARATUS_APPROVE_DRIVER_EXCEPTION.name,
             FACILITIES_CREATE.name,
             FACILITIES_EDIT.name,
             FACILITIES_MAINTENANCE.name,
             FACILITIES_MANAGE.name,
-            # Explicit so the rank grant ceiling lets this rank assign
-            # captain — see the note on fire_chief.
+            # Explicit so the grant ceilings let this rank assign the
+            # sensitive-facility offices — see the note on fire_chief.
             FACILITIES_VIEW_SENSITIVE.name,
             NOTIFICATIONS_MANAGE.name,
         ],

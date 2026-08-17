@@ -847,7 +847,10 @@ class InventoryService:
             entry = stats.get(vendor_id)
             if entry is None:
                 continue
-            entry["item_count"] = count or 0
+            # SUM() comes back as Decimal on MySQL even over an integer CASE.
+            # item_count is declared int on the response, and Pydantic warns
+            # (rather than coercing quietly) when handed a Decimal for it.
+            entry["item_count"] = int(count or 0)
             entry["total_purchase_value"] = spend
 
         reorder_rows = await self.db.execute(
@@ -3105,7 +3108,12 @@ class InventoryService:
                     "condition": a.item.condition.value,
                     "assigned_date": a.assigned_date,
                     "category_name": a.item.category.name if a.item.category else None,
-                    "quantity": a.item.quantity,
+                    # ItemAssignment has no per-assignment quantity column: a
+                    # permanent assignment is one physical unit (serialized
+                    # gear). a.item.quantity is the catalog's on-hand stock,
+                    # which inflated dashboard counts — one assignment of an
+                    # item with 50 units in stock displayed as 50.
+                    "quantity": 1,
                 }
                 for a in assignments
             ],

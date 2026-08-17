@@ -320,7 +320,10 @@ const Dashboard: React.FC = () => {
       const data = await inventoryService.getUserInventory(currentUser.id);
       setMyEquipment({
         assigned:
-          data.permanent_assignments.reduce((total, item) => total + (item.quantity ?? 1), 0) +
+          // Each permanent assignment is one physical unit — count rows, not
+          // the response's quantity field, which historically carried the
+          // catalog's on-hand stock and inflated this figure.
+          data.permanent_assignments.length +
           data.issued_items.reduce((total, item) => total + item.quantity_issued, 0),
         checkedOut: data.active_checkouts.length,
         overdue: data.active_checkouts.filter((item) => item.is_overdue).length,
@@ -1235,6 +1238,34 @@ const Dashboard: React.FC = () => {
                   <ul>
                     {feed.slice(0, FEED_ROWS_SHOWN).map((entry) => {
                       const msg = entry.message;
+                      const rowClass =
+                        'focus:ring-theme-focus-ring min-w-0 flex-1 cursor-pointer rounded text-left focus:ring-2 focus:outline-hidden';
+                      const rowInner = (
+                        <>
+                          <span className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
+                            {msg?.is_pinned && (
+                              <Pin className="text-theme-accent-yellow h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            )}
+                            <span className="truncate">{entry.title}</span>
+                            {entry.unread && (
+                              <span
+                                className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
+                                role="img"
+                                aria-label="Unread"
+                              />
+                            )}
+                            {msg?.is_persistent && (
+                              <span className="bg-theme-surface-hover text-theme-text-muted shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase">
+                                Persistent
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-theme-text-secondary mt-0.5 line-clamp-2 block text-[13px] whitespace-pre-line">
+                            {entry.body}
+                          </span>
+                          <span className="text-theme-text-muted mt-1 block text-xs">{entry.meta}</span>
+                        </>
+                      );
                       return (
                         <li
                           key={entry.key}
@@ -1244,34 +1275,41 @@ const Dashboard: React.FC = () => {
                               nested buttons: a <button> inside a <button> is
                               invalid HTML, and the browser closes the outer
                               element early, handing assistive technology a
-                              broken tree. */}
-                          <button
-                            onClick={entry.onClick}
-                            className="focus:ring-theme-focus-ring min-w-0 flex-1 rounded text-left focus:ring-2 focus:outline-hidden"
-                          >
-                            <span className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
-                              {msg?.is_pinned && (
-                                <Pin className="text-theme-accent-yellow h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                              )}
-                              <span className="truncate">{entry.title}</span>
-                              {entry.unread && (
-                                <span
-                                  className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
-                                  role="img"
-                                  aria-label="Unread"
-                                />
-                              )}
-                              {msg?.is_persistent && (
-                                <span className="bg-theme-surface-hover text-theme-text-muted shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase">
-                                  Persistent
-                                </span>
-                              )}
-                            </span>
-                            <span className="text-theme-text-secondary mt-0.5 line-clamp-2 block text-[13px] whitespace-pre-line">
-                              {entry.body}
-                            </span>
-                            <span className="text-theme-text-muted mt-1 block text-xs">{entry.meta}</span>
-                          </button>
+                              broken tree. For the same reason, message rows —
+                              whose bodies go through LinkifiedText and can
+                              contain <a> elements — render as div[role=button]
+                              rather than <button>: an anchor inside a button is
+                              equally invalid and split apart by the parser.
+                              LinkifiedText stops click propagation on its
+                              anchors, so following a link doesn't also fire the
+                              row's navigation to /messages. */}
+                          {msg ? (
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={entry.onClick}
+                              onKeyDown={(e) => {
+                                // Only the row itself activates the row. A
+                                // linkified body can hold focusable anchors,
+                                // and Enter on one bubbles here — without this
+                                // guard the row would swallow the keypress and
+                                // navigate to /messages instead of opening the
+                                // link (the anchor's guard covers clicks only).
+                                if (e.target !== e.currentTarget) return;
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  entry.onClick();
+                                }
+                              }}
+                              className={rowClass}
+                            >
+                              {rowInner}
+                            </div>
+                          ) : (
+                            <button onClick={entry.onClick} className={rowClass}>
+                              {rowInner}
+                            </button>
+                          )}
                           {msg?.is_persistent && canManageMessages && (
                             <button
                               onClick={() => void clearPersistentMessage(msg.id)}

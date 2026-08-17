@@ -163,6 +163,24 @@ describe('MyOrdersPage', () => {
     });
   });
 
+  it('hides change payment method on a cancelled order', async () => {
+    // The backend rejects the change for cancelled orders, so the button
+    // must not be offered even while a balance remains on the order.
+    mockGetMyOrders.mockResolvedValue([{ ...unpaidOrder, status: 'cancelled' }]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    expect(screen.queryByRole('button', { name: /change payment method/i })).not.toBeInTheDocument();
+  });
+
+  it('hides change payment method while a payment report awaits verification', async () => {
+    mockGetMyOrders.mockResolvedValue([{ ...unpaidOrder, paymentStatus: 'pending_verification' }]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    expect(screen.queryByRole('button', { name: /change payment method/i })).not.toBeInTheDocument();
+  });
+
   it('lets the member cancel an unfulfilled order', async () => {
     const user = userEvent.setup();
     mockCancelMyOrder.mockResolvedValue({ ...unpaidOrder, status: 'cancelled' });

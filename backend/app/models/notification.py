@@ -49,6 +49,34 @@ class NotificationTrigger(str, enum.Enum):
     DOCUMENT_UPLOADED = "document_uploaded"
 
 
+# Triggers whose senders actually consult the rules table. A rule for anything
+# else is stored and listed but never read, so the API reports it as not
+# enforced rather than showing an admin a switch that does nothing. Lives here
+# rather than in the service so the response schema can read it without a
+# schema-imports-service inversion; the full story is in
+# app/services/notification_rules.py.
+ENFORCED_TRIGGERS = frozenset(
+    {
+        NotificationTrigger.EVENT_REMINDER,
+        NotificationTrigger.TRAINING_EXPIRY,
+    }
+)
+
+
+def is_enforced(trigger) -> bool:
+    """Whether a sender consults rules for *trigger*.
+
+    Takes the enum or its raw string: rows loaded from MySQL and values
+    arriving from the API are not consistently one or the other.
+    """
+    try:
+        return NotificationTrigger(getattr(trigger, "value", trigger)) in (
+            ENFORCED_TRIGGERS
+        )
+    except ValueError:
+        return False
+
+
 class NotificationCategory(str, enum.Enum):
     """Category for notification rules"""
 

@@ -27,7 +27,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -455,6 +455,19 @@ EVENT_SETTINGS_DEFAULTS = {
         "min_lead_time_days": 21,
         "default_assignee_id": None,
         "public_progress_visible": False,
+        # Public intake is opt-in (EV-5). The endpoint takes an organization_id
+        # from the query string, and those are discoverable through the public
+        # calendar, so every active department was reachable by anyone who
+        # looked one up. A department that has never configured outreach should
+        # not be accepting internet submissions that write rows and email a
+        # coordinator. Defaults merge over stored settings, so existing
+        # organizations read False until an admin turns it on deliberately.
+        "accept_public_requests": False,
+        # Per-organization ceiling for public submissions in a day, counted
+        # only for submissions that pass validation and the honeypot — parity
+        # with the forms module, where counting rejects let anonymous traffic
+        # exhaust a department's allowance and lock out legitimate submitters.
+        "public_daily_limit": 50,
         "tasks": [
             {
                 "id": "review_request",
@@ -1877,12 +1890,8 @@ async def finalize_attendance(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
-    await NotificationsService(db).archive_related_notifications(
-        current_user.organization_id,
-        "event_validation",
-        "event_id",
-        event_id,
-    )
+    # finalize_event_attendance archives the related validation prompt itself,
+    # so every finalize path (end_event, auto-finalize, this endpoint) clears it.
 
     return FinalizeAttendanceResponse(updated_count=updated_count)
 
@@ -2477,13 +2486,38 @@ async def delete_event_attachment(
     if not attachment:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    # Remove file from disk
+    # Remove the file from disk — but only when no other event still
+    # references it. Recurring-occurrence generation and event duplication
+    # copy attachment metadata (same file_path) across events, so an
+    # unconditional remove would break downloads for the parent and every
+    # sibling occurrence.
     file_path = attachment["file_path"]
-    try:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-    except OSError as e:
-        logger.warning(f"Failed to remove attachment file {file_path}: {e}")
+    others = await db.execute(
+        select(func.count())
+        .select_from(Event)
+        .where(
+            Event.id != str(event_id),
+            cast(Event.attachments, String).contains(file_path, autoescape=True),
+        )
+    )
+    still_in_this_event = any(
+        a.get("file_path") == file_path
+        for a in attachments
+        if a.get("id") != attachment_id
+    )
+    if not still_in_this_event and (others.scalar() or 0) == 0:
+        # Same containment guard as the download endpoint: never remove a
+        # file outside the upload tree, even if the stored path was tampered
+        # with. The metadata row is removed regardless.
+        resolved_path = os.path.realpath(file_path)
+        allowed_base = os.path.realpath(ATTACHMENT_UPLOAD_DIR)
+        try:
+            if resolved_path.startswith(allowed_base + os.sep) and os.path.exists(
+                resolved_path
+            ):
+                os.remove(resolved_path)
+        except OSError as e:
+            logger.warning(f"Failed to remove attachment file {file_path}: {e}")
 
     # Remove from attachments list
     event.attachments = [a for a in attachments if a.get("id") != attachment_id]

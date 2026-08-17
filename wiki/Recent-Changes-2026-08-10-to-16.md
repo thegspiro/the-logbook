@@ -20,7 +20,7 @@ The engineering audit lives in the source repository at
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Aug 10–11** | The supply loop (shelf ↔ truck arithmetic), the email footer library, the Learning Center, skills-testing printing and return-for-correction, and a phone-width sweep across every page |
 | **Aug 12–14** | Security, permissions, elections, the dashboard personal/organization split, storefront, QR, scheduling settings — see [that page](Recent-Changes-2026-08-12-to-14)                     |
-| **Aug 15–16** | Onboarding session hardening and one global style ownership move. **No backend, schema, route, or permission change**, so no upgrade step                                               |
+| **Aug 15–16** | Onboarding session hardening, the dark-mode canvas move, nested facility rooms (migration `20260816_0001`), a nine-fix security/privacy batch, and the coverage-measurement correction — see [that page](Recent-Changes-2026-08-15-to-16). Post-audit merges the same day added storage-area barcodes (`20260816_0002`), inventory vendors (`20260816_0003`), and the silent-error surfacing pass |
 
 ## New pages and their permissions
 
@@ -113,8 +113,10 @@ August 15 and 16.
 
 Back up the database and encryption keys **separately**. Require exactly one
 result from `alembic heads` — **`20260814_0004`** at the close of this
-window, and **`20260816_0001`** once the facility-room-nesting change landed
-later the same day — then run
+window's audit snapshot; same-day merges then appended **`20260816_0001`**
+(nested facility rooms), **`20260816_0002`** (storage-area barcode backfill),
+and **`20260816_0003`** (inventory vendors — renumbered from a colliding
+`_0002`), so the head today is **`20260816_0003`** — then run
 `alembic upgrade head`. Never downgrade to repair a fork.
 
 **Before upgrading**, run the active-prospect duplicate check: group active
@@ -126,7 +128,8 @@ reconciliation revision, so a collision fails the upgrade rather than being
 repaired by it.
 
 Across the six days the chain adds: the deployed-lot and on-truck stock columns,
-the restock report, the found-expiration write-back, email-template footers,
+the restock report, the found-expiration column (its write-back onto template
+items was later removed as a security fix), email-template footers,
 optional kit items, the skill-test return trail and resume counter, saved ballot
 templates and their settings, active-prospect uniqueness and reconciliation,
 public-portal key/timestamp hardening, shift-template vehicle fields and
@@ -136,7 +139,12 @@ counts, per-organization scheduling settings, event mandatory membership types
 and reminder targets, and the store-open banner. Inspect migration logs before
 and after rollout.
 
-August 15–16 adds **no migration**.
+August 15–16 itself adds `20260816_0001` (nested facility rooms — no
+backfill), and the post-audit August 16 merges add the storage-area barcode
+backfill (`20260816_0002`) and the inventory-vendor tables/backfill
+(`20260816_0003`). An earlier revision of this page said this window carried
+no migration; that was true only of the onboarding/dark-mode changes it was
+written against.
 
 ## Documentation and media actions
 

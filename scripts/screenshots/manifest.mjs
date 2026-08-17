@@ -254,6 +254,33 @@ export function openFirstFromApi(apiPath, routeFor, listKey, match) {
   };
 }
 
+/**
+ * Open the first facility's **Rooms** section.
+ *
+ * The section list is sidebar navigation inside the facility detail page, not a
+ * route, so the room shots cannot be reached by URL alone. The rooms are
+ * fetched after the section mounts, so waiting for the heading is not waiting
+ * for the tree — hence the wait on a room row.
+ */
+export async function openFacilityRooms(page) {
+  await openFirstFromApi(
+    "/facilities",
+    (id) => `/facilities/${id}`,
+    "facilities",
+  )(page);
+  const rooms = page
+    .getByRole("button", { name: /^rooms/i })
+    .or(page.getByRole("link", { name: /^rooms/i }))
+    .first();
+  await rooms.waitFor({ timeout: 20_000 });
+  await rooms.click();
+  await page
+    .getByText("Volunteer Office", { exact: true })
+    .first()
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(600);
+}
+
 /** True for an event that has started but not finished. */
 export async function selectMedicApparatus(page) {
   const select = page.locator("#apparatus-select");
@@ -2971,7 +2998,14 @@ export const SHOTS = [
     doc: "00-getting-started.md",
     line: 134,
     anchor: "Screenshot of the sidebar navigation expanded, showing the member",
-    alt: "The navigation sidebar with the member-facing sections expanded",
+    alt: "The navigation sidebar as an ordinary member sees it, with the Training and Operations groups expanded",
+    // As a MEMBER. This shot had no `auth` key, so it defaulted to the
+    // administrator and published the admin sidebar — ADMINISTRATION section
+    // and Department Setup included — under a caption promising "the
+    // member-facing sections". 00-16's comment beside it recorded the
+    // symptom without naming the cause: the two shots rendered "the same
+    // picture" precisely because both were the same user.
+    auth: "member",
     route: "/dashboard",
     // Expanded, which is the point of the shot: the collapsed sidebar shows a
     // chevron beside Training and Operations and nothing of what is under
@@ -6383,13 +6417,17 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 86,
     anchor: "Screenshot of the QR code display page showing a large QR code",
-    alt: "Event QR code display page for member self check-in",
+    alt: "Event QR code display page for member self check-in, its check-in window open",
     route: "/events",
+    // The in-progress event, not merely an upcoming one: the page gates the
+    // code behind its check-in window, so an event days away pictures a
+    // "Check-in Not Available" badge under a caption about members scanning
+    // to check in. This is the screen an officer actually puts on the wall.
     prepare: openFirstFromApi(
       "/events?limit=100",
       (id) => `/events/${id}/qr-code`,
       "events",
-      isUpcoming,
+      isInProgress,
     ),
   },
   {
@@ -6443,6 +6481,10 @@ export const SHOTS = [
       (event) => event.title === "Volunteer Interest Night",
     ),
     fullPage: true,
+    // "No reminders" is the reminder-audience select's own option, in the
+    // DOM on every render; the guest sign-in settings this shot is about
+    // are both ticked.
+    allowEmptyState: true,
   },
   {
     id: "04-32-guest-sign-in-form",
@@ -6508,6 +6550,10 @@ export const SHOTS = [
       await page.waitForTimeout(1500);
     },
     fullPage: true,
+    // "No documents yet" is the drawer's documents panel — a walk-in guest
+    // has uploaded nothing, and the Linked Events panel this shot is about is
+    // populated.
+    allowEmptyState: true,
   },
   {
     id: "04-20-event-requests",
@@ -6542,21 +6588,6 @@ export const SHOTS = [
     // See 02-41's twin above: bare /training/admin is the Dashboard overview.
     // Reports lives under the Enhancements page.
     route: "/training/admin?tab=reports",
-    fullPage: true,
-  },
-  {
-    id: "09-05-template-detail",
-    doc: "09-skills-testing.md",
-    line: 138,
-    anchor:
-      "Screenshot of the template detail page for a published template showing the",
-    alt: "Published skill sheet template detail with its sections and criteria",
-    route: "/training/skills-testing",
-    prepare: openFirstFromApi(
-      "/training/skills-testing/templates",
-      (id) => `/training/skills-testing/templates/${id}`,
-      "templates",
-    ),
     fullPage: true,
   },
 
@@ -7277,21 +7308,21 @@ export const SHOTS = [
         .getByRole("button", { name: /Skills Tests/ })
         .first()
         .click({ timeout: 15_000 });
-      await page.waitForTimeout(1200);
-      // Clipped to the first handful of rows. The demo member carries fifty-odd
-      // identical passes from other seeding, and the whole section runs to
-      // ~3700px — the recent, varied results are all at the top.
-      await page.evaluate(() => {
-        const heading = [...document.querySelectorAll("button")].find((b) =>
-          b.textContent?.includes("Skills Tests"),
-        );
-        const section = heading?.parentElement;
-        if (section instanceof HTMLElement) {
-          section.style.maxHeight = "320px";
-          section.style.overflow = "hidden";
-        }
-      });
-      await page.waitForTimeout(300);
+      // Wait for the *validated* result rather than a fixed pause: it is the
+      // oldest row and so the last to render, and it is the half of the
+      // caption — an official attempt showing its score — that the practice
+      // and under-review rows above it cannot make.
+      //
+      // This step used to clamp the section to 320px because the demo member
+      // had accumulated fifty-odd identical practice passes, each capture run
+      // filing another. The seeder now prunes those (PRACTICE_TESTS_KEPT), so
+      // the section is five rows and the clamp only cut the row the caption is
+      // about — a workaround that outlived its cause.
+      await page
+        .getByText(/Passed/)
+        .last()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
     },
     selector: "div:has(> button:has-text('Skills Tests'))",
   },
@@ -7705,16 +7736,48 @@ export const SHOTS = [
     route: "/elections",
     // The member's own view, not an officer's: the ballot is what a voter sees.
     auth: "member",
-    // An open election WITH positions: the in-app ballot renders position
-    // races only, and the first open election in list order is the
-    // restricted issue vote — its ballot reads "No candidates for this
-    // position", which is the known in-app-ballot limitation, not the race
-    // this caption is about.
-    prepare: openElectionTab(
-      "voting",
-      (election) =>
-        isOpenElection(election) && (election.positions?.length ?? 0) > 0,
-    ),
+    // Not merely the first *open* election: the elections list carries no
+    // candidate count, so a list-level match cannot tell a contested race from
+    // an empty one — and the first open election is the restricted-ballot seat
+    // with no candidates, which rendered "No candidates for this position"
+    // under a caption about choosing between two. Resolved through each open
+    // election's candidates endpoint instead.
+    prepare: async (page) => {
+      const id = await page.evaluate(async () => {
+        const listed = await fetch("/api/v1/elections?limit=20", {
+          credentials: "include",
+        });
+        if (!listed.ok) return null;
+        const body = await listed.json();
+        const rows = Array.isArray(body) ? body : (body.elections ?? []);
+        for (const election of rows) {
+          if (String(election.status ?? "").toLowerCase() !== "open") continue;
+          const detail = await fetch(
+            `/api/v1/elections/${election.id}/candidates`,
+            { credentials: "include" },
+          );
+          if (!detail.ok) continue;
+          const listedCandidates = await detail.json();
+          const candidates = Array.isArray(listedCandidates)
+            ? listedCandidates
+            : (listedCandidates.candidates ?? []);
+          if (candidates.filter((c) => c.accepted).length >= 2) {
+            return election.id;
+          }
+        }
+        return null;
+      });
+      if (!id) {
+        throw new Error("04-42: no open election has a contested position");
+      }
+      await page.goto(new URL(`/elections/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      const tab = page.locator("#tab-voting");
+      await tab.waitFor({ timeout: 10_000 });
+      await tab.click({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+    },
     fullPage: true,
   },
   {
@@ -7804,6 +7867,55 @@ export const SHOTS = [
       await page.waitForTimeout(800);
     },
     fullPage: true,
+  },
+  {
+    id: "01-39-scan-member-id-nav",
+    doc: "01-membership.md",
+    line: 1409,
+    anchor:
+      "The Administration section's Members group expanded, Scan Member ID among its links",
+    alt: "The Administration section's Members group expanded, Scan Member ID among its links",
+    route: "/dashboard",
+    // The elevated half of a two-sign-in contrast. The placeholder asked for
+    // both roles side by side, which no single capture can be: the harness
+    // authenticates as the administrator, the demo member, or nobody, and a
+    // `members.view`-only role is none of those. The member half is
+    // cross-referenced to 00-15 instead, whose sidebar has no Administration
+    // section at all — which is *why* the scanner cannot appear there.
+    prepare: async (page) => {
+      // Wait for the ADMINISTRATION heading before touching anything. The
+      // admin half of the nav is built from permissions that resolve after
+      // first paint, so for a moment the only button named "Members" is the
+      // member-facing roster item — and clicking that one expands nothing.
+      // This shot timed out three times on that race before it was named.
+      // Matched case-insensitively: the heading is uppercased by CSS, so the
+      // DOM text is "Administration" and an exact "ADMINISTRATION" match —
+      // which is what `innerText` shows you — never fires.
+      await page
+        .getByText(/^Administration$/i)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      // Matched by text, not by `link` role: the Administration sub-items are
+      // not anchors, so a role-based locator finds nothing even with the group
+      // open and the words on screen.
+      const link = page.getByText(/^Scan Member ID$/).first();
+      // Expand only if it is not already open. The sidebar persists which
+      // groups are expanded, so an unconditional click is as likely to
+      // collapse the group as to open it.
+      if ((await link.count()) === 0) {
+        const group = page.getByRole("button", { name: /^Members$/ }).last();
+        await group.waitFor({ timeout: 20_000 });
+        await group.click({ timeout: 10_000 });
+      }
+      await link.waitFor({ timeout: 15_000 });
+      await link.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    // The taller viewport for the same reason 00-15 needs one: with the
+    // Administration group open the nav is well past 900px, and at the default
+    // height the group would not expand into view at all.
+    viewport: { width: 1440, height: 1500 },
+    selector: "nav",
   },
   {
     id: "01-07-admin-member-edit",
@@ -8186,6 +8298,81 @@ export const SHOTS = [
         .check();
       await page.waitForTimeout(800);
     },
+    fullPage: false,
+  },
+  {
+    id: "06-24-rooms-nested-tree",
+    doc: "06-apparatus-facilities.md",
+    line: 216,
+    anchor:
+      "SCREENSHOT NEEDED — Rooms section showing a two- or three-level tree",
+    alt: "The Rooms section as a containment tree: sub-rooms indented under the room holding them, each container reporting how many it holds",
+    route: "/facilities",
+    // The per-row actions are `sm:opacity-0 sm:group-hover:opacity-100`, so a
+    // plain capture of this section can never show the add-a-room-inside
+    // button — it is only painted while a row is hovered. Hovering the
+    // top-level row is therefore part of the shot, not a nicety.
+    prepare: async (page) => {
+      await openFacilityRooms(page);
+      await page.getByText("Volunteer Office", { exact: true }).first().hover();
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-25-room-located-inside",
+    doc: "06-apparatus-facilities.md",
+    line: 224,
+    anchor: 'SCREENSHOT NEEDED — room form open showing the "Located Inside"',
+    alt: 'The room form\'s "Located Inside" field, holding the room that contains the one being edited',
+    route: "/facilities",
+    // Same native-select limit as 06-23: an open `<select>` popup is drawn by
+    // the OS, not the page, so the exclusion cannot be photographed in the
+    // list. Editing a room that HAS a subtree makes the point better anyway —
+    // its only remaining option is "Facility (top level)", because itself and
+    // all three of its descendants are excluded. Verified by
+    // `roomTree.test.ts` (collectSubtreeIds) and the nesting service tests.
+    prepare: async (page) => {
+      await openFacilityRooms(page);
+      await page
+        .getByText("Quartermaster's Storage", { exact: true })
+        .first()
+        .hover();
+      await page.waitForTimeout(400);
+      const edits = page.locator('button[aria-label*="Edit"]');
+      await edits.first().waitFor({ timeout: 20_000 });
+      await edits.nth(1).click();
+      await page
+        .getByText(/Located Inside/i)
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-26-room-delete-subrooms",
+    doc: "06-apparatus-facilities.md",
+    line: 240,
+    anchor: "SCREENSHOT NEEDED — delete-room confirmation dialog for a room",
+    alt: "The delete-room confirmation, stating that the room's sub-rooms move up a level rather than being deleted",
+    route: "/facilities",
+    prepare: async (page) => {
+      await openFacilityRooms(page);
+      await page.getByText("Volunteer Office", { exact: true }).first().hover();
+      await page.waitForTimeout(400);
+      const deletes = page.locator(
+        'button[aria-label*="Delete"], button[title*="Delete"]',
+      );
+      await deletes.first().waitFor({ timeout: 20_000 });
+      await deletes.first().click();
+      await page
+        .getByRole("button", { name: /Keep it/i })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    // Viewport, not fullPage: the dialog is the subject and a full-page shot
+    // pushes it into a large dimmed backdrop.
     fullPage: false,
   },
 
