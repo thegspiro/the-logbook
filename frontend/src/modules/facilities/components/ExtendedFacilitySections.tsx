@@ -20,7 +20,7 @@ import type {
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { inputCls, labelCls } from '../constants';
 import { enumLabel } from '../types';
-import { formatNumber } from '../../../utils/dateFormatting';
+import { formatCalendarDate, formatCurrency, formatNumber } from '../../../utils/dateFormatting';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
 
 interface FieldDefinition {
@@ -283,6 +283,7 @@ interface SectionProps {
 function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: boolean }) {
   const [readings, setReadings] = useState<UtilityReading[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [readingDate, setReadingDate] = useState('');
   const [amount, setAmount] = useState('');
   const [usage, setUsage] = useState('');
@@ -304,6 +305,10 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
       toast.error('Reading date is required');
       return;
     }
+    // No server-side uniqueness constraint — a double-click would file the
+    // same reading twice, so the guard has to live here.
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       await facilitiesService.createUtilityReading(accountId, {
         utility_account_id: accountId,
@@ -314,6 +319,8 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
     } catch {
       toast.error('Failed to add reading');
       return;
+    } finally {
+      setIsSaving(false);
     }
     setReadingDate('');
     setAmount('');
@@ -321,6 +328,10 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
     setShowForm(false);
     await loadReadings();
   };
+
+  // The API returns newest-first, but the order is a display guarantee here,
+  // so it is not left to the server.
+  const sortedReadings = [...readings].sort((a, b) => b.readingDate.localeCompare(a.readingDate));
 
   return (
     <div className="mt-2">
@@ -334,6 +345,25 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
           </button>
         )}
       </div>
+      {sortedReadings.length > 0 && (
+        <ul className="border-theme-surface-border divide-theme-surface-border mt-2 divide-y rounded-lg border">
+          {sortedReadings.map((reading) => (
+            <li key={reading.id} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
+              {/* reading_date is a backend `date` (calendar date) — the
+                  non-shifting formatter keeps it on the day that was entered */}
+              <span className="text-theme-text-secondary">{formatCalendarDate(reading.readingDate)}</span>
+              <span className="text-theme-text-muted">
+                {reading.usageQuantity != null
+                  ? `${formatNumber(reading.usageQuantity)}${reading.usageUnit ? ` ${reading.usageUnit}` : ''}`
+                  : '—'}
+              </span>
+              <span className="text-theme-text-primary">
+                {reading.amount != null ? formatCurrency(reading.amount) : '—'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {showForm && (
         <div className="mt-2 grid grid-cols-3 gap-2" onClick={(event) => event.stopPropagation()}>
           <input
@@ -359,8 +389,12 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
             value={usage}
             onChange={(event) => setUsage(event.target.value)}
           />
-          <button className="btn-primary col-span-3 py-1.5 text-xs" onClick={() => void addReading()}>
-            Save reading
+          <button
+            className="btn-primary col-span-3 py-1.5 text-xs"
+            onClick={() => void addReading()}
+            disabled={isSaving}
+          >
+            {isSaving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Save reading'}
           </button>
         </div>
       )}

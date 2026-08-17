@@ -7,6 +7,165 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Migrations: revision ids are generated, not hand-authored (2026-08-17)
+
+**Changed**
+
+- **`alembic revision` now owns the id.** `docs/ALEMBIC_MIGRATIONS.md` used to
+  mandate a hand-authored `YYYYMMDD_SSSS` id and state "**No hex/random IDs**"
+  as a rule. That rule is what caused the collisions the document exists to
+  prevent: two branches open on the same day each counted from `_0001` and each
+  picked `_0002`, git merged the files without a word because they do not
+  overlap, and Alembic then refused to load the chain. It happened four times,
+  twice in one day. A generated id carries entropy, so two branches cannot pick
+  the same one; the date still leads the filename, which is what keeps listings
+  sorted. Nothing parses an id's structure — the validator compares them as
+  opaque strings — so the format was never load-bearing.
+- **`validate_migrations.py` enforces it and reports the head.** A
+  `YYYYMMDD_SSSS` id dated 2026-08-17 or later is an error. The rule is keyed
+  on the date the id already carries rather than on a position in the chain: a
+  revision anchor would need bumping every time another branch landed a
+  migration first, and whoever forgot would get a failure blaming a migration
+  written under the old rules. Everything already written is untouched —
+  renumbering released history would break every database that has already
+  stamped those ids.
+
+**Fixed**
+
+- **`ALEMBIC_MIGRATIONS.md` no longer records the current head by hand.** Every
+  migration PR edited the same lines to update it, which guaranteed a conflict
+  on each one and went stale whenever someone forgot — as it had, still naming
+  `20260816_0003` after `20260816_0004` landed. The validator prints the head
+  and the `down_revision` to use; the historical notes are kept, folded away,
+  and marked as history rather than the source of truth.
+- Vendor `item_count` came back as a `Decimal` from MySQL's `SUM()` over an
+  integer `CASE`, against an `int` field, which Pydantic warned about on every
+  vendor response rather than coercing silently.
+
+**Added**
+
+- **CSV import now reports vendor names it could not match.** A `Vendor` cell
+  naming nothing on file correctly keeps the typed-in name and creates no
+  vendor — importing must not invent suppliers nobody reviewed — but it did so
+  silently, quietly refilling the list the vendor cleanup screen exists to
+  drain. One misspelling in a 200-row sheet did it 200 times and surfaced weeks
+  later. The unrecognized names now come back in the import's existing
+  `warnings`, leading the list so the 50-warning cap cannot drop them and
+  pointing at Attach on the Vendors screen.
+
+  Three ways that report could have misled, all closed: names are folded to
+  the same case-insensitive key the matching and Attach use, so `Gals`, `gals`
+  and `GALS` are one entry rather than three pieces of apparent work; a name is
+  recorded only once its row has actually imported, since `create_item` still
+  rejects rows the CSV parse accepted and a name banked earlier would send the
+  reader to Attach for rows that were never written; and the vendor lookup now
+  includes **deactivated** vendors, so a name matching one links to it instead
+  of being reported. Deactivating a vendor keeps every existing link —
+  purchase history for equipment still in service is why the record exists —
+  and excluding them had left the warning advising "add this vendor" for a name
+  that vendor creation rejects as an inactive duplicate, a dead end.
+
+- Endpoint-level tests for the vendor financial redaction. The existing tests
+  cover the serializer, which proves the function blanks the fields but not
+  that the routes ask it to. These drive the real router through
+  `require_permission` with the grant coming from actual position rows, and
+  assert on the JSON that leaves the endpoint. Verified to fail with the
+  redaction stubbed out.
+
+**Documentation**
+
+- **Retired the "Full Revision Chain" table in `docs/ALEMBIC_MIGRATIONS.md`.**
+  It was abandoned at `20260223_0300` in February and listed 115 of 314
+  migrations — 37% of a chain it claimed to document in full, which is worse
+  than absent because it reads as authoritative. A note added in May recorded
+  that it was stale; it was never brought up to date. `alembic history` answers
+  the same question and cannot drift.
+- Corrected the vendor redaction field names in the changelog and
+  `wiki/Module-Inventory.md`. They were published as `accountNumber` /
+  `paymentTerms` / `totalPurchaseValue`, but the inventory response schemas set
+  no `alias_generator`, so the wire format is snake_case — `account_number`,
+  `payment_terms`, `total_purchase_value`, which is what the frontend reads.
+
+### Dashboard: the station board answers whether you can respond tonight (2026-08-17)
+
+**Added**
+
+- **A readiness line above "Needs you"** — _Clear to respond_, _Clear, with
+  conditions_, or _Not clear to respond_. The station board answered "what needs
+  me" and "what am I doing this week"; it never answered the question a fire
+  department asks first. It reads three things a member already has: their
+  certifications, the shift positions they may hold, and — where the department
+  tracks them — their medical screening compliance.
+
+  Three rules keep it from overstating, and each is tested:
+
+  - **It renders nothing when there is nothing to judge.** A member with no
+    tracked certifications and no screening requirements is _unknown_, not
+    clear, and a green verdict from an empty set asserts a clearance the
+    department has no basis for.
+  - **It names its inputs on screen** ("Certifications, screenings and seats"),
+    so it can never imply a check it did not make. SCBA fit-test dates are not
+    modelled anywhere in the product and are never among them.
+  - **A failed read is not a pass.** If the screening read fails, those
+    requirements drop out and the scope note narrows to what was confirmed.
+
+  It counts rather than names: the verdict says "2 certifications expiring", the
+  "Needs you" rows below name them and carry the buttons. Naming the soonest one
+  reproduced the row beneath it word for word — the "said twice" fault the
+  dashboard redesign existed to remove.
+
+- **`GET /medical-screening/compliance/me`** — a member's own screening
+  compliance, as counts. The existing compliance route takes a `user_id` and
+  requires `medical_screening.view`, which is the officer permission that reads
+  _anybody's_; there was no way for a member to see their own. The new route
+  takes no id — the subject comes from the authenticated session, so there is
+  nothing to substitute — and is registered before `/compliance/{user_id}` so
+  `me` is not captured as a user id. Both properties are structural rather than
+  runtime checks, so tests assert them.
+
+  It returns counts only: no requirement name, screening type, date or result.
+  The dashboard is a shared surface — The Logbook is installed as a kiosk on
+  tablets left at stations — so a line reading "Psychological evaluation
+  expired" would be legible to whoever walks past. A test asserts the serialized
+  shape, because the detail is one attribute access away in the summary it is
+  built from.
+
+**Changed**
+
+- **Concurrent identical GETs now make one request.** `useEnabledModules`
+  carried a comment promising that mounting it in several components did not
+  mean several round trips. Measured against the running app, the dashboard made
+  three requests for `/organization/modules` and two for `/auth/branding` on a
+  single mount: the response cache only helps a caller arriving _after_ an
+  identical request finishes, and the navigation surfaces all mount together
+  against a cold cache. `dedupeInFlight` shares the promise instead, and retains
+  nothing once it settles — so it adds no caching to the endpoints the HIPAA
+  rules exclude from caching. It wraps at the service layer, where the response
+  interceptor's 401 → refresh → retry has already run, so followers get the
+  retried result rather than the pre-refresh failure. Both endpoints now measure
+  at one request per mount.
+
+**Fixed**
+
+- **Shift times on the dashboard read "N/A – N/A".** A shift's `start_time` is a
+  time of day (`"08:00"`), and it was being formatted by a function that parses
+  an instant, so every row rendered `Invalid Date`. They go through
+  `formatTimeOfDay` now.
+- **The open-shift de-duplication never ran.** `loadOpenShifts` filtered its
+  response against `myShifts` read from its render closure, but both lists are
+  fetched concurrently from the same effect, so that set was always empty on
+  mount — the guard was defeated by exactly the race its comment described. It
+  now happens in a memo over both arrays, and every consumer reads the deduped
+  list.
+
+**Documentation**
+
+- `docs/training/13-medical-screening.md` records what the audit trail actually
+  covers. It claimed all access to the module is logged; only creates, updates
+  and deletes are. Reads are not — including one officer reading another
+  member's records or compliance, which is the access an audit trail most exists
+  to detect. This is documented as an open gap, not fixed here.
+
 ### Inventory: vendor pricing is a purchasing matter, not a directory one (2026-08-16)
 
 **Changed**
@@ -16,8 +175,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a broad, member-level grant whose job is answering "who do we buy this from
   and how do I reach them". What the department pays a supplier, on what terms,
   and under which account is a different question. `GET /inventory/vendors` and
-  `GET /inventory/vendors/{id}` now blank `accountNumber`, `paymentTerms` and
-  `totalPurchaseValue` unless the caller can manage inventory; names, phone,
+  `GET /inventory/vendors/{id}` now blank `account_number`, `payment_terms` and
+  `total_purchase_value` unless the caller can manage inventory; names, phone,
   email, fax, website, address, contacts and the item/reorder counts are
   unchanged, so the directory still works. No UI changes: the vendors screen
   already sits behind `inventory.manage`, and the item and reorder pickers only
@@ -108,6 +267,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raised `AttributeError` inside the per-organization guard, which logged it and
   moved on. Recipients now resolve through the `inventory.manage` permission via
   the roles relationship.
+### Failures now say so: eight silent-error paths surfaced (2026-08-16)
+
+**Fixed**
+
+- **A rejected equipment check no longer pretends it was queued.** The submit
+  path treated every failure as a connection loss: a 400/403/422 — validation
+  failure, revoked permission, shift already checked — got a "Connection lost
+  — check queued for sync" toast, the draft was deleted, and the offline queue
+  re-sent the identical doomed body on every reconnect without ever giving up
+  (the retry counter was incremented but never read). Server rejections now
+  surface as errors; only genuine transport failures queue (shared
+  `isNetworkError` helper), and the drain loop abandons a check past
+  `CHECK_QUEUE_MAX_RETRIES` **and reports the loss** — including photos that
+  failed to upload, whose only copy was previously dequeued undiscoverably.
+- Quick RSVP failures now surface instead of being indistinguishable from a
+  tap that never registered; bulk event cancel reports refusals rather than
+  "Cancelled 0 events" in a success toast; compliance attestation errors are
+  shown inline on the form instead of replacing the dashboard; election
+  package creation on stage advance treats only a 409 as "already exists";
+  event-request assignee notification failures are actually logged; a skills
+  test score is no longer cleared from its input when the save was refused.
+
+### Inventory: every storage area is assigned a barcode (2026-08-16)
+
+**Added / Changed**
+
+- **Storage areas always carry a barcode.** Creation auto-assigns the next
+  code in a per-organization sequential series (default prefix `SA-`, counter
+  in `organization.settings["storage_area_barcode"]`, manually-entered codes
+  skipped) when the caller doesn't supply one; a blank from an older client
+  cannot strip a code already printed on the shelf; pre-barcode areas pick one
+  up on first edit; migration `20260816_0002` backfills the rest.
+- The Storage Areas page shows **all areas by default**, and its facility
+  picker was fixed.
+
+> **The code is assigned and displayed, not yet resolvable by the scanner.**
+> The inventory scanner's `/inventory/lookup` searches `InventoryItem` fields
+> only (`search_by_code`), so scanning an `SA-…` code returns no result today.
+> The one query against `StorageArea.barcode` is the uniqueness check used when
+> allocating the next code. The Storage Areas form also tells the user the code
+> is assigned "so it can be scanned" — see
+> [KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) (INV-8) for the gap.
+
+### Small fixes from the open-PR resolution pass (2026-08-16)
+
+**Fixed / Changed**
+
+- The admin-hours Summary tab computes its date boundaries through the
+  timezone utilities (`useTimezone` + `localToUTC`) instead of raw `Date`
+  math.
+- Sidebar/top navigation deduplicate the Administration-section permission
+  check into a shared `hasAdministrationAccess` helper (no behavior change).
+- The frontend `TrainingSessionResponse` type caught up with the backend
+  response: `instructor_id`, `co_instructors`, `apparatus_id`, and
+  `counts_toward_certification` (false when a session's delivery would not be
+  accepted by a certifying body, so its hours must not advance linked
+  certificate requirements). Session linkage is now covered by integration
+  tests against a real database.
+
+### Forcing a stale device back onto the current build (2026-08-16)
+
+**Added**
+
+- **Settings → App**, a new tab holding the three things a member needs when
+  the app looks out of date and the automatic update path has already failed
+  them:
+  - **Installed version** — the build ID this device is actually running.
+    Previously unknowable from inside the app, which made "which version are
+    you on?" unanswerable on a support call.
+  - **Check for updates** — an on-demand version check that reports "you're on
+    the latest version" or swaps in the new service worker and reloads onto the
+    new build. The automatic checks are rate-limited to once a minute and hang
+    off route changes, tab focus and a five-minute poll; this one answers now.
+  - **Force refresh** — clears every client-side copy of the app (the workbox
+    precache holding the app shell, the `app-chunks` runtime cache holding
+    lazily-loaded screens, the in-memory API response cache) and reloads from
+    the server, behind a confirmation that says what it will do.
+
+  An installed PWA has no address bar and no `Ctrl+Shift+R`, so a home-screen
+  app that wedged on an old shell had no user-reachable way out at all — the
+  only advice was to uninstall it or clear website data.
+
+- The force refresh also drops the **branding cached in localStorage**
+  (`departmentName`, `logoData`). `AppLayout` writes those on first load and
+  only re-fetches when `departmentName` is missing, so a department that
+  renamed itself or changed its logo left every existing device showing the old
+  one indefinitely, with no expiry and no invalidation.
+
+- **Force refresh refuses to run when the server is unreachable**, leaving the
+  device untouched and saying so. The precache is the app's only offline copy
+  and workbox heals a deleted entry only by fetching it, so purging offline
+  would delete the shell and reload into nothing — bricking the installed PWA
+  until signal returned, which is far worse than the stale build being fixed,
+  and worst on the rural cellular connections this app is used from. A member
+  who taps this _because_ something looks wrong is exactly the person likely to
+  be out of signal at the time. Reachability is proven by fetching a parseable
+  `/version.json` rather than trusting `navigator.onLine`, which reports a
+  healthy connection on station Wi-Fi behind a captive portal — the same
+  interception already documented as a cause of blank screens.
+
+**Notes on what force refresh deliberately leaves alone** — each of these would
+be a worse failure than the one being fixed:
+
+- **The service worker registration.** Unregistering is the more thorough nuke,
+  but a Web Push subscription belongs to the registration and nothing
+  re-subscribes automatically, so it would silently switch off callout
+  notifications on that device. Deleting the caches is sufficient: workbox's
+  precache strategy falls back to the network on a miss and re-caches what it
+  fetches, so the precache heals itself on the very reload this triggers.
+- **The offline queues (IndexedDB).** They hold work done but not yet synced.
+- **`has_session` and the auth cookies.** This is a refresh, not a sign-out.
+
+**Changed**
+
+- `getCurrentBuildId` / the `/version.json` fetch moved out of `useAppUpdate`
+  into `utils/appVersion.ts`, so automatic detection and the manual check agree
+  on what "current" means rather than carrying two copies of the comparison.
 
 ### Inventory: vendor review fixes (2026-08-16)
 

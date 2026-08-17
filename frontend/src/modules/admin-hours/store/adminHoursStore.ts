@@ -93,6 +93,11 @@ interface AdminHoursState {
   clearError: () => void;
 }
 
+// Monotonically increasing token for summary requests. The Summary tab fires
+// a new fetch on every preset change; without this, a slow earlier response
+// arriving after a fast later one would overwrite the selected range's data.
+let summaryRequestToken = 0;
+
 export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
   categories: [],
   categoriesLoading: false,
@@ -288,11 +293,16 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
   },
 
   fetchSummary: async (params) => {
+    const requestToken = ++summaryRequestToken;
     set({ error: null });
     try {
       const summary = await adminHoursEntryService.getSummary(params);
+      // Only the latest request may write; a stale response would replace the
+      // summary for the range the user has since selected.
+      if (requestToken !== summaryRequestToken) return;
       set({ summary });
     } catch (error) {
+      if (requestToken !== summaryRequestToken) return;
       set({ error: handleStoreError(error, 'Failed to load summary') });
     }
   },

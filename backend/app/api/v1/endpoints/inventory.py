@@ -1247,8 +1247,14 @@ async def import_items_csv(
     # import lands in the same purchase history as items entered by hand. An
     # unrecognized name stays in the free-text column rather than silently
     # creating vendors nobody reviewed.
+    #
+    # Deactivated vendors are included deliberately. Deactivating one keeps
+    # every existing link — purchase history for equipment still in service is
+    # the reason the record exists — so an import naming one must link too.
+    # Excluding them also left the warning below advising "add this vendor" for
+    # a name that vendor creation rejects as an inactive duplicate: a dead end.
     vendors = await service.list_vendors(
-        organization_id=current_user.organization_id, active_only=True
+        organization_id=current_user.organization_id, active_only=False
     )
     vendor_by_name: Dict[str, str] = {
         vendor.name.strip().lower(): str(vendor.id) for vendor in vendors
@@ -1258,6 +1264,15 @@ async def import_items_csv(
     failed = 0
     errors: List[Dict[str, Any]] = []
     warnings: List[str] = []
+    # Names that matched no vendor, reported once at the end: a spreadsheet
+    # with one misspelling usually carries it on every row, and a warning per
+    # row would bury the others under the response cap.
+    #
+    # Keyed by the same case-folded value the matching uses, so "Gals", "gals"
+    # and "GALS" collapse to one entry — they are one name to Attach, and
+    # listing three would imply three pieces of work. The value keeps the first
+    # spelling seen, so the reader sees a name as it appears in their file.
+    unmatched_vendors: Dict[str, str] = {}
 
     rows = list(reader)
     if not rows:
@@ -1291,10 +1306,13 @@ async def import_items_csv(
             item_data["category_id"] = cat_id
 
         vendor_raw = (item_data.get("vendor") or "").strip()
+        unmatched_key = ""
         if vendor_raw:
             vendor_id = vendor_by_name.get(vendor_raw.lower())
             if vendor_id:
                 item_data["vendor_id"] = vendor_id
+            else:
+                unmatched_key = vendor_raw.lower()
 
         item_data.pop("barcode", None)
         new_item, error = await service.create_item(
@@ -1308,6 +1326,12 @@ async def import_items_csv(
             failed += 1
         else:
             imported += 1
+            # Recorded only now. create_item still rejects rows the CSV parse
+            # accepted — a duplicate serial, a pool item with no quantity — and
+            # a name banked before that is known would send the reader to
+            # Attach for rows that were never written.
+            if unmatched_key:
+                unmatched_vendors.setdefault(unmatched_key, vendor_raw)
 
     if imported > 0:
         await log_audit_event(
@@ -1327,6 +1351,27 @@ async def import_items_csv(
             str(current_user.organization_id),
             "items_imported",
             {"count": imported},
+        )
+
+    # Say so at import time. These rows keep the typed-in name and no vendor
+    # link, which is a silent way to refill the very list the vendor cleanup
+    # screen exists to drain — one misspelled column in a 200-row sheet used
+    # to import clean and surface weeks later as 200 unlinked rows.
+    if unmatched_vendors:
+        # Sorted by the fold key so ordering does not depend on which spelling
+        # the file happened to use first; displayed as that spelling.
+        shown = [unmatched_vendors[key] for key in sorted(unmatched_vendors)]
+        listed = ", ".join(f'"{name}"' for name in shown[:10])
+        if len(shown) > 10:
+            listed += f", and {len(shown) - 10} more"
+        # Leads the list rather than trailing it: warnings are truncated at 50
+        # below, and a sheet messy enough to fill that quota is exactly the one
+        # whose vendor names need reporting.
+        warnings.insert(
+            0,
+            f"{len(shown)} vendor name(s) did not match a vendor on file and "
+            f"were left as free text: {listed}. Add them on the Vendors screen, "
+            f"or use Attach there to link every row already carrying the name.",
         )
 
     return {

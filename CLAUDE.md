@@ -844,6 +844,77 @@ it as an `@utility` under the matching group header in `styles/index.css` rather
 than assembling it at the call site — that is what left `toggle-knob` in the
 sheet with no matching track and fifteen hand-built switches around it.
 
+### 18. Notifications Are Email-First; SMS Is an Add-On Behind an Allowlist _(2026-08-16)_
+
+Email is the primary channel and the channel of record. The in-app bell, web
+push and SMS are additions layered on top of an email that still goes out —
+never substitutes for it. A member who reads only their inbox must not miss
+anything, because email is the only channel the department can prove reached
+them.
+
+SMS costs money per message, arrives outside working hours, and is legally
+constrained (US TCPA requires express prior consent). So it is limited to the
+alerts named in `SmsAlert` in `app/services/notification_channels.py`, and that
+list is exhaustive. **Operational and administrative notices are email-only** —
+low-stock and reorder alerts, overdue-property digests, renewal and deadline
+reminders, anything whose recipient acts on it during business hours. A
+quartermaster does not need a 2am text to learn the department is low on gloves,
+and a text can carry neither the item list nor the quantities the email does.
+
+```python
+# WRONG — a hand-rolled filter at the call site, for a routine notice
+sms_svc = SMSService()
+if sms_svc.enabled:
+    phones = [a.phone for a in admins if a.phone and str(a.id) in consented]
+    await sms_svc.send_bulk_sms(phones, "Low Stock Alert: ...")
+
+# CORRECT — the allowlist decides, and it resolves both opt-in gates
+from app.services.notification_channels import SmsAlert, resolve_sms_recipients
+numbers = await resolve_sms_recipients(db, recipients, SmsAlert.URGENT_DEPARTMENT_MESSAGE)
+```
+
+`resolve_sms_recipients` applies Twilio configuration, the recorded TCPA consent
+(fails closed — a member never asked counts as having refused) and the member's
+own `sms_notifications` preference, which mutes texts without touching the
+emails they keep receiving.
+
+**Rule:** Never call `SMSService` directly from a feature. Route through
+`resolve_sms_recipients`, and give a notification a text only by adding a member
+to `SmsAlert` — a visible, reviewable change rather than a call site nobody
+sees. Whatever the SMS gates decide, send the email unconditionally.
+
+### 19. A Config Switch Must Have a Reader Before It Has a UI _(2026-08-16)_
+
+`notification_rules` shipped with a model, CRUD endpoints, an admin screen, a
+create modal and an enable/disable toggle — and **no code that read the table**.
+A chief could create "Event reminders", see it listed as _Active_, toggle it
+off, and the reminders kept going out. A switch wired to nothing is worse than
+no switch: it invites somebody to believe a notification is off when it is not,
+and nothing about the UI says otherwise.
+
+When adding org-level configuration, the reader comes first, and the UI only
+ever offers what a reader consults:
+
+- **Name the wired set in code, on the backend.** `ENFORCED_TRIGGERS` in
+  `models/notification.py` is the authority; `NotificationRuleResponse` reports
+  `enforced` per rule so the screen can label a stored-but-inert one instead of
+  badging it Active. The frontend dropdown offers only the wired values.
+- **Absence must mean "current behaviour", never "off".** A resolver that
+  defaults to disabled when a table is empty silently kills every existing
+  installation's notifications on upgrade, and nobody connects the missed drill
+  notice to the deploy. `NotificationRuleResolver` returns
+  `enabled=True` plus the sender's previous built-in defaults when an org has no
+  rule.
+- **Read free-form JSON config defensively.** `rule.config` is unvalidated JSON;
+  `reminder_schedule_from` degrades a bad value to the built-in default rather
+  than raising, because an exception inside a scheduled task takes out the whole
+  organization's reminders rather than the one setting somebody typed wrong.
+
+**Rule:** Do not ship a setting whose only effect is being stored. Either wire a
+reader in the same change, or mark it in the UI as not yet in effect — and add a
+test asserting the wired set, so the next trigger cannot be added to the list
+without a sender that reads it.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

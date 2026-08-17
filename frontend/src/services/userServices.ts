@@ -3,6 +3,7 @@
  */
 
 import api from './apiClient';
+import { dedupeInFlight } from '../utils/inFlight';
 import type { Permission, PermissionCategory, Role, UserRoleResponse, UserWithRoles } from '../types/role';
 import type {
   AuthSettings,
@@ -178,8 +179,8 @@ export const userService = {
     );
     return (
       response.data.notification_preferences || {
-        email: true,
         email_notifications: true,
+        sms_notifications: true,
         event_reminders: true,
         training_reminders: true,
       }
@@ -187,7 +188,11 @@ export const userService = {
   },
 
   /**
-   * Update notification preferences for a user
+   * Update notification preferences for a user.
+   *
+   * Partial by design: the backend merges, so a key you omit is left as it
+   * is rather than reset. Send only what the caller means to change — a
+   * screen that owns one toggle should send that one toggle.
    */
   async updateNotificationPreferences(
     userId: string,
@@ -228,6 +233,16 @@ export const userService = {
 
   async setMyConsent(consentType: string, granted: boolean): Promise<void> {
     await api.put(`/users/me/consents/${consentType}?granted=${granted ? 'true' : 'false'}`);
+  },
+
+  /**
+   * Another member's consents, for staff editing that member's contact and
+   * notification settings. Read-only on purpose — there is no admin write
+   * counterpart, because consent recorded by somebody else is not consent.
+   */
+  async getUserConsents(userId: string): Promise<import('../types/user').ConsentItem[]> {
+    const response = await api.get<import('../types/user').ConsentItem[]>(`/users/${userId}/consents`);
+    return response.data;
   },
 
   /**
@@ -420,11 +435,17 @@ export const organizationService = {
   },
 
   /**
-   * Get enabled modules for the organization
+   * Get enabled modules for the organization.
+   *
+   * De-duplicated: every navigation surface asks for this on mount, and the
+   * response cache cannot help callers that arrive before the first response
+   * does. Without this they each made their own round trip.
    */
   async getEnabledModules(): Promise<EnabledModulesResponse> {
-    const response = await api.get<EnabledModulesResponse>('/organization/modules');
-    return response.data;
+    return dedupeInFlight('organization/modules', async () => {
+      const response = await api.get<EnabledModulesResponse>('/organization/modules');
+      return response.data;
+    });
   },
 
   /**

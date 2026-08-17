@@ -85,6 +85,22 @@ def test_view_only_does_not_carry_hidden_action_permissions():
     assert merged == {"members.view"}
 
 
+def test_member_keeps_shift_swap_with_scheduling_view_only():
+    defaults = DEFAULT_POSITIONS["member"]["permissions"]
+    submitted = {"scheduling": RolePermission(view=True, manage=False)}
+    merged = _merged(submitted, defaults)
+    assert "scheduling.swap" in merged
+    assert "scheduling.view" in merged
+
+
+def test_unchecking_scheduling_revokes_shift_swap():
+    defaults = DEFAULT_POSITIONS["member"]["permissions"]
+    submitted = {"scheduling": RolePermission(view=False, manage=False)}
+    merged = _merged(submitted, defaults)
+    assert "scheduling.swap" not in merged
+    assert "scheduling.view" not in merged
+
+
 def test_vice_president_keeps_only_read_sub_permissions_with_view_only():
     defaults = DEFAULT_POSITIONS["vice_president"]["permissions"]
     submitted = {

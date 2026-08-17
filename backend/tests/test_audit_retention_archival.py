@@ -8,6 +8,9 @@ the surviving chain verifies, and rejection of unsanctioned head deletions.
 import gzip
 import os
 import stat
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import delete, func, select
@@ -58,6 +61,82 @@ class TestArchiveAttestation:
         assert AuditLogger.compute_archive_attestation(2, 10, "ab" * 32) != base
         assert AuditLogger.compute_archive_attestation(1, 11, "ab" * 32) != base
         assert AuditLogger.compute_archive_attestation(1, 10, "cd" * 32) != base
+
+
+class TestArchiveFileHardening:
+    """Pure unit test — no DB. The 0o600 mode passed to ``os.open`` is
+    filtered by the process umask, so a hostile umask could leave the only
+    remaining copy of the purged rows unreadable (PR #1436 review); the
+    explicit fchmod/chmod calls must win regardless of the umask."""
+
+    @staticmethod
+    def _row(i: int, ts: datetime) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=i,
+            timestamp=ts,
+            timestamp_nanos=0,
+            event_type="unit_test",
+            event_category="security",
+            severity="info",
+            user_id=None,
+            organization_id=None,
+            ip_address=None,
+            user_agent=None,
+            event_data={"i": i},
+            previous_hash="00" * 32,
+            current_hash=f"{i:02x}" * 32,
+            hash_version=3,
+        )
+
+    async def test_archive_modes_survive_hostile_umask(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
+        old_ts = datetime.now(UTC) - timedelta(days=3650)
+        rows = [self._row(1, old_ts), self._row(2, old_ts)]
+        checkpoint = SimpleNamespace(
+            first_log_id=1,
+            last_log_id=2,
+            archived_at=None,
+            last_log_hash=None,
+            archive_attestation=None,
+        )
+
+        def _scalars_result(items):
+            return MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(all=MagicMock(return_value=items))
+                )
+            )
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    MagicMock(scalar_one_or_none=MagicMock(return_value=rows[0])),
+                    _scalars_result([checkpoint]),
+                    MagicMock(scalar=MagicMock(return_value=old_ts)),
+                    _scalars_result(rows),
+                    MagicMock(),  # DELETE
+                ]
+            ),
+            flush=AsyncMock(),
+        )
+        service = AuditLogger()
+        service.verify_integrity = AsyncMock(return_value={"verified": True})
+
+        archive_dir = tmp_path / "archives"
+        prev_umask = os.umask(0o777)  # hostile: filters every mode bit away
+        try:
+            result = await service.archive_expired_logs(
+                db, retention_days=_PURGE_ALL, archive_dir=str(archive_dir)
+            )
+        finally:
+            os.umask(prev_umask)
+
+        assert result["purged_entries"] == 2
+        assert stat.S_IMODE(os.stat(archive_dir).st_mode) == 0o700
+        assert stat.S_IMODE(os.stat(result["archive_file"]).st_mode) == 0o600
+        # The archive is readable and complete despite the umask.
+        with gzip.open(result["archive_file"], "rt", encoding="utf-8") as fh:
+            assert len(fh.read().splitlines()) == 2
 
 
 @pytest.mark.integration

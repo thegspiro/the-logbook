@@ -86,12 +86,13 @@ export const MemberProfilePage: React.FC = () => {
   // Edit mode states
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  // null = not loaded / unreadable, so the UI claims nothing either way.
+  const [smsConsentGranted, setSmsConsentGranted] = useState<boolean | null>(null);
   const [editForm, setEditForm] = useState<ContactInfoUpdate>({
     email: '',
     phone: '',
     mobile: '',
     notification_preferences: {
-      email: true,
       email_notifications: true,
       sms_notifications: true,
       event_reminders: true,
@@ -239,13 +240,24 @@ export const MemberProfilePage: React.FC = () => {
     }
   }, []);
 
+  // The training-records and admin-hours APIs silently substitute the
+  // CALLER's id for non-managers, so fetching them for a colleague would
+  // render the VIEWER's own records and hours as the colleague's. Only
+  // fetch (and render) these sections for self, or for holders of the
+  // permission the backend honors for target-scoped reads.
+  const isSelf = currentUser?.id === userId;
+  const canViewTargetTraining = isSelf || checkPermission('training.manage');
+  const canViewTargetAdminHours = isSelf || checkPermission('admin_hours.manage');
+
   useEffect(() => {
     if (userId) {
       void fetchUserData(userId);
       void fetchModuleStatus(userId);
       void fetchLeaves(userId);
-      void fetchAdminHours(userId);
-      if (trainingEnabled) {
+      if (canViewTargetAdminHours) {
+        void fetchAdminHours(userId);
+      }
+      if (trainingEnabled && canViewTargetTraining) {
         void fetchTrainingRecords(userId);
         void fetchComplianceSummary(userId);
       }
@@ -253,6 +265,8 @@ export const MemberProfilePage: React.FC = () => {
   }, [
     userId,
     trainingEnabled,
+    canViewTargetTraining,
+    canViewTargetAdminHours,
     fetchUserData,
     fetchModuleStatus,
     fetchLeaves,
@@ -292,12 +306,27 @@ export const MemberProfilePage: React.FC = () => {
   };
 
   const handleEditClick = () => {
+    // The SMS preference in this form is meaningless without the member's own
+    // consent, so load it alongside. Read-only: staff can see the consent and
+    // mute a consenting member, but cannot grant consent on their behalf.
+    if (userId) {
+      userService
+        .getUserConsents(userId)
+        .then((items) => {
+          const sms = items.find((c) => c.consent_type === 'sms_notifications');
+          setSmsConsentGranted(sms?.granted === true);
+        })
+        .catch(() => {
+          // Unknown rather than assumed: leaving it null keeps the checkbox
+          // disabled and shows no claim about what the member agreed to.
+          setSmsConsentGranted(null);
+        });
+    }
     setEditForm({
       email: user?.email || '',
       phone: user?.phone || '',
       mobile: user?.mobile || '',
       notification_preferences: user?.notification_preferences || {
-        email: true,
         email_notifications: true,
         sms_notifications: true,
         event_reminders: true,
@@ -347,7 +376,6 @@ export const MemberProfilePage: React.FC = () => {
   const handleNotificationToggle = (type: keyof NotificationPreferences) => {
     setEditForm((prev) => {
       const currentPrefs = prev.notification_preferences ?? {
-        email: true,
         email_notifications: true,
         sms_notifications: true,
         event_reminders: true,
@@ -677,8 +705,10 @@ export const MemberProfilePage: React.FC = () => {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Left Column */}
           <div className="space-y-6 lg:col-span-2">
-            {/* Training & Certifications */}
-            {trainingEnabled && (
+            {/* Training & Certifications — hidden when the viewer has no
+                target-scoped access; an empty card would wrongly imply the
+                member has no training. */}
+            {trainingEnabled && canViewTargetTraining && (
               <TrainingSection
                 userId={userId ?? ''}
                 trainings={trainings}
@@ -789,6 +819,7 @@ export const MemberProfilePage: React.FC = () => {
               onSaveContact={handleSaveContact}
               onFormChange={handleFormChange}
               onNotificationToggle={handleNotificationToggle}
+              smsConsentGranted={smsConsentGranted}
             />
 
             {/* Address & Personal Email */}
@@ -1002,7 +1033,7 @@ export const MemberProfilePage: React.FC = () => {
             <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
               <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Quick Stats</h2>
               <div className="space-y-3">
-                {trainingEnabled && (
+                {trainingEnabled && canViewTargetTraining && (
                   <>
                     <div className="flex items-center justify-between">
                       <span className="text-theme-text-secondary text-sm">Active Training</span>

@@ -67,14 +67,22 @@ const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; la
   },
 };
 
-// Dropdown options for the create modal
+// Dropdown options for the create modal.
+//
+// Only triggers a sender actually consults are offered. The list used to
+// include schedule_change, new_member, maintenance_due and form_submitted,
+// none of which had a sender reading the rules table — creating one produced
+// a switch that looked live and did nothing. The backend is the authority
+// (ENFORCED_TRIGGERS in models/notification.py) and reports `enforced` on
+// every rule, so rules already created for those triggers are still listed,
+// labelled for what they are.
 const TRIGGER_OPTIONS = [
-  { label: 'Event Reminder', value: 'event_reminder' },
-  { label: 'Training Expiry', value: 'training_expiry' },
-  { label: 'Schedule Change', value: 'schedule_change' },
-  { label: 'Member Added', value: 'new_member' },
-  { label: 'Maintenance Due', value: 'maintenance_due' },
-  { label: 'Form Submitted', value: 'form_submitted' },
+  { label: 'Event Reminder', value: 'event_reminder', effect: 'Sends reminders before scheduled events.' },
+  {
+    label: 'Training Expiry',
+    value: 'training_expiry',
+    effect: 'Sends certification expiration alerts, when the training module has them switched on.',
+  },
 ];
 
 // Category mapping from trigger to category
@@ -647,9 +655,21 @@ const NotificationsPage: React.FC = () => {
                           <p className="text-theme-text-secondary mt-0.5 text-sm">
                             {rule.description || 'No description'}
                           </p>
-                          <div className="mt-1 flex items-center space-x-1">
-                            <Zap className="text-theme-text-muted h-3 w-3" />
-                            <span className="text-theme-text-muted text-xs">{display.label}</span>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="flex items-center space-x-1">
+                              <Zap className="text-theme-text-muted h-3 w-3" />
+                              <span className="text-theme-text-muted text-xs">{display.label}</span>
+                            </span>
+                            {/* A rule for a trigger nothing reads. Saying so
+                              beats the Active badge below implying it works. */}
+                            {!rule.enforced && (
+                              <span
+                                className="rounded-sm bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400"
+                                title="No notification is wired to this trigger yet, so this rule has no effect."
+                              >
+                                Not enforced
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -904,12 +924,14 @@ const NotificationsPage: React.FC = () => {
                       <div className="flex items-start space-x-2">
                         <AlertCircle className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" />
                         <p className="text-theme-text-muted text-sm">
-                          Category will be set to{' '}
+                          {TRIGGER_OPTIONS.find((opt) => opt.value === createTrigger)?.effect} It stops for the whole
+                          department once <strong className="text-theme-text-secondary">every</strong> rule for this
+                          trigger is switched off — one left active keeps it running. Individual members control their
+                          own email and text settings separately. Filed under{' '}
                           <strong className="text-theme-text-secondary">
                             {formatCategory(TRIGGER_CATEGORY_MAP[createTrigger] || 'general')}
-                          </strong>{' '}
-                          based on the selected trigger. Channel defaults to{' '}
-                          <strong className="text-theme-text-secondary">In-App</strong>.
+                          </strong>
+                          .
                         </p>
                       </div>
                     </div>

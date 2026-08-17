@@ -43,7 +43,7 @@ const OpenShiftsTab = lazyWithRetry(() => import('./scheduling/OpenShiftsTab'));
 const RequestsTab = lazyWithRetry(() => import('./scheduling/RequestsTab'));
 const ShiftDetailPanel = lazyWithRetry(() => import('./scheduling/ShiftDetailPanel'));
 const ShiftReportsTab = lazyWithRetry(() => import('./scheduling/ShiftReportsTab'));
-const MyChecklistsPage = lazyWithRetry(() => import('./scheduling/MyChecklistsPage'));
+const EquipmentChecksTab = lazyWithRetry(() => import('./scheduling/EquipmentChecksTab'));
 
 type TabId = 'schedule' | 'my-shifts' | 'open-shifts' | 'requests' | 'equipment-checks' | 'shift-reports';
 type ViewMode = 'week' | 'month';
@@ -1130,7 +1130,7 @@ const SchedulingPage: React.FC = () => {
             {activeTab === 'my-shifts' && <MyShiftsTab onViewShift={handleShiftClick} />}
             {activeTab === 'open-shifts' && <OpenShiftsTab onViewShift={handleShiftClick} />}
             {activeTab === 'requests' && <RequestsTab />}
-            {activeTab === 'equipment-checks' && <MyChecklistsPage />}
+            {activeTab === 'equipment-checks' && <EquipmentChecksTab />}
             {activeTab === 'shift-reports' && <ShiftReportsTab />}
           </Suspense>
         )}

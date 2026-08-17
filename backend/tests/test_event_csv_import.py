@@ -142,6 +142,16 @@ class TestImportSuccess:
         )
         event = db.add.call_args.args[0]
         assert event.is_mandatory is True
+        # Imported rows bypass the EventCreate validator, so the import must
+        # set the mandatory reminder audience itself — otherwise the column
+        # default "going" reminds only RSVP'd members.
+        assert event.reminder_target == "all"
+
+    async def test_optional_import_reminds_signed_up_members(self):
+        db = _db()
+        await EventService(db).import_events_from_csv([_row()], "org-1", "u1")
+        event = db.add.call_args.args[0]
+        assert event.reminder_target == "going"
 
     async def test_mixed_valid_and_invalid_rows(self):
         rows = [_row(title="Good"), _row(title=""), _row(event_type="training")]

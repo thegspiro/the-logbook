@@ -9,7 +9,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    can_view_kiosk_display_codes,
+    get_current_user,
+    require_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
@@ -28,7 +33,7 @@ from app.services.location_service import LocationService
 router = APIRouter()
 
 
-def _location_to_list_item(loc) -> LocationListItem:
+def _location_to_list_item(loc, *, include_display_code: bool) -> LocationListItem:
     """Convert a Location model to a LocationListItem response."""
     return LocationListItem(
         id=UUID(loc.id),
@@ -46,13 +51,13 @@ def _location_to_list_item(loc) -> LocationListItem:
         is_active=loc.is_active,
         facility_id=UUID(loc.facility_id) if loc.facility_id else None,
         facility_room_id=(UUID(loc.facility_room_id) if loc.facility_room_id else None),
-        display_code=loc.display_code,
+        display_code=loc.display_code if include_display_code else None,
         created_at=loc.created_at,
         updated_at=loc.updated_at,
     )
 
 
-def _location_to_response(location) -> LocationResponse:
+def _location_to_response(location, *, include_display_code: bool) -> LocationResponse:
     """Convert a Location model to a LocationResponse."""
     return LocationResponse(
         id=UUID(location.id),
@@ -74,7 +79,7 @@ def _location_to_response(location) -> LocationResponse:
         facility_room_id=(
             UUID(location.facility_room_id) if location.facility_room_id else None
         ),
-        display_code=location.display_code,
+        display_code=location.display_code if include_display_code else None,
         created_by=UUID(location.created_by) if location.created_by else None,
         created_at=location.created_at,
         updated_at=location.updated_at,
@@ -111,7 +116,11 @@ async def list_locations(
         limit=pagination.limit,
     )
 
-    return [_location_to_list_item(loc) for loc in locations]
+    include_codes = can_view_kiosk_display_codes(current_user)
+    return [
+        _location_to_list_item(loc, include_display_code=include_codes)
+        for loc in locations
+    ]
 
 
 @router.post("", response_model=LocationResponse, status_code=status.HTTP_201_CREATED)
@@ -137,7 +146,9 @@ async def create_location(
             created_by=current_user.id,
         )
 
-    return _location_to_response(location)
+    return _location_to_response(
+        location, include_display_code=can_view_kiosk_display_codes(current_user)
+    )
 
 
 @router.get("/{location_id}", response_model=LocationResponse)
@@ -160,7 +171,9 @@ async def get_location(
         "Location",
     )
 
-    return _location_to_response(location)
+    return _location_to_response(
+        location, include_display_code=can_view_kiosk_display_codes(current_user)
+    )
 
 
 @router.patch("/{location_id}", response_model=LocationResponse)
@@ -189,7 +202,9 @@ async def update_location(
 
     ensure_found(location, "Location")
 
-    return _location_to_response(location)
+    return _location_to_response(
+        location, include_display_code=can_view_kiosk_display_codes(current_user)
+    )
 
 
 @router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -262,7 +277,9 @@ async def regenerate_display_code(
         username=current_user.username,
     )
 
-    return _location_to_response(location)
+    return _location_to_response(
+        location, include_display_code=can_view_kiosk_display_codes(current_user)
+    )
 
 
 # ============================================
