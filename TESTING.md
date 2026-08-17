@@ -240,9 +240,24 @@ real regression in business logic.
 Line coverage says a statement executed; mutation score says a test would
 notice if it were wrong.
 
+Stryker is **deliberately not a devDependency.** The pilot is an occasional
+diagnostic, not a CI gate, and its runner pulls in a large tree that every
+`npm install` would otherwise pay for. Install it for the run and let it go
+again — pinned, so a future major does not silently change the score you are
+comparing against:
+
 ```bash
+# from the repo root; --no-save keeps it out of package.json and the lockfile
+npm install -D --no-save @stryker-mutator/core@10.0.0 @stryker-mutator/vitest-runner@10.0.0
+
 cd frontend && npx stryker run stryker.pilot.json   # ~1.5 min
 ```
+
+`stryker.pilot.json` is committed, the packages are not — so a bare
+`npx stryker …` on a fresh checkout never reaches the config. Worse than
+failing: `stryker` is an **unrelated package** on the registry (last published
+as `stryker@1.0.1`, the pre-scoped name), so `npx` offers to download that
+instead of `@stryker-mutator/core`. Run the install line first.
 
 The gap the pilot was built to find is **closed** _(2026-08-17)_. The
 `apiCache.ts` eviction path was 89% line-covered and could be **deleted
