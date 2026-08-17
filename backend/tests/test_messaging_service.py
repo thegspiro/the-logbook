@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.api.v1.endpoints import messages as messages_endpoint
 from app.services.messaging_service import MessagingService
 
 
@@ -340,7 +341,7 @@ class TestReadAckVisibilityGate:
             ]
         )
         db.add = MagicMock()
-        ok, _ = await MessagingService(db).acknowledge_message("m1", "u1", "org-1")
+        ok, _, _ = await MessagingService(db).acknowledge_message("m1", "u1", "org-1")
         assert ok is False
         db.add.assert_not_called()
 
@@ -355,11 +356,57 @@ class TestReadAckVisibilityGate:
         )
         db.add = MagicMock()
 
-        ok, error = await MessagingService(db).acknowledge_message("m1", "u1", "org-1")
+        ok, error, changed = await MessagingService(db).acknowledge_message(
+            "m1", "u1", "org-1"
+        )
 
         assert ok is False
         assert error == "Message does not require acknowledgment"
+        assert changed is False
         db.add.assert_not_called()
+
+    async def test_repeated_acknowledgment_reports_no_state_change(self):
+        message = _msg("m1", "all", requires_acknowledgment=True)
+        acknowledged_at = datetime.now(timezone.utc)
+        read_record = SimpleNamespace(acknowledged_at=acknowledged_at)
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=read_record)),
+            ]
+        )
+        db.commit = AsyncMock()
+
+        ok, error, changed = await MessagingService(db).acknowledge_message(
+            "m1", "u1", "org-1"
+        )
+
+        assert ok is True
+        assert error is None
+        assert changed is False
+        assert read_record.acknowledged_at == acknowledged_at
+        db.commit.assert_not_awaited()
+
+
+@pytest.mark.parametrize(("changed", "expected_audits"), [(True, 1), (False, 0)])
+async def test_acknowledgment_audit_only_records_state_change(
+    monkeypatch, changed, expected_audits
+):
+    service = MagicMock()
+    service.acknowledge_message = AsyncMock(return_value=(True, None, changed))
+    monkeypatch.setattr(
+        messages_endpoint, "MessagingService", MagicMock(return_value=service)
+    )
+    audit = AsyncMock()
+    monkeypatch.setattr(messages_endpoint, "log_audit_event", audit)
+    user = SimpleNamespace(id="u1", organization_id="org-1", username="firefighter")
+
+    result = await messages_endpoint.acknowledge_message("m1", MagicMock(), user)
+
+    assert result == {"status": "ok"}
+    assert audit.await_count == expected_audits
 
 
 class TestSoftDelete:
