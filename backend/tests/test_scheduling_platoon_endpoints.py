@@ -2,8 +2,7 @@
 Tests for the platoon-management endpoint permission gating.
 
 Unit-level: inspects the scheduling router's declared dependencies without a
-running server or database. The overview is read-gated; the bulk-assign is
-manage-gated.
+running server or database. Both roster-management endpoints are manage-gated.
 """
 
 from app.api.v1.endpoints.scheduling import router
@@ -32,11 +31,9 @@ class TestPlatoonEndpoints:
     def test_overview_route_exists(self):
         assert _get_route_deps("/platoons/overview", "GET") is not None
 
-    def test_overview_requires_scheduling_view(self):
+    def test_overview_requires_scheduling_manage(self):
         deps = _get_route_deps("/platoons/overview", "GET")
-        assert any(
-            "scheduling.view" in d or "require_permission" in d for d in deps
-        ), deps
+        assert any("scheduling.manage" in d for d in deps), deps
 
     def test_bulk_assign_route_exists(self):
         assert _get_route_deps("/platoons/bulk-assign", "POST") is not None

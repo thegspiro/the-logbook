@@ -2555,7 +2555,7 @@ async def rotate_calendar_feed(
 @router.get("/platoons/overview", response_model=PlatoonOverviewResponse)
 async def get_platoon_overview(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Department-wide platoon roster: every named platoon plus the unassigned
     bucket, with each platoon's active members."""
