@@ -50,8 +50,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently, quietly refilling the list the vendor cleanup screen exists to
   drain. One misspelling in a 200-row sheet did it 200 times and surfaced weeks
   later. The unrecognized names now come back in the import's existing
-  `warnings`, deduplicated and leading the list so the 50-warning cap cannot
-  drop them, pointing at Attach on the Vendors screen.
+  `warnings`, leading the list so the 50-warning cap cannot drop them and
+  pointing at Attach on the Vendors screen.
+
+  Three ways that report could have misled, all closed: names are folded to
+  the same case-insensitive key the matching and Attach use, so `Gals`, `gals`
+  and `GALS` are one entry rather than three pieces of apparent work; a name is
+  recorded only once its row has actually imported, since `create_item` still
+  rejects rows the CSV parse accepted and a name banked earlier would send the
+  reader to Attach for rows that were never written; and the vendor lookup now
+  includes **deactivated** vendors, so a name matching one links to it instead
+  of being reported. Deactivating a vendor keeps every existing link —
+  purchase history for equipment still in service is why the record exists —
+  and excluding them had left the warning advising "add this vendor" for a name
+  that vendor creation rejects as an inactive duplicate, a dead end.
+
 - Endpoint-level tests for the vendor financial redaction. The existing tests
   cover the serializer, which proves the function blanks the fields but not
   that the routes ask it to. These drive the real router through
