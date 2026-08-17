@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { isAppError, toAppError, getErrorMessage } from './errorHandling';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { isAppError, toAppError, getErrorMessage, isNetworkError } from './errorHandling';
 import type { AppError } from './errorHandling';
 
 describe('errorHandling', () => {
@@ -387,6 +387,54 @@ describe('errorHandling', () => {
         response: { data: { detail: '', message: '' }, statusText: '' },
       };
       expect(getErrorMessage(axiosError)).toBe('Request failed');
+    });
+  });
+  // ---- isNetworkError ----
+
+  describe('isNetworkError', () => {
+    const setOnline = (value: boolean) => {
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(value);
+    };
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('is false when the server answered, whatever it said', () => {
+      setOnline(true);
+      expect(isNetworkError({ response: { status: 422, data: { detail: 'Invalid' } } })).toBe(false);
+      expect(isNetworkError({ response: { status: 403, data: {} } })).toBe(false);
+      expect(isNetworkError({ response: { status: 500, data: {} } })).toBe(false);
+    });
+
+    it('is true for the axios transport failure codes', () => {
+      setOnline(true);
+      expect(isNetworkError({ code: 'ERR_NETWORK', message: 'Network Error' })).toBe(true);
+      expect(isNetworkError({ code: 'ECONNABORTED', message: 'timeout of 30000ms exceeded' })).toBe(true);
+      expect(isNetworkError({ code: 'ETIMEDOUT' })).toBe(true);
+    });
+
+    it('is true for a request that was sent but never answered', () => {
+      setOnline(true);
+      expect(isNetworkError({ request: {}, message: 'Network Error' })).toBe(true);
+    });
+
+    it('is true for any failure raised while the browser reports itself offline', () => {
+      setOnline(false);
+      expect(isNetworkError(new Error('whatever'))).toBe(true);
+    });
+
+    it('does not classify a programming error as a connectivity blip', () => {
+      setOnline(true);
+      expect(isNetworkError(new TypeError('x is not a function'))).toBe(false);
+      expect(isNetworkError('a string')).toBe(false);
+      expect(isNetworkError(null)).toBe(false);
+      expect(isNetworkError(undefined)).toBe(false);
+    });
+
+    it('treats a 4xx as a rejection even when it also carries a request object', () => {
+      setOnline(true);
+      expect(isNetworkError({ request: {}, response: { status: 400, data: {} } })).toBe(false);
     });
   });
 });

@@ -34,11 +34,7 @@ export const MobileCheckoutCard: React.FC<MobileCheckoutCardProps> = ({
   onExtend,
 }) => {
   return (
-    <div
-      className={`bg-theme-surface rounded-lg border p-4 ${
-        isOverdue ? 'border-red-500/30 bg-red-500/5' : 'border-theme-surface-border'
-      }`}
-    >
+    <div className={`card p-4 ${isOverdue ? 'border-red-500/30 bg-red-500/5' : ''}`}>
       {/* Top: name + overdue badge */}
       <div className="mb-2 flex items-start justify-between gap-2">
         <h3 className="text-theme-text-primary text-sm font-medium">{itemName}</h3>

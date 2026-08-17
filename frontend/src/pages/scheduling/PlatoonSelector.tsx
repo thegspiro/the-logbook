@@ -28,8 +28,7 @@ interface PlatoonSelectorProps {
 const PLATOON_NAMES = ['A', 'B', 'C', 'D'];
 const PLATOON_COUNT_OPTIONS = [2, 3, 4];
 
-const selectCls =
-  'bg-theme-input-bg border border-theme-input-border rounded-lg px-2 py-1.5 text-xs text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+const selectCls = 'form-input px-2 py-1.5 text-xs focus:ring-violet-500';
 
 export const PlatoonSelector: React.FC<PlatoonSelectorProps> = ({ members, platoons, onPlatoonsChange }) => {
   const countForPlatoon = (p: string): number => members.filter((m) => m.platoon === p).length;

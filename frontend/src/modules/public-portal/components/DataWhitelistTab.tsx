@@ -77,7 +77,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
+    <div className="card overflow-hidden">
       {/* Category Header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
@@ -253,7 +253,7 @@ export const DataWhitelistTab: React.FC = () => {
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div className="card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-theme-text-secondary text-sm">Total Fields</p>
@@ -272,7 +272,7 @@ export const DataWhitelistTab: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div className="card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-theme-text-secondary text-sm">Enabled</p>
@@ -296,7 +296,7 @@ export const DataWhitelistTab: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div className="card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-theme-text-secondary text-sm">Sensitive (PII)</p>
@@ -356,7 +356,7 @@ export const DataWhitelistTab: React.FC = () => {
 
       {/* Categories */}
       {categories.length === 0 ? (
-        <div className="bg-theme-surface-secondary border-theme-surface-border rounded-md border p-8 text-center">
+        <div className="card-secondary p-8 text-center">
           <svg
             className="text-theme-text-muted mx-auto h-12 w-12"
             fill="none"

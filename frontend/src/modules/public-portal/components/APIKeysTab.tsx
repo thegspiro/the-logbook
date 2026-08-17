@@ -194,7 +194,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
         </div>
       </div>
 
-      <div className="bg-theme-surface-secondary border-theme-surface-border mb-4 rounded-md border p-4">
+      <div className="card-secondary mb-4 p-4">
         <div className="flex items-center justify-between">
           <code className="text-theme-text-primary flex-1 font-mono text-sm break-all">{apiKey}</code>
           <button
@@ -346,7 +346,7 @@ export const APIKeysTab: React.FC = () => {
 
       {/* API Keys Table */}
       {apiKeys.length === 0 ? (
-        <div className="bg-theme-surface-secondary border-theme-surface-border rounded-md border p-8 text-center">
+        <div className="card-secondary p-8 text-center">
           <svg
             className="text-theme-text-muted mx-auto h-12 w-12"
             fill="none"
@@ -374,10 +374,7 @@ export const APIKeysTab: React.FC = () => {
           {/* Mobile cards */}
           <div className="space-y-3 sm:hidden">
             {apiKeys.map((key) => (
-              <div
-                key={key.id}
-                className="bg-theme-surface border-theme-surface-border space-y-2 rounded-lg border p-4"
-              >
+              <div key={key.id} className="card space-y-2 p-4">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-theme-text-primary truncate text-sm font-medium">{key.name}</span>
                   {getStatusBadge(key)}
@@ -402,7 +399,7 @@ export const APIKeysTab: React.FC = () => {
           </div>
 
           {/* Desktop table */}
-          <div className="bg-theme-surface border-theme-surface-border hidden overflow-x-auto rounded-lg border sm:block">
+          <div className="card hidden overflow-x-auto sm:block">
             <table className="divide-theme-surface-border min-w-full divide-y" aria-label="API keys list">
               <thead className="bg-theme-surface-secondary">
                 <tr>

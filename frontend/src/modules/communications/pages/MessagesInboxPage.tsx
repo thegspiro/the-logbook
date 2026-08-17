@@ -122,12 +122,7 @@ const MessagesInboxPage: React.FC = () => {
           {messages.map((msg) => {
             const expanded = expandedId === msg.id;
             return (
-              <li
-                key={msg.id}
-                className={`border-theme-surface-border bg-theme-surface rounded-lg border ${
-                  msg.is_read ? '' : 'border-l-theme-info border-l-4'
-                }`}
-              >
+              <li key={msg.id} className={`card ${msg.is_read ? '' : 'border-l-theme-info border-l-4'}`}>
                 <button
                   type="button"
                   onClick={() => void handleExpand(msg)}
