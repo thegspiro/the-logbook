@@ -2322,9 +2322,7 @@ async def get_position_roster(
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "scheduling.manage", "training.view_all", "training.manage"
-        )
+        require_permission("scheduling.manage", "training.view_all", "training.manage")
     ),
 ):
     """
