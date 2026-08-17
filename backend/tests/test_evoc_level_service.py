@@ -221,10 +221,15 @@ class TestAutoAddOperators:
             ]
         )
         out = await EvocLevelService(db).auto_add_operators_for_evoc_completion(
-            "u", "lvl-3", "o", created_by="admin"
+            "u",
+            "lvl-3",
+            "o",
+            created_by="admin",
+            completion_credit_id="credit-1",
         )
         assert len(out) == 1
         assert out[0].apparatus_id == "ap1"
+        assert out[0].completion_credit_id == "credit-1"
         db.commit.assert_awaited()
 
 

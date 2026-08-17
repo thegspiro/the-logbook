@@ -269,6 +269,7 @@ class EvocLevelService:
         evoc_level_id: str,
         organization_id: str,
         created_by: Optional[str] = None,
+        completion_credit_id: Optional[str] = None,
     ) -> List[ApparatusOperator]:
         """When a member completes an EVOC training program, automatically
         add them as a potential operator on all apparatus that require
@@ -317,6 +318,7 @@ class EvocLevelService:
                 is_certified=True,
                 is_active=True,
                 created_by=created_by,
+                completion_credit_id=completion_credit_id,
             )
             self.db.add(operator)
             new_operators.append(operator)
