@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GraduationCap, Megaphone } from 'lucide-react';
 import { describe, expect, it, vi } from 'vitest';
@@ -108,5 +108,25 @@ describe('DashboardNeedsYou', () => {
 
     await user.click(screen.getByRole('button', { name: 'Acknowledge' }));
     expect(onAction).toHaveBeenCalled();
+  });
+
+  // The line unmounts as it is activated. Left alone, focus falls to the body
+  // and a keyboard or switch user has to cross the whole page to reach the
+  // action they just asked to see.
+  it('moves focus onto the first revealed row rather than dropping it', async () => {
+    const user = userEvent.setup();
+    render(
+      <DashboardNeedsYou
+        items={[
+          makeItem({ id: 'a', title: 'First' }),
+          makeItem({ id: 'b', title: 'Second' }),
+          makeItem({ id: 'c', title: 'Third' }),
+        ]}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /Third/ }));
+
+    await waitFor(() => expect(rowAt(2)).toHaveFocus());
   });
 });

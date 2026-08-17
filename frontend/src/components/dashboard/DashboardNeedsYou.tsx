@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ChevronDown, ShieldAlert, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -55,6 +55,15 @@ const DashboardNeedsYou: React.FC<DashboardNeedsYouProps> = ({ items }) => {
   const hiddenOnMobile = collapsedOnMobile ? items.slice(MOBILE_ROWS_SHOWN) : [];
   const firstHidden = hiddenOnMobile[0];
 
+  // The summary line unmounts the moment it is activated. Without moving focus
+  // onto the first row it reveals, focus drops to the document body and the
+  // action the member just asked for is a whole page away again.
+  const firstCollapsedRowRef = useRef<HTMLLIElement>(null);
+  const revealAllOnMobile = () => {
+    setShowAllOnMobile(true);
+    window.requestAnimationFrame(() => firstCollapsedRowRef.current?.focus());
+  };
+
   if (items.length === 0) return null;
 
   return (
@@ -83,7 +92,9 @@ const DashboardNeedsYou: React.FC<DashboardNeedsYouProps> = ({ items }) => {
         {items.map((item, index) => (
           <li
             key={item.id}
-            className={`border-theme-surface-hover items-center gap-3 border-t px-4 py-3 first:border-t-0 sm:gap-4 sm:px-5 ${
+            ref={index === MOBILE_ROWS_SHOWN ? firstCollapsedRowRef : undefined}
+            tabIndex={index === MOBILE_ROWS_SHOWN ? -1 : undefined}
+            className={`border-theme-surface-hover focus:ring-theme-focus-ring items-center gap-3 border-t px-4 py-3 first:border-t-0 focus:ring-2 focus:outline-hidden focus:ring-inset sm:gap-4 sm:px-5 ${
               collapsedOnMobile && index >= MOBILE_ROWS_SHOWN ? 'hidden sm:flex' : 'flex'
             }`}
           >
@@ -112,7 +123,7 @@ const DashboardNeedsYou: React.FC<DashboardNeedsYouProps> = ({ items }) => {
           <li className="border-theme-surface-hover bg-theme-surface-secondary border-t sm:hidden">
             <button
               type="button"
-              onClick={() => setShowAllOnMobile(true)}
+              onClick={revealAllOnMobile}
               className="focus:ring-theme-focus-ring flex min-h-[44px] w-full items-center gap-2 px-4 text-left focus:ring-2 focus:outline-hidden focus:ring-inset"
             >
               <span className="text-theme-text-secondary min-w-0 flex-1 truncate text-[13px]">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { formatRelativeTime } from '../hooks/useRelativeTime';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
@@ -234,6 +234,13 @@ const Dashboard: React.FC = () => {
 
   // Phones show the first two rows of the week and name the rest on one line.
   const [timelineExpandedOnMobile, setTimelineExpandedOnMobile] = useState(false);
+  const firstCollapsedTimelineRowRef = useRef<HTMLLIElement>(null);
+  const revealTimelineOnMobile = () => {
+    setTimelineExpandedOnMobile(true);
+    // After the commit that mounts the revealed rows, so there is something to
+    // focus. Mirrors how the view tabs above move focus.
+    window.requestAnimationFrame(() => firstCollapsedTimelineRowRef.current?.focus());
+  };
 
   // Setup checklist (admin-only)
   const [setupProgress, setSetupProgress] = useState<{
@@ -727,8 +734,11 @@ const Dashboard: React.FC = () => {
   }, [myShifts, availableOpenShifts, upcomingEvents, tz, windowStart, windowEnd]);
 
   const visibleTimeline = timeline.slice(0, TIMELINE_ROWS_SHOWN);
-  const timelineCollapsedOnMobile = !timelineExpandedOnMobile && visibleTimeline.length > TIMELINE_ROWS_SHOWN_MOBILE;
-  const timelineHiddenOnMobile = timelineCollapsedOnMobile ? visibleTimeline.slice(TIMELINE_ROWS_SHOWN_MOBILE) : [];
+  const timelineCollapsedOnMobile = !timelineExpandedOnMobile && timeline.length > TIMELINE_ROWS_SHOWN_MOBILE;
+  // Counted from the whole week rather than the six rows the list renders: the
+  // footer that discloses entries past the desktop cap is itself held back
+  // while collapsed, so this line is the only thing left saying they exist.
+  const timelineHiddenOnMobile = timelineCollapsedOnMobile ? timeline.slice(TIMELINE_ROWS_SHOWN_MOBILE) : [];
   const firstHiddenTimelineRow = timelineHiddenOnMobile[0];
   const laterOpenShifts = availableOpenShifts.filter((s) => s.shift_date > windowEnd).length;
   const shortStaffedOpenShifts = availableOpenShifts.filter(
@@ -882,7 +892,13 @@ const Dashboard: React.FC = () => {
     return (
       <li
         key={entry.key}
-        className={`border-theme-surface-hover border-t first:border-t-0 ${
+        // The row the disclosure line names, focused when that line is tapped:
+        // the line unmounts on activation, and without this focus falls to the
+        // document body, leaving a keyboard or switch user to traverse the
+        // whole dashboard again to reach the Sign Up they just revealed.
+        ref={index === TIMELINE_ROWS_SHOWN_MOBILE ? firstCollapsedTimelineRowRef : undefined}
+        tabIndex={index === TIMELINE_ROWS_SHOWN_MOBILE ? -1 : undefined}
+        className={`border-theme-surface-hover focus:ring-theme-focus-ring border-t first:border-t-0 focus:ring-2 focus:outline-hidden focus:ring-inset ${
           heldBackOnMobile ? 'hidden sm:list-item' : ''
         }`}
       >
@@ -1167,7 +1183,7 @@ const Dashboard: React.FC = () => {
                     {firstHiddenTimelineRow && (
                       <button
                         type="button"
-                        onClick={() => setTimelineExpandedOnMobile(true)}
+                        onClick={revealTimelineOnMobile}
                         className="border-theme-surface-border bg-theme-surface-secondary focus:ring-theme-focus-ring flex min-h-[44px] w-full items-center gap-2 border-t px-4 text-left focus:ring-2 focus:outline-hidden focus:ring-inset sm:hidden"
                       >
                         <span className="text-theme-text-secondary min-w-0 flex-1 truncate text-[13px]">

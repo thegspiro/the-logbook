@@ -292,7 +292,8 @@ describe('Dashboard', () => {
 
       await screen.findByRole('button', { name: /Open Shift, and 1 more/ });
       const shiftRows = screen.getAllByRole('listitem').filter((row) => row.textContent?.includes('Open Shift'));
-      expect(shiftRows.slice(0, 2).every((row) => !row.className.includes('hidden'))).toBe(true);
+      expect(shiftRows[0]).not.toHaveClass('hidden');
+      expect(shiftRows[1]).not.toHaveClass('hidden');
       expect(shiftRows[2]).toHaveClass('hidden', 'sm:list-item');
       expect(shiftRows[3]).toHaveClass('hidden', 'sm:list-item');
       expect(screen.getByRole('button', { name: /Open Shift, and 1 more/ })).toBeInTheDocument();
@@ -312,8 +313,35 @@ describe('Dashboard', () => {
       await user.click(await screen.findByRole('button', { name: /Open Shift, and 1 more/ }));
 
       const shiftRows = screen.getAllByRole('listitem').filter((row) => row.textContent?.includes('Open Shift'));
-      expect(shiftRows.every((row) => !row.className.includes('hidden'))).toBe(true);
+      shiftRows.forEach((row) => expect(row).not.toHaveClass('hidden'));
       expect(screen.getAllByRole('button', { name: /^Sign Up$/ })).toHaveLength(4);
+    });
+
+    // The footer is the only thing that discloses entries past the six-row
+    // desktop cap, and it is held back while the week is collapsed — so this
+    // line has to count the whole week, not the rows the list renders.
+    it('counts the whole week on the line, including rows past the six-row cap', async () => {
+      mockGetOpenShifts.mockResolvedValue(
+        Array.from({ length: 7 }, (_, i) => makeShift({ id: `open-${i}`, shift_date: inWindow(i) }))
+      );
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: /Open Shift, and 4 more/ })).toBeInTheDocument();
+    });
+
+    it('moves focus onto the first revealed row rather than dropping it', async () => {
+      mockGetOpenShifts.mockResolvedValue(
+        Array.from({ length: 4 }, (_, i) => makeShift({ id: `open-${i}`, shift_date: inWindow(i) }))
+      );
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /Open Shift, and 1 more/ }));
+
+      const shiftRows = screen.getAllByRole('listitem').filter((row) => row.textContent?.includes('Open Shift'));
+      await waitFor(() => expect(shiftRows[2]).toHaveFocus());
     });
 
     it('leaves a short week alone', async () => {
