@@ -1605,6 +1605,8 @@ class MembershipPipelineService:
         step_type: str,
         provider_key: str,
         provider_value: str,
+        reference_config_key: str,
+        event_reference: str,
         completed_by: str,
         action_result: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, str]]:
@@ -1612,9 +1614,10 @@ class MembershipPipelineService:
 
         Finds an active prospect in the org whose email matches one of
         ``emails`` and whose current step is of ``step_type`` configured with
-        ``config[provider_key] == provider_value`` (e.g. a meeting step using
-        Cal.com when an applicant books, or a document step using Documenso
-        when they finish signing), then completes that step.
+        ``config[provider_key] == provider_value`` and whose configured
+        template/event reference matches the webhook. Requiring the reference
+        prevents a different booking or document involving the same email from
+        completing the stage.
 
         Returns ``{"prospect_id", "step_id"}`` on success, or None when nothing
         matched (unknown email, wrong current stage, or already advanced) — a
@@ -1622,6 +1625,9 @@ class MembershipPipelineService:
         """
         normalized = {e.strip().lower() for e in emails if e and e.strip()}
         if not normalized:
+            return None
+        event_reference = event_reference.strip()
+        if not event_reference:
             return None
 
         query = (
@@ -1653,6 +1659,15 @@ class MembershipPipelineService:
             if step_type_value != step_type:
                 continue
             if (step.config or {}).get(provider_key) != provider_value:
+                continue
+            expected_reference = str(
+                (step.config or {}).get(reference_config_key) or ""
+            ).strip()
+            # Cal.com stages store the public booking URL, while webhooks send
+            # the event-type slug. Documenso template IDs compare directly.
+            expected_reference = expected_reference.rstrip("/").split("/")[-1]
+            expected_reference = expected_reference.split("?", 1)[0]
+            if not expected_reference or expected_reference != event_reference:
                 continue
             await self.complete_step(
                 prospect_id=str(prospect.id),
