@@ -10,7 +10,7 @@ const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
 vi.mock('../../utils/forceAppRefresh', () => ({
-  forceAppRefresh: () => mockForceAppRefresh() as Promise<void>,
+  forceAppRefresh: () => mockForceAppRefresh() as Promise<'reloading' | 'unreachable'>,
 }));
 
 vi.mock('../../utils/serviceWorkerUpdate', () => ({
@@ -38,7 +38,7 @@ import { AppVersionSection } from './AppVersionSection';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockForceAppRefresh.mockResolvedValue(undefined);
+  mockForceAppRefresh.mockResolvedValue('reloading');
   mockReloadForNewVersion.mockResolvedValue(undefined);
 });
 
@@ -119,5 +119,20 @@ describe('AppVersionSection', () => {
     await user.click(within(dialog).getByRole('button', { name: /^force refresh$/i }));
 
     await waitFor(() => expect(mockForceAppRefresh).toHaveBeenCalledTimes(1));
+  });
+
+  it('explains a refused refresh and frees the button instead of spinning forever', async () => {
+    mockForceAppRefresh.mockResolvedValue('unreachable');
+    const user = userEvent.setup();
+    renderWithRouter(<AppVersionSection />);
+
+    await user.click(screen.getByRole('button', { name: /^force refresh$/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^force refresh$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/nothing was cleared/i);
+    expect(mockToastError).toHaveBeenCalledWith('Cannot reach the server — nothing was cleared.');
+    // Left enabled so the member can retry once they have signal.
+    await waitFor(() => expect(screen.getByRole('button', { name: /^force refresh$/i })).toBeEnabled());
   });
 });

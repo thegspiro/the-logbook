@@ -1,6 +1,34 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { forceAppRefresh, purgeAppCaches, purgeCacheStorage } from './forceAppRefresh';
+import { canReachServer, forceAppRefresh, purgeAppCaches, purgeCacheStorage } from './forceAppRefresh';
 import { getCached, setCache } from './apiCache';
+
+/**
+ * The reachability probe fetches /version.json. "Reachable" means a parseable
+ * build id came back — not merely that something answered, which is what a
+ * captive portal does.
+ */
+function mockReachable(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ buildId: 'server-build' }) })
+  );
+}
+
+function mockOffline(): void {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+}
+
+/** A portal answers with a login page: HTTP 200, but not our version manifest. */
+function mockCaptivePortal(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ ok: true, json: () => Promise.reject(new SyntaxError('Unexpected token <')) })
+  );
+}
+
+function setOnLine(value: boolean): void {
+  Object.defineProperty(window.navigator, 'onLine', { value, configurable: true });
+}
 
 /**
  * jsdom implements neither Cache Storage nor navigator.serviceWorker, so both
@@ -42,11 +70,15 @@ function removeServiceWorker(): void {
 beforeEach(() => {
   localStorage.clear();
   Object.defineProperty(window, 'location', { writable: true, value: { reload: vi.fn() } });
+  setOnLine(true);
+  mockReachable();
 });
 
 afterEach(() => {
   removeCaches();
   removeServiceWorker();
+  setOnLine(true);
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -113,6 +145,29 @@ describe('purgeAppCaches', () => {
   });
 });
 
+describe('canReachServer', () => {
+  it('is true when the app server answers with a real version manifest', async () => {
+    await expect(canReachServer()).resolves.toBe(true);
+  });
+
+  it('is false when the request fails outright', async () => {
+    mockOffline();
+    await expect(canReachServer()).resolves.toBe(false);
+  });
+
+  it('is false behind a captive portal, which answers 200 with a login page', async () => {
+    mockCaptivePortal();
+    await expect(canReachServer()).resolves.toBe(false);
+  });
+
+  it('short-circuits without a request when the browser reports itself offline', async () => {
+    setOnLine(false);
+
+    await expect(canReachServer()).resolves.toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('forceAppRefresh', () => {
   it('purges, pulls a fresh worker, then reloads', async () => {
     const caches = installCaches(['app-chunks']);
@@ -126,6 +181,43 @@ describe('forceAppRefresh', () => {
     expect(registration.update).toHaveBeenCalledExactlyOnceWith();
     expect(getCached('/events')).toBeNull();
     expect(window.location.reload).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  // The precache is the only offline copy of the app and workbox heals a
+  // deleted entry only by fetching it, so purging offline would brick the
+  // installed PWA until connectivity returned.
+  it('touches nothing when the server is unreachable', async () => {
+    mockOffline();
+    const caches = installCaches(['app-chunks']);
+    const registration = { update: vi.fn().mockResolvedValue(undefined) };
+    installServiceWorker(registration);
+    setCache('/events', [{ id: '1' }]);
+    localStorage.setItem('departmentName', 'Old Name Fire Department');
+
+    await expect(forceAppRefresh()).resolves.toBe('unreachable');
+
+    expect(caches.delete).not.toHaveBeenCalled();
+    expect(registration.update).not.toHaveBeenCalled();
+    expect(getCached('/events')).not.toBeNull();
+    expect(localStorage.getItem('departmentName')).toBe('Old Name Fire Department');
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+
+  it('touches nothing behind a captive portal', async () => {
+    mockCaptivePortal();
+    const caches = installCaches(['app-chunks']);
+
+    await expect(forceAppRefresh()).resolves.toBe('unreachable');
+
+    expect(caches.delete).not.toHaveBeenCalled();
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+
+  it('reports that it is reloading when the purge does go ahead', async () => {
+    installCaches([]);
+    removeServiceWorker();
+
+    await expect(forceAppRefresh()).resolves.toBe('reloading');
   });
 
   it('reloads even with no service worker and no Cache Storage', async () => {

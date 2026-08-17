@@ -218,6 +218,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renamed itself or changed its logo left every existing device showing the old
   one indefinitely, with no expiry and no invalidation.
 
+- **Force refresh refuses to run when the server is unreachable**, leaving the
+  device untouched and saying so. The precache is the app's only offline copy
+  and workbox heals a deleted entry only by fetching it, so purging offline
+  would delete the shell and reload into nothing — bricking the installed PWA
+  until signal returned, which is far worse than the stale build being fixed,
+  and worst on the rural cellular connections this app is used from. A member
+  who taps this _because_ something looks wrong is exactly the person likely to
+  be out of signal at the time. Reachability is proven by fetching a parseable
+  `/version.json` rather than trusting `navigator.onLine`, which reports a
+  healthy connection on station Wi-Fi behind a captive portal — the same
+  interception already documented as a cause of blank screens.
+
 **Notes on what force refresh deliberately leaves alone** — each of these would
 be a worse failure than the one being fixed:
 

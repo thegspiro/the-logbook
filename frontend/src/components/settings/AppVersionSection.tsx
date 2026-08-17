@@ -10,7 +10,7 @@
  */
 
 import React, { useState } from 'react';
-import { RefreshCw, Trash2, CheckCircle } from 'lucide-react';
+import { RefreshCw, Trash2, CheckCircle, WifiOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { fetchServerBuildId, formatBuildId, getCurrentBuildId } from '../../utils/appVersion';
@@ -22,6 +22,7 @@ export const AppVersionSection: React.FC = () => {
   const [checking, setChecking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [upToDate, setUpToDate] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
 
   const currentBuildId = getCurrentBuildId();
   const busy = checking || refreshing;
@@ -57,9 +58,9 @@ export const AppVersionSection: React.FC = () => {
     const confirmed = await confirm({
       title: 'Force refresh this device?',
       message:
-        'This clears every stored copy of the app on this device and reloads it from the server. ' +
-        'You stay signed in, and anything saved offline but not yet synced is kept. ' +
-        'The next few screens may load a little slower while the app re-downloads.',
+        'This clears every stored copy of the app on this device and reloads it from the server, ' +
+        'so it needs a working connection. You stay signed in, and anything saved offline but not ' +
+        'yet synced is kept. The next few screens may load a little slower while the app re-downloads.',
       confirmLabel: 'Force refresh',
       cancelLabel: 'Keep browsing',
       variant: 'warning',
@@ -67,8 +68,17 @@ export const AppVersionSection: React.FC = () => {
     if (!confirmed) return;
 
     setRefreshing(true);
-    // No success toast and no cleanup: this call ends in a page reload.
-    await forceAppRefresh();
+    setUnreachable(false);
+
+    const outcome = await forceAppRefresh();
+
+    // 'reloading' ends in a page reload, so there is nothing to clean up and no
+    // success message worth showing. 'unreachable' means nothing was touched.
+    if (outcome === 'unreachable') {
+      setUnreachable(true);
+      setRefreshing(false);
+      toast.error('Cannot reach the server — nothing was cleared.');
+    }
   };
 
   return (
@@ -126,6 +136,16 @@ export const AppVersionSection: React.FC = () => {
             clears every stored copy of the app and reloads from the server. You stay signed in, and offline work that
             has not synced yet is kept.
           </p>
+          <p className="text-theme-text-muted mt-1 text-sm">
+            Needs a working connection: this discards the offline copy of the app and has to download a replacement.
+          </p>
+          {unreachable && (
+            <p className="mt-1 flex items-start gap-1.5 text-sm text-red-600 dark:text-red-400" role="alert">
+              <WifiOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              The server could not be reached, so nothing was cleared. Reconnect and try again — refreshing now would
+              have left this device with no working copy of the app.
+            </p>
+          )}
         </div>
         <button
           type="button"

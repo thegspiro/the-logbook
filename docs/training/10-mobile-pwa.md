@@ -273,7 +273,17 @@ stored on the device the first time you open the app and is otherwise never
 re-read, so a department that renames itself or changes its logo can leave
 existing phones showing the old one indefinitely.
 
-A force refresh is safe:
+**It needs a working connection.** A force refresh throws away this device's
+offline copy of the app and downloads a replacement, so doing it with no signal
+would leave you with neither. The app checks before it clears anything: if it
+cannot reach the server it refuses, tells you so, and leaves the device exactly
+as it was. Get back in signal and try again.
+
+Note it checks by actually reaching The Logbook, not just by asking the phone
+whether it has a connection — station Wi-Fi behind a captive portal reports a
+perfectly good connection while answering every request with a login page.
+
+Otherwise a force refresh is safe:
 
 - **You stay signed in.** It is a refresh, not a sign-out.
 - **Offline work is kept.** Anything saved offline but not yet synced is left
