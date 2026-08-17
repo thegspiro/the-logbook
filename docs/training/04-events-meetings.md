@@ -201,7 +201,14 @@ or the API if you need it in a report.
 
 **Required Permission:** `events.manage`
 
-Navigate to **Events Admin > Create Event** or click **Create Event** on the events page.
+Navigate to **Manage Events > Create Event** or click **Create Event** on the
+events page.
+
+> **Renamed 2026-08-13:** the sidebar entry is now **Manage Events** (it was
+> "Events Admin") and it opens the events page; the admin hub's Create and
+> Settings sections are deep-linked from there
+> (`/events/admin?tab=create`, `/events/admin?tab=settings`). Wherever this
+> guide says "Events Admin", follow the **Manage Events** entry.
 
 1. Set the **event type**, **title**, **date**, **start time**, and **end time**.
 2. Add a **location** and **description**.

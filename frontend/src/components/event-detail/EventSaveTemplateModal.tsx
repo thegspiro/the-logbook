@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDialog } from '../../hooks/useDialog';
 
 interface EventSaveTemplateModalProps {
   templateName: string;
@@ -19,6 +20,8 @@ const EventSaveTemplateModal: React.FC<EventSaveTemplateModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -34,9 +37,12 @@ const EventSaveTemplateModal: React.FC<EventSaveTemplateModalProps> = ({
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="bg-theme-surface-modal relative z-10 inline-block transform overflow-hidden rounded-lg text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+        <div
+          ref={dialogRef}
+          className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+        >
           <form onSubmit={onSubmit}>
-            <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6">
+            <div className="modal-header">
               <h3 id="save-template-modal-title" className="text-theme-text-primary mb-4 text-lg leading-6 font-medium">
                 Save as Template
               </h3>
@@ -80,7 +86,7 @@ const EventSaveTemplateModal: React.FC<EventSaveTemplateModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring mt-3 inline-flex w-full justify-center rounded-md border px-4 py-2 text-base font-medium shadow-xs focus:ring-2 focus:ring-offset-2 focus:outline-hidden sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                className="btn-secondary text-theme-text-secondary mt-3 inline-flex w-full justify-center text-base font-medium shadow-xs focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
               >
                 Cancel
               </button>

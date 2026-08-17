@@ -67,10 +67,7 @@ const ScheduledEmailList: React.FC = () => {
         const StatusIcon = statusInfo.icon;
 
         return (
-          <div
-            key={email.id}
-            className="border-theme-surface-border bg-theme-surface flex items-center justify-between rounded-lg border p-4"
-          >
+          <div key={email.id} className="card flex items-center justify-between p-4">
             <div className="flex items-start gap-3">
               <StatusIcon className={`mt-0.5 h-5 w-5 ${statusInfo.color}`} />
               <div>

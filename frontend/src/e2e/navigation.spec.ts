@@ -74,10 +74,13 @@ test.describe('Navigation', () => {
       await expect(page).toHaveURL(/\/events/, { timeout: 10000 });
     });
 
-    test('should navigate to the Inventory section via the Operations menu', async ({ page }) => {
-      // Inventory is a child of the collapsible "Operations" group.
+    test('should navigate to the Gear & Uniforms section via the Operations menu', async ({ page }) => {
+      // Gear & Uniforms is a child of the collapsible "Operations" group. The
+      // label is not "Inventory": that word covers gear and medical supplies
+      // both, which are separate pages under separate permissions, so the nav
+      // names the one this route actually opens.
       await navItem(page, 'Operations').click();
-      await navItem(page, 'Inventory').click();
+      await navItem(page, 'Gear & Uniforms').click();
 
       await expect(page).toHaveURL(/\/inventory/, { timeout: 10000 });
     });

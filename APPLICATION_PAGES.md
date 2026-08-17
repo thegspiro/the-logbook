@@ -71,9 +71,12 @@ Complete reference of all pages in the application, organized by module.
 
 ## Dashboard
 
-| URL          | Page           | Permission    |
-| ------------ | -------------- | ------------- |
-| `/dashboard` | Main Dashboard | Authenticated |
+| URL          | Page            | Permission    |
+| ------------ | --------------- | ------------- |
+| `/dashboard` | Main Dashboard  | Authenticated |
+| `/learning`  | Learning Center | Authenticated |
+
+> **Learning Center (`/learning`)** _(added 2026-08-11)_. The in-app guide index, sitting beside the dashboard inside `AppLayout`. Authenticated-only by design — it teaches the application rather than exposing any department record, so gating it on a permission would hide the help from the members most likely to need it.
 
 > _(2026-05-02)_ The volunteer dashboard "Now" section has been redesigned. The dashboard "Upcoming Events" stat now counts only events in the **next 30 days** (card labeled "Next 30 days") rather than all future events. The top navigation shows an **offline / pending-sync pill** indicating queued training submissions and RSVPs that will sync when connectivity returns.
 
@@ -212,12 +215,16 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ## Locations (when Facilities module is off)
 
-| URL                   | Page                 | Permission    |
-| --------------------- | -------------------- | ------------- |
-| `/locations`          | Locations Management | Authenticated |
-| `/locations/qr-codes` | Check-In QR Codes    | Authenticated |
+| URL                   | Page                 | Permission                                    |
+| --------------------- | -------------------- | --------------------------------------------- |
+| `/locations`          | Locations Management | Authenticated                                 |
+| `/locations/qr-codes` | Check-In QR Codes    | `locations.manage` **OR** `facilities.manage` |
 
 > Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
+
+> **Name check:** the page's on-screen heading is **"Check-In QR Codes"** — that is what a reader will see and what the command palette calls it. "Room QR Codes" is the component's filename (`RoomQRCodesPage.tsx`) and appears in some engineering notes; it is not a user-facing label. Documentation should use the heading.
+
+> **The QR directory is restricted, unlike the rest of Locations** _(corrected 2026-08-16)_. This page was previously listed here as Authenticated; it is not. The route is registered by the Facilities module (so it resolves in both Locations and Facilities modes) behind `locations.manage` **OR** `facilities.manage`. The restriction is the point: a kiosk display code is a check-in credential, so a bulk directory of every room's code is a different object from any one room's QR. Regenerating a display code invalidates the previous one, and codes are tenant-bound.
 
 ---
 
@@ -230,7 +237,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` |
 | `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` |
 
-> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
+> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. **Rooms can be nested inside other rooms** _(2026-08-16)_: the Rooms section renders the containment tree with per-room sub-room counts and an add-a-room-inside action, the room form offers a "Located inside" picker (same facility only, no cycles, five levels max), and deleting a room re-parents its sub-rooms one level up rather than deleting them. A nested room's linked Location carries the full containment path (e.g. "Quartermaster's Storage — Volunteer Office — Station 1"), and the cross-module room picker in Events, Training, and Scheduling indents sub-rooms under their container. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
 
 ---
 
@@ -268,6 +275,10 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/training/skills-testing/test/new`            | Start Skill Test                                                  | **Authenticated** |
 | `/training/skills-testing/test/:testId`        | Active Skill Test (review)                                        | **Authenticated** |
 | `/training/skills-testing/test/:testId/active` | Active Skill Test (scoring)                                       | **Authenticated** |
+| `/training/skills-testing/print/template`      | Blank skill sheet (print)                                         | **Authenticated** |
+| `/training/skills-testing/print/scorecard`     | Completed scorecard (print)                                       | **Authenticated** |
+
+> **The two print pages are authenticated-only, and that is not an oversight** _(added 2026-08-11)_. A **blank skill sheet** carries no member data — it is the empty form, and the templates list that links to it already applies the template's own visibility rules; the backend's template fetch enforces visibility and org scoping. A **completed scorecard** is redacted by the backend to the reader's disclosure level _before the data leaves the server_, which is why the route is not gated on `training.manage`: doing so would stop a member printing a result they are already allowed to read, without withholding anything from anyone else. Same principle as the route guards below — the API decides what the page can contain.
 
 > **`/training/skills-testing` is the member's entry point, not the officer console** _(2026-08-08)_. When skills testing opened to members, this page became **Available Tests / My Results** — a member browses published sheets and reads their own results. The officer-facing **Templates** and **Test Records** tabs live under the Training Admin hub (`/training/admin?tab=templates` and `?tab=tests`), which is where validating, voiding and releasing happen.
 >
@@ -519,12 +530,15 @@ Checklists → Apparatus Inventory**. Pick an apparatus and see its tracked
 positions compartment by compartment: what is aboard, the lots and dates on each
 position, and the ready stock behind it.
 
-**It is deliberately crew-level.** An equipment check is a scheduled, signed pass
-over a whole apparatus that produces a report; a crew that used the last of
-something at 03:00 needs somewhere to put that fact _now_, not at the next
-morning's check. So the page and every write on it accept
+**Reporting usage is deliberately crew-level.** An equipment check is a
+scheduled, signed pass over a whole apparatus that produces a report; a crew
+that used the last of something at 03:00 needs somewhere to put that fact
+_now_, not at the next morning's check. So reporting an item used accepts
 `equipment_check.submit` — the default member position — as well as the manage
-permissions.
+permissions. **Corrections of record are not** _(2026-08-11)_: withdrawing a
+restock report, swapping a lot onto the apparatus, and rewriting a deployed
+lot's number or expiration date require `equipment_check.manage` or
+`inventory.manage`.
 
 | Action on a position | What it means                                                                                                                     |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |

@@ -25,6 +25,7 @@ import {
   Truck,
   UserPlus,
   Building2,
+  Stethoscope,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -175,19 +176,41 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   },
   {
     id: 'inventory',
-    name: 'Equipment & Inventory',
+    // Same name the nav and the pages use. "Equipment & Inventory" said both
+    // of the two words this app overloads most, and matched no screen label.
+    name: 'Gear & Uniforms',
     description:
-      'Manage equipment, track maintenance schedules, and monitor inventory levels. Keep your gear mission-ready.',
+      'Issue and track turnout gear, uniforms, tools and radios. Sizes, assignments, returns, and NFPA lifecycle.',
     icon: Package,
     priority: 'recommended',
     category: 'Operations',
     configRoute: '/onboarding/modules/inventory/config',
     permissions: {
-      viewDescription: 'View equipment, check availability, request items',
-      manageDescription: 'Add equipment, track maintenance, manage assignments',
-      view: ['View equipment list', 'Check item status', 'Request equipment'],
-      manage: ['Add/edit equipment', 'Assign items', 'Record maintenance', 'Manage inventory levels'],
+      viewDescription: 'View gear, check availability, request items',
+      manageDescription: 'Add gear, track maintenance, manage assignments',
+      view: ['View gear list', 'Check item status', 'Request gear'],
+      manage: ['Add/edit gear', 'Assign items', 'Record maintenance', 'Manage stock levels'],
       defaultManagePositions: ['it_manager', 'quartermaster', 'president', 'fire_chief'],
+    },
+  },
+  {
+    id: 'medical_supplies',
+    name: 'Medical Supplies',
+    description:
+      'EMS stock with lot numbers and expiration dates. Runs alongside gear, and can be handed to its own supply officer.',
+    icon: Stethoscope,
+    priority: 'recommended',
+    category: 'Operations',
+    permissions: {
+      viewDescription: 'View medical stock and what is expiring',
+      manageDescription: 'Add supplies, receive deliveries, manage stock lots',
+      view: ['View medical supply list', 'See expiring stock'],
+      manage: ['Add/edit supplies', 'Receive deliveries', 'Manage lots and expiration dates'],
+      // Seeded to the quartermaster as well: a department that has not split
+      // the role should not have to go find who owns this after enabling it.
+      // The apparatus officer is here because the rigs' checklists consume
+      // this stock, matching the seeded role in core/permissions.py.
+      defaultManagePositions: ['ems_supply_officer', 'quartermaster', 'apparatus_officer', 'fire_chief'],
     },
   },
   {

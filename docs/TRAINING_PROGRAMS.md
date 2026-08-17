@@ -151,6 +151,16 @@ A pipeline is fully editable from the program detail page (Overview tab), gated 
 - **Requirements** — add, edit content/target, reorder within a phase, move between
   phases, and remove (`…/requirements`, `…/requirements/reorder`,
   `…/requirements/{prog_req_id}`). The **Required ↔ Optional** toggle is also inline.
+  _(2026-08-08)_ A phase can **link an existing department requirement** instead of
+  creating a new one inline — the `RequirementLibraryPicker` appears in the
+  create-pipeline wizard and the phase edit modals. Provenance is tracked in
+  `program_requirements.owns_requirement`, and it decides deletion semantics:
+  unlinking a requirement deletes the underlying department requirement **only when
+  this link created it**. Removing a linked-in shared requirement (e.g. the
+  department's CPR requirement) from a phase leaves the requirement itself — and
+  every other program using it — untouched. Conversely, editing a linked-in
+  requirement changes it **everywhere it is used**, which is why the editor
+  surfaces the shared/owned distinction.
 - **Milestones** — add, edit, and delete (`…/milestones/{milestone_id}`).
 
 **Destructive edits auto-clean enrolled members.** Deleting a phase or removing a
@@ -1456,6 +1466,15 @@ linked categories, so tagging your Airway course with the "Airway…" category m
 hours count toward that requirement's Airway section.
 
 #### Option B: Create Custom Requirement
+
+> **Editing from this tab** _(2026-08-08)_: every requirement card on the
+> Training Programs → Requirements tab has an **Edit** button (plus a **New
+> Requirement** button on the tab) using the shared
+> `components/training/RequirementModal` — you no longer have to detour to the
+> Training Admin requirements page to change a requirement you created or
+> imported here. Registry-imported requirements (`is_editable = false`) show a
+> read-only marker because the backend refuses to update them — customize by
+> creating a department copy instead.
 
 1. Click "Create Requirement"
 2. Fill in details:

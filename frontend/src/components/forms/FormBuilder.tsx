@@ -151,11 +151,7 @@ const SortableFieldRow = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`card-secondary group flex items-center gap-3 px-4 py-3 transition-colors ${
-        warning
-          ? 'border-yellow-500/40 bg-yellow-500/5 hover:border-yellow-500/60'
-          : 'hover:border-theme-surface-border'
-      }`}
+      className={`card-secondary group flex items-center gap-3 px-4 py-3 ${warning ? 'border-yellow-500/40 bg-yellow-500/5 hover:border-yellow-500/60' : 'hover:border-theme-surface-border'}`}
     >
       {/* Drag handle */}
       <div className="text-theme-text-muted shrink-0 cursor-grab active:cursor-grabbing" {...attributes} {...listeners}>
