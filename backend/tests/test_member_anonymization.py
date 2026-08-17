@@ -9,7 +9,14 @@ from sqlalchemy import select
 from app.models.forms import Form, FormSubmission
 from app.models.inventory import MemberSizePreferences
 from app.models.medical_screening import ScreeningRecord, ScreeningType
-from app.models.membership_pipeline import ProspectiveMember
+from app.models.membership_pipeline import (
+    MembershipPipeline,
+    MembershipPipelineStep,
+    PipelineStepType,
+    ProspectiveMember,
+    ProspectStepProgress,
+    StepProgressStatus,
+)
 from app.models.user import (
     LeaveType,
     MemberLeaveOfAbsence,
@@ -218,6 +225,81 @@ class TestAnonymizeMember:
         assert submission.ip_address is None
         assert submission.user_agent is None
         assert submission.integration_result is None
+
+    async def test_scrubs_step_progress_payloads_and_duplicate_submissions(
+        self, db_session
+    ):
+        """Form-driven pipeline steps copy the mapped applicant data into
+        ProspectStepProgress.action_result, and a duplicate application's
+        submission is linked ONLY from there — both must be scrubbed or the
+        erasure leaves the applicant identifiable (PR #1412 review)."""
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        form = Form(organization_id=org.id, name="Membership application")
+        db_session.add(form)
+        await db_session.flush()
+        original = FormSubmission(
+            organization_id=org.id,
+            form_id=form.id,
+            data={"full_name": "Pat Firefighter"},
+            submitter_name="Pat Firefighter",
+        )
+        duplicate = FormSubmission(
+            organization_id=org.id,
+            form_id=form.id,
+            data={"full_name": "Pat Firefighter", "email": "pat@example.org"},
+            submitter_name="Pat Firefighter",
+        )
+        db_session.add_all([original, duplicate])
+        await db_session.flush()
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Firefighter",
+            email="pat@example.org",
+            transferred_user_id=user.id,
+            form_submission_id=original.id,
+        )
+        db_session.add(prospect)
+        pipeline = MembershipPipeline(organization_id=org.id, name="Default")
+        db_session.add(pipeline)
+        await db_session.flush()
+        step = MembershipPipelineStep(
+            pipeline_id=pipeline.id,
+            name="Submit application",
+            step_type=PipelineStepType.FORM_SUBMISSION,
+        )
+        db_session.add(step)
+        await db_session.flush()
+        mapped_data = {
+            "first_name": "Pat",
+            "last_name": "Firefighter",
+            "email": "pat@example.org",
+            "date_of_birth": "1990-05-04",
+        }
+        progress = ProspectStepProgress(
+            prospect_id=prospect.id,
+            step_id=step.id,
+            status=StepProgressStatus.COMPLETED,
+            action_result={
+                "form_submission_id": str(duplicate.id),
+                "form_id": str(form.id),
+                "mapped_data": mapped_data,
+            },
+        )
+        db_session.add(progress)
+        await db_session.flush()
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert summary["form_submissions_scrubbed"] == 2
+        assert summary["step_progress_scrubbed"] == 1
+        assert original.data == {}
+        assert duplicate.data == {}
+        assert duplicate.submitter_name is None
+        assert progress.action_result["mapped_data"] is None
+        # Structural keys survive so the pipeline history stays legible.
+        assert progress.action_result["form_submission_id"] == str(duplicate.id)
 
     async def test_refuses_double_anonymization(self, db_session):
         org = await _make_org(db_session)

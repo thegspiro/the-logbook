@@ -266,6 +266,25 @@ PUT    /api/v1/inventory/storage-areas/{id}              # Update storage area
 DELETE /api/v1/inventory/storage-areas/{id}              # Delete (deactivate) storage area
 ```
 
+_(2026-08-16)_ **Every storage area is assigned a barcode.** Creation assigns
+one automatically when the caller doesn't supply it — the next code in a per-org
+sequential series (default prefix `SA-`, counter in
+`organization.settings["storage_area_barcode"]`, manually-taken codes skipped) —
+so every area has a printable code rather than one only where somebody
+remembered the field. A blank barcode arriving from an older client cannot strip
+a code already printed on the shelf, areas created before this pick a code up on
+first edit, and migration `20260816_0002` backfilled the rest. The Storage Areas
+page also now shows **all areas by default** (the facility picker was fixed in
+the same pass).
+
+> **Assignment and display only — the scanner does not resolve these codes
+> yet.** `/inventory/lookup` (`InventoryService.search_by_code`) searches
+> `InventoryItem.barcode` / `serial_number` / `asset_tag` / `name` / `size` /
+> `color`; nothing maps a scanned `SA-…` code back to its storage area. The
+> Storage Areas form nevertheless tells the user the code is assigned "so it can
+> be scanned". Tracked as **INV-8** in
+> [KNOWN_LIMITATIONS](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md).
+
 ### Vendors _(2026-08-16)_
 
 ```
@@ -290,7 +309,7 @@ UUID.
 
 The two read endpoints take `inventory.view`; everything that writes takes `inventory.manage`. The screen itself sits behind `inventory.manage`, like every other page under `/inventory/admin` — the read permission on the API is there for surfaces that only need to name a vendor. `GET /api/v1/inventory/items?vendor_id=…` filters the catalog to one vendor — the link behind the item count on a vendor card.
 
-`inventory.view` gets the directory, not the commercial terms: `accountNumber`, `paymentTerms` and `totalPurchaseValue` come back blank unless the caller also holds `inventory.manage` _(2026-08-16)_. Name, phone, email, fax, website, address, contacts and the item/reorder counts are unaffected — a member can see that the department buys from a vendor and how to reach them, but not what it pays. The screen is unaffected, being `inventory.manage`-gated already.
+`inventory.view` gets the directory, not the commercial terms: `account_number`, `payment_terms` and `total_purchase_value` come back blank unless the caller also holds `inventory.manage` _(2026-08-16)_. Name, phone, email, fax, website, address, contacts and the item/reorder counts are unaffected — a member can see that the department buys from a vendor and how to reach them, but not what it pays. The screen is unaffected, being `inventory.manage`-gated already.
 
 ### Write-Off Requests
 

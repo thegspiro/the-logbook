@@ -69,8 +69,12 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
 
   // Reminders
   const [sendReminders, setSendReminders] = useState(initialData?.send_reminders ?? false);
+  // A template saved with reminders off persists reminder_target 'none', but
+  // the audience select only offers 'going'/'all' — coerce so the select never
+  // shows one value while state holds another, and so re-enabling reminders
+  // can never submit 'none' (an audience the scheduler silently skips).
   const [reminderTarget, setReminderTarget] = useState<'going' | 'all' | 'none'>(
-    initialData?.reminder_target ?? 'going'
+    initialData?.reminder_target === 'none' ? 'going' : (initialData?.reminder_target ?? 'going')
   );
   const reminderAudienceEdited = useRef(initialData?.reminder_target !== undefined);
   const [reminderSchedule, setReminderSchedule] = useState(initialData?.reminder_schedule?.join(', ') ?? '');
@@ -371,6 +375,11 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 onChange={(e) => {
                   reminderAudienceEdited.current = true;
                   setSendReminders(e.target.checked);
+                  // Belt-and-braces with the state initializer above: turning
+                  // reminders on must never leave 'none' as the audience.
+                  if (e.target.checked && reminderTarget === 'none') {
+                    setReminderTarget('going');
+                  }
                 }}
                 className={checkboxClass}
               />

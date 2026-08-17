@@ -83,7 +83,6 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
-from app.services.notifications_service import NotificationsService
 from app.services.scheduling_service import SchedulingService
 from app.services.shift_eligibility_service import ShiftEligibilityService
 
@@ -130,6 +129,36 @@ async def _authorize_shift_management(
         raise HTTPException(status_code=404, detail="Shift not found")
     if user_has_permission(current_user, permission) or _is_shift_officer(
         shift, current_user
+    ):
+        return shift
+    raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
+async def _authorize_handoff_access(
+    service: SchedulingService,
+    current_user: User,
+    shift_id: UUID,
+):
+    """Allow handoff access only to the incoming crew or shift managers."""
+    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
+    if shift is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    if user_has_permission(current_user, "scheduling.manage") or _is_shift_officer(
+        shift, current_user
+    ):
+        return shift
+
+    assignments = await service.get_shift_assignments(
+        shift_id, current_user.organization_id
+    )
+    active_statuses = {
+        AssignmentStatus.ASSIGNED.value,
+        AssignmentStatus.CONFIRMED.value,
+    }
+    if any(
+        str(assignment.user_id) == str(current_user.id)
+        and assignment.assignment_status in active_statuses
+        for assignment in assignments
     ):
         return shift
     raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -265,6 +294,9 @@ async def _enrich_shifts(
     enriched = []
     for s in shifts:
         d = {c.key: getattr(s, c.key) for c in s.__table__.columns}
+        # Pass-downs are operationally sensitive and are served exclusively by
+        # the roster-authorized handoff endpoint below.
+        d.pop("pass_down_notes", None)
         service._enrich_shift_dict(d, apparatus_map, user_name_map)
         d["attendee_count"] = attendee_counts.get(str(s.id), 0)
         d["call_count"] = call_counts.get(str(s.id), 0)
@@ -424,6 +456,7 @@ async def get_shift(
     officer_ids = [shift.shift_officer_id] if shift.shift_officer_id else []
     user_name_map = await service._get_user_name_map(officer_ids)
     d = {c.key: getattr(shift, c.key) for c in shift.__table__.columns}
+    d.pop("pass_down_notes", None)
     service._enrich_shift_dict(d, apparatus_map, user_name_map)
 
     member_call_counts = await service.compute_member_call_counts(shift_id)
@@ -562,12 +595,8 @@ async def finalize_shift(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-    await NotificationsService(db).archive_related_notifications(
-        current_user.organization_id,
-        "shift_validation",
-        "shift_id",
-        shift_id,
-    )
+    # SchedulingService.finalize_shift archives the related shift-validation
+    # prompt itself, so every finalize path clears it — not just this endpoint.
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
 
@@ -615,11 +644,13 @@ async def reopen_shift(
 async def get_shift_handoff(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """Return the previous crew's pass-down for this shift (same apparatus),
-    or null when there is none."""
+    or null when there is none. Access is limited to the incoming roster, its
+    officer, and organization-wide scheduling managers."""
     service = SchedulingService(db)
+    await _authorize_handoff_access(service, current_user, shift_id)
     return await service.get_previous_pass_down(shift_id, current_user.organization_id)
 
 

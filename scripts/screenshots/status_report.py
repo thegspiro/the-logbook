@@ -19,15 +19,10 @@ from pathlib import Path
 DOCS_DIR = Path(__file__).resolve().parent.parent.parent / "docs" / "training"
 OUTPUT = DOCS_DIR / "SCREENSHOT_STATUS.md"
 
-# The bracket is optional and unterminated on purpose. Guides carry two
-# placeholder syntaxes: `> **[SCREENSHOT NEEDED]:** _description_`, and
-# `> **[SCREENSHOT NEEDED — description]**` with the description *inside* the
-# brackets. Requiring `\[SCREENSHOT NEEDED\]` matched only the first, so 41
-# placeholders across twelve guides were invisible to this script and to
-# status_report.py — which reported "0 remaining" while forty-one fully
-# specified requests, several carrying their own seed instructions, had never
-# been counted, let alone filled. Both scripts hold a copy of this pattern;
-# keep them in step.
+# Keep in step with apply_placeholders.py, which explains why the `[` is
+# optional and unterminated: descriptive `**[SCREENSHOT NEEDED — …]**` markers
+# were invisible to this count, so the tracker read as nearly complete while 41
+# requested captures went unscheduled.
 MARKER = re.compile(
     r"^>\s*\*\*\[?(?:Screenshot placeholder|Screenshot needed)",
     re.IGNORECASE,

@@ -17,6 +17,12 @@ interface ContactInfoSectionProps {
   onSaveContact: () => Promise<void>;
   onFormChange: (field: keyof ContactInfoUpdate, value: string) => void;
   onNotificationToggle: (type: keyof NotificationPreferences) => void;
+  /**
+   * Whether this member has SMS consent on record. Read-only here: consent is
+   * the member's own TCPA record, so staff can see it but never set it.
+   * `null` while it is still loading or could not be read.
+   */
+  smsConsentGranted: boolean | null;
 }
 
 const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
@@ -31,6 +37,7 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
   onSaveContact,
   onFormChange,
   onNotificationToggle,
+  smsConsentGranted,
 }) => {
   return (
     <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
@@ -105,21 +112,36 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
               <label className="flex cursor-pointer items-center">
                 <input
                   type="checkbox"
-                  checked={editForm.notification_preferences?.email}
-                  onChange={() => onNotificationToggle('email')}
+                  checked={editForm.notification_preferences?.email_notifications ?? true}
+                  onChange={() => onNotificationToggle('email_notifications')}
                   className="form-checkbox border-theme-surface-border"
                 />
                 <span className="text-theme-text-secondary ml-2 text-sm">Email notifications</span>
               </label>
-              <label className="flex cursor-pointer items-center">
+              {/* Disabled without consent on record, because there it would do
+                nothing: the send path checks the member's TCPA consent, and no
+                preference set here can switch texts on for a member who never
+                granted it. Staff can still mute a consenting member. */}
+              <label
+                className={`flex items-center ${smsConsentGranted === true ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+              >
                 <input
                   type="checkbox"
-                  checked={editForm.notification_preferences?.sms_notifications}
+                  checked={(editForm.notification_preferences?.sms_notifications ?? true) && smsConsentGranted === true}
+                  disabled={smsConsentGranted !== true}
                   onChange={() => onNotificationToggle('sms_notifications')}
-                  className="form-checkbox border-theme-surface-border"
+                  className="form-checkbox border-theme-surface-border disabled:opacity-50"
                 />
-                <span className="text-theme-text-secondary ml-2 text-sm">Urgent text messages</span>
+                <span className="text-theme-text-secondary ml-2 text-sm">
+                  Urgent text messages (in addition to email)
+                </span>
               </label>
+              {smsConsentGranted === false && (
+                <p className="text-theme-text-muted text-sm">
+                  No text-message consent on record. Texts will not send until this member turns them on themselves
+                  under Settings → Notifications — consent has to come from them, not from staff.
+                </p>
+              )}
             </div>
           </div>
 

@@ -36,15 +36,13 @@ REPO_ROOT = HERE.parent.parent
 DOCS_DIR = REPO_ROOT / "docs" / "training"
 REPORT = HERE / "capture-report.json"
 
-# The bracket is optional and unterminated on purpose. Guides carry two
-# placeholder syntaxes: `> **[SCREENSHOT NEEDED]:** _description_`, and
-# `> **[SCREENSHOT NEEDED — description]**` with the description *inside* the
-# brackets. Requiring `\[SCREENSHOT NEEDED\]` matched only the first, so 41
-# placeholders across twelve guides were invisible to this script and to
-# status_report.py — which reported "0 remaining" while forty-one fully
-# specified requests, several carrying their own seed instructions, had never
-# been counted, let alone filled. Both scripts hold a copy of this pattern;
-# keep them in step.
+# The `[` is optional and NOT followed by a required `]`: the release-lesson
+# passes write the request inline as `**[SCREENSHOT NEEDED — what to capture]**`,
+# and an earlier form of this pattern demanded `[SCREENSHOT NEEDED]` as a closed
+# token. That made every descriptive marker invisible to both this script and
+# status_report.py — 41 of them across 12 guides on 2026-08-17, while the
+# tracker reported "421 of 423 filled". A marker nothing can see is a capture
+# nobody schedules.
 MARKER = re.compile(
     r"^>\s*\*\*\[?(?:Screenshot placeholder|Screenshot needed)",
     re.IGNORECASE,
@@ -52,10 +50,30 @@ MARKER = re.compile(
 
 
 def block_end(lines: list[str], start: int) -> int:
-    """Index one past the last line of the blockquote beginning at ``start``."""
+    """Index one past the last line of the placeholder beginning at ``start``.
+
+    Stops at the next marker as well as at the end of the blockquote. Guides
+    routinely stack two or three requests in one quote, separated by a bare
+    ``>``:
+
+        > **[SCREENSHOT NEEDED — the tree]**
+        >
+        > **[SCREENSHOT NEEDED — the form]**
+
+    Consuming to the end of the quote made the first replacement swallow its
+    siblings — the image landed and the other requests were deleted, unshot and
+    unrecorded. 11 markers across three guides were sitting in that position on
+    2026-08-17, one of them lost exactly this way before the behavior was found.
+    """
     end = start + 1
     while end < len(lines) and lines[end].startswith(">"):
+        if MARKER.match(lines[end]):
+            break
         end += 1
+    # Trailing bare `>` separators belong to the gap between two requests, not
+    # to the request above them.
+    while end - 1 > start and lines[end - 1].strip() in {">", ">​"}:
+        end -= 1
     return end
 
 

@@ -254,6 +254,33 @@ export function openFirstFromApi(apiPath, routeFor, listKey, match) {
   };
 }
 
+/**
+ * Open the first facility's **Rooms** section.
+ *
+ * The section list is sidebar navigation inside the facility detail page, not a
+ * route, so the room shots cannot be reached by URL alone. The rooms are
+ * fetched after the section mounts, so waiting for the heading is not waiting
+ * for the tree — hence the wait on a room row.
+ */
+export async function openFacilityRooms(page) {
+  await openFirstFromApi(
+    "/facilities",
+    (id) => `/facilities/${id}`,
+    "facilities",
+  )(page);
+  const rooms = page
+    .getByRole("button", { name: /^rooms/i })
+    .or(page.getByRole("link", { name: /^rooms/i }))
+    .first();
+  await rooms.waitFor({ timeout: 20_000 });
+  await rooms.click();
+  await page
+    .getByText("Volunteer Office", { exact: true })
+    .first()
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(600);
+}
+
 /** True for an event that has started but not finished. */
 export async function selectMedicApparatus(page) {
   const select = page.locator("#apparatus-select");
@@ -8271,6 +8298,81 @@ export const SHOTS = [
         .check();
       await page.waitForTimeout(800);
     },
+    fullPage: false,
+  },
+  {
+    id: "06-24-rooms-nested-tree",
+    doc: "06-apparatus-facilities.md",
+    line: 216,
+    anchor:
+      "SCREENSHOT NEEDED — Rooms section showing a two- or three-level tree",
+    alt: "The Rooms section as a containment tree: sub-rooms indented under the room holding them, each container reporting how many it holds",
+    route: "/facilities",
+    // The per-row actions are `sm:opacity-0 sm:group-hover:opacity-100`, so a
+    // plain capture of this section can never show the add-a-room-inside
+    // button — it is only painted while a row is hovered. Hovering the
+    // top-level row is therefore part of the shot, not a nicety.
+    prepare: async (page) => {
+      await openFacilityRooms(page);
+      await page.getByText("Volunteer Office", { exact: true }).first().hover();
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-25-room-located-inside",
+    doc: "06-apparatus-facilities.md",
+    line: 224,
+    anchor: 'SCREENSHOT NEEDED — room form open showing the "Located Inside"',
+    alt: 'The room form\'s "Located Inside" field, holding the room that contains the one being edited',
+    route: "/facilities",
+    // Same native-select limit as 06-23: an open `<select>` popup is drawn by
+    // the OS, not the page, so the exclusion cannot be photographed in the
+    // list. Editing a room that HAS a subtree makes the point better anyway —
+    // its only remaining option is "Facility (top level)", because itself and
+    // all three of its descendants are excluded. Verified by
+    // `roomTree.test.ts` (collectSubtreeIds) and the nesting service tests.
+    prepare: async (page) => {
+      await openFacilityRooms(page);
+      await page
+        .getByText("Quartermaster's Storage", { exact: true })
+        .first()
+        .hover();
+      await page.waitForTimeout(400);
+      const edits = page.locator('button[aria-label*="Edit"]');
+      await edits.first().waitFor({ timeout: 20_000 });
+      await edits.nth(1).click();
+      await page
+        .getByText(/Located Inside/i)
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-26-room-delete-subrooms",
+    doc: "06-apparatus-facilities.md",
+    line: 240,
+    anchor: "SCREENSHOT NEEDED — delete-room confirmation dialog for a room",
+    alt: "The delete-room confirmation, stating that the room's sub-rooms move up a level rather than being deleted",
+    route: "/facilities",
+    prepare: async (page) => {
+      await openFacilityRooms(page);
+      await page.getByText("Volunteer Office", { exact: true }).first().hover();
+      await page.waitForTimeout(400);
+      const deletes = page.locator(
+        'button[aria-label*="Delete"], button[title*="Delete"]',
+      );
+      await deletes.first().waitFor({ timeout: 20_000 });
+      await deletes.first().click();
+      await page
+        .getByRole("button", { name: /Keep it/i })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    // Viewport, not fullPage: the dialog is the subject and a full-page shot
+    // pushes it into a large dimmed backdrop.
     fullPage: false,
   },
 

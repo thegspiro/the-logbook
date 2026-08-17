@@ -348,18 +348,26 @@ export const EventForm: React.FC<EventFormProps> = ({
   };
 
   // Keep the standard one-hour window unless another meeting runs directly
-  // into it. In that case a shorter window prevents members from checking in
-  // to the later meeting while the earlier one is still in progress.
+  // into it. In that case the lead is capped at the actual gap (up to a
+  // 15-minute shortened standard) so check-in can never open while the
+  // earlier meeting is still in progress — a back-to-back meeting yields 0.
   useEffect(() => {
     if (checkInLeadTimeEdited.current || !formData.start_datetime) return;
     const start = new Date(localToUTC(formData.start_datetime, tz)).getTime();
-    const hasPreviousMeeting = (userEvents || []).some((event) => {
-      if (event.id === editingEventId) return false;
-      if (event.event_type && event.event_type !== EventTypeEnum.BUSINESS_MEETING) return false;
+    // Smallest gap (ms) to a business meeting ending within the hour before
+    // this event starts; null when there is no such meeting.
+    let precedingGapMs: number | null = null;
+    for (const event of userEvents || []) {
+      if (event.id === editingEventId) continue;
+      if (event.event_type && event.event_type !== EventTypeEnum.BUSINESS_MEETING) continue;
       const end = new Date(event.end_datetime).getTime();
-      return end <= start && end > start - 60 * 60 * 1000;
-    });
-    const standardLeadTime = hasPreviousMeeting ? 15 : 60;
+      if (end <= start && end > start - 60 * 60 * 1000) {
+        const gap = start - end;
+        if (precedingGapMs === null || gap < precedingGapMs) precedingGapMs = gap;
+      }
+    }
+    const standardLeadTime =
+      precedingGapMs === null ? 60 : Math.min(15, Math.max(0, Math.floor(precedingGapMs / 60000)));
     setFormData((prev) =>
       prev.check_in_minutes_before === standardLeadTime ? prev : { ...prev, check_in_minutes_before: standardLeadTime }
     );

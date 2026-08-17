@@ -58,6 +58,34 @@ class RecurrencePattern(str, Enum):
     CUSTOM = "custom"  # Uses recurrence_custom_days
 
 
+# custom_fields mixes organizer configuration with lifecycle markers written
+# by the finalize flow and the scheduled jobs. Anything that COPIES an event
+# (duplication, recurring-series generation) keeps the configuration but must
+# strip these, or the copy inherits "already handled" state and never gets its
+# own reminders or post-event validation prompt. Keep this list as the single
+# source of truth — it was previously duplicated at each copy site, and the
+# attendance_finalized marker was added to neither.
+EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS = (
+    "reminders_sent",
+    "validation_notification_sent",
+    "series_end_reminder_sent",
+    "attendance_finalized",
+)
+
+
+def default_reminder_target(is_mandatory: bool) -> str:
+    """Reminder audience for an event whose creator did not choose one.
+
+    Mandatory events remind every active member; everything else reminds the
+    members who RSVP'd. The EventCreate-family schemas apply this default in a
+    validator, but any path constructing Event(...) directly bypasses Pydantic
+    and inherits the column default "going" — which silently shrinks a
+    mandatory event's reminder audience. Those paths must pass
+    reminder_target=default_reminder_target(is_mandatory) instead.
+    """
+    return "all" if is_mandatory else "going"
+
+
 class Event(Base):
     """
     Event model for managing department events

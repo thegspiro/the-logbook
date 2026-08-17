@@ -9,7 +9,7 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**431 of 473 placeholders filled** (42 remaining).
+**434 of 473 placeholders filled** (39 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
@@ -19,7 +19,7 @@ regenerated wholesale, so that audit cannot live here.
 | [03-scheduling.md](./03-scheduling.md) | 66 | 0 |
 | [04-events-meetings.md](./04-events-meetings.md) | 31 | 4 |
 | [05-inventory.md](./05-inventory.md) | 57 | 2 |
-| [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 16 | 4 |
+| [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 19 | 1 |
 | [07-documents-forms.md](./07-documents-forms.md) | 13 | 0 |
 | [08-admin-reports.md](./08-admin-reports.md) | 38 | 1 |
 | [09-skills-testing.md](./09-skills-testing.md) | 21 | 3 |
@@ -35,5 +35,5 @@ regenerated wholesale, so that audit cannot live here.
 | [19-august-2026-release-changes.md](./19-august-2026-release-changes.md) | 0 | 20 |
 | [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) | 0 | 2 |
 | [TRAINING_MATERIALS_REVIEW.md](./TRAINING_MATERIALS_REVIEW.md) | 0 | 1 |
-| **Total** | **431** | **42** |
+| **Total** | **434** | **39** |
 

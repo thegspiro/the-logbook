@@ -51,6 +51,7 @@ from app.schemas.user import (
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
+    NotificationPreferences,
     UserListResponse,
     UserProfileResponse,
     UserUpdate,
@@ -221,9 +222,17 @@ async def create_member(
 
     # Use admin-provided password or generate a temporary one
     if user_data.password:
+        from app.core.breached_password import check_password_not_breached
         from app.core.security import validate_password_strength
 
         is_valid, error_msg = validate_password_strength(user_data.password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+
+        is_valid, error_msg = await check_password_not_breached(user_data.password)
         if not is_valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1251,9 +1260,28 @@ async def update_contact_info(
         user.mobile = contact_update.mobile
 
     if contact_update.notification_preferences is not None:
-        user.notification_preferences = (
-            contact_update.notification_preferences.model_dump()
+        # Merge, never replace. Every field on NotificationPreferences defaults
+        # to True, so dumping the whole model turned a partial payload into a
+        # re-subscribe: a caller sending only {"sms_notifications": false}
+        # silently switched the member's other preferences back on, and the
+        # 200 made it look like the save had done exactly what was asked.
+        # An omitted key means "leave this alone" (CLAUDE.md pitfall 1b).
+        known_keys = set(NotificationPreferences.model_fields)
+        merged = {
+            key: value
+            for key, value in (user.notification_preferences or {}).items()
+            # Drops keys no sender reads any more, so a blob that predates
+            # migration 20260816_0007 heals on its next save instead of
+            # carrying a dead `email` flag forever.
+            if key in known_keys
+        }
+        merged.update(
+            contact_update.notification_preferences.model_dump(exclude_unset=True)
         )
+        # Every value is a flat bool, so this rebuilt dict is a genuinely new
+        # value and SQLAlchemy issues the UPDATE. Pitfall 12 (shallow copies
+        # sharing nested references) does not arise — there is no nesting.
+        user.notification_preferences = merged
 
     await db.commit()
 
@@ -1622,6 +1650,7 @@ async def admin_reset_password(
 
     **Authentication required**
     """
+    from app.core.breached_password import check_password_not_breached
     from app.core.security import hash_password, validate_password_strength
     from app.models.user import Session as UserSession
     from app.services.auth_service import _save_password_to_history
@@ -1651,6 +1680,13 @@ async def admin_reset_password(
 
     # Validate the new password
     is_valid, error_msg = validate_password_strength(reset_data.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
+    is_valid, error_msg = await check_password_not_breached(reset_data.new_password)
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -2344,6 +2380,52 @@ async def get_my_consents(
     from app.services.consent_service import ConsentService
 
     return await ConsentService(db).list_for_user(current_user)
+
+
+@router.get("/{user_id}/consents")
+async def get_user_consents(
+    user_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Read another member's consents, for staff editing that member's contact
+    and notification settings.
+
+    **Read-only by design, and there is deliberately no admin write
+    counterpart.** SMS consent is a TCPA record of what the *member* agreed
+    to; an officer ticking a box on their behalf would not be consent. Staff
+    need to see it because the notification preferences they can edit are
+    meaningless without it — the SMS preference cannot switch texts on for a
+    member who never consented, only off for one who did.
+    """
+    if str(current_user.id) != str(user_id):
+        user_perms = _collect_user_permissions(current_user)
+        if not _has_permission("users.edit", user_perms) and not _has_permission(
+            "members.manage", user_perms
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to view this member's consents",
+            )
+
+    # Org-scoped: a permission is held within the caller's own organization and
+    # says nothing about a member of another one (CLAUDE.md pitfall 14b).
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    from app.services.consent_service import ConsentService
+
+    return await ConsentService(db).list_for_user(member)
 
 
 @router.put("/me/consents/{consent_type}")
