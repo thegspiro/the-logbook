@@ -30,6 +30,7 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.core.audit import log_audit_event
+from app.core.captcha import require_captcha
 from app.core.config import settings
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
@@ -243,6 +244,32 @@ async def get_login_branding(
     except Exception:
         # Pre-onboarding or DB not ready — return empty branding gracefully
         return {"name": None, "logo": None}
+
+
+@router.get("/captcha-config")
+async def get_captcha_config():
+    """Challenge-response configuration for anonymous pages.
+
+    Anonymous by design: the pages that need it (login, forgot-password, public
+    form submission) have no session yet. Everything returned here is already
+    public — the site key is embedded in the widget markup the browser renders.
+    The **secret** key is never included.
+
+    Reports ``enabled: false`` when CAPTCHA is switched on but misconfigured,
+    matching what the server actually enforces. A page that rendered a widget
+    the server was not checking would be security theatre; one that rendered
+    none while the server rejected every submission would be a dead form.
+    """
+    from app.core.captcha import is_captcha_configured
+
+    if not is_captcha_configured():
+        return {"enabled": False, "provider": None, "siteKey": None}
+
+    return {
+        "enabled": True,
+        "provider": settings.CAPTCHA_PROVIDER,
+        "siteKey": settings.CAPTCHA_SITE_KEY,
+    }
 
 
 @router.get("/oauth-config")
@@ -1284,7 +1311,10 @@ async def check_authentication(
     }
 
 
-@router.post("/forgot-password", dependencies=[rate_limit_password_reset()])
+@router.post(
+    "/forgot-password",
+    dependencies=[rate_limit_password_reset(), Depends(require_captcha)],
+)
 async def forgot_password(
     reset_request: PasswordResetRequest,
     request: Request,
