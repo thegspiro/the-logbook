@@ -9,7 +9,7 @@ import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
 import DashboardReadiness from '../components/dashboard/DashboardReadiness';
-import { READINESS_WINDOW_DAYS } from '../utils/readiness';
+import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
 import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
 import {
@@ -541,9 +541,11 @@ const Dashboard: React.FC = () => {
     try {
       setMyScreenings(await medicalScreeningService.getMyCompliance());
     } catch {
-      // Non-critical, and deliberately not retried: a department that does not
-      // track screenings still answers, and a failure must not turn into a
-      // claim that everything is current.
+      // Clear rather than keep the last good answer. A pull-to-refresh that
+      // fails would otherwise leave stale counts on screen while the scope note
+      // still claims screenings were checked — and a member who has since gone
+      // overdue would keep reading "Clear to respond".
+      setMyScreenings(null);
     }
   };
 
@@ -719,7 +721,10 @@ const Dashboard: React.FC = () => {
   // ── "Needs you" ───────────────────────────────────────────────────────────
   const urgentCerts = useMemo(
     () =>
-      myCerts
+      // currentCredentials first: my-training returns a history, so a renewed
+      // certification still has its lapsed row in the list. Without this the
+      // panel names an expiry the verdict above has already discounted.
+      currentCredentials(myCerts)
         .filter((c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= READINESS_WINDOW_DAYS))
         .sort((a, b) => (a.days_until_expiry ?? -Infinity) - (b.days_until_expiry ?? -Infinity)),
     [myCerts]
@@ -1042,7 +1047,11 @@ const Dashboard: React.FC = () => {
                 certs={myCerts}
                 positions={mySeats}
                 screenings={myScreenings}
-                onOpen={() => void navigate('/training/my-training')}
+                // A verdict driven only by screenings has nothing to say on
+                // the training page. Send those members to the department feed,
+                // where a screening notice would reach them, rather than to a
+                // page that cannot explain what grounded them.
+                onOpen={() => void navigate(myCerts.length > 0 ? '/training/my-training' : '/notifications?tab=inbox')}
               />
 
               <DashboardNeedsYou items={needsYouItems} />
