@@ -10,6 +10,7 @@ import re
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +30,7 @@ from app.models.forms import (
     IntegrationTarget,
     IntegrationType,
 )
-from app.models.user import User, UserStatus
+from app.models.user import Organization, User, UserStatus
 
 if TYPE_CHECKING:
     from app.models.membership_pipeline import ProspectiveMember
@@ -2321,17 +2322,35 @@ class FormsService:
                 ),
             }
 
+        # A date picker submits a calendar date ("2026-09-10") with no time.
+        # Stamping it midnight UTC turns it into the previous evening for
+        # every negative-offset department, so the coordinator's screen shows
+        # the day before the requester chose. Anchor date-only values to
+        # midnight in the organization's own timezone instead.
+        org_timezone = await self.db.scalar(
+            select(Organization.timezone).where(
+                Organization.id == str(submission.organization_id)
+            )
+        )
+        try:
+            request_tz = ZoneInfo(org_timezone or "UTC")
+        except (ZoneInfoNotFoundError, ValueError):
+            request_tz = timezone.utc
+
         def _parse_request_date(value: Any) -> Optional[datetime]:
             """Best-effort ISO parse for the requester's date preferences —
             a malformed date must not fail the whole request."""
             if not value:
                 return None
+            text = str(value).strip()
             try:
-                parsed = datetime.fromisoformat(str(value))
+                parsed = datetime.fromisoformat(text)
             except ValueError:
                 return None
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
+                # Date-only values carry no instant; a value that supplied its
+                # own time is still read as local to the department.
+                parsed = parsed.replace(tzinfo=request_tz)
             return parsed
 
         try:

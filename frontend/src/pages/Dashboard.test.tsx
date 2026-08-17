@@ -673,6 +673,39 @@ describe('Dashboard', () => {
       await user.click(within(feed).getByText('Fill the duty survey'));
       expect(mockNavigate).toHaveBeenCalledWith('/messages');
     });
+
+    // Enter on a focused body link bubbles to the row's keydown handler; the
+    // anchor's propagation guard covers clicks only, so without a target
+    // check the row would swallow the keypress and navigate instead.
+    it('lets a body link be activated by keyboard without the row hijacking it', async () => {
+      mockGetInbox.mockResolvedValue([
+        makeMessage({
+          id: 'msg-link-kbd',
+          title: 'Fill the duty survey',
+          body: 'Sign up at https://example.com/form today',
+          is_read: true,
+          is_persistent: true,
+        }),
+      ]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
+      const link = within(feed).getByRole('link', { name: 'https://example.com/form' });
+      link.addEventListener('click', (e) => e.preventDefault());
+
+      link.focus();
+      await user.keyboard('{Enter}');
+
+      expect(mockNavigate).not.toHaveBeenCalledWith('/messages');
+
+      // The row itself still responds to keyboard activation.
+      const row = within(feed).getByRole('button', { name: /Fill the duty survey/ });
+      row.focus();
+      await user.keyboard('{Enter}');
+      expect(mockNavigate).toHaveBeenCalledWith('/messages');
+    });
   });
 
   describe('Organization tab', () => {
@@ -714,7 +747,7 @@ describe('Dashboard', () => {
 
       renderWithRouter(<Dashboard />);
 
-      const equipment = await screen.findByRole('region', { name: 'My Equipment' });
+      const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
       expect(within(equipment).getByText('2')).toBeInTheDocument();
       expect(within(equipment).queryByText('51')).not.toBeInTheDocument();
     });

@@ -178,6 +178,20 @@ class TestPartialApprovalAccumulation:
                 action_result={"approvals": [{"role": "chief"}, {"role": "president"}]},
             )
 
+    async def test_manager_route_also_rejects_unrequested_roles(self):
+        step = _step(required=("chief", "president"))
+        prospect = _prospect(step)
+        service = _service(prospect, _signer("firefighter", "Firefighter"))
+
+        with pytest.raises(ValueError, match="does not require approval"):
+            await service.complete_step(
+                prospect_id="prospect-1",
+                organization_id="org-1",
+                step_id="step-1",
+                completed_by="signer-firefighter",
+                action_result={"approvals": [{"role": "firefighter"}]},
+            )
+
 
 class TestRecordStepApproval:
     async def test_rejects_non_multi_approval_steps(self):
@@ -197,6 +211,46 @@ class TestRecordStepApproval:
                 signer_id="signer-fire_chief",
                 role="chief",
             )
+
+    async def test_rejects_a_role_the_step_never_asked_for(self):
+        """The approve-step route is not manager-gated: the caller's only
+        authority is the stage asking for a role they hold. Without this,
+        any member could write their own position into any prospect's
+        workflow (PR #1510 review, P1)."""
+        step = _step(required=("chief", "president"))
+        prospect = _prospect(step)
+        service = _service(prospect, _signer("firefighter", "Firefighter"))
+
+        with pytest.raises(ValueError, match="does not require approval"):
+            await service.record_step_approval(
+                prospect_id="prospect-1",
+                organization_id="org-1",
+                step_id="step-1",
+                signer_id="signer-firefighter",
+                role="firefighter",
+            )
+
+        service.db.add.assert_not_called()
+        service._advance_current_step.assert_not_awaited()
+
+    async def test_rejects_a_step_with_no_configured_approvers(self):
+        """With required_approvers empty nothing is ever 'missing', so the
+        step would complete and advance the prospect on one unsolicited
+        call from any member."""
+        step = _step(required=())
+        prospect = _prospect(step)
+        service = _service(prospect, _signer("firefighter", "Firefighter"))
+
+        with pytest.raises(ValueError, match="no approver roles configured"):
+            await service.record_step_approval(
+                prospect_id="prospect-1",
+                organization_id="org-1",
+                step_id="step-1",
+                signer_id="signer-firefighter",
+                role="firefighter",
+            )
+
+        service._advance_current_step.assert_not_awaited()
 
     async def test_delegates_a_single_signed_approval(self):
         step = _step(required=("chief",))

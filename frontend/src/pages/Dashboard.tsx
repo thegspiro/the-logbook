@@ -1280,6 +1280,13 @@ const Dashboard: React.FC = () => {
                               tabIndex={0}
                               onClick={entry.onClick}
                               onKeyDown={(e) => {
+                                // Only the row itself activates the row. A
+                                // linkified body can hold focusable anchors,
+                                // and Enter on one bubbles here — without this
+                                // guard the row would swallow the keypress and
+                                // navigate to /messages instead of opening the
+                                // link (the anchor's guard covers clicks only).
+                                if (e.target !== e.currentTarget) return;
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
                                   entry.onClick();

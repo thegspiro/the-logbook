@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.event import (
+    EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
     CheckInWindowType,
     Event,
     EventRSVP,
@@ -550,11 +551,7 @@ class EventService:
         # be eligible for its own reminders and post-event notifications.
         custom_fields = copy.deepcopy(source_event.custom_fields)
         if custom_fields:
-            for lifecycle_key in (
-                "reminders_sent",
-                "validation_notification_sent",
-                "series_end_reminder_sent",
-            ):
+            for lifecycle_key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS:
                 custom_fields.pop(lifecycle_key, None)
 
         # Fields to copy from the source event

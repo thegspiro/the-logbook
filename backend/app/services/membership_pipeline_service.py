@@ -1368,6 +1368,20 @@ class MembershipPipelineService:
             raise ValueError("Step does not belong to this prospect's pipeline")
         if step.step_type != PipelineStepType.MULTI_APPROVAL:
             raise ValueError("Only multi-approval steps accept signer approvals")
+        # This route is deliberately not manager-gated — the roles a stage
+        # asks for are rarely held by members.manage holders. The caller's
+        # authority therefore comes entirely from the stage asking for a role
+        # they hold, so a role the stage never requested is not an approval at
+        # all: without this check any member could write their own position
+        # into any prospect's workflow (with arbitrary notes, receiving the
+        # full prospect record back), and a stage with no configured approvers
+        # would leave nothing "missing" — completing and advancing the
+        # prospect outright.
+        required = [str(r) for r in (step.config or {}).get("required_approvers") or []]
+        if not required:
+            raise ValueError("This step has no approver roles configured")
+        if role.casefold() not in {r.casefold() for r in required}:
+            raise ValueError("This step does not require approval from that role")
         return await self.complete_step(
             prospect_id=prospect_id,
             organization_id=organization_id,
@@ -1421,13 +1435,26 @@ class MembershipPipelineService:
                 organization_id, completed_by, action_result
             )
             if action_result and "approvals" in action_result:
+                required = (step.config or {}).get("required_approvers", [])
+                # An approval for a role the stage never asked for is not an
+                # approval — recording it would store misleading sign-off
+                # evidence against the prospect's file.
+                if required:
+                    wanted = {str(r).casefold() for r in required}
+                    for approval in action_result.get("approvals") or []:
+                        role_name = (
+                            approval.get("role") if isinstance(approval, dict) else None
+                        )
+                        if str(role_name or "").casefold() not in wanted:
+                            raise ValueError(
+                                "This step does not require approval from that role"
+                            )
                 # Each request carries exactly one authenticated approval;
                 # merge it over the stored list so separately signed
                 # approvals accumulate instead of replacing each other.
                 action_result = self._accumulate_approvals(
                     prospect, step, action_result
                 )
-                required = (step.config or {}).get("required_approvers", [])
                 approved_roles = {
                     str(a.get("role", "")).casefold()
                     for a in action_result.get("approvals", [])

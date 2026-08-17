@@ -5078,6 +5078,19 @@ class SchedulingService:
             shift.is_finalized = False
             shift.finalized_at = None
             shift.finalized_by = None
+            # Finalizing archives the validation prompt and leaves the
+            # "already reminded" marker behind. A reopened shift needs
+            # re-finalizing, so clear the marker or the post-shift task skips
+            # it forever and nobody is reminded to close it out again. Fresh
+            # dict reassignment — the JSON column does not track in-place
+            # mutation.
+            activities = shift.activities or {}
+            if activities.get("validation_notification_sent"):
+                shift.activities = {
+                    k: v
+                    for k, v in activities.items()
+                    if k != "validation_notification_sent"
+                }
             await self.db.commit()
             await self.db.refresh(shift)
             return shift, None

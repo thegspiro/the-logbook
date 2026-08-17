@@ -99,7 +99,10 @@ from loguru import logger
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.event import default_reminder_target
+from app.models.event import (
+    EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
+    default_reminder_target,
+)
 from app.models.inventory import MEDICAL_ITEM_TYPES
 from app.models.user import Organization, User
 from app.services.email_service import _redact_email
@@ -4498,11 +4501,7 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
 
             custom_fields = copy.deepcopy(parent.custom_fields)
             if custom_fields:
-                for lifecycle_key in (
-                    "reminders_sent",
-                    "validation_notification_sent",
-                    "series_end_reminder_sent",
-                ):
+                for lifecycle_key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS:
                     custom_fields.pop(lifecycle_key, None)
                 child_fields["custom_fields"] = custom_fields
 
