@@ -551,6 +551,13 @@ class TestSupportingFiles:
     def test_backend_requirements_exists(self):
         assert (BACKEND_DIR / "requirements.txt").exists()
 
+    def test_full_env_example_does_not_reveal_locked_accounts(self):
+        """Copied defaults must preserve uniform authentication failures."""
+        env_example = _read(ROOT_DIR / ".env.example.full")
+        assert re.search(
+            r"^ACCOUNT_LOCKOUT_REVEAL=false\s*$", env_example, re.MULTILINE
+        )
+
     def test_frontend_nginx_conf_exists(self):
         assert (FRONTEND_DIR / "nginx.conf").exists()
 
