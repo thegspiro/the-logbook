@@ -38,6 +38,7 @@ import {
   HardDrive,
   Key,
   Store,
+  Stethoscope,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { HelpLink } from '../components/HelpLink';
@@ -219,6 +220,13 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
     description:
       'Sell apparel and gear to members with open/close order windows, paid via Venmo, PayPal, cash, or check',
     icon: <Store className="h-5 w-5" />,
+  },
+  {
+    key: 'medical_supplies',
+    name: 'Medical Supplies',
+    description:
+      'EMS stock with lot numbers and expiration dates, tracked separately from gear so it can have its own supply officer',
+    icon: <Stethoscope className="h-5 w-5" />,
   },
 ];
 

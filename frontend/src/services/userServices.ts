@@ -3,6 +3,7 @@
  */
 
 import api from './apiClient';
+import { dedupeInFlight } from '../utils/inFlight';
 import type { Permission, PermissionCategory, Role, UserRoleResponse, UserWithRoles } from '../types/role';
 import type {
   AuthSettings,
@@ -315,6 +316,7 @@ export interface ModuleSettingsData {
   hr_payroll: boolean;
   grants: boolean;
   storefront: boolean;
+  medical_supplies: boolean;
   prospective_members: boolean;
   public_info: boolean;
 }
@@ -419,11 +421,17 @@ export const organizationService = {
   },
 
   /**
-   * Get enabled modules for the organization
+   * Get enabled modules for the organization.
+   *
+   * De-duplicated: every navigation surface asks for this on mount, and the
+   * response cache cannot help callers that arrive before the first response
+   * does. Without this they each made their own round trip.
    */
   async getEnabledModules(): Promise<EnabledModulesResponse> {
-    const response = await api.get<EnabledModulesResponse>('/organization/modules');
-    return response.data;
+    return dedupeInFlight('organization/modules', async () => {
+      const response = await api.get<EnabledModulesResponse>('/organization/modules');
+      return response.data;
+    });
   },
 
   /**

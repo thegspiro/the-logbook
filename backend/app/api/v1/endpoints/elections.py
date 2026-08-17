@@ -20,7 +20,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
@@ -1856,7 +1860,14 @@ async def list_candidates(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    return await service.list_candidates(election_id)
+    # Pending nominations are visible to members while nominations are open so
+    # nominees can respond.  Outside that phase they are election-management
+    # records and must not be exposed through the member-facing candidate list.
+    include_pending = (
+        election.status == ElectionStatus.NOMINATIONS
+        or user_has_permission(current_user, "elections.manage")
+    )
+    return await service.list_candidates(election_id, accepted_only=not include_pending)
 
 
 @router.post(

@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../../components/ux/DialogPanel';
 import { Clock, Users, UserPlus, Truck, Loader2, CalendarDays, Filter, Check, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -182,10 +183,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 </h3>
                 <div className="space-y-3">
                   {dayShifts?.map((shift) => (
-                    <div
-                      key={shift.id}
-                      className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 transition-colors hover:border-violet-500/30 sm:p-5"
-                    >
+                    <div key={shift.id} className="card p-4 hover:border-violet-500/30 sm:p-5">
                       <div className="flex items-start justify-between gap-3 sm:items-center">
                         <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
@@ -256,7 +254,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
           const targetShift = shifts.find((s) => s.id === signupShiftId);
           return (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+              className="modal-overlay flex items-center justify-center p-4"
               role="dialog"
               aria-modal="true"
               aria-label="Sign up for shift"
@@ -264,7 +262,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 if (e.key === 'Escape') setSignupShiftId(null);
               }}
             >
-              <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-sm rounded-xl border">
+              <DialogPanel onClose={() => setSignupShiftId(null)} className="w-full max-w-sm">
                 <div className="border-theme-surface-border border-b p-5">
                   <h2 className="text-theme-text-primary text-lg font-bold">Sign Up for Shift</h2>
                   {targetShift && (
@@ -334,7 +332,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                     </button>
                   )}
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           );
         })()}

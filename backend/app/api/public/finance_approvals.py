@@ -50,10 +50,18 @@ class ApprovalActionResponse(BaseModel):
 # string, so a generated client (and the contract fuzzer) treated "0" as a
 # legal request and the resulting rejection as a protocol violation. The
 # bounds mirror _load_record below — emailed approval tokens are 20-255 chars.
+#
+# The alphabet is declared for the same reason the bounds are, and bounds
+# alone were not enough: these are secrets.token_urlsafe values, so base64url
+# is the truth about them, and a length-only schema lets the fuzzer generate
+# non-ASCII strings that satisfy min_length as Python characters but arrive
+# shorter, percent-encoding being byte-oriented and lossy for anything that
+# will not round-trip through UTF-8. ASCII cannot lose characters in transit.
 APPROVAL_TOKEN = Path(
     ...,
     min_length=20,
     max_length=255,
+    pattern=r"^[A-Za-z0-9_-]+$",
     description="Single-use approval token from the notification email.",
 )
 

@@ -148,6 +148,9 @@ class TrainingSubmissionResponse(UTCResponseBase):
     id: UUID
     organization_id: UUID
     submitted_by: UUID
+    # Resolved by the service as a transient attribute; the model has no
+    # relationship to User, and the review queue needs a name, not an id.
+    submitter_name: Optional[str] = None
 
     course_name: str
     course_code: Optional[str]

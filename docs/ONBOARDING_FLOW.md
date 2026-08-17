@@ -1064,7 +1064,44 @@ The `modulePermissionConfigs` field stores which roles can manage each module. W
   `onboarding_csrf_token` for the double-submit check
 - `errors` — only kept in memory
 
-**Legacy compatibility**: The `syncWithSessionStorage()` function in the store reads from `sessionStorage` on first load if the Zustand store is empty, migrating any data from the older approach.
+**Legacy compatibility**: The `syncWithSessionStorage()` function in the store reads from `sessionStorage` on first load if the Zustand store is empty, migrating any data from the older approach. Separately, `loadSession()` and `clearSession()` in the API client delete any `onboarding_session_id` left in `localStorage` by a client built before 2026-08-15, so a stale identifier is dropped rather than presented.
+
+#### The two stores have different lifetimes — and that is user-visible
+
+The wizard's answers and the wizard's credential do not expire together, which
+produces the one confusing state in this flow:
+
+|                        | Wizard answers                       | Session identifier                                      |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------- |
+| Key                    | `localStorage['onboarding-storage']` | `sessionStorage['onboarding_session_id']`               |
+| Survives a tab close   | **Yes**                              | No                                                      |
+| Visible to another tab | **Yes**                              | No                                                      |
+| Server-side lifetime   | n/a                                  | 30-minute sliding expiry (`SESSION_EXPIRY_HOURS = 0.5`) |
+
+So reopening `/onboarding` after a browser restart **repaints every answer already
+typed while the server session behind them is gone.** The wizard looks resumable
+and is not. The failure surfaces at the next mutating step as `401` /
+`ONBD_SESSION_INVALID`, not at the repaint — which is the wrong moment for the
+user to learn about it, and the reason the guides and script 02 carry this
+explicitly.
+
+The obvious tightening — clearing `onboarding-storage` whenever the identifier is
+missing — was deliberately **not** done, because it would discard a part-finished
+department profile every time an installer glanced at another tab and came back.
+See [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) → "Onboarding Cannot Be
+Resumed Across a Browser Restart" for the open decision.
+
+**Edge cases:**
+
+- **A new tab does not inherit the run** and starts its own session. A
+  _duplicated_ tab does carry the identifier — Chrome and Firefox copy
+  `sessionStorage` into duplicates — but that is browser behavior, not a
+  supported resume path, and must not be documented as one.
+- **`403` / `ONBD_ALREADY_COMPLETED` is a different condition entirely**: an
+  organization row already exists, so `get_or_create_session()` refuses to open a
+  new session. The installer should sign in, not restart setup.
+- **`ResetProgressButton` calls `sessionStorage.clear()`**, so it discards the
+  identifier by construction.
 
 ---
 

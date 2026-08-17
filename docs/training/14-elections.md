@@ -200,8 +200,19 @@ Safeguards:
   email failures never block the phase change
 - Only candidates who **accepted** reach the ballot — `open_election` still
   validates this
+- **Pending nominations are member-visible only while nominations are open**
+  _(2026-08-16)_ — that window exists so nominees can see and respond to their
+  nomination. Once the phase closes, the member-facing candidate list shows
+  accepted candidates only; a nomination that was never accepted simply
+  disappears from members' view. Election managers (`elections.manage`)
+  always see the full list, pending entries included.
 
 ![Nominations tab with the nominate form and current nominations](./images/14-05-nominations-tab.png)
+
+> **[SCREENSHOT NEEDED — the candidate list for the same election seen from a
+> member account and an `elections.manage` account after nominations close:
+> pending nominations present for the manager, absent for the member. Caption
+> which account is which.]**
 
 ---
 

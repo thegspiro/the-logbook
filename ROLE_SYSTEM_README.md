@@ -268,6 +268,27 @@ Notes:
 
 ## Using the System
 
+### Onboarding Position Editor Semantics _(2026-08-13)_
+
+The onboarding position editor models exactly two checkboxes per module
+(**View** / **Manage**), so a saved position's permission list is rebuilt from
+those choices. Two classes of default permission are merged back in because the
+editor cannot express them:
+
+1. **Whole modules the editor doesn't cover** (audit, organization, users,
+   locations, meetings, …) — their defaults are carried over unchanged.
+2. **Explicitly read-only sub-permissions** within an edited module — currently
+   only `facilities.view_sensitive` — survive while the module keeps View.
+
+Everything else is intentional fallout: an **action** sub-permission the editor
+cannot show (`members.assign_positions`, `equipment_check.submit`, …) does
+**not** survive an admin clearing Manage on that module. Before 2026-08-13 such
+grants silently survived every save, leaving roles holding permissions the
+editor could never display or remove. A module saved with Manage carries the
+`module.*` wildcard, which covers its sub-permissions anyway. Roles saved
+before this change may still hold legacy invisible grants — review them in
+Role Management (`/settings/roles`), which shows the full permission list.
+
 ### Settings Navigation
 
 After onboarding, settings are split into two areas:

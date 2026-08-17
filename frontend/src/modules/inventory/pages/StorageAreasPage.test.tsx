@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import StorageAreasPage from './StorageAreasPage';
-import type { StorageAreaResponse } from '../types';
+import type { StorageAreaResponse, Location } from '../types';
 
 const mockGetLocations = vi.fn();
+const mockGetFacilities = vi.fn();
 const mockGetStorageAreas = vi.fn();
 const mockCreateStorageArea = vi.fn();
 const mockUpdateStorageArea = vi.fn();
@@ -14,6 +15,9 @@ const mockDeleteStorageArea = vi.fn();
 vi.mock('../../../services/api', () => ({
   locationsService: {
     getLocations: (...a: unknown[]) => mockGetLocations(...a) as unknown,
+  },
+  facilitiesService: {
+    getFacilities: (...a: unknown[]) => mockGetFacilities(...a) as unknown,
   },
   inventoryService: {
     getStorageAreas: (...a: unknown[]) => mockGetStorageAreas(...a) as unknown,
@@ -51,20 +55,114 @@ const makeArea = (overrides: Partial<StorageAreaResponse> = {}): StorageAreaResp
   ...overrides,
 });
 
+const makeRoom = (overrides: Partial<Location> = {}): Location => ({
+  id: 'room-1',
+  organization_id: 'org-1',
+  name: 'Apparatus Bay',
+  is_active: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  ...overrides,
+});
+
 describe('StorageAreasPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetLocations.mockResolvedValue([]);
+    mockGetFacilities.mockResolvedValue([]);
     mockGetStorageAreas.mockResolvedValue([]);
     mockCreateStorageArea.mockResolvedValue({});
     mockUpdateStorageArea.mockResolvedValue({});
     mockDeleteStorageArea.mockResolvedValue({});
   });
 
-  it('prompts to pick a facility and room once locations load', async () => {
+  it('shows every storage area when no facility or room is selected', async () => {
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'a-1', name: 'Rack A', location_id: 'room-1' }),
+      makeArea({ id: 'a-2', name: 'Cabinet B', location_id: 'room-2' }),
+      makeArea({ id: 'a-3', name: 'Homeless Bin' }),
+    ]);
     renderWithRouter(<StorageAreasPage />);
-    expect(await screen.findByText(/Select a facility and room above/)).toBeInTheDocument();
-    expect(mockGetLocations).toHaveBeenCalledTimes(1);
+
+    expect(await screen.findByText('Rack A')).toBeInTheDocument();
+    expect(screen.getByText('Cabinet B')).toBeInTheDocument();
+    expect(screen.getByText('Homeless Bin')).toBeInTheDocument();
+    expect(mockGetStorageAreas).toHaveBeenCalledWith({ flat: true });
+  });
+
+  it('says so plainly when the organization has no storage areas at all', async () => {
+    renderWithRouter(<StorageAreasPage />);
+    expect(await screen.findByText('No storage areas yet.')).toBeInTheDocument();
+  });
+
+  it('lists the facilities the rooms belong to, named from the facilities API', async () => {
+    mockGetLocations.mockResolvedValue([
+      makeRoom({ id: 'room-1', facility_id: 'fac-1', building: 'Station 1' }),
+      makeRoom({ id: 'room-2', name: 'Storage Closet', facility_id: 'fac-1', building: 'Station 1' }),
+      makeRoom({ id: 'room-3', name: 'Annex Loft', building: 'Annex' }),
+    ]);
+    mockGetFacilities.mockResolvedValue([{ id: 'fac-1', name: 'Station 1 — Headquarters' }]);
+    renderWithRouter(<StorageAreasPage />);
+
+    expect(await screen.findByRole('option', { name: 'Station 1 — Headquarters' })).toBeInTheDocument();
+    // A hand-entered location with no facility record still groups by building.
+    expect(screen.getByRole('option', { name: 'Annex' })).toBeInTheDocument();
+    // One option per facility, not one per room: two rooms in Station 1, one entry.
+    const facilitySelect = await screen.findByLabelText(/Facility/);
+    expect(within(facilitySelect).getAllByRole('option')).toHaveLength(3);
+  });
+
+  it('scopes the tree to the picked facility, then to the picked room', async () => {
+    mockGetLocations.mockResolvedValue([
+      makeRoom({ id: 'room-1', facility_id: 'fac-1', building: 'Station 1' }),
+      makeRoom({ id: 'room-2', name: 'Storage Closet', facility_id: 'fac-1', building: 'Station 1' }),
+      makeRoom({ id: 'room-3', name: 'Annex Loft', facility_id: 'fac-2', building: 'Annex' }),
+    ]);
+    mockGetFacilities.mockResolvedValue([
+      { id: 'fac-1', name: 'Station 1' },
+      { id: 'fac-2', name: 'Annex' },
+    ]);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'a-1', name: 'Bay Rack', location_id: 'room-1' }),
+      makeArea({ id: 'a-2', name: 'Closet Shelf', location_id: 'room-2' }),
+      makeArea({ id: 'a-3', name: 'Loft Bin', location_id: 'room-3' }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Bay Rack');
+
+    await user.selectOptions(screen.getByLabelText(/Facility/), 'fac-1');
+    expect(screen.getByText('Bay Rack')).toBeInTheDocument();
+    expect(screen.getByText('Closet Shelf')).toBeInTheDocument();
+    expect(screen.queryByText('Loft Bin')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText(/Room/), 'room-2');
+    expect(screen.queryByText('Bay Rack')).not.toBeInTheDocument();
+    expect(screen.getByText('Closet Shelf')).toBeInTheDocument();
+  });
+
+  it('keeps a child area with its parent when the child carries no room of its own', async () => {
+    mockGetLocations.mockResolvedValue([makeRoom({ id: 'room-1', facility_id: 'fac-1', building: 'Station 1' })]);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'a-1', name: 'Bay Rack', location_id: 'room-1' }),
+      makeArea({ id: 'a-2', name: 'Top Shelf', parent_id: 'a-1' }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Bay Rack');
+
+    await user.selectOptions(screen.getByLabelText(/Room/), 'room-1');
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
+    expect(screen.getByText('Top Shelf')).toBeInTheDocument();
+  });
+
+  it('still renders the picker when the facilities API is not permitted', async () => {
+    mockGetLocations.mockResolvedValue([makeRoom({ id: 'room-1', facility_id: 'fac-1', building: 'Station 1' })]);
+    mockGetFacilities.mockRejectedValue(new Error('403'));
+    renderWithRouter(<StorageAreasPage />);
+
+    expect(await screen.findByRole('option', { name: 'Station 1' })).toBeInTheDocument();
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 
   it('shows an error toast when locations fail to load', async () => {
@@ -73,38 +171,75 @@ describe('StorageAreasPage', () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
   });
 
-  it('creates a storage area from the add modal', async () => {
+  it('creates a storage area without asking for a barcode', async () => {
     const user = userEvent.setup();
     renderWithRouter(<StorageAreasPage />);
-    await screen.findByText(/Select a facility and room above/);
+    await screen.findByText('No storage areas yet.');
 
-    await user.click(screen.getByRole('button', { name: /Add Storage Area/ }));
+    // Header button and empty-state button both open the same modal.
+    await user.click(screen.getAllByRole('button', { name: /Add Storage Area/ })[0] as HTMLElement);
     await user.type(await screen.findByPlaceholderText('e.g. Rack A-1'), 'New Rack');
+
+    const barcodeField = screen.getByLabelText('Barcode');
+    expect(barcodeField).toHaveAttribute('readonly');
+    expect(barcodeField).toHaveValue('');
+
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => expect(mockCreateStorageArea).toHaveBeenCalledTimes(1));
-    expect(mockCreateStorageArea.mock.calls[0]?.[0]).toMatchObject({ name: 'New Rack' });
+    const payload = mockCreateStorageArea.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).toMatchObject({ name: 'New Rack' });
+    expect(payload).not.toHaveProperty('barcode');
     expect(mockToastSuccess).toHaveBeenCalledWith('Storage area created');
   });
 
-  it('renders matching areas from a search query', async () => {
-    mockGetStorageAreas.mockResolvedValue([makeArea()]);
+  it('shows the assigned barcode read-only when editing', async () => {
+    mockGetStorageAreas.mockResolvedValue([makeArea({ barcode: 'SA-000007' })]);
     const user = userEvent.setup();
     renderWithRouter(<StorageAreasPage />);
-    await screen.findByText(/Select a facility and room above/);
+    await screen.findByText('Rack A');
 
-    await user.type(screen.getByPlaceholderText(/Search storage areas by name/), 'Rack');
+    await user.click(screen.getByRole('button', { name: 'Edit Rack A' }));
+    const barcodeField = await screen.findByLabelText('Barcode');
+    expect(barcodeField).toHaveValue('SA-000007');
+    expect(barcodeField).toHaveAttribute('readonly');
+  });
+
+  it('renders matching areas from a search query', async () => {
+    mockGetStorageAreas.mockResolvedValue([makeArea(), makeArea({ id: 'a-bin', name: 'Bin 4' })]);
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Rack A');
+
+    await user.type(screen.getByPlaceholderText(/Search storage areas/), 'Rack');
 
     expect(await screen.findByText('Rack A')).toBeInTheDocument();
-    expect(mockGetStorageAreas).toHaveBeenCalledWith({ flat: true });
+    expect(screen.queryByText('Bin 4')).not.toBeInTheDocument();
+    // Search reads the already-loaded set rather than re-querying the API.
+    expect(mockGetStorageAreas).toHaveBeenCalledTimes(1);
+  });
+
+  it('finds an area by its barcode', async () => {
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ barcode: 'SA-000012' }),
+      makeArea({ id: 'a-bin', name: 'Bin 4' }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Rack A');
+
+    await user.type(screen.getByPlaceholderText(/Search storage areas/), 'SA-000012');
+
+    expect(await screen.findByText('Rack A')).toBeInTheDocument();
+    expect(screen.queryByText('Bin 4')).not.toBeInTheDocument();
   });
 
   it('edits an area surfaced through search', async () => {
     mockGetStorageAreas.mockResolvedValue([makeArea()]);
     const user = userEvent.setup();
     renderWithRouter(<StorageAreasPage />);
-    await screen.findByText(/Select a facility and room above/);
-    await user.type(screen.getByPlaceholderText(/Search storage areas by name/), 'Rack');
+    await screen.findByText('Rack A');
+    await user.type(screen.getByPlaceholderText(/Search storage areas/), 'Rack');
     await screen.findByText('Rack A');
 
     await user.click(screen.getByRole('button', { name: 'Edit Rack A' }));
@@ -119,8 +254,6 @@ describe('StorageAreasPage', () => {
     mockGetStorageAreas.mockResolvedValue([makeArea()]);
     const user = userEvent.setup();
     renderWithRouter(<StorageAreasPage />);
-    await screen.findByText(/Select a facility and room above/);
-    await user.type(screen.getByPlaceholderText(/Search storage areas by name/), 'Rack');
     await screen.findByText('Rack A');
 
     await user.click(screen.getByRole('button', { name: 'Delete Rack A' }));

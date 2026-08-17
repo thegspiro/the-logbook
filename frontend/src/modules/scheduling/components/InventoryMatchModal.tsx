@@ -144,7 +144,7 @@ const InventoryMatchModal: React.FC<InventoryMatchModalProps> = ({ templateId, i
         ) : (
           <>
             {coverage && (
-              <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-3 text-sm">
+              <div className="card-secondary p-3 text-sm">
                 <p className="text-theme-text-primary font-medium">
                   {coverage.linked} of {coverage.linkable} items are linked to inventory
                 </p>

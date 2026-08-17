@@ -851,7 +851,7 @@ export const MemberProfilePage: React.FC = () => {
                           personal_email: e.target.value,
                         }))
                       }
-                      className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input px-3 text-sm"
                       placeholder="Home email for post-separation contact"
                     />
                   </div>
@@ -866,7 +866,7 @@ export const MemberProfilePage: React.FC = () => {
                           address_street: e.target.value,
                         }))
                       }
-                      className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input px-3 text-sm"
                     />
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -881,7 +881,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_city: e.target.value,
                           }))
                         }
-                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input px-3 text-sm"
                       />
                     </div>
                     <div>
@@ -895,7 +895,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_state: e.target.value,
                           }))
                         }
-                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input px-3 text-sm"
                       />
                     </div>
                   </div>
@@ -911,7 +911,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_zip: e.target.value,
                           }))
                         }
-                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input px-3 text-sm"
                       />
                     </div>
                     <div>
@@ -925,7 +925,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_country: e.target.value,
                           }))
                         }
-                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input px-3 text-sm"
                       />
                     </div>
                   </div>
@@ -942,7 +942,7 @@ export const MemberProfilePage: React.FC = () => {
                     <button
                       onClick={() => setEditingAddress(false)}
                       disabled={savingAddress}
-                      className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex-1 rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
+                      className="btn-secondary text-theme-text-secondary flex-1 text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -1082,7 +1082,7 @@ export const MemberProfilePage: React.FC = () => {
 
         {/* Status Change Modal */}
         {statusModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="modal-overlay flex items-center justify-center">
             <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
               <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Change Member Status</h3>
               <div className="space-y-4">
@@ -1091,7 +1091,7 @@ export const MemberProfilePage: React.FC = () => {
                   <select
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value)}
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="form-input px-3 text-sm focus:ring-blue-500"
                   >
                     {Object.values(UserStatus).map((s) => (
                       <option key={s} value={s}>
@@ -1107,7 +1107,7 @@ export const MemberProfilePage: React.FC = () => {
                     onChange={(e) => setStatusReason(e.target.value)}
                     rows={3}
                     placeholder="Reason for the status change..."
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="form-input px-3 text-sm focus:ring-blue-500"
                   />
                 </div>
                 {(newStatus === UserStatus.DROPPED_VOLUNTARY || newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
@@ -1130,7 +1130,7 @@ export const MemberProfilePage: React.FC = () => {
                   type="button"
                   onClick={() => setStatusModalOpen(false)}
                   disabled={statusChanging}
-                  className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex-1 rounded-md border px-4 py-2 text-sm font-medium transition disabled:opacity-50"
+                  className="btn-secondary text-theme-text-secondary flex-1 text-sm font-medium transition"
                 >
                   Cancel
                 </button>

@@ -121,6 +121,7 @@ Enums:
 - External approvers who aren't system users (e.g., a Township Trustee who doesn't have a login)
 - Notification-only steps to external parties (e.g., "email the accountant when approved")
 - For APPROVAL steps with EMAIL type, the system generates a secure token link (like the existing `TrainingApproval.approval_token` pattern) so the external party can approve/deny via a one-click email link without logging in
+- **Approval tokens are single-use and consumed atomically** _(2026-08-16)_: the token row is locked (`SELECT … FOR UPDATE`) while the action runs and the token is cleared on approve/deny, so a forwarded or double-clicked link cannot action a step twice — the second attempt sees the step as already actioned
 
 ### How It Works
 
@@ -311,7 +312,7 @@ Enums:
 - `PUT /finance/dues/{id}` (record payment — appends to the ledger; idempotent on `transaction_reference`; refuses `WAIVED`/`EXEMPT`)
 - `GET /finance/dues/{id}/payments` *(2026-08-02)* — the payment ledger, oldest first. `finance.view`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
 - `POST /finance/dues/{id}/waive`
-- `POST /finance/dues/{id}/unwaive` *(2026-08-02)* — reverse a waiver. `finance.manage`, reason required. Restores whatever the ledger says (PENDING / PARTIAL / PAID) and writes a `finance.dues_waiver_reversed` audit event carrying the erased waive reason
+- `POST /finance/dues/{id}/unwaive` *(2026-08-02; reason handling reversed 2026-08-13)* — reverse a waiver. `finance.manage`, reason required. Restores whatever the ledger says (PENDING / PARTIAL / PAID) and writes a `finance.dues_waiver_reversed` audit event. **Free-text reasons are kept out of the immutable audit log**: the original waive reason is erased from the record and *not* copied into the event (it may carry personal information that must remain eligible for privacy scrubbing) — the event records only the dues id and restored status
 - `GET /finance/dues/summary` (collection rates, outstanding totals)
 - `POST /finance/dues/send-reminders` (trigger email notifications for overdue)
 

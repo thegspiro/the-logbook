@@ -81,7 +81,7 @@ const EXPENSE_TYPE_OPTIONS = [
 const FormSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading expense report form" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={`field-${String(i)}`} className="mb-4 space-y-2">
           <Skeleton className="h-4 w-24" />
@@ -258,7 +258,7 @@ const ExpenseReportFormPage: React.FC = () => {
       {/* Form */}
       <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-6">
         {/* Report Details */}
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Report Details</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -306,7 +306,7 @@ const ExpenseReportFormPage: React.FC = () => {
         </div>
 
         {/* Line Items */}
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-theme-text-primary text-lg font-semibold">Line Items</h2>
             <button
