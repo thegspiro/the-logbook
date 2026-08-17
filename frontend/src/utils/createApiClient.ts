@@ -75,6 +75,11 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
           await performSharedRefresh();
           return api(originalRequest);
         } catch {
+          // Awaited: handleExpiredSession purges locally-cached member data
+          // before navigating, and dropping the await would both skip the
+          // purge and leave a floating promise. Execution falls through to
+          // the shared reportApiError/reject below, so the caller still gets
+          // a rejection rather than an undefined response.
           await handleExpiredSession();
         }
       }

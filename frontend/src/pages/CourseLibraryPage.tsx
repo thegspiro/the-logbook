@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
 import { BookOpen, Plus, Search, Edit2, Trash2, X, Clock, Award, Filter, ChevronDown, ListOrdered } from 'lucide-react';
 import { trainingService } from '../services/api';
@@ -143,14 +144,14 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-lg">
+      <DialogPanel onClose={onClose} className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 className="text-theme-text-primary text-xl font-bold">{isEdit ? 'Edit Course' : 'Add New Course'}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary">
@@ -332,7 +333,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
             </button>
           </div>
         </form>
-      </div>
+      </DialogPanel>
     </div>
   );
 };
@@ -602,7 +603,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
           <>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {paginatedCourses.map((course) => (
-                <div key={course.id} className="card-secondary hover:bg-theme-surface-hover p-5 transition-colors">
+                <div key={course.id} className="card-secondary hover:bg-theme-surface-hover p-5">
                   <div className="mb-3 flex items-start justify-between">
                     <div className="flex-1">
                       <div className="mb-1 flex items-center space-x-2">
@@ -730,12 +731,15 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
 
       {syllabusCourse && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label={`Classes for ${syllabusCourse.name}`}
         >
-          <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-lg">
+          <DialogPanel
+            onClose={() => setSyllabusCourse(null)}
+            className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto"
+          >
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <div>
                 <h2 className="text-theme-text-primary text-xl font-bold">{syllabusCourse.name}</h2>
@@ -755,7 +759,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
             <div className="modal-body">
               <CourseSyllabusBuilder course={syllabusCourse} onCreateCourse={requestNewCourse} />
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

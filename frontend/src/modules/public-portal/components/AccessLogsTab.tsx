@@ -191,10 +191,7 @@ export const AccessLogsTab: React.FC = () => {
           {/* Clear Filters Button */}
           <div className="flex items-end">
             {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover w-full rounded-md border px-3 py-2"
-              >
+              <button onClick={clearFilters} className="btn-secondary text-theme-text-secondary w-full px-3">
                 Clear Filters
               </button>
             )}
@@ -204,7 +201,7 @@ export const AccessLogsTab: React.FC = () => {
 
       {/* Logs Table */}
       {logs.length === 0 ? (
-        <div className="bg-theme-surface-secondary border-theme-surface-border rounded-md border p-8 text-center">
+        <div className="card-secondary p-8 text-center">
           <svg
             className="text-theme-text-muted mx-auto h-12 w-12"
             fill="none"
@@ -225,7 +222,7 @@ export const AccessLogsTab: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="bg-theme-surface border-theme-surface-border overflow-x-auto rounded-lg border">
+          <div className="card overflow-x-auto">
             <table className="divide-theme-surface-border min-w-full divide-y">
               <thead className="bg-theme-surface-secondary">
                 <tr>
@@ -358,7 +355,7 @@ export const AccessLogsTab: React.FC = () => {
           </div>
 
           {/* Pagination */}
-          <div className="bg-theme-surface border-theme-surface-border flex items-center justify-between rounded-lg border px-4 py-3">
+          <div className="card flex items-center justify-between px-4 py-3">
             <div className="text-theme-text-secondary text-sm">
               Showing <span className="font-medium">{(filters.offset || 0) + 1}</span> to{' '}
               <span className="font-medium">{(filters.offset || 0) + logs.length}</span>
@@ -367,14 +364,14 @@ export const AccessLogsTab: React.FC = () => {
               <button
                 onClick={handlePrevPage}
                 disabled={!filters.offset || filters.offset === 0}
-                className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-secondary px-3 py-1 text-sm disabled:cursor-not-allowed"
               >
                 Previous
               </button>
               <button
                 onClick={handleNextPage}
                 disabled={logs.length < (filters.limit || 50)}
-                className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-secondary px-3 py-1 text-sm disabled:cursor-not-allowed"
               >
                 Next
               </button>

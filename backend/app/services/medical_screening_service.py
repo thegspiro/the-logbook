@@ -23,6 +23,7 @@ from app.schemas.medical_screening import (
     ComplianceItem,
     ComplianceSummary,
     ExpiringScreening,
+    MyComplianceSummary,
     ScreeningRecordCreate,
     ScreeningRecordUpdate,
     ScreeningRequirementCreate,
@@ -356,6 +357,42 @@ class MedicalScreeningService:
             expiring_soon_count=expiring_soon_count,
             is_fully_compliant=compliant_count == len(requirements),
             items=items,
+        )
+
+    async def get_my_compliance_summary(
+        self,
+        organization_id: str,
+        user_id: str,
+    ) -> MyComplianceSummary:
+        """Reduce a member's own compliance to counts, dropping the detail.
+
+        Built on top of ``get_compliance_status`` so there is one definition of
+        "compliant" rather than two that can drift apart. Everything naming a
+        specific screening is discarded here — see ``MyComplianceSummary``.
+        """
+        full = await self.get_compliance_status(
+            organization_id=organization_id,
+            user_id=user_id,
+        )
+
+        # Soonest lapse among screenings that are still valid. Anything already
+        # lapsed is reported by non_compliant_count, so a negative number never
+        # reaches the caller and cannot be rendered as "expires in -3 days".
+        upcoming = [
+            item.days_until_expiration
+            for item in full.items
+            if item.is_compliant
+            and item.days_until_expiration is not None
+            and item.days_until_expiration >= 0
+        ]
+
+        return MyComplianceSummary(
+            total_requirements=full.total_requirements,
+            compliant_count=full.compliant_count,
+            non_compliant_count=full.non_compliant_count,
+            expiring_soon_count=full.expiring_soon_count,
+            is_fully_compliant=full.is_fully_compliant,
+            days_until_next_expiration=min(upcoming) if upcoming else None,
         )
 
     async def get_expiring_soon(

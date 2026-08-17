@@ -27,7 +27,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, color
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-6">
+    <div className="card p-6">
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="text-theme-text-secondary text-sm font-medium">{title}</p>
@@ -83,7 +83,7 @@ export const UsageStatsTab: React.FC = () => {
 
   if (!stats) {
     return (
-      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-md border p-8 text-center">
+      <div className="card-secondary p-8 text-center">
         <p className="text-theme-text-secondary">No usage statistics available</p>
       </div>
     );
@@ -112,7 +112,7 @@ export const UsageStatsTab: React.FC = () => {
           onClick={() => {
             void refetch();
           }}
-          className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2"
+          className="btn-secondary text-theme-text-secondary"
         >
           <svg className="mr-2 inline h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -338,7 +338,7 @@ export const UsageStatsTab: React.FC = () => {
       {endpointStats.length > 0 && (
         <div>
           <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Top Endpoints (All Time)</h4>
-          <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-lg border p-6">
+          <div className="card space-y-4 p-6">
             {endpointStats.map((stat) => (
               <EndpointBar
                 key={stat.endpoint}

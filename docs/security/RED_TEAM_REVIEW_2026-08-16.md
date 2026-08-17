@@ -45,9 +45,53 @@ form, and failed token refreshes invoke the same purge before redirecting to log
 ## Residual deployment decisions
 
 The residual items documented in the 2026-08-11 review remain deployment or product decisions:
-verified database/Redis TLS, fail-closed GeoIP policy where country blocking is advertised, and an
-accessible challenge-response provider for exposed public forms. Operators should enable the
-applicable controls for their threat model and alert on degraded enforcement.
+verified database/Redis TLS and a fail-closed GeoIP policy where country blocking is advertised.
+Operators should enable the applicable controls for their threat model and alert on degraded
+enforcement.
+
+## Follow-up — attack-protection pass (2026-08-17)
+
+The challenge-response residual above is now **implemented** rather than outstanding, and three
+adjacent brute-force gaps were closed alongside it.
+
+### CI-11 — auth rate limit was neither Redis- nor memory-limited on a Redis error
+
+**Severity:** Low (defense-in-depth) · Carried over from `docs/app-review/core-infra.md`
+
+`check_rate_limit` requested the Redis verdict with `fail_closed=False` and a comment promising a
+fall back to the in-memory limiter on error. The fallback was unreachable: `is_rate_limited`
+catches its own exceptions and returns `False` ("not limited") unless `raise_on_error` is set, so
+in the window where Redis is connected but a command transiently fails, the request was limited by
+neither backend. Now passes `raise_on_error=True`, matching what the sibling `public_rate_limit`
+helper already did. The regression test was confirmed to fail without the fix.
+
+### Cross-account per-IP throttling (credential stuffing)
+
+The per-IP rate limit caps burst speed; the per-account lockout caps guesses against one user. A
+spray slips between them — one IP trying two passwords each against a thousand usernames stays
+under 5/min and never reaches `MAX_LOGIN_ATTEMPTS` on any single account. `app/core/suspicious_ip.py`
+counts failed attempts per IP across all accounts and blocks the IP past a threshold. A fully
+successful sign-in clears the counter (so shared station NAT does not accumulate ordinary typos),
+but never lifts an active block (so an attacker holding one valid credential cannot unblock
+themselves). Wired into `/login` and `/mfa/login`, including the pre-verification challenge
+rejections that resolve no account.
+
+### Breached-password detection
+
+Complexity rules accept passwords already sitting in public breach corpora — exactly what
+credential stuffing tries first. Checked against the HIBP range API under k-anonymity: only the
+first five characters of the SHA-1 hash leave the process. **Fails open**, deliberately, since
+complexity rules, password history, MFA, and lockout still apply and a third-party outage must not
+block password changes during an incident. Off by default.
+
+### Challenge-response on exposed public forms
+
+Pluggable Turnstile / hCaptcha / reCAPTCHA verification behind `CAPTCHA_ENABLED`, applied to public
+form submission and forgot-password. **Fails closed** — the opposite of the breached-password check,
+because there is no fallback control here and accepting unverified traffic during a provider outage
+is precisely the state an attacker wants. Not applied to guest check-in, which is reached by scanning
+a QR code at a station display where a challenge would be hostile. The CSP is widened for the
+configured provider's widget origins only; with CAPTCHA off the policy is unchanged.
 
 ## Validation still required
 

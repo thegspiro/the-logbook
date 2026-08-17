@@ -1200,6 +1200,18 @@ class FacilityRoom(Base):
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # Self-reference for rooms nested inside another room (a quartermaster's
+    # storage closet inside the volunteer office). SET NULL rather than
+    # CASCADE: deleting a room must never silently take its sub-rooms — and
+    # everything hanging off them (linked Locations, kiosk codes, stored
+    # inventory) — with it. The service re-parents children onto the deleted
+    # room's own parent first; this is the database-level backstop.
+    parent_room_id = Column(
+        String(36),
+        ForeignKey("facility_rooms.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     name = Column(String(200), nullable=False)
     room_number = Column(String(50), nullable=True)
@@ -1238,6 +1250,19 @@ class FacilityRoom(Base):
 
     # Relationships
     facility = relationship("Facility", back_populates="rooms")
+    parent_room = relationship(
+        "FacilityRoom",
+        remote_side=[id],
+        back_populates="child_rooms",
+    )
+    # passive_deletes: the service re-parents children onto the grandparent
+    # before deleting a room. Without this, SQLAlchemy would eagerly null out
+    # the loaded children's parent_room_id on delete and undo that.
+    child_rooms = relationship(
+        "FacilityRoom",
+        back_populates="parent_room",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         Index("idx_facility_rooms_type", "room_type"),

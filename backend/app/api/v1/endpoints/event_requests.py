@@ -16,6 +16,7 @@ import html as _html
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -273,9 +274,15 @@ async def _send_request_notification(
                         "body": f"New event request from {event_request.contact_name}",
                     },
                 )
-    except Exception:
-        # Email failures should not block the request flow
-        pass
+    except Exception as e:
+        # A failed notification must not roll back an event request the public
+        # already submitted — but swallowing it without a trace meant nobody
+        # could tell "no assignee was notified" from "no request came in".
+        logger.warning(
+            "Event request assignee notification failed for org {}: {}",
+            org.id,
+            e,
+        )
 
 
 async def _build_response(

@@ -6,6 +6,7 @@
  */
 
 import React, { useState } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import { RotateCcw, AlertTriangle, X } from 'lucide-react';
 import { apiClient } from '../services/api-client';
 import { useOnboardingStore } from '../store';
@@ -80,6 +81,8 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({ classN
     }
   };
 
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showModal, onClose: () => setShowModal(false) });
+
   return (
     <>
       {/* Reset Button */}
@@ -111,7 +114,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({ classN
           />
 
           {/* Modal Content */}
-          <div className="bg-theme-surface-modal relative w-full max-w-md rounded-xl border border-red-500/50 p-6 shadow-2xl">
+          <div ref={dialogRef} className="modal-panel relative w-full max-w-md border-red-500/50 p-6">
             {/* Close Button */}
             {!isResetting && (
               <button

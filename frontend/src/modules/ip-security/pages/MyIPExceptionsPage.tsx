@@ -76,7 +76,7 @@ const MyIPExceptionsPage: React.FC = () => {
 
         {/* Request Form */}
         {showForm && (
-          <div className="bg-theme-surface border-theme-surface-border mb-6 rounded-xl border p-6">
+          <div className="card mb-6 p-6">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Request IP Exception</h2>
             <IPExceptionRequestForm onSubmit={handleRequestSubmit} isSaving={isSaving} />
           </div>
@@ -96,7 +96,7 @@ const MyIPExceptionsPage: React.FC = () => {
         </div>
 
         {/* Exceptions Table */}
-        <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
+        <div className="card overflow-hidden">
           <IPExceptionTable exceptions={myExceptions} />
         </div>
       </div>
