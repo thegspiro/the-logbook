@@ -3979,14 +3979,32 @@ async def delete_storage_area(
 
 
 def _vendor_response(
-    vendor: InventoryVendor, stats: dict | None = None
+    vendor: InventoryVendor,
+    stats: dict | None = None,
+    *,
+    include_financials: bool,
 ) -> InventoryVendorResponse:
-    """Serialize a vendor with its contacts and purchasing totals."""
+    """Serialize a vendor with its contacts and purchasing totals.
+
+    ``include_financials`` is keyword-only and has no default on purpose: the
+    commercial fields below leave the building the moment a call site forgets
+    it, and a wrong default is silent. Callers state the caller's clearance.
+    """
     payload = InventoryVendorResponse.model_validate(vendor)
     if stats:
         payload.item_count = stats.get("item_count", 0)
         payload.open_reorder_count = stats.get("open_reorder_count", 0)
         payload.total_purchase_value = stats.get("total_purchase_value")
+    if not include_financials:
+        # `inventory.view` is a broad, member-level grant — it answers "who do
+        # we buy this from and how do I reach them". What we pay, on what terms,
+        # and under which account is a purchasing matter, so it rides with
+        # `inventory.manage` (which can read these by editing the vendor
+        # anyway). Contact details, address and the item/reorder counts stay:
+        # they are the point of the directory.
+        payload.account_number = None
+        payload.payment_terms = None
+        payload.total_purchase_value = None
     return payload
 
 
@@ -4000,6 +4018,9 @@ async def list_vendors(
     """
     List vendors for the organization, preferred ones first.
 
+    Account numbers, payment terms and spend totals are returned only to
+    callers holding ``inventory.manage``; everyone else gets the directory.
+
     **Authentication required**
     **Requires permission: inventory.view**
     """
@@ -4012,7 +4033,13 @@ async def list_vendors(
     stats = await service.get_vendor_stats(
         current_user.organization_id, [v.id for v in vendors]
     )
-    return [_vendor_response(v, stats.get(v.id)) for v in vendors]
+    financials = _has_permission(
+        "inventory.manage", _collect_user_permissions(current_user)
+    )
+    return [
+        _vendor_response(v, stats.get(v.id), include_financials=financials)
+        for v in vendors
+    ]
 
 
 @router.get("/vendors/unlinked-names", response_model=list[UnlinkedVendorName])
@@ -4044,6 +4071,9 @@ async def get_vendor(
     """
     Get one vendor with its contacts and purchasing totals.
 
+    Account numbers, payment terms and spend totals are returned only to
+    callers holding ``inventory.manage``; everyone else gets the directory.
+
     **Authentication required**
     **Requires permission: inventory.view**
     """
@@ -4052,7 +4082,13 @@ async def get_vendor(
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     stats = await service.get_vendor_stats(current_user.organization_id, [vendor.id])
-    return _vendor_response(vendor, stats.get(vendor.id))
+    return _vendor_response(
+        vendor,
+        stats.get(vendor.id),
+        include_financials=_has_permission(
+            "inventory.manage", _collect_user_permissions(current_user)
+        ),
+    )
 
 
 @router.post(
@@ -4090,7 +4126,8 @@ async def create_vendor(
         organization_id=str(current_user.organization_id),
     )
 
-    return _vendor_response(vendor)
+    # Reached only through `inventory.manage`, so nothing is withheld.
+    return _vendor_response(vendor, include_financials=True)
 
 
 @router.patch("/vendors/{vendor_id}", response_model=InventoryVendorResponse)
@@ -4132,7 +4169,8 @@ async def update_vendor(
     )
 
     stats = await service.get_vendor_stats(current_user.organization_id, [vendor.id])
-    return _vendor_response(vendor, stats.get(vendor.id))
+    # Reached only through `inventory.manage`, so nothing is withheld.
+    return _vendor_response(vendor, stats.get(vendor.id), include_financials=True)
 
 
 @router.delete("/vendors/{vendor_id}", status_code=status.HTTP_204_NO_CONTENT)

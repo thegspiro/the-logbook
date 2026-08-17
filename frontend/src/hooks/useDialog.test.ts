@@ -71,7 +71,13 @@ describe('useDialog', () => {
 
   it('does not re-register when the caller passes a new onClose each render', () => {
     const onClose = vi.fn();
-    const { rerender } = renderHook(() => useDialog({ onClose: () => onClose() }));
+    const { rerender } = renderHook(() =>
+      useDialog({
+        onClose: () => {
+          onClose();
+        },
+      })
+    );
 
     rerender();
     rerender();

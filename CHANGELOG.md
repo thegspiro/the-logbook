@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: vendor pricing is a purchasing matter, not a directory one (2026-08-16)
+
+**Changed**
+
+- **Account numbers, payment terms and vendor spend totals now require
+  `inventory.manage`.** They were readable by anyone holding `inventory.view` —
+  a broad, member-level grant whose job is answering "who do we buy this from
+  and how do I reach them". What the department pays a supplier, on what terms,
+  and under which account is a different question. `GET /inventory/vendors` and
+  `GET /inventory/vendors/{id}` now blank `accountNumber`, `paymentTerms` and
+  `totalPurchaseValue` unless the caller can manage inventory; names, phone,
+  email, fax, website, address, contacts and the item/reorder counts are
+  unchanged, so the directory still works. No UI changes: the vendors screen
+  already sits behind `inventory.manage`, and the item and reorder pickers only
+  ever read the name.
+
+  The serializer's clearance flag is keyword-only with no default, so a call
+  site that forgets it raises rather than falls open.
+
+**Fixed**
+
+- The schema-drift measurement recipe in `docs/DATABASE_SCHEMA_DRIFT.md` created
+  its two scratch databases without naming a collation, relying on the reader
+  having set `collation-server` to match docker-compose. On a stock server
+  (`utf8mb4_0900_ai_ci` on MySQL 8, `utf8mb4_general_ci` on MariaDB) the chain
+  dies at the first cross-table FK with errno 150, because some migrations
+  hardcode `COLLATE utf8mb4_unicode_ci` and the rest inherit the database
+  default. The `CREATE DATABASE` statements now name the collation themselves.
+
+### Inventory: vendors get database-backed tests, and a guard rail for migration-id collisions (2026-08-16)
+
+**Added**
+
+- **Backend Lint now runs `validate_migrations.py`.** The vendor migration
+  collided with a same-day revision id twice in one day — first with the
+  facilities room-nesting migration, then with the storage-area barcode
+  backfill — each time leaving `alembic upgrade head` failing with "Multiple
+  head revisions" for anyone upgrading through migrations. Git merges two files
+  that declare one revision id without a word, because they do not overlap;
+  only this script notices. It is stdlib-only, needs no database, runs in under
+  a second, and sits beside flake8 so a collision is caught at PR time rather
+  than after the merge. (Both renumberings themselves landed separately; this
+  is the part that stops the third one.)
+- `test_inventory_vendors_db.py` — the vendor flows against a real database,
+  marked `integration` so CI's MySQL and MariaDB jobs run them. The mocked
+  suite passed in full while merging a vendor deleted the contacts it reported
+  as moving; a cascade is precisely what a mock cannot have. These assert on
+  what is still in the database afterwards: contacts survive a merge, links
+  survive a deactivation, the case-folded matching the cleanup screen promises
+  actually matches across spellings and departments, spend counts retired
+  items while the catalog count does not, and a relinked reorder comes back
+  naming its new vendor. Verified to fail against the pre-fix merge.
+
 ### Inventory: medical supplies split onto their own page (2026-08-16)
 
 **Added**
@@ -211,8 +264,8 @@ that confirmed no new critical or high-severity findings.
   separately at 35 (measured 37.6%) so declarative model/schema bulk (~97%
   covered by import alone) cannot absorb a regression in real business logic.
 - Added a Stryker mutation-testing pilot config (`frontend/stryker.pilot.json`
-  + `vitest.stryker.config.ts`). Pilot score: 90.6% on three well-covered
-  utilities; the surviving mutants cluster in the `apiCache.ts` eviction path.
+  - `vitest.stryker.config.ts`). Pilot score: 90.6% on three well-covered
+    utilities; the surviving mutants cluster in the `apiCache.ts` eviction path.
 - Corrected CLAUDE.md pitfall #13: no lint rule guards bare
   `toHaveBeenCalledWith()` — it is review discipline, and a blanket ban was
   evaluated and rejected because the zero-argument form is the stronger, correct

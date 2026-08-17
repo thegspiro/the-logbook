@@ -18,11 +18,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
+import { canOpenAdministrationSection } from './adminNavigation';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
-import { hasAdministrationAccess } from './adminNavigation';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -96,9 +96,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  // users.view alone opens the Admin menu: the member ID scanner lives here,
-  // and validating a scanned card only needs users.view (see /members/scan).
-  const hasAnyAdminPermission = checkPermission('users.view') || hasAdministrationAccess(checkPermission);
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
