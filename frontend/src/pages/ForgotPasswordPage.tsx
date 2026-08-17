@@ -9,6 +9,7 @@ import { Link } from 'react-router';
 import { ArrowLeft, Mail, CheckCircle } from 'lucide-react';
 import { authService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useCaptcha } from '../hooks/useCaptcha';
 
 /** Cooldown between successive reset requests (in seconds). */
 const RESET_COOLDOWN_SECONDS = 60;
@@ -19,6 +20,7 @@ export const ForgotPasswordPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const captcha = useCaptcha('password_reset');
 
   // Cooldown countdown
   useEffect(() => {
@@ -36,20 +38,31 @@ export const ForgotPasswordPage: React.FC = () => {
 
       if (cooldown > 0) return;
 
+      let captchaToken: string | null = null;
+      if (captcha.required) {
+        captchaToken = await captcha.getToken();
+        if (!captchaToken) {
+          setError('Please complete the challenge below before continuing.');
+          return;
+        }
+      }
+
       setIsLoading(true);
 
       try {
-        await authService.requestPasswordReset({ email });
+        await authService.requestPasswordReset({ email }, captchaToken || undefined);
         setSuccess(true);
         setCooldown(RESET_COOLDOWN_SECONDS);
       } catch (err: unknown) {
         setError(getErrorMessage(err, 'Failed to send reset email. Please try again or contact your administrator.'));
         setCooldown(RESET_COOLDOWN_SECONDS);
+        // Tokens are single-use — a retry must solve a fresh challenge.
+        captcha.reset();
       } finally {
         setIsLoading(false);
       }
     },
-    [email, cooldown]
+    [email, cooldown, captcha]
   );
 
   if (success) {
@@ -148,6 +161,18 @@ export const ForgotPasswordPage: React.FC = () => {
                 />
               </div>
             </div>
+
+            {/* Challenge — renders nothing unless the server enforces one */}
+            {captcha.required && (
+              <div>
+                <div ref={captcha.containerRef} />
+                {captcha.error && (
+                  <p className="mt-2 text-sm text-red-700 dark:text-red-500" role="alert">
+                    {captcha.error}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div>
               <button
