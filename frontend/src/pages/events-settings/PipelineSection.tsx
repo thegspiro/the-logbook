@@ -10,6 +10,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
   onUpdateLeadTime,
   onUpdateDefaultAssignee,
   onTogglePublicVisibility,
+  onToggleAcceptPublicRequests,
   onAddTask,
   onRemoveTask,
   onReorderTask,
@@ -48,6 +49,33 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Accept public requests — the gate everything else here sits behind */}
+      <div className="border-theme-surface-border flex items-center justify-between border-t py-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <Globe className="text-theme-text-muted h-4 w-4" />
+            <p className="text-theme-text-primary text-sm font-medium">Accept Public Requests</p>
+          </div>
+          <p className="text-theme-text-muted mt-0.5 ml-6 text-xs">
+            Let anyone submit an outreach request from your public page. While this is off, the public request form is
+            closed and only staff can create requests.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggleAcceptPublicRequests}
+          disabled={saving}
+          className={`focus:ring-theme-focus-ring toggle-track-md ${
+            pipeline.accept_public_requests ? 'bg-green-500' : 'bg-theme-surface-hover'
+          }`}
+          role="switch"
+          aria-checked={pipeline.accept_public_requests}
+          aria-label="Accept public event requests"
+        >
+          <span className={`toggle-knob-sm ${pipeline.accept_public_requests ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
       </div>
 
       {/* Public progress visibility */}

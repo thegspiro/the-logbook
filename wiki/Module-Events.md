@@ -8,7 +8,7 @@ The Events module manages department events with QR code check-in, recurring eve
 
 - **Event Creation** — Create one-time or recurring events with location, time, and attendance tracking
 - **QR Code Check-In** — Generate unique QR codes for event check-in; members scan to register attendance
-- **Guest Check-In** — *(2026-08-09)* Opt-in **second** QR code on the room display that a **non-member** can scan to sign themselves in, with no account and no login. Built for outreach — volunteer interest nights, open houses. Optionally opens a prospective-member record for each guest who leaves an email. See [Guest Check-In](#guest-check-in-2026-08-09) below
+- **Guest Check-In** — _(2026-08-09)_ Opt-in **second** QR code on the room display that a **non-member** can scan to sign themselves in, with no account and no login. Built for outreach — volunteer interest nights, open houses. Optionally opens a prospective-member record for each guest who leaves an email. See [Guest Check-In](#guest-check-in-2026-08-09) below
 - **Recurring Events** — Daily, weekly, monthly, monthly-by-weekday (e.g., "2nd Tuesday"), and annual recurrence patterns with end dates and series management
 - **Event Templates** — Save and reuse event configurations
 - **RSVP Management** — Going/Maybe/Not Going with RSVP overrides for admins
@@ -18,23 +18,23 @@ The Events module manages department events with QR code check-in, recurring eve
 - **Post-Event Validation** — Organizers receive notifications to review/finalize attendance
 - **Past Events Tab** — Managers can browse historical events (hidden from regular members by default)
 - **Attendee Management** — Add/remove attendees directly from event detail page
-- **Training Integration** — Events can generate training sessions for attendance credit. *(2026-08-05)* The reverse now exists too: generating a **course cohort** creates one event per class of a multi-class course (a recruit school's fifteen subjects), each with its linked training session and the roster already RSVP'd — see [Module-Training](Module-Training#multi-class-courses--cohorts-2026-08-05)
-- **Custom Event Categories** — *(2026-03-04)* Define organization-specific event categories with color badges, filterable on the Events page and selectable in the Event form. Configured in Events Settings > Custom Event Categories
+- **Training Integration** — Events can generate training sessions for attendance credit. _(2026-08-05)_ The reverse now exists too: generating a **course cohort** creates one event per class of a multi-class course (a recruit school's fifteen subjects), each with its linked training session and the roster already RSVP'd — see [Module-Training](Module-Training#multi-class-courses--cohorts-2026-08-05)
+- **Custom Event Categories** — _(2026-03-04)_ Define organization-specific event categories with color badges, filterable on the Events page and selectable in the Event form. Configured in Events Settings > Custom Event Categories
 
 ---
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/events` | Events List | Authenticated |
-| `/events/:id` | Event Detail | Authenticated |
-| `/events/:id/qr-code` | Event QR Code | Authenticated |
-| `/events/:id/check-in` | Self Check-In | Authenticated |
-| `/events/:id/edit` | Edit Event | `events.manage` |
-| `/events/:id/monitoring` | Check-In Monitoring | `events.manage` |
-| `/events/:id/analytics` | Event Analytics | `analytics.view` |
-| `/events/admin` | Events Admin Hub — the sidebar entry is labeled **Manage Events** and points at `/events` since 2026-08-13; Create/Settings deep-link here via `?tab=create` / `?tab=settings` | `events.manage` |
+| URL                      | Page                                                                                                                                                                           | Permission       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
+| `/events`                | Events List                                                                                                                                                                    | Authenticated    |
+| `/events/:id`            | Event Detail                                                                                                                                                                   | Authenticated    |
+| `/events/:id/qr-code`    | Event QR Code                                                                                                                                                                  | Authenticated    |
+| `/events/:id/check-in`   | Self Check-In                                                                                                                                                                  | Authenticated    |
+| `/events/:id/edit`       | Edit Event                                                                                                                                                                     | `events.manage`  |
+| `/events/:id/monitoring` | Check-In Monitoring                                                                                                                                                            | `events.manage`  |
+| `/events/:id/analytics`  | Event Analytics                                                                                                                                                                | `analytics.view` |
+| `/events/admin`          | Events Admin Hub — the sidebar entry is labeled **Manage Events** and points at `/events` since 2026-08-13; Create/Settings deep-link here via `?tab=create` / `?tab=settings` | `events.manage`  |
 
 ---
 
@@ -71,10 +71,10 @@ including **check-out**, which is meaningless for a walk-in.
 
 Both switches are on **Edit Event → Check-In Settings**, and both default to off.
 
-| Setting                                     | Field                             | Effect                                                                            |
-| ------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------- |
-| Allow guest check-in                        | `allow_guest_check_in`            | Shows the guest QR code on the room display and opens the public sign-in page      |
-| Create a prospective member from each guest | `guest_check_in_creates_prospect` | Also opens a pipeline record for each guest who supplies an email                  |
+| Setting                                     | Field                             | Effect                                                                        |
+| ------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
+| Allow guest check-in                        | `allow_guest_check_in`            | Shows the guest QR code on the room display and opens the public sign-in page |
+| Create a prospective member from each guest | `guest_check_in_creates_prospect` | Also opens a pipeline record for each guest who supplies an email             |
 
 > **Off by default is deliberate.** Turning the first one on exposes an
 > **unauthenticated write path**. It belongs on outreach events and should stay
@@ -96,11 +96,11 @@ very visitors the page exists for.
 
 ### What gets written
 
-| Record                    | When                                                                     |
-| ------------------------- | ------------------------------------------------------------------------- |
+| Record                     | When                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `event_external_attendees` | Always. `source = 'kiosk_qr'`, distinguishing a self-recorded sign-in from one a staff member typed in |
-| `prospective_members`      | Only when the event opts in **and** the guest supplied an email            |
-| `prospect_event_links`     | Links that prospect to the event, `referral_source = "Attended: {title}"`  |
+| `prospective_members`      | Only when the event opts in **and** the guest supplied an email                                        |
+| `prospect_event_links`     | Links that prospect to the event, `referral_source = "Attended: {title}"`                              |
 
 `event_external_attendees.prospect_id` ties the two together with
 `ON DELETE SET NULL`, so purging a prospect never destroys the record of who was
@@ -120,22 +120,33 @@ in the room — that is the event's history, not the prospect's.
 
 ### Edge cases
 
-| Situation | Behavior |
-|---|---|
+| Situation                                      | Behavior                                                                                                                                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Guest arrives before the check-in window opens | Refused. Guests get the organizer's window **minus the early-arrival grace** members get — a member checking in early is identifiable and correctable, an anonymous early write is neither |
-| Guest taps the QR code twice | Matched on email where one was given, on name where it was not; returns `already_checked_in` rather than a second row |
-| Two guests with the same name and no email | They collapse into one row. The weaker fallback is deliberate — a duplicate on every double-tap is the far more common problem at a kiosk |
-| Staff pre-registered the guest | The sign-in fills blanks only; anything staff deliberately typed is kept |
-| Guest is already in the pipeline | The existing active prospect is linked to the event instead of a duplicate being opened |
-| The prospect cannot be created | Logged and swallowed. The attendance is still recorded and the guest still sees a confirmation — the sign-in is the thing they came to do |
-| The prospect is later purged | The attendance row survives with `prospect_id` set to NULL |
-| Guest leaves no email | Attendance is recorded; no prospect is opened, because there is no way to follow up |
+| Guest taps the QR code twice                   | Matched on email where one was given, on name where it was not; returns `already_checked_in` rather than a second row                                                                      |
+| Two guests with the same name and no email     | They collapse into one row. The weaker fallback is deliberate — a duplicate on every double-tap is the far more common problem at a kiosk                                                  |
+| Staff pre-registered the guest                 | The sign-in fills blanks only; anything staff deliberately typed is kept                                                                                                                   |
+| Guest is already in the pipeline               | The existing active prospect is linked to the event instead of a duplicate being opened                                                                                                    |
+| The prospect cannot be created                 | Logged and swallowed. The attendance is still recorded and the guest still sees a confirmation — the sign-in is the thing they came to do                                                  |
+| The prospect is later purged                   | The attendance row survives with `prospect_id` set to NULL                                                                                                                                 |
+| Guest leaves no email                          | Attendance is recorded; no prospect is opened, because there is no way to follow up                                                                                                        |
 
 ---
 
 ## Public Outreach Request Pipeline
 
 The Events module includes a public outreach request pipeline that lets community members submit event requests (fire safety demos, station tours, school visits, CPR classes, etc.) through a public-facing form. Department coordinators manage requests through a configurable workflow.
+
+> **Public intake is opt-in** _(2026-08-17)_. Turn it on under **Events →
+> Settings → Request pipeline → Accept Public Requests**; it is **off by
+> default**, including for existing departments. While it is off the public
+> endpoint answers as though the department does not exist — deliberately
+> indistinguishable, so the endpoint cannot be used to enumerate which
+> departments accept requests — and staff can still create requests
+> internally. When it is on, a submission must clear a human challenge and a
+> hidden honeypot field, and each department has a daily ceiling
+> (`public_daily_limit`, default 50) that counts **valid** submissions only,
+> so junk traffic cannot exhaust the allowance and lock out real requesters.
 
 ### Pipeline Features
 
@@ -162,12 +173,12 @@ Any active status → declined / cancelled
 
 ### Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/events/admin` (Event Requests tab) | Event Requests Admin | `events.manage` |
-| `/events/admin` (Settings tab) | Pipeline & Email Settings | `events.manage` |
-| `/request-status/:token` | Public Request Status | Public (no auth) |
-| `/f/:slug` | Public Request Form | Public (no auth) |
+| URL                                  | Page                      | Permission       |
+| ------------------------------------ | ------------------------- | ---------------- |
+| `/events/admin` (Event Requests tab) | Event Requests Admin      | `events.manage`  |
+| `/events/admin` (Settings tab)       | Pipeline & Email Settings | `events.manage`  |
+| `/request-status/:token`             | Public Request Status     | Public (no auth) |
+| `/f/:slug`                           | Public Request Form       | Public (no auth) |
 
 ### API Endpoints — Event Requests
 
@@ -259,23 +270,23 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 
 ### New Pages (2026-03-13)
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/events/analytics` | Event Analytics Dashboard | `analytics.view` |
-| `/events/templates` | Event Templates Management | `events.manage` |
+| URL                 | Page                       | Permission       |
+| ------------------- | -------------------------- | ---------------- |
+| `/events/analytics` | Event Analytics Dashboard  | `analytics.view` |
+| `/events/templates` | Event Templates Management | `events.manage`  |
 
 ### Edge Cases (2026-03-13)
 
-| Scenario | Behavior |
-|----------|----------|
-| Waitlisted attendees | Promoted in RSVP order when spots open |
-| Draft events | Not visible to non-admin users |
-| Conflict detection | Warns but does not block — departments may intentionally schedule concurrent events |
-| Recurrence exceptions | Tracked per-occurrence; deleting the exception restores the occurrence |
-| CSV import invalid rows | Skipped with error reporting; valid rows are still imported |
-| Calendar export | Respects user's timezone setting |
-| Non-respondent reminders | Excludes members who already responded (going, not going, or maybe) |
-| Template picker | Shows only active templates; deactivated templates hidden but not deleted |
+| Scenario                 | Behavior                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| Waitlisted attendees     | Promoted in RSVP order when spots open                                              |
+| Draft events             | Not visible to non-admin users                                                      |
+| Conflict detection       | Warns but does not block — departments may intentionally schedule concurrent events |
+| Recurrence exceptions    | Tracked per-occurrence; deleting the exception restores the occurrence              |
+| CSV import invalid rows  | Skipped with error reporting; valid rows are still imported                         |
+| Calendar export          | Respects user's timezone setting                                                    |
+| Non-respondent reminders | Excludes members who already responded (going, not going, or maybe)                 |
+| Template picker          | Shows only active templates; deactivated templates hidden but not deleted           |
 
 ---
 
@@ -316,13 +327,13 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 
 ### Data Model Changes (2026-03-22)
 
-| Table | Change | Description |
-|-------|--------|-------------|
-| `events` | `rolling_recurrence` (Boolean) | Enables rolling 12-month recurrence window |
-| `event_hour_mappings` | New table | Maps event types to admin hour tracking categories |
-| `admin_hours_requirements` | New table | Compliance requirements for admin hour categories |
-| `meeting_minutes` | FK cascade update | `event_id` FK cascades on delete |
-| `department_messages` | `is_persistent` (Boolean) | Messages only admins can clear |
+| Table                      | Change                         | Description                                        |
+| -------------------------- | ------------------------------ | -------------------------------------------------- |
+| `events`                   | `rolling_recurrence` (Boolean) | Enables rolling 12-month recurrence window         |
+| `event_hour_mappings`      | New table                      | Maps event types to admin hour tracking categories |
+| `admin_hours_requirements` | New table                      | Compliance requirements for admin hour categories  |
+| `meeting_minutes`          | FK cascade update              | `event_id` FK cascades on delete                   |
+| `department_messages`      | `is_persistent` (Boolean)      | Messages only admins can clear                     |
 
 ### API Endpoints (2026-03-22)
 
@@ -333,15 +344,15 @@ POST   /api/v1/events/{id}/end                   # Bulk checkout all checked-in 
 
 ### Edge Cases (2026-03-22)
 
-| Scenario | Behavior |
-|----------|----------|
-| Rolling recurrence with no end date | Generates 12 months ahead, auto-refreshed |
-| Delete series with past events | All events removed (past and future) |
-| "End Event" with no checked-in attendees | No-op with informational message |
-| Event linked to minutes then deleted | Minutes `event_id` set to null via cascade |
-| Admin hours with no mapping configured | Attendance not credited; mapping required |
-| Non-admin clearing persistent message | Clear button not shown |
-| Gmail with large email body | Hosted image URLs replace base64 logos to prevent clipping |
+| Scenario                                 | Behavior                                                   |
+| ---------------------------------------- | ---------------------------------------------------------- |
+| Rolling recurrence with no end date      | Generates 12 months ahead, auto-refreshed                  |
+| Delete series with past events           | All events removed (past and future)                       |
+| "End Event" with no checked-in attendees | No-op with informational message                           |
+| Event linked to minutes then deleted     | Minutes `event_id` set to null via cascade                 |
+| Admin hours with no mapping configured   | Attendance not credited; mapping required                  |
+| Non-admin clearing persistent message    | Clear button not shown                                     |
+| Gmail with large email body              | Hosted image URLs replace base64 logos to prevent clipping |
 
 ---
 
@@ -356,11 +367,11 @@ POST   /api/v1/events/{id}/end                   # Bulk checkout all checked-in 
 
 ### Edge Cases (2026-03-19)
 
-| Scenario | Behavior |
-|----------|----------|
-| In-app notifications | Appear in the member's notification bell alongside email delivery |
-| Time picker with pre-existing non-quarter values | Rounds to the nearest quarter-hour on next edit |
-| Check-in window near midnight | Uses consistent datetime source for both QR display and self-check-in |
+| Scenario                                         | Behavior                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------- |
+| In-app notifications                             | Appear in the member's notification bell alongside email delivery     |
+| Time picker with pre-existing non-quarter values | Rounds to the nearest quarter-hour on next edit                       |
+| Check-in window near midnight                    | Uses consistent datetime source for both QR display and self-check-in |
 
 ---
 
@@ -375,10 +386,10 @@ POST   /api/v1/events/{id}/end                   # Bulk checkout all checked-in 
 
 ### Edge Cases (2026-03-15)
 
-| Scenario | Behavior |
-|----------|----------|
-| Series already ended | No reminder is sent |
-| Eligible members endpoint | Returns only members who haven't already checked in |
+| Scenario                           | Behavior                                                                      |
+| ---------------------------------- | ----------------------------------------------------------------------------- |
+| Series already ended               | No reminder is sent                                                           |
+| Eligible members endpoint          | Returns only members who haven't already checked in                           |
 | Conflict detection across midnight | Correctly identifies overlaps when events span midnight in the org's timezone |
 
 ---
@@ -409,13 +420,13 @@ DELETE /api/v1/events/{id}/series                # Delete entire series
 
 ### Edge Cases — Recurring Events
 
-| Scenario | Behavior |
-|----------|----------|
-| Monthly-by-weekday with "5th week" | Falls back to last occurrence when month has fewer than 5 weeks |
-| Annual events on Feb 29 | Shifts to Feb 28 in non-leap years |
-| Delete single occurrence | Does not affect other occurrences in the series |
-| "Edit all future" | Only modifies events after the current date; past occurrences are unchanged |
-| Duplicate detection | Checks time + location overlap before creating each occurrence |
+| Scenario                           | Behavior                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------- |
+| Monthly-by-weekday with "5th week" | Falls back to last occurrence when month has fewer than 5 weeks             |
+| Annual events on Feb 29            | Shifts to Feb 28 in non-leap years                                          |
+| Delete single occurrence           | Does not affect other occurrences in the series                             |
+| "Edit all future"                  | Only modifies events after the current date; past occurrences are unchanged |
+| Duplicate detection                | Checks time + location overlap before creating each occurrence              |
 
 ---
 
@@ -455,7 +466,6 @@ The `custom_category` field is available on all event create/update/list endpoin
 ---
 
 **See also:** [Scheduling Module](Module-Scheduling) | [Training Module](Module-Training) | [Public Programs How-To](Public-Programs)
-
 
 ## Reminder audience and check-in defaults (August 14, 2026)
 

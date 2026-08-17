@@ -455,6 +455,19 @@ EVENT_SETTINGS_DEFAULTS = {
         "min_lead_time_days": 21,
         "default_assignee_id": None,
         "public_progress_visible": False,
+        # Public intake is opt-in (EV-5). The endpoint takes an organization_id
+        # from the query string, and those are discoverable through the public
+        # calendar, so every active department was reachable by anyone who
+        # looked one up. A department that has never configured outreach should
+        # not be accepting internet submissions that write rows and email a
+        # coordinator. Defaults merge over stored settings, so existing
+        # organizations read False until an admin turns it on deliberately.
+        "accept_public_requests": False,
+        # Per-organization ceiling for public submissions in a day, counted
+        # only for submissions that pass validation and the honeypot — parity
+        # with the forms module, where counting rejects let anonymous traffic
+        # exhaust a department's allowance and lock out legitimate submitters.
+        "public_daily_limit": 50,
         "tasks": [
             {
                 "id": "review_request",

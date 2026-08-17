@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: public request intake is opt-in and spam-controlled (2026-08-17)
+
+**Security / Added**
+
+- **A department must opt in before the internet can file requests against it**
+  (closes EV-5). `POST /event-requests/public` takes the organization from a
+  query parameter, and organization ids are discoverable through the public
+  calendar — so every _active_ department was reachable by anyone who looked
+  one up, with a per-IP limit of 10 as the only gate, while each submission
+  wrote rows and emailed a coordinator. Intake is now governed by
+  `events.request_pipeline.accept_public_requests`, **default false**, set
+  under **Events → Settings → Request pipeline → Accept Public Requests**. It
+  lives in the settings JSON behind a defaults merge, so there is no migration
+  and existing organizations read `false` until an admin turns it on.
+- **A closed department answers exactly like one that does not exist** — same
+  404, same detail. A distinguishable refusal would turn the endpoint into an
+  oracle for which departments accept requests, which is the reconnaissance
+  step before the flood the opt-in exists to stop.
+- **Honeypot and human challenge**, matching the forms module: an aliased
+  `website` field (a filled one returns the success shape and writes nothing,
+  so a bot has nothing to tune against) and the `require_captcha` dependency
+  that public form submit and password reset already carry. Event-request
+  intake had been left out of that work, making it the last unchallenged
+  internet-exposed write path.
+- **Per-organization daily ceiling** (`public_daily_limit`, default 50),
+  counted **only after** authorization, honeypot and validation — the
+  valid-only rule the forms module needed, where counting rejected traffic let
+  anonymous submissions exhaust a department's allowance and deny service to
+  legitimate ones. Exhaustion answers `429` with a clear message.
+
+Covered by `backend/tests/test_event_request_public_intake.py` (6 tests) plus
+the existing `test_captcha.py`.
+
 ### Migrations: revision ids are generated, not hand-authored (2026-08-17)
 
 **Changed**
