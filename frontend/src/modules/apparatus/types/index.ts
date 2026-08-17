@@ -591,20 +591,107 @@ export interface EvocLevelCreate {
   levelNumber: number;
   name: string;
   code: string;
-  description?: string;
+  description?: string | undefined;
   isCumulative?: boolean;
-  trainingProgramId?: string;
+  trainingProgramId?: string | undefined;
   sortOrder?: number;
   isActive?: boolean;
 }
 
-export type EvocLevelUpdate = Partial<EvocLevelCreate>;
+/**
+ * Update payload — not `Partial<EvocLevelCreate>`.
+ *
+ * The backend applies updates with `exclude_unset`, so an omitted key means
+ * "leave this alone" and only an explicit `null` clears a field. Unlinking a
+ * certifying program or wiping a description therefore has to send `null`,
+ * which `Partial<EvocLevelCreate>` cannot express.
+ */
+export interface EvocLevelUpdate {
+  levelNumber?: number;
+  name?: string;
+  code?: string;
+  description?: string | null;
+  isCumulative?: boolean;
+  trainingProgramId?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}
 
 export interface EvocLevelListItem {
   id: string;
   levelNumber: number;
   name: string;
   code: string;
+}
+
+// =============================================================================
+// Driver Qualification Exception
+// =============================================================================
+
+export const DriverExceptionStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DENIED: 'denied',
+  REVOKED: 'revoked',
+} as const;
+export type DriverExceptionStatus = (typeof DriverExceptionStatus)[keyof typeof DriverExceptionStatus];
+
+export const DriverExceptionReason = {
+  PARADE: 'parade',
+  SPECIAL_EVENT: 'special_event',
+  NON_EMERGENCY_TRANSPORT: 'non_emergency_transport',
+  MUTUAL_AID: 'mutual_aid',
+  OTHER: 'other',
+} as const;
+export type DriverExceptionReason = (typeof DriverExceptionReason)[keyof typeof DriverExceptionReason];
+
+export const DRIVER_EXCEPTION_REASON_LABELS: Record<string, string> = {
+  parade: 'Parade',
+  special_event: 'Special event',
+  non_emergency_transport: 'Non-emergency transport',
+  mutual_aid: 'Mutual aid',
+  other: 'Other',
+};
+
+export interface DriverException {
+  id: string;
+  organizationId: string;
+  userId: string;
+  userName: string | null;
+  /** Null means the exception covers any apparatus. */
+  apparatusId: string | null;
+  apparatusUnitNumber: string | null;
+  reason: string;
+  justification: string;
+  restrictions: string | null;
+  validFrom: string;
+  validUntil: string;
+  status: DriverExceptionStatus;
+  requestedBy: string | null;
+  requestedByName: string | null;
+  requestedAt: string | null;
+  reviewedBy: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewNotes: string | null;
+}
+
+/** Someone who can approve an exception — names and ranks only; contact
+ *  details stay behind the member directory's visibility settings. */
+export interface DriverExceptionApprover {
+  userId: string;
+  userName: string;
+  rank: string | null;
+}
+
+export interface DriverExceptionCreate {
+  userId: string;
+  apparatusId?: string | undefined;
+  reason: string;
+  justification: string;
+  restrictions?: string | undefined;
+  validFrom: string;
+  validUntil: string;
 }
 
 export interface EvocEligibilityCheck {

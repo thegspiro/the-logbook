@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: public request intake is opt-in and spam-controlled (2026-08-17)
+
+**Security / Added**
+
+- **A department must opt in before the internet can file requests against it**
+  (closes EV-5). `POST /event-requests/public` takes the organization from a
+  query parameter, and organization ids are discoverable through the public
+  calendar — so every _active_ department was reachable by anyone who looked
+  one up, with a per-IP limit of 10 as the only gate, while each submission
+  wrote rows and emailed a coordinator. Intake is now governed by
+  `events.request_pipeline.accept_public_requests`, **default false**, set
+  under **Events → Settings → Request pipeline → Accept Public Requests**. It
+  lives in the settings JSON behind a defaults merge, so there is no migration
+  and existing organizations read `false` until an admin turns it on.
+- **A closed department answers exactly like one that does not exist** — same
+  404, same detail. A distinguishable refusal would turn the endpoint into an
+  oracle for which departments accept requests, which is the reconnaissance
+  step before the flood the opt-in exists to stop.
+- **Honeypot and human challenge**, matching the forms module: an aliased
+  `website` field (a filled one returns the success shape and writes nothing,
+  so a bot has nothing to tune against) and the `require_captcha` dependency
+  that public form submit and password reset already carry. Event-request
+  intake had been left out of that work, making it the last unchallenged
+  internet-exposed write path.
+- **Per-organization daily ceiling** (`public_daily_limit`, default 50),
+  counted **only after** authorization, honeypot and validation — the
+  valid-only rule the forms module needed, where counting rejected traffic let
+  anonymous submissions exhaust a department's allowance and deny service to
+  legitimate ones. Exhaustion answers `429` with a clear message.
+
+Covered by `backend/tests/test_event_request_public_intake.py` (6 tests) plus
+the existing `test_captcha.py`.
+
 ### Migrations: revision ids are generated, not hand-authored (2026-08-17)
 
 **Changed**
@@ -267,6 +300,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raised `AttributeError` inside the per-organization guard, which logged it and
   moved on. Recipients now resolve through the `inventory.manage` permission via
   the roles relationship.
+
 ### Failures now say so: eight silent-error paths surfaced (2026-08-16)
 
 **Fixed**
@@ -542,6 +576,18 @@ that confirmed no new critical or high-severity findings.
 - Added a Stryker mutation-testing pilot config (`frontend/stryker.pilot.json`
   - `vitest.stryker.config.ts`). Pilot score: 90.6% on three well-covered
     utilities; the surviving mutants cluster in the `apiCache.ts` eviction path.
+- **The eviction gap that pilot found is closed** _(2026-08-17)_. The
+  `apiCache.ts` eviction path was 89% line-covered and could be deleted
+  wholesale with the suite still green: its one test never asserted how many
+  entries were evicted, so an off-by-one loop bound and the loss of the
+  re-insertion refresh both went unnoticed. Three tests now pin it — at the cap
+  nothing is evicted, each insert past the cap evicts exactly one oldest-first,
+  and re-caching a key makes it newest so it outlives older keys. `apiCache.ts`
+  now scores 90.43%, and deleting the eviction block fails the suite. The two
+  mutants that still survive are _equivalent_ — a comparison made redundant by
+  the excess arithmetic, and a runtime-unreachable guard that exists to satisfy
+  the type checker (removing it is a TS2345 error, not a behaviour change) —
+  and both are documented in place so they are not chased again.
 - Corrected CLAUDE.md pitfall #13: no lint rule guards bare
   `toHaveBeenCalledWith()` — it is review discipline, and a blanket ban was
   evaluated and rejected because the zero-argument form is the stronger, correct

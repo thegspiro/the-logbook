@@ -1816,3 +1816,192 @@ looked, this was broken_ — computed from the most recent check per
 (apparatus, template), so a fault fixed the next morning stops being reported.
 Assignment, repair and verification tracking would need a real
 `equipment_deficiencies` table and is not part of this change.
+## Driver Qualification: EVOC Administration & Position Roster (2026-08-16)
+
+Two gaps closed on the same chain: EVOC levels were modelled and enforced but
+unreachable from the UI, and there was no way to ask "who is cleared to drive?"
+short of opening every apparatus in turn.
+
+### EVOC levels are now administrable
+
+`evoc_levels` had full CRUD endpoints and no caller. Nothing in the frontend
+created a level, no migration seeded one, and `EvocLevelResponse` came back
+camelCase while the request schemas accepted snake_case only — so the first
+client to round-trip a level would have 422'd on `level_number`.
+
+With no levels on file, `Apparatus.required_evoc_level_id` stayed NULL,
+`check_driver_evoc_eligibility()` returned `eligible: True` unconditionally, and
+`auto_add_operators_for_evoc_completion()` never fired. The entire
+training → EVOC → apparatus-operator chain was inert in every installation.
+
+| Change                                                            | Where                                                                        |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Standard EVOC 1–4 ladder seeded lazily per org                    | `EvocLevelService.seed_defaults()`, called from `GET /apparatus/evoc-levels` |
+| Admin UI (create/edit/delete/activate, link certifying program)   | Settings → **EVOC Levels** (`EvocLevelsSettingsSection.tsx`)                 |
+| Request schemas accept camelCase                                  | `EvocLevelBase`, `EvocLevelUpdate`                                           |
+| `training_program_id` validated in-org (XC-1)                     | `EvocLevelService._assert_program_in_org()`                                  |
+| Level/code collisions return 400, not a 500 from the unique index | `EvocLevelService.update_level()`                                            |
+| Explicit nulls clear instead of being dropped                     | `apply_updates()` in `update_level()`                                        |
+
+Levels are seeded **per organization**, not as org-agnostic system rows: each
+carries a `training_program_id` pointing at that department's own certifying
+program, and a shared row would leak that link across tenants. The seed guard
+counts all rows including inactive ones, so deactivating an unused level does
+not resurrect the ladder — the same trade-off `OperationalRankService` makes.
+
+### Position qualification roster
+
+```
+GET /api/v1/scheduling/eligibility/roster?position=driver
+```
+
+Requires `scheduling.view` or `scheduling.manage`. Returns every active member
+eligible for the position with the _sources_ of that eligibility (rank,
+completed training, or the org's open-position list), their highest current EVOC
+level, and the apparatus they hold an operator record on. Surfaced at
+`/scheduling/qualifications` via the **Qualifications** admin card.
+
+Eligibility mirrors `get_eligible_positions()` exactly — same union behind the
+same membership-type gate — so the roster can never disagree with what
+self-signup enforces. Per-shift narrowing is deliberately not applied; this is
+the department-wide roster.
+
+Only _current_ operator records count (active, certified, unexpired), matching
+`check_driver_evoc_eligibility()`. An expired card must not read as cleared.
+
+### Edge Cases
+
+| Scenario                                  | Behavior                                                        |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| Org has no EVOC levels                    | Standard 1–4 seeded on first read of the levels endpoint        |
+| Every level deleted                       | Ladder re-seeds on next read; deactivate instead to suppress    |
+| Level deleted while apparatus requires it | Blocked with a descriptive 400                                  |
+| Certifying program from another org       | Rejected as "Invalid training program"                          |
+| Member rank-eligible with no EVOC         | Listed on the roster, flagged "No EVOC certification on file"   |
+| Member's EVOC expired                     | Excluded from EVOC level and apparatus clearances               |
+| Caller lacks `apparatus.manage`           | EVOC Levels settings section hidden rather than shown as a 403  |
+| Position roster during a refetch          | Labels derive from the loaded roster, not the pending selection |
+
+---
+
+_Last Updated: August 16, 2026_
+
+## EVOC Enforcement & Chief-Approved Driver Exceptions (2026-08-16)
+
+The EVOC check was advisory: `_attach_assignment_warnings` attached a
+non-blocking `evoc_warnings` entry and the assignment went through regardless.
+An officer could seat any member as the driver of any apparatus. It is now a
+hard block with a sanctioned, auditable override.
+
+### Enforcement
+
+`ShiftEligibilityService.evaluate_driver_assignment()` is the single decision
+point, returning `allowed`, `blocked_reason`, `warnings`, and the `exception`
+that carried an otherwise-blocked assignment.
+
+The block is applied in **`SchedulingService.create_assignment`**, not at the
+endpoints. Member self-signup and officer assignment both reach that one call,
+so the rule is written once and a future third write path inherits it.
+`update_assignment` re-checks when an edit moves someone into the driver seat —
+otherwise an officer blocked at create time could assign the member as a
+firefighter and PATCH the position to `driver`.
+
+`get_driver_assignment_warnings()` is now a thin wrapper over the same
+evaluation, so enforcement and display cannot describe one assignment
+differently.
+
+**`org.settings.scheduling.enforce_evoc` defaults to `true`.** Safe to switch on
+for existing organizations because the check is inert until an admin
+deliberately sets `required_evoc_level_id` on an apparatus. Turning it off
+downgrades the block to the previous advisory warning; the toggle is in
+Scheduling → Settings → General.
+
+### Driver exceptions
+
+New `driver_exceptions` table and `/api/v1/apparatus/driver-exceptions`
+endpoints, surfaced at `/scheduling/qualifications` under the **Driver
+exceptions** tab. Four controls make the override trustworthy:
+
+| Control                                                            | Where                                |
+| ------------------------------------------------------------------ | ------------------------------------ |
+| A request grants nothing — approval is a separate act              | `status` starts `pending`            |
+| Requester ≠ approver, and the beneficiary cannot approve their own | `assert_different_person`, twice     |
+| Chief-level permission to approve                                  | `apparatus.approve_driver_exception` |
+| Bounded validity — `valid_until` required, ≤ 366 days              | `MAX_VALIDITY_DAYS`                  |
+
+`apparatus.approve_driver_exception` is granted by default to fire chief,
+deputy chief, and assistant chief only — deliberately not to captain,
+lieutenant, or the president, who hold `apparatus.manage`. Authorizing an
+uncertified driver is an operational safety call.
+
+Request, approve, deny, and revoke are audit-logged (`driver_exception_*`,
+category `apparatus`; approval logs at `warning` severity). Revocation
+deliberately has **no** separation-of-duties bar: withdrawing permission is
+always the safe direction, and requiring a second signature to take an unsafe
+driver off a truck would be a hazard rather than a control.
+
+A NULL `apparatus_id` means "any apparatus" — the broader grant, so the request
+form asks for a unit first and the enforcement lookup prefers a unit-specific
+exception over a blanket one when both match, surfacing the narrower
+restrictions.
+
+### Edge Cases
+
+| Scenario                                             | Behavior                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------ |
+| Uncertified member assigned as driver                | 400 with the shortfall and how to resolve it                 |
+| Uncertified member self-signs up as driver           | Same block, same message                                     |
+| Assigned as firefighter, then PATCHed to driver      | Re-checked and blocked                                       |
+| Shift has no apparatus                               | No EVOC requirement to check; never blocked                  |
+| Apparatus has no `required_evoc_level_id`            | Never blocked                                                |
+| `enforce_evoc` off                                   | Advisory warning only, as before                             |
+| Approved exception covers the member, unit, and date | Allowed, with the restrictions surfaced to the officer       |
+| Exception pending, denied, or revoked                | Block stays in place                                         |
+| Exception expired before the shift date              | Block stays in place                                         |
+| Chief approves their own request, or one naming them | 400 (separation of duties); the UI hides the button          |
+| Re-deciding an already approved/denied request       | 400 — raise a new request                                    |
+| Approving a request whose window already closed      | 400                                                          |
+| Exception's apparatus deleted                        | `SET NULL` — widens to any apparatus, keeps the audit record |
+
+### The refusal has a route forward
+
+A block with no next step is where a safety control turns into a workaround —
+someone drives anyway and nobody records it. When an assignment or signup is
+refused, `ShiftDetailPanel` opens `DriverBlockedDialog` rather than a toast:
+
+- what is missing, in the backend's own words;
+- **who can approve an exception**, by name and rank, so the officer knows who
+  to call. Resolved from live permissions (positions + rank defaults, matched
+  with the same `permission_matches` the dependency layer uses) rather than
+  assumed from rank, so a department that moved the grant onto a training
+  officer sees the training officer. `GET /apparatus/driver-exceptions/approvers`,
+  readable by any member — names and ranks only, no contact details, which stay
+  behind the member directory's visibility settings;
+- an inline **request form**, prefilled with the member, the shift's apparatus,
+  and the shift date as a single-day window — the narrowest grant that solves
+  the problem in front of the officer.
+
+The dialog opens off the **`LB-SCHED-001`** support code, not the message text.
+`_check_driver_qualification` raises `CodedValueError`, `create_assignment` and
+`update_assignment` re-raise it rather than flattening it into their
+`(result, error)` tuple, and the three endpoints convert it to a
+`CodedHTTPException`. Matching on wording would break the moment the wording
+changed.
+
+Members without `scheduling.assign` / `scheduling.manage` / `apparatus.manage`
+see the approver list and are told to ask — the form is absent rather than
+present-and-failing. When nobody holds the approval grant at all, the dialog
+says so, instead of leaving an officer waiting on an approval that can never
+arrive.
+
+| Scenario                                    | Behavior                                                        |
+| ------------------------------------------- | --------------------------------------------------------------- |
+| Driver block on assign or signup            | Dialog with the shortfall, the approvers, and an inline request |
+| Approver lookup fails                       | Block still shown; the names are simply absent                  |
+| Nobody holds the approval grant             | Says so, rather than implying an approval is coming             |
+| Requester lacks the permission to raise one | Approver list only, with who to ask                             |
+| Any other assignment error                  | Unchanged — an ordinary toast                                   |
+
+---
+
+_Last Updated: August 16, 2026_

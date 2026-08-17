@@ -233,6 +233,88 @@ earlier** and remain stale.
 
 ---
 
+## "0 remaining" was measuring the wrong thing — 41 placeholders the tooling could not see
+
+Guide 01's two named placeholders are filled and verified (see the entries
+below). Re-checking them turned up something larger: **`status_report.py` and
+`apply_placeholders.py` shared a regex that matched none of the guides' actual
+placeholders.**
+
+Both required `\[SCREENSHOT NEEDED\]` — the bracket closing immediately after
+the word. Guides carry two syntaxes:
+
+```
+> **[SCREENSHOT NEEDED]:** _description outside the brackets_
+> **[SCREENSHOT NEEDED — description inside the brackets]**
+```
+
+Only the first matched. The second form accounts for **41 placeholders across
+twelve guides** — twenty of them in `19-august-2026-release-changes.md`, four
+each in guides 04 and 06, three in guide 09 — and several carry their own seed
+instructions ("seed orders in at least three states", "seed one
+organization-owned template and no vote data"). They were never counted, never
+attempted, and reported as though they did not exist. The tracker has been
+saying "0 remaining" while forty-one specified requests sat unread; the same
+list appears in this file's own SCREENSHOT NEEDED sections, so the work was
+known and the tooling simply never saw it.
+
+The bracket is now optional and unterminated in both scripts, which report
+**432 captured, 40 remaining**. Two properties were checked before changing it:
+every one of the 436 manifest shots carries an `anchor` (so no shot can drift
+onto a bracketed placeholder on a stale line number alone), and a dry run
+before and after replaces the identical set — the wider pattern lets the
+counter see these placeholders without letting the applier fill any of them by
+accident.
+
+### 00-15-sidebar-member was the administrator's sidebar
+
+The shot had no `auth` key, so it defaulted to admin: an image captioned "the
+member-facing sections" showed the ADMINISTRATION heading and Department
+Setup. 00-16's comment beside it recorded the symptom without naming the
+cause — it said an element clip of the nav "would be the same picture as the
+member-section shot above", which was true because both were the same user.
+
+Re-shot as a member, and the real member sidebar differs in more than the
+missing admin half: **Operations reads My Issued Gear / Gear & Uniforms**,
+where the stale admin capture showed My Equipment / Inventory. Those are
+renames, not permissions — no gate distinguishes them — so guide 00's member
+table was documenting labels the product no longer uses, and listing
+Department Store as an Operations child when it is its own top-level item.
+Corrected, along with **Gear Admin** (was Inventory Admin) in the
+Administration table, which the re-shot 00-16 exposed.
+
+00-16 also still pictured the raw-UTC dashboard timeline
+(`2026-08-16T23:00:00+00:00`) fixed earlier in this session, so it was re-shot
+too — an image displaying a bug the shipped code no longer has.
+
+### 01-39-scan-member-id-nav — the third guide-01 placeholder, filled
+
+The one in the invisible syntax asked for "side-by-side navigation for a
+`members.view`-only role and a `users.view` role". Checked against
+`SideNavigation.tsx` first: the rule is real —
+`anyPermission: ['users.view', 'members.manage']` — but the link is called
+**Scan Member ID**, not "Scanner", and it lives under Members in the
+Administration section.
+
+Two roles cannot be one picture, and the harness authenticates as the
+administrator, the demo member, or nobody — a `members.view`-only role is none
+of those. Split the way `09-18` and `01-membership.md:1156` were: the elevated
+half is captured, and the member half is cross-referenced to 00-15, whose
+sidebar has no Administration section at all — which is _why_ the scanner
+cannot appear there. Seeding a fourth identity would picture the permission
+pair exactly and is left recorded rather than half-done.
+
+Three harness lessons paid for by this one shot, all now written beside it:
+
+- **`innerText` lies about case.** The heading is uppercased by CSS, so the
+  DOM text is "Administration" and an exact `"ADMINISTRATION"` match — which
+  is what a debug dump shows you — never fires.
+- **The Administration sub-items are not anchors.** A `getByRole("link")`
+  locator finds nothing with the group open and the words plainly on screen.
+- **The admin half of the nav is built after permissions resolve**, so for a
+  moment the only button named "Members" is the member-facing roster item, and
+  clicking that one expands nothing. The shot waits for the section first.
+
 ## The 2026-08-17 pass — guides 04, 09, 06 and 08, 103 changed images verified
 
 All four guides were re-captured against the rebuilt database and the merged
@@ -287,6 +369,105 @@ against a seven-unit fleet — the missing one is U-1, unexplained and worth a
 look next pass. The stray "Oakville Fire Department" facility record the
 bootstrap creates also fronts two facility shots; real demo data, but the
 sparse record makes a poor face for the detail page.
+
+## The 2026-08-16 guide-09 re-capture — 22 images, every one opened
+
+Arithmetic checked rather than glanced at: the weighted scorecard's
+`10 + 30 = 40 of 50 = 80%` against its own per-section rows, the
+failed-at-100% result (a critical step fails the test regardless of the
+percentage — the banner says so, and it is the point of the shot), and the
+unscored-steps dialog's "1 step still has no Pass or Fail" against the
+`—/20` slider behind it.
+
+**`Avg Score 66%` looks wrong and is right.** The four scored tests average
+78%, but the stat filters on `validated_at` — 66% is the mean of the two
+_validated_ results (84 and 48). Verified against the query rather than
+assumed; recorded here because the next reader will do the same double-take.
+
+### Each capture run was littering the demo database
+
+Scoring a test is not a read. `09-16` and `09-18` drive the real scoring
+screen, so **every run filed another practice attempt** against the demo
+member — eleven had accumulated, all "Practice · Passed 100%", sorting above
+the official attempts. The member's results panel had become a wall of
+identical rows, and `09-21`'s prepare had grown a `maxHeight: 320px` clamp to
+cope, whose comment cited "fifty-odd identical passes from other seeding".
+
+`seed_skills_tests` now prunes them to one (the badge needs an example),
+through the route that refuses anything but practice records — an official
+result may carry a certification, which is why the API voids those instead.
+With the pile gone, the clamp only cut the validated PASS the caption is
+about, so it is removed and the step waits for that row instead.
+
+**Worth generalising:** a workaround for a data problem outlives the problem
+silently. The clamp still "worked" — it produced a clean image of the wrong
+rows.
+
+### A duplicate image, and a screen the guide invented
+
+`09-04-template-builder` and `09-05-template-detail` were **byte-identical**
+(same md5), the fourth instance of this shape after `02-21`/`02-41` and
+`04-20`/`17-01`. The cause is not a capture bug: `/templates/{id}` and
+`/templates/{id}/edit` both render `SkillTemplateBuilderPage`, so **there is
+no separate read-only template detail page** — the guide described UI the
+product does not have.
+
+Corrected the way the 08-13 pass corrected its five: the prose now says a
+template's own page _is_ the builder whether draft or published, the
+redundant shot and its file are removed, and `09-04` keeps the picture.
+
+## The 2026-08-16 guide-04 re-capture — 31 images, every one opened
+
+Numbers cross-checked against the API rather than read for plausibility:
+the event detail's 20/16/4 against its own twenty-row roster (four "Not
+Going" badges, counted), the check-in monitor's 9-of-22 at 40.91% with a
+134-minute average that matches its check-in timestamps, the analytics
+type distribution summing to its 29-event total, and the voter-eligibility
+roster's 22/22.
+
+### One product defect, two shots pointed at the wrong state
+
+**Meeting cards read "0 attendees 0 action items"** over a meeting whose
+detail view showed eight and two. `MeetingResponse` declares both counts
+and the cards render them, but the list query loads no children — the same
+shape of gap as `creator_name` one method above it, which had already been
+fixed this way. Two grouped counts, attached like the names, with tests.
+
+- **`04-04-event-qr-code` pictured "Check-in Not Available".** It matched
+  on `isUpcoming`, and the page gates the code behind its check-in window,
+  so an event days out shows a disabled badge under a caption about members
+  scanning to check in. Now matched on the in-progress event — the screen
+  an officer actually puts on the wall.
+- **`04-42-cast-ballot` pictured "No candidates for this position".** It
+  took the first _open_ election, which is the restricted-ballot seat with
+  an empty ballot. The elections list carries no candidate count, so no
+  list-level match could tell a contested race from an empty one — it now
+  resolves through each open election's candidates endpoint and lands on
+  the Captain race with its two candidates, which is what the caption
+  describes.
+
+### Seeder: the Minutes page had moved out from under it
+
+The page was rebuilt onto `/meetings` — first-class meeting records with
+attendees, motions and action items — while the seeder still populated only
+the older `/minutes-records` model. So a real minutes record sat behind a
+"No Meeting Minutes" empty state, and the Action Items page was empty too.
+Now seeded: an approved business meeting with attendees, motions and two
+open action items, plus a draft board meeting; and a pending public event
+request for the Requests tab. Both guarded **per title**, so a run that
+dies between the two creates adds the missing one next pass rather than
+deciding the step is done because one row exists.
+
+**A step written and then deleted.** A `seed_guest_prospect` step was added
+for the guest-sign-in prospect card before noticing that `04-33`'s prepare
+already creates Rosa Delgado by submitting the public form — and says so in
+its own comment. The manifest is part of the fixture surface; check it for
+an existing producer before adding a seeder step for a record a shot needs.
+
+Empty-state flags with their reasons: `04-31` ("No reminders" is the
+reminder-audience select's own option; both guest settings are ticked) and
+`04-34` (a walk-in guest has uploaded no documents; the Linked Events panel
+the shot is about is populated).
 
 ## The 2026-08-16 guide-02 re-capture — 66 applied images, every one opened
 
