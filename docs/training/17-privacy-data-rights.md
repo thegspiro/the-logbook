@@ -124,6 +124,19 @@ their duties require:
   screen. **Home address and personal email are never shown to ordinary
   members at any visibility setting** — those are visible only to members who
   manage the roster.
+- **Your account-security details are not part of your directory entry**
+  *(2026-08-16)*. A colleague who can open your profile through the member
+  directory (`members.view`) does not see whether you have MFA enabled,
+  whether your email is verified, when you last logged in, when your account
+  was created or changed, your notification preferences, or the permission
+  lists behind your roles — only the role names the profile displays. Those
+  fields remain visible to user administrators (`users.view`), roster
+  managers, and you on your own record.
+
+> **[SCREENSHOT NEEDED — the same member profile viewed with `members.view`
+> only and with `users.view`, side by side, showing the account-security
+> block absent in the first; use a demo member with MFA enabled.]**
+
 - **Date of birth and emergency contacts are restricted to leadership**
   *(2026-08-02)* — the chiefs, captains, president, vice-president,
   secretaries and membership coordinator, plus you on your own record. There

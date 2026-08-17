@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import toast from 'react-hot-toast';
 import {
   BookOpen,
@@ -234,6 +235,8 @@ const MinutesPage: React.FC = () => {
   // -------------------------------------------------------
   // Render
   // -------------------------------------------------------
+
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showCreateModal, onClose: () => setShowCreateModal(false) });
 
   return (
     <div className="min-h-screen">
@@ -485,10 +488,7 @@ const MinutesPage: React.FC = () => {
                       ) : (
                         <div className="space-y-2">
                           {waivers[meeting.id]?.map((waiver, wIdx) => (
-                            <div
-                              key={wIdx}
-                              className="bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-sm"
-                            >
+                            <div key={wIdx} className="card p-3 text-sm">
                               <div className="flex items-center justify-between">
                                 <span className="text-theme-text-primary font-medium">
                                   {toDisplayString(waiver.user_name ?? waiver.user_id ?? 'Unknown')}
@@ -585,8 +585,8 @@ const MinutesPage: React.FC = () => {
         {showCreateModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-2xl rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
+              <div ref={dialogRef} className="modal-panel relative w-full max-w-2xl">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-theme-text-primary text-lg font-medium">Record Meeting Minutes</h3>

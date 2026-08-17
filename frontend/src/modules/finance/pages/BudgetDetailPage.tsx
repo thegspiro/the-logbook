@@ -33,7 +33,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName }) => 
     budget.amountBudgeted > 0 ? Math.min((budget.amountEncumbered / budget.amountBudgeted) * 100, 100 - spentPct) : 0;
 
   return (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <div className="mb-4 flex items-center gap-3">
         <div className="rounded-lg bg-green-100 p-2 dark:bg-green-500/20">
           <DollarSign className="h-5 w-5 text-green-600" />
@@ -106,7 +106,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName }) => 
 const DetailSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading budget details" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <div className="mb-4 flex items-center gap-3">
         <Skeleton className="h-10 w-10" rounded="lg" />
         <div className="space-y-2">
@@ -124,7 +124,7 @@ const DetailSkeleton: React.FC = () => (
       </div>
       <Skeleton className="mt-6 h-3 w-full" />
     </div>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <Skeleton className="mb-4 h-5 w-40" />
       {Array.from({ length: 5 }).map((_, i) => (
         <Skeleton key={`row-${String(i)}`} className="mb-3 h-10 w-full" />
@@ -216,7 +216,7 @@ const BudgetDetailPage: React.FC = () => {
       <BudgetInfoCard budget={budget} categoryName={categoryName} />
 
       {/* Transaction History Placeholder */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Transaction History</h3>
         <EmptyState
           icon={FileText}

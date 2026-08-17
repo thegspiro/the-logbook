@@ -115,6 +115,7 @@ describe('purgeLocalMemberData', () => {
 
 describe('clearAllDrafts', () => {
   const REAL_KEY_PREFIX = 'shift-report-draft-';
+  const EQUIPMENT_KEY_PREFIX = 'equipment-check-draft-';
   const INDEX_KEY = 'shift-report-draft-index';
 
   beforeEach(() => {
@@ -129,6 +130,7 @@ describe('clearAllDrafts', () => {
 
     localStorage.setItem(`${REAL_KEY_PREFIX}shift-1`, JSON.stringify({ a: 1 }));
     localStorage.setItem(`${REAL_KEY_PREFIX}shift-2`, JSON.stringify({ a: 2 }));
+    localStorage.setItem(`${EQUIPMENT_KEY_PREFIX}shift-1-template-1`, JSON.stringify({ notes: 'sensitive' }));
     localStorage.setItem(INDEX_KEY, JSON.stringify(['shift-1']));
     // A draft the index lost track of must still be purged — it holds the
     // same PII either way.
@@ -138,6 +140,7 @@ describe('clearAllDrafts', () => {
 
     expect(localStorage.getItem(`${REAL_KEY_PREFIX}shift-1`)).toBeNull();
     expect(localStorage.getItem(`${REAL_KEY_PREFIX}shift-2`)).toBeNull();
+    expect(localStorage.getItem(`${EQUIPMENT_KEY_PREFIX}shift-1-template-1`)).toBeNull();
     expect(localStorage.getItem(INDEX_KEY)).toBeNull();
     expect(localStorage.getItem('unrelated-key')).toBe('keep me');
     expect(removed).toBeGreaterThan(0);

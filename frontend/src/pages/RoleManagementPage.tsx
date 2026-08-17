@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -234,7 +235,7 @@ export const RoleManagementPage: React.FC = () => {
         {showCreateModal && (
           <div
             ref={roleModalRef}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            className="modal-overlay flex items-center justify-center"
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-modal-title"
@@ -242,7 +243,10 @@ export const RoleManagementPage: React.FC = () => {
               if (e.key === 'Escape') setShowCreateModal(false);
             }}
           >
-            <div className="bg-theme-surface-modal mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-lg shadow-xl">
+            <DialogPanel
+              onClose={() => setShowCreateModal(false)}
+              className="mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden"
+            >
               <div className="border-theme-surface-border shrink-0 border-b px-6 py-4">
                 <h3 id="role-modal-title" className="text-theme-text-primary text-lg font-medium">
                   {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
@@ -361,7 +365,7 @@ export const RoleManagementPage: React.FC = () => {
               >
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium"
+                  className="btn-secondary text-theme-text-secondary text-sm font-medium"
                 >
                   Cancel
                 </button>
@@ -374,7 +378,7 @@ export const RoleManagementPage: React.FC = () => {
                   {editingRole ? 'Save Changes' : 'Create Role'}
                 </button>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         )}
       </div>

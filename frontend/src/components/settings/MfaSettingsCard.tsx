@@ -18,8 +18,7 @@ type Step = 'idle' | 'enrolling' | 'recovery';
 // Warn the member to generate fresh codes once they're running low.
 const LOW_RECOVERY_THRESHOLD = 3;
 
-const inputCls =
-  'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+const inputCls = 'form-input px-3 focus:ring-violet-500';
 
 export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange }) => {
   const [loading, setLoading] = useState(true);

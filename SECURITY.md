@@ -104,6 +104,7 @@ Organizations implementing The Logbook must also implement:
 #### Minimum Necessary Standard
 
 The system supports:
+
 - Role-based access control to limit PHI access
 - Granular permissions for different user roles
 - Audit trails showing who accessed what data
@@ -111,6 +112,7 @@ The system supports:
 #### Individual Rights
 
 The system supports:
+
 - Data export capabilities for individual access requests
 - Audit logs for accounting of disclosures
 - Data amendment tracking
@@ -221,6 +223,7 @@ Regular testing should include:
 ### Password Requirements
 
 **Minimum Standards (configurable in .env):**
+
 - Minimum length: 12 characters (NIST SP 800-63B recommendation)
 - At least one uppercase letter
 - At least one lowercase letter
@@ -262,6 +265,7 @@ Regular testing should include:
 **Algorithm**: AES-256-GCM (authenticated encryption — confidentiality plus an integrity tag, fresh random 96-bit nonce per value). Data written before the AES-256-GCM migration used Fernet (AES-128-CBC + HMAC-SHA256) and remains readable; `backend/scripts/reencrypt_to_aesgcm.py` (dry-run by default) re-encrypts it to AES-256-GCM — see the operator runbook `docs/AES256_GCM_BACKFILL_RUNBOOK.md`.
 
 **What is Encrypted:**
+
 - User passwords (Argon2id hashing)
 - Sensitive PHI fields
 - File uploads containing sensitive data
@@ -269,12 +273,14 @@ Regular testing should include:
 - Database columns marked as sensitive
 
 **Key Management:**
+
 - Encryption keys stored in environment variables
 - Never committed to version control (`.env` files are in `.gitignore`)
 - Rotated regularly (recommended: every 90 days)
 - Consider using a key management service (AWS KMS, Azure Key Vault, HashiCorp Vault)
 
 **Onboarding Session Encryption:**
+
 - Email configuration (SMTP passwords, OAuth secrets) encrypted before storage
 - File storage configuration (AWS keys, Azure keys) encrypted before storage
 - Only platform type identifiers are stored in plain text
@@ -283,6 +289,7 @@ Regular testing should include:
 ### Encryption in Transit
 
 **TLS 1.3** for all network communications:
+
 - HTTPS for web traffic
 - TLS for database connections
 - Encrypted email (STARTTLS)
@@ -291,6 +298,7 @@ Regular testing should include:
 ### Field-Level Encryption
 
 Sensitive fields that can be encrypted:
+
 - Social Security Numbers
 - Driver's License Numbers
 - Medical Record Numbers
@@ -317,6 +325,7 @@ The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling 
 ### What is Logged
 
 #### Authentication Events
+
 - Login attempts (success and failure)
 - Logout events
 - Password changes
@@ -325,6 +334,7 @@ The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling 
 - Session creation/termination
 
 #### Data Access
+
 - PHI access (view, edit, delete)
 - Document downloads
 - Report generation
@@ -332,6 +342,7 @@ The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling 
 - Search queries (if sensitive)
 
 #### Administrative Actions
+
 - User creation/modification/deletion
 - Role changes
 - Permission modifications
@@ -339,6 +350,7 @@ The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling 
 - Module enable/disable
 
 #### Security Events
+
 - Failed authorization attempts
 - Rate limit violations
 - Suspicious activity
@@ -355,6 +367,7 @@ The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling 
 ### Log Monitoring
 
 Automated monitoring for:
+
 - Multiple failed login attempts
 - After-hours access to PHI
 - Bulk data exports
@@ -432,6 +445,7 @@ Automated monitoring for:
 Permissions are structured as: `module.resource.action`
 
 Examples:
+
 - `users.profile.view`
 - `users.profile.edit`
 - `documents.sensitive.view`
@@ -449,12 +463,14 @@ The Logbook supports public-facing forms that can be accessed without authentica
 ### Protection Layers
 
 #### Input Sanitization
+
 - All submitted values are HTML-escaped before storage (prevents stored XSS)
 - Null bytes are stripped from all input
 - Per-field length limits enforced (5,000 chars for text, 50,000 for textarea, 254 for email)
 - Submitter name and email are independently sanitized
 
 #### Type-Specific Validation
+
 - **Email fields**: Format validation + header injection prevention (rejects newlines/carriage returns)
 - **Phone fields**: Character whitelist (digits, +, -, parentheses, spaces only)
 - **Number fields**: Range validation against configured min/max values
@@ -462,27 +478,32 @@ The Logbook supports public-facing forms that can be accessed without authentica
 - **Regex patterns**: Optional custom validation patterns per field
 
 #### Rate Limiting
+
 - **Form views**: 60 requests per minute per IP (5-minute lockout)
 - **Form submissions**: 10 requests per minute per IP (10-minute lockout)
 - Uses the application's existing in-memory rate limiter infrastructure
 
 #### Bot Detection
+
 - **Honeypot field**: A hidden `website` field is included in public forms
 - Real users never see or fill this field (positioned off-screen, `aria-hidden`, `tabIndex=-1`)
 - Bots that auto-fill all fields will populate it, triggering silent rejection
 - Rejected submissions receive a fake success response to avoid tipping off the bot
 
 #### Slug Validation
+
 - Form slugs are validated against a strict regex pattern (`^[a-f0-9]{12}$`)
 - Invalid slugs are rejected with a 404 before any database query executes
 - Prevents path traversal, SQL injection, and other injection attacks via the URL
 
 #### Frontend Defense-in-Depth
+
 - All server-provided text (form names, descriptions, field labels, help text) is sanitized through DOMPurify before display
 - DOMPurify strips all HTML tags and attributes, complementing React's built-in JSX escaping
 - Public form page uses a separate React component with no access to authenticated application state
 
 #### Data Isolation
+
 - Public form submissions are marked with `is_public_submission = true`
 - IP address and user agent are captured for audit purposes
 - `member_lookup` field types are excluded from public form display
@@ -507,6 +528,7 @@ whose attendance drives records that only apply to members.
 ### Protection Layers
 
 #### Tenant Resolution — the important one
+
 - The organization is resolved from the **room's display code**, never from
   anything in the request body. An anonymous caller cannot name the organization
   it writes to.
@@ -515,6 +537,7 @@ whose attendance drives records that only apply to members.
 - The event must have `allow_guest_check_in` set. Anything else is a `404`.
 
 #### Rate Limiting
+
 - Per-IP limiting on both the read and the write, reusing the display endpoint's
   existing limiter.
 - **Per-event daily ceiling** — `GUEST_CHECK_IN_DAILY_LIMIT`, default `300`, `0`
@@ -523,6 +546,7 @@ whose attendance drives records that only apply to members.
   than a page view. Exceeded → `429`.
 
 #### Bot Detection
+
 - Hidden `hp_website` honeypot field, named to look attractive to a form-filler.
 - A populated honeypot is answered with a **plausible `201` success** and nothing
   is written — the same pattern the public forms endpoint uses. A bot that
@@ -530,6 +554,7 @@ whose attendance drives records that only apply to members.
   confirmation has no signal to adapt to.
 
 #### Input Constraints
+
 - `first_name` / `last_name`: 1–100 chars, trimmed, blank-after-trim rejected.
 - `email`: validated `EmailStr`, normalized to lowercase before matching.
 - `phone` ≤ 50, `organization_name` ≤ 255, `interest_reason` ≤ 2000.
@@ -537,12 +562,14 @@ whose attendance drives records that only apply to members.
   up, not for a membership application.
 
 #### Timing
+
 - Guests are held to the organizer's configured check-in window **minus the
   early-arrival grace members get**. A member checking in early is identifiable
   and correctable; an anonymous early write is neither, so the gate stays shut
   until the window the organizer actually chose. Outside the window → `400`.
 
 #### Information Disclosure
+
 - The `GET` companion exposes only what a visitor standing in the room can
   already see: event name, type, start/end, room, department name, and whether
   sign-in is open. **The event description is withheld**, matching the kiosk
@@ -551,6 +578,7 @@ whose attendance drives records that only apply to members.
   times rather than falling back to the device's zone.
 
 #### Failure Containment
+
 - Pipeline creation failures are **logged and swallowed** — they never cost a
   guest their attendance, and they never surface an internal error to an
   anonymous caller.
@@ -561,6 +589,7 @@ whose attendance drives records that only apply to members.
 ### QR Code Access
 
 Public forms support QR code generation for physical distribution:
+
 - QR codes encode the full public URL including the form slug
 - Downloadable as PNG or SVG for printing
 - Error correction level "H" (high) for reliability when scanned from printed materials
@@ -587,6 +616,7 @@ The election system uses database-level constraints to prevent double-voting:
 ### Authentication & Token Security
 
 - **Token Storage**: Auth tokens live in **httpOnly cookies** set by the backend and are never readable by JavaScript. Only a non-sensitive `has_session` flag is kept in localStorage, to decide whether a page refresh should attempt to restore the session. CSRF is handled by double-submit (`csrf_token` cookie echoed as an `X-CSRF-Token` header on state-changing requests)
+- **Onboarding session storage** _(2026-08-15)_: The onboarding identifier is kept in **`sessionStorage`** (`onboarding_session_id`), not localStorage. It is a bearer credential — sent as `X-Session-ID`, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs on a shared or station-kiosk machine. Identifiers written by older clients are deleted on load and on clear. Its CSRF companion (`onboarding_csrf_token`) is a `SameSite=Strict` cookie, and the server-side session carries a 30-minute sliding expiry. The wizard's non-sensitive answers (`onboarding-storage`) remain in localStorage by design, which is why a restarted browser can repaint the form while the session behind it is gone — see [`docs/ONBOARDING_FLOW.md`](docs/ONBOARDING_FLOW.md)
 - **Concurrent Refresh Protection**: Multiple simultaneous 401 responses share a single token refresh promise — prevents replay detection from invalidating the session
 - **Account Lockout**: Failed login counter persists correctly via explicit database commit (not rolled back by HTTPException)
 - **Session Revocation**: Logout properly invalidates the server-side session record
@@ -617,7 +647,7 @@ All API endpoints follow a strict policy of **never exposing internal details** 
 
 - **Production console logging**: Error details (error context, user information) are only logged to the browser console in development mode. Production builds log only the step name and error message.
 - **Per-session obfuscation keys**: The frontend obfuscation utility generates a random key per browser session instead of using a hardcoded default, ensuring each session has a unique key.
-- **VITE_* variable safety**: Only non-secret values (API URLs, feature flags) are exposed via Vite environment variables. Secrets must never use the `VITE_` prefix.
+- **VITE\_\* variable safety**: Only non-secret values (API URLs, feature flags) are exposed via Vite environment variables. Secrets must never use the `VITE_` prefix.
 
 ### Environment & Configuration
 
@@ -649,13 +679,13 @@ never exported; audit history is summarized rather than dumped.
 members and for self) irreversibly scrubs a departed member's identity while
 preserving the operational history a department must keep:
 
-| Scrubbed | Retained |
-|----------|----------|
+| Scrubbed                                                                                                           | Retained                                                               |
+| ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | Names, username, email (replaced with per-member tokens), phone, address, date of birth, photo, emergency contacts | Training completions, certifications, attendance counts, service hours |
-| Credentials, MFA secrets, OAuth linkage, calendar/reset tokens; sessions and password history deleted | Property custody and departure clearance records |
-| Medical screening content (results, notes, provider) | Screening status and dates, as compliance proof |
-| Free-text reasons on leaves, waivers, time-off, meeting waivers; RSVP dietary/accessibility notes | Leave types and date ranges (compliance denominators) |
-| Body measurements; the applicant-era prospect record, its interview notes and uploaded documents | Dues and financial records |
+| Credentials, MFA secrets, OAuth linkage, calendar/reset tokens; sessions and password history deleted              | Property custody and departure clearance records                       |
+| Medical screening content (results, notes, provider)                                                               | Screening status and dates, as compliance proof                        |
+| Free-text reasons on leaves, waivers, time-off, meeting waivers; RSVP dietary/accessibility notes                  | Leave types and date ranges (compliance denominators)                  |
+| Body measurements; the applicant-era prospect record, its interview notes and uploaded documents                   | Dues and financial records                                             |
 
 **Never touched:** audit logs (append-only and hash-chained — rewriting them
 is tampering; the anonymization event itself records only the user id, never
@@ -701,15 +731,15 @@ statutory retention for fire-service records varies by state (ISO 15489).
 
 Continuous, and blocking where a fix exists (ISO/IEC 27001 A.8.8):
 
-| Control | Tool | Behavior |
-|---------|------|----------|
-| Python SAST | Bandit | Reported in CI, artifact uploaded |
-| Python dependencies | pip-audit | **Blocking**; documented deferrals only |
-| Frontend dependencies | npm audit | **Blocking at high severity** |
-| Cross-ecosystem sweep | Trivy | **Blocking** on HIGH/CRITICAL with a fix available; weekly schedule |
-| Secret scanning | gitleaks | Full history, weekly + per-PR |
-| Dependency updates | Dependabot | Weekly PRs (pip, npm, actions, docker) |
-| Bill of materials | Syft | SPDX SBOM published as a CI artifact each run |
+| Control               | Tool       | Behavior                                                            |
+| --------------------- | ---------- | ------------------------------------------------------------------- |
+| Python SAST           | Bandit     | Reported in CI, artifact uploaded                                   |
+| Python dependencies   | pip-audit  | **Blocking**; documented deferrals only                             |
+| Frontend dependencies | npm audit  | **Blocking at high severity**                                       |
+| Cross-ecosystem sweep | Trivy      | **Blocking** on HIGH/CRITICAL with a fix available; weekly schedule |
+| Secret scanning       | gitleaks   | Full history, weekly + per-PR                                       |
+| Dependency updates    | Dependabot | Weekly PRs (pip, npm, actions, docker)                              |
+| Bill of materials     | Syft       | SPDX SBOM published as a CI artifact each run                       |
 
 ---
 
@@ -752,6 +782,7 @@ We take security seriously. If you discover a security vulnerability:
 ### Bug Bounty
 
 Currently no formal bug bounty program, but we may offer:
+
 - Public acknowledgment (if desired)
 - Contribution credit
 - Swag/merchandise
@@ -815,16 +846,19 @@ Currently no formal bug bounty program, but we may offer:
 ### Regular Maintenance
 
 #### Daily
+
 - [ ] Review error logs
 - [ ] Check system alerts
 - [ ] Monitor active sessions
 
 #### Weekly
+
 - [ ] Review audit logs for anomalies
 - [ ] Check backup status
 - [ ] Review failed login attempts
 
 #### Monthly
+
 - [ ] Update dependencies
 - [ ] Review user access lists
 - [ ] Test backup restoration
@@ -832,6 +866,7 @@ Currently no formal bug bounty program, but we may offer:
 - [ ] Review rate limiting logs
 
 #### Quarterly
+
 - [ ] Full security audit
 - [ ] Review and update access controls
 - [ ] Disaster recovery testing
@@ -839,6 +874,7 @@ Currently no formal bug bounty program, but we may offer:
 - [ ] Review third-party integrations
 
 #### Annually
+
 - [ ] Comprehensive penetration testing
 - [ ] HIPAA risk assessment
 - [ ] Staff security training
@@ -880,30 +916,35 @@ Currently no formal bug bounty program, but we may offer:
 ### Response Steps
 
 #### 1. Detection & Analysis
+
 - Identify the incident
 - Determine scope and severity
 - Collect evidence
 - Document everything
 
 #### 2. Containment
+
 - Isolate affected systems
 - Revoke compromised credentials
 - Block malicious IPs
 - Preserve evidence
 
 #### 3. Eradication
+
 - Remove malware/backdoors
 - Patch vulnerabilities
 - Reset compromised accounts
 - Update security rules
 
 #### 4. Recovery
+
 - Restore from clean backups
 - Monitor for re-infection
 - Verify system integrity
 - Gradual service restoration
 
 #### 5. Post-Incident
+
 - Document lessons learned
 - Update security procedures
 - Implement preventive measures
@@ -929,6 +970,7 @@ If PHI is breached, you may need to:
 ### Contact Information
 
 Maintain a current list of:
+
 - Incident response team members
 - Legal counsel
 - Public relations contact
@@ -941,6 +983,7 @@ Maintain a current list of:
 ## Security Certifications
 
 Organizations may pursue:
+
 - SOC 2 Type II
 - ISO 27001
 - HITRUST CSF
@@ -959,6 +1002,7 @@ Organizations may pursue:
 ## Questions or Concerns?
 
 For security questions or concerns:
+
 - Email: security@yourfiredept.org
 - GitHub Discussions: https://github.com/thegspiro/the-logbook/discussions
 - Documentation: https://docs.the-logbook.org/security

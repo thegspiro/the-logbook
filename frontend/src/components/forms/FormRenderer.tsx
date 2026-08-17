@@ -328,7 +328,7 @@ const FormRenderer = ({
   // Success state
   if (submitted && showSuccessMessage) {
     return (
-      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-lg border p-8 text-center">
+      <div className="card-secondary p-8 text-center">
         <CheckCircle className="mx-auto mb-3 h-10 w-10 text-green-700 dark:text-green-400" />
         <h3 className="text-theme-text-primary mb-1 text-lg font-semibold">Submitted Successfully</h3>
         <p className="text-theme-text-muted text-sm">Your response has been recorded.</p>
@@ -344,7 +344,7 @@ const FormRenderer = ({
   // No fields
   if (fields.length === 0) {
     return (
-      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-lg border p-8 text-center">
+      <div className="card-secondary p-8 text-center">
         <p className="text-theme-text-muted text-sm">
           This form has no fields yet. Use the Form Builder to add fields.
         </p>

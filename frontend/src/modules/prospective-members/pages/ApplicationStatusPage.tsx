@@ -115,7 +115,7 @@ export const ApplicationStatusPage: React.FC = () => {
         </div>
 
         {/* Status Card */}
-        <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-xl border p-6 shadow-xs">
+        <div className="card mb-4 p-6 shadow-xs">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <p className="text-theme-text-muted text-xs tracking-wider uppercase">Current Status</p>
@@ -147,7 +147,7 @@ export const ApplicationStatusPage: React.FC = () => {
 
         {/* Current stage action (self-scheduling / e-signature) */}
         {data.current_stage_action && (
-          <div className="bg-theme-surface mb-4 rounded-xl border border-blue-500/30 p-5 shadow-xs">
+          <div className="card mb-4 border-blue-500/30 p-5 shadow-xs">
             {data.current_stage_action.type === 'calcom_scheduling' ? (
               <div className="flex items-start gap-3">
                 <CalendarClock className="h-6 w-6 shrink-0 text-blue-700 dark:text-blue-400" aria-hidden="true" />
@@ -185,7 +185,7 @@ export const ApplicationStatusPage: React.FC = () => {
 
         {/* Timeline */}
         {data.stage_timeline.length > 0 && (
-          <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-6 shadow-xs">
+          <div className="card p-6 shadow-xs">
             <h2 className="text-theme-text-primary mb-4 text-sm font-semibold">Stage Progress</h2>
             <div className="space-y-3" role="list" aria-label="Application stage progress">
               {data.stage_timeline.map((stage, idx) => {

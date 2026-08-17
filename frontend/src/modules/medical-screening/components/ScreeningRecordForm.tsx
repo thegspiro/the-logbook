@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import { X } from 'lucide-react';
 import { ScreeningType, ScreeningStatus, SCREENING_TYPE_LABELS, SCREENING_STATUS_LABELS } from '../types';
 import type { ScreeningRecord, ScreeningRequirement, ScreeningRecordCreate, ScreeningRecordUpdate } from '../types';
@@ -20,6 +21,8 @@ const inputClass = 'form-input';
 const labelClass = 'form-label mb-2';
 
 export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record, requirements, onSave, onClose }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [screeningType, setScreeningType] = useState<string>(record?.screening_type ?? ScreeningType.PHYSICAL_EXAM);
   const [recordStatus, setRecordStatus] = useState<string>(record?.status ?? ScreeningStatus.SCHEDULED);
   const [requirementId, setRequirementId] = useState(record?.requirement_id ?? '');
@@ -66,14 +69,14 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal border-theme-surface-border modal-body w-full max-w-lg rounded-xl border">
+      <div ref={dialogRef} className="modal-panel modal-body w-full max-w-lg">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 className="text-theme-text-primary text-lg font-bold">
             {record ? 'Edit Screening Record' : 'Add Screening Record'}

@@ -1550,6 +1550,7 @@ export interface TrainingSubmission {
   id: string;
   organization_id: string;
   submitted_by: string;
+  submitter_name?: string;
   course_name: string;
   course_code?: string;
   training_type: TrainingType;
