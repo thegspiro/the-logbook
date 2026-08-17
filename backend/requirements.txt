@@ -8,8 +8,8 @@
 fastapi==0.141.1
 # starlette pinned explicitly (normally transitive): the 1.x line carries
 # the security fixes pip-audit flagged; fastapi>=0.141 accepts it.
-starlette==1.4.1
-uvicorn[standard]==0.52.1
+starlette==1.6.0
+uvicorn[standard]==0.52.3
 pydantic==2.13.4
 pydantic-settings==2.15.0
 slowapi==0.1.10
@@ -17,11 +17,11 @@ slowapi==0.1.10
 # ============================================
 # Database - MySQL
 # ============================================
-sqlalchemy==2.0.51
-alembic==1.19.0
+sqlalchemy==2.0.52
+alembic==1.19.1
 pymysql==1.2.0
 aiomysql==0.3.2
-greenlet==3.5.4  # Required by SQLAlchemy for async operations
+greenlet==3.5.5  # Required by SQLAlchemy for async operations
 cryptography==50.0.0  # Required by PyMySQL for secure connections; includes CVE-2026-69247 fix
 
 # ============================================
@@ -55,7 +55,7 @@ jinja2==3.1.6
 # ============================================
 # SMS
 # ============================================
-twilio==9.10.9
+twilio==9.11.0
 
 # ============================================
 # Web Push (PWA notifications)
@@ -67,7 +67,7 @@ pywebpush==2.4.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.67  # AWS S3
+boto3==1.43.71  # AWS S3
 azure-storage-blob==12.30.0
 google-cloud-storage==3.13.1
 python-magic==0.4.27
@@ -78,7 +78,7 @@ python-magic==0.4.27
 python-docx==1.2.0
 openpyxl==3.1.5
 reportlab==5.0.0
-pypdf==6.15.0  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870
+pypdf==6.16.1  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870
 Pillow==12.3.0
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 
@@ -100,13 +100,13 @@ tzdata>=2026.3  # Timezone data for zoneinfo (Python 3.9+ built-in)
 # ============================================
 # Payments
 # ============================================
-stripe==15.4.0
+stripe==15.5.0
 
 # ============================================
 # Monitoring & Logging
 # ============================================
 loguru==0.7.3
-sentry-sdk==2.66.1
+sentry-sdk==2.68.0
 psutil==7.2.2  # System monitoring for health checks
 
 # ============================================
@@ -137,7 +137,7 @@ pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pytest-randomly==4.1.0
 pytest-timeout==2.4.0
-hypothesis==6.165.2  # schemathesis 4.x requires >=6.130.12
+hypothesis==6.165.7  # schemathesis 4.x requires >=6.130.12
 schemathesis==4.24.3
 faker==40.36.0
 
@@ -149,7 +149,7 @@ mypy==2.3.0
 isort==8.0.1
 # pylint 3.x caps isort at <7, which makes this file unresolvable against the
 # isort pin above. 4.x widens the cap to <9.
-pylint==4.0.6
+pylint==4.0.7
 
 # ============================================
 # Utilities
