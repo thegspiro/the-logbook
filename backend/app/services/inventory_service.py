@@ -847,7 +847,10 @@ class InventoryService:
             entry = stats.get(vendor_id)
             if entry is None:
                 continue
-            entry["item_count"] = count or 0
+            # SUM() comes back as Decimal on MySQL even over an integer CASE.
+            # item_count is declared int on the response, and Pydantic warns
+            # (rather than coercing quietly) when handed a Decimal for it.
+            entry["item_count"] = int(count or 0)
             entry["total_purchase_value"] = spend
 
         reorder_rows = await self.db.execute(

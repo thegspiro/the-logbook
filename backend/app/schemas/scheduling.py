@@ -114,7 +114,6 @@ class ShiftResponse(UTCResponseBase):
     color: Optional[str] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
-    pass_down_notes: Optional[str] = None
     attendee_count: Optional[int] = 0
     call_count: int = 0
     total_hours: Optional[float] = None

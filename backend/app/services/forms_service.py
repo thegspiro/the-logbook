@@ -1438,7 +1438,12 @@ class FormsService:
                             prospect_id=str(prospect.id),
                             organization_id=str(prospect.organization_id),
                             step_id=str(step.id),
-                            completed_by="system",
+                            # No user performed this. `completed_by` lands on
+                            # two nullable FKs to users.id, so a "system"
+                            # sentinel is not a free-text label — it fails the
+                            # constraint and the advance is lost to the
+                            # except below.
+                            completed_by=None,
                             notes="Auto-advanced on form submission",
                             action_result={
                                 "form_id": str(form.id),

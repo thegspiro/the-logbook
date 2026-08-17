@@ -73,6 +73,8 @@ import type {
   LotSwapResult,
   InventoryMatchesResult,
   InventoryLinkResult,
+  FleetReadinessResponse,
+  CheckLogResponse,
 } from '../types/equipmentCheck';
 import { blankToNull } from '@/utils/formValues';
 
@@ -112,7 +114,6 @@ export interface ShiftRecord {
   color?: string | null;
   notes?: string;
   activities?: unknown;
-  pass_down_notes?: string | null;
   open_to_all_members?: boolean;
   attendee_count: number;
   call_count: number;
@@ -967,6 +968,27 @@ export const schedulingService = {
   }): Promise<ShiftEquipmentCheckRecord[]> {
     const response = await api.get<ShiftEquipmentCheckRecord[]>('/equipment-checks/my-checklists/history', { params });
     return asArray(response.data);
+  },
+
+  // =====================================================================
+  // Fleet Readiness / Check Log
+  // =====================================================================
+
+  async getFleetReadiness(params?: { strip_dates?: number; expiring_days?: number }): Promise<FleetReadinessResponse> {
+    const response = await api.get<FleetReadinessResponse>('/equipment-checks/fleet', { params });
+    return response.data;
+  },
+
+  /**
+   * Expected-vs-actual check history.
+   *
+   * The server decides the scope from the caller's permissions — a member
+   * without `equipment_check.view` gets only their own checks and no grid —
+   * so there is no client-side flag to get wrong here.
+   */
+  async getCheckLog(params?: { dates?: number; apparatus_id?: string }): Promise<CheckLogResponse> {
+    const response = await api.get<CheckLogResponse>('/equipment-checks/log', { params });
+    return response.data;
   },
 
   // =====================================================================

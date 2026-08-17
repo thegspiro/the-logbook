@@ -1739,6 +1739,83 @@ actions archive matching notifications by organization plus entity/action ID,
 not by presentation text. See
 [training lesson 19](./training/19-august-2026-release-changes.md#apparatus-crew-seats-and-scheduling-settings).
 
+---
+
+## Fleet Board & Check Log (2026-08-16)
+
+The Equipment Checks tab was a personal to-do list serving three audiences. It
+is now organised around the **apparatus**, with a check log that reports on
+checks that _did not happen_.
+
+### Why the expected side had to be reconstructed
+
+`shift_equipment_checks` records only checks that were performed. Every count
+derived from that table alone uses "checks done" as its own denominator and can
+never fall below 100% — which is why `checks_expected` on the compliance report
+was hardcoded to `0`. `EquipmentReadinessService` rebuilds the expected side
+from **(shift × resolved template)**, the same pairing `get_my_checklists`
+walks for one user, and left-joins the submissions onto it. A missed check is
+therefore a row with a null `checkId`.
+
+Three rules the reconstruction honours, each of which silently produces a
+plausible wrong number when left implicit:
+
+1. **Grid columns are shared duty dates; rates are per-apparatus occasions.** A
+   rig on a weekly check would read as neglected if its rate were measured
+   against a fortnight of calendar days. `B-7` gets four squares in a fortnight
+   and a correct 100%.
+2. **Out of service is not missed.** Availability is reconstructed from
+   `apparatus_status_history` — not the apparatus's _current_ status, which
+   cannot express a rig that went to the shop last Tuesday and came back
+   Friday. Those days leave the denominator instead of counting against the
+   crew.
+3. **Apparatus identity comes from the shift, not the check.**
+   `ShiftEquipmentCheck.apparatus_id` is an FK to `apparatus.id` and is NULL for
+   a department running `BasicApparatus` (see `utils/apparatus_ref`), so
+   grouping checks by that column would drop every row for those departments.
+   Shift-based checks are attributed through `shifts.apparatus_id`.
+
+### Readiness is a claim, so it carries its reason
+
+`readinessReason` is non-optional and rendered next to every pill. Only two
+things take a rig off the road — the apparatus module's own status
+(`ApparatusStatus.is_available`) and an item a crew marked `out_of_service` —
+because those are the two places a human made that call explicitly. Everything
+else (missed checks, failed items, an unfinished check) is _needs attention_.
+
+### Routes
+
+| Route                                | Purpose                                                      | Permission                                                                   |
+| ------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `/scheduling/equipment`              | Fleet board — one card per apparatus                         | any of `equipment_check.view`, `scheduling.manage`                           |
+| `/scheduling/equipment/checks`       | Check log, fleet-wide (grid + log)                           | any of `equipment_check.submit`, `equipment_check.view`, `scheduling.manage` |
+| `/scheduling/equipment/:apparatusId` | Apparatus detail — Checks / Inventory / Findings / Check log | any of `equipment_check.view`, `scheduling.manage`                           |
+
+The Equipment Checks tab (`EquipmentChecksTab`) branches on
+`equipment_check.view`: holders get the fleet board, everyone else keeps
+`MyChecklistsPage`. That is not a preference — the fleet endpoint is gated and
+would 403 a plain member.
+
+### Endpoints
+
+All under `/api/v1/equipment-checks`.
+
+| Method | Path     | Notes                                                                                                                                                                                                                                                                           |
+| ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/fleet` | Readiness roll-up. `equipment_check.view`. Params: `strip_dates` (1–90), `expiring_days` (1–365)                                                                                                                                                                                |
+| `GET`  | `/log`   | Expected-vs-actual. Open to any authenticated member; **the server sets the scope** — without `equipment_check.view` the caller gets only their own checks and no grid, because a matrix of one member's checks reads as fleet coverage. Params: `dates` (1–90), `apparatus_id` |
+
+`ApparatusInventoryPage` takes an optional `apparatusId` prop; supplied, it
+drops its own picker and fleet-walk and becomes the detail page's Inventory
+tab. `CheckLogPage` takes the same prop for the Check log tab.
+
+### What this deliberately does not add
+
+There is no deficiency record. "Open finding" means _the last time anyone
+looked, this was broken_ — computed from the most recent check per
+(apparatus, template), so a fault fixed the next morning stops being reported.
+Assignment, repair and verification tracking would need a real
+`equipment_deficiencies` table and is not part of this change.
 ## Driver Qualification: EVOC Administration & Position Roster (2026-08-16)
 
 Two gaps closed on the same chain: EVOC levels were modelled and enforced but
