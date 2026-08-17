@@ -7610,9 +7610,50 @@ class Seeder:
         except ApiError as exc:
             self.blocked.append(f"cancel skills test: {exc}")
 
+    #: One practice attempt is documentary — the member's results list is
+    #: captioned as showing official attempts *and* a practice one, so the
+    #: badge needs an example. More than one is litter.
+    PRACTICE_TESTS_KEPT = 1
+
+    def _prune_practice_tests(self) -> None:
+        """Drop practice tests the capture runs left behind.
+
+        Scoring a test is not a read: `09-16`/`09-18` drive the real scoring
+        screen, and each run files another practice attempt against the demo
+        member. They sort newest-first, so after a dozen runs the member's
+        results panel is a wall of identical "Practice · Passed 100%" rows and
+        the official attempts its caption promises are pushed out of frame.
+
+        Only practice records are touched, and only through the route that
+        refuses anything else — an official result may carry a certification,
+        which is why the API voids those rather than deleting them.
+        """
+        practice = [
+            test
+            for test in items(
+                self.api.get(
+                    "/training/skills-testing/tests" "?limit=200&include_practice=true"
+                ),
+                "tests",
+            )
+            if pick(test, "is_practice", "isPractice")
+        ]
+        if len(practice) <= self.PRACTICE_TESTS_KEPT:
+            return
+        practice.sort(
+            key=lambda t: str(pick(t, "created_at", "createdAt") or ""), reverse=True
+        )
+        for test in practice[self.PRACTICE_TESTS_KEPT :]:
+            try:
+                self.api.delete(f"/training/skills-testing/tests/{pick(test, 'id')}")
+            except ApiError as exc:
+                self.blocked.append(f"practice test cleanup: {exc}")
+                return
+
     def seed_skills_tests(
         self, templates: list[dict], members: list[dict]
     ) -> list[dict]:
+        self._prune_practice_tests()
         tests = items(self.api.get("/training/skills-testing/tests"), "tests")
         if tests:
             # Keyed on the *statuses* present, not on "are there any". The

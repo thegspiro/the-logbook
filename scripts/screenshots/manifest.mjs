@@ -7259,21 +7259,21 @@ export const SHOTS = [
         .getByRole("button", { name: /Skills Tests/ })
         .first()
         .click({ timeout: 15_000 });
-      await page.waitForTimeout(1200);
-      // Clipped to the first handful of rows. The demo member carries fifty-odd
-      // identical passes from other seeding, and the whole section runs to
-      // ~3700px — the recent, varied results are all at the top.
-      await page.evaluate(() => {
-        const heading = [...document.querySelectorAll("button")].find((b) =>
-          b.textContent?.includes("Skills Tests"),
-        );
-        const section = heading?.parentElement;
-        if (section instanceof HTMLElement) {
-          section.style.maxHeight = "320px";
-          section.style.overflow = "hidden";
-        }
-      });
-      await page.waitForTimeout(300);
+      // Wait for the *validated* result rather than a fixed pause: it is the
+      // oldest row and so the last to render, and it is the half of the
+      // caption — an official attempt showing its score — that the practice
+      // and under-review rows above it cannot make.
+      //
+      // This step used to clamp the section to 320px because the demo member
+      // had accumulated fifty-odd identical practice passes, each capture run
+      // filing another. The seeder now prunes those (PRACTICE_TESTS_KEPT), so
+      // the section is five rows and the clamp only cut the row the caption is
+      // about — a workaround that outlived its cause.
+      await page
+        .getByText(/Passed/)
+        .last()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
     },
     selector: "div:has(> button:has-text('Skills Tests'))",
   },
