@@ -2128,9 +2128,9 @@ class SchedulingService:
             # ----------------------------------------------------------------
             assigned_members = pattern.assigned_members or []
 
-            # Drop any member IDs that don't belong to this org (stale entries
-            # from removed/transferred users) so generation never creates a
-            # cross-org or dangling assignment.
+            # Drop inactive member IDs and IDs that don't belong to this org
+            # (stale entries from deleted/removed/transferred users) so
+            # generation never creates an invalid assignment.
             if assigned_members:
                 member_ids = {
                     m.get("user_id") for m in assigned_members if m.get("user_id")
@@ -2140,6 +2140,7 @@ class SchedulingService:
                         select(User.id)
                         .where(User.id.in_(member_ids))
                         .where(User.organization_id == str(organization_id))
+                        .where(User.is_active)
                     )
                     valid_ids = {row[0] for row in valid_result.all()}
                     assigned_members = [
@@ -2195,7 +2196,7 @@ class SchedulingService:
                     select(User.id, User.platoon).where(
                         User.organization_id == str(organization_id),
                         User.platoon.isnot(None),
-                        User.status == "active",
+                        User.is_active,
                     )
                 )
                 for uid, platoon_name in live_result.all():
