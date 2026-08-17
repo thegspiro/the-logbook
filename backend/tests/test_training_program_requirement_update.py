@@ -12,6 +12,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+import pytest
+from pydantic import ValidationError
+
 from app.schemas.training_program import ProgramRequirementUpdate
 from app.services.training_program_service import TrainingProgramService
 
@@ -43,6 +46,16 @@ def _program_requirement(is_required=True):
 
 
 class TestUpdateProgramRequirement:
+    @pytest.mark.parametrize("field", ["is_required", "is_prerequisite", "sort_order"])
+    def test_rejects_null_requirement_settings(self, field):
+        with pytest.raises(ValidationError, match="cannot be null"):
+            ProgramRequirementUpdate(**{field: None})
+
+    def test_allows_omitted_settings_and_null_phase(self):
+        updates = ProgramRequirementUpdate(phase_id=None)
+
+        assert updates.model_dump(exclude_unset=True) == {"phase_id": None}
+
     async def test_missing_requirement_returns_error(self):
         db = RecordingSession([_one(None)])
         svc = TrainingProgramService(db)
