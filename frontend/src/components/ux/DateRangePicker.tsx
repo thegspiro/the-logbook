@@ -102,7 +102,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     <div className={`relative ${className}`}>
       {label && <label className="form-label">{label}</label>}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="bg-theme-input-bg border-theme-input-border flex w-full min-w-0 items-center gap-1 rounded-lg border sm:w-auto">
+        <div className="card bg-theme-input-bg border-theme-input-border flex w-full min-w-0 items-center gap-1 sm:w-auto">
           <div className="flex items-center pl-3">
             <Calendar className="text-theme-text-muted h-4 w-4" />
           </div>
@@ -146,10 +146,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           {showPresets && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowPresets(false)} aria-hidden="true" />
-              <div
-                className="bg-theme-surface-modal border-theme-surface-border absolute top-full left-0 z-20 mt-1 min-w-[140px] rounded-lg border py-1 shadow-lg"
-                role="menu"
-              >
+              <div className="popover-panel absolute top-full left-0 z-20 mt-1 min-w-[140px] py-1" role="menu">
                 {presets.map((preset) => (
                   <button
                     key={preset.label}

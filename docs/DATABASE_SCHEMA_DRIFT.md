@@ -2,7 +2,7 @@
 
 Findings from a full audit of the database schema, 2026-08-05. Companion to
 [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md), which is the generated reference for
-what the schema *is*. This document covers where the two ways of building that
+what the schema _is_. This document covers where the two ways of building that
 schema disagree.
 
 Every finding has been fixed; each records the revision that closed it. One
@@ -17,10 +17,10 @@ types, enums, defaults, foreign keys and indexes.
 
 The Logbook builds a database two different ways:
 
-| Path | When | Produces |
-|---|---|---|
-| `Base.metadata.create_all()` | Fresh install (`_fast_path_init` in `main.py`) | **232 tables** from `app/models/` |
-| `alembic upgrade head` | Pre-existing database | **203 tables** from the migration chain |
+| Path                         | When                                           | Produces                                |
+| ---------------------------- | ---------------------------------------------- | --------------------------------------- |
+| `Base.metadata.create_all()` | Fresh install (`_fast_path_init` in `main.py`) | **232 tables** from `app/models/`       |
+| `alembic upgrade head`       | Pre-existing database                          | **203 tables** from the migration chain |
 
 A fresh install never replays the migration chain — it creates every table from
 the models, runs `MIGRATION_ONLY_FILES` and `SEED_DATA_FILES`, then stamps
@@ -34,8 +34,8 @@ for reading everything below:
 
 > **Self-heal adds missing tables and missing columns. It never alters an
 > existing one.** `_add_missing_model_columns()` only ever issues
-> `ALTER TABLE … ADD COLUMN`. A column whose *type*, *enum value set*, *default*,
-> or *foreign key rule* differs from the model stays wrong forever.
+> `ALTER TABLE … ADD COLUMN`. A column whose _type_, _enum value set_, _default_,
+> or _foreign key rule_ differs from the model stays wrong forever.
 
 So drift splits cleanly into two classes: **self-healing** (missing tables and
 columns — noise, not bugs) and **durable** (everything else — real, permanent
@@ -49,12 +49,15 @@ Both paths were built against a real MySQL-family server and the resulting
 schemas compared through `information_schema`. This is reproducible:
 
 ```bash
-# Requires a MySQL 8 / MariaDB server with collation-server=utf8mb4_unicode_ci
-# (the collation docker-compose.yml pins — some migrations hardcode COLLATE
-#  utf8mb4_unicode_ci, so a server defaulting to another collation fails with
-#  errno 150 on the first cross-table FK).
+# Name the collation on the database itself rather than relying on the
+# server's collation-server flag: untagged tables inherit the *database*
+# default, some migrations hardcode COLLATE utf8mb4_unicode_ci, and a FK
+# across two collations is rejected (errno 150 / error 3780). A stock
+# server defaults to utf8mb4_0900_ai_ci (MySQL 8) or utf8mb4_general_ci
+# (MariaDB), either of which breaks the chain at the first cross-table FK.
 
-mysql -e "CREATE DATABASE db_migrations; CREATE DATABASE db_models;"
+mysql -e "CREATE DATABASE db_migrations CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+          CREATE DATABASE db_models     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 # Path A — the upgrade path
 DB_NAME=db_migrations alembic upgrade head
@@ -79,20 +82,20 @@ incomplete relative to the models.
 
 ## Summary
 
-| Class | Finding | Count | Status |
-|---|---|---|---|
-| Durable | Column **type** differs between paths | 38 | Fixed — `20260805_0101`, `0102`, `0003`–`0006` |
-| Durable | Foreign key **ON DELETE** rule differs | 18 | Fixed — `20260805_0005`, `0008` |
-| Durable | **Enum value set** differs | 5 | Fixed — `20260805_0003`, `0006` |
-| Durable | **Server default** missing on a NOT NULL column | 283 | Fixed — models + `20260805_0007` |
-| Durable | `roles`/`user_roles` never renamed to `positions` | 2 tables | Fixed — `20260805_0008` |
-| Self-healing | Tables only in models | 37 | Not a defect |
-| Self-healing | Columns only in models | 15 | Not a defect |
-| Model-side | **Duplicate indexes** — same column indexed twice | 136 | Fixed — models + `20260805_0009` |
-| Model-side | **Redundant indexes** — leftmost-prefix / unique-shadowed | 145 | Fixed — models + `20260805_0010` |
-| Durable | **Index set** differs between paths | 82 + 37 | Fixed — `20260805_0010` |
-| Durable | Foreign keys missing on one path | 8 | Fixed — models + `20260805_0010` |
-| Dead | Columns only in migrations | 2 | Fixed — `20260805_0009` |
+| Class        | Finding                                                   | Count    | Status                                         |
+| ------------ | --------------------------------------------------------- | -------- | ---------------------------------------------- |
+| Durable      | Column **type** differs between paths                     | 38       | Fixed — `20260805_0101`, `0102`, `0003`–`0006` |
+| Durable      | Foreign key **ON DELETE** rule differs                    | 18       | Fixed — `20260805_0005`, `0008`                |
+| Durable      | **Enum value set** differs                                | 5        | Fixed — `20260805_0003`, `0006`                |
+| Durable      | **Server default** missing on a NOT NULL column           | 283      | Fixed — models + `20260805_0007`               |
+| Durable      | `roles`/`user_roles` never renamed to `positions`         | 2 tables | Fixed — `20260805_0008`                        |
+| Self-healing | Tables only in models                                     | 37       | Not a defect                                   |
+| Self-healing | Columns only in models                                    | 15       | Not a defect                                   |
+| Model-side   | **Duplicate indexes** — same column indexed twice         | 136      | Fixed — models + `20260805_0009`               |
+| Model-side   | **Redundant indexes** — leftmost-prefix / unique-shadowed | 145      | Fixed — models + `20260805_0010`               |
+| Durable      | **Index set** differs between paths                       | 82 + 37  | Fixed — `20260805_0010`                        |
+| Durable      | Foreign keys missing on one path                          | 8        | Fixed — models + `20260805_0010`               |
+| Dead         | Columns only in migrations                                | 2        | Fixed — `20260805_0009`                        |
 
 After the whole `20260805` series — `0001`–`0010` plus `0101` and `0102` —
 re-running the comparison gives **0 differences of any kind** on tables both
@@ -138,7 +141,7 @@ that guarantee did not hold. Same fix, same revision as #1.
 
 > Both of these were originally reported as needing only a model change. That
 > was wrong: databases built by `create_all()` — every install created since the
-> fast path landed — already had the *narrow* column and needed the ALTER too.
+> fast path landed — already had the _narrow_ column and needed the ALTER too.
 > `20260805_0101` covers them.
 
 ### 3. `users.mfa_secret` was `VARCHAR(32)` on migration-built databases
@@ -160,12 +163,12 @@ affected members must re-enrol.
 
 ### 4. Enum value sets rejected values the models consider legal
 
-| Column | Was missing |
-|---|---|
-| `users.status` | `leave` |
-| `member_leaves_of_absence.leave_type` | `new_member` |
-| `training_waivers.waiver_type` | `new_member` |
-| `form_integrations.integration_type` | `event_request` |
+| Column                                | Was missing     |
+| ------------------------------------- | --------------- |
+| `users.status`                        | `leave`         |
+| `member_leaves_of_absence.leave_type` | `new_member`    |
+| `training_waivers.waiver_type`        | `new_member`    |
+| `form_integrations.integration_type`  | `event_request` |
 
 Putting a member on leave, or filing a `new_member` waiver, wrote a value the
 column's `ENUM` did not contain. Fixed by `20260805_0003`.
@@ -223,7 +226,7 @@ outside the new set, so this cannot be left to the server's `sql_mode`.
 ### 8. 283 NOT NULL columns had no server default on model-built databases
 
 **This was missed by the original audit** — the comparison checked column types
-and nullability but not defaults, and these columns are `NOT NULL` on *both*
+and nullability but not defaults, and these columns are `NOT NULL` on _both_
 paths. Only the default differed:
 
 ```python
@@ -285,7 +288,7 @@ No migration performs the rename — `rename_table` appears exactly once in the
 entire chain, for `meeting_action_items`. A chain-built database has `roles` and
 `user_roles`; the models want `positions` and `user_positions`.
 
-This is the one finding where self-heal makes things *worse*. On startup,
+This is the one finding where self-heal makes things _worse_. On startup,
 `create_all(checkfirst=True)` sees `positions` missing and creates it **empty**.
 The permission assignments in the old tables are not copied, leaving a database
 where no member holds any position — nobody has any permission — with no error
@@ -308,11 +311,11 @@ SHOW TABLES LIKE 'positions';   -- present alone => built after, safe
 Fixed by `20260805_0008`, which handles all three shapes a database can be in
 and was tested against each:
 
-| Shape | Meaning | What the revision does |
-|---|---|---|
-| Only `roles` | Built purely from the chain | Renames both tables in place; every position and assignment is preserved |
-| Both | Chain-built, then started against current code — repair created `positions` **empty** | Copies the rows across when `positions` is empty and `roles` is not, then drops the originals |
-| Only `positions` | Built by `create_all()` | Nothing to migrate |
+| Shape            | Meaning                                                                               | What the revision does                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Only `roles`     | Built purely from the chain                                                           | Renames both tables in place; every position and assignment is preserved                      |
+| Both             | Chain-built, then started against current code — repair created `positions` **empty** | Copies the rows across when `positions` is empty and `roles` is not, then drops the originals |
+| Only `positions` | Built by `create_all()`                                                               | Nothing to migrate                                                                            |
 
 The middle shape is the data-loss recovery path. Without it, a database in that
 state has no member holding any position, and therefore nobody with any
@@ -382,7 +385,7 @@ diverged by 93, are now identical — see finding 12.
 
 Three problems, fixed together by `20260805_0010`:
 
-**145 redundant indexes.** `20260805_0009` had removed 136 *exact* duplicates,
+**145 redundant indexes.** `20260805_0009` had removed 136 _exact_ duplicates,
 but two subtler kinds survived:
 
 - **Leftmost-prefix duplicates.** A composite index on `(a, b)` already serves
@@ -416,14 +419,13 @@ integrity there at all. The models now declare all eight.
 Every drop is guarded on another index still leading with the same column, and
 creates run before drops, so a foreign key is never left without a backing
 index (MySQL error 1553). `inventory_items.uq_item_org_serial_number` is unique
-and reports colliding rows up front rather than failing part-way with a bare
-1062.
+and reports colliding rows up front rather than failing part-way with a bare 1062.
 
 `test_database_schema.py::test_organization_id_is_indexed` was corrected as part
 of this. It only inspected `Index` objects, so it missed the `UniqueConstraint`
 that is now the sole coverage on three tables — MySQL materialises one as a
 unique index, which serves a leftmost-prefix lookup identically. It was also
-tightened to require `organization_id` to *lead* an index rather than merely
+tightened to require `organization_id` to _lead_ an index rather than merely
 appear in one: a lone `WHERE organization_id = ?` cannot use an index where the
 column sits second.
 

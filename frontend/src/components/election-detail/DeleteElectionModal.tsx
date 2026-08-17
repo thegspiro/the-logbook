@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import type { Election } from '../../types/election';
 
 interface DeleteElectionModalProps {
@@ -18,6 +19,8 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [deleteReason, setDeleteReason] = useState('');
 
   const handleKeyDown = useCallback(
@@ -31,13 +34,13 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-election-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal w-full max-w-lg rounded-lg shadow-xl">
+      <div ref={dialogRef} className="modal-panel w-full max-w-lg">
         <div
           className={`border-b px-6 py-4 ${isDraft ? 'border-theme-surface-border' : 'border-red-500/30 bg-red-500/10'}`}
         >

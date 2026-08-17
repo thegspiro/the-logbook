@@ -309,6 +309,8 @@ UUID.
 
 The two read endpoints take `inventory.view`; everything that writes takes `inventory.manage`. The screen itself sits behind `inventory.manage`, like every other page under `/inventory/admin` — the read permission on the API is there for surfaces that only need to name a vendor. `GET /api/v1/inventory/items?vendor_id=…` filters the catalog to one vendor — the link behind the item count on a vendor card.
 
+`inventory.view` gets the directory, not the commercial terms: `accountNumber`, `paymentTerms` and `totalPurchaseValue` come back blank unless the caller also holds `inventory.manage` _(2026-08-16)_. Name, phone, email, fax, website, address, contacts and the item/reorder counts are unaffected — a member can see that the department buys from a vendor and how to reach them, but not what it pays. The screen is unaffected, being `inventory.manage`-gated already.
+
 ### Write-Off Requests
 
 ```

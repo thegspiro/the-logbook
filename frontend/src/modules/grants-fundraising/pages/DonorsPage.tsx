@@ -77,10 +77,9 @@ const EMPTY_FORM: NewDonorForm = {
 // ---------------------------------------------------------------------------
 
 const inputClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+  'form-input px-3 text-sm placeholder:text-theme-text-secondary focus:border-red-500 focus:ring-red-500';
 
-const selectClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+const selectClass = 'form-input px-3 text-sm focus:border-red-500 focus:ring-red-500';
 
 const labelClass = 'form-label';
 
@@ -215,10 +214,7 @@ export const DonorsPage: React.FC = () => {
 
       {/* Inline Add Donor Form */}
       {showForm && (
-        <form
-          onSubmit={(e) => void handleSubmit(e)}
-          className="border-theme-surface-border bg-theme-surface space-y-4 rounded-lg border p-6"
-        >
+        <form onSubmit={(e) => void handleSubmit(e)} className="card space-y-4 p-6">
           <h2 className="text-theme-text-primary text-lg font-semibold">New Donor</h2>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -414,7 +410,7 @@ export const DonorsPage: React.FC = () => {
       </div>
 
       {/* Donors Table */}
-      <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
+      <div className="card overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
             <Loader2 className="h-8 w-8 animate-spin text-red-500" />

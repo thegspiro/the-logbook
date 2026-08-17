@@ -199,7 +199,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
                   onChange={(e) => setPkgNotes(e.target.value)}
                   placeholder="Internal notes about this applicant..."
                   rows={2}
-                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input placeholder-theme-text-muted resize-none px-3 text-sm"
                 />
               </div>
               <div>
@@ -209,7 +209,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
                   onChange={(e) => setPkgStatement(e.target.value)}
                   placeholder="Statement shown to voters on the ballot..."
                   rows={2}
-                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input placeholder-theme-text-muted resize-none px-3 text-sm"
                 />
               </div>
               <div className="flex items-center justify-end gap-2">
@@ -278,7 +278,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
                       <select
                         value={selectedElectionId}
                         onChange={(e) => setSelectedElectionId(e.target.value)}
-                        className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-lg border px-2 py-1.5 text-xs"
+                        className="form-input px-2 py-1.5 text-xs"
                       >
                         <option value="">Select a draft election...</option>
                         {draftElections.map((el) => (

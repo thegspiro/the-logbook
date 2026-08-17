@@ -99,7 +99,7 @@ const ExpenseReportsPage: React.FC = () => {
       )}
 
       {/* Status Tabs */}
-      <div className="border-theme-surface-border bg-theme-surface flex flex-wrap gap-1 rounded-lg border p-1">
+      <div className="card flex flex-wrap gap-1 p-1">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
@@ -128,7 +128,7 @@ const ExpenseReportsPage: React.FC = () => {
           placeholder="Search by report number or title..."
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
-          className="border-theme-surface-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-secondary w-full rounded-lg border py-2 pr-10 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none"
+          className="form-input placeholder:text-theme-text-secondary pr-10 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500"
         />
         {searchText && (
           <button
@@ -164,7 +164,7 @@ const ExpenseReportsPage: React.FC = () => {
           }
         />
       ) : (
-        <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
+        <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>

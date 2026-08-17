@@ -73,7 +73,7 @@ const DonationsPage: React.FC = () => {
       </div>
 
       {/* Summary Card */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+      <div className="card p-4">
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-green-100 p-2 dark:bg-green-500/20">
             <DollarSign className="h-5 w-5 text-green-600" />
@@ -98,7 +98,7 @@ const DonationsPage: React.FC = () => {
             placeholder="Search by donor name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="border-theme-surface-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-secondary w-full rounded-lg border py-2 pr-4 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none"
+            className="form-input placeholder:text-theme-text-secondary pr-4 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -115,7 +115,7 @@ const DonationsPage: React.FC = () => {
       </div>
 
       {/* Donations Table */}
-      <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
+      <div className="card overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-500 border-t-transparent" />

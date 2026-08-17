@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 
 interface CloneElectionModalProps {
   sourceTitle: string;
@@ -14,6 +15,8 @@ interface CloneElectionModalProps {
  * Votes, tokens, attendees, and overrides are never copied.
  */
 const CloneElectionModal: React.FC<CloneElectionModalProps> = ({ sourceTitle, cloning, error, onSubmit, onClose }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [title, setTitle] = useState(`${sourceTitle} (Copy)`);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -32,13 +35,13 @@ const CloneElectionModal: React.FC<CloneElectionModalProps> = ({ sourceTitle, cl
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="clone-election-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="clone-election-title" className="text-theme-text-primary text-lg font-medium">
             Clone Election
