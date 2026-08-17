@@ -268,6 +268,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moved on. Recipients now resolve through the `inventory.manage` permission via
   the roles relationship.
 
+### Forcing a stale device back onto the current build (2026-08-16)
+
+**Added**
+
+- **Settings → App**, a new tab holding the three things a member needs when
+  the app looks out of date and the automatic update path has already failed
+  them:
+  - **Installed version** — the build ID this device is actually running.
+    Previously unknowable from inside the app, which made "which version are
+    you on?" unanswerable on a support call.
+  - **Check for updates** — an on-demand version check that reports "you're on
+    the latest version" or swaps in the new service worker and reloads onto the
+    new build. The automatic checks are rate-limited to once a minute and hang
+    off route changes, tab focus and a five-minute poll; this one answers now.
+  - **Force refresh** — clears every client-side copy of the app (the workbox
+    precache holding the app shell, the `app-chunks` runtime cache holding
+    lazily-loaded screens, the in-memory API response cache) and reloads from
+    the server, behind a confirmation that says what it will do.
+
+  An installed PWA has no address bar and no `Ctrl+Shift+R`, so a home-screen
+  app that wedged on an old shell had no user-reachable way out at all — the
+  only advice was to uninstall it or clear website data.
+
+- The force refresh also drops the **branding cached in localStorage**
+  (`departmentName`, `logoData`). `AppLayout` writes those on first load and
+  only re-fetches when `departmentName` is missing, so a department that
+  renamed itself or changed its logo left every existing device showing the old
+  one indefinitely, with no expiry and no invalidation.
+
+- **Force refresh refuses to run when the server is unreachable**, leaving the
+  device untouched and saying so. The precache is the app's only offline copy
+  and workbox heals a deleted entry only by fetching it, so purging offline
+  would delete the shell and reload into nothing — bricking the installed PWA
+  until signal returned, which is far worse than the stale build being fixed,
+  and worst on the rural cellular connections this app is used from. A member
+  who taps this _because_ something looks wrong is exactly the person likely to
+  be out of signal at the time. Reachability is proven by fetching a parseable
+  `/version.json` rather than trusting `navigator.onLine`, which reports a
+  healthy connection on station Wi-Fi behind a captive portal — the same
+  interception already documented as a cause of blank screens.
+
+**Notes on what force refresh deliberately leaves alone** — each of these would
+be a worse failure than the one being fixed:
+
+- **The service worker registration.** Unregistering is the more thorough nuke,
+  but a Web Push subscription belongs to the registration and nothing
+  re-subscribes automatically, so it would silently switch off callout
+  notifications on that device. Deleting the caches is sufficient: workbox's
+  precache strategy falls back to the network on a miss and re-caches what it
+  fetches, so the precache heals itself on the very reload this triggers.
+- **The offline queues (IndexedDB).** They hold work done but not yet synced.
+- **`has_session` and the auth cookies.** This is a refresh, not a sign-out.
+
+**Changed**
+
+- `getCurrentBuildId` / the `/version.json` fetch moved out of `useAppUpdate`
+  into `utils/appVersion.ts`, so automatic detection and the manual check agree
+  on what "current" means rather than carrying two copies of the comparison.
+
 ### Inventory: vendor review fixes (2026-08-16)
 
 **Fixed**
