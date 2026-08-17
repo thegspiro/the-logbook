@@ -83,6 +83,9 @@ class ErrorCode(str, Enum):
     # --- Integrations ----------------------------------------------------
     INT_NOT_CONFIGURED = "LB-INT-001"
 
+    # --- Scheduling ------------------------------------------------------
+    SCHED_DRIVER_NOT_QUALIFIED = "LB-SCHED-001"
+
 
 @dataclass(frozen=True)
 class ErrorCodeInfo:
@@ -439,6 +442,28 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
         resolution=(
             "Add the integration's API credentials under Admin → "
             "Integrations (or the deployment environment) and retry.",
+        ),
+    ),
+    ErrorCode.SCHED_DRIVER_NOT_QUALIFIED: ErrorCodeInfo(
+        title="Driver not qualified for this apparatus",
+        description=(
+            "The member does not hold the EVOC certification the shift's "
+            "apparatus requires, so they cannot be seated as its driver. "
+            "This is a safety block, not a permissions problem — it applies "
+            "to officer assignment and member self-signup alike."
+        ),
+        resolution=(
+            "Record the member's EVOC certification on the apparatus's "
+            "Operators tab, or link the certifying training program to the "
+            "EVOC level under Settings → EVOC Levels so completion adds it "
+            "automatically.",
+            "For a parade or special event where an uncertified member may "
+            "legitimately drive, request a driver qualification exception "
+            "(Scheduling → Qualifications → Driver exceptions); a chief "
+            "other than the requester must approve it.",
+            "To make the check advisory rather than blocking for the whole "
+            "department, turn off 'Enforce EVOC for drivers' in Scheduling "
+            "→ Settings → General.",
         ),
     ),
 }

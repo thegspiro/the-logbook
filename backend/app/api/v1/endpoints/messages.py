@@ -384,22 +384,23 @@ async def acknowledge_message(
 ):
     """Acknowledge a message (for messages requiring acknowledgment)"""
     service = MessagingService(db)
-    success, error = await service.acknowledge_message(
+    success, error, newly_acknowledged = await service.acknowledge_message(
         message_id, current_user.id, current_user.organization_id
     )
     if not success:
         raise HTTPException(status_code=400, detail=error)
     # Acknowledgments are treated as compliance evidence, so record who
     # acknowledged what and when in the audit trail.
-    await log_audit_event(
-        db=db,
-        event_type="message_acknowledged",
-        event_category="messages",
-        severity="info",
-        event_data={"message_id": message_id},
-        user_id=str(current_user.id),
-        username=current_user.username,
-    )
+    if newly_acknowledged:
+        await log_audit_event(
+            db=db,
+            event_type="message_acknowledged",
+            event_category="messages",
+            severity="info",
+            event_data={"message_id": message_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
     return {"status": "ok"}
 
 

@@ -1502,7 +1502,7 @@ async def get_supply_expiring_items(
     days_ahead: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("equipment_check.view", "inventory.view")
+        require_permission("equipment_check.view", "inventory.manage")
     ),
 ):
     """Checklist items expiring soon on apparatus, with ready replacement

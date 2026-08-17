@@ -19,6 +19,13 @@ export default tseslint.config(
       'coverage/',
       'scripts/',
       'public/',
+      // Stryker copies the whole project into a sandbox per run and leaves it
+      // behind if the run is interrupted. It is gitignored, but ESLint still
+      // walks it — and it contains a second tsconfig, so typescript-eslint
+      // cannot resolve a root and reports a parse error on every file. One
+      // abandoned sandbox turned `npm run lint` into 1,164 phantom errors.
+      '.stryker-tmp/',
+      'reports/',
       '*.config.ts',
       '*.config.js',
     ],
@@ -69,10 +76,7 @@ export default tseslint.config(
       'no-unused-vars': 'off',
 
       // React Refresh rules
-      'react-refresh/only-export-components': [
-        'warn',
-        { allowConstantExport: true },
-      ],
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
       // TypeScript specific
       '@typescript-eslint/no-explicit-any': 'warn',
@@ -112,8 +116,7 @@ export default tseslint.config(
         },
         {
           selector: "CallExpression[callee.property.name='toLocaleTimeString']",
-          message:
-            'Use formatTime() from @/utils/dateFormatting instead of .toLocaleTimeString().',
+          message: 'Use formatTime() from @/utils/dateFormatting instead of .toLocaleTimeString().',
         },
       ],
       'no-restricted-imports': [
@@ -134,10 +137,7 @@ export default tseslint.config(
   // Exempt date formatting utilities from the locale-method ban (they ARE the
   // canonical wrappers) and from the date-fns import restriction.
   {
-    files: [
-      'src/utils/dateFormatting.ts',
-      'src/hooks/useRelativeTime.ts',
-    ],
+    files: ['src/utils/dateFormatting.ts', 'src/hooks/useRelativeTime.ts'],
     rules: {
       'no-restricted-syntax': 'off',
       'no-restricted-imports': 'off',
@@ -146,13 +146,7 @@ export default tseslint.config(
 
   // Test file overrides
   {
-    files: [
-      'src/**/*.test.ts',
-      'src/**/*.test.tsx',
-      'src/**/*.spec.ts',
-      'src/**/*.spec.tsx',
-      'src/test/**/*',
-    ],
+    files: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/**/*.spec.ts', 'src/**/*.spec.tsx', 'src/test/**/*'],
     languageOptions: {
       globals: {
         ...globals.jest,
@@ -175,14 +169,32 @@ export default tseslint.config(
       'vitest/no-focused-tests': 'error',
       'vitest/no-disabled-tests': 'warn',
       'vitest/no-standalone-expect': 'error',
-      'vitest/prefer-called-with': 'warn',
+      // DISABLED, and it must stay disabled. This rule is auto-fixable: it
+      // rewrites `expect(m).toHaveBeenCalled()` into
+      // `expect(m).toHaveBeenCalledWith()` — the ZERO-ARGUMENT form — without
+      // looking at how the mock was actually called. lint-staged runs
+      // `eslint --fix` on every commit, so the rewrite happened silently, and
+      // for any mock called with arguments it converts a passing assertion into
+      // a failing one:
+      //
+      //   const m = vi.fn(); m(1, 2);
+      //   expect(m).toHaveBeenCalled();      // passes
+      //   -- eslint --fix -->
+      //   expect(m).toHaveBeenCalledWith();  // FAILS: expected call with []
+      //
+      // That is the mechanism behind pitfall #13, which CLAUDE.md records as
+      // the single largest source of broken tests here (34 of 46). The cause
+      // was never developers choosing the wrong matcher — the toolchain was
+      // rewriting the right one on its way into the commit. It also directly
+      // contradicts the documented rule, which says to use
+      // `toHaveBeenCalled()` when arguments are not the point; with this rule
+      // on, that advice was impossible to follow.
+      'vitest/prefer-called-with': 'off',
       'vitest/no-restricted-matchers': [
         'error',
         {
-          toBeTruthy:
-            'Avoid toBeTruthy — use toBe(true), toBeTypeOf(), or a more specific assertion',
-          toBeFalsy:
-            'Avoid toBeFalsy — use toBe(false), toBeNull(), toBeUndefined(), or a more specific assertion',
+          toBeTruthy: 'Avoid toBeTruthy — use toBe(true), toBeTypeOf(), or a more specific assertion',
+          toBeFalsy: 'Avoid toBeFalsy — use toBe(false), toBeNull(), toBeUndefined(), or a more specific assertion',
         },
       ],
     },
@@ -204,5 +216,5 @@ export default tseslint.config(
   },
 
   // Prettier must be last to override conflicting rules
-  eslintConfigPrettier,
+  eslintConfigPrettier
 );

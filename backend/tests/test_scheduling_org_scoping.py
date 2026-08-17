@@ -24,6 +24,12 @@ def _all(items):
     return r
 
 
+def _scalars(items):
+    r = MagicMock()
+    r.scalars.return_value.all.return_value = items
+    return r
+
+
 def _scalars_first(obj):
     """Mock a result whose ``.scalars().first()`` yields ``obj``.
 
@@ -163,9 +169,19 @@ class TestUpdateShiftApparatusScoping:
             min_staffing=2,
         )
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_one(existing), _scalars_first(apparatus)])
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(existing),
+                _scalars_first(apparatus),
+                # Moving the apparatus re-checks the shift's drivers against
+                # the new unit; this shift has no assignments.
+                _scalars([]),
+            ]
+        )
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+        db.add = MagicMock()
         svc = SchedulingService(db)
 
         shift, err = await svc.update_shift("s1", "org-1", {"apparatus_id": "app-2"})

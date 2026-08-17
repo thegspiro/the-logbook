@@ -4090,7 +4090,7 @@ async def list_vendors(
 @router.get("/vendors/unlinked-names", response_model=list[UnlinkedVendorName])
 async def list_unlinked_vendor_names(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Supplier names typed onto items and reorder requests that were never
@@ -4101,7 +4101,7 @@ async def list_unlinked_vendor_names(
     "unlinked-names" as a malformed UUID.
 
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
     return await service.list_unlinked_vendor_names(current_user.organization_id)

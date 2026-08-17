@@ -314,10 +314,10 @@ class TestDocumentsServiceAPI:
         Inspect document_service.py source to ensure no method returns
         a tuple. Methods should either return a value or raise an exception.
         """
-        try:
-            from app.services import document_service
-        except ImportError:
-            pytest.skip("document_service not found")
+        # Imported unguarded on purpose. Skipping on ImportError would retire
+        # this check the moment the module is renamed or develops an import
+        # error — exactly when it is worth running.
+        from app.services import document_service
 
         source = inspect.getsource(document_service)
         tree = ast.parse(source)
@@ -363,8 +363,10 @@ class TestPublicPortalImplementation:
         portal_path = os.path.join(
             os.path.dirname(__file__), "..", "app", "api", "public", "portal.py"
         )
-        if not os.path.exists(portal_path):
-            pytest.skip("portal.py not found")
+        assert os.path.exists(portal_path), (
+            f"portal.py not found at {portal_path} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(portal_path) as f:
             source = f.read()
@@ -405,8 +407,10 @@ class TestPublicPortalImplementation:
         portal_path = os.path.join(
             os.path.dirname(__file__), "..", "app", "api", "public", "portal.py"
         )
-        if not os.path.exists(portal_path):
-            pytest.skip("portal.py not found")
+        assert os.path.exists(portal_path), (
+            f"portal.py not found at {portal_path} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(portal_path) as f:
             source = f.read()
@@ -434,8 +438,10 @@ class TestPublicPortalImplementation:
         portal_path = os.path.join(
             os.path.dirname(__file__), "..", "app", "api", "public", "portal.py"
         )
-        if not os.path.exists(portal_path):
-            pytest.skip("portal.py not found")
+        assert os.path.exists(portal_path), (
+            f"portal.py not found at {portal_path} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(portal_path) as f:
             source = f.read()
@@ -467,8 +473,10 @@ class TestFastPathInit:
         dropping existing tables and the count should reflect that.
         """
         main_path = os.path.join(os.path.dirname(__file__), "..", "main.py")
-        if not os.path.exists(main_path):
-            pytest.skip("main.py not found")
+        assert os.path.exists(main_path), (
+            f"main.py not found at {main_path} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(main_path) as f:
             source = f.read()
@@ -493,8 +501,10 @@ class TestFastPathInit:
     def test_fast_path_calls_create_all(self):
         """Fast-path should use Base.metadata.create_all() for speed."""
         main_path = os.path.join(os.path.dirname(__file__), "..", "main.py")
-        if not os.path.exists(main_path):
-            pytest.skip("main.py not found")
+        assert os.path.exists(main_path), (
+            f"main.py not found at {main_path} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(main_path) as f:
             source = f.read()
@@ -510,8 +520,10 @@ class TestFastPathInit:
         so future startups don't re-run migrations.
         """
         main_path = os.path.join(os.path.dirname(__file__), "..", "main.py")
-        if not os.path.exists(main_path):
-            pytest.skip("main.py not found")
+        assert os.path.exists(main_path), (
+            f"main.py not found at {main_path} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(main_path) as f:
             source = f.read()
@@ -568,8 +580,10 @@ class TestFrontendErrorHandling:
         be caught by the Error branch, losing the HTTP status code and
         API detail message.
         """
-        if not os.path.exists(self.ERROR_HANDLING_PATH):
-            pytest.skip("errorHandling.ts not found")
+        assert os.path.exists(self.ERROR_HANDLING_PATH), (
+            f"errorHandling.ts not found at {self.ERROR_HANDLING_PATH} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(self.ERROR_HANDLING_PATH) as f:
             source = f.read()
@@ -596,8 +610,10 @@ class TestFrontendErrorHandling:
 
     def test_toAppError_extracts_status(self):
         """toAppError() should extract HTTP status from Axios-like errors."""
-        if not os.path.exists(self.ERROR_HANDLING_PATH):
-            pytest.skip("errorHandling.ts not found")
+        assert os.path.exists(self.ERROR_HANDLING_PATH), (
+            f"errorHandling.ts not found at {self.ERROR_HANDLING_PATH} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(self.ERROR_HANDLING_PATH) as f:
             source = f.read()
@@ -608,8 +624,10 @@ class TestFrontendErrorHandling:
 
     def test_toAppError_extracts_detail_message(self):
         """toAppError() should extract API detail message from response data."""
-        if not os.path.exists(self.ERROR_HANDLING_PATH):
-            pytest.skip("errorHandling.ts not found")
+        assert os.path.exists(self.ERROR_HANDLING_PATH), (
+            f"errorHandling.ts not found at {self.ERROR_HANDLING_PATH} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(self.ERROR_HANDLING_PATH) as f:
             source = f.read()
@@ -622,8 +640,10 @@ class TestFrontendErrorHandling:
 
     def test_getErrorMessage_uses_fallback(self):
         """getErrorMessage() should accept and use a fallback message."""
-        if not os.path.exists(self.ERROR_HANDLING_PATH):
-            pytest.skip("errorHandling.ts not found")
+        assert os.path.exists(self.ERROR_HANDLING_PATH), (
+            f"errorHandling.ts not found at {self.ERROR_HANDLING_PATH} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(self.ERROR_HANDLING_PATH) as f:
             source = f.read()
@@ -634,8 +654,10 @@ class TestFrontendErrorHandling:
 
     def test_error_handling_exports_required_functions(self):
         """The module must export toAppError, getErrorMessage, and isAppError."""
-        if not os.path.exists(self.ERROR_HANDLING_PATH):
-            pytest.skip("errorHandling.ts not found")
+        assert os.path.exists(self.ERROR_HANDLING_PATH), (
+            f"errorHandling.ts not found at {self.ERROR_HANDLING_PATH} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(self.ERROR_HANDLING_PATH) as f:
             source = f.read()
@@ -653,8 +675,10 @@ class TestFrontendErrorHandling:
         frontend_src = os.path.join(
             os.path.dirname(__file__), "..", "..", "frontend", "src"
         )
-        if not os.path.exists(frontend_src):
-            pytest.skip("frontend/src not found")
+        assert os.path.exists(frontend_src), (
+            f"frontend/src not found at {frontend_src} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         violations = []
         for root, _dirs, files in os.walk(frontend_src):
@@ -703,8 +727,10 @@ class TestMakefileCorrectness:
 
     def test_backend_test_uses_pytest(self):
         """Backend test targets should use pytest, not npm test."""
-        if not os.path.exists(self.MAKEFILE_PATH):
-            pytest.skip("Makefile not found")
+        assert os.path.exists(self.MAKEFILE_PATH), (
+            f"Makefile not found at {self.MAKEFILE_PATH} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         with open(self.MAKEFILE_PATH) as f:
             content = f.read()
@@ -732,8 +758,10 @@ class TestAlembicMigrationChain:
 
     def _parse_migration_files(self):
         """Parse all migration files to extract revision metadata."""
-        if not os.path.exists(self.VERSIONS_DIR):
-            pytest.skip("alembic/versions not found")
+        assert os.path.exists(self.VERSIONS_DIR), (
+            f"alembic/versions not found at {self.VERSIONS_DIR} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         migrations = {}
         for filename in os.listdir(self.VERSIONS_DIR):
@@ -779,8 +807,10 @@ class TestAlembicMigrationChain:
 
     def test_no_duplicate_revision_ids(self):
         """Each migration must have a unique revision ID."""
-        if not os.path.exists(self.VERSIONS_DIR):
-            pytest.skip("alembic/versions not found")
+        assert os.path.exists(self.VERSIONS_DIR), (
+            f"alembic/versions not found at {self.VERSIONS_DIR} — this guard reads a tracked file; if it "
+            "moved, repoint the path instead of letting the check vanish"
+        )
 
         revisions = defaultdict(list)
         for filename in os.listdir(self.VERSIONS_DIR):
@@ -810,8 +840,10 @@ class TestAlembicMigrationChain:
         or be None (for the first migration).
         """
         migrations = self._parse_migration_files()
-        if not migrations:
-            pytest.skip("No migrations found")
+        assert migrations, (
+            f"no migration files under {self.VERSIONS_DIR} — the chain "
+            "integrity checks below would silently pass over an empty set"
+        )
 
         known_revisions = set(migrations.keys())
         broken = []
@@ -839,8 +871,10 @@ class TestAlembicMigrationChain:
         (the root of the migration chain).
         """
         migrations = self._parse_migration_files()
-        if not migrations:
-            pytest.skip("No migrations found")
+        assert migrations, (
+            f"no migration files under {self.VERSIONS_DIR} — the chain "
+            "integrity checks below would silently pass over an empty set"
+        )
 
         roots = [
             f"{meta['filename']} (rev: {rev})"
@@ -868,8 +902,10 @@ class TestAlembicMigrationChain:
         once both are merged.
         """
         migrations = self._parse_migration_files()
-        if not migrations:
-            pytest.skip("No migrations found")
+        assert migrations, (
+            f"no migration files under {self.VERSIONS_DIR} — the chain "
+            "integrity checks below would silently pass over an empty set"
+        )
 
         referenced = set()
         for meta in migrations.values():

@@ -63,6 +63,8 @@ async def list_meetings(
     )
     # Fill in creator_name the response declares (else "Created by …" never shows).
     await service.attach_creator_names(current_user.organization_id, list(meetings))
+    # Same for the attendee / action-item counts each card renders.
+    await service.attach_child_counts(list(meetings))
 
     return {
         "meetings": meetings,
