@@ -1,15 +1,19 @@
 """Track state and EVOC grants produced by reversible completions.
 
-Revision ID: 20260816_0002
-Revises: 20260816_0001
+(Renumbered from 20260816_0002: the storage-area barcode backfill on main
+already held that id — the same-day collision ALEMBIC_MIGRATIONS.md warns
+about. Chained after main's head, 20260816_0005.)
+
+Revision ID: 20260816_0009
+Revises: 20260816_0005
 Create Date: 2026-08-16
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260816_0002"
-down_revision = "20260816_0001"
+revision = "20260816_0009"
+down_revision = "20260816_0005"
 branch_labels = None
 depends_on = None
 
