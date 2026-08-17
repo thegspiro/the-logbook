@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
@@ -62,6 +63,8 @@ interface CreateProviderModalProps {
 }
 
 const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClose, onSuccess }) => {
+  const dialogRef1 = useDialog<HTMLDivElement>({ onClose });
+
   const [step, setStep] = useState<'type' | 'details'>('type');
   const [formData, setFormData] = useState<ExternalTrainingProviderCreate>({
     name: '',
@@ -114,7 +117,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-provider-title"
@@ -122,7 +125,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg">
+      <div ref={dialogRef1} className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
         <div className="border-theme-surface-border border-b p-6">
           <h2 id="create-provider-title" className="text-theme-text-primary text-2xl font-bold">
             {step === 'type' ? 'Select Provider Type' : 'Configure Provider'}
@@ -456,7 +459,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-6">
+    <div className="card p-6">
       <div className="mb-4 flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="bg-theme-surface-secondary rounded-lg p-2">
@@ -582,6 +585,8 @@ interface EditProviderModalProps {
 }
 
 const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider, onClose, onSuccess }) => {
+  const dialogRef2 = useDialog<HTMLDivElement>({ onClose });
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -651,7 +656,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-provider-title"
@@ -659,7 +664,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg">
+      <div ref={dialogRef2} className="modal-panel max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
         <div className="border-theme-surface-border border-b p-6">
           <h2 id="edit-provider-title" className="text-theme-text-primary text-2xl font-bold">
             Edit Provider: {provider.name}
@@ -841,6 +846,8 @@ interface MappingsModalProps {
 }
 
 const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, providerId, providerName }) => {
+  const dialogRef3 = useDialog<HTMLDivElement>({ onClose });
+
   const [activeTab, setActiveTab] = useState<'categories' | 'users'>('categories');
   const [categoryMappings, setCategoryMappings] = useState<ExternalCategoryMapping[]>([]);
   const [userMappings, setUserMappings] = useState<ExternalUserMapping[]>([]);
@@ -900,7 +907,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mappings-modal-title"
@@ -908,7 +915,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-lg">
+      <div ref={dialogRef3} className="modal-panel flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden">
         <div className="border-theme-surface-border border-b p-6">
           <h2 id="mappings-modal-title" className="text-2xl font-bold text-white">
             Mappings - {providerName}
@@ -1251,7 +1258,7 @@ const ExternalTrainingPage: React.FC = () => {
         ) : activeTab === 'providers' ? (
           <div className="grid gap-6 md:grid-cols-2" role="tabpanel">
             {providers.length === 0 ? (
-              <div className="bg-theme-surface border-theme-surface-border col-span-2 rounded-lg border py-12 text-center">
+              <div className="card col-span-2 py-12 text-center">
                 <Link2 className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Integrations Yet</h3>
                 <p className="text-theme-text-muted mb-4">
@@ -1289,10 +1296,7 @@ const ExternalTrainingPage: React.FC = () => {
             )}
           </div>
         ) : activeTab === 'imports' ? (
-          <div
-            className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center"
-            role="tabpanel"
-          >
+          <div className="card p-8 text-center" role="tabpanel">
             <Download className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Import Queue</h3>
             <p className="text-theme-text-muted">
@@ -1300,10 +1304,7 @@ const ExternalTrainingPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div
-            className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center"
-            role="tabpanel"
-          >
+          <div className="card p-8 text-center" role="tabpanel">
             <FolderTree className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">All Mappings</h3>
             <p className="text-theme-text-muted">View and manage all category and user mappings across providers</p>

@@ -104,7 +104,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({ templates, onClos
   ].sort();
 
   return (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CalendarClock className="h-5 w-5 text-blue-500" />

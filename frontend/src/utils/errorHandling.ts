@@ -153,6 +153,36 @@ export function getErrorMessage(error: unknown, fallback = 'An error occurred'):
 }
 
 /**
+ * True when a request never received an answer from the server — the device is
+ * offline, DNS/TLS failed, or the client timed out waiting.
+ *
+ * Offline-capable screens use this to decide whether a failed submit may be
+ * queued for later sync. A server that answered 400/403/422 has *rejected* the
+ * payload: re-sending the identical body later can only be rejected again, so
+ * queueing it hides a permanent failure behind a "will sync when connected"
+ * message and the member never learns their work was not recorded.
+ *
+ * Defaults to `false` for anything it cannot positively identify as transport
+ * failure — a programming error thrown while building the payload must surface,
+ * not be filed away as a connectivity blip.
+ */
+export function isNetworkError(error: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  if (typeof error !== 'object' || error === null) return false;
+
+  const err = error as { response?: unknown; code?: string; message?: string };
+  // An HTTP status means the server answered; whatever it said, it is not a
+  // transport failure.
+  if (err.response) return false;
+
+  if (err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') return true;
+
+  // Axios attaches `request` once the call left the browser; with no `response`
+  // alongside it, nothing came back.
+  return 'request' in (error as Record<string, unknown>) || err.message === 'Network Error';
+}
+
+/**
  * Detect the soft training-pipeline phase gate (HTTP 409 with a structured
  * `phase_gate` detail) that RSVP / self check-in return when a session is ahead
  * of the member's current phase. Returns the warning message the caller should

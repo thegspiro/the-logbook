@@ -620,7 +620,7 @@ const PoolItemsPage: React.FC = () => {
               onChange={(e) => setMemberSearch(e.target.value)}
             />
             {memberSearch && !issueUserId && (
-              <ul className="border-theme-surface-border bg-theme-surface mt-1 max-h-40 overflow-y-auto rounded-lg border">
+              <ul className="card mt-1 max-h-40 overflow-y-auto">
                 {filteredMembers.slice(0, 20).map((m) => (
                   <li key={m.user_id}>
                     <button

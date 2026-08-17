@@ -332,7 +332,7 @@ const MyEquipmentPage: React.FC = () => {
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">
             <Package className="text-theme-text-primary h-6 w-6" />
-            <h1 className="text-theme-text-primary text-2xl font-bold">My Equipment</h1>
+            <h1 className="text-theme-text-primary text-2xl font-bold">My Issued Gear</h1>
             <span className="text-theme-text-muted text-sm">({totalItems} items)</span>
           </div>
           <button
@@ -404,7 +404,7 @@ const MyEquipmentPage: React.FC = () => {
             )}
             {equipRequests.length > 0 && (
               <div>
-                <h3 className="text-theme-text-secondary mb-2 text-sm font-medium">Equipment Requests</h3>
+                <h3 className="text-theme-text-secondary mb-2 text-sm font-medium">Gear Requests</h3>
                 <div className="space-y-2">
                   {equipRequests.map((r) => (
                     <div
@@ -651,7 +651,7 @@ const MyEquipmentPage: React.FC = () => {
                 )}
               </div>
               {reqResults.length > 0 && !reqSelected && (
-                <ul className="border-theme-surface-border bg-theme-surface divide-theme-surface-border mt-1 max-h-40 divide-y overflow-y-auto rounded-md border">
+                <ul className="card divide-theme-surface-border mt-1 max-h-40 divide-y overflow-y-auto">
                   {reqResults.map((item) => (
                     <li key={item.id}>
                       <button

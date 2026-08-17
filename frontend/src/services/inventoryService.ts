@@ -22,6 +22,9 @@ import type {
   InventoryItemsListResponse,
   ItemHistoryEvent,
   InventorySummary,
+  InventorySetupStatus,
+  CategoryPreset,
+  CategoryPresetApplyResponse,
   InventoryCategoryCreate,
   ScanLookupResponse,
   BatchCheckoutRequest,
@@ -46,6 +49,15 @@ import type {
   ReorderRequest,
   ReorderRequestCreate,
   ReorderRequestUpdate,
+  InventoryVendor,
+  InventoryVendorCreate,
+  InventoryVendorUpdate,
+  InventoryVendorContact,
+  InventoryVendorContactCreate,
+  InventoryVendorContactUpdate,
+  UnlinkedVendorName,
+  VendorAttachNameResult,
+  VendorMergeResult,
   ItemVariantGroup,
   ItemVariantGroupCreate,
   EquipmentKit,
@@ -154,6 +166,22 @@ export const inventoryService = {
     return response.data;
   },
 
+  // Guided setup
+  async getSetupStatus(): Promise<InventorySetupStatus> {
+    const response = await api.get<InventorySetupStatus>('/inventory/setup/status');
+    return response.data;
+  },
+
+  async getCategoryPresets(): Promise<CategoryPreset[]> {
+    const response = await api.get<CategoryPreset[]>('/inventory/setup/category-presets');
+    return asArray(response.data);
+  },
+
+  async applyCategoryPresets(keys: string[]): Promise<CategoryPresetApplyResponse> {
+    const response = await api.post<CategoryPresetApplyResponse>('/inventory/setup/category-presets', { keys });
+    return response.data;
+  },
+
   async getItems(params?: {
     category_id?: string | undefined;
     status?: string | undefined;
@@ -161,6 +189,7 @@ export const inventoryService = {
     item_type?: string | undefined;
     location_id?: string | undefined;
     storage_area_id?: string | undefined;
+    vendor_id?: string | undefined;
     search?: string | undefined;
     active_only?: boolean | undefined;
     sort_by?: string | undefined;
@@ -744,6 +773,76 @@ export const inventoryService = {
 
   async deleteReorderRequest(id: string): Promise<void> {
     await api.delete(`/inventory/reorder-requests/${id}`);
+  },
+
+  // Vendors
+  async getVendors(params?: {
+    search?: string | undefined;
+    active_only?: boolean | undefined;
+  }): Promise<InventoryVendor[]> {
+    const response = await api.get<InventoryVendor[]>('/inventory/vendors', { params });
+    return asArray(response.data);
+  },
+
+  async getVendor(vendorId: string): Promise<InventoryVendor> {
+    const response = await api.get<InventoryVendor>(`/inventory/vendors/${vendorId}`);
+    return response.data;
+  },
+
+  async createVendor(data: InventoryVendorCreate): Promise<InventoryVendor> {
+    const response = await api.post<InventoryVendor>('/inventory/vendors', data);
+    return response.data;
+  },
+
+  async updateVendor(vendorId: string, data: InventoryVendorUpdate): Promise<InventoryVendor> {
+    const response = await api.patch<InventoryVendor>(`/inventory/vendors/${vendorId}`, data);
+    return response.data;
+  },
+
+  /** Deactivates the vendor; its items and reorder history keep pointing at it. */
+  async deactivateVendor(vendorId: string): Promise<void> {
+    await api.delete(`/inventory/vendors/${vendorId}`);
+  },
+
+  async addVendorContact(vendorId: string, data: InventoryVendorContactCreate): Promise<InventoryVendorContact> {
+    const response = await api.post<InventoryVendorContact>(`/inventory/vendors/${vendorId}/contacts`, data);
+    return response.data;
+  },
+
+  async updateVendorContact(
+    vendorId: string,
+    contactId: string,
+    data: InventoryVendorContactUpdate
+  ): Promise<InventoryVendorContact> {
+    const response = await api.patch<InventoryVendorContact>(
+      `/inventory/vendors/${vendorId}/contacts/${contactId}`,
+      data
+    );
+    return response.data;
+  },
+
+  async deleteVendorContact(vendorId: string, contactId: string): Promise<void> {
+    await api.delete(`/inventory/vendors/${vendorId}/contacts/${contactId}`);
+  },
+
+  /** Supplier names on rows that were never attached to a vendor. */
+  async getUnlinkedVendorNames(): Promise<UnlinkedVendorName[]> {
+    const response = await api.get<UnlinkedVendorName[]>('/inventory/vendors/unlinked-names');
+    return asArray(response.data);
+  },
+
+  /** Point every row carrying `name` at this vendor. */
+  async attachVendorName(vendorId: string, name: string): Promise<VendorAttachNameResult> {
+    const response = await api.post<VendorAttachNameResult>(`/inventory/vendors/${vendorId}/attach-name`, { name });
+    return response.data;
+  },
+
+  /** Fold `sourceVendorId` into `vendorId`; the duplicate is removed. */
+  async mergeVendors(vendorId: string, sourceVendorId: string): Promise<VendorMergeResult> {
+    const response = await api.post<VendorMergeResult>(`/inventory/vendors/${vendorId}/merge`, {
+      source_vendor_id: sourceVendorId,
+    });
+    return response.data;
   },
 
   // Variant Groups

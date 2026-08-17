@@ -63,7 +63,7 @@ const ApplicantInfoSection: React.FC<ApplicantInfoSectionProps> = ({ applicant, 
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+    <div className="card">
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3"
@@ -159,7 +159,7 @@ const PipelineProgressSection: React.FC<PipelineProgressSectionProps> = ({ appli
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+    <div className="card">
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3"
@@ -447,7 +447,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
   }
 
   return (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+    <div className="card p-4">
       {/* Header */}
       <div className="mb-3 flex items-start justify-between">
         <div className="flex items-center gap-2">
@@ -621,7 +621,7 @@ export const InterviewPage: React.FC = () => {
 
           {/* Recommendation summary */}
           {Object.keys(recommendationSummary).length > 0 && (
-            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+            <div className="card p-4">
               <h3 className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-semibold">
                 <FileText className="text-theme-text-secondary h-4 w-4" />
                 Recommendation Summary
@@ -654,7 +654,7 @@ export const InterviewPage: React.FC = () => {
         <div className="space-y-4 lg:col-span-2">
           {/* New interview form */}
           {showForm && (
-            <div className="bg-theme-surface rounded-lg border border-blue-200 p-4 dark:border-blue-800">
+            <div className="card border-blue-200 p-4 dark:border-blue-800">
               <h3 className="text-theme-text-primary mb-4 flex items-center gap-2 text-sm font-semibold">
                 <MessageSquare className="h-4 w-4 text-blue-600" />
                 Submit Interview Feedback
