@@ -22,10 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`.github/pull_request_template.md`** — Summary, Changes, Testing, and a
   short **Risk checks** list. The checks are deliberately not a restatement of
-  the CI gates: lint, formatting, import order, the migration chain, the
-  endpoint-permission docs check and the coverage floors are already enforced in
-  `ci.yml`, and a box asking whether they passed only teaches a reviewer to skip
-  the block. The list covers the failures no job can catch by reading the
+  the CI gates: ESLint, typecheck, flake8, black, isort, the migration chain,
+  the endpoint-permission docs check and the coverage floors are already
+  enforced in `ci.yml`, and a box asking whether they passed only teaches a
+  reviewer to skip the block. Prettier is called out as the one gap — it runs
+  only in the lint-staged pre-commit hook, so a `--no-verify` commit lands
+  unformatted `.ts`/`.md` on main, which is exactly how `CHANGELOG.md` came to
+  fail `prettier --check` before this change.
+  The list otherwise covers the failures no job can catch by reading the
   diff — a by-id query missing its `organization_id` filter, an update payload
   that omits a cleared field so the old value survives behind a success toast, a
   new PHI endpoint absent from `UNCACHEABLE_PREFIXES`, a setting stored with
