@@ -53,15 +53,33 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ item
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const filled = lines.filter((l) => l.inventory_item_id && l.quantity !== '');
-    if (filled.length === 0) {
+    // A row is either untouched or a real line. Half-filled rows used to be
+    // dropped by the same filter that selected the good ones, so a shipment
+    // went in short and still reported success — the officer only found out by
+    // recounting. Blank rows are ignored (they are just spare slots); a row
+    // with one field filled is a mistake worth stopping for.
+    const blank = (l: Line) => !l.inventory_item_id && l.quantity === '' && !l.lot_number && !l.expiration_date;
+    const touched = lines.filter((l) => !blank(l));
+    const incomplete = touched.filter((l) => !l.inventory_item_id || l.quantity === '');
+
+    if (touched.length === 0) {
       toast.error('Add at least one line with an item and a quantity');
       return;
     }
-    if (filled.some((l) => Number(l.quantity) < 1)) {
+    if (incomplete.length > 0) {
+      toast.error(
+        incomplete.length === 1
+          ? 'One line is missing its item or quantity. Complete it or clear the row.'
+          : `${incomplete.length} lines are missing an item or quantity. Complete them or clear the rows.`
+      );
+      return;
+    }
+    if (touched.some((l) => Number(l.quantity) < 1)) {
       toast.error('A received line needs a quantity of 1 or more');
       return;
     }
+
+    const filled = touched;
 
     const entries: InventoryLotBulkEntry[] = filled.map((l) => ({
       inventory_item_id: l.inventory_item_id,

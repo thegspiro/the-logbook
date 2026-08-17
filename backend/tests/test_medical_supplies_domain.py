@@ -204,6 +204,86 @@ class TestItemDomainPinning:
             await ms.get_medical_item(GEAR_ITEM, db=AsyncMock(), current_user=_user())
         assert err.value.status_code == 404
 
+    async def test_an_explicit_null_category_is_refused(self, svc):
+        """`{"category_id": null}` is the quiet way out of the domain.
+
+        `exclude_unset` keeps the key, so a truthiness check read the null as
+        "not supplied" and skipped the guard — clearing the column and
+        stranding the item as uncategorized, where the medical page's filter
+        cannot see it and the gear page's uncategorized rows can.
+        """
+        svc.update_item = AsyncMock(return_value=(MagicMock(), None))
+
+        with pytest.raises(HTTPException) as err:
+            await ms.update_medical_item(
+                MEDICAL_ITEM,
+                InventoryItemUpdate(category_id=None),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        assert err.value.status_code == 400
+        svc.update_item.assert_not_awaited()
+
+    async def test_an_update_that_omits_the_category_still_saves(self, svc):
+        """Omitted is not the same as null — it means "leave it alone"."""
+        svc.update_item = AsyncMock(return_value=(MagicMock(), None))
+
+        await ms.update_medical_item(
+            MEDICAL_ITEM,
+            InventoryItemUpdate(name="Renamed"),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        assert "category_id" not in svc.update_item.await_args.kwargs["update_data"]
+
+
+class TestSummaryCounts:
+    """The tiles must agree with the table underneath them."""
+
+    def _item(self, **kw):
+        item = MagicMock()
+        item.reorder_point = kw.get("reorder_point")
+        item.quantity = kw.get("quantity", 0)
+        item.is_lot_stocked = kw.get("is_lot_stocked", False)
+        item.lot_stock = kw.get("lot_stock")
+        return item
+
+    async def _low_stock_count(self, svc, items):
+        svc.get_items = AsyncMock(return_value=(items, len(items)))
+        svc.get_expiring_lots = AsyncMock(return_value=[])
+        result = await ms.medical_supply_summary(
+            expiring_within_days=30, db=AsyncMock(), current_user=_user()
+        )
+        return result["low_stock"]
+
+    async def test_a_replenished_lot_item_is_not_low(self, svc):
+        """Receiving a lot never touches `quantity`.
+
+        Counting the column alone reported a shelf full of in-date stock as
+        still below its reorder point.
+        """
+        item = self._item(
+            reorder_point=10, quantity=0, is_lot_stocked=True, lot_stock=48
+        )
+        assert await self._low_stock_count(svc, [item]) == 0
+
+    async def test_a_depleted_lot_item_is_low(self, svc):
+        item = self._item(
+            reorder_point=10, quantity=99, is_lot_stocked=True, lot_stock=2
+        )
+        assert await self._low_stock_count(svc, [item]) == 1
+
+    async def test_a_plain_counted_item_still_uses_quantity(self, svc):
+        item = self._item(reorder_point=10, quantity=3)
+        assert await self._low_stock_count(svc, [item]) == 1
+
+    async def test_an_item_with_no_reorder_point_is_never_low(self, svc):
+        """No floor set means the department has not said what low means."""
+        item = self._item(quantity=0)
+        assert await self._low_stock_count(svc, [item]) == 0
+
 
 class TestLotDomainPinning:
     async def test_lots_of_a_gear_item_are_not_listed(self, svc):

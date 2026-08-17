@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   CalendarClock,
   PackagePlus,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -88,6 +89,7 @@ const MedicalSuppliesPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showItemModal, setShowItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
   const load = useCallback(async () => {
@@ -123,6 +125,16 @@ const MedicalSuppliesPage: React.FC = () => {
   /** Lot stock is the real count for dated items; quantity is what's left over. */
   const onHand = (item: InventoryItem): number => (item.is_lot_stocked ? (item.lot_stock ?? 0) : (item.quantity ?? 0));
 
+  /**
+   * Resolve the category from the list this page already loaded.
+   *
+   * Not `item.category_name`: that field is not on `InventoryItemResponse`, so
+   * FastAPI strips it on the way out and every categorized supply rendered a
+   * dash. The categories are in hand anyway — one lookup beats widening a
+   * response model shared with the gear endpoints.
+   */
+  const categoryName = (item: InventoryItem): string => categories.find((c) => c.id === item.category_id)?.name ?? '—';
+
   const lowStockItems = useMemo(
     () => items.filter((i) => i.reorder_point !== undefined && onHand(i) <= (i.reorder_point ?? 0)),
     [items]
@@ -130,6 +142,7 @@ const MedicalSuppliesPage: React.FC = () => {
 
   const handleSaved = () => {
     setShowItemModal(false);
+    setEditingItem(null);
     setShowDeliveryModal(false);
     void load();
   };
@@ -361,6 +374,11 @@ const MedicalSuppliesPage: React.FC = () => {
                     <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
                       Storage
                     </th>
+                    {canManage && (
+                      <th className="px-4 py-3 text-right">
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -375,7 +393,7 @@ const MedicalSuppliesPage: React.FC = () => {
                           )}
                         </td>
                         <td data-label="Category" className="text-theme-text-muted px-4 py-3">
-                          {item.category_name ?? '—'}
+                          {categoryName(item)}
                         </td>
                         <td
                           data-label="On hand"
@@ -391,6 +409,18 @@ const MedicalSuppliesPage: React.FC = () => {
                         <td data-label="Storage" className="text-theme-text-muted px-4 py-3">
                           {item.storage_location || '—'}
                         </td>
+                        {canManage && (
+                          <td data-label="Actions" className="px-4 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setEditingItem(item)}
+                              className="btn-icon"
+                              aria-label={`Edit ${item.name}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -405,6 +435,15 @@ const MedicalSuppliesPage: React.FC = () => {
             </p>
           )}
         </section>
+      )}
+
+      {editingItem && (
+        <MedicalItemFormModal
+          categories={categories}
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSaved={handleSaved}
+        />
       )}
 
       {showItemModal && (

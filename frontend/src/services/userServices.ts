@@ -315,6 +315,7 @@ export interface ModuleSettingsData {
   hr_payroll: boolean;
   grants: boolean;
   storefront: boolean;
+  medical_supplies: boolean;
   prospective_members: boolean;
   public_info: boolean;
 }

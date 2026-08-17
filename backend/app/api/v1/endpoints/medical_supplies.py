@@ -389,7 +389,21 @@ async def update_medical_item(
     data = update_data.model_dump(exclude_unset=True)
     # Moving an item to a non-medical category is the same escape hatch as
     # reclassifying the category, one item at a time.
-    if data.get("category_id"):
+    #
+    # Key presence, not truthiness: `exclude_unset` keeps an explicitly-sent
+    # null, and `data.get(...)` reads that as falsy. That skipped the check and
+    # let `{"category_id": null}` through to `update_item`, which cleared the
+    # column — stranding the item as uncategorized, out of this page's domain
+    # filter and into the gear page's uncategorized rows, with no way back.
+    if "category_id" in data:
+        if data["category_id"] is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "A medical supply must stay in a medical category. "
+                    "Pick a different category rather than clearing it."
+                ),
+            )
         await _require_medical_category(service, str(data["category_id"]), org_id)
 
     updated, error = await service.update_item(
@@ -624,12 +638,24 @@ async def medical_supply_summary(
     already_expired = sum(
         1 for lot, _ in expiring if lot.expiration_date and lot.expiration_date < today
     )
+
     # Reorder point is the department's own floor for the item, so "low" means
     # what they said it means rather than a number chosen here.
+    #
+    # On-hand comes from the lots when the item is stocked as lots. `quantity`
+    # and the lots are separate ledgers — receiving a lot never touches the
+    # column — so counting `quantity` alone reported a replenished supply as
+    # still low, and missed a depleted one. That is most of this page's stock,
+    # and it made the tile disagree with the table right beside it.
+    def _on_hand(item) -> int:
+        if getattr(item, "is_lot_stocked", False):
+            return item.lot_stock or 0
+        return item.quantity or 0
+
     low_stock = sum(
         1
         for i in items
-        if i.reorder_point is not None and (i.quantity or 0) <= i.reorder_point
+        if i.reorder_point is not None and _on_hand(i) <= i.reorder_point
     )
 
     return {
