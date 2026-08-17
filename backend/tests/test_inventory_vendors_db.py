@@ -544,3 +544,110 @@ class TestWhatAViewerActuallyReceives:
         assert body["account_number"] == "FCFD-2201"
         assert body["payment_terms"] == "Net 30"
         assert Decimal(str(body["total_purchase_value"])) == Decimal("1200")
+
+
+class TestCsvImportReportsUnmatchedVendors:
+    """A "Vendor" cell naming nothing on file keeps the typed-in name and gets
+    no link. That is the right behaviour — importing must not create suppliers
+    nobody reviewed — but doing it silently refills the very list the cleanup
+    screen exists to drain, and one misspelling in a 200-row sheet does it 200
+    times. The import has to say so."""
+
+    async def _import(self, db_session, org, csv_text):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.api.dependencies import get_current_user
+        from app.api.v1.endpoints import inventory as inventory_endpoints
+        from app.core.database import get_db
+        from app.models.user import Position, User
+
+        user = User(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            username=f"qm-{uuid.uuid4().hex[:8]}",
+            email=f"{uuid.uuid4().hex[:8]}@example.test",
+            first_name="Sam",
+            last_name="Reed",
+            password_hash="x",
+        )
+        position = Position(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name="Quartermaster",
+            slug=f"qm-{uuid.uuid4().hex[:8]}",
+            permissions=["inventory.view", "inventory.manage"],
+        )
+        user.positions.append(position)
+        db_session.add_all([user, position])
+        await db_session.flush()
+
+        app = FastAPI()
+        app.include_router(inventory_endpoints.router, prefix="/inventory")
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db_session
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            return await client.post(
+                "/inventory/items/import",
+                files={"file": ("items.csv", csv_text.encode(), "text/csv")},
+            )
+
+    async def test_an_unrecognized_name_is_reported_not_swallowed(self, db_session):
+        org = await _make_org(db_session)
+        await _make_vendor(db_session, org, "Galls")
+
+        response = await self._import(
+            db_session,
+            org,
+            "Name,Vendor\n"
+            "Turnout coat,Galls\n"
+            "Helmet,Gals\n"  # the misspelling
+            "Gloves,Gals\n",
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["imported"] == 3
+        # Repeated on two rows, reported once.
+        vendor_warnings = [w for w in body["warnings"] if "did not match" in w]
+        assert len(vendor_warnings) == 1
+        assert '"Gals"' in vendor_warnings[0]
+        # The name that did match is not reported.
+        assert '"Galls"' not in vendor_warnings[0]
+
+    async def test_a_clean_sheet_says_nothing_about_vendors(self, db_session):
+        org = await _make_org(db_session)
+        await _make_vendor(db_session, org, "Galls")
+
+        response = await self._import(
+            db_session, org, "Name,Vendor\nTurnout coat,Galls\nHelmet,galls\n"
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert [w for w in body["warnings"] if "did not match" in w] == []
+
+    async def test_the_matched_rows_are_actually_linked(self, db_session):
+        org = await _make_org(db_session)
+        vendor = await _make_vendor(db_session, org, "Galls")
+
+        await self._import(
+            db_session, org, "Name,Vendor\nTurnout coat,Galls\nHelmet,Gals\n"
+        )
+
+        linked = (
+            (
+                await db_session.execute(
+                    select(InventoryItem).where(InventoryItem.organization_id == org.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_name = {item.name: item for item in linked}
+        assert by_name["Turnout coat"].vendor_id == vendor.id
+        # Unmatched keeps the typed name and no link — reported, not invented.
+        assert by_name["Helmet"].vendor_id is None
+        assert by_name["Helmet"].vendor == "Gals"

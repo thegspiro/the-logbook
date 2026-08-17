@@ -44,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Added**
 
+- **CSV import now reports vendor names it could not match.** A `Vendor` cell
+  naming nothing on file correctly keeps the typed-in name and creates no
+  vendor — importing must not invent suppliers nobody reviewed — but it did so
+  silently, quietly refilling the list the vendor cleanup screen exists to
+  drain. One misspelling in a 200-row sheet did it 200 times and surfaced weeks
+  later. The unrecognized names now come back in the import's existing
+  `warnings`, deduplicated and leading the list so the 50-warning cap cannot
+  drop them, pointing at Attach on the Vendors screen.
 - Endpoint-level tests for the vendor financial redaction. The existing tests
   cover the serializer, which proves the function blanks the fields but not
   that the routes ask it to. These drive the real router through
@@ -53,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Documentation**
 
+- **Retired the "Full Revision Chain" table in `docs/ALEMBIC_MIGRATIONS.md`.**
+  It was abandoned at `20260223_0300` in February and listed 115 of 314
+  migrations — 37% of a chain it claimed to document in full, which is worse
+  than absent because it reads as authoritative. A note added in May recorded
+  that it was stale; it was never brought up to date. `alembic history` answers
+  the same question and cannot drift.
 - Corrected the vendor redaction field names in the changelog and
   `wiki/Module-Inventory.md`. They were published as `accountNumber` /
   `paymentTerms` / `totalPurchaseValue`, but the inventory response schemas set
