@@ -330,6 +330,14 @@ class ProgramRequirementUpdate(BaseModel):
     # Move the requirement to a different phase (or None for program-level).
     phase_id: Optional[UUID] = None
 
+    @field_validator("is_required", "is_prerequisite", "sort_order")
+    @classmethod
+    def reject_null_settings(cls, value: Any) -> Any:
+        """Allow omitted settings in a PATCH, but never explicit nulls."""
+        if value is None:
+            raise ValueError("program requirement settings cannot be null")
+        return value
+
 
 class PhaseReorderRequest(BaseModel):
     """Ordered phase IDs; index becomes the new phase_number (1-based)."""
