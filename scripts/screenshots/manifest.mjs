@@ -6390,13 +6390,17 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 86,
     anchor: "Screenshot of the QR code display page showing a large QR code",
-    alt: "Event QR code display page for member self check-in",
+    alt: "Event QR code display page for member self check-in, its check-in window open",
     route: "/events",
+    // The in-progress event, not merely an upcoming one: the page gates the
+    // code behind its check-in window, so an event days away pictures a
+    // "Check-in Not Available" badge under a caption about members scanning
+    // to check in. This is the screen an officer actually puts on the wall.
     prepare: openFirstFromApi(
       "/events?limit=100",
       (id) => `/events/${id}/qr-code`,
       "events",
-      isUpcoming,
+      isInProgress,
     ),
   },
   {
@@ -6450,6 +6454,10 @@ export const SHOTS = [
       (event) => event.title === "Volunteer Interest Night",
     ),
     fullPage: true,
+    // "No reminders" is the reminder-audience select's own option, in the
+    // DOM on every render; the guest sign-in settings this shot is about
+    // are both ticked.
+    allowEmptyState: true,
   },
   {
     id: "04-32-guest-sign-in-form",
@@ -6515,6 +6523,10 @@ export const SHOTS = [
       await page.waitForTimeout(1500);
     },
     fullPage: true,
+    // "No documents yet" is the drawer's documents panel — a walk-in guest
+    // has uploaded nothing, and the Linked Events panel this shot is about is
+    // populated.
+    allowEmptyState: true,
   },
   {
     id: "04-20-event-requests",
@@ -6549,21 +6561,6 @@ export const SHOTS = [
     // See 02-41's twin above: bare /training/admin is the Dashboard overview.
     // Reports lives under the Enhancements page.
     route: "/training/admin?tab=reports",
-    fullPage: true,
-  },
-  {
-    id: "09-05-template-detail",
-    doc: "09-skills-testing.md",
-    line: 138,
-    anchor:
-      "Screenshot of the template detail page for a published template showing the",
-    alt: "Published skill sheet template detail with its sections and criteria",
-    route: "/training/skills-testing",
-    prepare: openFirstFromApi(
-      "/training/skills-testing/templates",
-      (id) => `/training/skills-testing/templates/${id}`,
-      "templates",
-    ),
     fullPage: true,
   },
 
@@ -7284,21 +7281,21 @@ export const SHOTS = [
         .getByRole("button", { name: /Skills Tests/ })
         .first()
         .click({ timeout: 15_000 });
-      await page.waitForTimeout(1200);
-      // Clipped to the first handful of rows. The demo member carries fifty-odd
-      // identical passes from other seeding, and the whole section runs to
-      // ~3700px — the recent, varied results are all at the top.
-      await page.evaluate(() => {
-        const heading = [...document.querySelectorAll("button")].find((b) =>
-          b.textContent?.includes("Skills Tests"),
-        );
-        const section = heading?.parentElement;
-        if (section instanceof HTMLElement) {
-          section.style.maxHeight = "320px";
-          section.style.overflow = "hidden";
-        }
-      });
-      await page.waitForTimeout(300);
+      // Wait for the *validated* result rather than a fixed pause: it is the
+      // oldest row and so the last to render, and it is the half of the
+      // caption — an official attempt showing its score — that the practice
+      // and under-review rows above it cannot make.
+      //
+      // This step used to clamp the section to 320px because the demo member
+      // had accumulated fifty-odd identical practice passes, each capture run
+      // filing another. The seeder now prunes those (PRACTICE_TESTS_KEPT), so
+      // the section is five rows and the clamp only cut the row the caption is
+      // about — a workaround that outlived its cause.
+      await page
+        .getByText(/Passed/)
+        .last()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
     },
     selector: "div:has(> button:has-text('Skills Tests'))",
   },
@@ -7712,16 +7709,48 @@ export const SHOTS = [
     route: "/elections",
     // The member's own view, not an officer's: the ballot is what a voter sees.
     auth: "member",
-    // An open election WITH positions: the in-app ballot renders position
-    // races only, and the first open election in list order is the
-    // restricted issue vote — its ballot reads "No candidates for this
-    // position", which is the known in-app-ballot limitation, not the race
-    // this caption is about.
-    prepare: openElectionTab(
-      "voting",
-      (election) =>
-        isOpenElection(election) && (election.positions?.length ?? 0) > 0,
-    ),
+    // Not merely the first *open* election: the elections list carries no
+    // candidate count, so a list-level match cannot tell a contested race from
+    // an empty one — and the first open election is the restricted-ballot seat
+    // with no candidates, which rendered "No candidates for this position"
+    // under a caption about choosing between two. Resolved through each open
+    // election's candidates endpoint instead.
+    prepare: async (page) => {
+      const id = await page.evaluate(async () => {
+        const listed = await fetch("/api/v1/elections?limit=20", {
+          credentials: "include",
+        });
+        if (!listed.ok) return null;
+        const body = await listed.json();
+        const rows = Array.isArray(body) ? body : (body.elections ?? []);
+        for (const election of rows) {
+          if (String(election.status ?? "").toLowerCase() !== "open") continue;
+          const detail = await fetch(
+            `/api/v1/elections/${election.id}/candidates`,
+            { credentials: "include" },
+          );
+          if (!detail.ok) continue;
+          const listedCandidates = await detail.json();
+          const candidates = Array.isArray(listedCandidates)
+            ? listedCandidates
+            : (listedCandidates.candidates ?? []);
+          if (candidates.filter((c) => c.accepted).length >= 2) {
+            return election.id;
+          }
+        }
+        return null;
+      });
+      if (!id) {
+        throw new Error("04-42: no open election has a contested position");
+      }
+      await page.goto(new URL(`/elections/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      const tab = page.locator("#tab-voting");
+      await tab.waitFor({ timeout: 10_000 });
+      await tab.click({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+    },
     fullPage: true,
   },
   {

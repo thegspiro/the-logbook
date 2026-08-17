@@ -320,6 +320,105 @@ look next pass. The stray "Oakville Fire Department" facility record the
 bootstrap creates also fronts two facility shots; real demo data, but the
 sparse record makes a poor face for the detail page.
 
+## The 2026-08-16 guide-09 re-capture — 22 images, every one opened
+
+Arithmetic checked rather than glanced at: the weighted scorecard's
+`10 + 30 = 40 of 50 = 80%` against its own per-section rows, the
+failed-at-100% result (a critical step fails the test regardless of the
+percentage — the banner says so, and it is the point of the shot), and the
+unscored-steps dialog's "1 step still has no Pass or Fail" against the
+`—/20` slider behind it.
+
+**`Avg Score 66%` looks wrong and is right.** The four scored tests average
+78%, but the stat filters on `validated_at` — 66% is the mean of the two
+_validated_ results (84 and 48). Verified against the query rather than
+assumed; recorded here because the next reader will do the same double-take.
+
+### Each capture run was littering the demo database
+
+Scoring a test is not a read. `09-16` and `09-18` drive the real scoring
+screen, so **every run filed another practice attempt** against the demo
+member — eleven had accumulated, all "Practice · Passed 100%", sorting above
+the official attempts. The member's results panel had become a wall of
+identical rows, and `09-21`'s prepare had grown a `maxHeight: 320px` clamp to
+cope, whose comment cited "fifty-odd identical passes from other seeding".
+
+`seed_skills_tests` now prunes them to one (the badge needs an example),
+through the route that refuses anything but practice records — an official
+result may carry a certification, which is why the API voids those instead.
+With the pile gone, the clamp only cut the validated PASS the caption is
+about, so it is removed and the step waits for that row instead.
+
+**Worth generalising:** a workaround for a data problem outlives the problem
+silently. The clamp still "worked" — it produced a clean image of the wrong
+rows.
+
+### A duplicate image, and a screen the guide invented
+
+`09-04-template-builder` and `09-05-template-detail` were **byte-identical**
+(same md5), the fourth instance of this shape after `02-21`/`02-41` and
+`04-20`/`17-01`. The cause is not a capture bug: `/templates/{id}` and
+`/templates/{id}/edit` both render `SkillTemplateBuilderPage`, so **there is
+no separate read-only template detail page** — the guide described UI the
+product does not have.
+
+Corrected the way the 08-13 pass corrected its five: the prose now says a
+template's own page _is_ the builder whether draft or published, the
+redundant shot and its file are removed, and `09-04` keeps the picture.
+
+## The 2026-08-16 guide-04 re-capture — 31 images, every one opened
+
+Numbers cross-checked against the API rather than read for plausibility:
+the event detail's 20/16/4 against its own twenty-row roster (four "Not
+Going" badges, counted), the check-in monitor's 9-of-22 at 40.91% with a
+134-minute average that matches its check-in timestamps, the analytics
+type distribution summing to its 29-event total, and the voter-eligibility
+roster's 22/22.
+
+### One product defect, two shots pointed at the wrong state
+
+**Meeting cards read "0 attendees 0 action items"** over a meeting whose
+detail view showed eight and two. `MeetingResponse` declares both counts
+and the cards render them, but the list query loads no children — the same
+shape of gap as `creator_name` one method above it, which had already been
+fixed this way. Two grouped counts, attached like the names, with tests.
+
+- **`04-04-event-qr-code` pictured "Check-in Not Available".** It matched
+  on `isUpcoming`, and the page gates the code behind its check-in window,
+  so an event days out shows a disabled badge under a caption about members
+  scanning to check in. Now matched on the in-progress event — the screen
+  an officer actually puts on the wall.
+- **`04-42-cast-ballot` pictured "No candidates for this position".** It
+  took the first _open_ election, which is the restricted-ballot seat with
+  an empty ballot. The elections list carries no candidate count, so no
+  list-level match could tell a contested race from an empty one — it now
+  resolves through each open election's candidates endpoint and lands on
+  the Captain race with its two candidates, which is what the caption
+  describes.
+
+### Seeder: the Minutes page had moved out from under it
+
+The page was rebuilt onto `/meetings` — first-class meeting records with
+attendees, motions and action items — while the seeder still populated only
+the older `/minutes-records` model. So a real minutes record sat behind a
+"No Meeting Minutes" empty state, and the Action Items page was empty too.
+Now seeded: an approved business meeting with attendees, motions and two
+open action items, plus a draft board meeting; and a pending public event
+request for the Requests tab. Both guarded **per title**, so a run that
+dies between the two creates adds the missing one next pass rather than
+deciding the step is done because one row exists.
+
+**A step written and then deleted.** A `seed_guest_prospect` step was added
+for the guest-sign-in prospect card before noticing that `04-33`'s prepare
+already creates Rosa Delgado by submitting the public form — and says so in
+its own comment. The manifest is part of the fixture surface; check it for
+an existing producer before adding a seeder step for a record a shot needs.
+
+Empty-state flags with their reasons: `04-31` ("No reminders" is the
+reminder-audience select's own option; both guest settings are ticked) and
+`04-34` (a walk-in guest has uploaded no documents; the Linked Events panel
+the shot is about is populated).
+
 ## The 2026-08-16 guide-02 re-capture — 66 applied images, every one opened
 
 The full guide-02 set was re-shot against the merged build and read against
