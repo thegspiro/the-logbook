@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Migrations: revision ids are generated, not hand-authored (2026-08-17)
+
+**Changed**
+
+- **`alembic revision` now owns the id.** `docs/ALEMBIC_MIGRATIONS.md` used to
+  mandate a hand-authored `YYYYMMDD_SSSS` id and state "**No hex/random IDs**"
+  as a rule. That rule is what caused the collisions the document exists to
+  prevent: two branches open on the same day each counted from `_0001` and each
+  picked `_0002`, git merged the files without a word because they do not
+  overlap, and Alembic then refused to load the chain. It happened four times,
+  twice in one day. A generated id carries entropy, so two branches cannot pick
+  the same one; the date still leads the filename, which is what keeps listings
+  sorted. Nothing parses an id's structure — the validator compares them as
+  opaque strings — so the format was never load-bearing.
+- **`validate_migrations.py` enforces it and reports the head.** A
+  `YYYYMMDD_SSSS` id dated 2026-08-17 or later is an error. The rule is keyed
+  on the date the id already carries rather than on a position in the chain: a
+  revision anchor would need bumping every time another branch landed a
+  migration first, and whoever forgot would get a failure blaming a migration
+  written under the old rules. Everything already written is untouched —
+  renumbering released history would break every database that has already
+  stamped those ids.
+
+**Fixed**
+
+- **`ALEMBIC_MIGRATIONS.md` no longer records the current head by hand.** Every
+  migration PR edited the same lines to update it, which guaranteed a conflict
+  on each one and went stale whenever someone forgot — as it had, still naming
+  `20260816_0003` after `20260816_0004` landed. The validator prints the head
+  and the `down_revision` to use; the historical notes are kept, folded away,
+  and marked as history rather than the source of truth.
+- Vendor `item_count` came back as a `Decimal` from MySQL's `SUM()` over an
+  integer `CASE`, against an `int` field, which Pydantic warned about on every
+  vendor response rather than coercing silently.
+
+**Added**
+
+- Endpoint-level tests for the vendor financial redaction. The existing tests
+  cover the serializer, which proves the function blanks the fields but not
+  that the routes ask it to. These drive the real router through
+  `require_permission` with the grant coming from actual position rows, and
+  assert on the JSON that leaves the endpoint. Verified to fail with the
+  redaction stubbed out.
+
+**Documentation**
+
+- Corrected the vendor redaction field names in the changelog and
+  `wiki/Module-Inventory.md`. They were published as `accountNumber` /
+  `paymentTerms` / `totalPurchaseValue`, but the inventory response schemas set
+  no `alias_generator`, so the wire format is snake_case — `account_number`,
+  `payment_terms`, `total_purchase_value`, which is what the frontend reads.
+
 ### Inventory: vendor pricing is a purchasing matter, not a directory one (2026-08-16)
 
 **Changed**
@@ -16,8 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a broad, member-level grant whose job is answering "who do we buy this from
   and how do I reach them". What the department pays a supplier, on what terms,
   and under which account is a different question. `GET /inventory/vendors` and
-  `GET /inventory/vendors/{id}` now blank `accountNumber`, `paymentTerms` and
-  `totalPurchaseValue` unless the caller can manage inventory; names, phone,
+  `GET /inventory/vendors/{id}` now blank `account_number`, `payment_terms` and
+  `total_purchase_value` unless the caller can manage inventory; names, phone,
   email, fax, website, address, contacts and the item/reorder counts are
   unchanged, so the directory still works. No UI changes: the vendors screen
   already sits behind `inventory.manage`, and the item and reorder pickers only

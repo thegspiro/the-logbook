@@ -439,3 +439,108 @@ class TestReorderResponseAfterAnUpdate:
         assert updated.vendor_id is None
         assert updated.vendor_record is None
         assert updated.vendor is None
+
+
+class TestWhatAViewerActuallyReceives:
+    """The redaction is unit-tested at the serializer in the mocked suite. That
+    proves the function blanks the fields; it does not prove the routes ask it
+    to. This drives the real router through `require_permission`, with the
+    caller's grant coming from actual position rows, and asserts on the JSON
+    that leaves the endpoint."""
+
+    async def _client(self, db_session, caller):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.api.dependencies import get_current_user
+        from app.api.v1.endpoints import inventory as inventory_endpoints
+        from app.core.database import get_db
+
+        app = FastAPI()
+        app.include_router(inventory_endpoints.router, prefix="/inventory")
+        app.dependency_overrides[get_current_user] = lambda: caller
+        app.dependency_overrides[get_db] = lambda: db_session
+        return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+    async def _caller(self, db_session, org, *permissions):
+        """A user whose grant comes from a real position row.
+
+        Built through the ORM rather than raw INSERTs so `user.positions` is
+        already populated in memory: `_collect_user_permissions` walks that
+        relationship, and a lazy load there raises MissingGreenlet under the
+        async session instead of quietly reporting no permissions.
+        """
+        from app.models.user import Position, User
+
+        user = User(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            username=f"tester-{uuid.uuid4().hex[:8]}",
+            email=f"{uuid.uuid4().hex[:8]}@example.test",
+            first_name="Pat",
+            last_name="Quinn",
+            password_hash="x",
+        )
+        position = Position(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name="Tester",
+            slug=f"tester-{uuid.uuid4().hex[:8]}",
+            permissions=list(permissions),
+        )
+        user.positions.append(position)
+        db_session.add_all([user, position])
+        await db_session.flush()
+        return user
+
+    async def _seed(self, db_session):
+        org = await _make_org(db_session)
+        vendor = await _make_vendor(
+            db_session,
+            org,
+            "Galls",
+            account_number="FCFD-2201",
+            payment_terms="Net 30",
+            phone="703-555-0100",
+            email="orders@galls.example",
+        )
+        await _make_item(
+            db_session, org, "Turnout coat", vendor_id=vendor.id, purchase_price=1200
+        )
+        return org, vendor
+
+    async def test_viewer_gets_the_directory_without_the_money(self, db_session):
+        org, vendor = await self._seed(db_session)
+        caller = await self._caller(db_session, org, "inventory.view")
+
+        async with await self._client(db_session, caller) as client:
+            listed = await client.get("/inventory/vendors")
+            detail = await client.get(f"/inventory/vendors/{vendor.id}")
+
+        assert listed.status_code == 200
+        assert detail.status_code == 200
+        for body in (listed.json()[0], detail.json()):
+            assert body["account_number"] is None
+            assert body["payment_terms"] is None
+            assert body["total_purchase_value"] is None
+            # Still a usable directory entry.
+            assert body["name"] == "Galls"
+            assert body["phone"] == "703-555-0100"
+            assert body["email"] == "orders@galls.example"
+            # "We buy from them" survives; only the amount is withheld.
+            assert body["item_count"] == 1
+
+    async def test_manager_gets_the_money(self, db_session):
+        org, vendor = await self._seed(db_session)
+        caller = await self._caller(
+            db_session, org, "inventory.view", "inventory.manage"
+        )
+
+        async with await self._client(db_session, caller) as client:
+            detail = await client.get(f"/inventory/vendors/{vendor.id}")
+
+        assert detail.status_code == 200
+        body = detail.json()
+        assert body["account_number"] == "FCFD-2201"
+        assert body["payment_terms"] == "Net 30"
+        assert Decimal(str(body["total_purchase_value"])) == Decimal("1200")

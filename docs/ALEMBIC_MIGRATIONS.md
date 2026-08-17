@@ -6,19 +6,61 @@
 
 ## Conventions
 
-| Rule                  | Detail                                                                                                                                                                                             |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **File naming**       | `YYYYMMDD_SSSS_short_description.py` where `SSSS` is a zero-padded sequence within that date (e.g., `0100`, `0200`). Use increments of `0100` to leave room for insertions (`0050`, `0150`, etc.). |
-| **Revision ID**       | Must match the `YYYYMMDD_SSSS` prefix of the filename.                                                                                                                                             |
-| **down_revision**     | Must point to the revision ID of the **immediately preceding** migration in the chain.                                                                                                             |
-| **No hex/random IDs** | Do not use Alembic auto-generated hex hashes. Always use the date-based scheme.                                                                                                                    |
-| **One stale file**    | `20260216_0100_add_pipeline_features_and_tables.py.stale` is intentionally excluded from the chain.                                                                                                |
+| Rule               | Detail                                                                                                                                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Creating one**   | Run `alembic revision -m "short description"` and **keep the id it generates.** `file_template` in `alembic.ini` already names the file `YYYYMMDD_HHMM_<rev>_<slug>.py`, so listings stay in date order. |
+| **Revision ID**    | Whatever `alembic revision` wrote. Do **not** hand-author one, and do not edit it to match the filename.                                                                                                 |
+| **down_revision**  | Must point to the revision ID of the **immediately preceding** migration in the chain. Get it from `python scripts/validate_migrations.py`, which prints the current head.                               |
+| **One stale file** | `20260216_0100_add_pipeline_features_and_tables.py.stale` is intentionally excluded from the chain.                                                                                                      |
+
+### Why ids are generated, not hand-authored _(2026-08-17)_
+
+This document used to require the opposite — `YYYYMMDD_SSSS`, a per-day
+sequence, with "**No hex/random IDs**" stated as a rule. That rule is what
+caused the collisions this document exists to prevent.
+
+Two branches open on the same day each counted from `_0001` and each picked
+`_0002`. The files do not overlap, so **git merges them without a word**;
+Alembic then refuses to load a chain with one id claimed twice, and the backend
+crashes on startup rather than failing at review. That happened **four times**,
+the last twice in a single day.
+
+A generated id carries entropy, so two branches cannot pick the same one. The
+date lives in the filename, which is what anyone actually reads when scanning
+the directory. Nothing in the codebase parses a revision id's structure — the
+validator compares them as opaque strings — so the format was never load-bearing.
+
+`scripts/validate_migrations.py` enforces this: a `YYYYMMDD_SSSS` id dated
+**2026-08-17 or later** is an error, since the convention changed that day.
+The rule is keyed on the date the id already carries rather than on a position
+in the chain — a revision anchor would need bumping every time another branch
+landed a migration first, and whoever forgot would get a failure blaming a
+migration written under the old rules. Everything already written is left
+alone; renumbering released history would break every database that has
+already stamped those ids.
 
 ## Current Head
 
-> **Update (2026-08-16, latest):** The current head is **`20260816_0003`**
-> (`20260816_0003_add_inventory_vendors.py`). **New migrations must set
-> `down_revision = "20260816_0003"`.** Past `20260814_0004` the chain runs
+**Ask the chain, not this file:**
+
+```bash
+python scripts/validate_migrations.py    # prints the head and the down_revision to use
+```
+
+This section used to declare the head in prose, and every migration PR edited
+the same lines to update it. That guaranteed a merge conflict on each one, and
+it went stale the moment anyone forgot — as it had here, still naming
+`20260816_0003` after `20260816_0004` landed. A fact the tooling can derive
+should not be transcribed by hand.
+
+What follows is kept as **history** — why the chain forks and merges where it
+does. It is not the source of truth for the current head.
+
+<details>
+<summary>Historical head notes (2026-05 through 2026-08)</summary>
+
+> **Update (2026-08-16):** The head was **`20260816_0003`**
+> (`20260816_0003_add_inventory_vendors.py`). Past `20260814_0004` the chain runs
 > `20260816_0001` (`facility_rooms.parent_room_id`, nested rooms) →
 > `20260816_0002` (backfill storage-area barcodes) → `20260816_0003`
 > (inventory vendors + contact backfill).
@@ -182,14 +224,20 @@ should set `down_revision` to **both** heads (a tuple) to merge them, e.g.
 `down_revision = ("20260503_0002", "20260528_0002")`, before adding new linear
 migrations on top.
 
-**To add a new migration**, use the next available sequence for today's date. For
-example, if today is 2026-02-23, the next file would be:
+</details>
 
+## Adding a new migration
+
+Let Alembic write the id — see [Why ids are generated](#why-ids-are-generated-not-hand-authored-2026-08-17).
+
+```bash
+python scripts/validate_migrations.py     # note the head it prints
+alembic revision -m "add widget table"    # writes YYYYMMDD_HHMM_<rev>_add_widget_table.py
 ```
-20260223_0400_your_description.py
-revision = "20260223_0400"
-down_revision = "20260223_0300"
-```
+
+Then set `down_revision` to the head from the first command, and leave the
+generated `revision` value alone. Re-run the validator before pushing; it fails
+on a duplicate id, a broken chain, or a hand-authored id after the cutover.
 
 ## Full Revision Chain
 
@@ -313,8 +361,12 @@ down_revision = "20260223_0300"
 
 ## Known Non-Standard Revision IDs
 
-These three migrations use IDs that don't follow the `YYYYMMDD_SSSS` convention.
-They are functional but should not be used as a pattern for new migrations:
+These three predate the 2026-08-17 change and did not follow the
+`YYYYMMDD_SSSS` convention that was in force at the time. Listed for
+recognition, not as a warning — generated hex ids are now the rule, and
+`a7f3e2d91b04` is exactly what `alembic revision` produces today. The slug and
+the truncated forms are still worth avoiding, since neither carries enough
+entropy to be collision-proof:
 
 | Revision ID           | File                                                          | Note                       |
 | --------------------- | ------------------------------------------------------------- | -------------------------- |
@@ -327,7 +379,7 @@ They are functional but should not be used as a pattern for new migrations:
 ```python
 """Short description of what this migration does
 
-Revision ID: YYYYMMDD_SSSS
+Revision ID: <generated by alembic revision — leave as written>
 Revises: <previous_revision_id>
 Create Date: YYYY-MM-DD HH:MM:SS.000000
 """
@@ -336,7 +388,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "YYYYMMDD_SSSS"
+revision = "<generated by alembic revision — leave as written>"
 down_revision = "<previous_revision_id>"
 branch_labels = None
 depends_on = None
@@ -412,7 +464,7 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260801_0008` | `20260801_0007`                  | `20260801_0008_add_tie_policy_roster_snapshot_merge.py`                   | Add `elections.tie_policy`, `elections.eligible_roster_snapshot` (voter roll frozen at open), and `candidates.merged_into_candidate_id` (write-in consolidation alias)                                                                                                                         |
 | `20260801_0009` | `20260801_0008`                  | `20260801_0009_add_audit_log_organization_id.py`                          | Add `audit_logs.organization_id` (indexed, backfilled from `user_id`) — org-scoped audit reads; hash chain v3 binds the org on new rows                                                                                                                                                        |
 | `20260801_0010` | `20260801_0009`                  | `20260801_0010_grant_equipment_check_submit_to_members.py`                | Data migration: append `equipment_check.submit` to existing system member positions (EC-7 gated the check-flow reads view-OR-submit; new orgs get it from `DEFAULT_POSITIONS`)                                                                                                                 |
-| `20260801_0011` | `20260801_0010`                  | `20260801_0011_per_org_finance_request_numbers.py`                        | Replace the global unique on `purchase_requests.request_number` / `expense_reports.report_number` / `check_requests.request_number` with per-org composite uniques (`uq_*_org_number`) — introspection-defensive because these tables are create_all-materialized — head as of 2026-07-31         |
+| `20260801_0011` | `20260801_0010`                  | `20260801_0011_per_org_finance_request_numbers.py`                        | Replace the global unique on `purchase_requests.request_number` / `expense_reports.report_number` / `check_requests.request_number` with per-org composite uniques (`uq_*_org_number`) — introspection-defensive because these tables are create_all-materialized — head as of 2026-07-31      |
 
 > **Single head:** the chain remains linear — `20260801_0011` was the head as
 > of 2026-07-31; later release windows (below) extend it, and the current
@@ -456,10 +508,10 @@ fails before `20260814_0003` can reconcile anything.
 Three revisions, linear, revising `20260814_0004`. `20260816_0003` is the
 **current single head**.
 
-| Revision | Revises | What it does |
-| --- | --- | --- |
-| `20260816_0001` | `20260814_0004` | Adds `facility_rooms.parent_room_id` (VARCHAR(36), nullable), index `idx_facility_rooms_parent`, and self-referential FK `fk_facility_rooms_parent_room` with `ON DELETE SET NULL` — nested facility rooms |
-| `20260816_0002` | `20260816_0001` | Backfills barcodes for storage areas that predate auto-assignment |
+| Revision        | Revises         | What it does                                                                                                                                                                                                                                                                                                              |
+| --------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260816_0001` | `20260814_0004` | Adds `facility_rooms.parent_room_id` (VARCHAR(36), nullable), index `idx_facility_rooms_parent`, and self-referential FK `fk_facility_rooms_parent_room` with `ON DELETE SET NULL` — nested facility rooms                                                                                                                |
+| `20260816_0002` | `20260816_0001` | Backfills barcodes for storage areas that predate auto-assignment                                                                                                                                                                                                                                                         |
 | `20260816_0003` | `20260816_0002` | Creates `inventory_vendors` + `inventory_vendor_contacts`, adds `vendor_id` to items and reorder requests, and backfills a vendor per distinct free-text supplier name (case-folded per org), linking the rows that named it. **Renumbered from `20260816_0002`** after a same-day id collision with the barcode backfill |
 
 Notes:
