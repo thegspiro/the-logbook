@@ -29,6 +29,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { PurchaseRequestStatus, PURCHASE_REQUEST_STATUS_COLORS, APPROVAL_STEP_STATUS_COLORS } from '../types';
 
@@ -64,7 +65,7 @@ const APPROVAL_STEP_LABELS: Record<string, string> = {
 const DetailSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading purchase request" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <div className="mb-4 flex items-center gap-3">
         <Skeleton className="h-10 w-10" rounded="lg" />
         <div className="space-y-2">
@@ -81,7 +82,7 @@ const DetailSkeleton: React.FC = () => (
         ))}
       </div>
     </div>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       <Skeleton className="mb-4 h-5 w-40" />
       {Array.from({ length: 3 }).map((_, i) => (
         <Skeleton key={`s-${String(i)}`} className="mb-3 h-12 w-full" />
@@ -178,6 +179,7 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
 const PurchaseRequestDetailPage: React.FC = () => {
   const tz = useTimezone();
   const { id } = useParams<{ id: string }>();
+  const { busy, run } = useSubmitGuard();
   const navigate = useNavigate();
   const {
     selectedPurchaseRequest: pr,
@@ -193,15 +195,16 @@ const PurchaseRequestDetailPage: React.FC = () => {
     }
   }, [id, fetchPurchaseRequest]);
 
-  const handleSubmit = async () => {
-    if (!id) return;
-    try {
-      await submitPurchaseRequest(id);
-      toast.success('Purchase request submitted for approval');
-    } catch {
-      // Error handled by store
-    }
-  };
+  const handleSubmit = () =>
+    run(async () => {
+      if (!id) return;
+      try {
+        await submitPurchaseRequest(id);
+        toast.success('Purchase request submitted for approval');
+      } catch {
+        // Error handled by store
+      }
+    });
 
   const handleMarkOrdered = async () => {
     if (!id) return;
@@ -314,7 +317,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
       )}
 
       {/* Request Header */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-3">
@@ -341,8 +344,9 @@ const PurchaseRequestDetailPage: React.FC = () => {
             {canSubmit && (
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => void handleSubmit()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit
@@ -453,7 +457,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
       </div>
 
       {/* Approval Timeline */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
         <ApprovalTimeline steps={pr.approvalSteps} />
       </div>

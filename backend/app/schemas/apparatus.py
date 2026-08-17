@@ -969,6 +969,12 @@ class ApparatusFuelLogResponse(ApparatusFuelLogBase):
 class EvocLevelBase(BaseModel):
     """Base EVOC level schema"""
 
+    # Accept camelCase like every other write schema in this module. Without
+    # it the request models took snake_case only while the responses came back
+    # camelCase, so any client round-tripping a level 422'd on level_number —
+    # latent until the EVOC admin screen became the first caller.
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     level_number: int = Field(..., ge=1, le=10, description="EVOC level number")
     name: str = Field(..., min_length=1, max_length=100)
     code: str = Field(..., min_length=1, max_length=50)
@@ -991,6 +997,8 @@ class EvocLevelCreate(EvocLevelBase):
 class EvocLevelUpdate(BaseModel):
     """Schema for updating an EVOC level"""
 
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     level_number: Optional[int] = Field(None, ge=1, le=10)
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     code: Optional[str] = Field(None, min_length=1, max_length=50)
@@ -1009,6 +1017,110 @@ class EvocLevelResponse(EvocLevelBase):
     is_system: bool = False
     created_at: datetime
     updated_at: datetime
+
+    model_config = _response_config
+
+
+# =============================================================================
+# Driver Qualification Exception Schemas
+# =============================================================================
+
+
+class DriverExceptionReasonValue(str, Enum):
+    """Why the EVOC requirement is being waived (mirrors the model enum)."""
+
+    PARADE = "parade"
+    SPECIAL_EVENT = "special_event"
+    NON_EMERGENCY_TRANSPORT = "non_emergency_transport"
+    MUTUAL_AID = "mutual_aid"
+    OTHER = "other"
+
+
+class DriverExceptionCreate(BaseModel):
+    """Request a chief-approved exception to the EVOC driving requirement."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    user_id: str = Field(..., description="Member the exception is for")
+    apparatus_id: Optional[str] = Field(
+        None, description="Specific apparatus, or null for any"
+    )
+    # Typed, not a free string: an unsupported value used to travel all the
+    # way to the MySQL ENUM column and fail at commit as a 500, when it is
+    # plain bad input that deserves a 422.
+    reason: DriverExceptionReasonValue = Field(
+        default=DriverExceptionReasonValue.PARADE,
+        description="parade, special_event, non_emergency_transport, "
+        "mutual_aid, or other",
+    )
+    justification: str = Field(..., min_length=1, max_length=2000)
+    restrictions: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description="Operating limits, e.g. 'parade route only, no emergency "
+        "response'",
+    )
+    valid_from: date
+    valid_until: date
+
+    @model_validator(mode="after")
+    def check_dates(self):
+        if self.valid_until < self.valid_from:
+            raise ValueError("The end date cannot be before the start date")
+        return self
+
+
+class DriverExceptionApprover(BaseModel):
+    """Someone who can approve a driver exception, so a blocked officer knows
+    who to call. Names and ranks only — contact details stay behind the
+    directory's visibility settings."""
+
+    user_id: str
+    user_name: str
+    rank: Optional[str] = None
+
+    model_config = _response_config
+
+
+class DriverExceptionReview(BaseModel):
+    """Approve or deny a pending exception request."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    approve: bool
+    review_notes: Optional[str] = Field(None, max_length=2000)
+
+
+class DriverExceptionRevoke(BaseModel):
+    """Withdraw an approved exception before its end date."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    review_notes: Optional[str] = Field(None, max_length=2000)
+
+
+class DriverExceptionResponse(BaseModel):
+    """An exception request with the names needed to review it."""
+
+    id: str
+    organization_id: str
+    user_id: str
+    user_name: Optional[str] = None
+    apparatus_id: Optional[str] = None
+    apparatus_unit_number: Optional[str] = None
+    reason: str
+    justification: str
+    restrictions: Optional[str] = None
+    valid_from: date
+    valid_until: date
+    status: str
+    requested_by: Optional[str] = None
+    requested_by_name: Optional[str] = None
+    requested_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None
+    reviewed_by_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_notes: Optional[str] = None
 
     model_config = _response_config
 

@@ -474,10 +474,20 @@ async def get_application_status(
     # Declared, not just enforced below: the schema described `token` as any
     # string, so a generated client had no way to know what a usable value
     # looks like. Bounds mirror the check in the body.
+    #
+    # The alphabet is declared too, and length alone was not enough. These
+    # tokens are secrets.token_urlsafe, i.e. base64url, so the pattern is the
+    # truth about them — but it also keeps the contract fuzzer from generating
+    # non-ASCII strings that satisfy min_length as Python characters and then
+    # arrive shorter than they were sent, because percent-encoding is
+    # byte-oriented and lossy for anything that will not round-trip through
+    # UTF-8. That is reported as the API rejecting a schema-compliant request.
+    # ASCII cannot lose characters in transit.
     token: str = Path(
         ...,
         min_length=10,
         max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
         description="Unique application-status token emailed to the prospect.",
     ),
     db: AsyncSession = Depends(get_db),

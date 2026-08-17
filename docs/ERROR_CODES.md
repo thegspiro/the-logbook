@@ -115,6 +115,17 @@ fails if this document misses a curated code).
 | ---------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
 | LB-INT-001 | A third-party integration has no credentials configured. | Add the integration's API credentials under Admin → Integrations. |
 
+## Scheduling (LB-SCHED)
+
+| Code         | Meaning                                                                             | What to do                                                                                                                                                |
+| ------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LB-SCHED-001 | The member lacks the EVOC certification the shift's apparatus requires to drive it. | Record the certification on the apparatus's Operators tab, or request a driver qualification exception (Scheduling → Qualifications → Driver exceptions). |
+
+A safety block, not a permissions problem — it applies to officer assignment
+and member self-signup alike. Departments that want it advisory rather than
+blocking can turn off **Enforce EVOC for drivers** in Scheduling → Settings →
+General.
+
 ## Automatic fallback (LB-API-\<status\>)
 
 Any error without a curated code gets `LB-API-<HTTP status>`:

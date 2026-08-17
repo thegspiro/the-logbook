@@ -6,9 +6,19 @@ import type { ShiftCompletionReport } from '../../../types/training';
 
 interface ReportContentDisplayProps {
   report: ShiftCompletionReport;
+  /**
+   * The department's configured rating labels, where the caller has them.
+   * Scoring uses these labels (the batch form's score buttons show them), so
+   * displaying the built-in samples beside the same numbers showed a report
+   * scored "Exemplary" as "Excellent". The member-facing report page cannot
+   * read the config (officer-only endpoint), hence a fallback rather than a
+   * fetch here.
+   */
+  scoreLabels?: Record<string, string>;
 }
 
-export const ReportContentDisplay: React.FC<ReportContentDisplayProps> = ({ report }) => {
+export const ReportContentDisplay: React.FC<ReportContentDisplayProps> = ({ report, scoreLabels }) => {
+  const labelFor = (score: number): string => scoreLabels?.[String(score)] ?? SKILL_SCORE_LABELS[score] ?? '';
   return (
     <div className="space-y-3">
       {report.performance_rating != null && report.performance_rating > 0 && (
@@ -84,7 +94,7 @@ export const ReportContentDisplay: React.FC<ReportContentDisplayProps> = ({ repo
                   </span>
                   {skill.score != null && (
                     <span className="text-xs font-medium text-violet-600 dark:text-violet-400">
-                      {skill.score}/5 — {SKILL_SCORE_LABELS[skill.score] ?? ''}
+                      {skill.score}/5 — {labelFor(skill.score)}
                     </span>
                   )}
                 </div>

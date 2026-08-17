@@ -10,8 +10,9 @@ import re
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,7 +30,7 @@ from app.models.forms import (
     IntegrationTarget,
     IntegrationType,
 )
-from app.models.user import User, UserStatus
+from app.models.user import Organization, User, UserStatus
 
 if TYPE_CHECKING:
     from app.models.membership_pipeline import ProspectiveMember
@@ -94,9 +95,11 @@ class FormsService:
         "organization name": "organization_name",
         "org name": "organization_name",
         "company": "organization_name",
+        "your organization": "organization_name",
         "outreach type": "outreach_type",
         "type": "outreach_type",
         "request type": "outreach_type",
+        "type of event": "outreach_type",
         "description": "description",
         "event description": "description",
         "details": "description",
@@ -106,10 +109,14 @@ class FormsService:
         "preferred date": "preferred_timeframe",
         "time of day": "preferred_time_of_day",
         "preferred time": "preferred_time_of_day",
+        "preferred time of day": "preferred_time_of_day",
+        "earliest date": "preferred_date_start",
+        "latest date": "preferred_date_end",
         "audience size": "audience_size",
         "expected attendees": "audience_size",
         "number of attendees": "audience_size",
         "attendees": "audience_size",
+        "expected audience size": "audience_size",
         "age group": "age_group",
         "age range": "age_group",
         "venue preference": "venue_preference",
@@ -1272,7 +1279,37 @@ class FormsService:
             if not integration:
                 return False, "Integration not found"
 
+            int_type = integration.integration_type
+            if hasattr(int_type, "value"):
+                int_type = int_type.value
+
             await self.db.delete(integration)
+            await self.db.flush()
+
+            # The form-level integration_type marker triggers direct
+            # processing on every submission independently of this row.
+            # When the operator deletes the last integration of that type,
+            # clear the marker too — otherwise submissions keep creating
+            # prospects/assignments/registrations/requests with no visible
+            # integration left to explain (or disable) it.
+            remaining = await self.db.execute(
+                select(FormIntegration.id).where(
+                    FormIntegration.form_id == str(form_id),
+                    FormIntegration.organization_id == str(organization_id),
+                    FormIntegration.integration_type == int_type,
+                )
+            )
+            if remaining.first() is None:
+                await self.db.execute(
+                    update(Form)
+                    .where(
+                        Form.id == str(form_id),
+                        Form.organization_id == str(organization_id),
+                        Form.integration_type == int_type,
+                    )
+                    .values(integration_type=None)
+                )
+
             await self.db.commit()
             return True, None
         except Exception as e:
@@ -1303,34 +1340,54 @@ class FormsService:
         # ---- Direct path: form.integration_type ----
         int_type = getattr(form, "integration_type", None)
         if int_type:
-            try:
-                if int_type == IntegrationType.MEMBERSHIP_INTEREST:
-                    result = await self._process_membership_interest(
-                        submission, integration=None, form=form
-                    )
-                    results["membership_interest"] = result
-                elif int_type == IntegrationType.EQUIPMENT_ASSIGNMENT:
-                    result = await self._process_equipment_assignment(
-                        submission, integration=None, form=form
-                    )
-                    results["equipment_assignment"] = result
-                elif int_type == IntegrationType.EVENT_REGISTRATION:
-                    result = await self._process_event_registration(
-                        submission, integration=None, form=form
-                    )
-                    results["event_registration"] = result
-                elif int_type == IntegrationType.EVENT_REQUEST:
-                    result = await self._process_event_request(
-                        submission, integration=None, form=form
-                    )
-                    results["event_request"] = result
-                handled_types.add(int_type)
-            except Exception as e:
-                results[int_type] = {
-                    "success": False,
-                    "error": str(e),
-                }
-                handled_types.add(int_type)
+            # The form-level marker and a FormIntegration row of the same
+            # type can coexist — the event-request form generator creates
+            # both. The row stays authoritative: it carries the explicit
+            # field_mappings (the label fallback does not recognize every
+            # generated label, so ignoring the row silently drops answers)
+            # and the operator's enable/disable switch. Use the active row's
+            # mappings when one exists, and skip processing entirely when
+            # every same-type row was deactivated.
+            same_type_rows = [
+                i
+                for i in (form.integrations or [])
+                if (
+                    i.integration_type.value
+                    if hasattr(i.integration_type, "value")
+                    else i.integration_type
+                )
+                == int_type
+            ]
+            integration = next((i for i in same_type_rows if i.is_active), None)
+            disabled = bool(same_type_rows) and integration is None
+            if not disabled:
+                try:
+                    if int_type == IntegrationType.MEMBERSHIP_INTEREST:
+                        result = await self._process_membership_interest(
+                            submission, integration=integration, form=form
+                        )
+                        results["membership_interest"] = result
+                    elif int_type == IntegrationType.EQUIPMENT_ASSIGNMENT:
+                        result = await self._process_equipment_assignment(
+                            submission, integration=integration, form=form
+                        )
+                        results["equipment_assignment"] = result
+                    elif int_type == IntegrationType.EVENT_REGISTRATION:
+                        result = await self._process_event_registration(
+                            submission, integration=integration, form=form
+                        )
+                        results["event_registration"] = result
+                    elif int_type == IntegrationType.EVENT_REQUEST:
+                        result = await self._process_event_request(
+                            submission, integration=integration, form=form
+                        )
+                        results["event_request"] = result
+                except Exception as e:
+                    results[int_type] = {
+                        "success": False,
+                        "error": str(e),
+                    }
+            handled_types.add(int_type)
 
         # ---- Legacy path: FormIntegration records ----
         for integration in form.integrations or []:
@@ -1375,15 +1432,18 @@ class FormsService:
             await self.db.commit()
 
         # Auto-advance pipeline steps linked to this form
-        await self._auto_advance_pipeline_step(form)
+        await self._auto_advance_pipeline_step(form, submission)
 
-    async def _auto_advance_pipeline_step(self, form: Form) -> None:
-        """Auto-complete pipeline steps linked to this form.
+    async def _auto_advance_pipeline_step(
+        self, form: Form, submission: FormSubmission
+    ) -> None:
+        """Auto-complete the pipeline step linked to this submission.
 
         When a form_submission pipeline step has ``auto_advance``
         enabled in its config and its ``form_id`` matches the
-        submitted form, find every prospect currently on that step
-        and complete it (which also advances them to the next step).
+        submitted form, advance only the prospect bound to this specific
+        submission. A form submission is not evidence that unrelated
+        prospects on the same step have completed the form.
         """
         from loguru import logger
 
@@ -1429,6 +1489,7 @@ class FormsService:
                     select(ProspectiveMember).where(
                         ProspectiveMember.current_step_id == step.id,
                         ProspectiveMember.status == ProspectStatus.ACTIVE,
+                        ProspectiveMember.form_submission_id == submission.id,
                     )
                 )
                 prospects = prospect_result.scalars().all()
@@ -1438,10 +1499,16 @@ class FormsService:
                             prospect_id=str(prospect.id),
                             organization_id=str(prospect.organization_id),
                             step_id=str(step.id),
-                            completed_by="system",
+                            # No user performed this. `completed_by` lands on
+                            # two nullable FKs to users.id, so a "system"
+                            # sentinel is not a free-text label — it fails the
+                            # constraint and the advance is lost to the
+                            # except below.
+                            completed_by=None,
                             notes="Auto-advanced on form submission",
                             action_result={
                                 "form_id": str(form.id),
+                                "form_submission_id": str(submission.id),
                                 "auto_advanced": True,
                             },
                         )
@@ -1453,7 +1520,7 @@ class FormsService:
                         )
                     except Exception as e:
                         logger.error(
-                            f"Failed to auto-advance " f"prospect {prospect.id}: {e}"
+                            f"Failed to auto-advance prospect {prospect.id}: {e}"
                         )
         except Exception as e:
             logger.error(f"Pipeline auto-advance check failed: {e}")
@@ -2260,10 +2327,40 @@ class FormsService:
             return {
                 "success": False,
                 "error": (
-                    f"Event request missing required mapping(s): "
-                    f"{', '.join(missing)}"
+                    f"Event request missing required mapping(s): {', '.join(missing)}"
                 ),
             }
+
+        # A date picker submits a calendar date ("2026-09-10") with no time.
+        # Stamping it midnight UTC turns it into the previous evening for
+        # every negative-offset department, so the coordinator's screen shows
+        # the day before the requester chose. Anchor date-only values to
+        # midnight in the organization's own timezone instead.
+        org_timezone = await self.db.scalar(
+            select(Organization.timezone).where(
+                Organization.id == str(submission.organization_id)
+            )
+        )
+        try:
+            request_tz = ZoneInfo(org_timezone or "UTC")
+        except (ZoneInfoNotFoundError, ValueError):
+            request_tz = timezone.utc
+
+        def _parse_request_date(value: Any) -> Optional[datetime]:
+            """Best-effort ISO parse for the requester's date preferences —
+            a malformed date must not fail the whole request."""
+            if not value:
+                return None
+            text = str(value).strip()
+            try:
+                parsed = datetime.fromisoformat(text)
+            except ValueError:
+                return None
+            if parsed.tzinfo is None:
+                # Date-only values carry no instant; a value that supplied its
+                # own time is still read as local to the department.
+                parsed = parsed.replace(tzinfo=request_tz)
+            return parsed
 
         try:
             event_request = EventRequest(
@@ -2276,6 +2373,12 @@ class FormsService:
                 description=mapped_data.get("description", "Submitted via form"),
                 date_flexibility=mapped_data.get("date_flexibility", "flexible"),
                 preferred_timeframe=mapped_data.get("preferred_timeframe"),
+                preferred_date_start=_parse_request_date(
+                    mapped_data.get("preferred_date_start")
+                ),
+                preferred_date_end=_parse_request_date(
+                    mapped_data.get("preferred_date_end")
+                ),
                 preferred_time_of_day=mapped_data.get(
                     "preferred_time_of_day", "flexible"
                 ),

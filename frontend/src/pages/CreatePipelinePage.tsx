@@ -447,7 +447,7 @@ const StepPhases: React.FC<{
     ) : (
       <div className="space-y-3">
         {phases.map((phase) => (
-          <div key={phase.id} className="bg-theme-surface border-theme-surface-border rounded-lg border">
+          <div key={phase.id} className="card">
             <div
               className="flex cursor-pointer items-center justify-between p-4"
               onClick={() => onToggleExpand(phase.id)}
@@ -608,7 +608,7 @@ const StepRequirements: React.FC<{
       </div>
     ) : (
       groups.map((phase) => (
-        <div key={phase.key} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div key={phase.key} className="card p-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-theme-text-primary font-medium">{phase.title}</h3>
             <div className="flex flex-wrap items-center gap-2">
@@ -934,7 +934,7 @@ const StepMilestones: React.FC<{
       </div>
     ) : (
       groups.map((phase) => (
-        <div key={phase.key} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div key={phase.key} className="card p-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-theme-text-primary font-medium">{phase.title}</h3>
             <button

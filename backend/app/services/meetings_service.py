@@ -190,6 +190,40 @@ class MeetingsService:
         for m in meetings:
             m.creator_name = names.get(m.created_by) if m.created_by else None
 
+    async def attach_child_counts(self, meetings: List[Meeting]) -> None:
+        """Populate MeetingResponse.attendee_count / action_item_count.
+
+        Same shape of gap as `creator_name` above: the list response declares
+        both counts and MinutesPage renders "N attendees · N action items",
+        but the list query never loads the children — so every card read
+        "0 attendees   0 action items" over a meeting whose detail view showed
+        eight of one and two of the other. Two grouped counts rather than
+        loading the rows, since only the totals are rendered here.
+        """
+        if not meetings:
+            return
+        meeting_ids = [m.id for m in meetings]
+        counts: dict[str, dict[str, int]] = {
+            str(mid): {"attendees": 0, "action_items": 0} for mid in meeting_ids
+        }
+        for model, key in (
+            (MeetingAttendee, "attendees"),
+            (MeetingActionItem, "action_items"),
+        ):
+            rows = await self.db.execute(
+                select(model.meeting_id, func.count())
+                .where(model.meeting_id.in_(meeting_ids))
+                .group_by(model.meeting_id)
+            )
+            for meeting_id, count in rows.all():
+                counts.setdefault(str(meeting_id), {"attendees": 0, "action_items": 0})[
+                    key
+                ] = count
+        for m in meetings:
+            row = counts.get(str(m.id), {})
+            m.attendee_count = row.get("attendees", 0)
+            m.action_item_count = row.get("action_items", 0)
+
     async def get_meeting_by_id(
         self, meeting_id: UUID, organization_id: UUID
     ) -> Optional[Meeting]:

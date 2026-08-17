@@ -284,6 +284,13 @@ export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
 // ============================================
 // Scheduling — Position Labels
 // ============================================
+/**
+ * Support code the backend attaches when a driver assignment is refused for a
+ * missing EVOC certification (see docs/ERROR_CODES.md). The UI keys its offer
+ * to request an exception off this rather than the message text.
+ */
+export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
+
 export const POSITION_LABELS: Record<string, string> = {
   officer: 'Officer',
   driver: 'Driver/Operator',

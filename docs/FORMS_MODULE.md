@@ -197,11 +197,21 @@ All form submissions (both public and authenticated) pass through `_sanitize_sub
 | Layer | Protection |
 |-------|-----------|
 | Rate Limiting | 60 views/min, 10 submits/min per IP |
+| Daily Cap | Per-form daily limit (`PUBLIC_FORM_DAILY_LIMIT`) counted against **valid submissions only**; exceeding it returns `429` |
 | Honeypot | Hidden "website" field catches bots |
 | Slug Validation | Strict `^[a-f0-9]{12}$` pattern prevents injection |
 | Sanitization | HTML escape + type validation on all data |
 | DOMPurify | Frontend strips all HTML from server text |
 | Data Isolation | Public submissions flagged, IP/UA captured |
+
+> **Daily cap semantics** _(2026-08-16)_: the cap is enforced inside
+> `FormsService.submit_public_form` (`enforce_daily_cap=True`), **after**
+> authorization, honeypot, and validation. Bots tripping the honeypot and
+> rejected payloads no longer consume the form's daily allowance, so an
+> anonymous flood cannot exhaust the quota and deny service to legitimate
+> submitters. Honeypot hits still receive a fake success response. The public
+> rate limiter also falls back to an in-memory limiter when Redis errors
+> _(2026-08-16)_ rather than failing open.
 
 ### Frontend Defense
 

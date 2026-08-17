@@ -666,16 +666,16 @@ class MessagingService:
 
     async def acknowledge_message(
         self, message_id: str, user_id: str, organization_id: str
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str], bool]:
         """Acknowledge a message (also marks as read)"""
         try:
             message = await self._visible_message_or_none(
                 message_id, user_id, organization_id
             )
             if not message:
-                return False, "Message not found"
+                return False, "Message not found", False
             if not message.requires_acknowledgment:
-                return False, "Message does not require acknowledgment"
+                return False, "Message does not require acknowledgment", False
 
             existing = await self.db.execute(
                 select(DepartmentMessageRead).where(
@@ -686,9 +686,10 @@ class MessagingService:
             record = existing.scalar_one_or_none()
 
             if record:
-                if not record.acknowledged_at:
-                    record.acknowledged_at = datetime.now(timezone.utc)
-                    await self.db.commit()
+                if record.acknowledged_at:
+                    return True, None, False
+                record.acknowledged_at = datetime.now(timezone.utc)
+                await self.db.commit()
             else:
                 read_record = DepartmentMessageRead(
                     id=generate_uuid(),
@@ -699,10 +700,10 @@ class MessagingService:
                 self.db.add(read_record)
                 await self.db.commit()
 
-            return True, None
+            return True, None, True
         except Exception as e:
             await self.db.rollback()
-            return False, safe_error_detail(e)
+            return False, safe_error_detail(e), False
 
     async def _validate_targeting(
         self,
@@ -791,15 +792,19 @@ class MessagingService:
     ) -> List[User]:
         """Resolve the concrete set of users a message is targeted at.
 
-        Loads the org's users (with roles) once and reuses _is_targeted so the
-        report and the stats denominator agree exactly with what the inbox
-        delivers. Bounded by org size, so an in-Python filter is acceptable for
-        this admin-only, low-frequency path.
+        Loads the org's active users (with roles) once and reuses _is_targeted
+        so delivery, reports, and the stats denominator agree exactly with what
+        the inbox delivers. Deleted or inactive accounts must not receive
+        external message delivery. Bounded by org size, so an in-Python filter
+        is acceptable for this admin-only, low-frequency path.
         """
         users_result = await self.db.execute(
             select(User)
             .options(selectinload(User.roles))
-            .where(User.organization_id == organization_id)
+            .where(
+                User.organization_id == organization_id,
+                User.is_active,
+            )
         )
         users = users_result.scalars().all()
         targeted = []

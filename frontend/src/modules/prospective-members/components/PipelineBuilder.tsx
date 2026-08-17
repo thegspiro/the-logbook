@@ -134,7 +134,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
       {/* Stage List */}
       <div className="space-y-2">
         {stages.length === 0 ? (
-          <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border border-dashed py-12 text-center">
+          <div className="card bg-theme-input-bg border-dashed py-12 text-center">
             <p className="text-theme-text-muted mb-2">No stages configured yet.</p>
             <p className="text-theme-text-muted text-sm">Add stages to define the prospective member journey.</p>
           </div>
@@ -153,12 +153,8 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDrop={(e) => handleDrop(e, index)}
                 onDragEnd={handleDragEnd}
-                className={`flex items-center gap-3 rounded-lg border p-4 transition-all ${
-                  isDragging
-                    ? 'bg-theme-surface border-red-500/50 opacity-50'
-                    : isDragOver
-                      ? 'bg-theme-surface-hover border-red-500'
-                      : 'border-theme-surface-border bg-theme-input-bg hover:border-theme-surface-border'
+                className={`drop-surface flex items-center gap-3 p-4 ${
+                  isDragging ? 'drop-surface-dragging' : isDragOver ? 'drop-surface-active' : ''
                 }`}
               >
                 {/* Drag Handle */}

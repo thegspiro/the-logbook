@@ -152,6 +152,23 @@ class TestTypeSlug:
 
         assert ref.type_slug == "ladder"
 
+    async def test_full_apparatus_type_prefers_the_code_over_the_name(self):
+        """Regression: lowercasing the display name broke every multi-word type.
+
+        Templates and per-apparatus config maps are keyed on the type *code*
+        ("ladder"); "Ladder/Aerial".lower() is "ladder/aerial", which matched
+        nothing — ladder checks could not resolve type-level templates and the
+        shift-report form fell back to the generic skill list.
+        """
+        db = MagicMock()
+        row = _full_apparatus(type_name="Ladder/Aerial")
+        row.apparatus_type.code = "ladder"
+        db.execute = AsyncMock(side_effect=[_scalars_first(row)])
+
+        ref = await resolve_apparatus_ref(db, "app-1", "org-1")
+
+        assert ref.type_slug == "ladder"
+
     async def test_full_apparatus_without_a_type_is_none(self):
         db = MagicMock()
         db.execute = AsyncMock(

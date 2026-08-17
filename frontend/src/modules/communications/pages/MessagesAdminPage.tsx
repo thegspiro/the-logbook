@@ -192,7 +192,7 @@ const MessagesAdminPage: React.FC = () => {
       )}
 
       {(composing || editing) && (
-        <div className="border-theme-surface-border bg-theme-surface mb-6 rounded-lg border p-4">
+        <div className="card mb-6 p-4">
           <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">
             {editing ? 'Edit message' : 'New message'}
           </h2>
@@ -224,14 +224,14 @@ const MessagesAdminPage: React.FC = () => {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search messages…"
             aria-label="Search messages"
-            className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
+            className="form-input pr-3 pl-9 text-sm"
           />
         </div>
         <select
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value)}
           aria-label="Filter by priority"
-          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+          className="form-input px-3 text-sm"
         >
           <option value="">All priorities</option>
           <option value="normal">Normal</option>
@@ -259,7 +259,7 @@ const MessagesAdminPage: React.FC = () => {
         ) : (
           <ul className="space-y-3">
             {messages.map((m) => (
-              <li key={m.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+              <li key={m.id} className="card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

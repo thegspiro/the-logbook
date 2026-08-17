@@ -32,6 +32,7 @@ import {
 import toast from 'react-hot-toast';
 import { formatDate, formatDateCustom } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useAuthStore } from '../stores/authStore';
 import { complianceConfigService } from '../services/trainingServices';
 import { adminHoursCategoryService } from '../modules/admin-hours/services/api';
 import type { AdminHoursCategory } from '../modules/admin-hours/types';
@@ -78,6 +79,11 @@ const REPORT_FREQUENCIES = [
 export default function ComplianceRequirementsConfigPage() {
   const { confirm } = useConfirm();
   const tz = useTimezone();
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  // The route admits compliance.manage holders (VP, Secretary, compliance
+  // officers), but the report-generation endpoint requires training.manage —
+  // without this gate they see an enabled form whose every submit 403s.
+  const canGenerateReports = checkPermission('training.manage');
   // All four tabs are addressable. They were plain state, so the report
   // history and the profile list — the two an officer has cause to send a
   // colleague — could not be linked to, and the Back button did nothing after
@@ -463,7 +469,7 @@ export default function ComplianceRequirementsConfigPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-theme-surface-border bg-theme-surface hscroll flex gap-1 rounded-lg border p-1">
+      <div className="card hscroll flex gap-1 p-1">
         {tabs.map((tab: { id: ActiveTab; label: string; icon: ReactElement }) => (
           <button
             key={tab.id}
@@ -480,7 +486,7 @@ export default function ComplianceRequirementsConfigPage() {
 
       {/* Tab Content */}
       {activeTab === 'thresholds' && (
-        <div className="border-theme-surface-border bg-theme-surface space-y-6 rounded-lg border p-6">
+        <div className="card space-y-6 p-6">
           <div className="flex items-center gap-2">
             <Settings className="text-theme-text-secondary h-5 w-5" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Compliance Thresholds</h2>
@@ -687,7 +693,7 @@ export default function ComplianceRequirementsConfigPage() {
 
           {/* Profile Form */}
           {showProfileForm && (
-            <div className="bg-theme-surface rounded-lg border border-blue-200 p-6 dark:border-blue-800">
+            <div className="card border-blue-200 p-6 dark:border-blue-800">
               <h3 className="text-theme-text-primary mb-4 text-base font-semibold">
                 {editingProfileId ? 'Edit Profile' : 'New Profile'}
               </h3>
@@ -950,7 +956,7 @@ export default function ComplianceRequirementsConfigPage() {
 
           {/* Existing Profiles */}
           {config?.profiles.map((profile: ComplianceProfile) => (
-            <div key={profile.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+            <div key={profile.id} className="card p-4">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1051,7 +1057,7 @@ export default function ComplianceRequirementsConfigPage() {
       )}
 
       {activeTab === 'schedule' && (
-        <div className="border-theme-surface-border bg-theme-surface space-y-6 rounded-lg border p-6">
+        <div className="card space-y-6 p-6">
           <div className="flex items-center gap-2">
             <Clock className="text-theme-text-secondary h-5 w-5" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Automated Report Scheduling</h2>
@@ -1150,91 +1156,102 @@ export default function ComplianceRequirementsConfigPage() {
       {activeTab === 'reports' && (
         <div className="space-y-6">
           {/* Generate Report */}
-          <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <div className="card p-6">
             <div className="flex items-center gap-2">
               <FileText className="text-theme-text-secondary h-5 w-5" />
               <h2 className="text-theme-text-primary text-lg font-semibold">Generate Report</h2>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-              <div>
-                <label className={labelClass}>Report Type</label>
-                <select
-                  className={selectClass}
-                  value={reportType}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setReportType(e.target.value)}
-                >
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Year</label>
-                <input
-                  type="number"
-                  className={inputClass}
-                  value={reportYear}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setReportYear(Number(e.target.value))}
-                  min={2020}
-                  max={2100}
-                />
-              </div>
-              {reportType === 'monthly' && (
-                <div>
-                  <label className={labelClass}>Month</label>
-                  <select
-                    className={selectClass}
-                    value={reportMonth}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setReportMonth(Number(e.target.value))}
-                  >
-                    {Array.from({ length: 12 }, (_: unknown, i: number) => (
-                      <option key={i + 1} value={i + 1}>
-                        {formatDateCustom(new Date(2024, i), { month: 'long' })}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="flex items-center gap-2 pt-7">
-                  <input
-                    type="checkbox"
-                    className={checkboxClass}
-                    checked={reportSendEmail}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setReportSendEmail(e.target.checked)}
-                  />
-                  <span className="text-theme-text-primary text-sm">Email report</span>
-                </label>
-              </div>
-            </div>
-
-            {reportSendEmail && (
-              <div className="mt-3">
-                <label className={labelClass}>Additional Recipients (optional)</label>
-                <input
-                  type="text"
-                  className={inputClass}
-                  value={reportAdditionalRecipients}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setReportAdditionalRecipients(e.target.value)}
-                  placeholder="extra@dept.com"
-                />
-              </div>
+            {!canGenerateReports && (
+              <p className="text-theme-text-secondary mt-4 text-sm">
+                Generating reports requires the training management permission. Ask a training officer or an
+                administrator to generate one — it will appear in the report history below.
+              </p>
             )}
 
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => void handleGenerateReport()}
-                disabled={isGenerating}
-                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-              >
-                {isGenerating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
-                {isGenerating ? 'Generating...' : 'Generate Report'}
-              </button>
-            </div>
+            {canGenerateReports && (
+              <>
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+                  <div>
+                    <label className={labelClass}>Report Type</label>
+                    <select
+                      className={selectClass}
+                      value={reportType}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) => setReportType(e.target.value)}
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Year</label>
+                    <input
+                      type="number"
+                      className={inputClass}
+                      value={reportYear}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setReportYear(Number(e.target.value))}
+                      min={2020}
+                      max={2100}
+                    />
+                  </div>
+                  {reportType === 'monthly' && (
+                    <div>
+                      <label className={labelClass}>Month</label>
+                      <select
+                        className={selectClass}
+                        value={reportMonth}
+                        onChange={(e: ChangeEvent<HTMLSelectElement>) => setReportMonth(Number(e.target.value))}
+                      >
+                        {Array.from({ length: 12 }, (_: unknown, i: number) => (
+                          <option key={i + 1} value={i + 1}>
+                            {formatDateCustom(new Date(2024, i), { month: 'long' })}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div>
+                    <label className="flex items-center gap-2 pt-7">
+                      <input
+                        type="checkbox"
+                        className={checkboxClass}
+                        checked={reportSendEmail}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setReportSendEmail(e.target.checked)}
+                      />
+                      <span className="text-theme-text-primary text-sm">Email report</span>
+                    </label>
+                  </div>
+                </div>
+
+                {reportSendEmail && (
+                  <div className="mt-3">
+                    <label className={labelClass}>Additional Recipients (optional)</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={reportAdditionalRecipients}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setReportAdditionalRecipients(e.target.value)}
+                      placeholder="extra@dept.com"
+                    />
+                  </div>
+                )}
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={() => void handleGenerateReport()}
+                    disabled={isGenerating}
+                    className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {isGenerating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
+                    {isGenerating ? 'Generating...' : 'Generate Report'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Report History */}
-          <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <div className="card p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-theme-text-primary text-lg font-semibold">Report History ({reportsTotal})</h2>
               <button
@@ -1333,7 +1350,7 @@ export default function ComplianceRequirementsConfigPage() {
 
       {/* Email Modal */}
       {emailModalReportId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="modal-overlay flex items-center justify-center">
           <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-theme-text-primary text-lg font-semibold">Email Report</h3>

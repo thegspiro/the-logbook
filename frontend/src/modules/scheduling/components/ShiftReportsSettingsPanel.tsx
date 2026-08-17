@@ -1254,9 +1254,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
 
       {/* Content panel */}
       <main className="min-w-0 flex-1">
-        <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 sm:p-6">
-          {renderSection()}
-        </div>
+        <div className="card p-4 sm:p-6">{renderSection()}</div>
       </main>
     </div>
   );
@@ -1352,7 +1350,7 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
         type="button"
         onClick={onAdd}
         disabled={!inputValue.trim()}
-        className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40"
+        className="btn-secondary text-theme-text-secondary inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium disabled:opacity-40"
       >
         <Plus className="h-3.5 w-3.5" />
         Add

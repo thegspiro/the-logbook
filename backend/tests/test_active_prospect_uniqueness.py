@@ -1,8 +1,13 @@
 """Regression tests for active prospect email uniqueness."""
 
+import re
 from pathlib import Path
 
 from app.models.membership_pipeline import ProspectiveMember
+
+VERSIONS = Path(__file__).parents[1] / "alembic/versions"
+ORIGINAL = VERSIONS / "20260812_0003_restore_active_prospect_uniqueness.py"
+RECONCILE = VERSIONS / "20260814_0003_reconcile_active_prospect_emails.py"
 
 
 def test_active_prospect_email_has_database_uniqueness_guard():
@@ -22,12 +27,7 @@ def test_active_prospect_email_has_database_uniqueness_guard():
     ]
 
 
-def test_uniqueness_migration_reconciles_legacy_duplicates_first():
-    migration = (
-        Path(__file__).parents[1]
-        / "alembic/versions/20260814_0003_reconcile_active_prospect_emails.py"
-    ).read_text()
-
+def _assert_reconciles_before_creating_index(migration: str):
     reconcile = migration.index("SET duplicate.status = 'inactive'")
     create_index = migration.index("op.create_index(")
     assert "LOWER(TRIM(email))" in migration
@@ -35,11 +35,31 @@ def test_uniqueness_migration_reconciles_legacy_duplicates_first():
     assert reconcile < create_index
 
 
-def test_released_uniqueness_migration_is_not_rewritten_with_data_repairs():
-    released = (
-        Path(__file__).parents[1]
-        / "alembic/versions/20260812_0003_restore_active_prospect_uniqueness.py"
-    ).read_text()
+def test_uniqueness_migration_reconciles_legacy_duplicates_first():
+    _assert_reconciles_before_creating_index(RECONCILE.read_text())
 
-    assert "LOWER(TRIM(email))" not in released
-    assert "SET duplicate.status" not in released
+
+def test_original_uniqueness_migration_also_reconciles_before_the_index():
+    """An install upgrading from 20260812_0002 with legacy duplicate active
+    emails runs 20260812_0003 first — if that migration created the unique
+    index without reconciling, the upgrade would fail inside it and never
+    reach the cleanup in 20260814_0003. The repair is therefore duplicated
+    into the earlier migration; installs already stamped past it never re-run
+    it, so the duplication only hardens fresh upgrade paths."""
+    _assert_reconciles_before_creating_index(ORIGINAL.read_text())
+
+
+def test_duplicated_reconciliation_blocks_do_not_drift():
+    """The repair exists twice on purpose (see above) — but it must stay the
+    same repair, or the two upgrade paths converge on different data."""
+
+    def _reconciliation_block(source: str) -> str:
+        start = source.index("UPDATE prospective_members AS duplicate")
+        marker = "SET duplicate.status = 'inactive'"
+        end = source.index(marker) + len(marker)
+        # Normalize the quoting/whitespace of concatenated string literals.
+        return re.sub(r"[\s\"']+", " ", source[start:end])
+
+    assert _reconciliation_block(ORIGINAL.read_text()) == _reconciliation_block(
+        RECONCILE.read_text()
+    )

@@ -95,8 +95,8 @@ export default function ComplianceSection({ facilityId, canManage }: Props) {
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
-      <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
+    <div className="card">
+      <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
         <h2 className="text-theme-text-primary text-sm font-semibold">
           Compliance Checklists {!isLoading && `(${checklists.length})`}
         </h2>
@@ -110,7 +110,7 @@ export default function ComplianceSection({ facilityId, canManage }: Props) {
         )}
       </div>
 
-      <div className="p-5">
+      <div className="p-4">
         {canManage && showForm && (
           <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
             <h3 className="text-theme-text-primary text-sm font-medium">New Compliance Checklist</h3>

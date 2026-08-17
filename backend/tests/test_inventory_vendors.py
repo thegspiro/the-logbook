@@ -10,11 +10,13 @@ the ids the client supplies.
 Mocked sessions — no DB — so they run in the sandbox.
 """
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
+from app.api.v1.endpoints.inventory import _vendor_response
 from app.models.inventory import InventoryVendor, InventoryVendorContact
 from app.services.inventory_service import InventoryService
 
@@ -490,3 +492,71 @@ class TestVendorFkScoping:
         # An explicit null means "unlink", not "look up the row None".
         await service._assert_item_fks_in_org({"vendor_id": None}, org_id)
         mock_db.execute.assert_not_called()
+
+
+class TestFinancialRedaction:
+    """`inventory.view` is a broad member-level grant. What we pay a supplier,
+    on what terms, and under which account number rides with
+    `inventory.manage` instead — the rest of the record stays readable so the
+    directory still answers "who do I call"."""
+
+    def _built(self, org_id, **kwargs):
+        vendor = _vendor(
+            org_id,
+            account_number="FCFD-2201",
+            payment_terms="Net 30",
+            phone="703-555-0100",
+            email="orders@galls.example",
+            city="Falls Church",
+            created_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            **kwargs,
+        )
+        return vendor
+
+    def test_viewer_gets_no_money(self, org_id):
+        payload = _vendor_response(
+            self._built(org_id),
+            {"item_count": 4, "open_reorder_count": 1, "total_purchase_value": 1200},
+            include_financials=False,
+        )
+        assert payload.account_number is None
+        assert payload.payment_terms is None
+        assert payload.total_purchase_value is None
+
+    def test_viewer_still_gets_the_directory(self, org_id):
+        payload = _vendor_response(
+            self._built(org_id),
+            {"item_count": 4, "open_reorder_count": 1, "total_purchase_value": 1200},
+            include_financials=False,
+        )
+        assert payload.name == "Galls"
+        assert payload.phone == "703-555-0100"
+        assert payload.email == "orders@galls.example"
+        assert payload.city == "Falls Church"
+        # Counts say "we buy from them"; only the amount is withheld.
+        assert payload.item_count == 4
+        assert payload.open_reorder_count == 1
+
+    def test_manager_gets_everything(self, org_id):
+        payload = _vendor_response(
+            self._built(org_id),
+            {"item_count": 4, "open_reorder_count": 1, "total_purchase_value": 1200},
+            include_financials=True,
+        )
+        assert payload.account_number == "FCFD-2201"
+        assert payload.payment_terms == "Net 30"
+        assert payload.total_purchase_value == 1200
+
+    def test_redaction_survives_a_missing_stats_row(self, org_id):
+        # A vendor with no purchase history gets no stats dict at all; the
+        # stored account number must still be withheld.
+        payload = _vendor_response(self._built(org_id), None, include_financials=False)
+        assert payload.account_number is None
+        assert payload.payment_terms is None
+
+    def test_clearance_has_no_default(self):
+        # The flag is keyword-only and required: a call site that forgets it
+        # should fail loudly rather than leak by default.
+        with pytest.raises(TypeError):
+            _vendor_response(MagicMock())

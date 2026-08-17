@@ -69,15 +69,29 @@ router = APIRouter()
 
 
 def _member_requirement(requirement) -> TrainingRequirementEnhancedResponse:
-    """Return a requirement without checklist steps reserved for officers."""
+    """Return a requirement with officer-only checklist steps redacted.
+
+    Redacted, not stripped: the member-facing progress view folds hidden
+    steps into "+N more steps your officer records", and the step arithmetic
+    on their progress bar has to add up against the officer's ticks — both
+    need the *count* of hidden steps. Neither the text nor the id of a
+    hidden step may leak, so each one is replaced by an anonymous stub.
+    Stripping them entirely made the fold line unreachable in the real app
+    while the component test asserted it against a payload the API never
+    produced.
+    """
     response = TrainingRequirementEnhancedResponse.model_validate(requirement)
-    return response.model_copy(
-        update={
-            "checklist_items": [
-                item for item in (response.checklist_items or []) if item.member_visible
-            ]
-        }
-    )
+    redacted = [
+        (
+            item
+            if item.member_visible
+            else item.model_copy(
+                update={"id": None, "text": "Recorded by your officer"}
+            )
+        )
+        for item in (response.checklist_items or [])
+    ]
+    return response.model_copy(update={"checklist_items": redacted})
 
 
 def _member_progress(progress) -> RequirementProgressResponse:
@@ -91,6 +105,15 @@ def _member_progress(progress) -> RequirementProgressResponse:
     visible_ids = {
         item.id for item in (visible_requirement.checklist_items or []) if item.id
     }
+    # Claims are shown only for steps the member can still self-report. After
+    # an officer disables member_can_complete on a claimed step, echoing the
+    # stale claim back would keep the member's UI showing (and resubmitting)
+    # a self-report the service no longer accepts.
+    claimable_ids = {
+        item.id
+        for item in (visible_requirement.checklist_items or [])
+        if item.id and item.member_can_complete
+    }
     notes = dict(response.progress_notes or {})
     if isinstance(notes.get("checklist_done"), list):
         notes["checklist_done"] = [
@@ -102,7 +125,7 @@ def _member_progress(progress) -> RequirementProgressResponse:
         notes["checklist_claimed"] = [
             item_id
             for item_id in notes["checklist_claimed"]
-            if str(item_id) in visible_ids
+            if str(item_id) in claimable_ids
         ]
     return response.model_copy(
         update={"requirement": visible_requirement, "progress_notes": notes or None}
@@ -319,14 +342,18 @@ async def import_registry_requirements(
 
     service = TrainingProgramService(db)
 
-    imported_count, categories_created, errors, last_updated, source_url = (
-        await service.import_registry_requirements(
-            registry_file_path=registry_file,
-            organization_id=current_user.organization_id,
-            created_by=current_user.id,
-            skip_existing=effective_skip,
-            selected_codes=selected_codes,
-        )
+    (
+        imported_count,
+        categories_created,
+        errors,
+        last_updated,
+        source_url,
+    ) = await service.import_registry_requirements(
+        registry_file_path=registry_file,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        skip_existing=effective_skip,
+        selected_codes=selected_codes,
     )
 
     return RegistryImportResult(
@@ -718,6 +745,15 @@ async def update_training_program(
             else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=code, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={"program_id": str(program_id), "action": "program_updated"},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return program
 
 
@@ -745,6 +781,15 @@ async def delete_training_program(
     )
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="warning",
+        event_data={"program_id": str(program_id), "action": "program_deleted"},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ==================== Program Phase Endpoints ====================
@@ -831,6 +876,15 @@ async def reorder_program_phases(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={"program_id": str(program_id), "action": "phases_reordered"},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return phases
 
 
@@ -860,6 +914,19 @@ async def update_program_phase(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program_id),
+            "phase_id": str(phase_id),
+            "action": "phase_updated",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return phase
 
 
@@ -888,6 +955,19 @@ async def delete_program_phase(
     )
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "program_id": str(program_id),
+            "phase_id": str(phase_id),
+            "action": "phase_deleted",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ==================== Program Requirement Endpoints ====================
@@ -966,6 +1046,20 @@ async def update_program_requirement(
             detail="Requirement does not belong to this program",
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program_id),
+            "program_requirement_id": str(program_requirement_id),
+            "action": "program_requirement_updated",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return program_requirement
 
 
@@ -993,6 +1087,18 @@ async def reorder_program_requirements(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program_id),
+            "action": "requirements_reordered",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return links
 
 
@@ -1021,6 +1127,19 @@ async def remove_requirement_from_program(
     )
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "program_id": str(program_id),
+            "program_requirement_id": str(program_requirement_id),
+            "action": "program_requirement_removed",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 @router.get(
@@ -1118,6 +1237,19 @@ async def update_program_milestone(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program_id),
+            "milestone_id": str(milestone_id),
+            "action": "milestone_updated",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return milestone
 
 
@@ -1144,6 +1276,19 @@ async def delete_program_milestone(
     )
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "program_id": str(program_id),
+            "milestone_id": str(milestone_id),
+            "action": "milestone_deleted",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ==================== Program Enrollment Endpoints ====================

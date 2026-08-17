@@ -34,8 +34,7 @@ const SEVERITY_ICON: Record<AuditSeverity, React.ReactNode> = {
   critical: <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />,
 };
 
-const inputClass =
-  'w-full bg-theme-input-bg border border-theme-input-border rounded-md px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-red-500';
+const inputClass = 'form-input px-3 text-sm focus:ring-red-500';
 
 const AuditLogPage: React.FC = () => {
   const tz = useTimezone();
