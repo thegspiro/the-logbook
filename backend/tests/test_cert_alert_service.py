@@ -117,7 +117,7 @@ class TestMemberEmailEnabled:
     def test_a_leftover_email_key_no_longer_suppresses_mail(self):
         # `email` was a second master switch that only this sender read, while
         # the member's own settings screen wrote `email_notifications`.
-        # Migration 20260816_0006 folds it in; a blob still carrying the dead
+        # Migration 20260816_0007 folds it in; a blob still carrying the dead
         # key (written by an old client mid-deploy) must be inert, not a
         # silent opt-out nobody can see or clear from the UI.
         m = SimpleNamespace(

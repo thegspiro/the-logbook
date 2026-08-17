@@ -104,7 +104,7 @@ class TestFullPayloads:
 class TestDeadKeys:
     async def test_a_key_no_sender_reads_is_dropped_on_save(self):
         # `email` was folded into email_notifications by migration
-        # 20260816_0006. Merging would otherwise preserve it forever; instead
+        # 20260816_0007. Merging would otherwise preserve it forever; instead
         # a stale blob heals the next time the member is saved.
         stored = {"email": False, "email_notifications": True}
         result = await _save(stored, {"sms_notifications": False})

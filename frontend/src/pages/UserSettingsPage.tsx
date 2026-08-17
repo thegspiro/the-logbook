@@ -25,10 +25,12 @@ import {
   Trash2,
   ShieldCheck,
   Download,
+  Smartphone,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';
 import { MfaSettingsCard } from '../components/settings/MfaSettingsCard';
+import { AppVersionSection } from '../components/settings/AppVersionSection';
 import { useAuthStore } from '../stores/authStore';
 import { useTheme } from '../contexts/ThemeContext';
 import { validatePasswordStrength } from '../utils/passwordValidation';
@@ -39,9 +41,9 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useRanks } from '../hooks/useRanks';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
-type TabType = 'account' | 'password' | 'security' | 'emergency' | 'appearance' | 'notifications';
+type TabType = 'account' | 'password' | 'security' | 'emergency' | 'appearance' | 'notifications' | 'app';
 
-const TAB_IDS: TabType[] = ['account', 'password', 'security', 'emergency', 'appearance', 'notifications'];
+const TAB_IDS: TabType[] = ['account', 'password', 'security', 'emergency', 'appearance', 'notifications', 'app'];
 
 export const UserSettingsPage: React.FC = () => {
   const { user, loadUser } = useAuthStore();
@@ -437,6 +439,7 @@ export const UserSettingsPage: React.FC = () => {
     { id: 'emergency' as TabType, label: 'Emergency Contacts', icon: Heart },
     { id: 'appearance' as TabType, label: 'Appearance', icon: Palette },
     { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },
+    { id: 'app' as TabType, label: 'App', icon: Smartphone },
   ];
 
   return (
@@ -1364,6 +1367,9 @@ export const UserSettingsPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* App Tab */}
+          {activeTab === 'app' && <AppVersionSection />}
         </div>
       </div>
     </div>

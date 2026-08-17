@@ -142,7 +142,7 @@ class CertAlertService:
         This used to AND in a second key, `email`, which no other sender read
         and which only the admin contact panel wrote — so the same switch
         meant "no mail at all" here and nothing anywhere else. Migration
-        20260816_0006 folded that key into email_notifications.
+        20260816_0007 folded that key into email_notifications.
         """
         prefs = getattr(member, "notification_preferences", None)
         if prefs and isinstance(prefs, dict):

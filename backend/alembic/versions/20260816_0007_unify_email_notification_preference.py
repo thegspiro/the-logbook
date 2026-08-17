@@ -13,7 +13,7 @@ the admin panel, so it is carried onto the surviving key before the dead one is
 dropped; a member who opted out must not start receiving mail again because the
 key was renamed underneath them.
 
-Revision ID: 20260816_0006
+Revision ID: 20260816_0007
 Revises: 20260816_0005
 
 (Renumbered from 20260816_0002: the storage-area barcode backfill landed
@@ -26,7 +26,7 @@ import json
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260816_0006"
+revision = "20260816_0007"
 down_revision = "20260816_0005"
 branch_labels = None
 depends_on = None

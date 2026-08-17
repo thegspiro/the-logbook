@@ -1271,7 +1271,7 @@ async def update_contact_info(
             key: value
             for key, value in (user.notification_preferences or {}).items()
             # Drops keys no sender reads any more, so a blob that predates
-            # migration 20260816_0006 heals on its next save instead of
+            # migration 20260816_0007 heals on its next save instead of
             # carrying a dead `email` flag forever.
             if key in known_keys
         }

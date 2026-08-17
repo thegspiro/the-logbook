@@ -439,3 +439,275 @@ class TestReorderResponseAfterAnUpdate:
         assert updated.vendor_id is None
         assert updated.vendor_record is None
         assert updated.vendor is None
+
+
+class TestWhatAViewerActuallyReceives:
+    """The redaction is unit-tested at the serializer in the mocked suite. That
+    proves the function blanks the fields; it does not prove the routes ask it
+    to. This drives the real router through `require_permission`, with the
+    caller's grant coming from actual position rows, and asserts on the JSON
+    that leaves the endpoint."""
+
+    async def _client(self, db_session, caller):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.api.dependencies import get_current_user
+        from app.api.v1.endpoints import inventory as inventory_endpoints
+        from app.core.database import get_db
+
+        app = FastAPI()
+        app.include_router(inventory_endpoints.router, prefix="/inventory")
+        app.dependency_overrides[get_current_user] = lambda: caller
+        app.dependency_overrides[get_db] = lambda: db_session
+        return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+    async def _caller(self, db_session, org, *permissions):
+        """A user whose grant comes from a real position row.
+
+        Built through the ORM rather than raw INSERTs so `user.positions` is
+        already populated in memory: `_collect_user_permissions` walks that
+        relationship, and a lazy load there raises MissingGreenlet under the
+        async session instead of quietly reporting no permissions.
+        """
+        from app.models.user import Position, User
+
+        user = User(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            username=f"tester-{uuid.uuid4().hex[:8]}",
+            email=f"{uuid.uuid4().hex[:8]}@example.test",
+            first_name="Pat",
+            last_name="Quinn",
+            password_hash="x",
+        )
+        position = Position(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name="Tester",
+            slug=f"tester-{uuid.uuid4().hex[:8]}",
+            permissions=list(permissions),
+        )
+        user.positions.append(position)
+        db_session.add_all([user, position])
+        await db_session.flush()
+        return user
+
+    async def _seed(self, db_session):
+        org = await _make_org(db_session)
+        vendor = await _make_vendor(
+            db_session,
+            org,
+            "Galls",
+            account_number="FCFD-2201",
+            payment_terms="Net 30",
+            phone="703-555-0100",
+            email="orders@galls.example",
+        )
+        await _make_item(
+            db_session, org, "Turnout coat", vendor_id=vendor.id, purchase_price=1200
+        )
+        return org, vendor
+
+    async def test_viewer_gets_the_directory_without_the_money(self, db_session):
+        org, vendor = await self._seed(db_session)
+        caller = await self._caller(db_session, org, "inventory.view")
+
+        async with await self._client(db_session, caller) as client:
+            listed = await client.get("/inventory/vendors")
+            detail = await client.get(f"/inventory/vendors/{vendor.id}")
+
+        assert listed.status_code == 200
+        assert detail.status_code == 200
+        for body in (listed.json()[0], detail.json()):
+            assert body["account_number"] is None
+            assert body["payment_terms"] is None
+            assert body["total_purchase_value"] is None
+            # Still a usable directory entry.
+            assert body["name"] == "Galls"
+            assert body["phone"] == "703-555-0100"
+            assert body["email"] == "orders@galls.example"
+            # "We buy from them" survives; only the amount is withheld.
+            assert body["item_count"] == 1
+
+    async def test_manager_gets_the_money(self, db_session):
+        org, vendor = await self._seed(db_session)
+        caller = await self._caller(
+            db_session, org, "inventory.view", "inventory.manage"
+        )
+
+        async with await self._client(db_session, caller) as client:
+            detail = await client.get(f"/inventory/vendors/{vendor.id}")
+
+        assert detail.status_code == 200
+        body = detail.json()
+        assert body["account_number"] == "FCFD-2201"
+        assert body["payment_terms"] == "Net 30"
+        assert Decimal(str(body["total_purchase_value"])) == Decimal("1200")
+
+
+class TestCsvImportReportsUnmatchedVendors:
+    """A "Vendor" cell naming nothing on file keeps the typed-in name and gets
+    no link. That is the right behaviour — importing must not create suppliers
+    nobody reviewed — but doing it silently refills the very list the cleanup
+    screen exists to drain, and one misspelling in a 200-row sheet does it 200
+    times. The import has to say so."""
+
+    async def _import(self, db_session, org, csv_text):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.api.dependencies import get_current_user
+        from app.api.v1.endpoints import inventory as inventory_endpoints
+        from app.core.database import get_db
+        from app.models.user import Position, User
+
+        user = User(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            username=f"qm-{uuid.uuid4().hex[:8]}",
+            email=f"{uuid.uuid4().hex[:8]}@example.test",
+            first_name="Sam",
+            last_name="Reed",
+            password_hash="x",
+        )
+        position = Position(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name="Quartermaster",
+            slug=f"qm-{uuid.uuid4().hex[:8]}",
+            permissions=["inventory.view", "inventory.manage"],
+        )
+        user.positions.append(position)
+        db_session.add_all([user, position])
+        await db_session.flush()
+
+        app = FastAPI()
+        app.include_router(inventory_endpoints.router, prefix="/inventory")
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db_session
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            return await client.post(
+                "/inventory/items/import",
+                files={"file": ("items.csv", csv_text.encode(), "text/csv")},
+            )
+
+    async def test_an_unrecognized_name_is_reported_not_swallowed(self, db_session):
+        org = await _make_org(db_session)
+        await _make_vendor(db_session, org, "Galls")
+
+        response = await self._import(
+            db_session,
+            org,
+            "Name,Vendor\n"
+            "Turnout coat,Galls\n"
+            "Helmet,Gals\n"  # the misspelling
+            "Gloves,Gals\n",
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["imported"] == 3
+        # Repeated on two rows, reported once.
+        vendor_warnings = [w for w in body["warnings"] if "did not match" in w]
+        assert len(vendor_warnings) == 1
+        assert '"Gals"' in vendor_warnings[0]
+        # The name that did match is not reported.
+        assert '"Galls"' not in vendor_warnings[0]
+
+    async def test_a_clean_sheet_says_nothing_about_vendors(self, db_session):
+        org = await _make_org(db_session)
+        await _make_vendor(db_session, org, "Galls")
+
+        response = await self._import(
+            db_session, org, "Name,Vendor\nTurnout coat,Galls\nHelmet,galls\n"
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert [w for w in body["warnings"] if "did not match" in w] == []
+
+    async def test_the_matched_rows_are_actually_linked(self, db_session):
+        org = await _make_org(db_session)
+        vendor = await _make_vendor(db_session, org, "Galls")
+
+        await self._import(
+            db_session, org, "Name,Vendor\nTurnout coat,Galls\nHelmet,Gals\n"
+        )
+
+        linked = (
+            (
+                await db_session.execute(
+                    select(InventoryItem).where(InventoryItem.organization_id == org.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_name = {item.name: item for item in linked}
+        assert by_name["Turnout coat"].vendor_id == vendor.id
+        # Unmatched keeps the typed name and no link — reported, not invented.
+        assert by_name["Helmet"].vendor_id is None
+        assert by_name["Helmet"].vendor == "Gals"
+
+
+class TestUnmatchedVendorReportingIsHonest:
+    """Three ways the warning could mislead, each of which sends the reader to
+    do work that will not succeed or is not needed. Companion to
+    TestCsvImportReportsUnmatchedVendors, which covers the happy path."""
+
+    async def _import(self, db_session, org, csv_text):
+        helper = TestCsvImportReportsUnmatchedVendors()
+        return await helper._import(db_session, org, csv_text)
+
+    async def test_spellings_of_one_name_are_reported_once(self, db_session):
+        org = await _make_org(db_session)
+
+        response = await self._import(
+            db_session,
+            org,
+            "Name,Vendor\nCoat,Gals\nHelmet,gals\nGloves,GALS\n",
+        )
+
+        body = response.json()
+        warning = next(w for w in body["warnings"] if "did not match" in w)
+        # Attach is case-insensitive, so these are one piece of work, not three.
+        assert warning.startswith("1 vendor name(s)")
+        assert warning.count('"') == 2
+
+    async def test_a_row_that_failed_to_import_is_not_reported(self, db_session):
+        org = await _make_org(db_session)
+        await _make_item(db_session, org, "Existing", serial_number="SN-1")
+
+        # Second row carries a duplicate serial, so create_item rejects it.
+        response = await self._import(
+            db_session,
+            org,
+            "Name,Vendor,Serial Number\nCoat,Gals,SN-1\n",
+        )
+
+        body = response.json()
+        assert body["imported"] == 0
+        assert body["failed"] == 1
+        # Nothing was written, so there is nothing to Attach.
+        assert [w for w in body["warnings"] if "did not match" in w] == []
+
+    async def test_a_deactivated_vendor_is_linked_not_reported(self, db_session):
+        org = await _make_org(db_session)
+        retired = await _make_vendor(db_session, org, "Galls", is_active=False)
+
+        response = await self._import(db_session, org, "Name,Vendor\nCoat,Galls\n")
+
+        body = response.json()
+        # Reporting it would advise adding a vendor that already exists, which
+        # creation rejects as an inactive duplicate — a dead end.
+        assert [w for w in body["warnings"] if "did not match" in w] == []
+        item = (
+            await db_session.execute(
+                select(InventoryItem).where(InventoryItem.name == "Coat")
+            )
+        ).scalar_one()
+        # Deactivating keeps every link, so an import naming one links too.
+        assert item.vendor_id == retired.id

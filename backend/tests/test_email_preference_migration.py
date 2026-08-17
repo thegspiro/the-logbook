@@ -1,4 +1,4 @@
-"""Migration 20260816_0006 folds the dead `email` preference key away.
+"""Migration 20260816_0007 folds the dead `email` preference key away.
 
 Two things are being protected. First the data rule: an explicit
 ``email: false`` was a real opt-out recorded through the admin contact panel,
@@ -25,7 +25,7 @@ MIGRATION_PATH = (
     Path(__file__).resolve().parents[1]
     / "alembic"
     / "versions"
-    / "20260816_0006_unify_email_notification_preference.py"
+    / "20260816_0007_unify_email_notification_preference.py"
 )
 
 
