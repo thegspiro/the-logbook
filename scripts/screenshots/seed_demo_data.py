@@ -5673,9 +5673,7 @@ class Seeder:
         target = ladders[0]
         shift_id = pick(target, "id")
 
-        crew = items(
-            self.api.get(f"/training/shift-reports/shift-crew/{shift_id}")
-        )
+        crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
         members = items(self.api.get("/users?limit=100"), "users")
         recruit_ids = {
             str(pick(m, "id")): pick(m, "username")
@@ -8630,6 +8628,128 @@ class Seeder:
 
     # -- elections ---------------------------------------------------
 
+    def seed_meetings(self, members: list[dict]) -> None:
+        """Meetings for the redesigned Minutes page, with action items.
+
+        The Minutes page was rebuilt onto ``/meetings`` — first-class meeting
+        records with attendees, motions and action items — while this seeder
+        only populated the older ``/minutes-records`` model, so the page
+        rendered "No Meeting Minutes" over a real minutes record. One approved
+        business meeting with open action items and one draft awaiting
+        approval populate the stats row, the list, and the Action Items page.
+        """
+        # Guarded per title, not per collection: a run that dies between the
+        # two creates must add the missing one on the next pass, not decide
+        # the step is done because one row exists.
+        existing_titles = {
+            str(pick(m, "title"))
+            for m in items(self.api.get("/meetings?limit=20"), "meetings")
+        }
+        member_ids = [str(pick(m, "id")) for m in members if pick(m, "id")]
+        if "July Business Meeting" not in existing_titles:
+            approved = self.api.post(
+                "/meetings",
+                {
+                    "title": "July Business Meeting",
+                    "meeting_type": "business",
+                    "meeting_date": str(TODAY - timedelta(days=32)),
+                    "start_time": "19:00:00",
+                    "end_time": "20:30:00",
+                    "location": "Station 1 — Training Room",
+                    "called_by": "President",
+                    "agenda": (
+                        "Old business; equipment purchases; fall open-house "
+                        "planning; new-member vote."
+                    ),
+                    "notes": (
+                        "Quorum met with 18 members present. Treasurer's report "
+                        "accepted as read. Discussion of the aerial ladder "
+                        "service quote deferred to the equipment committee."
+                    ),
+                    "motions": (
+                        "Motion to purchase four SCBA spare cylinders (Osei/"
+                        "Duarte) — carried 16-2. Motion to adopt the revised "
+                        "duty-crew policy (Ruiz/Nakamura) — carried unanimously."
+                    ),
+                    "attendees": [
+                        {"user_id": user_id, "present": True}
+                        for user_id in member_ids[:8]
+                    ],
+                    "action_items": [
+                        {
+                            "description": (
+                                "Collect two more quotes for the aerial ladder "
+                                "annual service."
+                            ),
+                            "assigned_to": member_ids[0] if member_ids else None,
+                            "due_date": str(TODAY + timedelta(days=14)),
+                            "priority": 2,
+                        },
+                        {
+                            "description": (
+                                "Book the school gym for the fall open house."
+                            ),
+                            "assigned_to": (
+                                member_ids[1] if len(member_ids) > 1 else None
+                            ),
+                            "due_date": str(TODAY + timedelta(days=30)),
+                            "priority": 1,
+                        },
+                    ],
+                },
+            )
+            self.api.post(f"/meetings/{pick(approved, 'id')}/approve")
+        if "Officer Meeting — Budget Review" not in existing_titles:
+            self.api.post(
+                "/meetings",
+                {
+                    "title": "Officer Meeting — Budget Review",
+                    "meeting_type": "board",
+                    "meeting_date": str(TODAY - timedelta(days=4)),
+                    "start_time": "18:30:00",
+                    "location": "Station 1 — Office",
+                    "called_by": "Chief",
+                    "agenda": "Mid-year budget review; apparatus fund status.",
+                    "notes": (
+                        "Draft — secretary to circulate for correction before "
+                        "approval at the next business meeting."
+                    ),
+                    "attendees": [
+                        {"user_id": user_id, "present": True}
+                        for user_id in member_ids[:4]
+                    ],
+                },
+            )
+
+    def seed_event_request(self) -> None:
+        """A pending public event request, so the Requests tab has a row.
+
+        Submitted through the same public endpoint the request form uses; the
+        admin tab otherwise renders "No event requests yet" under a caption
+        describing a queue.
+        """
+        if items(self.api.get("/event-requests?limit=5"), "requests"):
+            return
+        org_id = pick(self.api.get("/auth/me"), "organization_id")
+        self.api.post(
+            f"/event-requests/public?organization_id={org_id}",
+            {
+                "contact_name": "Dana Whitmore",
+                "contact_email": "dana.whitmore@oakvilleschools.example.org",
+                "contact_phone": "555-0173",
+                "organization_name": "Oakville Elementary PTA",
+                "outreach_type": "station_tour",
+                "description": (
+                    "Our second-grade classes are studying community helpers "
+                    "and would love a station tour and truck demonstration "
+                    "for about 45 students."
+                ),
+                "date_flexibility": "general_timeframe",
+                "timeframe_description": "Any weekday morning in the next month",
+                "expected_attendees": 45,
+            },
+        )
+
     MINUTES_TITLE = "July Business Meeting"
 
     def seed_minutes(self) -> list[dict]:
@@ -11298,6 +11418,8 @@ class Seeder:
         # Minutes before elections: the closed election links itself to the
         # minutes record at creation, and it cannot be patched once closed.
         minutes = self.step("meeting minutes", self.seed_minutes) or []
+        self.step("meetings", lambda: self.seed_meetings(members))
+        self.step("event request", self.seed_event_request)
         self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}

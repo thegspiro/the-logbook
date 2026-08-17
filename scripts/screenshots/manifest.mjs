@@ -6478,6 +6478,10 @@ export const SHOTS = [
       await page.waitForTimeout(1500);
     },
     fullPage: true,
+    // "No documents yet" is the drawer's documents panel — a walk-in guest
+    // has uploaded nothing, and the Linked Events panel this shot is about is
+    // populated.
+    allowEmptyState: true,
   },
   {
     id: "04-20-event-requests",
