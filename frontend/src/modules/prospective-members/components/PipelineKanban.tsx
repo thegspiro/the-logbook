@@ -142,9 +142,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
               onDrop={(e) => {
                 void handleDrop(e, stage.id);
               }}
-              className={`bg-theme-input-bg w-64 shrink-0 rounded-lg border transition-all sm:w-72 ${
-                isDropTarget ? 'border-red-500 bg-red-500/5' : 'border-theme-surface-border'
-              }`}
+              className={`drop-surface w-64 shrink-0 sm:w-72 ${isDropTarget ? 'drop-surface-active' : ''}`}
             >
               {/* Column Header */}
               <div className={`border-theme-surface-border border-t-2 border-b p-3 ${headerColor} rounded-t-lg`}>

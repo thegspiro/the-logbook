@@ -150,6 +150,17 @@ Each report stores:
 | `POST` | `/api/v1/compliance/reports/generate` | `training.manage` | Generate report (body: `type`, `send_email`, `additional_recipients`) |
 | `GET` | `/api/v1/compliance/reports` | `training.manage` | List stored reports (filter: `type`, `year`; pagination: `limit`, `offset`) |
 
+> **Permissions tightened 2026-08-13.** Report **generation** accepts
+> `training.manage` only — `reports.manage` was removed, because generating a
+> report returns full member-level compliance data while `reports.manage` only
+> manages saved report definitions. Config and report **reads** dropped
+> `compliance.view`: config reads accept `training.manage` / `compliance.manage`
+> and the stored-report list accepts `training.manage` / `reports.view`, so
+> organization-level configuration and member summaries are no longer exposed to
+> baseline members holding only `compliance.view`. Elected officers who
+> previously used these actions through `reports.manage` or `compliance.view`
+> need one of the accepted permissions granted explicitly.
+
 ---
 
 ## Data Models
@@ -237,7 +248,11 @@ The `ComplianceRequirementsConfigPage` provides:
 - Stored report history
 
 The per-requirement override (`inherit` / `include` / `exclude`) is set in the
-`RequirementModal` on the `TrainingRequirementsPage`.
+shared `components/training/RequirementModal` — reachable from the Training
+Admin requirements page and, since 2026-08-08, from the **Requirements tab on
+`/training/programs`** as well (each requirement card there has an Edit
+button; registry-imported requirements stay read-only because the backend
+refuses to update them).
 
 Linked from the compliance officer dashboard navigation.
 

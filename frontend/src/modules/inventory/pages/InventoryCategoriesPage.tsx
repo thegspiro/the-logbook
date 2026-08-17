@@ -25,6 +25,7 @@ const ITEM_TYPE_COLORS: Record<string, string> = {
   vehicle: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
   electronics: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30',
   consumable: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30',
+  medical: 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30',
   other: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border',
 };
 

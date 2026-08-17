@@ -208,7 +208,7 @@ const InventoryMembersPage: React.FC = () => {
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
-        title="Back to Inventory Admin"
+        title="Back to Gear Admin"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Admin
       </Link>

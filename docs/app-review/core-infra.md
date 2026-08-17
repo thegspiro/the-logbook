@@ -63,7 +63,7 @@ Re-verified this hardened foundation against the infra lenses. **All clean, no
 code change:**
 
 - **Middleware** — all five classes are pure ASGI (`__call__(scope, receive,
-  send)`); `BaseHTTPMiddleware` is not imported (Pitfall #4); wrapped `receive`
+send)`); `BaseHTTPMiddleware` is not imported (Pitfall #4); wrapped `receive`
   callables (`limited_receive`, `_replay_receive`) are `async`; header extension on
   `http.response.start` preserves `Set-Cookie`.
 - **Bounded caches (Pitfall #9)** — `RateLimiter` (`_MAX_KEYS` + eviction),
@@ -79,13 +79,21 @@ code change:**
   `Settings.__repr__`; DB password scrubbed from connect-error logs;
   `safe_error_detail` blocks SQL/paths/tracebacks/mem-addrs and caps length.
 
-### Flagged (LOW, defense-in-depth) — CI-11
+### Flagged (LOW, defense-in-depth) — CI-11 — ✅ FIXED 2026-08-17
+
+**Resolved.** `check_rate_limit` now passes `raise_on_error=True`, which is what makes
+the in-memory fallback below reachable; the helper's error path was already
+distinguishable from "not limited" via that flag, so honoring the comment's
+intent needed no new behavior in `is_rate_limited` itself — only the caller
+opting into it, exactly as `public_rate_limit` already did. Covered by
+`test_auth_limiter_falls_back_when_redis_command_fails`, confirmed to fail
+without the fix. Original finding follows.
 
 The auth rate-limit's "fall back to in-memory on Redis error" path
 (`check_rate_limit` → `redis_rate_limited(fail_closed=False)`) is effectively
 **unreachable**: the redis helper catches its own exceptions and returns `False`
 (not-limited) rather than raising, so the outer `except → in-memory` fallback never
-runs. Net effect: in the narrow window where Redis is *connected* but a command
+runs. Net effect: in the narrow window where Redis is _connected_ but a command
 transiently errors, that one auth request is limited by neither backend (fail-open).
 A full Redis outage is unaffected (in-memory applies). Not attacker-triggerable and
 one of several brute-force controls, so **flagged, not fixed** — honoring the
@@ -118,6 +126,7 @@ ops/migration decisions stay flagged.
 The audit flagged (CI-5) that switching from Fernet (AES-128-CBC) to real AES-256
 would need re-encryption, and (CI-10 crypto#3) that the KDF used 100k PBKDF2
 iterations vs OWASP's ~600k. **Both are done:**
+
 - `core/security.py` now encrypts new values with **AES-256-GCM** (AEAD), tagged
   `$gcm2$`; legacy Fernet values remain readable, and `scripts/reencrypt_to_aesgcm.py`
   backfills existing rows (see `docs/AES256_GCM_BACKFILL_RUNBOOK.md`).
@@ -159,7 +168,7 @@ nothing used it.
 - MFA **recovery codes are 40-bit unsalted SHA-256** (well-mitigated: Fernet-encrypted
   at rest, single-use, lockout-throttled; migration-shaped).
 - **CI-4 full fail-closed decrypt** — the decrypt path still passes legacy plaintext
-  through on `InvalidToken`; a full fail-closed switch is now *enabled* by the
+  through on `InvalidToken`; a full fail-closed switch is now _enabled_ by the
   AES-256-GCM backfill script but remains a per-deployment completeness decision
   (must confirm no legacy rows remain first).
 
@@ -185,9 +194,9 @@ nothing used it.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (cache) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ cache-related tests **8 passed**; no test referenced the removed `clear_pattern`. |
+| Check            | Result                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `flake8` (cache) | ✅ 0 violations                                                                      |
+| `black --check`  | ✅ unchanged                                                                         |
+| `tsc --noEmit`   | ✅ n/a — no frontend change                                                          |
+| backend tests    | ✅ cache-related tests **8 passed**; no test referenced the removed `clear_pattern`. |

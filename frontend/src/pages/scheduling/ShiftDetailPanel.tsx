@@ -830,8 +830,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     }
   }, [positionOptions, assignForm.position, openPositions]);
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+  const inputCls = 'form-input px-3 text-sm focus:ring-violet-500';
 
   const renderAssignmentRow = (assignment: Assignment) => {
     const isCurrentUser = assignment.user_id === user?.id;
@@ -950,12 +949,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} aria-hidden="true" />
+      <div className="modal-overlay z-40" onClick={onClose} aria-hidden="true" />
 
       {/* Panel — uses drawer-panel CSS class for mobile-responsive width */}
       <div className="drawer-panel overflow-y-auto overscroll-contain">
         {/* Header */}
-        <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b p-4 sm:p-6">
+        <div className="modal-header-sticky p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 pr-2">
               <h2 className="text-theme-text-primary text-lg font-bold sm:text-xl">Shift Details</h2>
@@ -1083,7 +1082,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 (c) => c.checkTiming === 'start_of_shift' && !c.isCompleted
               ).length;
               return (
-                <div className="bg-theme-surface border-theme-surface-border flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2 text-xs">
+                <div className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-xs">
                   <span className="text-theme-text-secondary font-semibold">Readiness</span>
                   {/* Two counts with different denominators — "0/2 present" beside
                       "2/3 staffed" — read as though the screen contradicted
@@ -1336,7 +1335,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                                   [a.user_id]: e.target.value,
                                 }))
                               }
-                              className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-20 rounded-md border px-2 py-1 text-right text-sm"
+                              className="form-input w-20 px-2 py-1 text-right text-sm"
                             />
                           </div>
                         ))}
@@ -1347,7 +1346,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
                 {/* Call count */}
                 {shift.call_count !== undefined && shift.call_count !== null && (
-                  <div className="bg-theme-surface border-theme-surface-border flex items-center gap-2 rounded-md border p-2">
+                  <div className="card flex items-center gap-2 p-2">
                     <FileText className="text-theme-text-muted h-4 w-4 shrink-0" />
                     <span className="text-theme-text-secondary">
                       {shift.call_count} call{shift.call_count !== 1 ? 's' : ''} recorded

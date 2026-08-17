@@ -16,6 +16,10 @@ export { default as api } from './apiClient';
 // Auth
 export { authService } from './authService';
 
+// Medical screening (self-service compliance only)
+export { medicalScreeningService } from './medicalScreeningServices';
+export type { MyComplianceSummary } from './medicalScreeningServices';
+
 // Users, Organization, Roles
 export { userService, organizationService, roleService } from './userServices';
 export type {

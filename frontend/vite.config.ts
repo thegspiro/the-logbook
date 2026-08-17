@@ -215,6 +215,15 @@ export default defineConfig({
         target: process.env.VITE_BACKEND_URL || 'http://localhost:3001',
         changeOrigin: true,
       },
+      // The onboarding service gate polls the backend's root /health endpoint
+      // (see modules/onboarding/services/api-client.ts checkHealth). Without
+      // this entry the dev server answers with index.html, the JSON parse
+      // fails, and the gate reports "Unable to connect to backend" forever —
+      // a fresh install can never get past the waiting screen in dev.
+      '/health': {
+        target: process.env.VITE_BACKEND_URL || 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
   build: {

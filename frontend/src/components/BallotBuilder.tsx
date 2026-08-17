@@ -839,7 +839,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
 
               {/* Template popover dropdown — opens upward so it doesn't clip */}
               {showTemplatePopover && (
-                <div className="bg-theme-surface-modal border-theme-surface-border absolute right-0 bottom-full z-30 mb-2 max-h-[70dvh] w-[28rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border p-4 shadow-lg">
+                <div className="popover-panel absolute right-0 bottom-full z-30 mb-2 max-h-[70dvh] w-[28rem] max-w-[calc(100vw-2rem)] overflow-y-auto p-4">
                   {!selectedTemplate ? (
                     <>
                       <h4 className="text-theme-text-primary mb-3 text-sm font-semibold">Select a Template</h4>
@@ -850,10 +850,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                           </p>
                           <div className="space-y-2">
                             {savedTemplates.map((template) => (
-                              <div
-                                key={template.id}
-                                className="bg-theme-surface-secondary border-theme-surface-border flex items-center gap-2 rounded-lg border p-3"
-                              >
+                              <div key={template.id} className="card-secondary flex items-center gap-2 p-3">
                                 <button
                                   type="button"
                                   onClick={() => setPendingSavedTemplateId(template.id)}
@@ -927,7 +924,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                               key={template.id}
                               type="button"
                               onClick={() => handleSelectTemplate(template)}
-                              className="bg-theme-surface-secondary border-theme-surface-border hover:border-theme-text-muted hover:bg-theme-surface-hover rounded-lg border p-3 text-left transition-all"
+                              className="card-secondary hover:border-theme-text-muted hover:bg-theme-surface-hover p-3 text-left transition-all"
                             >
                               <div className="mb-1 flex items-center gap-2">
                                 <span
@@ -1063,7 +1060,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
       </div>
 
       {showSaveTemplate && !isLocked && (
-        <div className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end">
+        <div className="card-secondary mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
           <div className="flex-1">
             <label className={labelClass} htmlFor="saved-ballot-template-name">
               Template name
