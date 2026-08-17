@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { isAppError, toAppError, getErrorMessage, isNetworkError } from './errorHandling';
+import { isAppError, toAppError, getErrorMessage, isNetworkError, isNonRetryableHttpError } from './errorHandling';
 import type { AppError } from './errorHandling';
 
 describe('errorHandling', () => {
@@ -435,6 +435,23 @@ describe('errorHandling', () => {
     it('treats a 4xx as a rejection even when it also carries a request object', () => {
       setOnline(true);
       expect(isNetworkError({ request: {}, response: { status: 400, data: {} } })).toBe(false);
+    });
+  });
+
+  describe('isNonRetryableHttpError', () => {
+    it('identifies explicit permanent client rejections', () => {
+      expect(isNonRetryableHttpError({ response: { status: 400 } })).toBe(true);
+      expect(isNonRetryableHttpError({ response: { status: 403 } })).toBe(true);
+      expect(isNonRetryableHttpError({ response: { status: 422 } })).toBe(true);
+    });
+
+    it('retains transient failures for later retry', () => {
+      expect(isNonRetryableHttpError({ code: 'ETIMEDOUT' })).toBe(false);
+      expect(isNonRetryableHttpError({ response: { status: 500 } })).toBe(false);
+      expect(isNonRetryableHttpError({ response: { status: 503 } })).toBe(false);
+      expect(isNonRetryableHttpError({ response: { status: 408 } })).toBe(false);
+      expect(isNonRetryableHttpError({ response: { status: 425 } })).toBe(false);
+      expect(isNonRetryableHttpError({ response: { status: 429 } })).toBe(false);
     });
   });
 });
