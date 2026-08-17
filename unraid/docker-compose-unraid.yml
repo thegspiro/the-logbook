@@ -165,6 +165,17 @@ services:
       # production posture resolves to Secure=true — mirrored here because an
       # empty value is not a valid boolean for the backend.
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Transport TLS to data services. The bundled db/redis containers speak
+      # PLAINTEXT on the compose-internal network and do not terminate TLS.
+      # The backend defaults SECURITY_REQUIRE_TLS to true in production and
+      # REFUSES TO START without DB_SSL/REDIS_SSL — this explicit false keeps
+      # the bundled Unraid stack bootable as an accepted risk (traffic never
+      # leaves the internal Docker network). If you point the app at external
+      # TLS-terminating MySQL/Redis, set DB_SSL/REDIS_SSL (+ CA certs) and
+      # flip this to true to keep them configured.
+      SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-false}
+      DB_SSL: ${DB_SSL:-false}
+      REDIS_SSL: ${REDIS_SSL:-false}
 
       # File Storage
       STORAGE_TYPE: ${STORAGE_TYPE:-local}

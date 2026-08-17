@@ -150,7 +150,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const themeLabel =
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
-  // Determine if user has any admin permission (to show/hide Administration section).
+  // Determine if user has any admin permission (to show/hide the
+  // Administration section). The shared helper's list mirrors the
+  // section items' gates — extend it there, never inline, so Side/Top
+  // navigation cannot drift apart.
   const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
 
   const navItems: NavItem[] = [

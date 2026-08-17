@@ -15,6 +15,8 @@ vi.mock('../services/api', () => ({
     updateUserProfile: vi.fn(),
     getNotificationPreferences: vi.fn(),
     updateNotificationPreferences: vi.fn().mockResolvedValue(undefined),
+    getMyConsents: vi.fn(),
+    setMyConsent: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -93,12 +95,14 @@ describe('UserSettingsPage', () => {
     vi.clearAllMocks();
     vi.mocked(userService.getUserWithRoles).mockResolvedValue(defaultProfile as never);
     vi.mocked(userService.getNotificationPreferences).mockResolvedValue({
-      email: true,
       email_notifications: true,
       sms_notifications: true,
       event_reminders: true,
       training_reminders: true,
     });
+    vi.mocked(userService.getMyConsents).mockResolvedValue([
+      { consent_type: 'sms_notifications', granted: true, updated_at: null },
+    ]);
   });
 
   it('should render the page title', () => {
@@ -124,7 +128,7 @@ describe('UserSettingsPage', () => {
   });
 
   describe('Notifications Tab', () => {
-    it('saves the SMS-notifications toggle for urgent messages', async () => {
+    it('turning off urgent texts withdraws the SMS consent and the preference together', async () => {
       const user = userEvent.setup();
       renderWithRouter(<UserSettingsPage />);
 
@@ -133,17 +137,87 @@ describe('UserSettingsPage', () => {
       const smsToggle = await screen.findByRole('switch', {
         name: /urgent text messages/i,
       });
-      // Loaded as opted-in; turn it off.
-      expect(smsToggle).toHaveAttribute('aria-checked', 'true');
+      // Consent granted and preference on, so the add-on reads as on.
+      await waitFor(() => expect(smsToggle).toHaveAttribute('aria-checked', 'true'));
       await user.click(smsToggle);
-      await user.click(screen.getByRole('button', { name: /save preferences/i }));
 
-      await waitFor(() =>
-        expect(userService.updateNotificationPreferences).toHaveBeenCalledWith(
-          'user-123',
-          expect.objectContaining({ sms_notifications: false })
-        )
-      );
+      // Saved on the switch, not deferred to the Save Preferences button —
+      // and carrying only the key this switch owns, so it cannot commit
+      // unsaved edits sitting in the toggles above it.
+      await waitFor(() => expect(userService.setMyConsent).toHaveBeenCalledWith('sms_notifications', false));
+      expect(userService.updateNotificationPreferences).toHaveBeenCalledWith('user-123', {
+        sms_notifications: false,
+      });
+    });
+
+    it('grants consent last when enabling, so a half-failed save leaves texts off', async () => {
+      // Two requests, no transaction across them. Consent is the gate that
+      // opens (the preference defaults to on when unset), so writing it first
+      // would let texts start sending to a member the UI just told the save
+      // had failed.
+      vi.mocked(userService.getMyConsents).mockResolvedValue([
+        { consent_type: 'sms_notifications', granted: null, updated_at: null },
+      ]);
+      const order: string[] = [];
+      vi.mocked(userService.updateNotificationPreferences).mockImplementation(() => {
+        order.push('preference');
+        return Promise.resolve();
+      });
+      vi.mocked(userService.setMyConsent).mockImplementation(() => {
+        order.push('consent');
+        return Promise.resolve();
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+      await user.click(screen.getByText('Notifications'));
+      await user.click(await screen.findByRole('switch', { name: /urgent text messages/i }));
+
+      await waitFor(() => expect(order).toEqual(['preference', 'consent']));
+    });
+
+    it('withdraws consent first when disabling, for the same reason', async () => {
+      const order: string[] = [];
+      vi.mocked(userService.updateNotificationPreferences).mockImplementation(() => {
+        order.push('preference');
+        return Promise.resolve();
+      });
+      vi.mocked(userService.setMyConsent).mockImplementation(() => {
+        order.push('consent');
+        return Promise.resolve();
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+      await user.click(screen.getByText('Notifications'));
+      const smsToggle = await screen.findByRole('switch', { name: /urgent text messages/i });
+      await waitFor(() => expect(smsToggle).toHaveAttribute('aria-checked', 'true'));
+      await user.click(smsToggle);
+
+      // Revoking consent closes the gate; if the preference write then fails,
+      // texts have already stopped.
+      await waitFor(() => expect(order).toEqual(['consent', 'preference']));
+    });
+
+    it('reads as off until the member grants SMS consent, whatever the stored preference says', async () => {
+      // The consent is the gate the backend actually enforces. A preference of
+      // true with no consent on record sends nothing, so the switch must not
+      // show the member as opted in.
+      vi.mocked(userService.getMyConsents).mockResolvedValue([
+        { consent_type: 'sms_notifications', granted: null, updated_at: null },
+      ]);
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.click(screen.getByText('Notifications'));
+
+      const smsToggle = await screen.findByRole('switch', {
+        name: /urgent text messages/i,
+      });
+      expect(smsToggle).toHaveAttribute('aria-checked', 'false');
+
+      await user.click(smsToggle);
+      await waitFor(() => expect(userService.setMyConsent).toHaveBeenCalledWith('sms_notifications', true));
     });
   });
 

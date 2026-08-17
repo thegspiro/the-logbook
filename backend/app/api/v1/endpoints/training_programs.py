@@ -105,6 +105,15 @@ def _member_progress(progress) -> RequirementProgressResponse:
     visible_ids = {
         item.id for item in (visible_requirement.checklist_items or []) if item.id
     }
+    # Claims are shown only for steps the member can still self-report. After
+    # an officer disables member_can_complete on a claimed step, echoing the
+    # stale claim back would keep the member's UI showing (and resubmitting)
+    # a self-report the service no longer accepts.
+    claimable_ids = {
+        item.id
+        for item in (visible_requirement.checklist_items or [])
+        if item.id and item.member_can_complete
+    }
     notes = dict(response.progress_notes or {})
     if isinstance(notes.get("checklist_done"), list):
         notes["checklist_done"] = [
@@ -116,7 +125,7 @@ def _member_progress(progress) -> RequirementProgressResponse:
         notes["checklist_claimed"] = [
             item_id
             for item_id in notes["checklist_claimed"]
-            if str(item_id) in visible_ids
+            if str(item_id) in claimable_ids
         ]
     return response.model_copy(
         update={"requirement": visible_requirement, "progress_notes": notes or None}

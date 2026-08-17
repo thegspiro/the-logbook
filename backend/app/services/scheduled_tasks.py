@@ -99,6 +99,10 @@ from loguru import logger
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.event import (
+    EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
+    default_reminder_target,
+)
 from app.models.inventory import MEDICAL_ITEM_TYPES
 from app.models.user import Organization, User
 from app.services.email_service import _redact_email
@@ -106,8 +110,8 @@ from app.services.email_service import _redact_email
 
 def _resolve_event_reminder_target(event: Any) -> str:
     """Return the stored audience, retaining legacy mandatory-event behavior."""
-    return getattr(event, "reminder_target", None) or (
-        "all" if event.is_mandatory else "going"
+    return getattr(event, "reminder_target", None) or default_reminder_target(
+        event.is_mandatory
     )
 
 
@@ -570,7 +574,14 @@ async def resolve_check_templates(
 
 
 async def run_cert_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
-    """Run certification expiration alerts for all organizations."""
+    """Run certification expiration alerts for all organizations.
+
+    The org's TRAINING_EXPIRY notification rule gates these, but the check
+    lives inside ``CertAlertService.process_alerts`` rather than here: two
+    other entry points reach that method directly (the per-org and all-orgs
+    training endpoints), and a gate on this task alone would leave the trigger
+    reported as enforced while those routes still sent the alerts.
+    """
     from app.services.cert_alert_service import CertAlertService
 
     async def _process(db_session, org):
@@ -859,10 +870,19 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.core.config import settings
     from app.core.utils import generate_uuid
     from app.models.event import Event, RSVPStatus
-    from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.notification import (
+        NotificationChannel,
+        NotificationLog,
+        NotificationTrigger,
+    )
     from app.models.user import User
     from app.services.email_service import EmailService
+    from app.services.notification_rules import (
+        NotificationRuleResolver,
+        reminder_schedule_from,
+    )
 
+    rule_resolver = NotificationRuleResolver(db)
     now = datetime.now(dt_timezone.utc)
     orgs = await db.execute(
         select(Organization).where(Organization.active.isnot(False))
@@ -878,6 +898,16 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         org_emails = 0
 
         try:
+            # The org's EVENT_REMINDER rule, if it made one. Absent means on,
+            # so an org that never opened the notifications screen keeps the
+            # reminders it has always had.
+            rule = await rule_resolver.resolve(
+                org.id, NotificationTrigger.EVENT_REMINDER
+            )
+            if not rule.enabled:
+                continue
+            fallback_schedule = reminder_schedule_from(rule.config)
+
             # Load org event settings to get default_reminder_time
             org_settings = (org.settings or {}).get("events", {}).get("defaults", {})
             default_reminder_time_str = org_settings.get(
@@ -914,7 +944,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
             events = list(events_result.scalars().all())
 
             for event in events:
-                schedule = event.reminder_schedule or [24]
+                # An event's own schedule always wins; the rule only supplies
+                # the fallback for events that carry none.
+                schedule = event.reminder_schedule or fallback_schedule
                 custom = event.custom_fields or {}
                 already_sent = set(custom.get("reminders_sent", []))
 
@@ -1166,7 +1198,13 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
             for event in events:
                 custom = event.custom_fields or {}
-                if custom.get("validation_notification_sent"):
+                # attendance_finalized is stamped by the finalize flow itself
+                # (end_event / record_actual_times / manual finalize), so an
+                # event finalized before this task ever ran must not get a
+                # stale "validate attendance" prompt.
+                if custom.get("validation_notification_sent") or custom.get(
+                    "attendance_finalized"
+                ):
                     continue
 
                 # Find the event creator
@@ -1364,6 +1402,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 .where(Shift.end_time <= now)
                 .where(Shift.end_time >= lookback)
                 .where(Shift.shift_officer_id.isnot(None))
+                # A shift finalized after it ended but before this task runs
+                # has already been validated — never prompt for it.
+                .where(Shift.is_finalized.is_(False))
             )
             shifts = list(shifts_result.scalars().all())
 
@@ -3596,44 +3637,16 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             if success_count > 0:
                 alerts_sent += 1
 
-        # SMS carries only a count, so it needs no domain split — but it must
-        # still reach only people with some stock duty.
-        admins = await _stock_alert_recipients(
-            db_session, str(org.id), MEDICAL_STOCK_PERMISSIONS
-        )
-
-        try:
-            from app.services.sms_service import SMSService
-
-            sms_svc = SMSService()
-            if sms_svc.enabled:
-                # TCPA: text messaging needs express consent. The email above
-                # is unconditional, so an admin without SMS consent still gets
-                # this alert — only the text is suppressed.
-                from app.models.consent import ConsentType
-                from app.services.consent_service import ConsentService
-
-                consented = await ConsentService(db_session).granted_user_ids(
-                    [str(a.id) for a in admins], ConsentType.SMS_NOTIFICATIONS
-                )
-                admin_phones = [
-                    a.phone
-                    for a in admins
-                    if getattr(a, "phone", None) and str(a.id) in consented
-                ]
-                if admin_phones:
-                    sms_body = (
-                        f"Low Stock Alert: {len(low_stock)} inventory item(s) "
-                        f"below reorder point. Check the inventory dashboard."
-                    )
-                    sms_sent = await sms_svc.send_bulk_sms(admin_phones, sms_body)
-                    logger.info(
-                        f"Low stock SMS sent to {sms_sent}/"
-                        f"{len(admin_phones)} admins for org {org.id}"
-                    )
-        except Exception as sms_err:
-            logger.warning(f"SMS low stock alerts failed for org {org.id}: {sms_err}")
-
+        # Email only, deliberately. Reordering is a purchasing decision a
+        # quartermaster makes during business hours against the itemised,
+        # audience-scoped table above — a text can carry neither the item list
+        # nor the quantities, so it adds nothing but an out-of-hours
+        # interruption and a per-message charge. It also sidestepped the
+        # gear/medical split this task now makes for the emails: a count is
+        # less than a table, but "23 medical items are low" is still a
+        # disclosure to an officer with no medical stock duty. See
+        # app/services/notification_channels for the policy and the list of
+        # alerts that do warrant a text.
         return alerts_sent
 
     return await _for_each_org(db, "inventory_low_stock_alerts", process)
@@ -4488,11 +4501,7 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
 
             custom_fields = copy.deepcopy(parent.custom_fields)
             if custom_fields:
-                for lifecycle_key in (
-                    "reminders_sent",
-                    "validation_notification_sent",
-                    "series_end_reminder_sent",
-                ):
+                for lifecycle_key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS:
                     custom_fields.pop(lifecycle_key, None)
                 child_fields["custom_fields"] = custom_fields
 

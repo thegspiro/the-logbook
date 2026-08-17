@@ -85,7 +85,6 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
-from app.services.notifications_service import NotificationsService
 from app.services.scheduling_service import SchedulingService
 from app.services.shift_eligibility_service import ShiftEligibilityService
 
@@ -598,12 +597,8 @@ async def finalize_shift(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-    await NotificationsService(db).archive_related_notifications(
-        current_user.organization_id,
-        "shift_validation",
-        "shift_id",
-        shift_id,
-    )
+    # SchedulingService.finalize_shift archives the related shift-validation
+    # prompt itself, so every finalize path clears it — not just this endpoint.
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
 

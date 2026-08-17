@@ -341,6 +341,15 @@ This is a deliberate design decision for data integrity and HIPAA compliance —
   You get a "Queued for sync" toast, and the app sends them automatically when
   the device is back online — see the walkthrough in
   [Realistic Example: Mobile Workflow](#realistic-example-mobile-workflow--event-check-in-equipment-scan--offline-queue).
+- **Only genuine connection failures queue** _(2026-08-16)_. If the server
+  actually **rejects** an equipment check — validation failure, revoked
+  permission, shift already checked — you now see the real error instead of a
+  false "queued for sync". Previously a rejected check was reported as queued,
+  the draft was deleted, and the queue re-sent the same doomed submission on
+  every reconnect forever (the pending pill never cleared). A queued check that
+  keeps failing is now abandoned after a retry limit **and the app tells you it
+  was lost**, including photos that failed to upload, rather than dropping it
+  silently.
 
 > **Hint:** If you are attending an event at a location with poor cell coverage, check in or RSVP before you arrive while you still have signal. QR code check-in also works — the scan happens on the device and the check-in is submitted when the device has connectivity.
 
