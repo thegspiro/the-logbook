@@ -107,7 +107,7 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
         className={`relative cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-          isDragging ? 'border-red-500 bg-red-500/5' : 'border-theme-surface-border hover:border-theme-text-muted'
+          isDragging ? 'drop-surface-active' : 'border-theme-surface-border hover:border-theme-text-muted'
         }`}
         role="button"
         tabIndex={0}

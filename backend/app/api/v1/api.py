@@ -38,6 +38,7 @@ from app.api.v1.endpoints import (
     labels,
     locations,
     medical_screening,
+    medical_supplies,
     meetings,
     member_leaves,
     member_status,
@@ -111,6 +112,11 @@ api_router.include_router(
 )
 api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(
+    medical_supplies.router,
+    prefix="/medical-supplies",
+    tags=["medical-supplies"],
+)
 api_router.include_router(storefront.router, prefix="/store", tags=["storefront"])
 api_router.include_router(labels.router, tags=["labels"])
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
@@ -246,6 +252,7 @@ async def api_root():
             "training_external": "/api/v1/training/external",
             "elections": "/api/v1/elections",
             "inventory": "/api/v1/inventory",
+            "medical_supplies": "/api/v1/medical-supplies",
             "apparatus": "/api/v1/apparatus",
             "facilities": "/api/v1/facilities",
             "security": "/api/v1/security",

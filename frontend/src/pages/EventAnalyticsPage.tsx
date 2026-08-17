@@ -297,7 +297,7 @@ export const EventAnalyticsPage: React.FC = () => {
 
         {/* Avg check-in lead time */}
         {data.avgCheckinMinutesBefore != null && (
-          <div className="bg-theme-surface border-theme-surface-border mb-8 flex items-center gap-3 rounded-lg border p-4">
+          <div className="card mb-8 flex items-center gap-3 p-4">
             <Clock className="text-theme-text-muted h-5 w-5" />
             <span className="text-theme-text-secondary text-sm">
               Members check in on average{' '}
@@ -312,7 +312,7 @@ export const EventAnalyticsPage: React.FC = () => {
         {/* Charts Row */}
         <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Event Type Distribution (#46) */}
-          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-5">
+          <div className="card p-5">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Event Type Distribution</h2>
             {data.eventTypeDistribution.length === 0 ? (
               <p className="text-theme-text-muted text-sm">No event data available.</p>
@@ -339,7 +339,7 @@ export const EventAnalyticsPage: React.FC = () => {
           </div>
 
           {/* Monthly Trend (#44) */}
-          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-5">
+          <div className="card p-5">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Monthly Event Trend</h2>
             {data.monthlyEventCounts.length === 0 ? (
               <p className="text-theme-text-muted text-sm">No event data available.</p>
@@ -369,7 +369,7 @@ export const EventAnalyticsPage: React.FC = () => {
         </div>
 
         {/* Top Events by Attendance (#47) */}
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-5">
+        <div className="card p-5">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Top Events by Attendance</h2>
           {data.topEvents.length === 0 ? (
             <p className="text-theme-text-muted text-sm">No attendance data available.</p>
@@ -449,7 +449,7 @@ interface SummaryCardProps {
 }
 
 const SummaryCard: React.FC<SummaryCardProps> = ({ icon, label, value }) => (
-  <div className="bg-theme-surface border-theme-surface-border flex items-center gap-4 rounded-lg border p-4">
+  <div className="card flex items-center gap-4 p-4">
     <div className="bg-theme-surface-hover rounded-lg p-2">{icon}</div>
     <div>
       <p className="text-theme-text-secondary text-sm">{label}</p>

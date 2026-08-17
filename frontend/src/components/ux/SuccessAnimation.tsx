@@ -42,7 +42,7 @@ export const SuccessAnimation: React.FC<SuccessAnimationProps> = ({
       role="status"
       aria-live="polite"
     >
-      <div className="bg-theme-surface-modal/95 border-theme-surface-border animate-success-pop rounded-2xl border p-8 shadow-2xl backdrop-blur-xs">
+      <div className="bg-theme-surface-modal/95 border-theme-surface-border animate-success-pop rounded-lg border p-8 shadow-2xl backdrop-blur-xs">
         {/* Animated checkmark circle */}
         <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
           <svg

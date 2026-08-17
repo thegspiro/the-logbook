@@ -28,8 +28,7 @@ interface MessageComposeFormProps {
 
 type TargetType = 'all' | 'roles' | 'statuses' | 'members';
 
-const inputClass =
-  'w-full rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+const inputClass = 'form-input px-3 text-sm';
 const labelClass = 'form-label';
 const checkboxClass = 'form-checkbox border-theme-surface-border';
 

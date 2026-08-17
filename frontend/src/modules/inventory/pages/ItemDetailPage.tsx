@@ -44,6 +44,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
+import { VendorName } from '../components/VendorName';
 import StockLotsPanel from '../components/StockLotsPanel';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
@@ -406,7 +407,9 @@ const ItemDetailPage: React.FC = () => {
             <Field label="Current Value" value={fmtCurrency(item.current_value)} />
             <Field label="Replacement Cost" value={fmtCurrency(item.replacement_cost)} />
             <Field label="Purchase Date" value={formatDate(item.purchase_date, tz)} />
-            <Field label="Vendor" value={item.vendor || '--'} />
+            {/* The tracked vendor is the answer when the item has one; a name
+                that is only free text is muted, the same as in the reorder queue. */}
+            <Field label="Vendor" value={<VendorName record={item} fallback="--" />} />
             <Field label="Warranty Exp." value={formatDate(item.warranty_expiration, tz)} />
           </Card>
         )}
@@ -592,10 +595,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ events, tz }) => {
   return (
     <ul className="space-y-3">
       {events.map((evt) => (
-        <li
-          key={evt.id}
-          className="bg-theme-surface border-theme-surface-border flex items-start gap-3 rounded-lg border p-3"
-        >
+        <li key={evt.id} className="card flex items-start gap-3 p-3">
           <span className="mt-0.5">
             {HISTORY_ICONS[evt.type] ?? <Clock className="text-theme-text-muted h-4 w-4" />}
           </span>

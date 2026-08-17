@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { schedulingService, type PlatoonOverview } from '../../modules/scheduling/services/api';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { useRanks } from '../../hooks/useRanks';
 import SchedulingHeader from './SchedulingHeader';
 
 // Standard platoon labels offered in the assign dropdown, merged with any
@@ -21,6 +22,7 @@ const STANDARD_PLATOONS = ['A', 'B', 'C', 'D'];
 
 const SchedulingPlatoonsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { formatRank } = useRanks();
   const [overview, setOverview] = useState<PlatoonOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -107,7 +109,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
             )}
 
             {/* Bulk-assign toolbar */}
-            <div className="bg-theme-surface border-theme-surface-border mb-6 flex flex-wrap items-center gap-3 rounded-lg border p-4">
+            <div className="card mb-6 flex flex-wrap items-center gap-3 p-4">
               <span className="text-theme-text-secondary text-sm">{selected.size} selected</span>
               <select
                 value={target}
@@ -142,10 +144,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
               {overview.groups.map((group) => {
                 const key = group.platoon ?? '__unassigned__';
                 return (
-                  <div
-                    key={key}
-                    className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border"
-                  >
+                  <div key={key} className="card overflow-hidden">
                     <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
                       <h2 className="text-theme-text-primary font-semibold">
                         {group.platoon ? `Platoon ${group.platoon}` : 'Unassigned'}
@@ -168,7 +167,9 @@ const SchedulingPlatoonsPage: React.FC = () => {
                                 className="form-checkbox border-theme-surface-border"
                               />
                               <span className="text-theme-text-primary text-sm">{m.user_name}</span>
-                              {m.rank && <span className="text-theme-text-muted ml-auto text-xs">{m.rank}</span>}
+                              {m.rank && (
+                                <span className="text-theme-text-muted ml-auto text-xs">{formatRank(m.rank)}</span>
+                              )}
                             </label>
                           </li>
                         ))}

@@ -199,7 +199,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
   return (
     <div>
       {submittedWithinHours && (
-        <div className="border-theme-surface-border bg-theme-surface-secondary mb-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
+        <div className="card-secondary mb-3 flex items-center justify-between gap-3 px-3 py-2 text-sm">
           <span className="text-theme-text-secondary">
             Showing orders submitted in the last {submittedWithinHours} hours
           </span>
@@ -216,7 +216,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
         </div>
       )}
       {openOnly && (
-        <div className="border-theme-surface-border bg-theme-surface-secondary mb-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
+        <div className="card-secondary mb-3 flex items-center justify-between gap-3 px-3 py-2 text-sm">
           <span className="text-theme-text-secondary">Showing open orders only</span>
           <button
             type="button"

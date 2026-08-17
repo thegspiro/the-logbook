@@ -228,7 +228,34 @@ class TrainingSubmissionService:
         query = query.limit(limit).offset(offset)
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        submissions = list(result.scalars().all())
+        await self._attach_submitter_names(submissions)
+        return submissions
+
+    async def _attach_submitter_names(
+        self, submissions: List[TrainingSubmission]
+    ) -> None:
+        """Resolve submitter display names for the review queue.
+
+        The model has no relationship to User, so the response carried only
+        the raw submitted_by id — which is what the Review Submissions queue
+        then printed where a reviewer expects a name. Attached as a transient
+        attribute the response schema declares, resolved in one query.
+        """
+        user_ids = {str(s.submitted_by) for s in submissions if s.submitted_by}
+        if not user_ids:
+            return
+        result = await self.db.execute(
+            select(User.id, User.first_name, User.last_name).where(
+                User.id.in_(user_ids)
+            )
+        )
+        names = {
+            str(row.id): f"{row.first_name or ''} {row.last_name or ''}".strip()
+            for row in result.all()
+        }
+        for submission in submissions:
+            submission.submitter_name = names.get(str(submission.submitted_by))
 
     async def update_submission(
         self,

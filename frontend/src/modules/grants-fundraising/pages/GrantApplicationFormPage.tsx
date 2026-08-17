@@ -261,7 +261,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         className="space-y-6"
       >
         {/* Program Information */}
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Program Information</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -367,7 +367,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         </div>
 
         {/* Funding Details */}
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Funding Details</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
@@ -434,7 +434,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         </div>
 
         {/* Dates */}
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Dates</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <div>
@@ -495,7 +495,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         </div>
 
         {/* Reporting */}
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Reporting</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -521,7 +521,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         </div>
 
         {/* Project Details */}
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Project Details</h2>
           <div className="space-y-4">
             <div>

@@ -54,7 +54,15 @@ import { useTimezone } from '../../hooks/useTimezone';
 /** The list endpoint's ceiling; asking for more is rejected outright. */
 const FLEET_PAGE_SIZE = 100;
 
-const ApparatusInventoryPage: React.FC = () => {
+interface ApparatusInventoryPageProps {
+  /**
+   * Pins the page to one apparatus and drops its own picker — the Inventory
+   * tab of the apparatus detail, which already names the rig in its header.
+   */
+  apparatusId?: string;
+}
+
+const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparatusId }) => {
   const navigate = useNavigate();
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
@@ -63,7 +71,8 @@ const ApparatusInventoryPage: React.FC = () => {
   // member would end every tap in a 403.
   const canManageStock = checkPermission('equipment_check.manage') || checkPermission('inventory.manage');
   const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('apparatus') ?? '';
+  const embedded = apparatusId !== undefined;
+  const selectedId = apparatusId ?? searchParams.get('apparatus') ?? '';
 
   const [fleet, setFleet] = useState<ApparatusListItem[]>([]);
   const [inventory, setInventory] = useState<ApparatusInventory | null>(null);
@@ -78,6 +87,9 @@ const ApparatusInventoryPage: React.FC = () => {
   const [lotsBusy, setLotsBusy] = useState(false);
 
   useEffect(() => {
+    // The fleet list exists only to fill the picker, and walking it costs one
+    // request per hundred apparatus. Embedded there is no picker, so skip it.
+    if (embedded) return;
     void (async () => {
       try {
         // The endpoint caps page_size at 100 and 422s above it, so a fleet
@@ -94,16 +106,18 @@ const ApparatusInventoryPage: React.FC = () => {
         toast.error(getErrorMessage(err, 'Failed to load apparatus'));
       }
     })();
-  }, []);
+  }, [embedded]);
 
-  const load = useCallback(async (apparatusId: string): Promise<boolean> => {
-    if (!apparatusId) {
+  // Named `targetId` rather than `apparatusId` so it cannot be confused with
+  // the prop of that name now that this page can be pinned to one rig.
+  const load = useCallback(async (targetId: string): Promise<boolean> => {
+    if (!targetId) {
       setInventory(null);
       return false;
     }
     setLoading(true);
     try {
-      setInventory(await schedulingService.getApparatusInventory(apparatusId));
+      setInventory(await schedulingService.getApparatusInventory(targetId));
       return true;
     } catch (err: unknown) {
       setInventory(null);
@@ -398,64 +412,79 @@ const ApparatusInventoryPage: React.FC = () => {
     );
   };
 
-  return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-2">
-          <button
-            type="button"
-            onClick={() => void navigate('/scheduling')}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover mt-0.5 shrink-0 rounded-lg p-1.5 transition-colors"
-            aria-label="Back to Scheduling"
-            title="Back to Scheduling"
-          >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <div>
-            <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-              <Truck className="h-6 w-6" aria-hidden="true" />
-              Apparatus Inventory
-            </h1>
-            <p className="text-theme-text-muted mt-1 text-sm">
-              Record what you used when you use it, and put fresh stock in the bracket. No check required.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => void confirmSaved()}
-          disabled={!selectedId || loading || saving || busyItemId !== null || lotsBusy}
-          aria-label="Save inventory"
-          className="btn-primary inline-flex shrink-0 items-center gap-2 self-end px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Save className="h-4 w-4" aria-hidden="true" />
-          )}
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
+  const saveButton = (
+    <button
+      type="button"
+      onClick={() => void confirmSaved()}
+      disabled={!selectedId || loading || saving || busyItemId !== null || lotsBusy}
+      aria-label="Save inventory"
+      className="btn-primary inline-flex shrink-0 items-center gap-2 self-end px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
+    >
+      {saving ? (
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      ) : (
+        <Save className="h-4 w-4" aria-hidden="true" />
+      )}
+      {saving ? 'Saving…' : 'Save'}
+    </button>
+  );
 
-      <div className="mb-4">
-        <label htmlFor="apparatus-select" className="text-theme-text-secondary mb-1 block text-xs">
-          Apparatus
-        </label>
-        <select
-          id="apparatus-select"
-          className="form-input sm:max-w-xs"
-          value={selectedId}
-          onChange={(e) => selectApparatus(e.target.value)}
-        >
-          <option value="">Select an apparatus…</option>
-          {fleet.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.unitNumber}
-              {a.name ? ` — ${a.name}` : ''}
-            </option>
-          ))}
-        </select>
-      </div>
+  return (
+    <div className={embedded ? '' : 'mx-auto max-w-4xl px-4 py-6'}>
+      {embedded ? (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-theme-text-muted text-sm">
+            Record what you used when you use it, and put fresh stock in the bracket. No check required.
+          </p>
+          {saveButton}
+        </div>
+      ) : (
+        <>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2">
+              <button
+                type="button"
+                onClick={() => void navigate('/scheduling')}
+                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover mt-0.5 shrink-0 rounded-lg p-1.5 transition-colors"
+                aria-label="Back to Scheduling"
+                title="Back to Scheduling"
+              >
+                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <div>
+                <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
+                  <Truck className="h-6 w-6" aria-hidden="true" />
+                  Apparatus Inventory
+                </h1>
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  Record what you used when you use it, and put fresh stock in the bracket. No check required.
+                </p>
+              </div>
+            </div>
+            {saveButton}
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="apparatus-select" className="text-theme-text-secondary mb-1 block text-xs">
+              Apparatus
+            </label>
+            <select
+              id="apparatus-select"
+              className="form-input sm:max-w-xs"
+              value={selectedId}
+              onChange={(e) => selectApparatus(e.target.value)}
+            >
+              <option value="">Select an apparatus…</option>
+              {fleet.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.unitNumber}
+                  {a.name ? ` — ${a.name}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
@@ -532,7 +561,7 @@ const ApparatusInventoryPage: React.FC = () => {
       />
 
       {lotsTarget && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+        <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
@@ -566,7 +595,7 @@ const ApparatusInventoryPage: React.FC = () => {
       )}
 
       {swapTarget && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+        <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
