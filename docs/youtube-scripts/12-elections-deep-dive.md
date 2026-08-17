@@ -212,6 +212,17 @@ eligible-voter-types selector and the attendance toggle.]**
 > them not accepted — they stay visible in your records but voters can't vote
 > for them."
 
+> "And 'your records' means exactly that: members only see pending
+> nominations while the nomination window is open, so nominees can respond.
+> Once it closes, the member-facing candidate list shows accepted candidates
+> only — you, with election-manage permission, always see the full list."
+
+**[EDITOR (2026-08-16): new 15-second beat — pending-nomination visibility
+is now phase-scoped (member list returns accepted-only outside the
+nominations phase). Re-time Chapter 5 onward by ~0:15. B-roll: capture the
+candidate list from a plain member account after closing nominations to show
+the pending entry absent.]**
+
 **[SCREEN: Attempt to delete a candidate who has votes — show the block]**
 
 > "Two guardrails: a candidate with recorded votes can't be deleted — that

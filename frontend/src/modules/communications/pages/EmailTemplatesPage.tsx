@@ -416,7 +416,7 @@ const EmailTemplatesPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             {/* Template list sidebar */}
             <div className="lg:col-span-3">
-              <div className="bg-theme-surface-modal border-theme-surface-border rounded-xl border p-4 lg:sticky lg:top-6">
+              <div className="card p-4 lg:sticky lg:top-6">
                 <TemplateList
                   templates={templates}
                   selectedId={selectedTemplate?.id ?? null}
@@ -428,7 +428,7 @@ const EmailTemplatesPage: React.FC = () => {
             {/* Main content area: editor / preview via tabs */}
             <div className="lg:col-span-9">
               {selectedTemplate ? (
-                <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
+                <div className="card">
                   {/* Template meta bar */}
                   <div className="border-theme-surface-border flex flex-col gap-3 border-b px-5 pt-5 pb-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-4">
@@ -612,7 +612,7 @@ const EmailTemplatesPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-12 text-center">
+                <div className="card p-12 text-center">
                   <Mail className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                   <h3 className="text-theme-text-primary mb-2 text-xl font-bold">Select a Template</h3>
                   <p className="text-theme-text-secondary">

@@ -75,7 +75,7 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
               type="email"
               value={editForm.email}
               onChange={(e) => onFormChange('email', e.target.value)}
-              className="form-input border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+              className="form-input px-3 text-sm"
             />
           </div>
           <div>
@@ -84,7 +84,7 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
               type="tel"
               value={editForm.phone}
               onChange={(e) => onFormChange('phone', e.target.value)}
-              className="form-input border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+              className="form-input px-3 text-sm"
             />
           </div>
           <div>
@@ -93,7 +93,7 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
               type="tel"
               value={editForm.mobile}
               onChange={(e) => onFormChange('mobile', e.target.value)}
-              className="form-input border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+              className="form-input px-3 text-sm"
             />
           </div>
 
@@ -136,7 +136,7 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
             <button
               onClick={onCancelEdit}
               disabled={saving}
-              className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex-1 rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
+              className="btn-secondary text-theme-text-secondary flex-1 text-sm font-medium"
             >
               Cancel
             </button>

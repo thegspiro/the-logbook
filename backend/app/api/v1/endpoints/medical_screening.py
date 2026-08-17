@@ -10,7 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -18,6 +18,7 @@ from app.models.user import User
 from app.schemas.medical_screening import (
     ComplianceSummary,
     ExpiringScreening,
+    MyComplianceSummary,
     ScreeningRecordCreate,
     ScreeningRecordResponse,
     ScreeningRecordUpdate,
@@ -334,6 +335,35 @@ async def delete_record(
 
 
 # --- Compliance ---
+
+
+# Registered before "/compliance/{user_id}" so "me" is matched as this route
+# and never captured as a user id by the admin route below it.
+@router.get(
+    "/compliance/me",
+    response_model=MyComplianceSummary,
+)
+async def get_my_compliance(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Compliance counts for the signed-in member.
+
+    Self-scoped by construction: the subject is taken from the authenticated
+    session and the route accepts no id, so there is nothing for a caller to
+    substitute. Reading anybody else's compliance still requires
+    ``medical_screening.view`` on the route below.
+
+    Returns counts only, never which screening or what it found — see
+    ``MyComplianceSummary`` for why the dashboard is not given the detail.
+
+    **Authentication required**
+    """
+    service = MedicalScreeningService(db)
+    return await service.get_my_compliance_summary(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+    )
 
 
 @router.get(

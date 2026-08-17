@@ -613,7 +613,7 @@ export const LoginPage: React.FC = () => {
                     type="button"
                     onClick={handleGoogleLogin}
                     disabled={isLoading}
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover focus:ring-theme-focus-ring inline-flex w-full justify-center rounded-md border px-4 py-2 text-sm font-medium shadow-xs focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+                    className="btn-secondary text-theme-text-muted inline-flex w-full justify-center text-sm font-medium shadow-xs focus:ring-offset-2 disabled:cursor-not-allowed"
                   >
                     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path
@@ -642,7 +642,7 @@ export const LoginPage: React.FC = () => {
                     type="button"
                     onClick={handleMicrosoftLogin}
                     disabled={isLoading}
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover focus:ring-theme-focus-ring inline-flex w-full justify-center rounded-md border px-4 py-2 text-sm font-medium shadow-xs focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+                    className="btn-secondary text-theme-text-muted inline-flex w-full justify-center text-sm font-medium shadow-xs focus:ring-offset-2 disabled:cursor-not-allowed"
                   >
                     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M11.4 24H0V12.6h11.4V24z" fill="#F1511B" />

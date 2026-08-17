@@ -99,7 +99,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
 
   if (value) {
     return (
-      <div className="border-theme-surface-border bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2">
+      <div className="card-secondary flex items-center gap-2 px-3 py-2">
         <Package className="text-theme-text-muted h-4 w-4 shrink-0" />
         <span className="text-theme-text-primary min-w-0 flex-1 truncate text-sm">{selectedName ?? 'Linked item'}</span>
         <button
@@ -120,7 +120,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
 
   return (
     <div className="relative" ref={containerRef}>
-      <div className="border-theme-surface-border bg-theme-surface focus-within:ring-theme-focus-ring flex items-center gap-2 rounded-md border px-3 py-2 focus-within:ring-2">
+      <div className="card focus-within:ring-theme-focus-ring flex items-center gap-2 px-3 py-2 focus-within:ring-2">
         <Search className="text-theme-text-muted h-4 w-4 shrink-0" />
         <input
           autoCapitalize="none"
@@ -136,7 +136,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
         {loading && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />}
       </div>
       {open && query.trim() && (
-        <div className="border-theme-surface-border bg-theme-surface absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border shadow-lg">
+        <div className="card absolute z-20 mt-1 max-h-56 w-full overflow-auto shadow-lg">
           {results.length === 0 && !loading ? (
             <p className="text-theme-text-muted px-3 py-2 text-xs">No matching items.</p>
           ) : (

@@ -35,6 +35,7 @@ import { getSchedulingRoutes } from './modules/scheduling';
 import { getEventsRoutes, getEventsPublicRoutes } from './modules/events';
 import { getTrainingRoutes } from './modules/training';
 import { getInventoryRoutes } from './modules/inventory';
+import { getMedicalSuppliesRoutes } from './modules/medical-supplies';
 import { getStorefrontRoutes } from './modules/storefront';
 import { getElectionsRoutes, getElectionsPublicRoutes } from './modules/elections';
 import { getMinutesRoutes } from './modules/minutes';
@@ -142,6 +143,7 @@ function App() {
                     {getDocumentsRoutes()}
                     {getTrainingRoutes()}
                     {getInventoryRoutes()}
+                    {getMedicalSuppliesRoutes()}
                     {getStorefrontRoutes()}
                     {getSchedulingRoutes()}
                     {getFacilitiesRoutes()}

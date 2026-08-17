@@ -195,19 +195,19 @@ const TrainingWaiversTab: React.FC = () => {
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Summary Cards */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div className="card p-4">
           <p className="text-theme-text-muted text-xs tracking-wider uppercase">Active</p>
           <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.active}</p>
         </div>
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div className="card p-4">
           <p className="text-theme-text-muted text-xs tracking-wider uppercase">Future</p>
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.future}</p>
         </div>
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div className="card p-4">
           <p className="text-theme-text-muted text-xs tracking-wider uppercase">Expired</p>
           <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{stats.expired}</p>
         </div>
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <div className="card p-4">
           <p className="text-theme-text-muted text-xs tracking-wider uppercase">Total</p>
           <p className="text-theme-text-primary text-2xl font-bold">{stats.total}</p>
         </div>
@@ -236,7 +236,7 @@ const TrainingWaiversTab: React.FC = () => {
           onChange={(e) => setSearchQuery(e.target.value)}
           aria-label="Search by name, rank, or reason..."
           placeholder="Search by name, rank, or reason..."
-          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden sm:w-72"
+          className="form-input px-3 py-1.5 text-sm sm:w-72"
         />
         <div className="text-theme-text-muted ml-auto self-center text-xs">
           {filteredWaivers.length} waiver{filteredWaivers.length !== 1 ? 's' : ''}
@@ -245,11 +245,11 @@ const TrainingWaiversTab: React.FC = () => {
 
       {/* Waiver Table */}
       {filteredWaivers.length === 0 ? (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
+        <div className="card py-12 text-center">
           <p className="text-theme-text-muted">No training waivers match the current filter.</p>
         </div>
       ) : (
-        <div className="bg-theme-surface border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
+        <div className="card overflow-hidden overflow-x-auto">
           <table className="divide-theme-surface-border min-w-full divide-y">
             <thead className="bg-theme-surface-hover">
               <tr>
