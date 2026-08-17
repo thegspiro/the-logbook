@@ -267,6 +267,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raised `AttributeError` inside the per-organization guard, which logged it and
   moved on. Recipients now resolve through the `inventory.manage` permission via
   the roles relationship.
+
 ### Failures now say so: eight silent-error paths surfaced (2026-08-16)
 
 **Fixed**
@@ -542,6 +543,18 @@ that confirmed no new critical or high-severity findings.
 - Added a Stryker mutation-testing pilot config (`frontend/stryker.pilot.json`
   - `vitest.stryker.config.ts`). Pilot score: 90.6% on three well-covered
     utilities; the surviving mutants cluster in the `apiCache.ts` eviction path.
+- **The eviction gap that pilot found is closed** _(2026-08-17)_. The
+  `apiCache.ts` eviction path was 89% line-covered and could be deleted
+  wholesale with the suite still green: its one test never asserted how many
+  entries were evicted, so an off-by-one loop bound and the loss of the
+  re-insertion refresh both went unnoticed. Three tests now pin it — at the cap
+  nothing is evicted, each insert past the cap evicts exactly one oldest-first,
+  and re-caching a key makes it newest so it outlives older keys. `apiCache.ts`
+  now scores 90.43%, and deleting the eviction block fails the suite. The two
+  mutants that still survive are _equivalent_ — a comparison made redundant by
+  the excess arithmetic, and a runtime-unreachable guard that exists to satisfy
+  the type checker (removing it is a TS2345 error, not a behaviour change) —
+  and both are documented in place so they are not chased again.
 - Corrected CLAUDE.md pitfall #13: no lint rule guards bare
   `toHaveBeenCalledWith()` — it is review discipline, and a blanket ban was
   evaluated and rejected because the zero-argument form is the stronger, correct

@@ -79,25 +79,25 @@ docker compose exec backend ./run_onboarding_tests.sh -v
 
 ### Onboarding Tests (Backend)
 
-| Test | Purpose | Status |
-|------|---------|--------|
-| `test_admin_user_creation_with_role_assignment` | MissingGreenlet fix validation | ✅ |
-| `test_create_organization` | Organization creation | ✅ |
-| `test_default_roles_creation` | Super Admin role creation | ✅ |
-| `test_duplicate_admin_user_prevention` | Duplicate user protection | ✅ |
-| `test_onboarding_status_tracking` | Status tracking | ✅ |
+| Test                                            | Purpose                        | Status |
+| ----------------------------------------------- | ------------------------------ | ------ |
+| `test_admin_user_creation_with_role_assignment` | MissingGreenlet fix validation | ✅     |
+| `test_create_organization`                      | Organization creation          | ✅     |
+| `test_default_roles_creation`                   | Super Admin role creation      | ✅     |
+| `test_duplicate_admin_user_prevention`          | Duplicate user protection      | ✅     |
+| `test_onboarding_status_tracking`               | Status tracking                | ✅     |
 
 ### Event Component Tests (Frontend - Added 2026-02-14)
 
 Comprehensive frontend test coverage for the events module:
 
-| Test File | Purpose | Lines |
-|-----------|---------|-------|
-| `EventForm.test.tsx` | Form validation, field interactions, submit handling | 460 |
-| `EventCreatePage.test.tsx` | Event creation flow, API integration, navigation | 137 |
-| `EventDetailPage.test.tsx` | Detail view, RSVP, duplication, delete | 694+82 |
-| `EventEditPage.test.tsx` | Edit form pre-population, update submission | 243 |
-| `EventsPage.test.tsx` | List view, filtering, search, pagination | 331 |
+| Test File                  | Purpose                                              | Lines  |
+| -------------------------- | ---------------------------------------------------- | ------ |
+| `EventForm.test.tsx`       | Form validation, field interactions, submit handling | 460    |
+| `EventCreatePage.test.tsx` | Event creation flow, API integration, navigation     | 137    |
+| `EventDetailPage.test.tsx` | Detail view, RSVP, duplication, delete               | 694+82 |
+| `EventEditPage.test.tsx`   | Edit form pre-population, update submission          | 243    |
+| `EventsPage.test.tsx`      | List view, filtering, search, pagination             | 331    |
 
 **Running event tests:**
 
@@ -116,10 +116,10 @@ cd frontend && npx vitest run --coverage src/pages/Event*.test.tsx
 
 ### Self-Check-In & QR Code Tests (Frontend - Added 2026-02-14)
 
-| Test File | Purpose | Tests |
-|-----------|---------|-------|
-| `EventSelfCheckInPage.test.tsx` | Self-check-in flow, error handling, time window validation | 31 |
-| `EventQRCodePage.test.tsx` | QR code display, auto-refresh, time validation | 25 |
+| Test File                       | Purpose                                                    | Tests |
+| ------------------------------- | ---------------------------------------------------------- | ----- |
+| `EventSelfCheckInPage.test.tsx` | Self-check-in flow, error handling, time window validation | 31    |
+| `EventQRCodePage.test.tsx`      | QR code display, auto-refresh, time validation             | 25    |
 
 **Running self-check-in tests:**
 
@@ -135,13 +135,13 @@ cd frontend && npx vitest run src/pages/EventQRCodePage.test.tsx
 
 Cross-module integration tests validate end-to-end data flows:
 
-| Test File | Purpose | Key Flows Tested |
-|-----------|---------|-----------------|
-| `test_election_voting_flow.py` | Election lifecycle | Election creation → ballot setup → vote casting → result certification → receipt verification |
-| `test_event_lifecycle.py` | Event pipeline | Event creation → RSVP → check-in → attendance tracking → analytics generation |
-| `test_membership_pipeline_flow.py` | Prospect pipeline | Prospect creation → stage advancement → document upload → election package → conversion to active member |
-| `test_training_compliance_integration.py` | Training compliance | Training record creation → requirement evaluation → compliance matrix calculation → leave adjustment |
-| `test_shift_completion.py` | Shift reports (expanded) | Report creation → draft management → review workflow → pipeline progress → batch review |
+| Test File                                 | Purpose                  | Key Flows Tested                                                                                         |
+| ----------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `test_election_voting_flow.py`            | Election lifecycle       | Election creation → ballot setup → vote casting → result certification → receipt verification            |
+| `test_event_lifecycle.py`                 | Event pipeline           | Event creation → RSVP → check-in → attendance tracking → analytics generation                            |
+| `test_membership_pipeline_flow.py`        | Prospect pipeline        | Prospect creation → stage advancement → document upload → election package → conversion to active member |
+| `test_training_compliance_integration.py` | Training compliance      | Training record creation → requirement evaluation → compliance matrix calculation → leave adjustment     |
+| `test_shift_completion.py`                | Shift reports (expanded) | Report creation → draft management → review workflow → pipeline progress → batch review                  |
 
 ```bash
 # Run all integration tests
@@ -156,22 +156,22 @@ cd backend && pytest tests/test_membership_pipeline_flow.py -v
 
 Fixed **39 pre-existing test failures** across 17 files and **7 store test assertion mismatches**:
 
-| Area | Files Fixed | Issue |
-|------|------------|-------|
-| Component tests | 17 files | Mock setup mismatches, missing provider wrappers, incorrect assertions |
-| Store tests | 5 files (auth, admin-hours, apparatus, medical-screening, skills-testing) | `toHaveBeenCalledWith()` used instead of `toHaveBeenCalled()` or with correct arguments |
-| Service tests | 2 files (trainingServices, inventoryService) | URL path mismatches and response shape errors |
-| Finance store | 1 file | Expanded from 25 to 75 tests with corrected assertions |
+| Area            | Files Fixed                                                               | Issue                                                                                   |
+| --------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Component tests | 17 files                                                                  | Mock setup mismatches, missing provider wrappers, incorrect assertions                  |
+| Store tests     | 5 files (auth, admin-hours, apparatus, medical-screening, skills-testing) | `toHaveBeenCalledWith()` used instead of `toHaveBeenCalled()` or with correct arguments |
+| Service tests   | 2 files (trainingServices, inventoryService)                              | URL path mismatches and response shape errors                                           |
+| Finance store   | 1 file                                                                    | Expanded from 25 to 75 tests with corrected assertions                                  |
 
 ### New Frontend Test Files (2026-04-10)
 
-| Test File | Purpose | Tests |
-|-----------|---------|-------|
-| `facilitiesStore.test.ts` | Facilities store state and API interactions | Full CRUD + search + filtering |
-| `onboardingStore.test.ts` | Onboarding flow state management | Step validation + session persistence |
-| `financeStore.test.ts` | Finance store operations | 75 tests covering all store actions |
-| `trainingServices.test.ts` | Training service URL paths | All endpoint URL and response contracts |
-| `inventoryService.test.ts` | Inventory service API contract | Item CRUD, assignments, checkouts |
+| Test File                  | Purpose                                     | Tests                                   |
+| -------------------------- | ------------------------------------------- | --------------------------------------- |
+| `facilitiesStore.test.ts`  | Facilities store state and API interactions | Full CRUD + search + filtering          |
+| `onboardingStore.test.ts`  | Onboarding flow state management            | Step validation + session persistence   |
+| `financeStore.test.ts`     | Finance store operations                    | 75 tests covering all store actions     |
+| `trainingServices.test.ts` | Training service URL paths                  | All endpoint URL and response contracts |
+| `inventoryService.test.ts` | Inventory service API contract              | Item CRUD, assignments, checkouts       |
 
 ### Backend Tests (1257+ tests)
 
@@ -200,14 +200,14 @@ cd backend && pytest -m "not slow"   # Skip slow tests
 
 ### New Testing Tools (2026-03-07)
 
-| Tool | Purpose | Usage |
-|------|---------|-------|
-| **vitest-axe** | Automated WCAG accessibility checks | `import { axe } from 'vitest-axe'` in component tests |
-| **hypothesis** | Property-based testing for Pydantic schemas | `@given(st.text())` generates random inputs to find edge cases |
-| **schemathesis** | API contract testing from OpenAPI spec | `cd backend && pytest tests/test_api_contract.py` |
-| **pytest-timeout** | Prevents hanging async tests | 30s default; override with `@pytest.mark.timeout(60)` |
+| Tool               | Purpose                                     | Usage                                                          |
+| ------------------ | ------------------------------------------- | -------------------------------------------------------------- |
+| **vitest-axe**     | Automated WCAG accessibility checks         | `import { axe } from 'vitest-axe'` in component tests          |
+| **hypothesis**     | Property-based testing for Pydantic schemas | `@given(st.text())` generates random inputs to find edge cases |
+| **schemathesis**   | API contract testing from OpenAPI spec      | `cd backend && pytest tests/test_api_contract.py`              |
+| **pytest-timeout** | Prevents hanging async tests                | 30s default; override with `@pytest.mark.timeout(60)`          |
 
-### Coverage Ratcheting *(re-based 2026-08-16)*
+### Coverage Ratcheting _(re-based 2026-08-16)_
 
 Coverage floors are a **ratchet** set a couple of points under the measured
 number — they block regressions, not express an aspiration. Raise them as
@@ -218,7 +218,7 @@ coverage grows; never lower them.
 files a test happens to import. Vitest 4's default (no `include`) counted only
 imported files, which hid 384 of 758 source files and reported 60.32% lines
 where the honest figure was 33.10% — a module with no test contributed nothing
-to the denominator, so adding one *raised* the percentage. Playwright specs
+to the denominator, so adding one _raised_ the percentage. Playwright specs
 under `src/e2e` are excluded (they are tests, not application source). The
 floors were re-based against the corrected denominator:
 
@@ -236,11 +236,33 @@ is "covered" by the import itself — and that mass would otherwise absorb a
 real regression in business logic.
 
 **Mutation testing pilot**: `frontend/stryker.pilot.json` +
-`vitest.stryker.config.ts` run Stryker over three well-covered utilities
-(90.6% mutation score measured). Line coverage says a statement executed;
-mutation score says a test would notice if it were wrong. The known gap is
-the `apiCache.ts` eviction path, where mutants survive despite 89% line
-coverage.
+`vitest.stryker.config.ts` run Stryker over three well-covered utilities.
+Line coverage says a statement executed; mutation score says a test would
+notice if it were wrong.
+
+```bash
+cd frontend && npx stryker run stryker.pilot.json   # ~1.5 min
+```
+
+The gap the pilot was built to find is **closed** _(2026-08-17)_. The
+`apiCache.ts` eviction path was 89% line-covered and could be **deleted
+wholesale with the suite still green** — the one test exercising it never
+asserted how many entries were evicted, so an off-by-one in the loop bound
+and the loss of the re-insertion refresh both passed. Three tests now pin the
+behaviour (at-cap evicts nothing, each insert past the cap evicts exactly one
+oldest-first, re-caching a key makes it newest) and `apiCache.ts` scores
+**90.43%** (91.40% of covered code).
+
+Two mutants there survive and **always will** — do not spend time on them:
+
+| Mutant                                  | Why it cannot be killed                                                                                                                                                                      |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cache.size > MAX_CACHE_ENTRIES` → `>=` | At exactly the cap the loop bound is `size - MAX` = 0, so neither form evicts. The comparison is redundant with the excess arithmetic.                                                       |
+| `if (!oldest.done)` → `if (true)`       | Unreachable at runtime (`excess < size` always). The check exists to narrow `string \| undefined` for `cache.delete`; removing it fails typecheck with TS2345 instead of changing behaviour. |
+
+An equivalent mutant is a property of the code, not a missing test. When a
+survivor turns out to be one, record why next to it — the next person to read
+the report should not have to re-derive it.
 
 ### Accessibility Testing Pattern (Frontend)
 
@@ -309,23 +331,29 @@ E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called
 ### Common Test Failures
 
 #### MissingGreenlet Error
+
 ```
 sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called
 ```
+
 **Cause:** Accessing lazy-loaded relationship without proper async handling
 **Fix:** Use `await db.refresh(user, ['roles'])` before accessing `user.roles`
 
 #### Duplicate User Error
+
 ```
 AssertionError: assert error2 is not None
 ```
+
 **Cause:** Duplicate prevention not working
 **Fix:** Check user creation logic and unique constraints
 
 #### Step Order Violation
+
 ```
 ValueError: Cannot create admin user before organization
 ```
+
 **Cause:** Steps not completed in correct order
 **Fix:** Ensure onboarding status is properly tracked
 
@@ -407,6 +435,7 @@ Expected test execution times:
 - **Database:** MySQL (same as production)
 
 If tests are slower, check:
+
 - MySQL container health: `docker compose ps`
 - Database connection: `docker compose logs mysql | tail -20`
 - Network connectivity between containers
@@ -414,6 +443,7 @@ If tests are slower, check:
 ## Troubleshooting
 
 ### Tests won't run
+
 ```bash
 # Make sure container is running
 docker compose ps
@@ -426,6 +456,7 @@ docker compose exec backend pip install pytest pytest-asyncio
 ```
 
 ### Database errors in tests
+
 ```bash
 # Tests use MySQL database (same as production)
 # Ensure MySQL container is healthy
@@ -438,6 +469,7 @@ docker compose up -d backend
 ```
 
 ### Import errors
+
 ```bash
 # Ensure you're in the backend directory
 cd backend

@@ -173,6 +173,77 @@ describe('apiCache', () => {
       // A mid-range entry should still exist
       expect(getCached('/item/100')).not.toBeNull();
     });
+
+    // The three tests below exist because the 2026-08-16 mutation-testing pilot
+    // found the eviction path was 89% line-covered and yet could be deleted
+    // wholesale with the suite still green. The test above executes eviction
+    // without pinning it down: it never asserts *how many* entries went, so an
+    // off-by-one in the loop bound (`i < excess` -> `i <= excess`) evicts an
+    // extra entry undetected, and dropping the `oldest.done` guard changes
+    // nothing it looks at. Counting survivors is what closes that.
+    //
+    // `countCached` probes through the public API rather than exporting the Map:
+    // the point is the behaviour callers get, and a test that reaches inside
+    // would keep passing if eviction moved somewhere else.
+    const countCached = (total: number): number => {
+      let alive = 0;
+      for (let i = 0; i < total; i++) {
+        if (getCached(`/item/${i}`) !== null) alive += 1;
+      }
+      return alive;
+    };
+
+    // Two mutants in this path are *equivalent* — no test can kill them, and
+    // chasing them is wasted effort:
+    //   `size > MAX` -> `size >= MAX`: at exactly the cap the loop bound
+    //     becomes `size - MAX` = 0, so neither form evicts anything. The
+    //     comparison is redundant with the excess arithmetic.
+    //   `!oldest.done` -> `true`: unreachable at runtime; the check is there to
+    //     narrow `string | undefined` for `cache.delete`. See the comment in
+    //     apiCache.ts.
+    it('evicts nothing while the cache is exactly at the cap', () => {
+      for (let i = 0; i < 200; i++) {
+        setCache(`/item/${i}`, { id: i });
+      }
+
+      // 200 entries is at the limit, not over it — eviction is gated on
+      // `size > MAX_CACHE_ENTRIES`, so nothing may be discarded yet. Relaxing
+      // that comparison to `>=` would throw away the oldest entry here.
+      expect(countCached(200)).toBe(200);
+      expect(getCached('/item/0')).not.toBeNull();
+    });
+
+    it('evicts exactly one entry per insert past the cap, oldest first', () => {
+      for (let i = 0; i < 205; i++) {
+        setCache(`/item/${i}`, { id: i });
+      }
+
+      // Five inserts past the cap: the five oldest are gone, and nothing else
+      // is. The upper bound is what the earlier test left unguarded — an extra
+      // iteration would silently take item/5 with it.
+      for (let i = 0; i < 5; i++) {
+        expect(getCached(`/item/${i}`)).toBeNull();
+      }
+      expect(getCached('/item/5')).not.toBeNull();
+      expect(getCached('/item/204')).not.toBeNull();
+      expect(countCached(205)).toBe(200);
+    });
+
+    it('re-caching a key makes it the newest, so it outlives older keys', () => {
+      for (let i = 0; i < 200; i++) {
+        setCache(`/item/${i}`, { id: i });
+      }
+
+      // setCache deletes before inserting specifically so a re-cached key moves
+      // to the end of the Map's insertion order. Without that delete the write
+      // updates in place, item/0 stays the oldest, and the wrong entry is
+      // evicted next — the cache would keep discarding hot keys.
+      setCache('/item/0', { id: 0, refreshed: true });
+      setCache('/item/200', { id: 200 });
+
+      expect(getCached('/item/0')).toEqual(expect.objectContaining({ data: { id: 0, refreshed: true } }));
+      expect(getCached('/item/1')).toBeNull();
+    });
   });
 
   // ---- Revalidation tracking ----
