@@ -13,6 +13,7 @@ MySQL.
 """
 
 import inspect
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -75,15 +76,16 @@ class TestCheckDriverQualification:
         )
         assert called is False
 
-    async def test_allowed_assignment_passes_quietly(self, monkeypatch):
-        svc = self._svc(
-            monkeypatch, {"allowed": True, "blocked_reason": None, "warnings": []}
-        )
+    async def test_allowed_assignment_returns_the_verdict(self, monkeypatch):
+        # Returned rather than discarded so callers can surface the operating
+        # restrictions an approved exception was granted under.
+        verdict = {"allowed": True, "blocked_reason": None, "warnings": [{"m": 1}]}
+        svc = self._svc(monkeypatch, verdict)
         assert (
             await svc._check_driver_qualification(
                 "u1", "sh1", "org-1", position="driver"
             )
-            is None
+            == verdict
         )
 
     async def test_blocked_assignment_raises_with_the_reason(self, monkeypatch):
@@ -154,6 +156,114 @@ class TestEnforcementIsWiredIntoBothWritePaths:
         check_at = source.index("_check_driver_qualification")
         apply_at = source.index("for key, value in update_data.items()")
         assert check_at < apply_at
+
+
+class TestEveryWritePathIsCovered:
+    """The block is only as good as the narrowest gap left around it.
+
+    Source assertions on the three remaining ways a driver reaches a seat:
+    pattern generation writes assignments directly, and a shift edit can move
+    the apparatus or date out from under an assignment that was fine when it
+    was made.
+    """
+
+    def test_pattern_generation_checks_each_driver(self):
+        source = inspect.getsource(SchedulingService.generate_shifts_from_pattern)
+        assert "_check_driver_qualification_message" in source
+
+    def test_pattern_generation_skips_rather_than_aborting(self):
+        # One unqualified member must not fail the whole generation run; the
+        # occurrence is created with that seat empty and the skip reported.
+        source = inspect.getsource(SchedulingService.generate_shifts_from_pattern)
+        check_at = source.index("_check_driver_qualification_message")
+        insert_at = source.index("assignment = ShiftAssignment(")
+        assert check_at < insert_at
+        assert "skipped_drivers.append" in source
+
+    def test_shift_edits_revalidate_drivers(self):
+        source = inspect.getsource(SchedulingService.update_shift)
+        assert "_requalify_drivers_for_shift_change" in source
+
+    def test_revalidation_gates_the_write(self):
+        source = inspect.getsource(SchedulingService.update_shift)
+        check_at = source.index("_requalify_drivers_for_shift_change")
+        apply_at = source.index("for key, value in update_data.items()")
+        assert check_at < apply_at
+
+    def test_revalidation_watches_apparatus_and_date(self):
+        source = inspect.getsource(
+            SchedulingService._requalify_drivers_for_shift_change
+        )
+        assert '"apparatus_id", "shift_date"' in source
+
+
+class TestRequalifyOnShiftChange:
+    def _shift(self, apparatus_id="ap1", shift_date="2026-09-04"):
+        return SimpleNamespace(
+            id="sh1", apparatus_id=apparatus_id, shift_date=shift_date
+        )
+
+    def _db(self, assignments):
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = assignments
+        db.execute = AsyncMock(return_value=result)
+        db.flush = AsyncMock()
+        db.add = MagicMock()
+        return db
+
+    async def test_unrelated_edit_costs_nothing(self):
+        # Renaming a shift must not pay for a driver re-check.
+        db = self._db([])
+        db.execute = AsyncMock(side_effect=AssertionError("should not query"))
+        svc = SchedulingService(db)
+        assert (
+            await svc._requalify_drivers_for_shift_change(
+                self._shift(), "org-1", {"notes": "hi"}
+            )
+            is None
+        )
+
+    async def test_no_drivers_on_the_shift_is_allowed(self):
+        svc = SchedulingService(self._db([]))
+        assert (
+            await svc._requalify_drivers_for_shift_change(
+                self._shift(), "org-1", {"apparatus_id": "ap2"}
+            )
+            is None
+        )
+
+    async def test_blocks_when_a_seated_driver_would_not_qualify(self, monkeypatch):
+        assignment = SimpleNamespace(user_id="u1", position="driver")
+        db = self._db([assignment])
+        svc = SchedulingService(db)
+
+        async def _blocked(**kwargs):
+            return "Requires EVOC Level 3."
+
+        monkeypatch.setattr(svc, "_check_driver_qualification_message", _blocked)
+        error = await svc._requalify_drivers_for_shift_change(
+            self._shift(), "org-1", {"apparatus_id": "ap2"}
+        )
+        assert error is not None
+        assert "Requires EVOC Level 3." in error
+
+    async def test_restores_the_shift_after_evaluating(self, monkeypatch):
+        # The pending values are applied so the check sees the shift as it
+        # would be, then rolled back — a rejected edit must not leave the
+        # in-memory shift mutated.
+        assignment = SimpleNamespace(user_id="u1", position="driver")
+        shift = self._shift(apparatus_id="ap1")
+        svc = SchedulingService(self._db([assignment]))
+
+        async def _blocked(**kwargs):
+            return "nope"
+
+        monkeypatch.setattr(svc, "_check_driver_qualification_message", _blocked)
+        await svc._requalify_drivers_for_shift_change(
+            shift, "org-1", {"apparatus_id": "ap2"}
+        )
+        assert shift.apparatus_id == "ap1"
 
 
 if __name__ == "__main__":  # pragma: no cover

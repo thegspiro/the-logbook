@@ -1026,6 +1026,16 @@ class EvocLevelResponse(EvocLevelBase):
 # =============================================================================
 
 
+class DriverExceptionReasonValue(str, Enum):
+    """Why the EVOC requirement is being waived (mirrors the model enum)."""
+
+    PARADE = "parade"
+    SPECIAL_EVENT = "special_event"
+    NON_EMERGENCY_TRANSPORT = "non_emergency_transport"
+    MUTUAL_AID = "mutual_aid"
+    OTHER = "other"
+
+
 class DriverExceptionCreate(BaseModel):
     """Request a chief-approved exception to the EVOC driving requirement."""
 
@@ -1035,8 +1045,11 @@ class DriverExceptionCreate(BaseModel):
     apparatus_id: Optional[str] = Field(
         None, description="Specific apparatus, or null for any"
     )
-    reason: str = Field(
-        default="parade",
+    # Typed, not a free string: an unsupported value used to travel all the
+    # way to the MySQL ENUM column and fail at commit as a 500, when it is
+    # plain bad input that deserves a 422.
+    reason: DriverExceptionReasonValue = Field(
+        default=DriverExceptionReasonValue.PARADE,
         description="parade, special_event, non_emergency_transport, "
         "mutual_aid, or other",
     )

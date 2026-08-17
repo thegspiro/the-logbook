@@ -1300,7 +1300,15 @@ async def generate_shifts_from_pattern(
             f"{len(result)} shift(s) were published to the schedule.",
         )
     enriched = await _enrich_shifts(service, current_user.organization_id, result)
-    return {"shifts_created": len(result), "shifts": enriched}
+    response: dict = {"shifts_created": len(result), "shifts": enriched}
+
+    # Driver seats the pattern could not fill because the member lacks the
+    # apparatus's EVOC level. Reported rather than silently dropped — an
+    # unfilled driver seat the officer does not know about is worse than the
+    # unqualified assignment enforcement just prevented.
+    if service.last_generation_warnings:
+        response["driver_warnings"] = service.last_generation_warnings
+    return response
 
 
 # ============================================
@@ -1429,7 +1437,15 @@ async def update_assignment(
             status_code=400, detail=_safe_detail("Unable to update assignment.", error)
         )
     enriched = await service.enrich_assignments([result])
-    return enriched[0]
+    response = enriched[0]
+
+    # An edit that moves someone into the driver seat under an approved
+    # exception carries that exception's operating restrictions. The crew-board
+    # position editor uses this endpoint, and an officer who never sees them is
+    # relying on a control that did not reach them.
+    if service.last_assignment_warnings:
+        response["evoc_warnings"] = service.last_assignment_warnings
+    return response
 
 
 @router.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -2399,7 +2415,13 @@ async def update_scheduling_feature_settings(
         fields_set = data.model_fields_set
         result = await service.update_scheduling_settings(
             organization_id=current_user.organization_id,
-            platoons_enabled=data.platoons_enabled,
+            # Guarded like every sibling field. Passed unconditionally, a
+            # partial save from any single toggle (which sends only its own
+            # key) carried the schema default False and switched platoon
+            # scheduling off behind the user's back.
+            platoons_enabled=(
+                data.platoons_enabled if "platoons_enabled" in fields_set else None
+            ),
             max_hours_per_window=(
                 (data.max_hours_per_window or 0.0)
                 if "max_hours_per_window" in fields_set

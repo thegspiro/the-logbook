@@ -282,14 +282,21 @@ class EvocLevelService:
         user_id: str,
         apparatus_id: str,
         organization_id: str,
+        on_date: Optional[date] = None,
     ) -> dict:
         """Check if a user meets the EVOC requirement for an apparatus.
+
+        ``on_date`` is the date the driving would happen — the shift's date,
+        not today. Scheduling is a forward-looking act: a certification that
+        is current now but lapses before the shift does not qualify anyone to
+        drive it, and defaulting to today silently seated members on shifts
+        their card would not cover.
 
         Returns a dict with:
           - eligible: bool
           - warning: optional warning message
           - required_level: the required EvocLevel (or None)
-          - user_level: the user's highest qualifying EvocLevel (or None)
+          - user_level: the qualifying EvocLevel (or the highest held)
         """
         apparatus_result = await self.db.execute(
             select(Apparatus)
@@ -310,18 +317,19 @@ class EvocLevelService:
 
         required_level = apparatus.required_evoc_level
 
-        # A driver only qualifies on a *current* certification: active,
-        # certified, and not past its expiration. Without the is_certified /
-        # expiration filters an expired EVOC certification still counted as
-        # valid (nothing flips is_active off on expiry), letting an
-        # out-of-cert member drive without a warning.
-        today = date.today()
+        # A driver only qualifies on a certification current *on the day they
+        # would drive*: active, certified, and not past its expiration as of
+        # that date. Without the is_certified / expiration filters an expired
+        # EVOC certification still counted as valid (nothing flips is_active
+        # off on expiry), letting an out-of-cert member drive without a
+        # warning.
+        as_of = on_date or date.today()
         current_cert = (
             ApparatusOperator.is_active.is_(True),
             ApparatusOperator.is_certified.is_(True),
             or_(
                 ApparatusOperator.certification_expiration.is_(None),
-                ApparatusOperator.certification_expiration >= today,
+                ApparatusOperator.certification_expiration >= as_of,
             ),
         )
 
@@ -337,16 +345,9 @@ class EvocLevelService:
         )
         operators = list(operator_result.scalars().all())
 
-        user_max_level = None
-        for op in operators:
-            if op.evoc_level:
-                if (
-                    user_max_level is None
-                    or op.evoc_level.level_number > user_max_level.level_number
-                ):
-                    user_max_level = op.evoc_level
+        held_levels = [op.evoc_level for op in operators if op.evoc_level]
 
-        if not user_max_level:
+        if not held_levels:
             return {
                 "eligible": False,
                 "warning": (
@@ -357,24 +358,28 @@ class EvocLevelService:
                 "user_level": None,
             }
 
-        meets_requirement = False
-        if user_max_level.level_number >= required_level.level_number:
-            if user_max_level.is_cumulative:
-                meets_requirement = True
-            elif user_max_level.level_number == required_level.level_number:
-                meets_requirement = True
+        user_max_level = max(held_levels, key=lambda level: level.level_number)
 
-        if not meets_requirement:
-            specific_match = await self.db.execute(
-                select(ApparatusOperator).where(
-                    ApparatusOperator.user_id == user_id,
-                    ApparatusOperator.organization_id == organization_id,
-                    *current_cert,
-                    ApparatusOperator.evoc_level_id == required_level.id,
-                )
+        # Every certification the member holds is considered, not just the
+        # highest-numbered one. Judging on the maximum alone rejected a member
+        # holding cumulative Level 3 *and* non-cumulative Level 4 for a Level 2
+        # apparatus: the max (4) is not cumulative and is not an exact match,
+        # so the cumulative 3 that plainly covers it never got a look. That was
+        # a spurious warning before enforcement; it is now a refusal to let
+        # somebody drive, which makes it worth getting right.
+        def _covers(level) -> bool:
+            if level.level_number == required_level.level_number:
+                return True
+            return level.is_cumulative and level.level_number > (
+                required_level.level_number
             )
-            if specific_match.scalar_one_or_none():
-                meets_requirement = True
+
+        qualifying = [level for level in held_levels if _covers(level)]
+        meets_requirement = bool(qualifying)
+        if meets_requirement:
+            # Report the lowest level that actually satisfies the requirement —
+            # that is the one being relied on.
+            user_max_level = min(qualifying, key=lambda level: level.level_number)
 
         if meets_requirement:
             return {

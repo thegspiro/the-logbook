@@ -1,7 +1,7 @@
 """Add driver qualification exceptions
 
-Revision ID: 20260816_0002
-Revises: 20260816_0001
+Revision ID: 20260816_0006
+Revises: 20260816_0005
 Create Date: 2026-08-16
 
 Creates the ``driver_exceptions`` table backing chief-approved, time-boxed
@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260816_0002"
-down_revision = "20260816_0001"
+revision = "20260816_0006"
+down_revision = "20260816_0005"
 branch_labels = None
 depends_on = None
 
@@ -41,12 +41,14 @@ def upgrade() -> None:
             sa.ForeignKey("users.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        # Nullable: NULL means "any apparatus", and SET NULL on delete keeps
-        # the approval record intact for audit after a unit is retired.
+        # Nullable: NULL means "any apparatus". CASCADE rather than SET NULL —
+        # SET NULL would turn a deleted unit's exception into one that matches
+        # every apparatus, widening a safety grant as a side effect of fleet
+        # housekeeping. The audit log retains the approval independently.
         sa.Column(
             "apparatus_id",
             sa.String(36),
-            sa.ForeignKey("apparatus.id", ondelete="SET NULL"),
+            sa.ForeignKey("apparatus.id", ondelete="CASCADE"),
             nullable=True,
         ),
         sa.Column(

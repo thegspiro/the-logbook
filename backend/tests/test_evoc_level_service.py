@@ -8,6 +8,7 @@ in-use delete protection) and the cumulative auto-add of operators on
 EVOC completion. DB mocked; no MySQL.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -141,29 +142,74 @@ class TestDriverEligibility:
         # required level -> not eligible (distinct vehicle categories).
         required = _level(2, name="EVOC II")
         user_level = _level(4, name="EVOC IV", is_cumulative=False)
-        db = _db(
-            [
-                _one(_apparatus(required)),
-                _scalars([_operator(user_level)]),
-                _one(None),  # specific_match fallback: none
-            ]
-        )
+        db = _db([_one(_apparatus(required)), _scalars([_operator(user_level)])])
         out = await EvocLevelService(db).check_driver_evoc_eligibility("u", "ap1", "o")
         assert out["eligible"] is False
         assert "EVOC Level 4" in out["warning"]
 
-    async def test_higher_noncumulative_with_exact_fallback_is_eligible(self):
+    async def test_higher_noncumulative_plus_exact_level_is_eligible(self):
+        # Holding non-cumulative Level 4 *and* the required Level 2. The
+        # operator query already returns both, so the exact match is found
+        # without a second lookup.
         required = _level(2)
-        user_level = _level(4, is_cumulative=False)
         db = _db(
             [
                 _one(_apparatus(required)),
-                _scalars([_operator(user_level)]),
-                _one(SimpleNamespace(id="op-exact")),  # has exact required level
+                _scalars(
+                    [
+                        _operator(_level(4, is_cumulative=False)),
+                        _operator(_level(2)),
+                    ]
+                ),
             ]
         )
         out = await EvocLevelService(db).check_driver_evoc_eligibility("u", "ap1", "o")
         assert out["eligible"] is True
+
+    async def test_cumulative_level_below_the_highest_still_qualifies(self):
+        # Cumulative Level 3 plus non-cumulative Level 4, against a Level 2
+        # apparatus. Judging on the highest level alone rejected this member:
+        # the max (4) is neither cumulative nor an exact match, so the
+        # cumulative 3 that plainly covers Level 2 never got a look.
+        required = _level(2)
+        db = _db(
+            [
+                _one(_apparatus(required)),
+                _scalars(
+                    [
+                        _operator(_level(4, is_cumulative=False)),
+                        _operator(_level(3, is_cumulative=True)),
+                    ]
+                ),
+            ]
+        )
+        out = await EvocLevelService(db).check_driver_evoc_eligibility("u", "ap1", "o")
+        assert out["eligible"] is True
+
+    async def test_only_higher_noncumulative_is_not_eligible(self):
+        # Non-cumulative Level 4 alone does not confer Level 2.
+        required = _level(2)
+        db = _db(
+            [
+                _one(_apparatus(required)),
+                _scalars([_operator(_level(4, is_cumulative=False))]),
+            ]
+        )
+        out = await EvocLevelService(db).check_driver_evoc_eligibility("u", "ap1", "o")
+        assert out["eligible"] is False
+
+    async def test_expiry_is_judged_on_the_shift_date(self):
+        # Scheduling is forward-looking: a card current today but lapsed by the
+        # shift does not qualify anyone to drive it. Asserted on the compiled
+        # SQL because the date bound is the whole safety property here.
+        required = _level(2)
+        db = _db([_one(_apparatus(required)), _scalars([])])
+        shift_day = date(2026, 12, 25)
+        await EvocLevelService(db).check_driver_evoc_eligibility(
+            "u", "ap1", "o", on_date=shift_day
+        )
+        params = db.execute.await_args[0][0].compile().params
+        assert shift_day in params.values()
 
     async def test_lower_level_not_eligible(self):
         required = _level(3)

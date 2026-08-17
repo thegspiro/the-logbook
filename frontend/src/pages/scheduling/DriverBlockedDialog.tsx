@@ -27,6 +27,7 @@ import {
 import { Modal } from '../../components/Modal';
 import { useAuthStore } from '../../stores/authStore';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { formatCalendarDate } from '../../utils/dateFormatting';
 import { useRanks } from '../../hooks/useRanks';
 
 export interface DriverBlockedDialogProps {
@@ -192,8 +193,8 @@ export const DriverBlockedDialog: React.FC<DriverBlockedDialogProps> = ({
           <div className="border-theme-surface-border bg-theme-surface-secondary/50 space-y-3 rounded-lg border p-3">
             <p className="text-theme-text-muted text-xs">
               This covers {userName}
-              {apparatusUnitNumber ? ` on ${apparatusUnitNumber}` : ''} for {shiftDate} only. It grants nothing until a
-              chief other than you approves it.
+              {apparatusUnitNumber ? ` on ${apparatusUnitNumber}` : ''} for {formatCalendarDate(shiftDate)} only. It
+              grants nothing until a chief other than you approves it.
             </p>
 
             <div>

@@ -1387,12 +1387,19 @@ class DriverException(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    # NULL = any apparatus. SET NULL so deleting a unit downgrades the
-    # exception's scope rather than silently deleting the approval record that
-    # an audit may need to reconstruct who authorized what.
+    # NULL = any apparatus.
+    #
+    # CASCADE, deliberately, not SET NULL. SET NULL would leave a deleted
+    # unit's exception looking identical to a blanket one, so an approval
+    # granted for a retired parade antique would silently start authorizing
+    # the member on every remaining vehicle until it expired — a safety grant
+    # widening itself as a side effect of fleet housekeeping. Deleting the
+    # exception with its apparatus fails closed instead, and the approval
+    # itself remains reconstructible from the audit log, which records the
+    # exception id, subject, apparatus and reviewer independently of this row.
     apparatus_id = Column(
         String(36),
-        ForeignKey("apparatus.id", ondelete="SET NULL"),
+        ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=True,
     )
 

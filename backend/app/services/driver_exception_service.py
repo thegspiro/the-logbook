@@ -24,7 +24,7 @@ The controls are deliberate and each one is load-bearing:
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -180,6 +180,16 @@ class DriverExceptionService:
                 f"An exception may cover at most {MAX_VALIDITY_DAYS} days. "
                 "Request a shorter window, or renew it when it lapses."
             )
+        # Bounding only the window length let a one-day exception start years
+        # out — a chief's approval sitting dormant until long after the
+        # circumstances they weighed have gone. The grant has to begin within
+        # the same horizon it may span.
+        if (valid_from - date.today()).days > MAX_VALIDITY_DAYS:
+            raise ValueError(
+                f"An exception must start within {MAX_VALIDITY_DAYS} days. "
+                "Request it closer to the date so it is reviewed against the "
+                "circumstances that apply."
+            )
 
         justification = (data.get("justification") or "").strip()
         if not justification:
@@ -252,16 +262,41 @@ class DriverExceptionService:
                 "This request has already lapsed; its end date is in the past."
             )
 
-        exception.status = (
+        # Two chiefs deciding the same request at once would both read
+        # "pending", both pass the guard above, and both commit — the later
+        # write silently deciding the outcome while both endpoints report
+        # success and log an audit event. Settle it in the database: the
+        # UPDATE only matches a row that is *still* pending, so exactly one
+        # review can win.
+        decision = (
             DriverExceptionStatus.APPROVED if approve else DriverExceptionStatus.DENIED
         )
-        exception.reviewed_by = str(reviewer_id)
-        exception.reviewed_at = datetime.now(timezone.utc)
-        exception.review_notes = (review_notes or "").strip() or None
+        result = await self.db.execute(
+            update(DriverException)
+            .where(
+                DriverException.id == str(exception_id),
+                DriverException.organization_id == str(organization_id),
+                DriverException.status == DriverExceptionStatus.PENDING,
+            )
+            .values(
+                status=decision,
+                reviewed_by=str(reviewer_id),
+                reviewed_at=datetime.now(timezone.utc),
+                review_notes=(review_notes or "").strip() or None,
+            )
+        )
+        if result.rowcount == 0:
+            await self.db.rollback()
+            raise ValueError(
+                "Another reviewer decided this request first. Reload to see "
+                "their decision."
+            )
 
         await self.db.commit()
-        await self.db.refresh(exception)
-        return exception
+        # Re-read rather than mutating the instance we fetched: the decision
+        # was settled by the UPDATE, so the row is the authority on what it
+        # now says.
+        return await self.get_exception(exception_id, organization_id) or exception
 
     async def revoke_exception(
         self,
@@ -282,14 +317,26 @@ class DriverExceptionService:
         if exception.status != DriverExceptionStatus.APPROVED:
             raise ValueError("Only an approved exception can be revoked")
 
-        exception.status = DriverExceptionStatus.REVOKED
-        exception.reviewed_by = str(reviewer_id)
-        exception.reviewed_at = datetime.now(timezone.utc)
-        exception.review_notes = (review_notes or "").strip() or None
+        result = await self.db.execute(
+            update(DriverException)
+            .where(
+                DriverException.id == str(exception_id),
+                DriverException.organization_id == str(organization_id),
+                DriverException.status == DriverExceptionStatus.APPROVED,
+            )
+            .values(
+                status=DriverExceptionStatus.REVOKED,
+                reviewed_by=str(reviewer_id),
+                reviewed_at=datetime.now(timezone.utc),
+                review_notes=(review_notes or "").strip() or None,
+            )
+        )
+        if result.rowcount == 0:
+            await self.db.rollback()
+            raise ValueError("Only an approved exception can be revoked")
 
         await self.db.commit()
-        await self.db.refresh(exception)
-        return exception
+        return await self.get_exception(exception_id, organization_id) or exception
 
     # ------------------------------------------------------------------
     # Reads

@@ -23,7 +23,7 @@ import {
 } from '../../modules/apparatus/types';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import { useAuthStore } from '../../stores/authStore';
-import { formatDate } from '../../utils/dateFormatting';
+import { formatCalendarDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -141,7 +141,7 @@ const DriverExceptionsPanel: React.FC = () => {
         title: `Approve driving exception for ${exception.userName ?? 'this member'}?`,
         message:
           `This lets them drive ${exception.apparatusUnitNumber ?? 'any apparatus'} without the required EVOC ` +
-          `certification through ${formatDate(exception.validUntil, tz)}. The approval is recorded against your ` +
+          `certification through ${formatCalendarDate(exception.validUntil)}. The approval is recorded against your ` +
           'name in the audit log.',
         confirmLabel: 'Approve exception',
         cancelLabel: 'Not now',
@@ -428,7 +428,7 @@ const DriverExceptionsPanel: React.FC = () => {
                   </div>
 
                   <p className="text-theme-text-secondary mt-1 text-xs">
-                    {formatDate(exception.validFrom, tz)} – {formatDate(exception.validUntil, tz)}
+                    {formatCalendarDate(exception.validFrom)} – {formatCalendarDate(exception.validUntil)}
                     {exception.requestedByName && (
                       <span className="text-theme-text-muted"> · requested by {exception.requestedByName}</span>
                     )}

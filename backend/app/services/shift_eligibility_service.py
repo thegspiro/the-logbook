@@ -640,11 +640,18 @@ class ShiftEligibilityService:
             # against — the position is a label, not a seat behind a wheel.
             return outcome
 
+        # The date the driving would happen, not today. A certification that
+        # is current now but lapses before the shift does not qualify anyone to
+        # drive it, and the exception lookup below already reasons about the
+        # shift date — the two must agree or one of them is wrong.
+        as_of = on_date or getattr(shift, "shift_date", None)
+
         evoc_service = EvocLevelService(self.db)
         result = await evoc_service.check_driver_evoc_eligibility(
             user_id=user_id,
             apparatus_id=apparatus_id,
             organization_id=organization_id,
+            on_date=as_of,
         )
         if result["eligible"]:
             return outcome
@@ -668,7 +675,7 @@ class ShiftEligibilityService:
             user_id=user_id,
             organization_id=organization_id,
             apparatus_id=str(apparatus_id),
-            on_date=on_date or getattr(shift, "shift_date", None),
+            on_date=as_of,
         )
         if exception:
             outcome["exception"] = exception

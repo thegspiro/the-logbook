@@ -2966,14 +2966,24 @@ async def list_driver_exceptions(
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("apparatus.view", "apparatus.manage", "scheduling.manage")
+        require_permission(
+            "apparatus.view",
+            "apparatus.manage",
+            "scheduling.view",
+            "scheduling.manage",
+        )
     ),
 ):
     """
     List driver qualification exceptions for the organization.
 
-    **Permissions required:** apparatus.view, apparatus.manage, or
-    scheduling.manage
+    ``scheduling.view`` is accepted because the Qualifications page that hosts
+    this list is itself reachable on that grant — gating the tab's data more
+    tightly than its page just produced a 403 toast for the members it was
+    meant to inform.
+
+    **Permissions required:** apparatus.view, apparatus.manage,
+    scheduling.view, or scheduling.manage
     """
     service = DriverExceptionService(db)
     exceptions = await service.list_exceptions(

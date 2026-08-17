@@ -30,9 +30,15 @@ def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
+def _updated(rowcount=1):
+    """Result of the conditional UPDATE that settles a review."""
+    return MagicMock(rowcount=rowcount)
+
+
 def _db(side_effect):
     db = MagicMock()
     db.execute = AsyncMock(side_effect=side_effect)
+    db.rollback = AsyncMock()
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.flush = AsyncMock()
@@ -140,16 +146,23 @@ class TestRequestException:
 
 class TestReviewException:
     async def test_approves_a_pending_request(self):
-        db = _db([_one(_exception())])
+        decided = _exception(status=DriverExceptionStatus.APPROVED)
+        decided.reviewed_by = "chief-1"
+        db = _db([_one(_exception()), _updated(), _one(decided)])
         exc = await DriverExceptionService(db).review_exception(
             "exc-1", "org-1", "chief-1", approve=True, review_notes="Approved."
         )
         assert exc.status == DriverExceptionStatus.APPROVED
         assert exc.reviewed_by == "chief-1"
-        assert exc.reviewed_at is not None
 
     async def test_denies_a_pending_request(self):
-        db = _db([_one(_exception())])
+        db = _db(
+            [
+                _one(_exception()),
+                _updated(),
+                _one(_exception(status=DriverExceptionStatus.DENIED)),
+            ]
+        )
         exc = await DriverExceptionService(db).review_exception(
             "exc-1", "org-1", "chief-1", approve=False
         )
@@ -191,10 +204,40 @@ class TestReviewException:
                 "exc-1", "org-1", "chief-1", approve=True
             )
 
+    async def test_a_concurrent_reviewer_cannot_also_win(self):
+        # Two chiefs deciding at once both read "pending" and both pass the
+        # in-Python guard. The UPDATE matches only a still-pending row, so the
+        # loser is told rather than silently overwriting the winner's decision
+        # while its endpoint reports success and logs an audit event.
+        db = _db([_one(_exception()), _updated(rowcount=0)])
+        with pytest.raises(ValueError, match="decided this request first"):
+            await DriverExceptionService(db).review_exception(
+                "exc-1", "org-1", "chief-1", approve=True
+            )
+        db.rollback.assert_awaited()
+
+    async def test_the_decision_update_is_conditional_on_still_pending(self):
+        db = _db([_one(_exception()), _updated()])
+        with pytest.raises(StopAsyncIteration):
+            # Third call (the re-read) is deliberately unmocked; the UPDATE
+            # has already been issued by then, which is what we inspect.
+            await DriverExceptionService(db).review_exception(
+                "exc-1", "org-1", "chief-1", approve=True
+            )
+        statement = db.execute.await_args_list[1][0][0]
+        params = statement.compile().params
+        assert DriverExceptionStatus.PENDING in params.values()
+
 
 class TestRevokeException:
     async def test_revokes_an_approved_exception(self):
-        db = _db([_one(_exception(status=DriverExceptionStatus.APPROVED))])
+        db = _db(
+            [
+                _one(_exception(status=DriverExceptionStatus.APPROVED)),
+                _updated(),
+                _one(_exception(status=DriverExceptionStatus.REVOKED)),
+            ]
+        )
         exc = await DriverExceptionService(db).revoke_exception(
             "exc-1", "org-1", "chief-1", review_notes="Parade cancelled."
         )
@@ -206,11 +249,24 @@ class TestRevokeException:
         # hazard, not a control.
         approved = _exception(status=DriverExceptionStatus.APPROVED)
         approved.requested_by = "chief-1"
-        db = _db([_one(approved)])
+        db = _db(
+            [
+                _one(approved),
+                _updated(),
+                _one(_exception(status=DriverExceptionStatus.REVOKED)),
+            ]
+        )
         exc = await DriverExceptionService(db).revoke_exception(
             "exc-1", "org-1", "chief-1"
         )
         assert exc.status == DriverExceptionStatus.REVOKED
+
+    async def test_a_concurrent_revoker_cannot_double_revoke(self):
+        db = _db([_one(_exception(status=DriverExceptionStatus.APPROVED)), _updated(0)])
+        with pytest.raises(ValueError, match="Only an approved"):
+            await DriverExceptionService(db).revoke_exception(
+                "exc-1", "org-1", "chief-1"
+            )
 
     async def test_pending_request_cannot_be_revoked(self):
         db = _db([_one(_exception())])
