@@ -266,16 +266,24 @@ PUT    /api/v1/inventory/storage-areas/{id}              # Update storage area
 DELETE /api/v1/inventory/storage-areas/{id}              # Delete (deactivate) storage area
 ```
 
-_(2026-08-16)_ **Every storage area carries a barcode.** Creation assigns one
-automatically when the caller doesn't supply it — the next code in a per-org
+_(2026-08-16)_ **Every storage area is assigned a barcode.** Creation assigns
+one automatically when the caller doesn't supply it — the next code in a per-org
 sequential series (default prefix `SA-`, counter in
 `organization.settings["storage_area_barcode"]`, manually-taken codes skipped) —
-so areas are always scannable rather than barcoded only when someone remembered
-the field. A blank barcode arriving from an older client cannot strip a code
-already printed on the shelf, areas created before this pick a code up on first
-edit, and migration `20260816_0002` backfilled the rest. The Storage Areas page
-also now shows **all areas by default** (the facility picker was fixed in the
-same pass).
+so every area has a printable code rather than one only where somebody
+remembered the field. A blank barcode arriving from an older client cannot strip
+a code already printed on the shelf, areas created before this pick a code up on
+first edit, and migration `20260816_0002` backfilled the rest. The Storage Areas
+page also now shows **all areas by default** (the facility picker was fixed in
+the same pass).
+
+> **Assignment and display only — the scanner does not resolve these codes
+> yet.** `/inventory/lookup` (`InventoryService.search_by_code`) searches
+> `InventoryItem.barcode` / `serial_number` / `asset_tag` / `name` / `size` /
+> `color`; nothing maps a scanned `SA-…` code back to its storage area. The
+> Storage Areas form nevertheless tells the user the code is assigned "so it can
+> be scanned". Tracked as **INV-8** in
+> [KNOWN_LIMITATIONS](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md).
 
 ### Vendors _(2026-08-16)_
 

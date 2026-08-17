@@ -33,9 +33,11 @@ opened and checked against its guide caption.
 ### Added by the post-audit August 16 merges
 
 - **Storage Areas page** (guide 05): now shows all areas by default and every
-  area carries a barcode (auto-assigned `SA-…` series). Re-verify any
+  area is assigned a barcode (auto-assigned `SA-…` series). Re-verify any
   storage-areas capture; a new capture should show the barcode column
-  populated on every row.
+  populated on every row. **Do not caption it as scannable** — the code is
+  assigned and printable, but the inventory scanner cannot resolve it yet
+  (KNOWN_LIMITATIONS INV-8).
 - **Equipment-check rejection vs. offline queue** (guides 03/10): capture a
   server-rejected check showing the real error message — **not** the
   "queued for sync" toast — and, separately, the abandoned-after-retries

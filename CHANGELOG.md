@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   event-request assignee notification failures are actually logged; a skills
   test score is no longer cleared from its input when the save was refused.
 
-### Inventory: storage areas are always scannable (2026-08-16)
+### Inventory: every storage area is assigned a barcode (2026-08-16)
 
 **Added / Changed**
 
@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   up on first edit; migration `20260816_0002` backfills the rest.
 - The Storage Areas page shows **all areas by default**, and its facility
   picker was fixed.
+
+> **The code is assigned and displayed, not yet resolvable by the scanner.**
+> The inventory scanner's `/inventory/lookup` searches `InventoryItem` fields
+> only (`search_by_code`), so scanning an `SA-…` code returns no result today.
+> The one query against `StorageArea.barcode` is the uniqueness check used when
+> allocating the next code. The Storage Areas form also tells the user the code
+> is assigned "so it can be scanned" — see
+> [KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) (INV-8) for the gap.
 
 ### Small fixes from the open-PR resolution pass (2026-08-16)
 
