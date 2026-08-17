@@ -27,6 +27,7 @@ from app.api.dependencies import (
     _collect_user_permissions,
     _has_permission,
     get_current_user,
+    require_all_permissions,
     require_permission,
 )
 from app.core.database import get_db
@@ -117,7 +118,9 @@ def _to_response(leave) -> LeaveOfAbsenceResponse:
 async def create_leave_of_absence(
     data: LeaveOfAbsenceCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("members.manage")),
+    current_user: User = Depends(
+        require_all_permissions("members.manage", "scheduling.assign")
+    ),
 ):
     """Create a leave of absence for a member."""
     if data.end_date and data.end_date < data.start_date:
