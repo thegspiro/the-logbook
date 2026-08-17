@@ -13,7 +13,7 @@ import secrets
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from loguru import logger
 from sqlalchemy import and_, delete, func, or_, select, update
@@ -1191,7 +1191,7 @@ class MembershipPipelineService:
     async def _authorized_multi_approval_result(
         self,
         organization_id: str,
-        completed_by: str,
+        completed_by: Optional[str],
         action_result: Optional[Dict[str, Any]],
     ) -> Optional[Dict[str, Any]]:
         """Replace client-claimed approval identities with the authenticated signer."""
@@ -1238,7 +1238,7 @@ class MembershipPipelineService:
         prospect_id: str,
         organization_id: str,
         step_id: str,
-        completed_by: str,
+        completed_by: Optional[str],
         notes: Optional[str] = None,
         action_result: Optional[Dict[str, Any]] = None,
         *,
@@ -1870,7 +1870,7 @@ class MembershipPipelineService:
     async def _do_transfer(
         self,
         prospect: ProspectiveMember,
-        transferred_by: str,
+        transferred_by: Optional[str],
         username: Optional[str] = None,
         membership_id: Optional[str] = None,
         rank: Optional[str] = None,
@@ -2871,7 +2871,7 @@ class MembershipPipelineService:
         prospect_id: str,
         organization_id: str,
         step_id: str,
-        completed_by: str,
+        completed_by: Optional[str],
         trigger: str,
         action_result: Optional[Dict[str, Any]] = None,
     ) -> bool:
@@ -2917,11 +2917,73 @@ class MembershipPipelineService:
                 f"past step '{step.name}' on {trigger}"
             )
             return True
+        except ValueError as e:
+            # The stage gate is not satisfied yet — two of three screenings
+            # passed, one of two interviews recorded. For an event-driven
+            # advance that is the ordinary case, not a fault: the stage stays
+            # put and the next event re-tries. Logging it at ERROR buried the
+            # real failures below in routine noise.
+            logger.debug(
+                f"Auto-advance for prospect {prospect_id} on {trigger} "
+                f"deferred; stage requirements not met yet: {e}"
+            )
+            return False
         except Exception as e:
             logger.error(
                 f"Failed to auto-advance prospect " f"{prospect_id} on {trigger}: {e}"
             )
             return False
+
+    async def try_auto_advance_current_step(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        *,
+        step_type: PipelineStepType,
+        trigger: str,
+        completed_by: Optional[str] = None,
+        action_result: Optional[Dict[str, Any]] = None,
+        config_matches: Optional[Callable[[Dict[str, Any]], bool]] = None,
+    ) -> bool:
+        """Auto-advance a prospect whose current stage is of ``step_type``.
+
+        Completion evidence often arrives from another module — a medical
+        screening result, an attendance record — which knows the event that
+        happened but not which pipeline stage, if any, is waiting on it. Resolve
+        the prospect's current stage here, require it to be a type this event
+        can satisfy, and let :meth:`_try_auto_advance_step` apply the
+        ``auto_advance`` opt-in and the stage's own completion gate.
+
+        ``config_matches`` narrows further on the stage config, so an attendance
+        record only advances a meeting stage pointed at *that* event.
+
+        Returns True only if the prospect actually advanced.
+        """
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect or not prospect.pipeline or not prospect.current_step_id:
+            return False
+
+        step = next(
+            (
+                s
+                for s in prospect.pipeline.steps
+                if str(s.id) == str(prospect.current_step_id)
+            ),
+            None,
+        )
+        if step is None or step.step_type != step_type:
+            return False
+        if config_matches and not config_matches(step.config or {}):
+            return False
+
+        return await self._try_auto_advance_step(
+            prospect_id=prospect_id,
+            organization_id=organization_id,
+            step_id=str(step.id),
+            completed_by=completed_by,
+            trigger=trigger,
+            action_result=action_result,
+        )
 
     # =========================================================================
     # Template Seeding
@@ -3758,7 +3820,7 @@ class MembershipPipelineService:
                 prospect_id=prospect_id,
                 organization_id=organization_id,
                 step_id=step_id,
-                completed_by=uploaded_by or "system",
+                completed_by=uploaded_by,
                 trigger="document upload",
                 action_result={"document_id": doc.id},
             )

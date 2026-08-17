@@ -229,7 +229,7 @@ export const ResetPasswordPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring block w-full rounded-md border py-2 pr-10 pl-10 focus:border-transparent focus:ring-2 focus:outline-hidden sm:text-sm"
+                  className="form-input bg-theme-surface-secondary placeholder-theme-text-muted block pr-10 pl-10 focus:border-transparent sm:text-sm"
                   placeholder="Enter new password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -297,7 +297,7 @@ export const ResetPasswordPage: React.FC = () => {
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring block w-full rounded-md border py-2 pr-10 pl-10 focus:border-transparent focus:ring-2 focus:outline-hidden sm:text-sm"
+                  className="form-input bg-theme-surface-secondary placeholder-theme-text-muted block pr-10 pl-10 focus:border-transparent sm:text-sm"
                   placeholder="Confirm new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

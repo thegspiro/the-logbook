@@ -194,7 +194,7 @@ Click on any facility from the dashboard to open its full-page detail view at `/
 | Section                | Description                                                                                                                                                                                                                                                                   |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Overview**           | Name, type, status, address, phone, email, fax, county, founded year                                                                                                                                                                                                          |
-| **Rooms**              | Room inventory with purpose, capacity, NFPA 1500/1585 zone classification (hot/transition/cold), and linked Location records for Events and QR check-in                                                                                                                       |
+| **Rooms**              | Room inventory with purpose, capacity, NFPA 1500/1585 zone classification (hot/transition/cold), and linked Location records for Events and QR check-in. Rooms can be **nested inside other rooms** _(2026-08-16)_ — see [Nesting rooms inside rooms](#nesting-rooms-inside-rooms-2026-08-16)                                                                             |
 | **Building Systems**   | HVAC, electrical, plumbing, fire suppression, and 8 fire-critical system types (exhaust extraction, cascade air, decontamination, bay door, air quality monitor, PPE cleaning, alerting system, shore power). Each system tracks model, install date, warranty, and condition |
 | **Maintenance**        | Maintenance history and work orders with 16 NFPA-aligned maintenance types. Priority badges (low/medium/high/critical)                                                                                                                                                        |
 | **Inspections**        | Inspection records with inspector name, license number, agency, pass/fail status, deficiency tracking, and corrective action dates                                                                                                                                            |
@@ -210,6 +210,67 @@ Click on any facility from the dashboard to open its full-page detail view at `/
 ![Facility detail page with its sidebar navigation and content area](./images/06-11-facility-detail.png)
 
 > **Edge case:** If a facility was created during onboarding, it is automatically linked to a Location record so it appears in the Events location picker. Rooms added later also auto-create Location records. If you delete a room, its linked Location record is preserved (with a note that the room was removed) to avoid breaking existing event references.
+
+### Nesting rooms inside rooms _(2026-08-16)_
+
+A room can now live inside another room in the same facility — the
+quartermaster's storage space within the volunteer office, a closet inside
+the training room — instead of every space sitting in one flat list.
+
+**How to nest a room:**
+
+1. Open the facility's **Rooms** section. The list renders as a tree:
+   sub-rooms appear indented under their container, and each room shows how
+   many sub-rooms it holds.
+2. Either use the **add-a-room-inside** action on an existing room's row
+   (which pre-fills the container), or open any room's form and choose a
+   container in the **Located inside** picker.
+3. Save. The room's linked Location record automatically takes the full
+   containment path as its name — "Quartermaster's Storage — Volunteer
+   Office — Station 1" — so it is distinguishable from a storage room
+   elsewhere in the building everywhere Locations appear (event location
+   picker, QR check-in, kiosk displays).
+
+> **[SCREENSHOT NEEDED — Rooms section showing a two- or three-level tree with
+> indented sub-rooms, per-room sub-room counts, and the add-a-room-inside row
+> action; seed a facility with at least one nested branch, e.g. Volunteer
+> Office → Quartermaster's Storage.]**
+>
+> **[SCREENSHOT NEEDED — room form open with the "Located inside" picker
+> expanded, demonstrating that the room's own subtree is absent from the
+> options.]**
+
+**Where the nesting shows up elsewhere:** the room picker used by Events,
+Training, and Scheduling lists sub-rooms indented under their container and
+prints the containment path beneath the selected room.
+
+> **[SCREENSHOT NEEDED — an event form's room picker with indented sub-rooms
+> and the containment path shown for a selected nested room.]**
+
+**Edge cases worth teaching:**
+
+- **The container must be a room in the same facility** (and your own
+  organization). You cannot nest across buildings; moving a room to another
+  facility carries its whole subtree along and re-syncs the linked Locations
+  to the new building.
+- **No circles, five levels deep at most.** A room cannot be placed inside
+  itself or any of its own sub-rooms — the picker hides those options, and
+  the server rejects them if attempted directly. Nesting is capped at five
+  levels (a top-level room is level 1).
+- **Deleting a container room does not delete what's inside it.** Sub-rooms
+  are re-parented onto the deleted room's own container (or become top-level).
+  The delete confirmation says so before you commit — their kiosk codes and
+  stored inventory survive.
+
+> **[SCREENSHOT NEEDED — delete-room confirmation dialog for a room with
+> sub-rooms, showing the "sub-rooms move up a level" warning.]**
+
+- **Clearing a field now sticks.** Emptying floor, capacity, or description on
+  the room form persists the cleared value on save instead of silently
+  keeping the old one, and a save the server rejects (bad parent, depth
+  exceeded) reports the actual reason in the toast.
+- **A room whose container is missing** (e.g. removed by a concurrent edit)
+  surfaces at the top level of the list rather than disappearing.
 
 ### Facilities Module Architecture _(2026-04-11)_
 
@@ -626,7 +687,9 @@ The Equipment Check system provides structured vehicle and equipment inspections
 | Shift scheduling not showing min staffing                          | Fixed in March 2026 — the apparatus list endpoint was not returning the full `min_staffing` field. Pull latest and restart. Understaffing badges (amber triangle) now appear on shift cards when `attendee_count < min_staffing`.                                                                                                                                                                                                                                                                          |
 | Cannot see Facilities module                                       | Facilities is an optional module. Your administrator must enable it in Settings > Modules. You may see the simplified Locations page instead.                                                                                                                                                                                                                                                                                                                                                              |
 | Inspection past due but no alert                                   | Inspection alerts depend on notification rules being configured. Check Settings > Notifications.                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Room not showing on facility                                       | Rooms must be added individually to each facility from the Rooms section of the facility detail page.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Room not showing on facility                                       | Rooms must be added individually to each facility from the Rooms section of the facility detail page. Since 2026-08-16 the list is a tree — a room placed inside another room appears indented under its container, not in the top-level list; expand the container or check its sub-room count.                                                                                                                                                                                                             |
+| Cannot pick a room as "Located inside" container                   | The picker excludes the room's own subtree (no circles), rooms in other facilities, and any choice that would exceed five nesting levels. If the container you want is missing, check which facility it belongs to and how deep it already sits.                                                                                                                                                                                                                                                            |
+| Deleted a room and its sub-rooms "moved"                           | Working as designed _(2026-08-16)_: deleting a container room re-parents its sub-rooms onto the deleted room's own container (or top level) instead of deleting them — kiosk codes and stored inventory survive. The delete confirmation states this.                                                                                                                                                                                                                                                       |
 | Facility address fields showing as blank                           | Fixed in March 2026 — frontend types were using snake_case (`address_line1`, `zip_code`) but the API returns camelCase (`addressLine1`, `zipCode`). Pull latest and rebuild.                                                                                                                                                                                                                                                                                                                               |
 | Apparatus list page gradient looks wrong in light mode             | Fixed in March 2026 — hardcoded `via-red-900` gradient replaced with theme-aware CSS variables. Pull latest and rebuild.                                                                                                                                                                                                                                                                                                                                                                                   |
 | Physical address not showing in Organization Settings              | As of 2026-03-04, a Physical Address section is now available in Organization Settings > General with a "Same as mailing address" toggle.                                                                                                                                                                                                                                                                                                                                                                  |

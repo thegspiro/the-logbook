@@ -69,16 +69,13 @@ const SummaryCard: React.FC<{
 
   if (onClick) {
     return (
-      <button
-        onClick={onClick}
-        className="bg-theme-surface border-theme-surface-border w-full rounded-lg border p-4 transition-colors hover:border-purple-500/60"
-      >
+      <button onClick={onClick} className="card w-full p-4 hover:border-purple-500/60">
         {body}
       </button>
     );
   }
 
-  return <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">{body}</div>;
+  return <div className="card p-4">{body}</div>;
 };
 
 const TemplateRow: React.FC<{
@@ -298,14 +295,14 @@ const SkillsTestingTemplatesTab: React.FC = () => {
             placeholder="Search templates..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-2 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
+            className="form-input placeholder:text-theme-text-muted pr-4 pl-10"
           />
         </div>
         <div className="flex gap-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
+            className="form-input px-3"
             aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
@@ -336,7 +333,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
         </div>
       ) : filteredTemplates.length === 0 ? (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
+        <div className="card py-12 text-center">
           <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted">No templates found</p>
           {/* Where a new department actually lands, so the library is offered
@@ -355,7 +352,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
+        <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>

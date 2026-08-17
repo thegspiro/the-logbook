@@ -201,7 +201,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                   type="button"
                   onClick={onClose}
                   disabled={deleting}
-                  className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50"
+                  className="btn-secondary text-theme-text-secondary text-sm font-medium focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg)"
                 >
                   Cancel
                 </button>
@@ -291,7 +291,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                   type="button"
                   onClick={onClose}
                   disabled={deleting}
-                  className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50"
+                  className="btn-secondary text-theme-text-secondary text-sm font-medium focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg)"
                 >
                   Cancel
                 </button>

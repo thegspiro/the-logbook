@@ -225,14 +225,14 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
                 onChange={(e) => setActionNotes(e.target.value)}
                 placeholder="Add notes for this action..."
                 rows={2}
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input placeholder-theme-text-muted flex-1 resize-none px-3 text-sm"
               />
             </div>
           )}
 
           {/* Withdraw confirmation */}
           {showWithdrawConfirm && (
-            <div className="bg-theme-surface-secondary border-theme-surface-border rounded-lg border p-3">
+            <div className="card-secondary p-3">
               <p className="text-theme-text-secondary mb-2 text-sm">
                 Withdraw this application? The applicant will be archived and removed from the active pipeline.
               </p>
@@ -414,12 +414,12 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
                 onChange={(e) => setActionNotes(e.target.value)}
                 placeholder="Add notes for this action..."
                 rows={2}
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input placeholder-theme-text-muted flex-1 resize-none px-3 text-sm"
               />
             </div>
           )}
           {showWithdrawConfirm && (
-            <div className="bg-theme-surface-secondary border-theme-surface-border rounded-lg border p-3">
+            <div className="card-secondary p-3">
               <p className="text-theme-text-secondary mb-2 text-sm">
                 Withdraw this application? The applicant will be archived and removed from the active pipeline.
               </p>
@@ -519,7 +519,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
                 onChange={(e) => setActionNotes(e.target.value)}
                 placeholder="Add notes for reactivation..."
                 rows={2}
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input placeholder-theme-text-muted flex-1 resize-none px-3 text-sm"
               />
             </div>
           )}
@@ -561,7 +561,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
                 onChange={(e) => setActionNotes(e.target.value)}
                 placeholder="Add notes for reactivation..."
                 rows={2}
-                className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input placeholder-theme-text-muted flex-1 resize-none px-3 text-sm"
               />
             </div>
           )}

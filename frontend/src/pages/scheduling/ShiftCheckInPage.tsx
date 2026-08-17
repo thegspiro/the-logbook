@@ -205,7 +205,7 @@ const ShiftCheckInPage: React.FC = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="bg-theme-surface border-theme-surface-border w-full max-w-sm space-y-5 rounded-2xl border p-6 shadow-lg">
+      <div className="card w-full max-w-sm space-y-5 p-6 shadow-lg">
         {/* Shift info */}
         <div className="text-center">
           <h1 className="text-theme-text-primary text-xl font-bold">Shift Check-In</h1>

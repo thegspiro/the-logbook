@@ -100,7 +100,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         {/* Tooltip */}
         {showTooltip && tooltip && (
           <div className={`absolute z-50 ${getTooltipPositionClasses()}`}>
-            <div className="bg-theme-surface text-theme-text-primary border-theme-surface-border max-w-xs rounded-lg border p-3 text-sm shadow-xl">
+            <div className="card text-theme-text-primary max-w-xs p-3 text-sm shadow-xl">
               <div className="mb-2 flex items-start justify-between space-x-2">
                 <p>{tooltip}</p>
                 <button

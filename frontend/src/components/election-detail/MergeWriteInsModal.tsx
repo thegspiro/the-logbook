@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import type { Candidate } from '../../types/election';
 
 interface MergeWriteInsModalProps {
@@ -16,6 +17,8 @@ interface MergeWriteInsModalProps {
  * under the target. The merge is audited.
  */
 const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({ candidates, merging, error, onSubmit, onClose }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
   const [targetId, setTargetId] = useState('');
 
@@ -48,13 +51,13 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({ candidates, mer
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="merge-write-ins-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="merge-write-ins-title" className="text-theme-text-primary text-lg font-medium">
             Merge Write-In Variants
