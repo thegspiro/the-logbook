@@ -240,12 +240,21 @@ class UserWithRolesResponse(UserResponse):
 
 
 class NotificationPreferences(BaseModel):
-    """Notification preferences schema"""
+    """Notification preferences schema.
 
-    email: bool = True
+    Email is the primary channel; the flags here govern which notifications a
+    member receives on top of the announcements they always get by email.
+    """
+
+    # The single master email switch. A second `email` key used to sit beside
+    # this one meaning the same thing, read by one sender and written by a
+    # different screen; migration 20260816_0007 folded it in here.
     email_notifications: bool = True
-    # Opt-in (default on) to SMS for urgent department messages. Only takes
-    # effect when Twilio is configured and the member has a mobile/phone.
+    # Mutes the SMS *addition* to the emails a member already receives, and
+    # only for the urgent alerts in notification_channels.SmsAlert. Defaults
+    # to True because the effective opt-in is the recorded TCPA consent, which
+    # fails closed — turning this off is how a consenting member silences
+    # texts without losing the email.
     sms_notifications: bool = True
     event_reminders: bool = True
     training_reminders: bool = True
