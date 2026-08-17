@@ -651,3 +651,63 @@ class TestCsvImportReportsUnmatchedVendors:
         # Unmatched keeps the typed name and no link — reported, not invented.
         assert by_name["Helmet"].vendor_id is None
         assert by_name["Helmet"].vendor == "Gals"
+
+
+class TestUnmatchedVendorReportingIsHonest:
+    """Three ways the warning could mislead, each of which sends the reader to
+    do work that will not succeed or is not needed. Companion to
+    TestCsvImportReportsUnmatchedVendors, which covers the happy path."""
+
+    async def _import(self, db_session, org, csv_text):
+        helper = TestCsvImportReportsUnmatchedVendors()
+        return await helper._import(db_session, org, csv_text)
+
+    async def test_spellings_of_one_name_are_reported_once(self, db_session):
+        org = await _make_org(db_session)
+
+        response = await self._import(
+            db_session,
+            org,
+            "Name,Vendor\nCoat,Gals\nHelmet,gals\nGloves,GALS\n",
+        )
+
+        body = response.json()
+        warning = next(w for w in body["warnings"] if "did not match" in w)
+        # Attach is case-insensitive, so these are one piece of work, not three.
+        assert warning.startswith("1 vendor name(s)")
+        assert warning.count('"') == 2
+
+    async def test_a_row_that_failed_to_import_is_not_reported(self, db_session):
+        org = await _make_org(db_session)
+        await _make_item(db_session, org, "Existing", serial_number="SN-1")
+
+        # Second row carries a duplicate serial, so create_item rejects it.
+        response = await self._import(
+            db_session,
+            org,
+            "Name,Vendor,Serial Number\nCoat,Gals,SN-1\n",
+        )
+
+        body = response.json()
+        assert body["imported"] == 0
+        assert body["failed"] == 1
+        # Nothing was written, so there is nothing to Attach.
+        assert [w for w in body["warnings"] if "did not match" in w] == []
+
+    async def test_a_deactivated_vendor_is_linked_not_reported(self, db_session):
+        org = await _make_org(db_session)
+        retired = await _make_vendor(db_session, org, "Galls", is_active=False)
+
+        response = await self._import(db_session, org, "Name,Vendor\nCoat,Galls\n")
+
+        body = response.json()
+        # Reporting it would advise adding a vendor that already exists, which
+        # creation rejects as an inactive duplicate — a dead end.
+        assert [w for w in body["warnings"] if "did not match" in w] == []
+        item = (
+            await db_session.execute(
+                select(InventoryItem).where(InventoryItem.name == "Coat")
+            )
+        ).scalar_one()
+        # Deactivating keeps every link, so an import naming one links too.
+        assert item.vendor_id == retired.id

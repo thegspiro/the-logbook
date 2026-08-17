@@ -10,7 +10,7 @@
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Creating one**   | Run `alembic revision -m "short description"` and **keep the id it generates.** `file_template` in `alembic.ini` already names the file `YYYYMMDD_HHMM_<rev>_<slug>.py`, so listings stay in date order. |
 | **Revision ID**    | Whatever `alembic revision` wrote. Do **not** hand-author one, and do not edit it to match the filename.                                                                                                 |
-| **down_revision**  | Must point to the revision ID of the **immediately preceding** migration in the chain. Get it from `python scripts/validate_migrations.py`, which prints the current head.                               |
+| **down_revision**  | Must point to the revision ID of the **immediately preceding** migration in the chain. Get it from `python scripts/validate_migrations.py` (run from `backend/`), which prints the current head.         |
 | **One stale file** | `20260216_0100_add_pipeline_features_and_tables.py.stale` is intentionally excluded from the chain.                                                                                                      |
 
 ### Why ids are generated, not hand-authored _(2026-08-17)_
@@ -44,7 +44,7 @@ already stamped those ids.
 **Ask the chain, not this file:**
 
 ```bash
-python scripts/validate_migrations.py    # prints the head and the down_revision to use
+cd backend && python scripts/validate_migrations.py    # prints the head and the down_revision to use
 ```
 
 This section used to declare the head in prose, and every migration PR edited
@@ -234,6 +234,7 @@ migrations on top.
 Let Alembic write the id — see [Why ids are generated](#why-ids-are-generated-not-hand-authored-2026-08-17).
 
 ```bash
+cd backend                                # both tools live here, not at the repo root
 python scripts/validate_migrations.py     # note the head it prints
 alembic revision -m "add widget table"    # writes YYYYMMDD_HHMM_<rev>_add_widget_table.py
 ```
@@ -245,7 +246,8 @@ on a duplicate id, a broken chain, or a hand-authored id after the cutover.
 ## Full Revision Chain
 
 ```bash
-cd backend && alembic history          # the whole chain, in order
+cd backend
+alembic history                        # the whole chain, in order
 python scripts/validate_migrations.py  # the head, and a check that the chain is sound
 ```
 

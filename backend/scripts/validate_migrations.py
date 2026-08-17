@@ -202,7 +202,21 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
     # someone forgot. Ask the chain instead.
     for head in sorted(head_revisions):
         print(f"  head -> {head}  ({revision_ids[head][0]})")
+
+    # Only sound advice when there is one head. Told to pick a parent while the
+    # chain is forked, a reader extends one branch and leaves the fork — and
+    # the instruction was printed once per head, so it named two parents that
+    # cannot both be right.
+    if len(head_revisions) == 1:
+        head = next(iter(head_revisions))
         print(f'  new migrations set down_revision = "{head}"')
+    elif len(head_revisions) > 1:
+        joined = ", ".join(f'"{h}"' for h in sorted(head_revisions))
+        print("  the chain is FORKED — do not extend either head on its own.")
+        print(
+            f"  merge first: alembic merge -m \"merge heads\" {' '.join(sorted(head_revisions))}"
+        )
+        print(f"  (a merge revision sets down_revision = ({joined}))")
 
     if warnings:
         print("\n" + "-" * 40)
