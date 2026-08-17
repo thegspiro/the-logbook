@@ -114,7 +114,6 @@ class ShiftResponse(UTCResponseBase):
     color: Optional[str] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
-    pass_down_notes: Optional[str] = None
     attendee_count: Optional[int] = 0
     call_count: int = 0
     total_hours: Optional[float] = None
@@ -769,6 +768,50 @@ class SchedulingEligibilitySettingsResponse(BaseModel):
     open_positions: List[str]
 
 
+class PositionEligibilitySource(BaseModel):
+    """One reason a member holds a position.
+
+    ``type`` is ``rank``, ``training``, or ``open``; ``label`` names the
+    specific rank or completed program so an officer can see *why* without
+    cross-referencing the settings screens.
+    """
+
+    type: str
+    label: str
+
+
+class RosterApparatusClearance(BaseModel):
+    """An apparatus the member holds a current operator record on."""
+
+    apparatus_id: str
+    unit_number: str
+    certification_expiration: Optional[date] = None
+
+
+class PositionRosterMember(BaseModel):
+    """A member eligible for a position, with the basis for that eligibility."""
+
+    user_id: str
+    user_name: str
+    rank: Optional[str] = None
+    rank_display_name: Optional[str] = None
+    membership_type: str
+    platoon: Optional[str] = None
+    sources: List[PositionEligibilitySource]
+    evoc_level_number: Optional[int] = None
+    evoc_level_name: Optional[str] = None
+    apparatus_cleared: List[RosterApparatusClearance] = []
+
+
+class PositionRosterResponse(BaseModel):
+    """Department-wide roster of everyone eligible for a shift position."""
+
+    position: str
+    members: List[PositionRosterMember]
+    excluded_membership_types: List[str]
+    is_open_position: bool
+
+
 class CalendarFeedResponse(BaseModel):
     """The member's personal ICS calendar-feed token and relative path."""
 
@@ -792,6 +835,11 @@ class SchedulingFeatureSettings(BaseModel):
     # Lifecycle enforcement
     require_end_of_shift_checks: bool = False
     restrict_checkin_to_assigned: bool = False
+    # Driver qualification. Defaults on: a member without the EVOC level an
+    # apparatus requires cannot be seated as its driver. Inert until an admin
+    # sets required_evoc_level_id on an apparatus, so switching it on for
+    # existing orgs changes nothing until they opt into the requirement.
+    enforce_evoc: bool = True
 
 
 # ============================================

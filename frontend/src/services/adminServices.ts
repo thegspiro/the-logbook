@@ -3,6 +3,7 @@
  */
 
 import api from './apiClient';
+import { dedupeInFlight } from '../utils/inFlight';
 import type { SecurityStatus, SecurityAlert } from './facilitiesServices';
 import type { DashboardStats, AdminSummary, ActionItemSummary, CommunityEngagement } from './communicationsServices';
 import type { IntegrationConfig } from './trainingServices';
@@ -73,10 +74,16 @@ export interface TrainingSessionResponse {
   training_type: string;
   credit_hours: number;
   instructor?: string;
+  instructor_id?: string;
+  co_instructors?: string[];
+  apparatus_id?: string;
   issues_certification: boolean;
   certification_number_prefix?: string;
   issuing_agency?: string;
   expiration_months?: number;
+  // False when the session's hours must not advance linked certificate
+  // requirements (delivery a certifying body wouldn't accept).
+  counts_toward_certification: boolean;
   auto_create_records: boolean;
   require_completion_confirmation: boolean;
   approval_deadline_days: number;
@@ -346,9 +353,20 @@ export const dashboardService = {
     const response = await api.get<CommunityEngagement>('/dashboard/community-engagement');
     return response.data;
   },
-  async getBranding(): Promise<{ name?: string }> {
-    const response = await api.get<{ name?: string }>('/auth/branding');
-    return response.data;
+  /**
+   * Department name and logo.
+   *
+   * De-duplicated because the app shell and the dashboard both ask on a first
+   * visit, guarded by different storage keys, and neither has written its key
+   * by the time the other fires. It is also the one branding read that cannot
+   * fall back on the response cache: `/auth/` is excluded from caching for
+   * credential endpoints, and this public endpoint is caught by that prefix.
+   */
+  async getBranding(): Promise<{ name?: string; logo?: string }> {
+    return dedupeInFlight('auth/branding', async () => {
+      const response = await api.get<{ name?: string; logo?: string }>('/auth/branding');
+      return response.data;
+    });
   },
 };
 
@@ -472,6 +490,12 @@ export interface NotificationRuleRecord {
   channel: string;
   enabled: boolean;
   config?: unknown;
+  /**
+   * Whether a sender actually consults this rule. Rules for triggers that
+   * have no sender yet are stored and listed but never read — the UI says so
+   * rather than showing them as plain "Active".
+   */
+  enforced: boolean;
   created_at: string;
   updated_at: string;
   created_by?: string;

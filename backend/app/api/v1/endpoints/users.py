@@ -51,6 +51,7 @@ from app.schemas.user import (
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
+    NotificationPreferences,
     UserListResponse,
     UserProfileResponse,
     UserUpdate,
@@ -221,9 +222,17 @@ async def create_member(
 
     # Use admin-provided password or generate a temporary one
     if user_data.password:
+        from app.core.breached_password import check_password_not_breached
         from app.core.security import validate_password_strength
 
         is_valid, error_msg = validate_password_strength(user_data.password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+
+        is_valid, error_msg = await check_password_not_breached(user_data.password)
         if not is_valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -516,6 +525,24 @@ def _clear_leadership_only_fields(
     """
     payload.date_of_birth = None
     payload.emergency_contacts = []
+
+
+def _clear_directory_only_profile_metadata(payload: UserProfileResponse) -> None:
+    """Remove account and authorization metadata from a directory profile.
+
+    ``members.view`` allows a member to find and open a colleague's directory
+    entry.  It must not also reveal the colleague's account-security state,
+    notification settings, or the permission sets attached to their roles.
+    Role names remain available because they are displayed on the profile.
+    """
+    payload.email_verified = None
+    payload.mfa_enabled = None
+    payload.last_login_at = None
+    payload.created_at = None
+    payload.updated_at = None
+    payload.notification_preferences = None
+    for role in payload.roles:
+        role.permissions = []
 
 
 def _clear_hidden_contact_fields(
@@ -1086,8 +1113,9 @@ async def get_user_with_roles(
     `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
     see `_clear_hidden_contact_fields`. Date of birth and emergency contacts are
     leadership-only regardless of that setting — see
-    `_clear_leadership_only_fields`. Members-managers and the subject themselves
-    are exempt from both.
+    `_clear_leadership_only_fields`. A caller relying only on `members.view`
+    also receives no account-security, notification, or role-permission
+    metadata. Members-managers and the subject themselves are exempt.
 
     **Authentication required**
     """
@@ -1155,6 +1183,8 @@ async def get_user_with_roles(
         visibility = await _load_contact_visibility(db, current_user, is_admin)
         _clear_hidden_contact_fields(payload, visibility)
         _clear_leadership_only_fields(payload)
+        if not _has_permission("users.view", user_permissions):
+            _clear_directory_only_profile_metadata(payload)
 
     return payload
 
@@ -1230,9 +1260,28 @@ async def update_contact_info(
         user.mobile = contact_update.mobile
 
     if contact_update.notification_preferences is not None:
-        user.notification_preferences = (
-            contact_update.notification_preferences.model_dump()
+        # Merge, never replace. Every field on NotificationPreferences defaults
+        # to True, so dumping the whole model turned a partial payload into a
+        # re-subscribe: a caller sending only {"sms_notifications": false}
+        # silently switched the member's other preferences back on, and the
+        # 200 made it look like the save had done exactly what was asked.
+        # An omitted key means "leave this alone" (CLAUDE.md pitfall 1b).
+        known_keys = set(NotificationPreferences.model_fields)
+        merged = {
+            key: value
+            for key, value in (user.notification_preferences or {}).items()
+            # Drops keys no sender reads any more, so a blob that predates
+            # migration 20260816_0007 heals on its next save instead of
+            # carrying a dead `email` flag forever.
+            if key in known_keys
+        }
+        merged.update(
+            contact_update.notification_preferences.model_dump(exclude_unset=True)
         )
+        # Every value is a flat bool, so this rebuilt dict is a genuinely new
+        # value and SQLAlchemy issues the UPDATE. Pitfall 12 (shallow copies
+        # sharing nested references) does not arise — there is no nesting.
+        user.notification_preferences = merged
 
     await db.commit()
 
@@ -1337,9 +1386,17 @@ async def update_user_profile(
                 detail="A member with this membership number already exists",
             )
 
-    # Rank, station, platoon, and membership number changes restricted to
-    # leadership / secretary / membership coordinator
-    restricted_fields = {"rank", "station", "platoon", "membership_number"}
+    # Eligibility and assignment fields are restricted to leadership,
+    # the secretary, or the membership coordinator. In particular, hire_date
+    # drives automatic membership tier advancement and must not be editable
+    # with the broader users.edit grant.
+    restricted_fields = {
+        "hire_date",
+        "rank",
+        "station",
+        "platoon",
+        "membership_number",
+    }
     has_restricted = restricted_fields & update_data.keys()
     if has_restricted:
         perm_result = await db.execute(
@@ -1353,7 +1410,11 @@ async def update_user_profile(
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, platoon, or membership number",
+                detail=(
+                    "Only leadership, the secretary, or the membership coordinator "
+                    "can update hire date, rank, station, platoon, or membership "
+                    "number"
+                ),
             )
 
         # members.manage lets you set rank, but a rank grants its own
@@ -1589,6 +1650,7 @@ async def admin_reset_password(
 
     **Authentication required**
     """
+    from app.core.breached_password import check_password_not_breached
     from app.core.security import hash_password, validate_password_strength
     from app.models.user import Session as UserSession
     from app.services.auth_service import _save_password_to_history
@@ -1618,6 +1680,13 @@ async def admin_reset_password(
 
     # Validate the new password
     is_valid, error_msg = validate_password_strength(reset_data.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
+    is_valid, error_msg = await check_password_not_breached(reset_data.new_password)
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -2311,6 +2380,52 @@ async def get_my_consents(
     from app.services.consent_service import ConsentService
 
     return await ConsentService(db).list_for_user(current_user)
+
+
+@router.get("/{user_id}/consents")
+async def get_user_consents(
+    user_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Read another member's consents, for staff editing that member's contact
+    and notification settings.
+
+    **Read-only by design, and there is deliberately no admin write
+    counterpart.** SMS consent is a TCPA record of what the *member* agreed
+    to; an officer ticking a box on their behalf would not be consent. Staff
+    need to see it because the notification preferences they can edit are
+    meaningless without it — the SMS preference cannot switch texts on for a
+    member who never consented, only off for one who did.
+    """
+    if str(current_user.id) != str(user_id):
+        user_perms = _collect_user_permissions(current_user)
+        if not _has_permission("users.edit", user_perms) and not _has_permission(
+            "members.manage", user_perms
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to view this member's consents",
+            )
+
+    # Org-scoped: a permission is held within the caller's own organization and
+    # says nothing about a member of another one (CLAUDE.md pitfall 14b).
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    from app.services.consent_service import ConsentService
+
+    return await ConsentService(db).list_for_user(member)
 
 
 @router.put("/me/consents/{consent_type}")

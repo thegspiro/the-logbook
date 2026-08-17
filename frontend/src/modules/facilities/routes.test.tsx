@@ -24,7 +24,7 @@ vi.mock('../../components/ProtectedRoute', () => ({
 import { getFacilitiesRoutes } from './routes';
 
 describe('getFacilitiesRoutes', () => {
-  it('restricts the bulk QR code directory to location or facility managers', async () => {
+  it('restricts the bulk QR code directory to managers and apparatus viewers', async () => {
     capturedAnyPermissions.length = 0;
     render(
       <MemoryRouter initialEntries={['/locations/qr-codes']}>
@@ -33,6 +33,9 @@ describe('getFacilitiesRoutes', () => {
     );
 
     expect(await screen.findByTestId('room-qr-codes-page')).toBeInTheDocument();
-    expect(capturedAnyPermissions).toContainEqual(['locations.manage', 'facilities.manage']);
+    // apparatus.view is admitted for the apparatus shift check-in cards only —
+    // room kiosk codes are redacted server-side for non-managers, so those
+    // cards never render for apparatus-only viewers.
+    expect(capturedAnyPermissions).toContainEqual(['locations.manage', 'facilities.manage', 'apparatus.view']);
   });
 });

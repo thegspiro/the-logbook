@@ -101,11 +101,6 @@ class SecureApiClient {
     return match?.[1] ? decodeURIComponent(match[1]) : null;
   }
 
-  /** Set a SameSite=Strict cookie (JS-readable, for double-submit pattern). */
-  private setCookie(name: string, value: string): void {
-    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; SameSite=Strict`;
-  }
-
   /** Delete a cookie by name. */
   private deleteCookie(name: string): void {
     document.cookie = `${name}=; path=/; SameSite=Strict; max-age=0`;
@@ -114,13 +109,40 @@ class SecureApiClient {
   /** Load the short-lived onboarding bearer identifier for this tab only. */
   private loadSession(): void {
     this.sessionId = sessionStorage.getItem('onboarding_session_id');
-    // Remove identifiers persisted by older clients. An onboarding session can
-    // authorize setup mutations, so it must not survive a browser restart or
-    // remain available to unrelated tabs via localStorage.
+    // One-time migration: clients from before the tab-scoping change persisted
+    // the session id in localStorage. Adopt it into this tab before removing
+    // it — once an organization row exists, /onboarding/start refuses to issue
+    // a new session, so discarding the only copy of the id would permanently
+    // brick an administrator who was mid-onboarding across the deploy.
+    if (!this.sessionId) {
+      const legacySessionId = localStorage.getItem('onboarding_session_id');
+      if (legacySessionId) {
+        this.sessionId = legacySessionId;
+        sessionStorage.setItem('onboarding_session_id', legacySessionId);
+      }
+    }
+    // An onboarding session can authorize setup mutations, so it must not
+    // survive a browser restart or remain available to unrelated tabs via
+    // localStorage.
     localStorage.removeItem('onboarding_session_id');
-    // SEC: CSRF token stored in a SameSite=Strict cookie (double-submit pattern)
-    // instead of localStorage to limit XSS exposure.
-    this.csrfToken = this.getCookie('onboarding_csrf_token');
+
+    // The backend validates X-CSRF-Token against the token it stored in the
+    // session server-side, so the token must stay paired with the session id
+    // it was issued for. Storing it in an origin-wide cookie let two
+    // concurrent onboarding tabs overwrite each other's token; keep it in
+    // tab-scoped sessionStorage alongside the session id instead.
+    this.csrfToken = sessionStorage.getItem('onboarding_csrf_token');
+    if (!this.csrfToken && this.sessionId) {
+      // Legacy fallback: pre-deploy clients kept the token in a cookie. Adopt
+      // it into this tab (pairs with the session-id migration above) and
+      // retire the shared cookie — nothing else reads it.
+      const legacyCsrfToken = this.getCookie('onboarding_csrf_token');
+      if (legacyCsrfToken) {
+        this.csrfToken = legacyCsrfToken;
+        sessionStorage.setItem('onboarding_csrf_token', legacyCsrfToken);
+        this.deleteCookie('onboarding_csrf_token');
+      }
+    }
   }
 
   /** Keep the short-lived onboarding bearer identifier scoped to this tab. */
@@ -129,10 +151,14 @@ class SecureApiClient {
     sessionStorage.setItem('onboarding_session_id', sessionId);
 
     if (csrfToken) {
-      this.csrfToken = csrfToken;
-      // SEC: Store CSRF token in a SameSite=Strict cookie (not localStorage)
-      this.setCookie('onboarding_csrf_token', csrfToken);
+      this.setCsrfToken(csrfToken);
     }
+  }
+
+  /** Store the CSRF token tab-scoped, paired with the session id it belongs to. */
+  private setCsrfToken(csrfToken: string): void {
+    this.csrfToken = csrfToken;
+    sessionStorage.setItem('onboarding_csrf_token', csrfToken);
   }
 
   /**
@@ -142,7 +168,8 @@ class SecureApiClient {
     this.sessionId = null;
     this.csrfToken = null;
     sessionStorage.removeItem('onboarding_session_id');
-    // Clean up the legacy persistent location as well.
+    sessionStorage.removeItem('onboarding_csrf_token');
+    // Clean up the legacy persistent locations as well.
     localStorage.removeItem('onboarding_session_id');
     this.deleteCookie('onboarding_csrf_token');
     // Clean up legacy localStorage CSRF token if it exists
@@ -257,8 +284,8 @@ class SecureApiClient {
    * If the server returns 401 (stale/missing session) and we thought we
    * had a valid session, automatically start a fresh session and retry
    * the request once.  This handles the case where the backend database
-   * was re-initialized but the browser still has a stale session ID in
-   * localStorage.
+   * was re-initialized but the tab still has a stale session ID in
+   * sessionStorage.
    */
   private async request<T>(
     method: string,
@@ -286,9 +313,7 @@ class SecureApiClient {
       // Update CSRF token if provided
       const newCsrfToken = response.headers.get('X-CSRF-Token');
       if (newCsrfToken) {
-        this.csrfToken = newCsrfToken;
-        // SEC: Store in SameSite=Strict cookie (not localStorage)
-        this.setCookie('onboarding_csrf_token', newCsrfToken);
+        this.setCsrfToken(newCsrfToken);
       }
 
       if (!response.ok) {

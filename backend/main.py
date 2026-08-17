@@ -2032,6 +2032,7 @@ app.add_middleware(
         "Authorization",
         "Content-Type",
         "X-Requested-With",
+        "X-Captcha-Token",
         "X-CSRF-Token",
         "X-Session-ID",
         "Accept",

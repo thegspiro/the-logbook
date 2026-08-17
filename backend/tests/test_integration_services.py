@@ -638,6 +638,7 @@ class TestWebhookParsing:
                 "event": "DOCUMENT_COMPLETED",
                 "payload": {
                     "externalId": "sp-1",
+                    "templateId": 42,
                     "title": "Waiver",
                     "recipients": [{"email": "a@b.com"}, {"email": "c@d.com"}],
                 },
@@ -645,6 +646,7 @@ class TestWebhookParsing:
         )
         assert parsed["completed"] is True
         assert parsed["external_id"] == "sp-1"
+        assert parsed["template_id"] == "42"
         assert parsed["recipient_emails"] == ["a@b.com", "c@d.com"]
 
     def test_documenso_non_completion_event(self):
@@ -663,11 +665,16 @@ class TestWebhookParsing:
         parsed = parse_calcom_webhook(
             {
                 "triggerEvent": "BOOKING_CREATED",
-                "payload": {"uid": "bk-1", "attendees": [{"email": "x@y.com"}]},
+                "payload": {
+                    "uid": "bk-1",
+                    "eventType": {"slug": "membership-interview"},
+                    "attendees": [{"email": "x@y.com"}],
+                },
             }
         )
         assert parsed["created"] is True
         assert parsed["booking_uid"] == "bk-1"
+        assert parsed["event_type_slug"] == "membership-interview"
         assert parsed["attendee_emails"] == ["x@y.com"]
 
     def test_calcom_cancellation_is_not_created(self):

@@ -1843,7 +1843,7 @@ async def save_session_organization(
         )
 
 
-_VIEW_ONLY_SUBPERMISSIONS = frozenset({"facilities.view_sensitive"})
+_CARRYOVER_SUBPERMISSIONS = frozenset({"facilities.view_sensitive", "scheduling.swap"})
 
 
 def _merge_default_permissions(
@@ -1861,12 +1861,14 @@ def _merge_default_permissions(
 
     1. Whole modules the frontend registry doesn't cover (audit, organization,
        users, locations, meetings, ...) — keep all their defaults.
-    2. Explicitly read-only sub-permissions within a submitted module (currently
-       facilities.view_sensitive) — keep them while the module retains view
-       access. Other action permissions are not representable by the editor and
-       must not survive when an admin clears Manage. A module saved with manage
-       already carries the ``module.*`` wildcard, which covers every
-       sub-permission without cluttering the list.
+    2. Sub-permissions within a submitted module that pair with baseline view
+       access rather than manage (facilities.view_sensitive, scheduling.swap —
+       members must keep shift-swap requests with scheduling view alone) — keep
+       them while the module retains view access. Other action permissions are
+       not representable by the editor and must not survive when an admin
+       clears Manage. A module saved with manage already carries the
+       ``module.*`` wildcard, which covers every sub-permission without
+       cluttering the list.
     """
     merged = list(permission_list)
     for perm in default_perms:
@@ -1875,7 +1877,7 @@ def _merge_default_permissions(
         module_prefix = perm.partition(".")[0]
         if module_prefix not in submitted:
             merged.append(perm)
-        elif perm in _VIEW_ONLY_SUBPERMISSIONS:
+        elif perm in _CARRYOVER_SUBPERMISSIONS:
             module_perms = submitted[module_prefix]
             if module_perms.view and not module_perms.manage:
                 merged.append(perm)

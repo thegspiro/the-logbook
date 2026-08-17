@@ -366,6 +366,17 @@ DEBUG=false
 # Requests must arrive through the HTTPS reverse proxy named above.
 SECURITY_ENFORCE_HTTPS=true
 
+# Transport TLS to data services — EXPLICIT OPT-OUT. The bundled MySQL and
+# Redis containers speak PLAINTEXT on the compose-internal Docker network and
+# do not terminate TLS. The backend defaults SECURITY_REQUIRE_TLS to true in
+# production and REFUSES TO START without DB_SSL/REDIS_SSL, so this explicit
+# false keeps the bundled Unraid stack bootable. If you move MySQL/Redis
+# off-host (or add TLS termination), set DB_SSL=true + DB_SSL_CA and
+# REDIS_SSL=true + REDIS_SSL_CA, then flip SECURITY_REQUIRE_TLS=true.
+SECURITY_REQUIRE_TLS=false
+DB_SSL=false
+REDIS_SSL=false
+
 # Ports
 FRONTEND_PORT=7880
 BACKEND_PORT=7881

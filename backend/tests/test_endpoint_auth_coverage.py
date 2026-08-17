@@ -28,6 +28,11 @@ AUTH_DEPS = {
 ALLOWLISTED_PUBLIC = {
     ("auth.py", "get_login_branding"),
     ("auth.py", "get_oauth_config"),
+    # Tells anonymous pages (login, forgot-password, public form submission)
+    # whether to render a challenge widget. Necessarily pre-session, and every
+    # field it returns is already public — the site key ships in the widget
+    # markup the browser renders. The secret key is never included.
+    ("auth.py", "get_captcha_config"),
     ("auth.py", "oauth_google_initiate"),
     ("auth.py", "oauth_google_callback"),
     ("auth.py", "oauth_microsoft_initiate"),

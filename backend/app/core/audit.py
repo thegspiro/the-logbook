@@ -667,6 +667,11 @@ class AuditLogger:
         filename = f"audit_archive_{rows[0].id:012d}-{purge_end:012d}_{stamp}.jsonl.gz"
         archive_path = os.path.join(archive_dir, filename)
         fd = os.open(archive_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        # The mode passed to os.open is filtered by the process umask — a
+        # hostile umask could leave the only remaining copy of the purged
+        # rows unreadable (mode 0000). fchmod re-asserts the exact mode,
+        # matching the explicit chmod on the directory above.
+        os.fchmod(fd, 0o600)
         with os.fdopen(fd, "wb") as raw_fh:
             with gzip.open(raw_fh, "wt", encoding="utf-8") as fh:
                 for row in rows:

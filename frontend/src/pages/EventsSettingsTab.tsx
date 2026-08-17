@@ -318,6 +318,23 @@ const EventsSettingsTab: React.FC = () => {
     );
   };
 
+  const toggleAcceptPublicRequests = async () => {
+    if (!settings) return;
+    const enabling = !settings.request_pipeline.accept_public_requests;
+    const result = await savePipeline(
+      { accept_public_requests: enabling },
+      undefined,
+      'Failed to update public request intake.'
+    );
+    if (result) {
+      toast.success(
+        result.request_pipeline.accept_public_requests
+          ? 'Your public request form is now open.'
+          : 'Your public request form is now closed. Staff can still create requests.'
+      );
+    }
+  };
+
   const togglePublicVisibility = async () => {
     if (!settings) return;
     const result = await savePipeline(
@@ -520,6 +537,7 @@ const EventsSettingsTab: React.FC = () => {
             onUpdateLeadTime={(d) => void updateLeadTime(d)}
             onUpdateDefaultAssignee={(u) => void updateDefaultAssignee(u)}
             onTogglePublicVisibility={() => void togglePublicVisibility()}
+            onToggleAcceptPublicRequests={() => void toggleAcceptPublicRequests()}
             onAddTask={() => void addPipelineTask()}
             onRemoveTask={(id) => void removePipelineTask(id)}
             onReorderTask={(i, d) => void reorderTask(i, d)}

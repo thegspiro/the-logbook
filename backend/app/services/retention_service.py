@@ -179,7 +179,6 @@ class RetentionService:
         items = []
         for rc in RECORD_CLASSES:
             configured = config.get(rc.key, "__unset__")
-            effective = rc.default_days if configured == "__unset__" else configured
             items.append(
                 {
                     "record_class": rc.key,
@@ -189,7 +188,11 @@ class RetentionService:
                     "configured_days": (
                         None if configured == "__unset__" else configured
                     ),
-                    "effective_days": effective,
+                    # Resolve through the same helper enforcement uses, so
+                    # the API reports the duration actually applied — a
+                    # malformed stored value falls back to the default and a
+                    # below-floor value is floored, exactly as in enforce().
+                    "effective_days": self._effective_days(config, rc),
                     "is_configured": configured != "__unset__",
                 }
             )

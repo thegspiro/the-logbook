@@ -150,11 +150,15 @@ GET    /api/v1/equipment-checks/reports/export               # CSV/PDF export
 ### Supply & Deployed Lots _(2026-08-10)_
 
 The bridge between Inventory and the Equipment Check system. **Reads** accept
-`equipment_check.view` or `inventory.view`; **writes** accept
-`equipment_check.submit` — the default member position — as well as
-`equipment_check.manage` / `inventory.manage`. Recording what you just used is
-crew work; gating it behind a manage permission is what leaves the gap for the
-next morning's check to find.
+`equipment_check.view` or `inventory.view`. **Writes** are split by intent
+*(tightened 2026-08-11)*: reporting an item used — and deployed-lot quantity
+updates — accept `equipment_check.submit` (the default member position) as
+well as `equipment_check.manage` / `inventory.manage`, because recording what
+you just used is crew work. Corrections of record are manage-only: withdrawing
+a restock report (`DELETE /items/{id}/used`), lot swaps
+(`POST /items/{id}/swap`), and edits touching a deployed lot's `lot_number`
+or `expiration_date` require `equipment_check.manage` or `inventory.manage`
+(a submit-only caller gets 403; quantity-only lot updates still pass).
 
 ```
 GET    /api/v1/equipment-checks/supply/expiring-items                        # ?days_ahead=30 (1-365)
@@ -605,7 +609,11 @@ to an event somewhere else.
 | `hp_website`        | string | no       | **Honeypot.** Hidden in the real form; only a bot fills it in        |
 
 **Response** (`GuestCheckInResponse`): `status` (`checked_in` | `already_checked_in`),
-`attendee_id`, `event_name`, `checked_in_at`, `prospect_created`, `message`.
+`attendee_id`, `event_name`, `checked_in_at`, `message`. _(2026-08-11)_
+`prospect_created` was removed from the response: an unauthenticated kiosk
+caller could use it to probe whether a name/email already exists as a
+prospect. The "someone will follow up" notice is now driven client-side from
+the event's `collects_prospect_details` flag.
 
 **GET response** (`GuestCheckInEventInfo`) exposes only what a visitor standing in
 the room can already see — name, type, start/end, room, department name,

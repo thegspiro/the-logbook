@@ -21,6 +21,7 @@ import { inputCls, labelCls, INSPECTION_TYPE_OPTIONS } from '../constants';
 import { useInspectionForm } from '../hooks/useInspectionForm';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
+import { DialogPanel } from '../../../components/ux/DialogPanel';
 
 interface Props {
   facilityId: string;
@@ -51,8 +52,8 @@ export default function InspectionsSection({ facilityId, canManage }: Props) {
   } = useInspectionForm({ facilityId });
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
-      <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
+    <div className="card">
+      <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
         <h2 className="text-theme-text-primary text-sm font-semibold">Inspections</h2>
         {canManage && (
           <button
@@ -64,7 +65,7 @@ export default function InspectionsSection({ facilityId, canManage }: Props) {
         )}
       </div>
 
-      <div className="space-y-4 p-5">
+      <div className="space-y-4 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative max-w-xs flex-1">
             <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -196,14 +197,14 @@ export default function InspectionsSection({ facilityId, canManage }: Props) {
 
       {canManage && showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl border">
+          <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingInspection ? 'Edit Inspection' : 'New Inspection'}
@@ -355,13 +356,13 @@ export default function InspectionsSection({ facilityId, canManage }: Props) {
                   void handleSave();
                 }}
                 disabled={isSaving}
-                className="btn-primary flex items-center gap-2 px-5 text-sm"
+                className="btn-primary flex items-center gap-2 px-4 text-sm"
               >
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {editingInspection ? 'Update' : 'Create'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

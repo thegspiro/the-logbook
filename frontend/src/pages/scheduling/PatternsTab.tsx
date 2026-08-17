@@ -50,8 +50,7 @@ const PATTERN_TYPE_LABELS: Record<string, string> = {
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const inputCls =
-  'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+const inputCls = 'form-input px-3 text-sm focus:ring-violet-500';
 
 const LazyFallback = () => (
   <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
@@ -786,13 +785,12 @@ export const PatternsTab: React.FC = () => {
             const config: Record<string, unknown> = pattern.schedule_config ?? {};
             const weekdays = config.weekdays as number[] | undefined;
             const cyclePattern = config.cycle_pattern as string[] | undefined;
-            const patternPlatoons = config.platoons as string[] | undefined;
+            const patternPlatoons = Array.isArray(config.platoons)
+              ? config.platoons.filter((platoon): platoon is string => typeof platoon === 'string')
+              : [];
 
             return (
-              <div
-                key={pattern.id}
-                className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border"
-              >
+              <div key={pattern.id} className="card overflow-hidden">
                 {/* A pattern row used to be one big button with a bare chevron:
                     everything a pattern is for — generating the shifts — was
                     behind a glyph that said nothing about what it hid. The

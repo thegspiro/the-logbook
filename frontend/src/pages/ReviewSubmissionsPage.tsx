@@ -614,7 +614,7 @@ const SubmissionCard: React.FC<{
   const isApproved = submission.status === SubmissionStatus.APPROVED && !!submission.training_record_id;
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
+    <div className="card overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -629,7 +629,7 @@ const SubmissionCard: React.FC<{
             <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span className="flex items-center space-x-1">
                 <User className="h-3 w-3" />
-                <span>{submission.submitted_by}</span>
+                <span>{submission.submitter_name || submission.submitted_by}</span>
               </span>
               <span className="flex items-center space-x-1">
                 <Calendar className="h-3 w-3" />
@@ -805,7 +805,7 @@ const ConfigEditor: React.FC<{
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border space-y-6 rounded-lg border p-6">
+    <div className="card space-y-6 p-6">
       <h2 className="text-theme-text-primary flex items-center space-x-2 text-lg font-semibold">
         <Settings className="text-theme-text-muted h-5 w-5" />
         <span>Self-Report Configuration</span>
@@ -1129,7 +1129,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             <p className="text-theme-text-muted mt-4">Loading submissions...</p>
           </div>
         ) : submissions.length === 0 ? (
-          <div className="bg-theme-surface border-theme-surface-border rounded-lg border">
+          <div className="card">
             {activeView === 'pending' ? (
               <EmptyState icon={CheckCircle2} title="All caught up!" description="No submissions waiting for review." />
             ) : (

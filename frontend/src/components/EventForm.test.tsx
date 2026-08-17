@@ -264,6 +264,93 @@ describe('EventForm', () => {
       await waitFor(() => expect(screen.getByLabelText(/minutes before/i)).toHaveValue(15));
     });
 
+    it('should derive the lead time from the gap when the preceding meeting is back-to-back', async () => {
+      renderWithRouter(
+        <EventForm
+          initialData={{ start_datetime: '2026-08-13T18:00:00Z' }}
+          userEvents={[
+            {
+              id: 'previous-meeting',
+              title: 'Previous meeting',
+              event_type: 'business_meeting',
+              start_datetime: '2026-08-13T17:00:00Z',
+              end_datetime: '2026-08-13T18:00:00Z',
+            },
+          ]}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      // Gap of 0 — check-in must not open during the earlier meeting at all.
+      await waitFor(() => expect(screen.getByLabelText(/minutes before/i)).toHaveValue(0));
+    });
+
+    it('should derive the lead time from the gap when it is under 15 minutes', async () => {
+      renderWithRouter(
+        <EventForm
+          initialData={{ start_datetime: '2026-08-13T18:00:00Z' }}
+          userEvents={[
+            {
+              id: 'previous-meeting',
+              title: 'Previous meeting',
+              event_type: 'business_meeting',
+              start_datetime: '2026-08-13T16:50:00Z',
+              end_datetime: '2026-08-13T17:50:00Z',
+            },
+          ]}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      // Gap of 10 minutes — lead is the gap, not the 15-minute standard.
+      await waitFor(() => expect(screen.getByLabelText(/minutes before/i)).toHaveValue(10));
+    });
+
+    it('should cap the shortened lead time at 15 minutes for larger gaps', async () => {
+      renderWithRouter(
+        <EventForm
+          initialData={{ start_datetime: '2026-08-13T18:00:00Z' }}
+          userEvents={[
+            {
+              id: 'previous-meeting',
+              title: 'Previous meeting',
+              event_type: 'business_meeting',
+              start_datetime: '2026-08-13T16:30:00Z',
+              end_datetime: '2026-08-13T17:30:00Z',
+            },
+          ]}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      // Gap of 30 minutes — the shortened standard (15) applies, not the gap.
+      await waitFor(() => expect(screen.getByLabelText(/minutes before/i)).toHaveValue(15));
+    });
+
+    it('should keep the standard 60-minute lead when no meeting precedes within the hour', async () => {
+      renderWithRouter(
+        <EventForm
+          initialData={{ start_datetime: '2026-08-13T18:00:00Z' }}
+          userEvents={[
+            {
+              id: 'distant-meeting',
+              title: 'Distant meeting',
+              event_type: 'business_meeting',
+              start_datetime: '2026-08-13T15:00:00Z',
+              end_datetime: '2026-08-13T16:00:00Z',
+            },
+          ]}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await waitFor(() => expect(screen.getByLabelText(/minutes before/i)).toHaveValue(60));
+    });
+
     it('should show window options when Window type is selected', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 

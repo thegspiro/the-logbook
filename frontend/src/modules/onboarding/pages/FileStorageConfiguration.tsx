@@ -14,8 +14,7 @@ import {
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 
-const inputClass =
-  'w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+const inputClass = 'form-input px-3';
 const labelClass = 'form-label-sm';
 
 interface FileStorageConfig {

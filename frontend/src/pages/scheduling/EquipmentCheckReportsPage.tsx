@@ -31,6 +31,7 @@ import { DateRangePicker } from '../../components/ux/DateRangePicker';
 import { Pagination } from '../../components/ux/Pagination';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
 import SchedulingHeader from './SchedulingHeader';
 
 type ReportTab = 'compliance' | 'failures' | 'trends';
@@ -70,7 +71,7 @@ const EquipmentCheckReportsPage: React.FC = () => {
         <SchedulingHeader backTo="/scheduling" description="Check reports · Review compliance and deficiencies" />
 
         {/* Tabs */}
-        <div className="bg-theme-surface border-theme-surface-border mb-5 flex gap-1 rounded-xl border p-1">
+        <div className="card mb-5 flex gap-1 p-1">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -181,13 +182,13 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
       <div className="flex justify-end gap-2">
         <button
           onClick={handleExportCsv}
-          className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
+          className="btn-secondary text-theme-text-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
         >
           <Download className="h-3.5 w-3.5" /> CSV
         </button>
         <button
           onClick={handleExportPdf}
-          className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
+          className="btn-secondary text-theme-text-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
         >
           <FileText className="h-3.5 w-3.5" /> PDF
         </button>
@@ -201,7 +202,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {data.apparatus.map((a) => (
-              <div key={a.apparatusId} className="bg-theme-surface border-theme-surface-border rounded-xl border p-4">
+              <div key={a.apparatusId} className="card p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-theme-text-primary text-sm font-semibold">{a.apparatusName}</span>
                   {a.hasDeficiency && (
@@ -252,7 +253,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
         {data.members.length === 0 ? (
           <p className="text-theme-text-muted py-4 text-sm">No member data available.</p>
         ) : (
-          <div className="bg-theme-surface border-theme-surface-border overflow-x-auto rounded-xl border">
+          <div className="card overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
@@ -376,13 +377,13 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
         </div>
         <button
           onClick={handleExportCsv}
-          className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium"
+          className="btn-secondary text-theme-text-secondary flex items-center gap-1.5 px-3 text-xs font-medium"
         >
           <Download className="h-3.5 w-3.5" /> CSV
         </button>
         <button
           onClick={handleExportPdf}
-          className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium"
+          className="btn-secondary text-theme-text-secondary flex items-center gap-1.5 px-3 text-xs font-medium"
         >
           <FileText className="h-3.5 w-3.5" /> PDF
         </button>
@@ -401,7 +402,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
         <>
           <p className="text-theme-text-muted text-xs">{data.total} total failures</p>
 
-          <div className="bg-theme-surface border-theme-surface-border overflow-x-auto rounded-xl border">
+          <div className="card overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
@@ -460,6 +461,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
   const [trendData, setTrendData] = useState<ItemTrendResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Load templates for the picker
   useEffect(() => {
@@ -467,8 +469,11 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
       try {
         const result = await schedulingService.getEquipmentCheckTemplates({});
         setTemplates(result);
-      } catch {
-        // silently handle
+      } catch (err: unknown) {
+        // An empty picker and a picker whose contents failed to load looked
+        // identical, so a failure here read as "this department has no
+        // templates" and the officer stopped rather than retrying.
+        setError(getErrorMessage(err, 'Failed to load check templates'));
       } finally {
         setLoadingTemplates(false);
       }
@@ -484,24 +489,38 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
   useEffect(() => {
     if (!selectedItemId) {
       setTrendData(null);
+      setError(null);
       return;
     }
+    // Switching items re-fires this before the previous request lands. Without
+    // the flag a slow response for the item just deselected overwrites the one
+    // the officer is now looking at — the heading names the new item while the
+    // bars belong to the old one, and nothing looks wrong.
+    let cancelled = false;
     const load = async () => {
       setLoading(true);
+      setError(null);
       try {
         const result = await schedulingService.getItemTrends({
           template_item_id: selectedItemId,
           date_from: startDate,
           date_to: endDate,
         });
-        setTrendData(result);
-      } catch {
-        // silently handle
+        if (!cancelled) setTrendData(result);
+      } catch (err: unknown) {
+        if (cancelled) return;
+        // Leaving the previous item's chart on screen under the new item's
+        // name was the worst of both: stale numbers presented as current.
+        setTrendData(null);
+        setError(getErrorMessage(err, 'Failed to load trend data'));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     void load();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedItemId, startDate, endDate]);
 
   // Reset item when template changes
@@ -520,8 +539,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
     window.open(url, '_blank');
   };
 
-  const selectClass =
-    'px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500';
+  const selectClass = 'form-input px-3 text-sm focus:ring-violet-500';
 
   return (
     <div className="space-y-5">
@@ -558,7 +576,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
         {trendData && (
           <button
             onClick={handleExport}
-            className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium"
+            className="btn-secondary text-theme-text-secondary flex items-center gap-1.5 px-3 text-xs font-medium"
           >
             <Download className="h-3.5 w-3.5" /> Export CSV
           </button>
@@ -566,6 +584,12 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
       </div>
 
       {/* Content */}
+      {error && (
+        <p className="alert-danger" role="alert">
+          {error}
+        </p>
+      )}
+
       {!selectedItemId ? (
         <div className="text-theme-text-muted py-12 text-center">
           <TrendingUp className="mx-auto mb-2 h-8 w-8 opacity-50" />
@@ -581,7 +605,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
 
           {/* Bar chart visualization */}
           {trendData.trends.length > 0 ? (
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4">
+            <div className="card p-4">
               <div className="flex h-40 items-end gap-1">
                 {trendData.trends.map((entry) => {
                   const notApplicable = entry.notApplicableCount ?? 0;
@@ -661,7 +685,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
           {trendData.history.length > 0 && (
             <div>
               <h4 className="text-theme-text-secondary mb-2 text-xs font-semibold">Past results</h4>
-              <div className="bg-theme-surface border-theme-surface-border overflow-x-auto rounded-xl border">
+              <div className="card overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
@@ -735,7 +759,7 @@ const StatCard: React.FC<{ label: string; value: string; color?: 'green' | 'ambe
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 text-center">
+    <div className="card p-4 text-center">
       <p className="mb-0.5 text-2xl font-bold">
         <span className={color ? colorClasses[color] : 'text-theme-text-primary'}>{value}</span>
       </p>

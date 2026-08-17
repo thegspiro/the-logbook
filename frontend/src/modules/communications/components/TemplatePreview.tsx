@@ -105,7 +105,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
           value={selectedMemberId}
           onChange={(e) => handleMemberChange(e.target.value)}
           disabled={isLoadingMembers}
-          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-focus-ring flex-1 rounded-md border px-2 py-1.5 text-xs focus:outline-hidden"
+          className="form-input flex-1 px-2 py-1.5 text-xs"
         >
           <option value="">Sample data (default)</option>
           {members.map((m) => {
@@ -129,9 +129,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
 
       {/* Email body preview */}
       <div
-        className={`bg-theme-surface border-theme-surface-border mx-auto overflow-hidden rounded-lg border transition-all ${
-          viewport === 'mobile' ? 'max-w-[375px]' : 'w-full'
-        }`}
+        className={`card mx-auto overflow-hidden transition-all ${viewport === 'mobile' ? 'max-w-[375px]' : 'w-full'}`}
       >
         {isPreviewing && !preview ? (
           <div className="flex h-[600px] items-center justify-center">

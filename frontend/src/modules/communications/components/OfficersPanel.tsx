@@ -107,7 +107,7 @@ const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSa
   };
 
   return (
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+    <div className="card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
