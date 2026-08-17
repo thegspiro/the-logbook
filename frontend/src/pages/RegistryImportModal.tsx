@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { X, Loader2, CheckCircle2, Circle, Download } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
@@ -27,6 +28,8 @@ function metaLine(item: RegistryRequirementPreview): string {
 }
 
 const RegistryImportModal: React.FC<Props> = ({ registryKey, registryName, onClose, onImported }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [items, setItems] = useState<RegistryRequirementPreview[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -102,7 +105,7 @@ const RegistryImportModal: React.FC<Props> = ({ registryKey, registryName, onClo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`Import from ${registryName}`}
@@ -110,7 +113,7 @@ const RegistryImportModal: React.FC<Props> = ({ registryKey, registryName, onClo
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-lg flex-col rounded-lg">
+      <div ref={dialogRef} className="modal-panel flex max-h-[90dvh] w-full max-w-lg flex-col">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
           <div>
             <h2 className="text-theme-text-primary text-lg font-bold">Import from {registryName}</h2>

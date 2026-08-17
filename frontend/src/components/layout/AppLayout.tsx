@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet } from 'react-router';
-import axios from 'axios';
 import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
 import { ConfirmDialog } from '../ux/ConfirmDialog';
+import { dashboardService } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useIdleTimer } from '../../hooks/useIdleTimer';
 import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
@@ -89,10 +89,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
     // If localStorage is empty (first visit), fetch branding from backend
     if (!savedDepartmentName) {
-      void axios
-        .get<{ name?: string; logo?: string }>('/api/v1/auth/branding')
-        .then((response) => {
-          const { name, logo } = response.data;
+      // Through the shared service rather than a bare axios call, so this and
+      // the dashboard's own first-visit fetch collapse into one request.
+      void dashboardService
+        .getBranding()
+        .then(({ name, logo }) => {
           if (name) {
             setDepartmentName(name);
             localStorage.setItem('departmentName', name);

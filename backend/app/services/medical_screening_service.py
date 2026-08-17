@@ -23,6 +23,7 @@ from app.schemas.medical_screening import (
     ComplianceItem,
     ComplianceSummary,
     ExpiringScreening,
+    MyComplianceSummary,
     ScreeningRecordCreate,
     ScreeningRecordUpdate,
     ScreeningRequirementCreate,
@@ -247,6 +248,55 @@ class MedicalScreeningService:
         await self.db.flush()
         return record
 
+    async def try_advance_pipeline_stage(
+        self,
+        record: ScreeningRecord,
+        organization_id: str,
+        completed_by: str,
+    ) -> bool:
+        """Advance a prospect parked on a medical screening stage, if cleared.
+
+        A screening result is the completion evidence a MEDICAL_SCREENING stage
+        waits on, but nothing connected the two: an org could tick the stage's
+        "auto-advance" box and still watch cleared applicants sit there until
+        someone moved them by hand.
+
+        Only a cleared result is evidence, so this mirrors the stage gate's own
+        definition (``PASSED``/``COMPLETED``) rather than treating any write as
+        progress. The gate still has the final say — it requires *every*
+        configured screening to have cleared, so clearing one of three defers
+        the advance instead of granting it.
+
+        Call this after the screening write is committed: completing a stage
+        commits, and an uncommitted screening row would otherwise ride along.
+        """
+        if not record.prospect_id:
+            return False
+        if record.status not in (ScreeningStatus.PASSED, ScreeningStatus.COMPLETED):
+            return False
+
+        from app.models.membership_pipeline import PipelineStepType
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+        )
+
+        screening_type = (
+            record.screening_type.value
+            if hasattr(record.screening_type, "value")
+            else record.screening_type
+        )
+        return await MembershipPipelineService(self.db).try_auto_advance_current_step(
+            prospect_id=str(record.prospect_id),
+            organization_id=organization_id,
+            step_type=PipelineStepType.MEDICAL_SCREENING,
+            trigger="medical screening result",
+            completed_by=completed_by,
+            action_result={
+                "screening_record_id": str(record.id),
+                "screening_type": screening_type,
+            },
+        )
+
     async def delete_record(self, record_id: str, organization_id: str) -> bool:
         """Delete a screening record."""
         record = await self.get_record(record_id, organization_id)
@@ -356,6 +406,42 @@ class MedicalScreeningService:
             expiring_soon_count=expiring_soon_count,
             is_fully_compliant=compliant_count == len(requirements),
             items=items,
+        )
+
+    async def get_my_compliance_summary(
+        self,
+        organization_id: str,
+        user_id: str,
+    ) -> MyComplianceSummary:
+        """Reduce a member's own compliance to counts, dropping the detail.
+
+        Built on top of ``get_compliance_status`` so there is one definition of
+        "compliant" rather than two that can drift apart. Everything naming a
+        specific screening is discarded here — see ``MyComplianceSummary``.
+        """
+        full = await self.get_compliance_status(
+            organization_id=organization_id,
+            user_id=user_id,
+        )
+
+        # Soonest lapse among screenings that are still valid. Anything already
+        # lapsed is reported by non_compliant_count, so a negative number never
+        # reaches the caller and cannot be rendered as "expires in -3 days".
+        upcoming = [
+            item.days_until_expiration
+            for item in full.items
+            if item.is_compliant
+            and item.days_until_expiration is not None
+            and item.days_until_expiration >= 0
+        ]
+
+        return MyComplianceSummary(
+            total_requirements=full.total_requirements,
+            compliant_count=full.compliant_count,
+            non_compliant_count=full.non_compliant_count,
+            expiring_soon_count=full.expiring_soon_count,
+            is_fully_compliant=full.is_fully_compliant,
+            days_until_next_expiration=min(upcoming) if upcoming else None,
         )
 
     async def get_expiring_soon(

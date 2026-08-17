@@ -642,7 +642,7 @@ is deliberate — voiding keeps the submission and records the reason it was
 refused, rather than deleting an evaluation somebody actually sat for. The
 candidate sees the reason.
 
-![Officer review queue — completed results awaiting validation, with Validate and Void actions](./images/09-11-validation-queue.png)
+![Officer review queue — completed results awaiting validation, each row with its accept, notify and void controls and a bulk Accept above them](./images/09-11-validation-queue.png)
 
 ### Edge cases
 

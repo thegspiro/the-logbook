@@ -221,9 +221,17 @@ async def create_member(
 
     # Use admin-provided password or generate a temporary one
     if user_data.password:
+        from app.core.breached_password import check_password_not_breached
         from app.core.security import validate_password_strength
 
         is_valid, error_msg = validate_password_strength(user_data.password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+
+        is_valid, error_msg = await check_password_not_breached(user_data.password)
         if not is_valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1622,6 +1630,7 @@ async def admin_reset_password(
 
     **Authentication required**
     """
+    from app.core.breached_password import check_password_not_breached
     from app.core.security import hash_password, validate_password_strength
     from app.models.user import Session as UserSession
     from app.services.auth_service import _save_password_to_history
@@ -1651,6 +1660,13 @@ async def admin_reset_password(
 
     # Validate the new password
     is_valid, error_msg = validate_password_strength(reset_data.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
+    is_valid, error_msg = await check_password_not_breached(reset_data.new_password)
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

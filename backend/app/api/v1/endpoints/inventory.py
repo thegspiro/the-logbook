@@ -38,6 +38,7 @@ from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import generate_uuid, safe_error_detail, sanitize_error_message
 from app.core.websocket_manager import ws_manager
 from app.models.inventory import (
+    MEDICAL_ITEM_TYPES,
     AssignmentType,
     CheckOutRecord,
     EquipmentRequest,
@@ -53,6 +54,7 @@ from app.models.inventory import (
     NFPAItemCompliance,
     StorageArea,
 )
+from app.models.location import Location
 from app.models.operational_rank import OperationalRank
 from app.models.user import User
 from app.schemas.inventory import (
@@ -64,6 +66,9 @@ from app.schemas.inventory import (
     BulkIssuanceRequest,
     BulkIssuanceResponse,
     BulkIssuanceResultItem,
+    CategoryPresetApplyRequest,
+    CategoryPresetApplyResponse,
+    CategoryPresetResponse,
     ChargeManagementResponse,
     CheckInRequest,
     CheckOutCreate,
@@ -104,6 +109,7 @@ from app.schemas.inventory import (
     InventoryLotCreate,
     InventoryLotResponse,
     InventoryLotUpdate,
+    InventorySetupStatus,
     InventorySummary,
     InventoryVendorContactCreate,
     InventoryVendorContactResponse,
@@ -173,6 +179,7 @@ from app.services.inventory_service import InventoryService
 from app.services.label_service import LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
+from app.utils.org_scoping import assert_in_org
 from app.utils.upload_limits import read_upload_limited
 from app.utils.websocket_origin import is_websocket_origin_allowed
 
@@ -250,6 +257,10 @@ async def list_categories(
     categories = await service.get_categories(
         organization_id=current_user.organization_id,
         item_type=item_type,
+        # Medical supplies have their own page and their own officer; listing
+        # them here too would put the same stock under two owners and let a
+        # gear-only quartermaster edit an EMS category by accident.
+        exclude_item_types=MEDICAL_ITEM_TYPES,
         active_only=active_only,
     )
     return categories
@@ -405,6 +416,99 @@ async def delete_category(
 
 
 # ============================================
+# Guided Setup Endpoints
+# ============================================
+
+
+@router.get("/setup/status", response_model=InventorySetupStatus)
+async def get_setup_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Counts of the records the guided setup workflow walks through.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_setup_status(organization_id=current_user.organization_id)
+
+
+@router.get("/setup/category-presets", response_model=list[CategoryPresetResponse])
+async def list_category_presets(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    List the starter categories the setup workflow offers, each flagged with
+    whether the organization already has a category by that name.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_category_presets(
+        organization_id=current_user.organization_id
+    )
+
+
+@router.post(
+    "/setup/category-presets",
+    response_model=CategoryPresetApplyResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def apply_category_presets(
+    request: CategoryPresetApplyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create the named starter categories. Presets whose name already exists in
+    the organization are skipped rather than duplicated, so the call is safe to
+    repeat.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    created, skipped, error = await service.apply_category_presets(
+        organization_id=current_user.organization_id,
+        keys=request.keys,
+        created_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error),
+        )
+
+    if created:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_category_presets_applied",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "category_ids": [str(category.id) for category in created],
+                "category_names": [category.name for category in created],
+                "skipped": skipped,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return CategoryPresetApplyResponse(
+        created=[
+            InventoryCategoryResponse.model_validate(category, from_attributes=True)
+            for category in created
+        ],
+        skipped=skipped,
+    )
+
+
+# ============================================
 # Item Endpoints
 # ============================================
 
@@ -493,6 +597,8 @@ async def list_items(
         status=status_enum,
         condition=condition_enum,
         item_type=item_type_enum,
+        # Gear and uniforms only — medical stock is listed on its own page.
+        exclude_item_types=MEDICAL_ITEM_TYPES,
         assigned_to=assigned_to,
         location_id=location_id,
         storage_area_id=storage_area_id,
@@ -1141,8 +1247,14 @@ async def import_items_csv(
     # import lands in the same purchase history as items entered by hand. An
     # unrecognized name stays in the free-text column rather than silently
     # creating vendors nobody reviewed.
+    #
+    # Deactivated vendors are included deliberately. Deactivating one keeps
+    # every existing link — purchase history for equipment still in service is
+    # the reason the record exists — so an import naming one must link too.
+    # Excluding them also left the warning below advising "add this vendor" for
+    # a name that vendor creation rejects as an inactive duplicate: a dead end.
     vendors = await service.list_vendors(
-        organization_id=current_user.organization_id, active_only=True
+        organization_id=current_user.organization_id, active_only=False
     )
     vendor_by_name: Dict[str, str] = {
         vendor.name.strip().lower(): str(vendor.id) for vendor in vendors
@@ -1152,6 +1264,15 @@ async def import_items_csv(
     failed = 0
     errors: List[Dict[str, Any]] = []
     warnings: List[str] = []
+    # Names that matched no vendor, reported once at the end: a spreadsheet
+    # with one misspelling usually carries it on every row, and a warning per
+    # row would bury the others under the response cap.
+    #
+    # Keyed by the same case-folded value the matching uses, so "Gals", "gals"
+    # and "GALS" collapse to one entry — they are one name to Attach, and
+    # listing three would imply three pieces of work. The value keeps the first
+    # spelling seen, so the reader sees a name as it appears in their file.
+    unmatched_vendors: Dict[str, str] = {}
 
     rows = list(reader)
     if not rows:
@@ -1185,10 +1306,13 @@ async def import_items_csv(
             item_data["category_id"] = cat_id
 
         vendor_raw = (item_data.get("vendor") or "").strip()
+        unmatched_key = ""
         if vendor_raw:
             vendor_id = vendor_by_name.get(vendor_raw.lower())
             if vendor_id:
                 item_data["vendor_id"] = vendor_id
+            else:
+                unmatched_key = vendor_raw.lower()
 
         item_data.pop("barcode", None)
         new_item, error = await service.create_item(
@@ -1202,6 +1326,12 @@ async def import_items_csv(
             failed += 1
         else:
             imported += 1
+            # Recorded only now. create_item still rejects rows the CSV parse
+            # accepted — a duplicate serial, a pool item with no quantity — and
+            # a name banked before that is known would send the reader to
+            # Attach for rows that were never written.
+            if unmatched_key:
+                unmatched_vendors.setdefault(unmatched_key, vendor_raw)
 
     if imported > 0:
         await log_audit_event(
@@ -1221,6 +1351,27 @@ async def import_items_csv(
             str(current_user.organization_id),
             "items_imported",
             {"count": imported},
+        )
+
+    # Say so at import time. These rows keep the typed-in name and no vendor
+    # link, which is a silent way to refill the very list the vendor cleanup
+    # screen exists to drain — one misspelled column in a 200-row sheet used
+    # to import clean and surface weeks later as 200 unlinked rows.
+    if unmatched_vendors:
+        # Sorted by the fold key so ordering does not depend on which spelling
+        # the file happened to use first; displayed as that spelling.
+        shown = [unmatched_vendors[key] for key in sorted(unmatched_vendors)]
+        listed = ", ".join(f'"{name}"' for name in shown[:10])
+        if len(shown) > 10:
+            listed += f", and {len(shown) - 10} more"
+        # Leads the list rather than trailing it: warnings are truncated at 50
+        # below, and a sheet messy enough to fill that quota is exactly the one
+        # whose vendor names need reporting.
+        warnings.insert(
+            0,
+            f"{len(shown)} vendor name(s) did not match a vendor on file and "
+            f"were left as free text: {listed}. Add them on the Vendors screen, "
+            f"or use Attach there to link every row already carrying the name.",
         )
 
     return {
@@ -3611,8 +3762,6 @@ async def list_storage_areas(
     item_counts = {row.storage_area_id: row.cnt for row in count_result.all()}
 
     # Load locations for names
-    from app.models.location import Location
-
     loc_result = await db.execute(
         select(Location.id, Location.name).where(
             Location.organization_id == str(current_user.organization_id)
@@ -3672,6 +3821,36 @@ async def create_storage_area(
     organization's storage-area series. Areas are meant to be scannable, so
     this is not left to whoever remembers to fill the field in.
     """
+    # XC-1: the room and parent area come from the client, so both have to be
+    # confirmed in-org before they are stored — otherwise an area can be filed
+    # under another organization's room and the tree reads that room's name back.
+    #
+    # Ahead of the barcode, deliberately: allocating one advances the
+    # organization's running counter, so validating afterwards would burn a
+    # number out of the series on every rejected request.
+    try:
+        await assert_in_org(
+            db,
+            Location,
+            data.location_id,
+            current_user.organization_id,
+            allow_none=True,
+            label="room",
+        )
+        await assert_in_org(
+            db,
+            StorageArea,
+            data.parent_id,
+            current_user.organization_id,
+            allow_none=True,
+            label="parent storage area",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
     service = InventoryService(db)
     barcode = (data.barcode or "").strip() or None
     if barcode is None:
@@ -3727,6 +3906,32 @@ async def update_storage_area(
     area = result.scalar_one_or_none()
     if not area:
         raise HTTPException(status_code=404, detail="Storage area not found")
+
+    # XC-1: same as create — a re-filed room or parent must still be in-org.
+    try:
+        if "location_id" in data.model_fields_set:
+            await assert_in_org(
+                db,
+                Location,
+                data.location_id,
+                current_user.organization_id,
+                allow_none=True,
+                label="room",
+            )
+        if "parent_id" in data.model_fields_set:
+            await assert_in_org(
+                db,
+                StorageArea,
+                data.parent_id,
+                current_user.organization_id,
+                allow_none=True,
+                label="parent storage area",
+            )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
 
     ALLOWED_AREA_FIELDS = {
         "name",
@@ -3819,14 +4024,32 @@ async def delete_storage_area(
 
 
 def _vendor_response(
-    vendor: InventoryVendor, stats: dict | None = None
+    vendor: InventoryVendor,
+    stats: dict | None = None,
+    *,
+    include_financials: bool,
 ) -> InventoryVendorResponse:
-    """Serialize a vendor with its contacts and purchasing totals."""
+    """Serialize a vendor with its contacts and purchasing totals.
+
+    ``include_financials`` is keyword-only and has no default on purpose: the
+    commercial fields below leave the building the moment a call site forgets
+    it, and a wrong default is silent. Callers state the caller's clearance.
+    """
     payload = InventoryVendorResponse.model_validate(vendor)
     if stats:
         payload.item_count = stats.get("item_count", 0)
         payload.open_reorder_count = stats.get("open_reorder_count", 0)
         payload.total_purchase_value = stats.get("total_purchase_value")
+    if not include_financials:
+        # `inventory.view` is a broad, member-level grant — it answers "who do
+        # we buy this from and how do I reach them". What we pay, on what terms,
+        # and under which account is a purchasing matter, so it rides with
+        # `inventory.manage` (which can read these by editing the vendor
+        # anyway). Contact details, address and the item/reorder counts stay:
+        # they are the point of the directory.
+        payload.account_number = None
+        payload.payment_terms = None
+        payload.total_purchase_value = None
     return payload
 
 
@@ -3840,6 +4063,9 @@ async def list_vendors(
     """
     List vendors for the organization, preferred ones first.
 
+    Account numbers, payment terms and spend totals are returned only to
+    callers holding ``inventory.manage``; everyone else gets the directory.
+
     **Authentication required**
     **Requires permission: inventory.view**
     """
@@ -3852,7 +4078,13 @@ async def list_vendors(
     stats = await service.get_vendor_stats(
         current_user.organization_id, [v.id for v in vendors]
     )
-    return [_vendor_response(v, stats.get(v.id)) for v in vendors]
+    financials = _has_permission(
+        "inventory.manage", _collect_user_permissions(current_user)
+    )
+    return [
+        _vendor_response(v, stats.get(v.id), include_financials=financials)
+        for v in vendors
+    ]
 
 
 @router.get("/vendors/unlinked-names", response_model=list[UnlinkedVendorName])
@@ -3884,6 +4116,9 @@ async def get_vendor(
     """
     Get one vendor with its contacts and purchasing totals.
 
+    Account numbers, payment terms and spend totals are returned only to
+    callers holding ``inventory.manage``; everyone else gets the directory.
+
     **Authentication required**
     **Requires permission: inventory.view**
     """
@@ -3892,7 +4127,13 @@ async def get_vendor(
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     stats = await service.get_vendor_stats(current_user.organization_id, [vendor.id])
-    return _vendor_response(vendor, stats.get(vendor.id))
+    return _vendor_response(
+        vendor,
+        stats.get(vendor.id),
+        include_financials=_has_permission(
+            "inventory.manage", _collect_user_permissions(current_user)
+        ),
+    )
 
 
 @router.post(
@@ -3930,7 +4171,8 @@ async def create_vendor(
         organization_id=str(current_user.organization_id),
     )
 
-    return _vendor_response(vendor)
+    # Reached only through `inventory.manage`, so nothing is withheld.
+    return _vendor_response(vendor, include_financials=True)
 
 
 @router.patch("/vendors/{vendor_id}", response_model=InventoryVendorResponse)
@@ -3972,7 +4214,8 @@ async def update_vendor(
     )
 
     stats = await service.get_vendor_stats(current_user.organization_id, [vendor.id])
-    return _vendor_response(vendor, stats.get(vendor.id))
+    # Reached only through `inventory.manage`, so nothing is withheld.
+    return _vendor_response(vendor, stats.get(vendor.id), include_financials=True)
 
 
 @router.delete("/vendors/{vendor_id}", status_code=status.HTTP_204_NO_CONTENT)

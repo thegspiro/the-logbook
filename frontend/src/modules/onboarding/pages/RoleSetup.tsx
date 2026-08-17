@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import { useNavigate } from 'react-router';
 import {
   Users,
@@ -720,6 +721,8 @@ const PositionSetup: React.FC = () => {
   const selectedCount = Object.keys(selectedPositions).length;
   const currentYear = new Date().getFullYear();
 
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showCustomModal, onClose: () => setShowCustomModal(false) });
+
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
@@ -905,9 +908,7 @@ const PositionSetup: React.FC = () => {
                     return (
                       <div
                         key={position.id}
-                        className={`bg-theme-surface rounded-lg border transition-all ${
-                          isEditing ? 'border-theme-accent-orange' : 'border-theme-surface-border'
-                        }`}
+                        className={`card transition-all ${isEditing ? 'border-theme-accent-orange' : 'border-theme-surface-border'}`}
                       >
                         <div
                           className="flex cursor-pointer items-center justify-between p-4"
@@ -1043,7 +1044,7 @@ const PositionSetup: React.FC = () => {
       {/* Custom Position Modal */}
       {showCustomModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
+          className="modal-overlay flex items-center justify-center p-4 backdrop-blur-xs"
           role="dialog"
           aria-modal="true"
           aria-labelledby="custom-position-modal-title"
@@ -1051,7 +1052,7 @@ const PositionSetup: React.FC = () => {
             if (e.key === 'Escape') setShowCustomModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border p-6">
+          <div ref={dialogRef} className="modal-panel w-full max-w-md p-6">
             <h3 id="custom-position-modal-title" className="text-theme-text-primary mb-4 text-xl font-bold">
               Create Custom Position
             </h3>

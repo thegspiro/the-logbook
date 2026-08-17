@@ -93,7 +93,7 @@ const AnalyticsDashboardPage: React.FC = () => {
           onClick={() => {
             void exportData();
           }}
-          className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover shrink-0 self-start rounded-md border px-4 py-2 text-sm font-medium text-blue-700 sm:self-auto dark:text-blue-400"
+          className="btn-secondary shrink-0 self-start text-sm font-medium text-blue-700 sm:self-auto dark:text-blue-400"
         >
           Export Data
         </button>

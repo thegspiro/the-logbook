@@ -246,11 +246,20 @@ GET    /api/v1/scheduling/my-attendance-history            # My attendance histo
 ### Equipment-Check Supply Endpoints *(2026-08-10)*
 
 Everything below lives under `/api/v1/equipment-checks`. Reads accept
-`equipment_check.view` / `inventory.view`; **writes accept
-`equipment_check.submit`** — the default member position — as well as
-`equipment_check.manage` / `inventory.manage`, because recording what you just
-used is crew work and gating it behind a manage permission is what leaves the
-gap for the next morning's check to find.
+`equipment_check.view` / `inventory.view`. Writes are split by intent
+*(tightened 2026-08-11)*:
+
+- **Reporting what you just used** (`POST /items/{id}/used`, and deployed-lot
+  quantity updates) accepts `equipment_check.submit` — the default member
+  position — as well as `equipment_check.manage` / `inventory.manage`.
+  Recording consumption is crew work; gating it behind a manage permission is
+  what leaves the gap for the next morning's check to find.
+- **Corrections of record** now require `equipment_check.manage` or
+  `inventory.manage` only: withdrawing a restock report
+  (`DELETE /items/{id}/used`), swapping a ready-stock lot onto the apparatus
+  (`POST /items/{id}/swap`), and editing a deployed lot's identity fields
+  (`lot_number`, `expiration_date`) — a submit-only member changing those on a
+  deployed lot gets a 403, though quantity edits still go through.
 
 ```
 GET    /supply/expiring-items?days_ahead=30              # The supply worklist: expiring, expired,
@@ -521,6 +530,8 @@ A new **Shift Reports** sub-tab within Scheduling Settings provides centralized 
 |---------|---------|-------------|
 | `checklist_timing.start_of_shift_enabled` | `true` | Start-of-shift equipment checklists active |
 | `checklist_timing.end_of_shift_enabled` | `true` | End-of-shift equipment checklists active |
+| `checklist_timing.checkin_opens_hours_before` | `2` | _(2026-08-11)_ How many hours before shift start the check-in link opens |
+| `checklist_timing.checkin_closes_hours_after` | `12` | _(2026-08-11)_ How many hours after shift end check-in still works — a link to a shift that ended last week is refused instead of stamping an arrival |
 | `post_shift_validation.enabled` | `true` | Post-shift validation reminders active |
 | `post_shift_validation.require_officer_report` | `false` | Mandatory shift completion report per shift |
 | `post_shift_validation.validation_window_hours` | `2` | Hours after shift end for validation reminders |
@@ -560,7 +571,12 @@ When filing a report linked to a shift with an assigned apparatus, the form auto
 
 ### Save as Draft
 
-Officers can save incomplete reports as drafts. Drafts do not trigger training pipeline progress until completed and transitioned to `approved` or `pending_review`.
+Officers can save incomplete reports as drafts. Drafts do not trigger training
+pipeline progress — and _(2026-08-11/12)_ neither does `pending_review`:
+credit toward training requirements is released only when a report reaches
+`approved`, so a report awaiting second review cannot credit a trainee early
+or credit twice. Trainees also cannot read a report before it is approved,
+even when the optional second-review workflow is disabled.
 
 ### Auto-Filter Trainee List
 
