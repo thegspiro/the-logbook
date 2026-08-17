@@ -688,15 +688,34 @@ expect(mockGetTemplates).toHaveBeenCalledWith(undefined);
 _something_". Use `toHaveBeenCalled()` if you don't care about arguments, or
 specify the expected arguments explicitly.
 
-**This is review discipline, not an enforced rule — nothing catches it for you.**
-An earlier version of this section claimed `vitest/prefer-called-with` enforced
-it at `error` level. That was wrong twice over, and the correction matters
-because it tells you how much vigilance the matcher actually needs:
+**The tooling was the cause, not the cure.** An earlier version of this section
+claimed `vitest/prefer-called-with` enforced this rule at `error` level. The
+opposite was true: that rule is what _created_ these assertions.
 
-- The rule is configured at `warn`, not `error`.
-- More importantly it enforces the _opposite_ direction. It flags
-  `toHaveBeenCalled()` and pushes callers **toward** `toHaveBeenCalledWith`. It
-  says nothing about the zero-argument form, so it has never guarded this.
+`vitest/prefer-called-with` is auto-fixable. It rewrites
+`expect(m).toHaveBeenCalled()` into `expect(m).toHaveBeenCalledWith()` — the
+zero-argument form — without inspecting how the mock was actually called. The
+pre-commit hook runs `eslint --fix`, so the rewrite happened silently on the way
+into every commit, and for any mock called with arguments it converts a passing
+assertion into a failing one:
+
+```ts
+const m = vi.fn();
+m(1, 2);
+expect(m).toHaveBeenCalled(); // passes
+// -- eslint --fix -->
+expect(m).toHaveBeenCalledWith(); // FAILS: expected call with []
+```
+
+That is the mechanism behind "34 of 46 broken tests". It was never developers
+choosing the wrong matcher. It also made the rule above impossible to follow:
+the advice is to use `toHaveBeenCalled()` when arguments are not the point, and
+the hook rewrote exactly that.
+
+**The rule is now `off` in `eslint.config.js` and must stay off.** With it
+disabled, `toHaveBeenCalled()` survives a commit and the guidance above works.
+Nothing now flags a hand-written zero-argument `toHaveBeenCalledWith()`, so that
+part remains review discipline.
 
 A lint rule banning the zero-argument form outright was tried and rejected: of
 the 53 instances in the suite, at least 35 assert against genuinely zero-arity

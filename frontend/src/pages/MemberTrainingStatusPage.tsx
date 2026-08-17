@@ -15,6 +15,7 @@ import { trainingService } from '../services/trainingServices';
 import type { MemberComplianceStatusColor, MemberPeriodStatusRow } from '../types/training';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { escapeCsvCell } from '../utils/csv';
 import { SkeletonCard } from '../components/ux/Skeleton';
 import { EmptyState } from '../components/ux/EmptyState';
 import { SortableHeader, type SortDirection } from '../components/ux/SortableHeader';
@@ -182,10 +183,9 @@ const MemberTrainingStatusPage: React.FC = () => {
       'Requirements Met',
       'Requirements Total',
     ];
-    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const lines = sortedRows.map((r) =>
       [
-        escape(r.member_name),
+        escapeCsvCell(r.member_name),
         r.trainings_completed,
         r.hours_completed,
         r.last_activity ? formatDate(r.last_activity, tz) : '',

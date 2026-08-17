@@ -21,6 +21,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, CodedValueError
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.training import (
     AssignmentStatus,
@@ -41,6 +42,7 @@ from app.schemas.scheduling import (
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
     PlatoonOverviewResponse,
+    PositionRosterResponse,
     SchedulingEligibilitySettings,
     SchedulingEligibilitySettingsResponse,
     SchedulingFeatureSettings,
@@ -1329,7 +1331,15 @@ async def generate_shifts_from_pattern(
             f"{len(result)} shift(s) were published to the schedule.",
         )
     enriched = await _enrich_shifts(service, current_user.organization_id, result)
-    return {"shifts_created": len(result), "shifts": enriched}
+    response: dict = {"shifts_created": len(result), "shifts": enriched}
+
+    # Driver seats the pattern could not fill because the member lacks the
+    # apparatus's EVOC level. Reported rather than silently dropped — an
+    # unfilled driver seat the officer does not know about is worse than the
+    # unqualified assignment enforcement just prevented.
+    if service.last_generation_warnings:
+        response["driver_warnings"] = service.last_generation_warnings
+    return response
 
 
 # ============================================
@@ -1367,6 +1377,21 @@ async def get_unavailable_members(
     return {"unavailable_user_ids": user_ids}
 
 
+def _driver_block(exc: CodedValueError) -> CodedHTTPException:
+    """Turn the driver qualification refusal into a 400 that keeps its code.
+
+    The message names what is missing and how to resolve it; the code
+    (``LB-SCHED-001``) is what the UI keys its "request an exception" offer
+    off, so it must survive the trip rather than being flattened into an
+    anonymous 400.
+    """
+    return CodedHTTPException(
+        status_code=400,
+        detail=str(exc),
+        error_code=exc.error_code,
+    )
+
+
 @router.post(
     "/shifts/{shift_id}/assignments",
     response_model=ShiftAssignmentResponse,
@@ -1391,9 +1416,12 @@ async def create_assignment(
         service, current_user, shift_id, "scheduling.assign"
     )
     assignment_data = assignment.model_dump(exclude_none=True)
-    result, error = await service.create_assignment(
-        current_user.organization_id, shift_id, assignment_data, current_user.id
-    )
+    try:
+        result, error = await service.create_assignment(
+            current_user.organization_id, shift_id, assignment_data, current_user.id
+        )
+    except CodedValueError as e:
+        raise _driver_block(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to create assignment.", error)
@@ -1429,15 +1457,26 @@ async def update_assignment(
     service = SchedulingService(db)
     await _authorize_assignment_management(service, current_user, assignment_id)
     update_data = assignment.model_dump(exclude_unset=True)
-    result, error = await service.update_assignment(
-        assignment_id, current_user.organization_id, update_data
-    )
+    try:
+        result, error = await service.update_assignment(
+            assignment_id, current_user.organization_id, update_data
+        )
+    except CodedValueError as e:
+        raise _driver_block(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update assignment.", error)
         )
     enriched = await service.enrich_assignments([result])
-    return enriched[0]
+    response = enriched[0]
+
+    # An edit that moves someone into the driver seat under an approved
+    # exception carries that exception's operating restrictions. The crew-board
+    # position editor uses this endpoint, and an officer who never sees them is
+    # relying on a control that did not reach them.
+    if service.last_assignment_warnings:
+        response["evoc_warnings"] = service.last_assignment_warnings
+    return response
 
 
 @router.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1976,13 +2015,16 @@ async def signup_for_shift(
         "user_id": str(current_user.id),
         "position": signup.position.value,
     }
-    result, error = await service.create_assignment(
-        current_user.organization_id,
-        shift_id,
-        assignment_data,
-        current_user.id,
-        self_signup=True,
-    )
+    try:
+        result, error = await service.create_assignment(
+            current_user.organization_id,
+            shift_id,
+            assignment_data,
+            current_user.id,
+            self_signup=True,
+        )
+    except CodedValueError as e:
+        raise _driver_block(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to sign up for shift.", error)
@@ -2269,6 +2311,39 @@ async def get_eligible_positions(
 
 
 @router.get(
+    "/eligibility/roster",
+    response_model=PositionRosterResponse,
+)
+async def get_position_roster(
+    position: str = Query(
+        "driver",
+        description="Shift position to build the roster for",
+        max_length=50,
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
+):
+    """
+    List every active member eligible for a shift position, and why.
+
+    Answers "who is cleared to drive?" without opening each apparatus in
+    turn. Each entry reports the sources of the member's eligibility (rank,
+    completed training, or the org's open-position list), their current EVOC
+    level, and the apparatus they hold an operator record on.
+
+    **Permissions required:** scheduling.view or scheduling.manage
+    """
+    service = ShiftEligibilityService(db)
+    roster = await service.get_position_roster(
+        organization_id=current_user.organization_id,
+        position=position.strip().lower(),
+    )
+    return PositionRosterResponse(**roster)
+
+
+@router.get(
     "/eligibility/settings",
     response_model=SchedulingEligibilitySettingsResponse,
 )
@@ -2353,6 +2428,7 @@ async def get_scheduling_feature_settings(
         restrict_checkin_to_assigned=bool(
             lifecycle.get("restrict_checkin_to_assigned", False)
         ),
+        enforce_evoc=service.get_evoc_enforcement(org),
     )
 
 
@@ -2370,7 +2446,13 @@ async def update_scheduling_feature_settings(
         fields_set = data.model_fields_set
         result = await service.update_scheduling_settings(
             organization_id=current_user.organization_id,
-            platoons_enabled=data.platoons_enabled,
+            # Guarded like every sibling field. Passed unconditionally, a
+            # partial save from any single toggle (which sends only its own
+            # key) carried the schema default False and switched platoon
+            # scheduling off behind the user's back.
+            platoons_enabled=(
+                data.platoons_enabled if "platoons_enabled" in fields_set else None
+            ),
             max_hours_per_window=(
                 (data.max_hours_per_window or 0.0)
                 if "max_hours_per_window" in fields_set
@@ -2399,6 +2481,7 @@ async def update_scheduling_feature_settings(
                 if "restrict_checkin_to_assigned" in fields_set
                 else None
             ),
+            enforce_evoc=(data.enforce_evoc if "enforce_evoc" in fields_set else None),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -2414,6 +2497,7 @@ async def update_scheduling_feature_settings(
         restrict_checkin_to_assigned=bool(
             result.get("restrict_checkin_to_assigned", False)
         ),
+        enforce_evoc=bool(result.get("enforce_evoc", True)),
     )
 
 

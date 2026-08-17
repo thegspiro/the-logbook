@@ -17,6 +17,7 @@ from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid
 from app.models.notification import NotificationLog
 from app.models.training import (
@@ -94,6 +95,11 @@ class SchedulingService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Advisories produced by the last write, for the endpoint to attach to
+        # its response. Initialised here so a caller that reads them after a
+        # path which sets nothing gets an empty list rather than AttributeError.
+        self.last_assignment_warnings: List[Dict[str, Any]] = []
+        self.last_generation_warnings: List[str] = []
 
     # ============================================
     # Generic Helpers
@@ -1238,6 +1244,76 @@ class SchedulingService:
         for displaced in displaced_result.scalars().all():
             displaced.position = ShiftPosition.FIREFIGHTER
 
+    async def _requalify_drivers_for_shift_change(
+        self,
+        shift: Shift,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
+    ) -> Optional[str]:
+        """Reject a shift edit that would strand an unqualified driver.
+
+        Only runs when the edit actually moves ``apparatus_id`` or
+        ``shift_date`` — the two inputs the driver check reads. Evaluates
+        against the *pending* values by applying them to the shift, checking,
+        and rolling the attributes back, so the verdict is about the shift as
+        it would be rather than as it is.
+        """
+        watched = ("apparatus_id", "shift_date")
+        changes = {
+            key: update_data[key]
+            for key in watched
+            if key in update_data and update_data[key] != getattr(shift, key, None)
+        }
+        if not changes:
+            return None
+
+        result = await self.db.execute(
+            select(ShiftAssignment).where(
+                ShiftAssignment.shift_id == str(shift.id),
+                ShiftAssignment.organization_id == str(organization_id),
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                ),
+            )
+        )
+        drivers = [
+            assignment
+            for assignment in result.scalars().all()
+            if self._is_driver_position(assignment.position)
+        ]
+        if not drivers:
+            return None
+
+        original = {key: getattr(shift, key, None) for key in changes}
+        for key, value in changes.items():
+            setattr(shift, key, value)
+        # The check re-reads the shift through its own session query, so the
+        # pending values must be visible to it without being committed.
+        self.db.add(shift)
+        await self.db.flush()
+        try:
+            blocked = []
+            for assignment in drivers:
+                message = await self._check_driver_qualification_message(
+                    user_id=str(assignment.user_id),
+                    shift_id=str(shift.id),
+                    organization_id=str(organization_id),
+                    position=assignment.position,
+                )
+                if message:
+                    blocked.append(message)
+        finally:
+            for key, value in original.items():
+                setattr(shift, key, value)
+            await self.db.flush()
+
+        if blocked:
+            return (
+                "This change would leave a driver on the shift who is not "
+                "qualified for it: " + " ".join(blocked)
+            )
+        return None
+
     async def update_shift(
         self, shift_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Tuple[Optional[Shift], Optional[str]]:
@@ -1277,6 +1353,19 @@ class SchedulingService:
                         update_data["min_staffing"] = apparatus_min_staffing
 
             old_officer_id = shift.shift_officer_id
+
+            # Moving a shift's apparatus or date changes what its drivers are
+            # qualified against. Without this, the block is trivially
+            # side-stepped: seat a driver while the shift has no apparatus (or
+            # on a date an exception covers), then edit the shift onto a
+            # restricted unit or an uncovered date, and the unqualified
+            # assignment simply stays. Refuse the edit and name who it would
+            # strand, rather than silently leaving them there.
+            requalify_error = await self._requalify_drivers_for_shift_change(
+                shift, organization_id, update_data
+            )
+            if requalify_error:
+                return None, requalify_error
 
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
@@ -2023,6 +2112,9 @@ class SchedulingService:
         created_by: UUID,
     ) -> Tuple[List[Shift], Optional[str]]:
         """Generate shifts from a pattern for a given date range"""
+        # Driver seats skipped for want of an EVOC certification, reported
+        # alongside the generated shifts.
+        skipped_drivers: List[str] = []
         try:
             pattern = await self.get_pattern_by_id(pattern_id, organization_id)
             if not pattern:
@@ -2128,9 +2220,9 @@ class SchedulingService:
             # ----------------------------------------------------------------
             assigned_members = pattern.assigned_members or []
 
-            # Drop any member IDs that don't belong to this org (stale entries
-            # from removed/transferred users) so generation never creates a
-            # cross-org or dangling assignment.
+            # Drop inactive member IDs and IDs that don't belong to this org
+            # (stale entries from deleted/removed/transferred users) so
+            # generation never creates an invalid assignment.
             if assigned_members:
                 member_ids = {
                     m.get("user_id") for m in assigned_members if m.get("user_id")
@@ -2140,6 +2232,7 @@ class SchedulingService:
                         select(User.id)
                         .where(User.id.in_(member_ids))
                         .where(User.organization_id == str(organization_id))
+                        .where(User.is_active)
                     )
                     valid_ids = {row[0] for row in valid_result.all()}
                     assigned_members = [
@@ -2195,7 +2288,7 @@ class SchedulingService:
                     select(User.id, User.platoon).where(
                         User.organization_id == str(organization_id),
                         User.platoon.isnot(None),
-                        User.status == "active",
+                        User.is_active,
                     )
                 )
                 for uid, platoon_name in live_result.all():
@@ -2370,6 +2463,28 @@ class SchedulingService:
                     if member_user_id in seen_users:
                         continue
                     seen_users.add(member_user_id)
+
+                    # Pattern generation writes assignments directly rather
+                    # than through create_assignment, so the driver block has
+                    # to be applied here too — otherwise a recurring pattern
+                    # quietly seats an uncertified driver on every occurrence
+                    # it generates, which is the opposite of what enforcement
+                    # is for. The occurrence is still created; only the driver
+                    # seat is left empty, and the skip is reported so the
+                    # officer knows to fill it.
+                    driver_error = await self._check_driver_qualification_message(
+                        user_id=str(member_user_id),
+                        shift_id=str(shift.id),
+                        organization_id=str(organization_id),
+                        position=position,
+                    )
+                    if driver_error:
+                        skipped_drivers.append(
+                            f"{shift.shift_date}: driver seat left unfilled "
+                            f"({driver_error})"
+                        )
+                        continue
+
                     assignment = ShiftAssignment(
                         organization_id=organization_id,
                         shift_id=shift.id,
@@ -2387,6 +2502,7 @@ class SchedulingService:
             for shift in created_shifts:
                 await self.db.refresh(shift)
 
+            self.last_generation_warnings = skipped_drivers
             return created_shifts, None
         except Exception as e:
             await self.db.rollback()
@@ -2395,6 +2511,90 @@ class SchedulingService:
     # ============================================
     # Shift Assignment Management
     # ============================================
+
+    @staticmethod
+    def _is_driver_position(position: Any) -> bool:
+        """Whether a position value names the driver seat."""
+        if position is None:
+            return False
+        value = getattr(position, "value", position)
+        return str(value).strip().lower() == "driver"
+
+    async def _evaluate_driver_seat(
+        self,
+        user_id: str,
+        shift_id: str,
+        organization_id: str,
+        position: Any,
+    ) -> Optional[Dict[str, Any]]:
+        """The driver-qualification verdict, or None for a non-driver seat.
+
+        A safety control, not a convenience check: without the EVOC level the
+        apparatus requires, the member does not take the wheel. The sanctioned
+        override is a chief-approved ``DriverException``, which
+        ``evaluate_driver_assignment`` consults — nothing here needs to know
+        about it beyond honouring the answer.
+        """
+        if not self._is_driver_position(position):
+            return None
+
+        # Imported here rather than at module scope: the eligibility service
+        # imports scheduling models, and a top-level import closes the cycle.
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        return await ShiftEligibilityService(self.db).evaluate_driver_assignment(
+            user_id=user_id,
+            shift_id=shift_id,
+            organization_id=organization_id,
+        )
+
+    async def _check_driver_qualification_message(
+        self,
+        user_id: str,
+        shift_id: str,
+        organization_id: str,
+        position: Any,
+    ) -> Optional[str]:
+        """The blocking reason, or None if the member may take the seat.
+
+        For callers that must keep going rather than abort — pattern
+        generation skips the one driver seat instead of failing the whole
+        run.
+        """
+        outcome = await self._evaluate_driver_seat(
+            user_id, shift_id, organization_id, position
+        )
+        if outcome is None or outcome["allowed"]:
+            return None
+        return outcome["blocked_reason"]
+
+    async def _check_driver_qualification(
+        self,
+        user_id: str,
+        shift_id: str,
+        organization_id: str,
+        position: Any,
+    ) -> Optional[Dict[str, Any]]:
+        """Raise when a member may not drive this shift; else return the verdict.
+
+        Raises ``CodedValueError`` rather than returning a message so the
+        refusal carries ``LB-SCHED-001`` all the way to the client. The UI
+        keys its "request an exception" offer off that code; matching on the
+        message text would break the moment the wording changed.
+
+        The verdict is returned on success so callers can surface the
+        restrictions an approved exception was granted under — those are the
+        whole point of the exception and must reach the officer.
+        """
+        outcome = await self._evaluate_driver_seat(
+            user_id, shift_id, organization_id, position
+        )
+        if outcome is not None and not outcome["allowed"]:
+            raise CodedValueError(
+                outcome["blocked_reason"],
+                error_code=ErrorCode.SCHED_DRIVER_NOT_QUALIFIED,
+            )
+        return outcome
 
     async def create_assignment(
         self,
@@ -2518,6 +2718,18 @@ class SchedulingService:
                 if leaves:
                     return None, "Member is on leave of absence for this date"
 
+            # Driver qualification. Enforced here rather than at the endpoints
+            # so member self-signup and officer assignment cannot diverge —
+            # both paths reach this one call, and a future third path inherits
+            # the check for free.
+            if user_id:
+                await self._check_driver_qualification(
+                    user_id=str(user_id),
+                    shift_id=str(shift_id),
+                    organization_id=str(organization_id),
+                    position=assignment_data.get("position"),
+                )
+
             assignment = ShiftAssignment(
                 organization_id=organization_id,
                 shift_id=shift_id,
@@ -2566,6 +2778,12 @@ class SchedulingService:
         except IntegrityError:
             await self.db.rollback()
             return None, "Member is already assigned to this shift"
+        except CodedValueError:
+            # A curated business refusal (e.g. the driver qualification
+            # block). Re-raise so the endpoint can surface its support code
+            # instead of flattening it into an anonymous 400.
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
@@ -2735,6 +2953,21 @@ class SchedulingService:
                         "it cannot be set on their behalf.",
                     )
 
+            # Re-check qualification when an edit moves someone into the
+            # driver seat. Without this, an officer blocked at create time
+            # could assign the member as a firefighter and PATCH the position
+            # to driver — the same unqualified driver, one request later.
+            driver_verdict: Optional[Dict[str, Any]] = None
+            if "position" in update_data and self._is_driver_position(
+                update_data.get("position")
+            ):
+                driver_verdict = await self._check_driver_qualification(
+                    user_id=str(assignment.user_id),
+                    shift_id=str(assignment.shift_id),
+                    organization_id=str(organization_id),
+                    position=update_data.get("position"),
+                )
+
             old_status = assignment.assignment_status
             position = assignment.position
 
@@ -2759,7 +2992,19 @@ class SchedulingService:
                     action="declined",
                 )
 
+            # The crew-board position editor seats drivers through this path.
+            # An approved exception carries operating restrictions ("no
+            # emergency response"), and an officer who never sees them is
+            # relying on a control that did not reach them.
+            self.last_assignment_warnings = (driver_verdict or {}).get("warnings") or []
+
             return assignment, None
+        except CodedValueError:
+            # A curated business refusal (e.g. the driver qualification
+            # block). Re-raise so the endpoint can surface its support code
+            # instead of flattening it into an anonymous 400.
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
             return None, str(e)

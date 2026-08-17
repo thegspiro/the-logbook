@@ -4467,7 +4467,10 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             if not new_occurrences:
                 continue
 
-            # Build a set of field values from the parent for child events
+            # Build a set of field values from the parent for child events.  Do
+            # not propagate attachments: their metadata points at files owned
+            # by the parent event, and each occurrence exposes an independent
+            # delete action that would otherwise remove the shared file.
             child_fields = {}
             for field in (
                 "title",
@@ -4491,7 +4494,6 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 "allow_guest_check_in",
                 "guest_check_in_creates_prospect",
                 "allowed_rsvp_statuses",
-                "attachments",
                 "template_id",
                 "is_draft",
             ):
