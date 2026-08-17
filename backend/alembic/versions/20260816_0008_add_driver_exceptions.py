@@ -1,7 +1,7 @@
 """Add driver qualification exceptions
 
-Revision ID: 20260816_0006
-Revises: 20260816_0005
+Revision ID: 20260816_0008
+Revises: 20260816_0006, 20260816_0007
 Create Date: 2026-08-16
 
 Creates the ``driver_exceptions`` table backing chief-approved, time-boxed
@@ -14,8 +14,14 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260816_0006"
-down_revision = "20260816_0005"
+revision = "20260816_0008"
+# A merge point, not a single parent. main forked at 0005: the legacy
+# shift-finalization backfill (0006) and the email-preference unification
+# (0007) both chain off it, leaving two heads. Whichever this branch had
+# chained to, the other would have been skipped on deploy — the startup
+# runner upgrades to a single head it picks by sort order, and that head is
+# now this migration. Depending on both makes it the join and applies both.
+down_revision = ("20260816_0006", "20260816_0007")
 branch_labels = None
 depends_on = None
 
