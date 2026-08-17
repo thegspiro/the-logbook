@@ -1154,7 +1154,12 @@ When Alex reaches the **Election/Vote** stage, the system automatically creates 
 
 **Edge case — failed vote:** If the vote had been 15-23 (Not Elected), the election package status would change to **Not Elected**. Alex would remain in the pipeline at the Election/Vote stage with the option to re-apply after a configurable waiting period (default: 6 months). Lt. Morrison would see a "Re-application eligible" date on the prospect card.
 
-> **[SCREENSHOT NEEDED]:** _The Elections module showing Alex Rivera's election package with status "Elected", vote tally (35-3), and the linked prospect record._
+![The applicant drawer's Election Package section, its status badge reading Elected](./images/01-37-elected-package-badge.png)
+
+The vote tally itself is not part of this drawer. Counts are recorded and
+displayed on the election's results screen in the Elections module — see the
+[Elections guide](./14-elections.md) — and the drawer shows the outcome those
+counts produced: the package status, beside the applicant it belongs to.
 
 ---
 
@@ -1280,7 +1285,16 @@ Alex completes all four Phase 1 orientation requirements during the first week (
 
 **Edge case — prior certification credit:** Alex holds a current CPR/AED certification from a previous employer. Alex uploads the certification card as a training record attachment. Capt. Davis reviews the document, confirms the certification is current and from an accredited provider, and approves it. The Phase 3 CPR/AED requirement is automatically credited — Alex will only need to complete the remaining two EMS requirements when Phase 3 unlocks.
 
-> **[SCREENSHOT NEEDED]:** _The Training Program detail view for Alex Rivera showing Phase 1 (Complete, 4/4), Phase 2 (In Progress, 0/6), Phase 3 (Locked, 1/3 pre-credited), and Phase 4 (Locked, 0/2), with the overall progress bar at 25%._
+![A recruit's program progress — every phase group with its requirements and statuses, the current phase marked, the overall bar above them](./images/01-38-program-phase-progress.png)
+
+The fractions in the worked example above are illustrative. On screen, each
+phase group lists its requirements with their individual status and progress,
+a phase whose requirements are all complete carries a check mark, and the
+header totals completed requirements across the whole program — including any
+credited in a later phase, which is how Alex's pre-credited CPR/AED
+certification shows up before Phase 3 unlocks. Members see this breakdown on
+their own **My Program Progress** page; coordinators reach the same
+per-member breakdown from the program's **Enrollments** tab.
 
 ---
 

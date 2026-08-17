@@ -65,7 +65,7 @@ const PRIORITY_OPTIONS = [
 const FormSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading purchase request form" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+    <div className="card p-6">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={`field-${String(i)}`} className="mb-4 space-y-2">
           <Skeleton className="h-4 w-24" />
@@ -255,10 +255,7 @@ const PurchaseRequestFormPage: React.FC = () => {
       </div>
 
       {/* Form */}
-      <form
-        onSubmit={(e) => void handleSubmit(onSubmit)(e)}
-        className="border-theme-surface-border bg-theme-surface rounded-lg border p-6"
-      >
+      <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="card p-6">
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           {/* Title */}
           <div className="sm:col-span-2">

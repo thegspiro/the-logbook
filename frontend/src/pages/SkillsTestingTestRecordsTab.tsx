@@ -78,7 +78,7 @@ const TestCard: React.FC<{
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onClick();
       }}
-      className="bg-theme-surface border-theme-surface-border w-full cursor-pointer rounded-lg border p-4 text-left transition-colors hover:border-red-500/50"
+      className="card w-full cursor-pointer p-4 text-left hover:border-red-500/50"
     >
       <div className="flex flex-wrap items-center justify-between gap-y-2">
         {selectable && (
@@ -407,14 +407,14 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             placeholder="Search tests..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-2 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
+            className="form-input placeholder:text-theme-text-muted pr-4 pl-10"
           />
         </div>
         <div className="flex gap-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
+            className="form-input px-3"
             aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
@@ -455,7 +455,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           mixes drafts, practice runs and closed records, and there is no single
           action a selection across those could mean. */}
       {pendingOnly && selectableTests.length > 0 && (
-        <div className="bg-theme-surface border-theme-surface-border mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+        <div className="card mb-3 flex flex-wrap items-center justify-between gap-3 p-3">
           <label className="mobile-touch-target flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -487,7 +487,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
         </div>
       ) : filteredTests.length === 0 ? (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border">
+        <div className="card">
           <EmptyState
             icon={ClipboardList}
             title={pendingOnly ? 'Nothing waiting on you' : 'No test records found'}

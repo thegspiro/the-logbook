@@ -397,7 +397,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                           className={`cursor-pointer rounded-lg border p-3 transition-colors ${
                             isSelected
                               ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10'
-                              : 'border-theme-border bg-theme-surface hover:bg-theme-surface-secondary'
+                              : 'border-theme-surface-border bg-theme-surface hover:bg-theme-surface-secondary'
                           }`}
                           onClick={() => toggleSelection(item)}
                         >
@@ -408,7 +408,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                                 className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
                                   isSelected
                                     ? 'border-emerald-600 bg-emerald-600'
-                                    : 'border-theme-border bg-theme-surface'
+                                    : 'border-theme-surface-border bg-theme-surface'
                                 }`}
                               >
                                 {isSelected && <Check className="h-3 w-3 text-white" />}
@@ -428,7 +428,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                           {/* Return options (only when selected) */}
                           {isSelected && sel && (
                             <div
-                              className="border-theme-border mt-3 flex flex-wrap items-center gap-3 border-t pt-3"
+                              className="border-theme-surface-border mt-3 flex flex-wrap items-center gap-3 border-t pt-3"
                               onClick={(e) => e.stopPropagation()}
                             >
                               {/* Condition */}
@@ -478,11 +478,8 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
 
                   {/* Submit */}
                   {selectedCount > 0 && (
-                    <div className="border-theme-border flex justify-end gap-3 border-t pt-2">
-                      <button
-                        onClick={onClose}
-                        className="border-theme-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg border px-4 py-2 text-sm"
-                      >
+                    <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-2">
+                      <button onClick={onClose} className="btn-secondary text-sm">
                         Cancel
                       </button>
                       <button

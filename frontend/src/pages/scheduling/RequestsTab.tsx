@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { DialogPanel } from '../../components/ux/DialogPanel';
 import { ArrowLeftRight, CalendarOff, Check, X, Loader2, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -198,7 +199,7 @@ export const RequestsTab: React.FC = () => {
             {swapRequests.map((req) => {
               const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
               return (
-                <div key={req.id} className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 sm:p-5">
+                <div key={req.id} className="card p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-3 sm:items-center">
                     <div className="flex min-w-0 items-start gap-3 sm:items-center">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 sm:h-10 sm:w-10">
@@ -345,7 +346,7 @@ export const RequestsTab: React.FC = () => {
           {timeOffRequests.map((req) => {
             const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
             return (
-              <div key={req.id} className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 sm:p-5">
+              <div key={req.id} className="card p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3 sm:items-center">
                   <div className="flex min-w-0 items-start gap-3 sm:items-center">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 sm:h-10 sm:w-10">
@@ -451,15 +452,12 @@ export const RequestsTab: React.FC = () => {
       {/* Review Modal */}
       {reviewing && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Review request"
         >
-          <div
-            ref={reviewModalRef}
-            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border"
-          >
+          <DialogPanel onClose={() => setReviewing(null)} ref={reviewModalRef} className="w-full max-w-md">
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Review Request</h2>
             </div>
@@ -509,7 +507,7 @@ export const RequestsTab: React.FC = () => {
                 Approve
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

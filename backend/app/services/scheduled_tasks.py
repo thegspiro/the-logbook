@@ -93,12 +93,13 @@ Recommended crontab (add to host or container cron):
 import copy
 import html as _html
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.inventory import MEDICAL_ITEM_TYPES
 from app.models.user import Organization, User
 from app.services.email_service import _redact_email
 
@@ -364,6 +365,113 @@ SCHEDULE = {
         "cron": "30 6 * * *",
     },
 }
+
+
+# Who to tell, per alert domain. Gear and medical stock can be held by
+# different officers, so an alert about one must not be addressed only to the
+# holder of the other. Alerts that span both domains list both permissions.
+GEAR_STOCK_PERMISSIONS = ("inventory.manage",)
+MEDICAL_STOCK_PERMISSIONS = ("inventory.manage", "inventory.manage_medical")
+
+# The two stock domains, as they appear in an audience key.
+DOMAIN_GEAR = "gear"
+DOMAIN_MEDICAL = "medical"
+
+
+async def _stock_alert_audiences(
+    db_session: AsyncSession, organization_id: str
+) -> Dict[frozenset, List[str]]:
+    """Group recipient emails by the stock domains each may actually see.
+
+    An alert that spans both domains cannot simply widen its recipient list:
+    the body is one rendered table, so adding medical-only officers to a
+    mixed low-stock email hands them gear item names, categories and counts
+    that the API refuses them by design. Mailing a copy of the data is the
+    same disclosure as serving it.
+
+    Returns ``{frozenset({"gear", "medical"}): [...], frozenset({"medical"}):
+    [...]}`` so a caller can render one message per audience containing only
+    that audience's rows. Someone holding both grants appears once, in the
+    two-domain group, and so receives a single complete email rather than two
+    partial ones.
+    """
+    from sqlalchemy.orm import selectinload
+
+    from app.core.permissions import permission_matches
+
+    result = await db_session.execute(
+        select(User)
+        .where(User.organization_id == organization_id)
+        .where(User.is_active == True)  # noqa: E712
+        .where(User.email.isnot(None))
+        .options(selectinload(User.roles))
+    )
+
+    audiences: Dict[frozenset, List[str]] = {}
+    for user in result.scalars().all():
+        granted: set[str] = set()
+        for role in user.roles or []:
+            granted.update(role.permissions or [])
+
+        domains = set()
+        # The broad grant covers gear, and medical too — a department running
+        # one supply line holds only this one.
+        if permission_matches("inventory.manage", granted):
+            domains.update({DOMAIN_GEAR, DOMAIN_MEDICAL})
+        if permission_matches("inventory.manage_medical", granted):
+            domains.add(DOMAIN_MEDICAL)
+        if not domains:
+            continue
+
+        audiences.setdefault(frozenset(domains), []).append(user.email)
+
+    return audiences
+
+
+async def _stock_alert_recipients(
+    db_session: AsyncSession,
+    organization_id: str,
+    permissions: tuple[str, ...] = GEAR_STOCK_PERMISSIONS,
+) -> list[User]:
+    """The members this department put in charge of the stock being alerted on.
+
+    Resolved by permission rather than by a fixed list of role slugs, because
+    departments split the job differently: one may run everything through a
+    quartermaster, another gives medical supplies to an EMS supply officer and
+    uniforms to someone else. Whoever a department granted the permission to is
+    who hears about low stock and expiring lots.
+
+    ``permissions`` is per-alert and matched as OR. Checking only
+    ``inventory.manage`` excluded the ``ems_supply_officer`` role outright — it
+    holds ``inventory.manage_medical`` and nothing broader — so the officer
+    appointed to own medical stock was the one person guaranteed not to hear
+    that it was expiring.
+
+    Matching a scalar ``User.role`` here — as this once did — matched nothing:
+    ``User`` carries no such column (roles are the many-to-many ``positions``
+    relationship), so every call raised ``AttributeError`` inside the per-org
+    guard in ``_for_each_org``, which logged it and moved on. The alerts were
+    silently undelivered rather than visibly broken.
+    """
+    from sqlalchemy.orm import selectinload
+
+    from app.core.permissions import permission_matches_any
+
+    result = await db_session.execute(
+        select(User)
+        .where(User.organization_id == organization_id)
+        .where(User.is_active == True)  # noqa: E712
+        .where(User.email.isnot(None))
+        .options(selectinload(User.roles))
+    )
+    recipients: list[User] = []
+    for user in result.scalars().all():
+        granted: set[str] = set()
+        for role in user.roles or []:
+            granted.update(role.permissions or [])
+        if permission_matches_any(permissions, granted):
+            recipients.append(user)
+    return recipients
 
 
 async def _for_each_org(
@@ -3391,15 +3499,17 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     from app.services.email_service import EmailService
     from app.services.inventory_service import InventoryService
 
-    async def process(db_session: AsyncSession, org: Organization) -> int:
-        service = InventoryService(db_session)
-        low_stock = await service.get_low_stock_items_for_alerts(org.id)
-        if not low_stock:
-            return 0
+    def _row_domain(item) -> str:
+        """Which stock domain a low-stock row belongs to."""
+        category = getattr(item, "category", None)
+        item_type = getattr(category, "item_type", None)
+        return DOMAIN_MEDICAL if item_type in MEDICAL_ITEM_TYPES else DOMAIN_GEAR
 
+    def _render(rows) -> tuple:
+        """Build the table body for one audience's rows."""
         items_html = ""
         any_from_lots = False
-        for item, on_hand, from_lots in low_stock:
+        for item, on_hand, from_lots in rows:
             cat_name = item.category.name if item.category else "Uncategorized"
             any_from_lots = any_from_lots or from_lots
             # Name the ledger the figure came from. For a lot-stocked item it
@@ -3418,8 +3528,6 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                 f"{item.reorder_point}</td></tr>"
             )
 
-        from app.services.email_service import wrap_email_body
-
         table_html = (
             '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
             "<thead>"
@@ -3431,50 +3539,68 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             "</tr></thead>"
             f"<tbody>{items_html}</tbody></table>"
         )
-        html_body = wrap_email_body(
-            org,
-            "Low Stock Alert",
-            "<p>The following inventory items are at or below their reorder point:</p>"
-            f"{table_html}"
-            + (
-                "<p style='color:#6b7280;font-size:13px;'>Items kept as dated "
-                "stock lots are counted from their in-date lots — expired lots "
-                "cannot be issued or swapped onto an apparatus, so they do not "
-                "count as stock on hand.</p>"
-                if any_from_lots
-                else ""
-            )
-            + "<p>Please review and reorder as needed.</p>",
-            header_color="#dc2626",
-        )
+        return table_html, any_from_lots
 
-        admin_result = await db_session.execute(
-            select(User)
-            .where(User.organization_id == str(org.id))
-            .where(User.is_active == True)  # noqa: E712
-            .where(User.email.isnot(None))
-        )
-        admins = [
-            u
-            for u in admin_result.scalars().all()
-            if u.role in ("admin", "owner", "quartermaster")
-        ]
-        admin_emails = [a.email for a in admins if a.email]
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        from app.services.email_service import wrap_email_body
+
+        service = InventoryService(db_session)
+        low_stock = await service.get_low_stock_items_for_alerts(org.id)
+        if not low_stock:
+            return 0
+
+        by_domain: Dict[str, List] = {DOMAIN_GEAR: [], DOMAIN_MEDICAL: []}
+        for row in low_stock:
+            by_domain[_row_domain(row[0])].append(row)
+
+        audiences = await _stock_alert_audiences(db_session, str(org.id))
 
         alerts_sent = 0
-        if admin_emails:
-            email_svc = EmailService(organization=org)
+        email_svc = EmailService(organization=org)
+        # One message per audience, carrying only that audience's rows. A
+        # single mixed table sent to everyone would put gear item names and
+        # counts in front of a medical-only officer, who cannot reach them
+        # through the API — mailing the data is the same disclosure.
+        for domains, emails in audiences.items():
+            rows = [r for d in sorted(domains) for r in by_domain[d]]
+            if not rows or not emails:
+                continue
+
+            table_html, any_from_lots = _render(rows)
+            html_body = wrap_email_body(
+                org,
+                "Low Stock Alert",
+                "<p>The following inventory items are at or below their "
+                "reorder point:</p>"
+                f"{table_html}"
+                + (
+                    "<p style='color:#6b7280;font-size:13px;'>Items kept as dated "
+                    "stock lots are counted from their in-date lots — expired lots "
+                    "cannot be issued or swapped onto an apparatus, so they do not "
+                    "count as stock on hand.</p>"
+                    if any_from_lots
+                    else ""
+                )
+                + "<p>Please review and reorder as needed.</p>",
+                header_color="#dc2626",
+            )
             success_count, _ = await email_svc.send_email(
-                to_emails=admin_emails,
-                subject=f"Low Stock Alert — {len(low_stock)} item(s) below reorder point",
+                to_emails=emails,
+                subject=f"Low Stock Alert — {len(rows)} item(s) below reorder point",
                 html_body=html_body,
                 text_body=(
-                    f"{len(low_stock)} inventory items are below their "
+                    f"{len(rows)} inventory items are below their "
                     f"reorder point. Please check the inventory dashboard."
                 ),
             )
             if success_count > 0:
                 alerts_sent += 1
+
+        # SMS carries only a count, so it needs no domain split — but it must
+        # still reach only people with some stock duty.
+        admins = await _stock_alert_recipients(
+            db_session, str(org.id), MEDICAL_STOCK_PERMISSIONS
+        )
 
         try:
             from app.services.sms_service import SMSService
@@ -3664,17 +3790,11 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
             header_color="#dc2626",
         )
 
-        admin_result = await db_session.execute(
-            select(User)
-            .where(User.organization_id == str(org.id))
-            .where(User.is_active == True)  # noqa: E712
-            .where(User.email.isnot(None))
+        # NFPA 1851 retirement is structural firefighting PPE, which is
+        # the gear officer's ledger and not the EMS supply officer's.
+        admins = await _stock_alert_recipients(
+            db_session, str(org.id), GEAR_STOCK_PERMISSIONS
         )
-        admins = [
-            u
-            for u in admin_result.scalars().all()
-            if u.role in ("admin", "owner", "quartermaster")
-        ]
         admin_emails = [a.email for a in admins if a.email]
 
         if admin_emails:
@@ -3737,7 +3857,18 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         deployed = overview.get("items", [])
 
         inventory_service = InventoryService(db_session)
-        lot_rows = await inventory_service.get_expiring_lots(str(org.id), window_days)
+        # Two fetches rather than one: the shelf-lot table is rendered into the
+        # email body, so a medical-only officer receiving the whole list would
+        # be mailed gear lot numbers and counts the API refuses them.
+        medical_lots = await inventory_service.get_expiring_lots(
+            str(org.id), window_days, item_types=MEDICAL_ITEM_TYPES
+        )
+        all_lots = await inventory_service.get_expiring_lots(str(org.id), window_days)
+        medical_lot_ids = {lot.id for lot, _ in medical_lots}
+        gear_lots = [
+            (lot, name) for lot, name in all_lots if lot.id not in medical_lot_ids
+        ]
+        lot_rows = all_lots
 
         if not deployed and not lot_rows:
             return 0
@@ -3787,11 +3918,11 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
-        def _lot_section() -> str:
-            if not lot_rows:
+        def _lot_section(rows) -> str:
+            if not rows:
                 return ""
             body = ""
-            for lot, item_name in lot_rows:
+            for lot, item_name in rows:
                 days = (
                     (lot.expiration_date - today).days if lot.expiration_date else None
                 )
@@ -3807,7 +3938,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 )
             return f"""
                 <h3 style="color:#ca8a04;margin-top:16px;">
-                    Replacement stock on the shelf ({len(lot_rows)})
+                    Replacement stock on the shelf ({len(rows)})
                 </h3>
                 <p style="color:#6b7280;font-size:13px;margin:4px 0;">
                     Stock that expires before it can be deployed. A lot past its
@@ -3825,55 +3956,58 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
-        html_body = wrap_email_body(
-            org,
-            "Expiring Supplies",
-            f"<p>Supplies expiring within {window_days} days:</p>"
-            + _deployed_section(
-                "On apparatus — no replacement stock",
-                needs_reorder,
-                "#dc2626",
-                "Nothing in-date on the shelf to swap in. These need ordering.",
-            )
-            + _deployed_section(
-                "On apparatus — replacement ready",
-                swap_ready,
-                "#ea580c",
-                "In-date stock is on hand; swap it in during the next check.",
-            )
-            + _lot_section(),
-            header_color="#dc2626",
-        )
-
-        admin_result = await db_session.execute(
-            select(User)
-            .where(User.organization_id == str(org.id))
-            .where(User.is_active == True)  # noqa: E712
-            .where(User.email.isnot(None))
-        )
-        admin_emails = [
-            u.email
-            for u in admin_result.scalars().all()
-            if u.role in ("admin", "owner", "quartermaster") and u.email
-        ]
-        if not admin_emails:
+        audiences = await _stock_alert_audiences(db_session, str(org.id))
+        if not audiences:
             return 0
 
         email_svc = EmailService(organization=org)
-        success_count, _ = await email_svc.send_email(
-            to_emails=admin_emails,
-            subject=(
-                f"Expiring Supplies — {len(deployed)} on apparatus, "
-                f"{len(lot_rows)} in stock"
-            ),
-            html_body=html_body,
-            text_body=(
-                f"{len(deployed)} item(s) on apparatus and {len(lot_rows)} "
-                f"stock lot(s) expire within {window_days} days. "
-                f"{len(needs_reorder)} have no replacement stock on hand."
-            ),
-        )
-        return 1 if success_count > 0 else 0
+        sent_any = False
+        # One message per audience. The deployed sections are apparatus
+        # checklist content, governed by equipment_check.* rather than by the
+        # inventory domain, so every recipient sees them; the shelf-lot table
+        # is inventory data and is filtered to the domains that audience holds.
+        for domains, emails in audiences.items():
+            rows = list(medical_lots) if DOMAIN_MEDICAL in domains else []
+            if DOMAIN_GEAR in domains:
+                rows = list(gear_lots) + rows
+            if not emails or (not deployed and not rows):
+                continue
+
+            html_body = wrap_email_body(
+                org,
+                "Expiring Supplies",
+                f"<p>Supplies expiring within {window_days} days:</p>"
+                + _deployed_section(
+                    "On apparatus — no replacement stock",
+                    needs_reorder,
+                    "#dc2626",
+                    "Nothing in-date on the shelf to swap in. These need ordering.",
+                )
+                + _deployed_section(
+                    "On apparatus — replacement ready",
+                    swap_ready,
+                    "#ea580c",
+                    "In-date stock is on hand; swap it in during the next check.",
+                )
+                + _lot_section(rows),
+                header_color="#dc2626",
+            )
+            success_count, _ = await email_svc.send_email(
+                to_emails=emails,
+                subject=(
+                    f"Expiring Supplies — {len(deployed)} on apparatus, "
+                    f"{len(rows)} in stock"
+                ),
+                html_body=html_body,
+                text_body=(
+                    f"{len(deployed)} item(s) on apparatus and {len(rows)} "
+                    f"stock lot(s) expire within {window_days} days. "
+                    f"{len(needs_reorder)} have no replacement stock on hand."
+                ),
+            )
+            sent_any = sent_any or success_count > 0
+
+        return 1 if sent_any else 0
 
     return await _for_each_org(db, "supply_expiration_alerts", process)
 

@@ -138,7 +138,7 @@ const NavigationChoice: React.FC = () => {
                 </p>
 
                 {/* Preview */}
-                <div className="bg-theme-surface-secondary border-theme-input-border rounded-lg border p-4">
+                <div className="card-secondary border-theme-input-border p-4">
                   <div className="space-y-2">
                     {/* Header bar */}
                     <div className="bg-theme-surface flex h-8 items-center space-x-1 rounded-sm px-2">
@@ -213,7 +213,7 @@ const NavigationChoice: React.FC = () => {
                 </p>
 
                 {/* Preview */}
-                <div className="bg-theme-surface-secondary border-theme-input-border rounded-lg border p-4">
+                <div className="card-secondary border-theme-input-border p-4">
                   <div className="flex space-x-2">
                     {/* Sidebar */}
                     <div className="bg-theme-surface flex w-16 flex-col space-y-1 rounded-sm p-1">
