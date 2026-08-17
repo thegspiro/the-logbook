@@ -117,16 +117,36 @@ No narration is known to be wrong here — these chapters predate the driver
 block and mostly do not mention it — but any *new* material written for it
 should carry the shift-date rule, which is the counter-intuitive one.
 
-### 06 — The Member Experience · **verify only**
+### 06 — The Member Experience · **WRONG — corrected in-script 2026-08-18**
 
-Chapter narration around signing in and changing a password is unaffected: all
-three new controls are invisible on a successful sign-in, and the two optional
-ones are off by default, so a recording made against a stock deployment shows
-exactly what it always did. **Only re-check this if the recording deployment
-has `CAPTCHA_ENABLED` or `BREACHED_PASSWORD_CHECK_ENABLED` turned on** — in
-which case the forgot-password screen carries a widget the narration does not
-mention, and a deliberately weak demonstration password may be refused
-mid-take.
+**Four lines named a navigation item that no longer exists.** The gear/medical
+split on 2026-08-16 renamed **My Equipment** → **My Issued Gear** (along with
+Inventory → Gear & Uniforms, Inventory Admin → Gear Admin, Equipment Requests →
+Gear Requests, Equipment Kits → Gear Kits). Script 06 said "My Equipment" twice
+in narration and twice in `[SCREEN:]` direction. Routes did not change, so
+nothing broke — the viewer is simply told to look for a label that is not on
+screen.
+
+Corrected in `06-member-guide.md` rather than left in this queue, per the
+standing rule that no behavioural content lives only in SCRIPT_CURRENCY.
+
+**If this chapter has already been recorded, the audio is wrong** — the
+presenter says "My Equipment" over a screen now reading "My Issued Gear". That
+is a re-record of two short lines, not a chapter; the `[SCREEN:]` directions
+re-shoot with it. Worth checking the take before assuming it needs redoing:
+the second mention is a passing reference that a caption could cover.
+
+**Same sweep, other scripts:** none. The rename reached only this script's
+narration; the other fifteen either do not name the item or reach it by route.
+
+On the rest of the window: chapter narration around signing in and changing a
+password is unaffected. All three new authentication controls are invisible on
+a successful sign-in, and the two optional ones are off by default, so a
+recording made against a stock deployment shows exactly what it always did.
+**Only re-check that if the recording deployment has `CAPTCHA_ENABLED` or
+`BREACHED_PASSWORD_CHECK_ENABLED` turned on** — in which case the
+forgot-password screen carries a widget the narration does not mention, and a
+deliberately weak demonstration password may be refused mid-take.
 
 ### Explicitly not flagged
 

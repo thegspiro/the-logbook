@@ -1649,7 +1649,7 @@ the loop between the shelf (Inventory) and the truck (Equipment Checks).
 | `/scheduling/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
 
 The worklist is reached from the **Supply** tile on the Scheduling hub (which
-carries a count badge) and from the Inventory Admin Hub. The apparatus view is
+carries a count badge) and from the Gear Admin hub. The apparatus view is
 reached from **My Equipment Checklists → Apparatus Inventory**.
 
 ### Schema

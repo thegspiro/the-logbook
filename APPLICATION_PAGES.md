@@ -359,15 +359,15 @@ Requires `training.manage` permission. Tab-based admin interface.
 | URL                        | Page                 | Permission    |
 | -------------------------- | -------------------- | ------------- |
 | `/inventory`               | Inventory Items List | Authenticated |
-| `/inventory/my-equipment`  | My Equipment         | Authenticated |
+| `/inventory/my-equipment`  | My Issued Gear         | Authenticated |
 | `/inventory/items/:id`     | Item Detail          | Authenticated |
 | `/inventory/storage-areas` | Storage Areas        | Authenticated |
 
-### Inventory Admin Hub (`/inventory/admin`)
+### Gear Admin Hub (`/inventory/admin`)
 
 Requires `inventory.manage` permission. Dashboard with summary stats (total items, low stock, overdue checkouts, pending requests) and navigation to admin sub-pages.
 
-### Inventory Admin Pages
+### Gear Admin Pages
 
 | URL                               | Page                      | Permission         |
 | --------------------------------- | ------------------------- | ------------------ |
@@ -379,16 +379,16 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/admin/members`        | Members Inventory         | `inventory.manage` |
 | `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage` |
 | `/inventory/admin/returns`        | Return Requests           | `inventory.manage` |
-| `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage` |
+| `/inventory/admin/requests`       | Gear Requests        | `inventory.manage` |
 | `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage` |
 | `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage` |
 | `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
 | `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
-| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/kits`           | Gear Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts`            | Active Checkouts          | `inventory.manage` |
 | `/inventory/import`               | CSV Import                | `inventory.manage` |
-| `/inventory/admin/kits`           | Equipment Kits            | `inventory.manage` |
+| `/inventory/admin/kits`           | Gear Kits            | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups            | `inventory.manage` |
 | `/inventory/print-labels`         | Barcode Label Printing    | Authenticated      |
 
@@ -508,7 +508,7 @@ Sections are defined in
 #### Expiring on Apparatus (`/scheduling/supply/expiring`) _(documented 2026-08-10)_
 
 The supply officer's worklist. Reached from **Scheduling → Supply** (the tile
-carries a count badge) and from the **Inventory Admin Hub**. Lists checklist
+carries a count badge) and from the **Gear Admin hub**. Lists checklist
 positions that are expiring, expired, short of target, or reported used, each with
 the ready replacement stock behind it.
 
@@ -584,6 +584,21 @@ lot's number or expiration date require `equipment_check.manage` or
 | `/medical-screening` | Medical Screening | `medical_screening.view` |
 
 > Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Availability is controlled per organization via the `enabled_modules` setting in Organization/Admin Settings.
+
+---
+
+## Medical Supplies (2026-08-16)
+
+| URL                            | Page              | Permission                                    |
+| ------------------------------ | ----------------- | --------------------------------------------- |
+| `/medical-supplies`            | Medical Supplies  | `inventory.view_medical` **or** `inventory.view` |
+| `/medical-supplies/categories` | Medical Categories | `inventory.view_medical` **or** `inventory.view` |
+
+> EMS consumables held as **dated lots** rather than one flat count, on their own page rather than mixed into the gear catalog. Opens on what is expiring, with an all-supplies tab, category management, an add-supply form, and a receive-delivery form that books a whole shipment as one dated lot per item line. Writes require `inventory.manage_medical` **or** `inventory.manage`.
+>
+> **The permission check is an OR on every route**, so a department running one supply line is unaffected — its quartermaster holds the broad grant and reaches medical stock exactly as before. A department that splits the job appoints an **EMS Supply Officer**, who holds the medical permissions plus the whole `equipment_check.*` set and has no access to gear or uniforms.
+>
+> Availability is controlled per organization via the `medical_supplies` key in `enabled_modules` (**off by default**). Full documentation: [docs/MEDICAL_SUPPLIES_MODULE.md](./docs/MEDICAL_SUPPLIES_MODULE.md).
 
 ---
 

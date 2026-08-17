@@ -87,7 +87,24 @@ The following roles are automatically created for each organization:
 5. **Quartermaster** (Priority: 85)
    - Manages department inventory, equipment, and gear assignments
    - Inventory and compliance management access
+   - Seeds with `inventory.view_medical` / `inventory.manage_medical` as well, so a
+     department running **one** supply line needs no second appointment. A
+     department that splits the job drops those two and appoints an EMS Supply
+     Officer _(2026-08-16)_
    - Cannot be deleted
+
+5a. **EMS Supply Officer** (`ems_supply_officer`, Priority: 55) _(new 2026-08-16)_
+   - Manages medical supplies, stock lots, and what is aboard each rig
+   - Holds `inventory.view_medical` / `inventory.manage_medical` plus the **whole**
+     `equipment_check.*` set — both halves of the shelf-to-truck loop, since stock
+     is only useful if the same officer can put it on the apparatus checklist and
+     see what is expiring out there
+   - **No access to gear or uniforms.** This is the point of the role: the medical
+     permissions are domain-scoped, and gear listings exclude medical-domain items
+     and vice versa
+   - Also `apparatus.view`, `locations.view`, and the baseline directory reads
+   - Ships with a matching email-signature office
+   - See [docs/MEDICAL_SUPPLIES_MODULE.md](./docs/MEDICAL_SUPPLIES_MODULE.md)
 
 6. **Vice President** (Priority: 80)
    - Similar to President but cannot edit organization settings

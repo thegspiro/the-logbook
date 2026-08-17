@@ -326,7 +326,40 @@ database by one table and 21 columns:
 
 Regenerating is a one-command step and is worth doing in any pull request that
 touches `app/models/` — a schema reference that silently omits a whole table is
-the kind of staleness a reader has no way to detect.
+the kind of staleness a reader has no way to detect. **CI now regenerates and
+fails on a diff**, so this cannot recur.
+
+### Follow-up sweep (2026-08-18)
+
+Acting on this audit turned up three more findings that were not changes in the
+window but were exposed by documenting it:
+
+1. **The Medical Supplies module had no documentation at all.** Shipped
+   2026-08-16 with a page, two permissions, a system role, a module toggle and
+   an enum member, and appeared in no module doc, no wiki page, no
+   `APPLICATION_PAGES.md` row, and no role or permission reference. Now covered
+   by [`MEDICAL_SUPPLIES_MODULE.md`](./MEDICAL_SUPPLIES_MODULE.md) and
+   `wiki/Module-Medical-Supplies.md`.
+
+2. **The gear renames left instructions pointing at items that no longer
+   exist** — `00-getting-started.md` told readers to open "My Equipment under
+   Inventory". 74 references corrected across 11 documents, plus four lines of
+   YouTube narration. Dated historical notes were deliberately left alone.
+
+3. **`check_endpoint_permissions.py` was not checking 202 routes.** Its regex
+   read one of the two docstring spellings in use. Because an unread docstring
+   contributes no permissions, those routes could never produce a `mismatch` —
+   they landed in the warning bucket instead, exempt from the gate. It also read
+   only the signature, so eight routes enforcing through a body authorizer
+   looked `undefended`; that report was not just wrong but actively dangerous,
+   since "fixing" it by adding the dependency would have removed the shift
+   officer's access. Both fixed, with regression tests, and the check now runs
+   `--strict` against a zero backlog.
+
+The pattern across all three, and worth carrying into the next pass: **the
+documentation that fails silently is the documentation nothing reads.** A
+missing module page, a renamed nav item, and a regex that skips a spelling all
+present identically — as nothing at all.
 
 ### Screenshots
 

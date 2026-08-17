@@ -7,6 +7,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation gates: two that were not gating (2026-08-18)
+
+**Fixed**
+
+- **202 routes were exempt from the endpoint permission check.**
+  `check_endpoint_permissions.py` compares each route's docstring against the
+  permissions it enforces, and its regex read only one of the **two** spellings
+  in use: `Requires permission:` (428 uses) but not `Permissions required:`
+  (202 uses). That was worse than a miscount. A docstring the regex cannot see
+  contributes **no** documented permissions, so it could never produce a
+  `mismatch` — it fell into `understated`, a warning that does not fail the
+  build. Those 202 routes could have named a permission the route did not
+  enforce, indefinitely, while CI stayed green and reported them as merely
+  under-documented. Widening the regex surfaced **two real
+  docstring/enforcement disagreements** that had been invisible.
+- **The checker read only the signature, so eight routes looked undefended.**
+  Enforcement lives in two places: a `Depends(require_permission(...))`
+  dependency, and — where the permission is not the only way in — a helper
+  called in the route body. The officer named on a shift may manage its crew,
+  attendance, calls, finalization and cancellation **without**
+  `scheduling.assign` / `scheduling.manage`, and that check needs the loaded
+  shift row, so it cannot be a dependency. Reading only the signature reported
+  those routes as `undefended` — the script's most alarming finding, and here
+  entirely wrong. **Anyone "fixing" the report by adding the dependency would
+  have removed the shift officer's access.** Body authorizers are now read,
+  including the permission a helper hardcodes internally, resolved from the
+  helper's own definition so the mapping cannot drift.
+- **A wrapped permission list lost everything after the wrap.** Four
+  alternatives do not fit on one line inside an indented docstring; the capture
+  stopped at the newline, which reads as a `mismatch` against a docstring that
+  is complete and correct. Continuation now stops at a blank line, a new
+  emphasis block, or a sentence end, so prose below the list cannot contribute
+  tokens.
+- **`docs/DATABASE_SCHEMA.md` had no drift gate.** It is generated from
+  `app/models/`, and on a fresh install those models **are** the schema —
+  `_fast_path_init()` calls `create_all()` and stamps Alembic at head, so
+  nothing replays the migration chain. Nothing verified the file was current,
+  and it had drifted across three merges: a whole table (`driver_exceptions`,
+  17 columns) plus 21 columns were missing. A missing table is the dangerous
+  kind of stale, because a reader has no way to detect it. CI now regenerates
+  and fails on a diff.
+
+**Changed**
+
+- **The endpoint permission check runs with `--strict`.** The 189-route
+  "under-documentation backlog" was mostly not a backlog — 163 were documented
+  in the unread spelling and 8 more enforced through a body authorizer. The
+  genuine remainder, **22 routes** across `users.py`, `roles.py` and
+  `elections.py`, were documented rather than waived, so the count is zero and
+  under-documentation now fails the build. Warnings accumulate; an error has to
+  be dealt with by whoever caused it.
+- Those 22 docstrings also lost an older, narrower `Requires \`x\` permission.`
+  line that named fewer permissions than the route accepts — 18 in total, now
+  replaced by one complete statement each.
+
+**Added**
+
+- `scripts/test_check_endpoint_permissions.py` — 10 regression tests, one per
+  way the checker was wrong, each in the direction that made an unchecked route
+  look fine. Includes the inverse case: an **unrecognised** helper must not
+  read as protection, or a genuine `undefended` finding would become a silent
+  pass. Repo-root script tests now run in CI.
+
+### Documentation: the Medical Supplies module is documented (2026-08-18)
+
+**Documentation**
+
+- **The module shipped 2026-08-16 with no reference documentation at all.** It
+  appeared in no `docs/*_MODULE.md`, nowhere in `wiki/`, not in
+  `APPLICATION_PAGES.md`, and its `ems_supply_officer` role and
+  `inventory.view_medical` / `inventory.manage_medical` permissions were in no
+  role or permission reference. A department appointing an EMS supply officer
+  had nothing to hand them.
+- Added [`docs/MEDICAL_SUPPLIES_MODULE.md`](docs/MEDICAL_SUPPLIES_MODULE.md)
+  and `wiki/Module-Medical-Supplies.md`, covering the module toggle, the two
+  domain-scoped permissions and the OR check that keeps single-supply-line
+  departments unaffected, the EMS Supply Officer role, the domain boundary
+  (**404 not 403** on a cross-domain id, so the endpoint is not an existence
+  oracle over the gear catalog), lot-based on-hand, the per-domain alert
+  audiences, both migrations, and the edge-case table.
+- Registered it in `APPLICATION_PAGES.md`, `ROLE_SYSTEM_README.md`,
+  `docs/README.md`, `wiki/Home.md` and the wiki sidebar.
+
+**Fixed**
+
+- **The 2026-08-16 gear renames left instructions pointing at navigation items
+  that no longer exist.** `docs/training/00-getting-started.md` told a reader to
+  "navigate to **My Equipment** under **Inventory**" — both renamed (**My Issued
+  Gear** under **Gear & Uniforms**). 74 label references were corrected across
+  11 documents, plus four lines of narration in YouTube script 06.
+  **If that chapter is already recorded, the audio is wrong** and is flagged in
+  `SCRIPT_CURRENCY`. Dated historical notes and the changelog were deliberately
+  left alone — rewriting them would falsify the record of what the screens were
+  called at the time. `My Equipment Checklists` is a different, still-current
+  scheduling screen and is untouched.
+
 ### Scheduling: the platoon roster is staffing information, not a directory (2026-08-17)
 
 **Security**

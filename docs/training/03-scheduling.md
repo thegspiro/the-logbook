@@ -1017,7 +1017,7 @@ stocks.
 #### Expiring on Apparatus — the supply officer's worklist
 
 Open **Scheduling → Supply** (the tile carries a count badge when there is
-anything on it), or reach it from the **Inventory Admin Hub**.
+anything on it), or reach it from the **Gear Admin hub**.
 
 The page lists checklist positions that need attention **together with the ready
 replacement stock for each**, because "swap it" and "order it" are different jobs

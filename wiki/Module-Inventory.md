@@ -16,7 +16,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Barcode & QR Scanning** — Camera-based scanning for check-in/check-out operations via BarcodeDetector API (Chrome/Edge) with html5-qrcode fallback (Firefox/Safari/desktop). Desktop webcam support via environment→user facingMode fallback
 - **Thermal Label Printing** — Dymo (2.25×1.25″), Rollo (4×6″), and sheet (8.5×11″) label generation with Code128 barcodes
 - **Category Management** — Organize items by category with low-stock thresholds and maintenance requirements
-- **Equipment Requests** — Members can request checkouts, issuances, or purchases; admins approve/deny
+- **Gear Requests** — Members can request checkouts, issuances, or purchases; admins approve/deny
 - **Org-Scoped Uniqueness** — Serial numbers, barcodes, and asset tags are unique per organization
 - **Row-Level Locking** — `SELECT FOR UPDATE` on mutation operations to prevent race conditions
 - **Overdue Tracking** — Computed at read time; scheduled task for reporting
@@ -30,7 +30,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Mobile Card Views & FAB** — _(2026-03-05)_ Responsive card layouts on mobile with floating action button for quick actions (add item, scan barcode, import CSV)
 - **CSV Import** — _(2026-03-02)_ Bulk import items via CSV upload with downloadable template, header validation, duplicate serial detection
 - **Variant Groups** — _(2026-03-07)_ Link related items that differ by size/style (e.g., coat in S/M/L/XL). Each variant tracks its own stock while sharing a base product description
-- **Equipment Kits** — _(2026-03-07)_ Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking. _(2026-08-11)_ Kit components can be flagged **optional** (`equipment_kit_items.optional`) — an optional component that is out of stock no longer blocks issuing the rest of the kit
+- **Gear Kits** — _(2026-03-07)_ Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking. _(2026-08-11)_ Kit components can be flagged **optional** (`equipment_kit_items.optional`) — an optional component that is out of stock no longer blocks issuing the rest of the kit
 - **Member Size Preferences** — _(2026-03-07)_ Members record preferred sizes (coat, pants, gloves, boots, helmet) for auto-selection during kit issuance and ordering
 - **Reorder Requests** — _(2026-03-07)_ Full workflow (pending → approved → ordered → received) with vendor/PO tracking and audit logging
 - **Item Reorder Points** — _(2026-03-07)_ Per-item threshold for low-stock alerts. Triggers email and SMS (Twilio) notifications
@@ -63,7 +63,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | URL                               | Page                      | Permission         |
 | --------------------------------- | ------------------------- | ------------------ |
 | `/inventory`                      | Inventory Items List      | Authenticated      |
-| `/inventory/my-equipment`         | My Equipment              | Authenticated      |
+| `/inventory/my-equipment`         | My Issued Gear              | Authenticated      |
 | `/inventory/items/:id`            | Item Detail               | Authenticated      |
 | `/inventory/storage-areas`        | Storage Areas             | Authenticated      |
 | `/inventory/admin`                | Admin Dashboard           | `inventory.manage` |
@@ -74,17 +74,17 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `/inventory/admin/members`        | Members Inventory         | `inventory.manage` |
 | `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage` |
 | `/inventory/admin/returns`        | Return Requests           | `inventory.manage` |
-| `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage` |
+| `/inventory/admin/requests`       | Gear Requests        | `inventory.manage` |
 | `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage` |
 | `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage` |
 | `/inventory/admin/vendors`        | Vendors                   | `inventory.manage` |
 | `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
 | `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
-| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/kits`           | Gear Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts`            | Active Checkouts          | `inventory.manage` |
 | `/inventory/import`               | CSV Import                | `inventory.manage` |
-| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/kits`           | Gear Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
 | `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
@@ -251,7 +251,7 @@ POST   /api/v1/inventory/clearances/{id}/items/{iid}/resolve  # Resolve line ite
 POST   /api/v1/inventory/clearances/{id}/complete         # Complete clearance
 ```
 
-### Equipment Requests
+### Gear Requests
 
 ```
 POST   /api/v1/inventory/requests                        # Create request
@@ -321,7 +321,7 @@ GET    /api/v1/inventory/write-offs                      # List write-off reques
 PUT    /api/v1/inventory/write-offs/{id}/review           # Approve/deny write-off
 ```
 
-### Variant Groups & Equipment Kits _(2026-03-07)_
+### Variant Groups & Gear Kits _(2026-03-07)_
 
 ```
 GET    /api/v1/inventory/variant-groups                    # List variant groups
@@ -492,7 +492,7 @@ A new Quartermaster planning tool (`/inventory/admin/impact-planner`, `inventory
 ### Admin Hub Redesign, Kits & Variant Groups Pages, Barcode Printing
 
 - **Inventory admin hub redesign**: Dashboard redesigned with grouped card sections and prominent navigation cards replacing the flat list layout
-- **Equipment Kits admin page**: New dedicated page at `/inventory/admin/kits` for managing equipment kit bundles
+- **Gear Kits admin page**: New dedicated page at `/inventory/admin/kits` for managing equipment kit bundles
 - **Variant Groups admin page**: New dedicated page at `/inventory/admin/variant-groups` for managing size/style variant groups
 - **Barcode printing ISO compliance**: Label generation aligned with ISO/IEC 15417 — correct quiet zones, minimum bar widths, and aspect ratios
 - **Auto-rotation for thermal printers**: Roll-fed labels auto-rotate to maximize print area when orientation doesn't match
@@ -519,7 +519,7 @@ A new Quartermaster planning tool (`/inventory/admin/impact-planner`, `inventory
 ## Recent Changes (2026-03-07)
 
 - **Variant Groups** — Items can be grouped as variants of a base product (e.g., coat in sizes S/M/L/XL). Each variant has independent stock, serials, and assignments
-- **Equipment Kits** — Named bundles for single-operation issuance with per-component tracking
+- **Gear Kits** — Named bundles for single-operation issuance with per-component tracking
 - **Member Size Preferences** — Record preferred garment sizes for auto-selection during kit issuance
 - **Reorder Requests** — Full lifecycle (pending → approved → ordered → received) with audit logging
 - **Item Reorder Points** — Per-pool-item threshold triggers low-stock dashboard alerts, email, and SMS notifications
