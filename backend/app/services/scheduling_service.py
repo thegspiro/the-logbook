@@ -2194,7 +2194,7 @@ class SchedulingService:
                     select(User.id, User.platoon).where(
                         User.organization_id == str(organization_id),
                         User.platoon.isnot(None),
-                        User.status == "active",
+                        User.is_active,
                     )
                 )
                 for uid, platoon_name in live_result.all():

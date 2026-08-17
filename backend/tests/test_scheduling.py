@@ -892,10 +892,12 @@ class TestPatternGeneration:
         assert {a.user_id for a in assignments} == {user_id, user2_id}
 
     @pytest.mark.asyncio
-    async def test_platoon_pulls_live_member_platoon(self, db_session, setup_template):
+    async def test_platoon_pulls_only_active_live_member_platoon(
+        self, db_session, setup_template
+    ):
         """With no per-pattern crews, generation should staff each platoon's
-        shifts from members' profile platoon (User.platoon) — the single
-        source of truth."""
+        shifts from active members' profile platoon (User.platoon), excluding
+        members who have been soft deleted."""
         org_id, user_id, user2_id, template = setup_template
         svc = SchedulingService(db_session)
 
@@ -905,8 +907,11 @@ class TestPatternGeneration:
             {"id": user_id},
         )
         await db_session.execute(
-            text("UPDATE users SET platoon = 'B' WHERE id = :id"),
-            {"id": user2_id},
+            text(
+                "UPDATE users SET platoon = 'B', deleted_at = :deleted_at "
+                "WHERE id = :id"
+            ),
+            {"id": user2_id, "deleted_at": datetime.now(timezone.utc)},
         )
         await db_session.flush()
 
@@ -951,7 +956,7 @@ class TestPatternGeneration:
         day1 = await svc.get_shift_assignments(
             uuid.UUID(by_date[start + timedelta(days=1)].id), uuid.UUID(org_id)
         )
-        assert [a.user_id for a in day1] == [user2_id]  # platoon B
+        assert day1 == []  # platoon B contains only a soft-deleted member
 
         # Roster for platoon A's shift: the A member shows as assigned.
         roster = await svc.get_platoon_roster_for_shift(by_date[start])
