@@ -222,9 +222,17 @@ async def create_member(
 
     # Use admin-provided password or generate a temporary one
     if user_data.password:
+        from app.core.breached_password import check_password_not_breached
         from app.core.security import validate_password_strength
 
         is_valid, error_msg = validate_password_strength(user_data.password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+
+        is_valid, error_msg = await check_password_not_breached(user_data.password)
         if not is_valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -517,6 +525,24 @@ def _clear_leadership_only_fields(
     """
     payload.date_of_birth = None
     payload.emergency_contacts = []
+
+
+def _clear_directory_only_profile_metadata(payload: UserProfileResponse) -> None:
+    """Remove account and authorization metadata from a directory profile.
+
+    ``members.view`` allows a member to find and open a colleague's directory
+    entry.  It must not also reveal the colleague's account-security state,
+    notification settings, or the permission sets attached to their roles.
+    Role names remain available because they are displayed on the profile.
+    """
+    payload.email_verified = None
+    payload.mfa_enabled = None
+    payload.last_login_at = None
+    payload.created_at = None
+    payload.updated_at = None
+    payload.notification_preferences = None
+    for role in payload.roles:
+        role.permissions = []
 
 
 def _clear_hidden_contact_fields(
@@ -1087,8 +1113,9 @@ async def get_user_with_roles(
     `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
     see `_clear_hidden_contact_fields`. Date of birth and emergency contacts are
     leadership-only regardless of that setting — see
-    `_clear_leadership_only_fields`. Members-managers and the subject themselves
-    are exempt from both.
+    `_clear_leadership_only_fields`. A caller relying only on `members.view`
+    also receives no account-security, notification, or role-permission
+    metadata. Members-managers and the subject themselves are exempt.
 
     **Authentication required**
     """
@@ -1156,6 +1183,8 @@ async def get_user_with_roles(
         visibility = await _load_contact_visibility(db, current_user, is_admin)
         _clear_hidden_contact_fields(payload, visibility)
         _clear_leadership_only_fields(payload)
+        if not _has_permission("users.view", user_permissions):
+            _clear_directory_only_profile_metadata(payload)
 
     return payload
 
@@ -1242,7 +1271,7 @@ async def update_contact_info(
             key: value
             for key, value in (user.notification_preferences or {}).items()
             # Drops keys no sender reads any more, so a blob that predates
-            # migration 20260816_0002 heals on its next save instead of
+            # migration 20260816_0006 heals on its next save instead of
             # carrying a dead `email` flag forever.
             if key in known_keys
         }
@@ -1357,9 +1386,17 @@ async def update_user_profile(
                 detail="A member with this membership number already exists",
             )
 
-    # Rank, station, platoon, and membership number changes restricted to
-    # leadership / secretary / membership coordinator
-    restricted_fields = {"rank", "station", "platoon", "membership_number"}
+    # Eligibility and assignment fields are restricted to leadership,
+    # the secretary, or the membership coordinator. In particular, hire_date
+    # drives automatic membership tier advancement and must not be editable
+    # with the broader users.edit grant.
+    restricted_fields = {
+        "hire_date",
+        "rank",
+        "station",
+        "platoon",
+        "membership_number",
+    }
     has_restricted = restricted_fields & update_data.keys()
     if has_restricted:
         perm_result = await db.execute(
@@ -1373,7 +1410,11 @@ async def update_user_profile(
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, platoon, or membership number",
+                detail=(
+                    "Only leadership, the secretary, or the membership coordinator "
+                    "can update hire date, rank, station, platoon, or membership "
+                    "number"
+                ),
             )
 
         # members.manage lets you set rank, but a rank grants its own
@@ -1609,6 +1650,7 @@ async def admin_reset_password(
 
     **Authentication required**
     """
+    from app.core.breached_password import check_password_not_breached
     from app.core.security import hash_password, validate_password_strength
     from app.models.user import Session as UserSession
     from app.services.auth_service import _save_password_to_history
@@ -1638,6 +1680,13 @@ async def admin_reset_password(
 
     # Validate the new password
     is_valid, error_msg = validate_password_strength(reset_data.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
+    is_valid, error_msg = await check_password_not_breached(reset_data.new_password)
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

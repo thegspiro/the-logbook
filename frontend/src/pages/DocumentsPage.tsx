@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import {
   FileText,
   FolderOpen,
@@ -590,8 +591,8 @@ const DocumentsPage: React.FC = () => {
         {showUploadModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowUploadModal(false)} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowUploadModal(false)} aria-hidden="true" />
+              <DialogPanel onClose={() => setShowUploadModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-theme-text-primary text-lg font-medium">Upload Document</h3>
@@ -700,7 +701,7 @@ const DocumentsPage: React.FC = () => {
                     <span>Upload</span>
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -717,12 +718,8 @@ const DocumentsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div
-                className="fixed inset-0 bg-black/60"
-                onClick={() => setShowCreateFolder(false)}
-                aria-hidden="true"
-              />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowCreateFolder(false)} aria-hidden="true" />
+              <DialogPanel onClose={() => setShowCreateFolder(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 id="create-folder-title" className="text-theme-text-primary text-lg font-medium">
@@ -790,7 +787,7 @@ const DocumentsPage: React.FC = () => {
                     <span>Create Folder</span>
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -799,8 +796,8 @@ const DocumentsPage: React.FC = () => {
         {deleteConfirm && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setDeleteConfirm(null)} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-sm rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setDeleteConfirm(null)} aria-hidden="true" />
+              <DialogPanel onClose={() => setDeleteConfirm(null)} className="relative w-full max-w-sm">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex items-start space-x-3">
                     <div className="rounded-full bg-red-500/10 p-2">
@@ -832,7 +829,7 @@ const DocumentsPage: React.FC = () => {
                     <span>Delete</span>
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}

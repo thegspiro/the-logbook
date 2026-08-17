@@ -280,7 +280,7 @@ const EquipmentKitsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Equipment Kits</h1>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Gear Kits</h1>
           <p className="text-theme-text-secondary mt-1">
             Create kit templates to issue multiple items to members at once.
           </p>

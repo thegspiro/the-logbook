@@ -49,7 +49,7 @@ const ActiveSessionsTab: React.FC = () => {
           onClick={() => {
             void fetchActiveSessions();
           }}
-          className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition"
+          className="btn-secondary text-theme-text-secondary flex items-center gap-2 px-3 text-sm transition"
         >
           <RefreshCw className="h-4 w-4" />
           Refresh

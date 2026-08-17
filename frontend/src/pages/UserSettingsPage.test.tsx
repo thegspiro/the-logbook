@@ -150,6 +150,55 @@ describe('UserSettingsPage', () => {
       });
     });
 
+    it('grants consent last when enabling, so a half-failed save leaves texts off', async () => {
+      // Two requests, no transaction across them. Consent is the gate that
+      // opens (the preference defaults to on when unset), so writing it first
+      // would let texts start sending to a member the UI just told the save
+      // had failed.
+      vi.mocked(userService.getMyConsents).mockResolvedValue([
+        { consent_type: 'sms_notifications', granted: null, updated_at: null },
+      ]);
+      const order: string[] = [];
+      vi.mocked(userService.updateNotificationPreferences).mockImplementation(() => {
+        order.push('preference');
+        return Promise.resolve();
+      });
+      vi.mocked(userService.setMyConsent).mockImplementation(() => {
+        order.push('consent');
+        return Promise.resolve();
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+      await user.click(screen.getByText('Notifications'));
+      await user.click(await screen.findByRole('switch', { name: /urgent text messages/i }));
+
+      await waitFor(() => expect(order).toEqual(['preference', 'consent']));
+    });
+
+    it('withdraws consent first when disabling, for the same reason', async () => {
+      const order: string[] = [];
+      vi.mocked(userService.updateNotificationPreferences).mockImplementation(() => {
+        order.push('preference');
+        return Promise.resolve();
+      });
+      vi.mocked(userService.setMyConsent).mockImplementation(() => {
+        order.push('consent');
+        return Promise.resolve();
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+      await user.click(screen.getByText('Notifications'));
+      const smsToggle = await screen.findByRole('switch', { name: /urgent text messages/i });
+      await waitFor(() => expect(smsToggle).toHaveAttribute('aria-checked', 'true'));
+      await user.click(smsToggle);
+
+      // Revoking consent closes the gate; if the preference write then fails,
+      // texts have already stopped.
+      await waitFor(() => expect(order).toEqual(['consent', 'preference']));
+    });
+
     it('reads as off until the member grants SMS consent, whatever the stored preference says', async () => {
       // The consent is the gate the backend actually enforces. A preference of
       // true with no consent on record sends nothing, so the switch must not

@@ -142,7 +142,7 @@ class CertAlertService:
         This used to AND in a second key, `email`, which no other sender read
         and which only the admin contact panel wrote — so the same switch
         meant "no mail at all" here and nothing anywhere else. Migration
-        20260816_0002 folded that key into email_notifications.
+        20260816_0006 folded that key into email_notifications.
         """
         prefs = getattr(member, "notification_preferences", None)
         if prefs and isinstance(prefs, dict):
@@ -185,16 +185,39 @@ class CertAlertService:
 
         Should be called daily via cron job.
 
+        Two switches gate this, and they compose as AND. The training module's
+        own ``cert_alert_config.enabled`` decides whether the org has these
+        alerts at all; the org's TRAINING_EXPIRY notification rule can then
+        turn them off. Creating an enabled rule does not switch them on for an
+        org that never configured cert alerts.
+
+        Both checks live here, in the shared service, rather than in the
+        scheduled task — three entry points reach this method (the daily task,
+        ``/training/certifications/process-alerts`` and the all-orgs endpoint
+        via ``run_daily_cert_alerts``), and a gate on only one of them would
+        report the trigger as enforced while two routes still sent the alerts.
+
         Returns: {"alerts_sent": N, "escalations_sent": N, "in_app_sent": N, "errors": N}
         """
+        silent = {
+            "alerts_sent": 0,
+            "escalations_sent": 0,
+            "in_app_sent": 0,
+            "errors": 0,
+        }
+
         config = await self.get_alert_config(organization_id)
         if not config.get("enabled"):
-            return {
-                "alerts_sent": 0,
-                "escalations_sent": 0,
-                "in_app_sent": 0,
-                "errors": 0,
-            }
+            return silent
+
+        from app.models.notification import NotificationTrigger
+        from app.services.notification_rules import NotificationRuleResolver
+
+        resolver = NotificationRuleResolver(self.db)
+        if not await resolver.is_enabled(
+            organization_id, NotificationTrigger.TRAINING_EXPIRY
+        ):
+            return silent
 
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))

@@ -33,11 +33,14 @@ def _low_stock_item(name="Structural gloves", on_hand=2, reorder_point=10):
 
 
 def _quartermaster():
+    # Recipients are resolved by granted permission, not by a role name: a
+    # department may run all stock through a quartermaster or split medical
+    # off to an EMS supply officer. inventory.manage covers both domains.
     return SimpleNamespace(
         id="qm1",
         email="qm@fd.example",
         phone="+15551234567",
-        role="quartermaster",
+        roles=[SimpleNamespace(permissions=["inventory.manage"])],
     )
 
 

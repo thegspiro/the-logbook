@@ -22,6 +22,7 @@ import type {
 } from '../types';
 import { pipelineService, applicantService, interviewService } from '../services/api';
 import { handleStoreError } from '../../../utils/storeHelpers';
+import { toAppError } from '../../../utils/errorHandling';
 import { StageType } from '../../../constants/enums';
 import { KANBAN_PAGE_SIZE } from '../constants';
 
@@ -386,8 +387,20 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
               pipeline_id: pipeline.id,
               stage_id: newStage.id,
             });
-          } catch {
-            // Package may already exist — not a blocking error
+          } catch (packageError: unknown) {
+            // A 409 means the package is already there, which is the expected
+            // outcome when a stage is re-entered. Anything else left the
+            // applicant sitting on an election-vote stage with nothing to vote
+            // on — the advance itself succeeded, so this is reported as a
+            // warning rather than rolled back.
+            if (toAppError(packageError).status !== 409) {
+              set({
+                error: handleStoreError(
+                  packageError,
+                  'Applicant advanced, but the election package could not be created'
+                ),
+              });
+            }
           }
         }
       }

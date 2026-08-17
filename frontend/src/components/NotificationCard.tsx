@@ -272,9 +272,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMar
 
   return (
     <div
-      className={`card overflow-hidden rounded-lg transition-all duration-300 ease-in-out ${
-        isVisuallyActive ? 'border-l-4 border-l-blue-500 opacity-100' : 'border-l-4 border-l-transparent opacity-60'
-      }`}
+      className={`card overflow-hidden rounded-lg transition-all duration-300 ease-in-out ${isVisuallyActive ? 'border-l-4 border-l-blue-500 opacity-100' : 'border-l-4 border-l-transparent opacity-60'}`}
     >
       {/* Collapsed header — always visible */}
       <button

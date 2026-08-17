@@ -49,28 +49,28 @@ for (const tab of STATUS_TABS) {
 
 const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
   <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+    <div className="card p-4">
       <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <DollarSign className="h-4 w-4" />
         Expected
       </div>
       <p className="text-theme-text-primary mt-1 text-xl font-bold">{formatCurrency(summary.totalExpected)}</p>
     </div>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+    <div className="card p-4">
       <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <DollarSign className="h-4 w-4 text-green-600" />
         Collected
       </div>
       <p className="mt-1 text-xl font-bold text-green-600">{formatCurrency(summary.totalCollected)}</p>
     </div>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+    <div className="card p-4">
       <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <DollarSign className="h-4 w-4 text-red-600" />
         Outstanding
       </div>
       <p className="mt-1 text-xl font-bold text-red-600">{formatCurrency(summary.totalOutstanding)}</p>
     </div>
-    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+    <div className="card p-4">
       <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <Users className="h-4 w-4" />
         Collection Rate
@@ -154,7 +154,7 @@ const DuesManagementPage: React.FC = () => {
 
       {/* Schedule Selector */}
       {activeSchedules.length > 0 && (
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+        <div className="card p-4">
           <h2 className="text-theme-text-secondary mb-3 text-sm font-medium">Dues Schedule</h2>
           <div className="flex flex-wrap gap-2">
             <button
@@ -190,7 +190,7 @@ const DuesManagementPage: React.FC = () => {
       )}
 
       {/* Status Tabs */}
-      <div className="border-theme-surface-border bg-theme-surface flex flex-wrap gap-1 rounded-lg border p-1">
+      <div className="card flex flex-wrap gap-1 p-1">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
@@ -219,7 +219,7 @@ const DuesManagementPage: React.FC = () => {
           }
         />
       ) : (
-        <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
+        <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>

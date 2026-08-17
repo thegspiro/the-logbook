@@ -159,7 +159,7 @@ const EquipmentRequestsPage: React.FC = () => {
               <ClipboardList className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-xl font-bold">Equipment Requests</h1>
+              <h1 className="text-theme-text-primary text-xl font-bold">Gear Requests</h1>
               <p className="text-theme-text-muted text-sm">Review member requests for equipment</p>
             </div>
           </div>

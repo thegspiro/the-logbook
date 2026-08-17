@@ -16,6 +16,12 @@ vi.mock('../store/adminHoursStore', () => ({
   useAdminHoursStore: (selector: (state: unknown) => unknown) => selector({ summary, fetchSummary }),
 }));
 
+// Pin the department timezone so the UTC bounds below are stable regardless of
+// the machine running the suite. America/New_York is UTC-4 on these March dates.
+vi.mock('../../../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
+}));
+
 const populatedSummary: AdminHoursSummary = {
   totalHours: 10,
   totalEntries: 4,
@@ -64,30 +70,46 @@ describe('SummaryTab', () => {
     expect(screen.getByText(/Active sessions, rejected entries, and deleted entries are excluded/)).toBeInTheDocument();
   });
 
-  it('requests presets through the end of the selected day', async () => {
+  it('requests presets as UTC instants covering the whole selected day', async () => {
     render(<SummaryTab />);
 
     fireEvent.change(screen.getByLabelText('Reporting period'), { target: { value: '30-days' } });
 
     await waitFor(() => expect(fetchSummary).toHaveBeenCalledTimes(2));
-    expect(lastSummaryParams?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T23:59:59\.999$/);
+    expect(lastSummaryParams?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.999Z$/);
   });
 
   it('requests the current calendar year and displays a bounded reporting period', async () => {
     summary = {
       ...populatedSummary,
-      periodStart: '2026-01-01T00:00:00Z',
-      periodEnd: '2026-08-14T23:59:59.999Z',
+      // Bounds as the fetch actually sends them: reporting-day edges in
+      // America/New_York converted to UTC instants.
+      periodStart: '2026-01-01T05:00:00Z',
+      periodEnd: '2026-08-15T03:59:59.999Z',
     };
     render(<SummaryTab />);
 
-    expect(screen.getByText(/2026.*–.*2026/)).toBeInTheDocument();
+    expect(screen.getByText('Jan 1, 2026 – Aug 14, 2026')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Reporting period'), { target: { value: 'year' } });
 
     await waitFor(() => expect(fetchSummary).toHaveBeenCalledTimes(2));
-    expect(lastSummaryParams?.startDate).toMatch(/^\d{4}-01-01$/);
-    expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T23:59:59\.999$/);
+    // Jan 1 local in a UTC-5 zone is 05:00Z on Jan 1, not midnight Dec 31.
+    expect(lastSummaryParams?.startDate).toMatch(/^\d{4}-01-01T05:00:00\.000Z$/);
+    expect(lastSummaryParams?.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.999Z$/);
+  });
+
+  it('renders the period label in the reporting timezone, not UTC', () => {
+    summary = {
+      ...populatedSummary,
+      // The end bound is Mar 31 23:59:59.999 in America/New_York, which is
+      // already Apr 1 in UTC — the label must still read Mar 31.
+      periodStart: '2026-03-10T05:00:00Z',
+      periodEnd: '2026-04-01T03:59:59.999Z',
+    };
+    render(<SummaryTab />);
+
+    expect(screen.getByText('Mar 10, 2026 – Mar 31, 2026')).toBeInTheDocument();
   });
 
   it('applies and validates a custom date range', () => {
@@ -100,9 +122,11 @@ describe('SummaryTab', () => {
 
     fireEvent.change(screen.getByLabelText('Through'), { target: { value: '2026-03-31' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply range' }));
+    // UTC-4 on these dates: the range opens at 04:00Z on the 10th and closes a
+    // millisecond before 04:00Z on April 1, so the whole 31st is included.
     expect(fetchSummary).toHaveBeenLastCalledWith({
-      startDate: '2026-03-10',
-      endDate: '2026-03-31T23:59:59.999',
+      startDate: '2026-03-10T04:00:00.000Z',
+      endDate: '2026-04-01T03:59:59.999Z',
     });
   });
 

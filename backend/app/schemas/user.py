@@ -242,7 +242,7 @@ class NotificationPreferences(BaseModel):
 
     # The single master email switch. A second `email` key used to sit beside
     # this one meaning the same thing, read by one sender and written by a
-    # different screen; migration 20260816_0002 folded it in here.
+    # different screen; migration 20260816_0006 folded it in here.
     email_notifications: bool = True
     # Mutes the SMS *addition* to the emails a member already receives, and
     # only for the urgent alerts in notification_channels.SmsAlert. Defaults
@@ -268,6 +268,13 @@ class ContactInfoUpdate(BaseModel):
 class UserProfileResponse(UserResponse):
     """Extended user response with roles and notification preferences"""
 
+    # These account-management fields are cleared when this schema is used as
+    # a directory profile for a caller who has only ``members.view``.
+    email_verified: Optional[bool] = None
+    mfa_enabled: Optional[bool] = None
+    last_login_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     roles: List[RoleResponse] = []
     notification_preferences: Optional[dict] = None
 

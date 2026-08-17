@@ -286,18 +286,32 @@ export const UserSettingsPage: React.FC = () => {
    * waiting for the Save Preferences button: the consent is a legal record
    * (TCPA), and a switch that quietly defers is how a member ends up believing
    * they opted in when they did not.
+   *
+   * These are two requests with no transaction across them, so the order is
+   * chosen to fail closed — a half-completed toggle must never leave texts
+   * sending to somebody the UI just told the save had failed. The consent
+   * write is the one that opens the gate (the preference defaults to on when
+   * unset), so it goes **last** when enabling and **first** when disabling.
+   * Either way, if the second request fails, SMS is off.
    */
   const handleSmsAddOnToggle = async (enabled: boolean) => {
     if (!user?.id) return;
     setSavingConsent('sms_notifications');
     try {
-      await userService.setMyConsent('sms_notifications', enabled);
       // Only the key this switch owns. The backend merges, so the toggles
       // above keep whatever the member last saved — flipping this must not
       // quietly commit unsaved edits sitting in the rest of the form.
-      await userService.updateNotificationPreferences(user.id, {
-        sms_notifications: enabled,
-      });
+      const writePreference = () => userService.updateNotificationPreferences(user.id, { sms_notifications: enabled });
+      const writeConsent = () => userService.setMyConsent('sms_notifications', enabled);
+
+      if (enabled) {
+        await writePreference();
+        await writeConsent();
+      } else {
+        await writeConsent();
+        await writePreference();
+      }
+
       applyConsentLocally('sms_notifications', enabled);
       setSmsNotifications(enabled);
       toast.success(enabled ? 'Text messages turned on' : 'Text messages turned off');
@@ -586,7 +600,7 @@ export const UserSettingsPage: React.FC = () => {
                           type="text"
                           value={profileForm.membership_number || ''}
                           readOnly
-                          className="border-theme-input-border bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted block w-full cursor-not-allowed rounded-md border px-3 py-2 opacity-60 sm:text-sm"
+                          className="form-input bg-theme-surface-secondary placeholder-theme-text-muted block cursor-not-allowed px-3 opacity-60 sm:text-sm"
                           disabled
                         />
                       </div>
@@ -601,7 +615,7 @@ export const UserSettingsPage: React.FC = () => {
                             rankOptions.find((r) => r.value === profileForm.rank)?.label || profileForm.rank || '—'
                           }
                           readOnly
-                          className="border-theme-input-border bg-theme-surface-secondary text-theme-text-primary block w-full cursor-not-allowed rounded-md border px-3 py-2 opacity-60 sm:text-sm"
+                          className="form-input bg-theme-surface-secondary block cursor-not-allowed px-3 opacity-60 sm:text-sm"
                           disabled
                         />
                       </div>
@@ -614,7 +628,7 @@ export const UserSettingsPage: React.FC = () => {
                           type="text"
                           value={profileForm.station || ''}
                           readOnly
-                          className="border-theme-input-border bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted block w-full cursor-not-allowed rounded-md border px-3 py-2 opacity-60 sm:text-sm"
+                          className="form-input bg-theme-surface-secondary placeholder-theme-text-muted block cursor-not-allowed px-3 opacity-60 sm:text-sm"
                           disabled
                         />
                       </div>

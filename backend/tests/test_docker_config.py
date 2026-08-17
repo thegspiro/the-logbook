@@ -388,6 +388,9 @@ class TestProductionComposeSecuritySwitches:
     def test_transport_tls_is_required_by_default(self):
         assert "SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-true}" in self.content
 
+    def test_backend_volumes_replace_development_bind_mounts(self):
+        assert "volumes: !override" in self.content
+
 
 class TestDockerComposeMinimal:
     """Validate docker-compose.minimal.yml override file."""
