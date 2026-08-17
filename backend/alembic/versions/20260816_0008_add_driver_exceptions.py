@@ -1,6 +1,6 @@
 """Add driver qualification exceptions
 
-Revision ID: 20260816_0006
+Revision ID: 20260816_0008
 Revises: 20260816_0005
 Create Date: 2026-08-16
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260816_0006"
+revision = "20260816_0008"
 down_revision = "20260816_0005"
 branch_labels = None
 depends_on = None
