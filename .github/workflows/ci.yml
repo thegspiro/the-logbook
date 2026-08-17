@@ -69,6 +69,17 @@ jobs:
         if: "!cancelled()"
         run: isort --check-only app/ tests/ alembic/
 
+      # Two branches that each add a migration pick the next number
+      # independently, so both land claiming the same revision id. Git merges
+      # the two files without a word — they do not overlap — and the result is
+      # an ambiguous chain that fails at `alembic upgrade head` with "Multiple
+      # head revisions", after the merge, for everyone. It happened twice in a
+      # single day on 2026-08-16. This is the check that sees it, and it needs
+      # no database.
+      - name: Validate migration chain
+        if: "!cancelled()"
+        run: python scripts/validate_migrations.py
+
       # Repo-root Python (generate_registry.py, scripts/) is outside the
       # backend working-directory and was linted by nothing, which let five
       # unused imports and an empty f-string accumulate. flake8 only — these

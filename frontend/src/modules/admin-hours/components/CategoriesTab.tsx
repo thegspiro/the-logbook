@@ -159,7 +159,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
             onClick={() => {
               void handleCloseStaleSessions();
             }}
-            className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition"
+            className="btn-secondary text-theme-text-secondary flex items-center gap-2 px-3 text-sm transition"
             title="Auto-close any sessions that exceeded their max hours limit"
           >
             <AlertTriangle className="h-4 w-4" />

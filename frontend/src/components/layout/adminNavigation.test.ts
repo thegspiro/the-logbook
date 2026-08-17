@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasAdministrationAccess } from './adminNavigation';
+import { canOpenAdministrationSection, hasAdministrationAccess } from './adminNavigation';
 
 const checkerFor =
   (...permissions: string[]) =>
@@ -17,4 +17,20 @@ describe('hasAdministrationAccess', () => {
       expect(hasAdministrationAccess(checkerFor(permission))).toBe(true);
     }
   );
+});
+
+describe('canOpenAdministrationSection', () => {
+  it('opens for users.view alone (the member ID scanner lives in the section)', () => {
+    expect(hasAdministrationAccess(checkerFor('users.view'))).toBe(false);
+    expect(canOpenAdministrationSection(checkerFor('users.view'))).toBe(true);
+  });
+
+  it('opens for any administrative permission', () => {
+    expect(canOpenAdministrationSection(checkerFor('settings.manage'))).toBe(true);
+  });
+
+  it('stays closed with no relevant grants', () => {
+    expect(canOpenAdministrationSection(checkerFor('forms.view'))).toBe(false);
+    expect(canOpenAdministrationSection(checkerFor())).toBe(false);
+  });
 });

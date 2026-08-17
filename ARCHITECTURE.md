@@ -1010,7 +1010,7 @@ columns.
 | Correct one lot | `PUT /equipment-checks/items/{id}/deployed-lots/{lotId}` | Count, lot number and expiration together; zero quantity removes the lot |
 | Swap fresh stock | `POST /equipment-checks/items/{id}/swap` | `−N` on `inventory_lots.quantity`, `+N` as a deployed lot, `swap` changelog entry, clears the restock report |
 | Withdraw a report | `DELETE /equipment-checks/items/{id}/used` | Clears the flag, reporter and note together |
-| Submitting an equipment check | `POST /equipment-checks/shifts/{id}/submit` | A **recount** — a crew at the compartment outranks a running total that has drifted; `expiration_found` / `lot_found` / `serial_found` are written back onto the template item |
+| Submitting an equipment check | `POST /equipment-checks/shifts/{id}/submit` | A **recount** — a crew at the compartment outranks a running total that has drifted; `lot_found` / `serial_found` are written back onto the template item. `expiration_found` is recorded on the check but **not** written back _(2026-08-11)_ — a submitter asserting a fresh date must not be able to clear an expired-item auto-fail; authoritative expirations change only via the manage-level supply flows. Submitted items must belong to the named template |
 
 **Permissions.** Everything in that table is crew work and sits behind
 `equipment_check.submit` (the default member position) as well as the manage
