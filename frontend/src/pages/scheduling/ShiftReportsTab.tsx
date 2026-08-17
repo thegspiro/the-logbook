@@ -1075,7 +1075,7 @@ export const ShiftReportsTab: React.FC = () => {
         {isExpanded && (
           <div className="border-theme-surface-border space-y-4 border-t px-4 pb-4 sm:px-5 sm:pb-5">
             <div className="pt-3">
-              <ReportContentDisplay report={report} />
+              <ReportContentDisplay report={report} scoreLabels={ratingScaleLabels} />
             </div>
 
             {/* Print button */}
@@ -2383,7 +2383,7 @@ export const ShiftReportsTab: React.FC = () => {
                       </span>
                       {reviewReport.performance_rating && renderRating(reviewReport.performance_rating)}
                     </div>
-                    <ReportContentDisplay report={reviewReport} />
+                    <ReportContentDisplay report={reviewReport} scoreLabels={ratingScaleLabels} />
                   </div>
                 )}
 
