@@ -208,7 +208,7 @@ export const publicFormsService = {
       try {
         await performSharedRefresh();
       } catch (refreshError) {
-        handleExpiredSession();
+        await handleExpiredSession();
         throw refreshError;
       }
       response = await axios.post<PublicFormSubmissionResponse>(url, payload, config);

@@ -38,6 +38,10 @@ The draft purge now sweeps both shift-report and equipment-check namespaces, inc
 keys that are absent from an index. A regression test seeds both types of sensitive draft, verifies
 their removal, and verifies unrelated browser preferences remain intact.
 
+The cleanup is corruption- and race-safe: malformed draft indexes cannot skip the namespace sweep,
+the sweep runs again after asynchronous queue cleanup to remove drafts recreated by an in-flight
+form, and failed token refreshes invoke the same purge before redirecting to login.
+
 ## Residual deployment decisions
 
 The residual items documented in the 2026-08-11 review remain deployment or product decisions:

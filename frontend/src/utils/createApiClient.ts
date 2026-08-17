@@ -78,7 +78,7 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
           // Redirecting is a side effect, not a response. Reject the request as
           // well so callers cannot continue with an `undefined` Axios response
           // while the browser is navigating to the login page.
-          handleExpiredSession();
+          await handleExpiredSession();
           // Report the refresh failure, not the original request's 401: the
           // reporter deliberately filters 401s as routine session expiry, so
           // reporting the original error recorded nothing. A refresh 401 is

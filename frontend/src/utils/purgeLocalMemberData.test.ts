@@ -60,6 +60,7 @@ describe('purgeLocalMemberData', () => {
   });
 
   it('sweeps drafts again after asynchronous queue cleanup', async () => {
+    mockClearAllDrafts.mockReturnValueOnce(1).mockReturnValueOnce(2);
     let finishQueue!: (count: number) => void;
     mockClearAllQueuedChecks.mockReturnValue(
       new Promise<number>((resolve) => {
@@ -70,9 +71,11 @@ describe('purgeLocalMemberData', () => {
     const pending = purgeLocalMemberData();
     expect(mockClearAllDrafts).toHaveBeenCalledTimes(1);
     finishQueue(0);
-    await pending;
+    const result = await pending;
 
     expect(mockClearAllDrafts).toHaveBeenCalledTimes(2);
+    // Both sweeps count towards the reported total.
+    expect(result.drafts).toBe(3);
   });
 
   it('still clears the other stores when one throws', async () => {
@@ -161,5 +164,19 @@ describe('clearAllDrafts', () => {
     expect(localStorage.getItem(INDEX_KEY)).toBeNull();
     expect(localStorage.getItem('unrelated-key')).toBe('keep me');
     expect(removed).toBeGreaterThan(0);
+  });
+
+  it('still sweeps every draft namespace when the shift index is malformed', async () => {
+    vi.doUnmock('./shiftReportDrafts');
+    const { clearAllDrafts } = await vi.importActual<typeof import('./shiftReportDrafts')>('./shiftReportDrafts');
+
+    localStorage.setItem(INDEX_KEY, '{not-json');
+    localStorage.setItem(`${REAL_KEY_PREFIX}orphan`, JSON.stringify({ notes: 'private' }));
+    localStorage.setItem(`${EQUIPMENT_KEY_PREFIX}standalone-template-1`, JSON.stringify({ notes: 'sensitive' }));
+
+    expect(clearAllDrafts()).toBe(2);
+    expect(localStorage.getItem(INDEX_KEY)).toBeNull();
+    expect(localStorage.getItem(`${REAL_KEY_PREFIX}orphan`)).toBeNull();
+    expect(localStorage.getItem(`${EQUIPMENT_KEY_PREFIX}standalone-template-1`)).toBeNull();
   });
 });
