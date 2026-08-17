@@ -14,6 +14,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from app.core.security_middleware import (
     CSRFProtection,
@@ -69,6 +70,64 @@ class TestRateLimiter:
             rate_limiter.lockouts.pop(key, None)
 
         assert [limited for limited, _ in results] == [False, False, True]
+
+    @pytest.mark.unit
+    async def test_auth_limiter_falls_back_when_redis_command_fails(self, monkeypatch):
+        """CI-11: a connected but failing Redis must not disable auth throttling.
+
+        ``is_rate_limited`` swallowed its own Redis errors and returned False
+        ("not limited"), so ``check_rate_limit``'s ``except -> in-memory`` path
+        was unreachable and the request was limited by neither backend. The
+        third call here must 429 from the in-memory limiter.
+        """
+        from app.core.cache import cache_manager
+        from app.core.security_middleware import check_rate_limit
+
+        class FailingPipeline:
+            def __getattr__(self, _name):
+                return lambda *args, **kwargs: self
+
+            async def execute(self):
+                raise TimeoutError("Redis command timed out")
+
+        class FailingRedis:
+            def pipeline(self):
+                return FailingPipeline()
+
+        monkeypatch.setattr(cache_manager, "redis_client", FailingRedis())
+        monkeypatch.setattr(cache_manager, "_connected", True)
+        monkeypatch.setattr(
+            "app.core.security_middleware.settings.RATE_LIMIT_ENABLED", True
+        )
+
+        client_ip = "203.0.113.77"
+        request = MagicMock()
+        request.client.host = client_ip
+        request.headers = {}
+
+        key = f"login:{client_ip}"
+        rate_limiter.requests.pop(key, None)
+        rate_limiter.lockouts.pop(key, None)
+
+        statuses = []
+        try:
+            for _ in range(3):
+                try:
+                    await check_rate_limit(
+                        request,
+                        max_requests=2,
+                        window_seconds=60,
+                        lockout_seconds=60,
+                        scope="login",
+                    )
+                    statuses.append(200)
+                except HTTPException as exc:
+                    statuses.append(exc.status_code)
+        finally:
+            rate_limiter.requests.pop(key, None)
+            rate_limiter.lockouts.pop(key, None)
+
+        assert statuses == [200, 200, 429]
 
     @pytest.mark.unit
     def test_first_request_is_not_limited(self):

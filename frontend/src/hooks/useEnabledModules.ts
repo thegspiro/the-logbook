@@ -20,9 +20,13 @@ export interface EnabledModules {
  * Loads the organization's enabled modules for navigation gating.
  *
  * Shared by every navigation surface (side, top and bottom) so the
- * "unconfigured means show everything" heuristic lives in one place. The
- * underlying GET goes through the global axios cache, so mounting this in
- * several components does not mean several round trips.
+ * "unconfigured means show everything" heuristic lives in one place.
+ *
+ * Mounting this in several components costs one round trip, but that is the
+ * service's de-duplication doing it, not the response cache: these all mount
+ * together, and a cache can only serve a caller that arrives after the first
+ * response has landed. This comment used to credit the cache, and the
+ * navigation surfaces were quietly making a request each.
  */
 export function useEnabledModules(): EnabledModules {
   const [enabledModules, setEnabledModules] = useState<Set<string> | null>(null);

@@ -146,7 +146,7 @@ const EmergencyContactsSection: React.FC<EmergencyContactsSectionProps> = ({
             <button
               onClick={onCancelEditContacts}
               disabled={savingContacts}
-              className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex-1 rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
+              className="btn-secondary text-theme-text-secondary flex-1 text-sm font-medium"
             >
               Cancel
             </button>

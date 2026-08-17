@@ -2,6 +2,46 @@
 
 ## Flagged by the 2026-08-15 → 08-16 changes
 
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-15_TO_16.md`](../CHANGE_AUDIT_2026-08-15_TO_16.md#documentation-and-media-disposition).
+These are **not verified captures**; each remains open until the image is
+opened and checked against its guide caption.
+
+### SCREENSHOT NEEDED
+
+- **Nested facility rooms** (guide 06, lesson 19): the Rooms section rendering
+  a two/three-level tree with indented sub-rooms, per-room sub-room counts,
+  and the add-a-room-inside row action. Seed one nested branch (e.g.
+  Volunteer Office → Quartermaster's Storage).
+- Room form with the **"Located inside" picker** open, demonstrating the
+  room's own subtree is excluded from the options.
+- **Delete-room confirmation** for a container room, showing the
+  "sub-rooms move up a level" warning.
+- **Cross-module room picker** (an event form) with indented sub-rooms and
+  the containment path printed under a selected nested room.
+- **Candidate list, member vs. manager** (guides 14, 19): the same election
+  after nominations close from a member account (accepted only) and an
+  `elections.manage` account (pending visible). Caption which is which.
+- **Directory profile redaction** (guides 17, 19): the same colleague profile
+  with `members.view` only (no MFA/verification/last-login/notification
+  metadata, roles without permission lists) beside the `users.view` version.
+  Use a demo member with MFA enabled so the difference is visible.
+- **Hire-date restriction** (guide 19): profile edit rejecting a `hire_date`
+  change without leadership/secretary/membership-coordinator permission,
+  showing the explanation in the toast.
+
+### REPLACE / re-verify
+
+- `06-11-facility-detail.png` — re-verify: if the Rooms section is visible,
+  it now renders a tree with sub-room counts, not a flat list. Replace if the
+  old flat list shows.
+- Any existing capture of the **room form** without the "Located inside"
+  field, or of a **room picker** (events/training/scheduling captures) showing
+  a flat, un-indented list — the picker now indents sub-rooms and shows the
+  containment path.
+- Any capture of a colleague profile that shows the account-metadata block
+  (MFA, last login, timestamps) under a members-only viewing context.
+
 ### REPLACE — one image now; 38 more only when they are next re-shot
 
 The themed background gradient moved from `body` to `html` so that it also
@@ -142,6 +182,342 @@ earlier** and remain stale.
 > quietly becomes policy.
 
 ---
+
+## The 2026-08-17 pass — guides 04, 09, 06 and 08, 103 changed images verified
+
+All four guides were re-captured against the rebuilt database and the merged
+build, and **every changed image was opened and read against its caption** by
+three parallel verification passes before anything was committed. Ninety-two
+came through verified; the rest were dispositioned rather than trusted:
+
+- **Thirteen kept their previously verified bytes** instead of the fresh
+  capture, because the new frame showed a data regression, not a code change:
+  the meetings module, event requests, QR-scan analytics, apparatus fuel
+  logs, permanent equipment assignments and overdue facility maintenance are
+  all **unseeded on a fresh database** (the long-lived one had accumulated
+  them), the compliance dashboard's rate cards need screening data the seed
+  does not create, two inbox shots need read notifications the fresh inbox
+  lacks, and the event QR shot caught a check-in window that had closed.
+  Each is an open seed gap recorded here so a future pass fixes the seeder
+  rather than re-diagnosing the empty frame.
+- **Time-sensitive fixtures expired twice mid-pass** — two container restarts
+  cost hours each, and the "live right now" open house had ended by capture
+  time. Re-seeded and re-shot: check-in monitoring, the room display, the
+  guest sign-in pair and End Event. A side effect stands recorded: the guest
+  event slides to the seed moment, so captures taken late at night carry an
+  open house timed in the small hours, and the five guest-flow images were
+  shot across different slides of that window — each internally right,
+  mutually a few hours apart.
+- **The guest sign-in prospect had no pipeline card on a fresh database** —
+  the open-house step ran before any pipeline existed, so Rosa Delgado
+  landed stage-less and unopenable. The step now runs after the pipeline
+  seeding, and the one stranded record was rebuilt through the same public
+  sign-in path.
+- **The cast-ballot shot picked the wrong open election**: list order put the
+  restricted issue vote first, whose in-app ballot correctly reads "No
+  candidates for this position" (the documented position-races-only
+  limitation). The shot now demands an open election with positions.
+- **08-60 retargeted**: the station-board rebuild replaced the dashboard
+  Notifications panel (per-card ✕, Clear All) with the My Updates feed; the
+  guide section is rewritten against it. One stored notification still spelt
+  a raw enum ("ShiftPosition.FIREFIGHTER") — written before the formatting
+  fix landed; the row was removed rather than pictured, since the shipped
+  code no longer produces it.
+- **Caption drift corrected against the build** (the 03-45 pattern): the
+  validation queue's controls are accept/notify/void icons with a bulk
+  Accept, not "Validate and Void" buttons; module management has two
+  category headers, the email-template sidebar six; organization settings
+  carries no department-type selector; the screening record form opens from
+  a member's row and so has no member picker; the template builder's section
+  count and the operators-tab roster size are no longer promised as numbers.
+
+Cross-image drift noted and accepted: notification badges differ between
+shots captured minutes apart, and the apparatus label print reads six labels
+against a seven-unit fleet — the missing one is U-1, unexplained and worth a
+look next pass. The stray "Oakville Fire Department" facility record the
+bootstrap creates also fronts two facility shots; real demo data, but the
+sparse record makes a poor face for the detail page.
+
+## The 2026-08-16 guide-02 re-capture — 66 applied images, every one opened
+
+The full guide-02 set was re-shot against the merged build and read against
+its captions. Five capture failures and one empty state all traced to data
+or contract gaps, each fixed at the root:
+
+- **Review Submissions was empty** — nothing seeded a member training
+  submission. The seeder now files one as the demo member (org defaults
+  route it to pending review), and the queue also printed the submitter's
+  raw UUID where a reviewer expects a name — the service now resolves
+  display names in one batch query (`submitter_name` on the response).
+- **The demo member had no approved shift report**, so My Reports and the
+  My Shift Progress card were blank. Two causes: the filing loop's
+  states-present early return never checked her, and when she was picked it
+  could be as the trailing save-as-draft pair — a draft is invisible in My
+  Reports, the same trap as the positional flag. The loop now swaps her off
+  the tail and `_ensure_demo_member_report` files-and-approves one when the
+  early return would otherwise skip filing.
+- **Nothing locked, so the "Locked until you finish" line had no subject.**
+  Hour auto-credit had quietly completed the old Hose Deployment gate. The
+  probationary pipeline now also gates on the written exam — a knowledge
+  test only an explicitly recorded result can complete — and 02-99 resolves
+  the probationary enrollment directly instead of trusting list order.
+- **Officer-only checklist steps existed nowhere.** The blueprint gained
+  three (`member_visible: false`) with a backfill for existing databases,
+  and a product fix: the member serializer **stripped** hidden steps, so
+  the "+N more steps your officer records" fold line was unreachable in
+  the real app while its component test asserted it against a payload the
+  API never produced. Hidden steps now survive as anonymous stubs — count
+  preserved, text and id redacted — with endpoint tests pinning the
+  contract. 02-88 (member fold line), 02-87/02-94 (officer view with
+  Officer-only badges) picture it end to end.
+- **Label drift**: 02-32/33/35/36 were shot before the ReportContentDisplay
+  fix landed here and read "5/5 — Excellent"; re-shot reading the
+  department's configured "Exemplary".
+- **02-89 removed as redundant** (02-100 pictures the same steps editor);
+  **02-68-vector-category-mapping's stray file removed** and the entry now
+  carries `holdBack` — the mapping table it describes is only creatable by
+  a live vendor sync, per the "Held back deliberately" note.
+
+Observations recorded, not fixed: course-type requirements completed via
+certification equivalency read "Completed · 0 / 1 courses" (02-93, 02-105);
+the print pages' "Active Certifications 0" and "Enrolled: 0" stats disagree
+with the tables beside them (02-62, 02-63); the compliance-matrix print
+overflows its sheet at 26 columns (02-65). All are what the product renders
+today; they read as stat-wiring gaps worth a product pass.
+
+## The 2026-08-16 guide-03 re-capture — 67 of 67, every changed image opened
+
+The full guide-03 set was re-shot against the fresh database and the current
+build, and **every changed image was opened and read against its caption**
+before being committed. The pass surfaced four product defects (all fixed in
+the same session), a set of capture flows stranded by the scheduling
+redesign, and one lost fix re-instated.
+
+### Product defects the images exposed, fixed here
+
+1. **Apparatus types resolved by lowercased display name, not code.** The
+   shift serializer and `ApparatusRef.type_slug` returned "ladder/aerial"
+   where templates and the per-apparatus skill/task config are keyed on the
+   code "ladder" — so ladder shifts could not resolve type-level
+   equipment-check templates, and the batch shift-report form silently fell
+   back to the generic skill list on every type whose name is not one word.
+   The batch-form shots (03-63/03-64) now show the ladder-specific skills
+   with the department's score labels, which is the proof of the fix.
+2. **The platoon roster printed raw rank codes** ("deputy_chief"). Same
+   defect class as the 2026-08-10 Impact Planner fix; now formatted through
+   `useRanks().formatRank` (03-16).
+3. **The redesigned dashboard timeline printed raw UTC ISO timestamps** —
+   the my-shifts payload carries full datetimes where other shift payloads
+   carry "HH:MM", and `formatTimeOfDay` falls back to the raw string. It
+   also read "undefined of 4 filled" (the payload has no attendee_count).
+   Both fixed; 03-60/03-62 re-shot clean.
+4. **`POST /training/instructors/qualifications` refused every valid
+   create** (UUID bound as dashless hex against String(36) columns) — see
+   the fresh-database section below.
+
+### The scheduling redesign stranded ten capture flows
+
+The re-capture's first run failed 10 of 67 shots, all for the same reason:
+prepares written against retired DOM. The dashboard's "My Upcoming Shifts" /
+"Open Shifts" panels are now one **Next 7 Days** timeline (a
+`section.card`); the crew board's open-seat button reads **Assign someone**;
+the panel header's edit button is labelled just **Edit**; the My Shifts bulk
+bar reads "awaiting your confirmation"; and the batch-report form's Evaluate
+control renders only for an enrolled trainee who has not been reported on.
+All re-pointed, and the guide's Dashboard Shift Display section rewritten
+against the timeline.
+
+### Fixture repairs behind the failures
+
+- **The trainee-carrying ladder shift is now reserved.** Report filing walks
+  newest-first, which is exactly where the evaluable trainees sit — one
+  re-seed consumed them and the batch-form shots failed on a crew of
+  "Already reported". `seed_shift_reports` now reserves the newest such
+  shift and skips it when filing.
+- **Swap and time-off requests are seeded** (a pending one of each, by the
+  demo member). The old database showed rows in the Requests tab only as
+  leftovers of manual runs; a fresh one rendered two empty states under a
+  caption describing populated tables (03-11 now pictures both).
+- **The shift reminder for 03-97 was generated by the scheduler's own
+  task**, run once with the org's lookahead temporarily widened to 30 hours
+  and restored afterwards. On a live stack these accrue organically; a
+  fresh database's backend has not been running long enough.
+- **03-22 re-points at the seeded Medic 3 Supply Check again.** The
+  2026-08-11 fix for exactly this shot was lost in a later reconciliation,
+  and the manifest had regressed to the blank `/new` form under an
+  `allowEmptyState` flag — the precise failure mode that pass documented.
+
+### Caption corrections, checked against the build
+
+- `03-60-report-used-sheet`: the sheet is now the **Flag** dialog (the minus
+  button is what records use); prose already said so, the alt did not.
+- `03-54`: counts dropped from the caption — the property is open rows with
+  per-seat controls and the bulk Fill All Open action.
+- `03-58`: the form is titled "Assign someone to this shift"; prose updated
+  ("Assign Member" no longer exists).
+- `03-13`: the image is the patterns page with type badges, not a "creation
+  page with the pattern type selector".
+- Empty-state flags suppressed with reasons on 03-52 (select placeholder),
+  03-54/03-57/03-05 ("No calls logged" belongs to a future shift's Calls
+  sub-panel), 03-59 ("No stock" is the unlinked traffic-cones row's label).
+
+Known-and-accepted in frame: 03-14's "Total Members 66" member-requirement
+aggregation (documented product behaviour, guide carries the note), and the
+08-16 toast in 03-37's corner.
+
+## The 2026-08-16 pass — a fresh database, and the last two placeholders
+
+The container was reclaimed, taking MariaDB (and its data directory), the
+backend virtualenv and node_modules with it. The demo database this session
+runs against was therefore **rebuilt from `bootstrap_demo.py`** — which the
+08-13 notes predicted would happen someday and warned would carry a cost. Two
+consequences worth separating:
+
+- **Nothing already committed is invalidated by the rebuild.** The 421
+  verified images record what the product rendered against the old data;
+  the rebuild changes incidental values (ids, dates, spreads) only for
+  captures taken from here on.
+- **The clean rows the 08-13 pass wanted arrived for free.** The regress
+  residue ("4 of 6 stages completed" on a stage-four applicant) is gone by
+  construction.
+
+### Three seeder crashes only a fresh database could expose
+
+Every one of these sat in the create path, which a long-lived database never
+re-runs — the skip-by-name guard means that code executes exactly once per
+database, and it had not run since the blueprints last changed.
+
+1. **The prospect create-loop advanced without the interview fallback.** The
+   spread's advance knows to record an interview when a stage demands one; the
+   create-path loop above it did not, so the first applicant that had to clear
+   Interview aborted the whole step — Morgan Tran and Riley Bishop were never
+   created at all. Both paths now share `_advance_recording_interview`.
+2. **The equipment-check seed posted the engine template to the first three
+   shifts regardless of apparatus.** The old database happened to return
+   engines first; the fresh one ordered a medic shift into the front and the
+   API correctly refused it ("Template is not applicable to this shift"),
+   killing the step. The loop now filters to engine shifts with the
+   `apparatus_type_of` helper that was already defined a page above it.
+3. **`POST /training/instructors/qualifications` has refused every valid
+   create since 2026-08-11 — a product bug, not a seeder one.** The
+   tenant-scoping commit compares `users.id` (String(36)) against the
+   `uuid.UUID` the endpoint's `model_dump()` produces, and aiomysql binds a
+   UUID object in a representation that matches no stored row — so the guard
+   answered "Invalid user_id" for references that were perfectly in-org. The
+   unit test mocked the session and asserted compiled SQL, which is exactly
+   the layer that cannot see a bind-value mismatch. Fixed by stringifying
+   UUIDs at the service boundary; a new test pins the bound value itself.
+
+### 01-37-elected-package-badge — the elected badge, produced by the vote
+
+`01-membership.md:1156` wanted status Elected, a 35-3 tally and the linked
+prospect on one screen, which the 08-13 analysis had already split: no screen
+joins them. The caption now promises the drawer badge and cross-references
+guide 14 for tallies.
+
+`elected` is written in exactly one place — `_sync_package_statuses` when an
+election closes — so the seeder now walks the product's own lifecycle
+(`seed_membership_vote_outcome`): package marked `ready`, assigned to the
+draft August election through the assign endpoint, election opened, the floor
+vote recorded as a paper batch, attested by two officers, election closed.
+Three things that pass mattered:
+
+- **The hand-built ballot item was replaced, not reused.** It carried no
+  `prospect_package_id`, so closing an election around it would have synced
+  nothing — the assign endpoint is what writes the link.
+- **The assign default of regular/life eligibility matches nobody** in a
+  roster of active/administrative members, and an item with zero eligible
+  voters rejects any tally as implausible. The package's
+  `recommended_ballot_item` opens it to all types.
+- **The tally is 18-2, not the guide's 35-3** — the plausibility check caps a
+  batch at the eligible-voter count, and inventing 38 voters for a 22-member
+  department would need the audited override for no documentary gain. The
+  worked example keeps its numbers as prose.
+
+Verified: drawer open on the applicant at Membership Vote, ELECTION PACKAGE
+section reading **elected** with the "can now be converted" line, against an
+API state of package `elected` / election `closed`.
+
+Consequences recorded: the August election is now permanently closed in the
+demo. `14-23-membership-ballot-item` still captures — Preview Ballot renders
+for any manageable election with ballot items, status regardless — and its
+committed image predates the close anyway. `GET /elections/{id}/results` on
+this election answers 403 ("Results not available yet") because it was
+seeded `results_visible_immediately: false`; the certified-results screens
+picture the July election, which is `true`, so nothing loses its picture.
+
+### 01-38-program-phase-progress — the phase view, on the page that shows all of it
+
+`01-membership.md:1282`'s fractions (4/4, 0/6, 1/3, 0/2, 25%) were the worked
+example's numbers, not any screen's. The 08-13 analysis established the
+program detail carries no requirements inside its phases; the per-phase
+grouping lives on the **enrollment progress** view. Confirmed on the fresh
+database — where the blueprint's requirements actually seeded this time —
+and shot as the member-facing **My Program Progress** page rather than the
+admin Progress modal: the modal shows the same grouping but is height-capped
+and scrolls, so a capture of it holds one phase group, and the caption is
+about seeing all of them. (The fresh seed is also why this became capturable
+at all: the old database's programs pre-dated requirements in the phase
+payload, and the skip-by-name guard kept them that way.)
+
+Verified: Probationary Firefighter Pipeline for the demo member — 4/13
+requirements · 31% (matches the enrollment API), three phase groups with
+per-requirement status, "You are here" on Phase 1, and a completed
+requirement sitting inside not-yet-started Phase 2, which is the guide's
+prior-credit story rendered. Caption rewritten against the screen; both
+surfaces (member page, Enrollments-tab modal) named in prose.
+
+**With these two, every placeholder in every guide is filled — 423 captured,
+0 remaining.**
+
+### Manifest housekeeping
+
+`03-60-report-used-sheet` existed twice in the manifest, byte-identical — a
+merge artifact. Ids double as output filenames, so duplicates capture twice
+and the later silently overwrites the earlier; identical copies are the lucky
+case. One removed, and the manifest now **throws at import on any duplicate
+id**, beside the existing mutates-last invariant.
+
+### Two sessions re-captured guide 03 at once — how the sets were reconciled
+
+The 08-11 "two sessions shot the same screens" incident repeated at full
+scale: this session and a parallel one each re-captured the whole guide
+against their own rebuilt databases, fixed overlapping defect sets, and
+pushed within the hour. The committed images are the **parallel session's
+set** (the "67 of 67" record above), chosen on evidence rather than
+recency: its captures postdate two frontend fixes this session's did not
+carry — the platoon-rank formatting (this session's `03-16` showed raw
+`deputy_chief` enums) and the same dashboard-timeline repairs both sessions
+wrote independently.
+
+What survived from this session's pass, verified over its own captures and
+kept in the merge:
+
+- **The `ReportContentDisplay` label fix** — the expanded report card and
+  review modal hardcoded the sample skill-score scale while scoring uses the
+  department's configured one, so a skill scored "Exemplary" displayed
+  "5/5 — Excellent". Both sessions' `03-49` and `03-62-flagged-queue`
+  captures predate the fix on the card path; the two were re-shot after the
+  merge so the pictured labels match the shipped code.
+- **The seeder's `seed_membership_vote_outcome`, batch-trainee, reminder and
+  review-queue-depth fixtures** merged with the parallel session's versions
+  of the same repairs — where both wrote one (`seed_scheduling_requests`),
+  the merge kept the version whose swap request deliberately targets the
+  member's furthest-out shift, so the swap-dialog shot's card keeps its
+  plain Swap button, plus this session's near-term seat for the timeline's
+  "Yours" pill.
+- **`--only` accepts a comma-separated prefix list**, because re-running
+  exactly the failed shots previously meant one invocation per shot.
+- The apparatus-type mismatch both sessions found was fixed at **opposite
+  ends**: this session re-keyed the seeder vocabulary to the lowercased
+  display name, the parallel one made `ApparatusRef.type_slug` prefer the
+  **code** — the right end, since UI-configured departments already key on
+  codes. The seeder keys are back on codes and the backend fix stands.
+
+The independent verification passes agreed with the parallel session's
+verdicts everywhere they overlapped, including the reservations: `03-14`'s
+member-requirement-pairs arithmetic, the `03-15`/`03-32` shared frame, and
+notification-badge drift between shots captured minutes apart.
 
 ## The 2026-08-13 guide-by-guide re-verification
 

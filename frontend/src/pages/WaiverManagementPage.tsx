@@ -396,7 +396,7 @@ export const WaiverManagementPage: React.FC = () => {
         {activeTab === 'active' && (
           <div>
             {activeWaivers.length === 0 ? (
-              <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
+              <div className="card py-12 text-center">
                 <p className="text-theme-text-muted">No active waivers at this time.</p>
                 <button
                   onClick={() => handleTabChange('create')}
@@ -406,7 +406,7 @@ export const WaiverManagementPage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="bg-theme-surface border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
+              <div className="card overflow-hidden overflow-x-auto">
                 <table className="divide-theme-surface-border min-w-full divide-y">
                   <thead className="bg-theme-surface-hover">
                     <tr>
@@ -502,7 +502,7 @@ export const WaiverManagementPage: React.FC = () => {
         {/* Create Waiver Tab */}
         {activeTab === 'create' && (
           <div className="max-w-2xl">
-            <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-6">
+            <div className="card p-6">
               <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Create New Waiver</h2>
 
               {createSuccess && (
@@ -683,7 +683,7 @@ export const WaiverManagementPage: React.FC = () => {
                 onChange={(e) => setMemberFilter(e.target.value)}
                 aria-label="Search by member name..."
                 placeholder="Search by member name..."
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring w-64 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input w-64 px-3 py-1.5 text-sm"
               />
               <div className="text-theme-text-muted ml-auto self-center text-xs">
                 {filteredHistory.length} waiver{filteredHistory.length !== 1 ? 's' : ''}
@@ -691,11 +691,11 @@ export const WaiverManagementPage: React.FC = () => {
             </div>
 
             {filteredHistory.length === 0 ? (
-              <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
+              <div className="card py-12 text-center">
                 <p className="text-theme-text-muted">No waivers match the current filter.</p>
               </div>
             ) : (
-              <div className="bg-theme-surface border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
+              <div className="card overflow-hidden overflow-x-auto">
                 <table className="divide-theme-surface-border min-w-full divide-y">
                   <thead className="bg-theme-surface-hover">
                     <tr>

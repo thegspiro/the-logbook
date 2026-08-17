@@ -897,6 +897,24 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 
 Enable with `*_ENABLED=true`: `EMAIL_ENABLED`, `TWILIO_ENABLED`, `SENTRY_ENABLED`, `AZURE_AD_ENABLED`, `GOOGLE_OAUTH_ENABLED`, `PUSH_ENABLED` (Web Push; also needs `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` and the optional `pywebpush` dependency). Each requires additional config vars — see `.env.example.full`. (`LDAP_ENABLED` exists in config but gates nothing — LDAP is not implemented.)
 
+### Attack Protection
+
+Four brute-force controls layer on top of each other; when changing one, know which gap it covers so you do not collapse two into one:
+
+| Control                | Counts                           | Keyed on             | On provider/Redis failure |
+| ---------------------- | -------------------------------- | -------------------- | ------------------------- |
+| `check_rate_limit`     | all attempts, short window       | IP + scope           | falls back to in-memory   |
+| Account lockout        | consecutive failures             | user                 | n/a (database)            |
+| Suspicious-IP throttle | **failed** attempts, long window | IP, **all** accounts | falls back to in-memory   |
+| Breached password      | breach-corpus appearances        | password hash prefix | **fails open**            |
+| CAPTCHA                | human challenge                  | request              | **fails closed**          |
+
+The two failure directions are deliberate and opposite. Breached-password detection is supplementary — complexity rules, password history, MFA, and lockout still apply if the lookup is skipped — so an outage must not block password changes. CAPTCHA has no fallback control behind it, so accepting unverified traffic during an outage is the state an attacker wants; it rejects instead. Preserve both directions when touching either.
+
+Two invariants in `app/core/suspicious_ip.py` that are load-bearing: a successful sign-in clears an IP's counter **only after full authentication** (never on a correct password alone, or an attacker holding one leaked password for an MFA-protected account could zero the tally at will), and clearing **never lifts an active block**.
+
+Enabling `CAPTCHA_ENABLED` also widens the CSP in `SecurityHeadersMiddleware` for the configured provider's widget origins — a hardcoded `script-src 'self'` silently blocks the widget, which presents as "the challenge never appears" rather than as a CSP error. New providers need an entry in both `_VERIFY_URLS` and `_WIDGET_ORIGINS`.
+
 ### Module Enablement
 
 Module availability is controlled **per organization** at runtime via the organization settings (`enabled_modules`), which the frontend navigation consumes. There are no deployment-level `MODULE_*_ENABLED` environment flags — they were removed because they gated nothing (all routers register unconditionally) and merely duplicated the per-org mechanism.

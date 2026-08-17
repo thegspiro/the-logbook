@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -1699,14 +1700,20 @@ const IntegrationsPage: React.FC = () => {
               <div className="fixed inset-0 z-50 overflow-y-auto">
                 <div className="flex min-h-screen items-center justify-center px-4">
                   <div
-                    className="fixed inset-0 bg-black/60"
+                    className="modal-overlay"
                     onClick={() => {
                       setShowConnectModal(null);
                       resetFormState();
                     }}
                     aria-hidden="true"
                   />
-                  <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+                  <DialogPanel
+                    onClose={() => {
+                      setShowConnectModal(null);
+                      resetFormState();
+                    }}
+                    className="relative w-full max-w-lg"
+                  >
                     <div className="px-6 pt-5 pb-4">
                       <div className="mb-4 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
@@ -1775,7 +1782,7 @@ const IntegrationsPage: React.FC = () => {
                         {connecting ? 'Connecting...' : 'Connect'}
                       </button>
                     </div>
-                  </div>
+                  </DialogPanel>
                 </div>
               </div>
             );

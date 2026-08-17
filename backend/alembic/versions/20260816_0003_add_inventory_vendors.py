@@ -10,8 +10,13 @@ becomes a vendor, and the rows that named it are linked to it. The free-text
 columns are left in place — they still carry the value for rows nobody has
 reviewed, and CSV imports still write them.
 
-Revision ID: 20260816_0002
-Revises: 20260816_0001
+Revision ID: 20260816_0003
+Revises: 20260816_0002
+
+(Renumbered from 20260816_0002: the storage-area barcode backfill on main
+already held that id — two branches numbered from 20260816_0001 the same day,
+the recurring collision ALEMBIC_MIGRATIONS.md warns about. Chained after the
+barcode backfill to keep the graph linear.)
 Create Date: 2026-08-16 00:00:00.000000
 """
 
@@ -21,8 +26,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260816_0002"
-down_revision = "20260816_0001"
+revision = "20260816_0003"
+down_revision = "20260816_0002"
 branch_labels = None
 depends_on = None
 

@@ -30,6 +30,7 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.core.audit import log_audit_event
+from app.core.captcha import require_captcha
 from app.core.config import settings
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
@@ -42,6 +43,11 @@ from app.core.security_middleware import (
     rate_limit_password_reset,
     rate_limit_register,
     rate_limit_token_refresh,
+)
+from app.core.suspicious_ip import (
+    clear_auth_failures,
+    enforce_suspicious_ip,
+    record_auth_failure,
 )
 from app.models.user import Organization, User
 from app.schemas.auth import (
@@ -238,6 +244,32 @@ async def get_login_branding(
     except Exception:
         # Pre-onboarding or DB not ready — return empty branding gracefully
         return {"name": None, "logo": None}
+
+
+@router.get("/captcha-config")
+async def get_captcha_config():
+    """Challenge-response configuration for anonymous pages.
+
+    Anonymous by design: the pages that need it (login, forgot-password, public
+    form submission) have no session yet. Everything returned here is already
+    public — the site key is embedded in the widget markup the browser renders.
+    The **secret** key is never included.
+
+    Reports ``enabled: false`` when CAPTCHA is switched on but misconfigured,
+    matching what the server actually enforces. A page that rendered a widget
+    the server was not checking would be security theatre; one that rendered
+    none while the server rejected every submission would be a dead form.
+    """
+    from app.core.captcha import is_captcha_configured
+
+    if not is_captcha_configured():
+        return {"enabled": False, "provider": None, "siteKey": None}
+
+    return {
+        "enabled": True,
+        "provider": settings.CAPTCHA_PROVIDER,
+        "siteKey": settings.CAPTCHA_SITE_KEY,
+    }
 
 
 @router.get("/oauth-config")
@@ -596,7 +628,10 @@ async def register(
     return response
 
 
-@router.post("/login", dependencies=[rate_limit_login()])
+@router.post(
+    "/login",
+    dependencies=[rate_limit_login(), Depends(enforce_suspicious_ip)],
+)
 async def login(
     credentials: UserLogin,
     request: Request,
@@ -642,6 +677,13 @@ async def login(
                 await db.commit()
         except Exception:
             logger.debug("brute-force detection failed on login failure")
+        # Count the failure toward the cross-account per-IP total. Unlike the
+        # per-account lockout, this accrues no matter which username was tried,
+        # so a spray across many accounts still converges on a block.
+        try:
+            await record_auth_failure(login_ip)
+        except Exception:
+            logger.debug("suspicious-IP counter update failed on login failure")
         raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=auth_error or "Incorrect username or password",
@@ -674,6 +716,16 @@ async def login(
                 "mfa_token": create_mfa_pending_token(str(user.id)),
             }
         )
+
+    # Full authentication succeeded (no second factor required), so the IP has
+    # demonstrated it holds a real credential — reset its failure tally. This is
+    # deliberately *after* the MFA branch above: a correct password alone does
+    # not clear the counter, otherwise an attacker holding one leaked password
+    # for an MFA-protected account could zero the tally at will and spray on.
+    try:
+        await clear_auth_failures(login_ip)
+    except Exception:
+        logger.debug("suspicious-IP counter reset failed on login success")
 
     try:
         # Create tokens
@@ -714,7 +766,10 @@ async def login(
 _MFA_ISSUER = "The Logbook"
 
 
-@router.post("/mfa/login", dependencies=[rate_limit_login()])
+@router.post(
+    "/mfa/login",
+    dependencies=[rate_limit_login(), Depends(enforce_suspicious_ip)],
+)
 async def mfa_login(
     data: MFALogin,
     request: Request,
@@ -730,19 +785,33 @@ async def mfa_login(
         detail="Invalid or expired challenge",
         error_code=ErrorCode.AUTH_MFA_CHALLENGE_EXPIRED,
     )
+
+    async def _reject_challenge() -> CodedHTTPException:
+        """Count a rejected challenge toward the per-IP tally, then raise.
+
+        A forged or replayed ``mfa_token`` never reaches the per-account lockout
+        below (there is no resolved account yet), so without this the challenge
+        step would be the one unmetered door into the auth surface.
+        """
+        try:
+            await record_auth_failure(get_client_ip(request))
+        except Exception:
+            logger.debug("suspicious-IP counter update failed on MFA challenge")
+        return invalid
+
     try:
         payload = decode_token(data.temp_token)
     except Exception:
-        raise invalid
+        raise await _reject_challenge()
     if payload.get("type") != "mfa_pending" or not payload.get("sub"):
-        raise invalid
+        raise await _reject_challenge()
 
     from datetime import datetime, timedelta, timezone
 
     result = await db.execute(select(User).where(User.id == str(payload["sub"])))
     user = result.scalar_one_or_none()
     if not user or not user.mfa_enabled or not user.is_active:
-        raise invalid
+        raise await _reject_challenge()
 
     # Per-user brute-force protection: the second factor shares the account's
     # failed-login counter/lockout so that guessing TOTP codes is throttled and
@@ -780,6 +849,10 @@ async def mfa_login(
                 minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
             )
         await db.commit()
+        try:
+            await record_auth_failure(get_client_ip(request))
+        except Exception:
+            logger.debug("suspicious-IP counter update failed on MFA failure")
         raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid verification code",
@@ -793,6 +866,11 @@ async def mfa_login(
     user.failed_login_attempts = 0
     user.locked_until = None
     await db.commit()
+
+    try:
+        await clear_auth_failures(get_client_ip(request))
+    except Exception:
+        logger.debug("suspicious-IP counter reset failed on MFA success")
 
     access_token, refresh_token = await AuthService(db).create_user_tokens(
         user=user,
@@ -1233,7 +1311,10 @@ async def check_authentication(
     }
 
 
-@router.post("/forgot-password", dependencies=[rate_limit_password_reset()])
+@router.post(
+    "/forgot-password",
+    dependencies=[rate_limit_password_reset(), Depends(require_captcha)],
+)
 async def forgot_password(
     reset_request: PasswordResetRequest,
     request: Request,
