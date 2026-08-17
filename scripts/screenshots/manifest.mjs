@@ -2971,7 +2971,14 @@ export const SHOTS = [
     doc: "00-getting-started.md",
     line: 134,
     anchor: "Screenshot of the sidebar navigation expanded, showing the member",
-    alt: "The navigation sidebar with the member-facing sections expanded",
+    alt: "The navigation sidebar as an ordinary member sees it, with the Training and Operations groups expanded",
+    // As a MEMBER. This shot had no `auth` key, so it defaulted to the
+    // administrator and published the admin sidebar — ADMINISTRATION section
+    // and Department Setup included — under a caption promising "the
+    // member-facing sections". 00-16's comment beside it recorded the
+    // symptom without naming the cause: the two shots rendered "the same
+    // picture" precisely because both were the same user.
+    auth: "member",
     route: "/dashboard",
     // Expanded, which is the point of the shot: the collapsed sidebar shows a
     // chevron beside Training and Operations and nothing of what is under
@@ -7804,6 +7811,55 @@ export const SHOTS = [
       await page.waitForTimeout(800);
     },
     fullPage: true,
+  },
+  {
+    id: "01-39-scan-member-id-nav",
+    doc: "01-membership.md",
+    line: 1409,
+    anchor:
+      "The Administration section's Members group expanded, Scan Member ID among its links",
+    alt: "The Administration section's Members group expanded, Scan Member ID among its links",
+    route: "/dashboard",
+    // The elevated half of a two-sign-in contrast. The placeholder asked for
+    // both roles side by side, which no single capture can be: the harness
+    // authenticates as the administrator, the demo member, or nobody, and a
+    // `members.view`-only role is none of those. The member half is
+    // cross-referenced to 00-15 instead, whose sidebar has no Administration
+    // section at all — which is *why* the scanner cannot appear there.
+    prepare: async (page) => {
+      // Wait for the ADMINISTRATION heading before touching anything. The
+      // admin half of the nav is built from permissions that resolve after
+      // first paint, so for a moment the only button named "Members" is the
+      // member-facing roster item — and clicking that one expands nothing.
+      // This shot timed out three times on that race before it was named.
+      // Matched case-insensitively: the heading is uppercased by CSS, so the
+      // DOM text is "Administration" and an exact "ADMINISTRATION" match —
+      // which is what `innerText` shows you — never fires.
+      await page
+        .getByText(/^Administration$/i)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      // Matched by text, not by `link` role: the Administration sub-items are
+      // not anchors, so a role-based locator finds nothing even with the group
+      // open and the words on screen.
+      const link = page.getByText(/^Scan Member ID$/).first();
+      // Expand only if it is not already open. The sidebar persists which
+      // groups are expanded, so an unconditional click is as likely to
+      // collapse the group as to open it.
+      if ((await link.count()) === 0) {
+        const group = page.getByRole("button", { name: /^Members$/ }).last();
+        await group.waitFor({ timeout: 20_000 });
+        await group.click({ timeout: 10_000 });
+      }
+      await link.waitFor({ timeout: 15_000 });
+      await link.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    // The taller viewport for the same reason 00-15 needs one: with the
+    // Administration group open the nav is well past 900px, and at the default
+    // height the group would not expand into view at all.
+    viewport: { width: 1440, height: 1500 },
+    selector: "nav",
   },
   {
     id: "01-07-admin-member-edit",

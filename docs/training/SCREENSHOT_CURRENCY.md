@@ -183,6 +183,88 @@ earlier** and remain stale.
 
 ---
 
+## "0 remaining" was measuring the wrong thing — 41 placeholders the tooling could not see
+
+Guide 01's two named placeholders are filled and verified (see the entries
+below). Re-checking them turned up something larger: **`status_report.py` and
+`apply_placeholders.py` shared a regex that matched none of the guides' actual
+placeholders.**
+
+Both required `\[SCREENSHOT NEEDED\]` — the bracket closing immediately after
+the word. Guides carry two syntaxes:
+
+```
+> **[SCREENSHOT NEEDED]:** _description outside the brackets_
+> **[SCREENSHOT NEEDED — description inside the brackets]**
+```
+
+Only the first matched. The second form accounts for **41 placeholders across
+twelve guides** — twenty of them in `19-august-2026-release-changes.md`, four
+each in guides 04 and 06, three in guide 09 — and several carry their own seed
+instructions ("seed orders in at least three states", "seed one
+organization-owned template and no vote data"). They were never counted, never
+attempted, and reported as though they did not exist. The tracker has been
+saying "0 remaining" while forty-one specified requests sat unread; the same
+list appears in this file's own SCREENSHOT NEEDED sections, so the work was
+known and the tooling simply never saw it.
+
+The bracket is now optional and unterminated in both scripts, which report
+**432 captured, 40 remaining**. Two properties were checked before changing it:
+every one of the 436 manifest shots carries an `anchor` (so no shot can drift
+onto a bracketed placeholder on a stale line number alone), and a dry run
+before and after replaces the identical set — the wider pattern lets the
+counter see these placeholders without letting the applier fill any of them by
+accident.
+
+### 00-15-sidebar-member was the administrator's sidebar
+
+The shot had no `auth` key, so it defaulted to admin: an image captioned "the
+member-facing sections" showed the ADMINISTRATION heading and Department
+Setup. 00-16's comment beside it recorded the symptom without naming the
+cause — it said an element clip of the nav "would be the same picture as the
+member-section shot above", which was true because both were the same user.
+
+Re-shot as a member, and the real member sidebar differs in more than the
+missing admin half: **Operations reads My Issued Gear / Gear & Uniforms**,
+where the stale admin capture showed My Equipment / Inventory. Those are
+renames, not permissions — no gate distinguishes them — so guide 00's member
+table was documenting labels the product no longer uses, and listing
+Department Store as an Operations child when it is its own top-level item.
+Corrected, along with **Gear Admin** (was Inventory Admin) in the
+Administration table, which the re-shot 00-16 exposed.
+
+00-16 also still pictured the raw-UTC dashboard timeline
+(`2026-08-16T23:00:00+00:00`) fixed earlier in this session, so it was re-shot
+too — an image displaying a bug the shipped code no longer has.
+
+### 01-39-scan-member-id-nav — the third guide-01 placeholder, filled
+
+The one in the invisible syntax asked for "side-by-side navigation for a
+`members.view`-only role and a `users.view` role". Checked against
+`SideNavigation.tsx` first: the rule is real —
+`anyPermission: ['users.view', 'members.manage']` — but the link is called
+**Scan Member ID**, not "Scanner", and it lives under Members in the
+Administration section.
+
+Two roles cannot be one picture, and the harness authenticates as the
+administrator, the demo member, or nobody — a `members.view`-only role is none
+of those. Split the way `09-18` and `01-membership.md:1156` were: the elevated
+half is captured, and the member half is cross-referenced to 00-15, whose
+sidebar has no Administration section at all — which is _why_ the scanner
+cannot appear there. Seeding a fourth identity would picture the permission
+pair exactly and is left recorded rather than half-done.
+
+Three harness lessons paid for by this one shot, all now written beside it:
+
+- **`innerText` lies about case.** The heading is uppercased by CSS, so the
+  DOM text is "Administration" and an exact `"ADMINISTRATION"` match — which
+  is what a debug dump shows you — never fires.
+- **The Administration sub-items are not anchors.** A `getByRole("link")`
+  locator finds nothing with the group open and the words plainly on screen.
+- **The admin half of the nav is built after permissions resolve**, so for a
+  moment the only button named "Members" is the member-facing roster item, and
+  clicking that one expands nothing. The shot waits for the section first.
+
 ## The 2026-08-17 pass — guides 04, 09, 06 and 08, 103 changed images verified
 
 All four guides were re-captured against the rebuilt database and the merged

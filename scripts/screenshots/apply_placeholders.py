@@ -36,8 +36,17 @@ REPO_ROOT = HERE.parent.parent
 DOCS_DIR = REPO_ROOT / "docs" / "training"
 REPORT = HERE / "capture-report.json"
 
+# The bracket is optional and unterminated on purpose. Guides carry two
+# placeholder syntaxes: `> **[SCREENSHOT NEEDED]:** _description_`, and
+# `> **[SCREENSHOT NEEDED — description]**` with the description *inside* the
+# brackets. Requiring `\[SCREENSHOT NEEDED\]` matched only the first, so 41
+# placeholders across twelve guides were invisible to this script and to
+# status_report.py — which reported "0 remaining" while forty-one fully
+# specified requests, several carrying their own seed instructions, had never
+# been counted, let alone filled. Both scripts hold a copy of this pattern;
+# keep them in step.
 MARKER = re.compile(
-    r"^>\s*\*\*(?:Screenshot placeholder|Screenshot needed|\[SCREENSHOT NEEDED\])",
+    r"^>\s*\*\*\[?(?:Screenshot placeholder|Screenshot needed)",
     re.IGNORECASE,
 )
 
