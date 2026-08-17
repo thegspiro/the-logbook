@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from app.models.forms import Form, IntegrationType
+from app.models.membership_pipeline import ProspectStatus
 from app.services.forms_service import FormsService
 
 
@@ -74,6 +75,15 @@ class TestDirectPathUsesExplicitMappings:
             submission, integration=None, form=form
         )
 
+    async def test_auto_advance_receives_the_specific_submission(self):
+        service = _service()
+        form = _form([])
+        submission = _submission()
+
+        await service._process_integrations(submission, form)
+
+        service._auto_advance_pipeline_step.assert_awaited_once_with(form, submission)
+
     async def test_disabled_row_stops_direct_processing(self):
         service = _service()
         submission = _submission()
@@ -94,6 +104,44 @@ class TestDirectPathUsesExplicitMappings:
         # The unrelated row neither supplies mappings nor disables the path.
         service._process_event_request.assert_awaited_once_with(
             submission, integration=None, form=form
+        )
+
+
+class TestFormStepAutoAdvance:
+    async def test_only_selects_prospect_bound_to_submission(self, monkeypatch):
+        step = SimpleNamespace(id="step-1", name="Application")
+        prospect = SimpleNamespace(id="prospect-1", organization_id="org-1")
+        statements = []
+
+        async def execute(statement):
+            statements.append(statement)
+            rows = [step] if len(statements) == 1 else [prospect]
+            return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
+
+        db = SimpleNamespace(execute=execute)
+        service = FormsService(db)
+        complete_step = AsyncMock()
+
+        from app.services import membership_pipeline_service as pipeline_module
+
+        monkeypatch.setattr(
+            pipeline_module.MembershipPipelineService,
+            "complete_step",
+            complete_step,
+        )
+
+        form = SimpleNamespace(id="form-1")
+        submission = SimpleNamespace(id="submission-1")
+        await service._auto_advance_pipeline_step(form, submission)
+
+        prospect_query = statements[1].compile()
+        assert "form_submission_id" in str(prospect_query)
+        assert "submission-1" in prospect_query.params.values()
+        assert ProspectStatus.ACTIVE in prospect_query.params.values()
+        complete_step.assert_awaited_once()
+        assert (
+            complete_step.await_args.kwargs["action_result"]["form_submission_id"]
+            == "submission-1"
         )
 
 
