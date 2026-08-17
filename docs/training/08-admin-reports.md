@@ -98,7 +98,7 @@ Navigate to **Administration > Organization Settings > Organization** to manage 
 - **Mailing and Physical Addresses**
 - **Logo** upload
 
-![Organization Settings page with department name, type, and timezone](./images/08-02-organization-settings.png)
+![Organization Settings page with department name, timezone and contact details](./images/08-02-organization-settings.png)
 
 ### Contact Info Visibility
 
@@ -138,7 +138,7 @@ Configure how membership IDs are assigned:
 
 Navigate to **Settings > Organization** and scroll to the **Modules** section.
 
-Modules are organized into three categories:
+Modules are organized into categories:
 
 ### Core Modules (Always Enabled)
 
@@ -1261,17 +1261,22 @@ All API response schemas now inherit from `UTCResponseBase`, which automatically
 
 ### Dashboard Notification Management
 
-Each card in the dashboard's Notifications panel carries a **dismiss** control
-— the **✕** on the right — which marks that notification as read and removes it
-from the panel. The panel header carries **Clear All**, which marks every
-notification in it as read at once.
+The dashboard's **My Updates** panel merges your notifications and department
+messages into one feed. An amber dot marks each unread row and the header
+counts them; opening a row marks it read and takes you to what it announces —
+a notification's own screen, or the Messages page. A **pinned department
+message** stays in the feed until you clear it with the ✕ beside it; that
+control appears only on persistent messages, which would otherwise never
+leave. **Older Items** at the foot opens the full notification inbox, which
+is where bulk actions such as marking everything read live.
 
-> **Corrected 2026-08-10.** This previously described two controls on each
-> card, a dismiss and a checkmark "clear", with different effects. There is one
-> control per card, the ✕, and it is the mark-as-read action; "Clear All" is a
-> header action, not a per-card one.
+> **Superseded 2026-08-16.** This previously described the Notifications
+> panel — a per-card dismiss ✕ and a Clear All header action. The station
+> board rebuild replaced that panel with the My Updates feed described here;
+> per-notification and bulk mark-as-read now belong to the Notifications
+> inbox.
 
-![The dashboard Notifications panel — a dismiss control on each card and Clear All in the header](./images/08-60-dashboard-notification-cards.png)
+![The dashboard's My Updates feed — unread rows dotted amber, the unread count in the header, and Older Items linking to the full inbox](./images/08-60-dashboard-notification-cards.png)
 
 ### Department Messages
 

@@ -8,6 +8,9 @@ import DashboardNeedsYou from '../components/dashboard/DashboardNeedsYou';
 import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
+import DashboardReadiness from '../components/dashboard/DashboardReadiness';
+import { READINESS_WINDOW_DAYS } from '../utils/readiness';
+import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
 import {
   Calendar,
@@ -41,8 +44,9 @@ import {
   organizationService,
   inventoryService,
   eventService,
+  medicalScreeningService,
 } from '../services/api';
-import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert } from '../services/api';
+import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert, MyComplianceSummary } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -182,15 +186,20 @@ const Dashboard: React.FC = () => {
   });
   const [loadingHours, setLoadingHours] = useState(true);
 
-  // Expiring certifications for the current user (feeds the "Needs you" panel)
-  type MyCert = {
-    id: string;
-    course_name: string;
-    expiration_date: string | null;
-    is_expired: boolean;
-    days_until_expiry: number | null;
-  };
-  const [myCerts, setMyCerts] = useState<MyCert[]>([]);
+  // Certifications for the current user. One source for both the readiness
+  // verdict and the "Needs you" rows, so the summary and the detail below it
+  // cannot disagree about what is expiring.
+  const [myCerts, setMyCerts] = useState<ReadinessCert[]>([]);
+
+  // Shift positions this member may hold, resolved by the backend from rank,
+  // completed training and membership type. Distinct from the per-shift
+  // eligibility fetched when a signup row is expanded.
+  const [mySeats, setMySeats] = useState<string[]>([]);
+
+  // The member's own screening compliance, as counts. Left null when the read
+  // fails so the verdict states a narrower scope rather than implying
+  // screenings were checked and passed.
+  const [myScreenings, setMyScreenings] = useState<MyComplianceSummary | null>(null);
 
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
@@ -269,6 +278,8 @@ const Dashboard: React.FC = () => {
     void loadOpenShifts();
     void loadDeptMessages();
     void loadHours();
+    void loadMySeats();
+    void loadMyScreenings();
     void loadTrainingProgress();
     void loadMyEquipment();
     void loadUpcomingEvents();
@@ -470,10 +481,7 @@ const Dashboard: React.FC = () => {
         start_date: today,
         end_date: nextMonth,
       });
-      // Filter out shifts the user is already signed up for (defense-in-depth;
-      // the backend also filters these, but guard against race conditions)
-      const myShiftIds = new Set(myShifts.map((s) => s.id));
-      setOpenShifts(data.filter((s) => !myShiftIds.has(s.id)));
+      setOpenShifts(data);
     } catch {
       // Open shifts are non-critical
     } finally {
@@ -511,6 +519,31 @@ const Dashboard: React.FC = () => {
       toast.error(getErrorMessage(error, 'Failed to sign up for shift'));
     } finally {
       setSigningUpShiftId(null);
+    }
+  };
+
+  const loadMySeats = async () => {
+    try {
+      // No shift id: the positions the member may hold in general, not the
+      // ones open on a particular shift.
+      const data = await schedulingService.getEligiblePositions();
+      // A member the department excludes from shift signup has no seats to
+      // report, and "no seats" is not a readiness finding about them — the
+      // verdict simply says nothing on the subject.
+      setMySeats(data.is_excluded ? [] : data.positions);
+    } catch {
+      // Seat eligibility is non-critical; the verdict falls back to
+      // certifications alone and says so.
+    }
+  };
+
+  const loadMyScreenings = async () => {
+    try {
+      setMyScreenings(await medicalScreeningService.getMyCompliance());
+    } catch {
+      // Non-critical, and deliberately not retried: a department that does not
+      // track screenings still answers, and a failure must not turn into a
+      // claim that everything is current.
     }
   };
 
@@ -595,22 +628,42 @@ const Dashboard: React.FC = () => {
   const windowStart = getTodayLocalDate(tz);
   const windowEnd = addCalendarDays(windowStart, TIMELINE_DAYS - 1);
 
-  const shiftTimeRange = (shift: ShiftRecord) => {
-    const start = formatTimeOfDay(shift.start_time);
-    const end = formatTimeOfDay(shift.end_time);
-    return end ? `${start}–${end}` : start;
-  };
+  // Open slots the member is not already on. The backend excludes their own
+  // shifts, but this is the defence-in-depth pass — and it has to happen here
+  // rather than inside loadOpenShifts, where `myShifts` is read from a render
+  // closure that is still empty because both lists are fetched concurrently.
+  const availableOpenShifts = useMemo(() => {
+    const mine = new Set(myShifts.map((s) => s.id));
+    return openShifts.filter((s) => !mine.has(s.id));
+  }, [myShifts, openShifts]);
 
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
 
+    // start_time is "HH:MM" on some shift payloads and a full UTC datetime on
+    // others (my-shifts). formatTimeOfDay falls back to the raw string on
+    // anything it cannot parse, which put bare ISO timestamps on the timeline.
+    const formatShiftTime = (value: string | null | undefined) =>
+      value && value.includes('T') ? formatTime(value, tz) : formatTimeOfDay(value);
+
+    const shiftTimeRange = (shift: ShiftRecord) => {
+      const start = formatShiftTime(shift.start_time);
+      const end = formatShiftTime(shift.end_time);
+      return end ? `${start}–${end}` : start;
+    };
+
     const shiftSortAt = (shift: ShiftRecord) =>
-      new Date(`${shift.shift_date}T${shift.start_time || '00:00'}`).getTime();
+      shift.start_time?.includes('T')
+        ? new Date(shift.start_time).getTime()
+        : new Date(`${shift.shift_date}T${shift.start_time || '00:00'}`).getTime();
 
     for (const shift of myShifts) {
       const details = [shiftTimeRange(shift)];
       if (shift.shift_officer_name) details.push(`Officer ${shift.shift_officer_name}`);
-      if (shift.min_staffing != null) details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
+      // The my-shifts payload carries no attendee_count; interpolating it
+      // unguarded printed "undefined of 4 filled" on the member's own rows.
+      if (shift.min_staffing != null && shift.attendee_count != null)
+        details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
       entries.push({
         key: `my-${shift.id}`,
         kind: 'my-shift',
@@ -622,9 +675,10 @@ const Dashboard: React.FC = () => {
       });
     }
 
-    for (const shift of openShifts) {
+    for (const shift of availableOpenShifts) {
       const details = [shiftTimeRange(shift)];
-      if (shift.min_staffing != null) details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
+      if (shift.min_staffing != null && shift.attendee_count != null)
+        details.push(`${shift.attendee_count} of ${shift.min_staffing} filled`);
       entries.push({
         key: `open-${shift.id}`,
         kind: 'open-shift',
@@ -653,11 +707,11 @@ const Dashboard: React.FC = () => {
     return entries
       .filter((e) => e.dateOnly >= windowStart && e.dateOnly <= windowEnd)
       .sort((a, b) => a.sortAt - b.sortAt);
-  }, [myShifts, openShifts, upcomingEvents, tz, windowStart, windowEnd]);
+  }, [myShifts, availableOpenShifts, upcomingEvents, tz, windowStart, windowEnd]);
 
   const visibleTimeline = timeline.slice(0, TIMELINE_ROWS_SHOWN);
-  const laterOpenShifts = openShifts.filter((s) => s.shift_date > windowEnd).length;
-  const shortStaffedOpenShifts = openShifts.filter(
+  const laterOpenShifts = availableOpenShifts.filter((s) => s.shift_date > windowEnd).length;
+  const shortStaffedOpenShifts = availableOpenShifts.filter(
     (s) => s.min_staffing != null && s.attendee_count < s.min_staffing
   ).length;
   const timelineLoading = loadingMyShifts || loadingOpenShifts || loadingUpcomingEvents;
@@ -666,7 +720,7 @@ const Dashboard: React.FC = () => {
   const urgentCerts = useMemo(
     () =>
       myCerts
-        .filter((c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= 60))
+        .filter((c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= READINESS_WINDOW_DAYS))
         .sort((a, b) => (a.days_until_expiry ?? -Infinity) - (b.days_until_expiry ?? -Infinity)),
     [myCerts]
   );
@@ -778,6 +832,8 @@ const Dashboard: React.FC = () => {
       loadOpenShifts(),
       loadDeptMessages(),
       loadHours(),
+      loadMySeats(),
+      loadMyScreenings(),
       loadTrainingProgress(),
       loadMyEquipment(),
       loadUpcomingEvents(),
@@ -979,6 +1035,16 @@ const Dashboard: React.FC = () => {
           >
             {/* ── Main column ── */}
             <div className="flex min-w-0 flex-col gap-5">
+              {/* Both carry the default flex order, so source order puts the
+                  verdict above the panel it summarises — on phones too, where
+                  the actions and timeline swap around them. */}
+              <DashboardReadiness
+                certs={myCerts}
+                positions={mySeats}
+                screenings={myScreenings}
+                onOpen={() => void navigate('/training/my-training')}
+              />
+
               <DashboardNeedsYou items={needsYouItems} />
 
               {/* Three actions, not one. The page's own data says taking a
@@ -1011,7 +1077,7 @@ const Dashboard: React.FC = () => {
                       Take a Shift
                     </span>
                     <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      <span className="font-bold tabular-nums">{openShifts.length}</span> open
+                      <span className="font-bold tabular-nums">{availableOpenShifts.length}</span> open
                       {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
                     </span>
                   </span>
@@ -1317,12 +1383,12 @@ const Dashboard: React.FC = () => {
 
               <DashboardHoursCard monthLabel={monthLabel} segments={hoursSegments} loading={loadingHours} />
 
-              {/* Equipment — compact in the rail; the full picture is in Organization */}
+              {/* Issued gear — compact in the rail; the full picture is in Organization */}
               {!loadingMyEquipment && (myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
                 <section className="card p-4" aria-labelledby="my-equipment-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="my-equipment-heading" className="text-theme-text-primary text-[15px] font-bold">
-                      My Equipment
+                      My Issued Gear
                     </h3>
                     <button
                       onClick={() => void navigate('/inventory/my-equipment')}
@@ -1503,7 +1569,7 @@ const Dashboard: React.FC = () => {
                 <DashboardCardHeader
                   icon={Package}
                   iconColor="text-emerald-500"
-                  title={isInventoryAdmin ? 'Equipment & Inventory' : 'My Equipment'}
+                  title={isInventoryAdmin ? 'Gear & Uniforms' : 'My Issued Gear'}
                   viewAllColor="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300"
                   onViewAll={() => void navigate('/inventory')}
                 />
@@ -1572,7 +1638,7 @@ const Dashboard: React.FC = () => {
                     onClick={() => void navigate('/inventory/my-equipment')}
                     className="rounded-lg bg-emerald-600 px-4 py-2 text-center text-sm text-white transition-colors hover:bg-emerald-700"
                   >
-                    My Equipment
+                    My Issued Gear
                   </button>
                   {isInventoryAdmin && (
                     <button

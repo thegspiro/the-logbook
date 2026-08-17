@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { schedulingService, type PlatoonOverview } from '../../modules/scheduling/services/api';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { useRanks } from '../../hooks/useRanks';
 import SchedulingHeader from './SchedulingHeader';
 
 // Standard platoon labels offered in the assign dropdown, merged with any
@@ -21,6 +22,7 @@ const STANDARD_PLATOONS = ['A', 'B', 'C', 'D'];
 
 const SchedulingPlatoonsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { formatRank } = useRanks();
   const [overview, setOverview] = useState<PlatoonOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -165,7 +167,9 @@ const SchedulingPlatoonsPage: React.FC = () => {
                                 className="form-checkbox border-theme-surface-border"
                               />
                               <span className="text-theme-text-primary text-sm">{m.user_name}</span>
-                              {m.rank && <span className="text-theme-text-muted ml-auto text-xs">{m.rank}</span>}
+                              {m.rank && (
+                                <span className="text-theme-text-muted ml-auto text-xs">{formatRank(m.rank)}</span>
+                              )}
                             </label>
                           </li>
                         ))}

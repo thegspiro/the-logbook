@@ -182,7 +182,7 @@ const COMMANDS: CommandItem[] = [
     icon: GraduationCap,
     section: 'Actions',
   },
-  { id: 'my-equipment', label: 'My Equipment', path: '/inventory/my-equipment', icon: Package, section: 'Actions' },
+  { id: 'my-equipment', label: 'My Issued Gear', path: '/inventory/my-equipment', icon: Package, section: 'Actions' },
   { id: 'my-store-orders', label: 'My Store Orders', path: '/store/orders', icon: Package, section: 'Actions' },
 
   // Admin

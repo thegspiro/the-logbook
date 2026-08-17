@@ -7,6 +7,188 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dashboard: the station board answers whether you can respond tonight (2026-08-17)
+
+**Added**
+
+- **A readiness line above "Needs you"** — _Clear to respond_, _Clear, with
+  conditions_, or _Not clear to respond_. The station board answered "what needs
+  me" and "what am I doing this week"; it never answered the question a fire
+  department asks first. It reads three things a member already has: their
+  certifications, the shift positions they may hold, and — where the department
+  tracks them — their medical screening compliance.
+
+  Three rules keep it from overstating, and each is tested:
+
+  - **It renders nothing when there is nothing to judge.** A member with no
+    tracked certifications and no screening requirements is _unknown_, not
+    clear, and a green verdict from an empty set asserts a clearance the
+    department has no basis for.
+  - **It names its inputs on screen** ("Certifications, screenings and seats"),
+    so it can never imply a check it did not make. SCBA fit-test dates are not
+    modelled anywhere in the product and are never among them.
+  - **A failed read is not a pass.** If the screening read fails, those
+    requirements drop out and the scope note narrows to what was confirmed.
+
+  It counts rather than names: the verdict says "2 certifications expiring", the
+  "Needs you" rows below name them and carry the buttons. Naming the soonest one
+  reproduced the row beneath it word for word — the "said twice" fault the
+  dashboard redesign existed to remove.
+
+- **`GET /medical-screening/compliance/me`** — a member's own screening
+  compliance, as counts. The existing compliance route takes a `user_id` and
+  requires `medical_screening.view`, which is the officer permission that reads
+  _anybody's_; there was no way for a member to see their own. The new route
+  takes no id — the subject comes from the authenticated session, so there is
+  nothing to substitute — and is registered before `/compliance/{user_id}` so
+  `me` is not captured as a user id. Both properties are structural rather than
+  runtime checks, so tests assert them.
+
+  It returns counts only: no requirement name, screening type, date or result.
+  The dashboard is a shared surface — The Logbook is installed as a kiosk on
+  tablets left at stations — so a line reading "Psychological evaluation
+  expired" would be legible to whoever walks past. A test asserts the serialized
+  shape, because the detail is one attribute access away in the summary it is
+  built from.
+
+**Changed**
+
+- **Concurrent identical GETs now make one request.** `useEnabledModules`
+  carried a comment promising that mounting it in several components did not
+  mean several round trips. Measured against the running app, the dashboard made
+  three requests for `/organization/modules` and two for `/auth/branding` on a
+  single mount: the response cache only helps a caller arriving _after_ an
+  identical request finishes, and the navigation surfaces all mount together
+  against a cold cache. `dedupeInFlight` shares the promise instead, and retains
+  nothing once it settles — so it adds no caching to the endpoints the HIPAA
+  rules exclude from caching. It wraps at the service layer, where the response
+  interceptor's 401 → refresh → retry has already run, so followers get the
+  retried result rather than the pre-refresh failure. Both endpoints now measure
+  at one request per mount.
+
+**Fixed**
+
+- **Shift times on the dashboard read "N/A – N/A".** A shift's `start_time` is a
+  time of day (`"08:00"`), and it was being formatted by a function that parses
+  an instant, so every row rendered `Invalid Date`. They go through
+  `formatTimeOfDay` now.
+- **The open-shift de-duplication never ran.** `loadOpenShifts` filtered its
+  response against `myShifts` read from its render closure, but both lists are
+  fetched concurrently from the same effect, so that set was always empty on
+  mount — the guard was defeated by exactly the race its comment described. It
+  now happens in a memo over both arrays, and every consumer reads the deduped
+  list.
+
+**Documentation**
+
+- `docs/training/13-medical-screening.md` records what the audit trail actually
+  covers. It claimed all access to the module is logged; only creates, updates
+  and deletes are. Reads are not — including one officer reading another
+  member's records or compliance, which is the access an audit trail most exists
+  to detect. This is documented as an open gap, not fixed here.
+
+### Inventory: vendor pricing is a purchasing matter, not a directory one (2026-08-16)
+
+**Changed**
+
+- **Account numbers, payment terms and vendor spend totals now require
+  `inventory.manage`.** They were readable by anyone holding `inventory.view` —
+  a broad, member-level grant whose job is answering "who do we buy this from
+  and how do I reach them". What the department pays a supplier, on what terms,
+  and under which account is a different question. `GET /inventory/vendors` and
+  `GET /inventory/vendors/{id}` now blank `accountNumber`, `paymentTerms` and
+  `totalPurchaseValue` unless the caller can manage inventory; names, phone,
+  email, fax, website, address, contacts and the item/reorder counts are
+  unchanged, so the directory still works. No UI changes: the vendors screen
+  already sits behind `inventory.manage`, and the item and reorder pickers only
+  ever read the name.
+
+  The serializer's clearance flag is keyword-only with no default, so a call
+  site that forgets it raises rather than falls open.
+
+**Fixed**
+
+- The schema-drift measurement recipe in `docs/DATABASE_SCHEMA_DRIFT.md` created
+  its two scratch databases without naming a collation, relying on the reader
+  having set `collation-server` to match docker-compose. On a stock server
+  (`utf8mb4_0900_ai_ci` on MySQL 8, `utf8mb4_general_ci` on MariaDB) the chain
+  dies at the first cross-table FK with errno 150, because some migrations
+  hardcode `COLLATE utf8mb4_unicode_ci` and the rest inherit the database
+  default. The `CREATE DATABASE` statements now name the collation themselves.
+
+### Inventory: vendors get database-backed tests, and a guard rail for migration-id collisions (2026-08-16)
+
+**Added**
+
+- **Backend Lint now runs `validate_migrations.py`.** The vendor migration
+  collided with a same-day revision id twice in one day — first with the
+  facilities room-nesting migration, then with the storage-area barcode
+  backfill — each time leaving `alembic upgrade head` failing with "Multiple
+  head revisions" for anyone upgrading through migrations. Git merges two files
+  that declare one revision id without a word, because they do not overlap;
+  only this script notices. It is stdlib-only, needs no database, runs in under
+  a second, and sits beside flake8 so a collision is caught at PR time rather
+  than after the merge. (Both renumberings themselves landed separately; this
+  is the part that stops the third one.)
+- `test_inventory_vendors_db.py` — the vendor flows against a real database,
+  marked `integration` so CI's MySQL and MariaDB jobs run them. The mocked
+  suite passed in full while merging a vendor deleted the contacts it reported
+  as moving; a cascade is precisely what a mock cannot have. These assert on
+  what is still in the database afterwards: contacts survive a merge, links
+  survive a deactivation, the case-folded matching the cleanup screen promises
+  actually matches across spellings and departments, spend counts retired
+  items while the catalog count does not, and a relinked reorder comes back
+  naming its new vendor. Verified to fail against the pre-fix merge.
+
+### Inventory: medical supplies split onto their own page (2026-08-16)
+
+**Added**
+
+- **Medical Supplies** module at `/medical-supplies` — EMS stock with lot
+  numbers and expiration dates, on its own page rather than mixed into the gear
+  catalog. Opens on what is expiring, with an all-supplies tab, category
+  management, an add-supply form, and a receive-delivery form that books a whole
+  shipment as one dated lot per item line.
+- `ItemType.MEDICAL`, appended to the enum (never inserted — MySQL stores an
+  ENUM as its ordinal, so a mid-list insert would silently reclassify every
+  existing category). Migration `20260816_0001`.
+- Domain-scoped permissions `inventory.view_medical` and
+  `inventory.manage_medical`, so a department can appoint an EMS supply officer
+  for medical stock while the quartermaster keeps gear. Every medical route
+  accepts either these or the broad `inventory.view` / `inventory.manage`, so a
+  department running one supply line is unaffected, and `inventory.*` still
+  grants everything.
+- `ems_supply_officer` system role and matching email-signature office. It holds
+  the medical permissions plus `equipment_check.*` — both halves of the
+  shelf-to-truck loop — and no access to gear or uniforms.
+- `apparatus_officer` now states the medical permissions explicitly (it already
+  reached medical stock through the broad `inventory.manage`, so nothing is
+  widened — the role editor is simply honest about it now), and gains the
+  `equipment_check.*` set its description has always promised.
+- `medical_supplies` module toggle (off by default), so departments that do not
+  run EMS never see the page.
+
+**Changed**
+
+- Renamed the gear side so the two are distinguishable: **Inventory** →
+  **Gear & Uniforms**, **My Equipment** → **My Issued Gear**, **Inventory
+  Admin** → **Gear Admin**, **Equipment Requests** → **Gear Requests**,
+  **Equipment Kits** → **Gear Kits**. Routes and table names are unchanged, so
+  no existing link breaks.
+- Gear listings now exclude medical-domain items and categories, and the medical
+  routes are pinned to the medical domain server-side — the domain is never read
+  from a query parameter, and every by-id write re-checks that its target is in
+  the domain before touching it.
+
+**Fixed**
+
+- Low-stock, NFPA-retirement, and expiring-supply alerts had never been
+  delivered. All three filtered recipients on `u.role`, a column `User` does not
+  have (roles are the many-to-many `positions` relationship), so every send
+  raised `AttributeError` inside the per-organization guard, which logged it and
+  moved on. Recipients now resolve through the `inventory.manage` permission via
+  the roles relationship.
+
 ### Forcing a stale device back onto the current build (2026-08-16)
 
 **Added**

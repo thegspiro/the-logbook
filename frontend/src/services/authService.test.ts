@@ -153,8 +153,22 @@ describe('authService', () => {
 
       const result = await authService.requestPasswordReset({ email: 'user@example.com' });
 
-      expect(mockPost).toHaveBeenCalledWith('/auth/forgot-password', { email: 'user@example.com' });
+      // No challenge token: the config argument is present but carries no
+      // headers, so deployments without CAPTCHA send exactly what they did.
+      expect(mockPost).toHaveBeenCalledWith('/auth/forgot-password', { email: 'user@example.com' }, {});
       expect(result).toEqual(response);
+    });
+
+    it('should attach the challenge token as a header when one is supplied', async () => {
+      mockPost.mockResolvedValue({ data: { message: 'ok' } });
+
+      await authService.requestPasswordReset({ email: 'user@example.com' }, 'challenge-token');
+
+      expect(mockPost).toHaveBeenCalledWith(
+        '/auth/forgot-password',
+        { email: 'user@example.com' },
+        { headers: { 'X-Captcha-Token': 'challenge-token' } }
+      );
     });
   });
 

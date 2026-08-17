@@ -9,13 +9,14 @@ import copy
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql import Select
 
 from app.core.audit import log_audit_event
 from app.models.inventory import (
@@ -663,17 +664,33 @@ class InventoryService:
         self,
         organization_id: UUID,
         item_type: Optional[ItemType] = None,
+        item_types: Optional[Iterable[ItemType]] = None,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
         active_only: bool = True,
         skip: int = 0,
         limit: int = 200,
     ) -> List[InventoryCategory]:
-        """Get categories for an organization with pagination"""
+        """Get categories for an organization with pagination.
+
+        ``item_types`` / ``exclude_item_types`` scope the result to a domain,
+        so the medical-supply page's category picker never offers a uniform
+        category and the gear page's never offers a medical one.
+        """
         query = select(InventoryCategory).where(
             InventoryCategory.organization_id == str(organization_id)
         )
 
+        include_types = set(item_types or ())
         if item_type:
-            query = query.where(InventoryCategory.item_type == item_type)
+            include_types.add(item_type)
+
+        if include_types:
+            query = query.where(InventoryCategory.item_type.in_(list(include_types)))
+
+        if exclude_item_types:
+            query = query.where(
+                InventoryCategory.item_type.notin_(list(exclude_item_types))
+            )
 
         if active_only:
             query = query.where(InventoryCategory.active.is_(True))
@@ -1443,6 +1460,21 @@ class InventoryService:
         "updated_at": InventoryItem.updated_at,
     }
 
+    @staticmethod
+    def _category_ids_of_type(
+        organization_id: UUID, item_types: Set[ItemType]
+    ) -> "Select":
+        """Org-scoped select of category ids in the given domains.
+
+        Org-scoped inside the subquery rather than relying on the outer
+        query's filter: without it, an item could be matched against another
+        organization's category of the same type.
+        """
+        return select(InventoryCategory.id).where(
+            InventoryCategory.organization_id == str(organization_id),
+            InventoryCategory.item_type.in_(list(item_types)),
+        )
+
     async def get_items(
         self,
         organization_id: UUID,
@@ -1450,6 +1482,8 @@ class InventoryService:
         status: Optional[ItemStatus] = None,
         condition: Optional[ItemCondition] = None,
         item_type: Optional[ItemType] = None,
+        item_types: Optional[Iterable[ItemType]] = None,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
         assigned_to: Optional[UUID] = None,
         location_id: Optional[UUID] = None,
         storage_area_id: Optional[UUID] = None,
@@ -1464,7 +1498,14 @@ class InventoryService:
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[InventoryItem], int]:
-        """Get items with filtering, sorting, and pagination"""
+        """Get items with filtering, sorting, and pagination.
+
+        ``item_types`` restricts to a domain, ``exclude_item_types`` carves one
+        out — that pair is what keeps the medical-supply page and the
+        gear-and-uniforms page from each listing the other's stock. Both are
+        applied server-side from the caller's permissions, never from a query
+        parameter, so a medical-only officer cannot widen their own view.
+        """
         query = (
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
@@ -1484,17 +1525,32 @@ class InventoryService:
         if condition:
             query = query.where(InventoryItem.condition == condition)
 
+        include_types = set(item_types or ())
         if item_type:
-            # Filter by item_type via the category relationship
-            cat_subq = (
-                select(InventoryCategory.id)
-                .where(
-                    InventoryCategory.organization_id == str(organization_id),
-                    InventoryCategory.item_type == item_type,
+            include_types.add(item_type)
+
+        if include_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, include_types)
                 )
-                .subquery()
             )
-            query = query.where(InventoryItem.category_id.in_(select(cat_subq)))
+
+        if exclude_item_types:
+            # An uncategorized item has no domain, so it is not the excluded
+            # one — NOT IN would drop it along with the excluded rows because
+            # NULL NOT IN (...) is NULL, and the gear page would quietly lose
+            # every item nobody has filed yet.
+            query = query.where(
+                or_(
+                    InventoryItem.category_id.is_(None),
+                    InventoryItem.category_id.notin_(
+                        self._category_ids_of_type(
+                            organization_id, set(exclude_item_types)
+                        )
+                    ),
+                )
+            )
 
         if assigned_to:
             # str(): the column is String(36) and the parameter is a UUID, so
@@ -4946,6 +5002,65 @@ class InventoryService:
             )
         )
 
+    async def category_in_domain(
+        self,
+        category_id: Optional[str],
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Is this category one of ``item_types``, in this organization?
+
+        Fails closed: an unresolvable or uncategorized id is not in the
+        domain. A medical-only officer reaching for a uniform category must be
+        refused, and so must one reaching for a category that does not exist.
+        """
+        if not category_id:
+            return False
+        found = await self.db.scalar(
+            select(InventoryCategory.id).where(
+                InventoryCategory.id == str(category_id),
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(list(item_types)),
+            )
+        )
+        return found is not None
+
+    async def item_in_domain(
+        self,
+        item_id: str,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Is this item filed under a category in ``item_types``?"""
+        found = await self.db.scalar(
+            select(InventoryItem.id)
+            .join(
+                InventoryCategory,
+                InventoryCategory.id == InventoryItem.category_id,
+            )
+            .where(
+                InventoryItem.id == str(item_id),
+                InventoryItem.organization_id == organization_id,
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(list(item_types)),
+            )
+        )
+        return found is not None
+
+    async def lot_in_domain(
+        self,
+        lot_id: str,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Is this stock lot attached to an item in ``item_types``?"""
+        lot = await self._get_lot(lot_id, organization_id)
+        if not lot:
+            return False
+        return await self.item_in_domain(
+            lot.inventory_item_id, organization_id, item_types
+        )
+
     async def _get_lot(
         self, lot_id: str, organization_id: str
     ) -> Optional[InventoryLot]:
@@ -5180,11 +5295,18 @@ class InventoryService:
         return by_item
 
     async def get_expiring_lots(
-        self, organization_id: str, days_ahead: int = 30
+        self,
+        organization_id: str,
+        days_ahead: int = 30,
+        item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Tuple[InventoryLot, str]]:
-        """Get in-stock lots expiring within N days, with the item name."""
+        """Get in-stock lots expiring within N days, with the item name.
+
+        ``item_types`` narrows the result to one domain so the medical-supply
+        page reports its own expiring stock and not the whole department's.
+        """
         cutoff = date.today() + timedelta(days=days_ahead)
-        result = await self.db.execute(
+        query = (
             select(InventoryLot, InventoryItem.name)
             .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
             .where(
@@ -5193,7 +5315,15 @@ class InventoryService:
                 InventoryLot.expiration_date.isnot(None),
                 InventoryLot.expiration_date <= cutoff,
             )
-            .order_by(InventoryLot.expiration_date.asc())
+        )
+        if item_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                )
+            )
+        result = await self.db.execute(
+            query.order_by(InventoryLot.expiration_date.asc())
         )
         return [(row[0], row[1]) for row in result.all()]
 

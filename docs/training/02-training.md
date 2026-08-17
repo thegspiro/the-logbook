@@ -423,7 +423,7 @@ from the member's view.
 
 **Hidden steps still count toward the total.** If they did not, a requirement
 could read 100% complete while the background check was still outstanding. So the
-member is told **"+2 more steps your officer records"** rather than being shown a
+member is told **"+3 more steps your officer records"** rather than being shown a
 denominator that does not match what is on their screen.
 
 An officer-only step is not dimmed — it is **marked in amber, with the eye
@@ -431,7 +431,7 @@ struck through**, and it sits in the list exactly where it was. The step is
 still yours to edit, rename and reorder; the toggle changes only who can read
 it.
 
-![The requirement editor's checklist steps — each with its own eye toggle, one switched to officer-only](./images/02-100-checklist-steps-editor.png)
+![The requirement editor's checklist steps — each with its own eye toggle, the officer-recorded ones switched to officer-only](./images/02-100-checklist-steps-editor.png)
 
 #### Edge cases
 
@@ -524,7 +524,7 @@ prerequisites screen to consult.
   exist. This greying is on the member's own progression view, not on the
   pipeline page above: what the officer sees there is the chip.
 
-![A member's progression view — the gated requirement greyed out and reading 'Locked until you finish Hose Deployment'](./images/02-99-member-locked-requirement.png)
+![A member's progression view — the gated requirement greyed out and reading 'Locked until you finish Firefighter I Written Exam'](./images/02-99-member-locked-requirement.png)
 
 A requirement the member has **already finished** is never greyed, whatever the
 gate says — the lock holds back work not yet done, and does not retract credit
@@ -2169,7 +2169,7 @@ Alex can see her enrollment on the **My Training** dashboard under **Active Prog
 > below has requirements finished in Phase 2 and Phase 3 while Phase 1 is still
 > in progress. What **is** locked is an individual **requirement** with a
 > prerequisite, which greys out and says which requirement it is waiting on
-> ("Locked until you finish Hose Deployment"). The current phase is marked
+> ("Locked until you finish Firefighter I Written Exam"). The current phase is marked
 > **You are here** rather than by unlocking, and **Next milestones** at the top
 > lists the phase completions still ahead.
 

@@ -18,11 +18,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
+import { canOpenAdministrationSection } from './adminNavigation';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
-import { hasAdministrationAccess } from './adminNavigation';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -96,9 +96,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  // users.view alone opens the Admin menu: the member ID scanner lives here,
-  // and validating a scanned card only needs users.view (see /members/scan).
-  const hasAnyAdminPermission = checkPermission('users.view') || hasAdministrationAccess(checkPermission);
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
@@ -134,8 +132,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       subItems: [
         ...(isModuleOn('inventory')
           ? [
-              { label: 'My Equipment', path: '/inventory/my-equipment' },
-              { label: 'Inventory', path: '/inventory' },
+              { label: 'My Issued Gear', path: '/inventory/my-equipment' },
+              { label: 'Gear & Uniforms', path: '/inventory' },
+            ]
+          : []),
+        ...(isModuleOn('medical_supplies')
+          ? [
+              {
+                label: 'Medical Supplies',
+                path: '/medical-supplies',
+                anyPermission: ['inventory.view_medical', 'inventory.view'],
+              },
             ]
           : []),
         ...(isModuleOn('apparatus')
@@ -197,7 +204,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
               ...(isModuleOn('inventory')
-                ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
+                ? [{ label: 'Gear Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
                 : []),
               ...(isModuleOn('storefront')
                 ? [{ label: 'Store Admin', path: '/store/admin', permission: 'storefront.manage' }]
