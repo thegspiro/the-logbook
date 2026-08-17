@@ -22,8 +22,7 @@ interface RosterRow {
 
 const BASE_PLATOONS = ['A', 'B', 'C', 'D'];
 
-const selectCls =
-  'bg-theme-input-bg border border-theme-input-border rounded-lg px-2.5 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+const selectCls = 'form-input px-2.5 py-1.5 text-sm focus:ring-violet-500';
 
 export const PlatoonRosterPanel: React.FC = () => {
   const [rows, setRows] = useState<RosterRow[]>([]);

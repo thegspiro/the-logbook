@@ -16,7 +16,13 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.constants import ROLE_TRAINING_OFFICER
-from app.models.event import CheckInWindowType, Event, EventRSVP, EventType
+from app.models.event import (
+    CheckInWindowType,
+    Event,
+    EventRSVP,
+    EventType,
+    default_reminder_target,
+)
 from app.models.training import (
     ApprovalStatus,
     EnrollmentStatus,
@@ -260,6 +266,7 @@ class TrainingSessionService:
             is_mandatory=session_data.is_mandatory,
             allow_guests=False,  # Training sessions don't allow guests
             send_reminders=True,
+            reminder_target=default_reminder_target(session_data.is_mandatory),
             reminder_schedule=[24],
             check_in_window_type=CheckInWindowType(session_data.check_in_window_type),
             check_in_minutes_before=session_data.check_in_minutes_before,
@@ -399,6 +406,7 @@ class TrainingSessionService:
             "is_mandatory": session_data.is_mandatory,
             "allow_guests": False,
             "send_reminders": True,
+            "reminder_target": default_reminder_target(session_data.is_mandatory),
             "reminder_schedule": [24],
             "check_in_window_type": CheckInWindowType(
                 session_data.check_in_window_type

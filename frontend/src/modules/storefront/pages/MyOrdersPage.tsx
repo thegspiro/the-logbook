@@ -28,7 +28,10 @@ import {
 
 const MyOrdersPage: React.FC = () => {
   const tz = useTimezone();
-  const { myOrders, isLoading, loadMyOrders } = useStorefrontStore();
+  // `error` is read here deliberately: without it a failed load fell through to
+  // the "No orders yet" empty state, telling a member who has orders that they
+  // have none — a load failure presented as fact about their account.
+  const { myOrders, isLoading, error, loadMyOrders } = useStorefrontStore();
 
   const [reportOrder, setReportOrder] = useState<StoreOrder | null>(null);
   const [reportMethod, setReportMethod] = useState('');
@@ -123,6 +126,15 @@ const MyOrdersPage: React.FC = () => {
           <div className="flex justify-center py-12" role="status" aria-live="polite">
             <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
           </div>
+        ) : error ? (
+          <div className="space-y-3">
+            <p className="alert-danger" role="alert">
+              {error}
+            </p>
+            <button type="button" onClick={() => void loadMyOrders()} className="btn-secondary btn-md">
+              Try again
+            </button>
+          </div>
         ) : myOrders.length === 0 ? (
           <EmptyState
             icon={ShoppingBag}
@@ -203,7 +215,10 @@ const MyOrdersPage: React.FC = () => {
                     </div>
                   )}
 
-                  {balance > 0 && order.paymentStatus !== 'pending_verification' && (
+                  {/* The backend rejects payment-method changes on cancelled
+                      orders and while a payment report awaits verification —
+                      don't offer a button that can only error. */}
+                  {balance > 0 && order.status !== 'cancelled' && order.paymentStatus !== 'pending_verification' && (
                     <button
                       type="button"
                       className="text-theme-text-muted hover:text-theme-text-primary mt-2 text-xs underline"

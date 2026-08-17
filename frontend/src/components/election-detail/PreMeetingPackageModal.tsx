@@ -10,6 +10,7 @@
  * attach the downloaded PDF to their own communication.
  */
 import React, { useCallback, useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import { electionService } from '../../services/api';
 import type { PackageVariant } from '../../types/election';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -38,6 +39,8 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [recipients, setRecipients] = useState<RecipientChip[]>([]);
   const [newEmail, setNewEmail] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
@@ -114,13 +117,13 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="premeeting-package-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg shadow-xl">
+      <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="premeeting-package-modal-title" className="text-theme-text-primary text-lg font-medium">
             Email Pre-Meeting Package
@@ -144,7 +147,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
                   void loadPrefill('leadership');
                 }}
                 disabled={prefillLoading !== null}
-                className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                className="btn-secondary text-theme-text-secondary px-3 py-1.5 text-sm"
               >
                 {prefillLoading === 'leadership' ? 'Loading…' : 'Leadership'}
               </button>
@@ -154,14 +157,14 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
                   void loadPrefill('eligible_voters');
                 }}
                 disabled={prefillLoading !== null}
-                className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                className="btn-secondary text-theme-text-secondary px-3 py-1.5 text-sm"
               >
                 {prefillLoading === 'eligible_voters' ? 'Loading…' : 'All eligible voters'}
               </button>
               <button
                 type="button"
                 onClick={() => setRecipients([])}
-                className="bg-theme-surface text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm"
+                className="btn-secondary text-theme-text-muted px-3 py-1.5 text-sm"
               >
                 Clear list
               </button>
@@ -218,7 +221,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
               <button
                 type="button"
                 onClick={addRecipient}
-                className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm"
+                className="btn-secondary text-theme-text-secondary px-3 py-1.5 text-sm"
               >
                 Add
               </button>

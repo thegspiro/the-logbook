@@ -114,6 +114,17 @@ describe('VendorsPage', () => {
     });
   });
 
+  it('does not request manager-only cleanup data for view-only users', async () => {
+    mockCheckPermission.mockReturnValue(false);
+
+    renderWithRouter(<VendorsPage />);
+
+    await waitFor(() => {
+      expect(mockGetVendors).toHaveBeenCalledWith({ search: undefined, active_only: true });
+    });
+    expect(mockGetUnlinkedVendorNames).not.toHaveBeenCalled();
+  });
+
   it('shows the empty state when no vendors are on file', async () => {
     renderWithRouter(<VendorsPage />);
     expect(await screen.findByText('No vendors yet')).toBeInTheDocument();

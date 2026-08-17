@@ -106,6 +106,29 @@ class TestApplyTrainingToRequirement:
         assert updates.status == "completed"
         assert updates.progress_value is None
 
+    async def test_status_requirement_with_source_records_reversible_signoff(self):
+        prog, req = _prog(0.0), _req(RequirementType.SKILLS_EVALUATION)
+        db = RecordingSession([_one(_enrollment()), _first((prog, req))])
+        svc = TrainingProgramService(db)
+        svc.apply_requirement_credit = AsyncMock(return_value=(MagicMock(), None))
+
+        applied, error = await svc.apply_training_to_requirement(
+            user_id="u1",
+            organization_id=uuid4(),
+            program_id="prog-1",
+            requirement_id=req.id,
+            hours=3.0,
+            verified_by=uuid4(),
+            source_id="submission-1",
+        )
+
+        assert applied is True
+        assert error is None
+        kwargs = svc.apply_requirement_credit.await_args.kwargs
+        assert kwargs["source_id"] == "submission-1"
+        assert kwargs["units"] == 0.0
+        assert kwargs["mark_completed"] is True
+
     async def test_not_enrolled_returns_error(self):
         db = RecordingSession([_one(None)])
         svc = TrainingProgramService(db)

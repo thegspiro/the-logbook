@@ -92,7 +92,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `check_template_items` | Individual check items with type, expiration, serial/lot tracking *(2026-03-19)*. Now also the **live** state of a position: `quantity_on_truck` (NULL = never counted, target stands in), `restock_needed` + `restock_reported_by`/`_at`/`_note`, and the `inventory_item_id` catalog link everything hangs off *(2026-08-10)* |
 | `check_item_deployed_lots` | **One row per lot's presence on one position** *(2026-08-10)*. A position's count is the sum of these and its expiration the earliest; lot number and date are snapshotted so a deleted shelf lot does not erase the truck's record |
 | `shift_equipment_checks` | Submitted check records linked to shifts; `shift_id` nullable for standalone ad-hoc checks; composite indexes on `(shift_id, template_id)` *(updated 2026-04-04)* |
-| `shift_equipment_check_items` | Individual item results within a submitted check *(2026-03-19)*. `expiration_found` is the counterpart to `serial_found`/`lot_found` — what the crew read off a replacement unit, written back onto the template item on submit *(2026-08-10)* |
+| `shift_equipment_check_items` | Individual item results within a submitted check *(2026-03-19)*. `expiration_found` is the counterpart to `serial_found`/`lot_found` — what the crew read off a replacement unit. *(2026-08-11)* It is recorded on the check but **no longer written back onto the template item on submit** — a submitter asserting a fresh date could otherwise clear an expired-item auto-fail; the template's authoritative expiration changes only through the manage-level supply flows |
 
 ### Inventory
 

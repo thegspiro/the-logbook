@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { getErrorMessage } from '@/utils/errorHandling';
 import {
   FormInput,
@@ -62,6 +64,7 @@ const FormsPage: React.FC = () => {
   const [forms, setForms] = useState<FormDef[]>([]);
   const [summary, setSummary] = useState<FormsSummary | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const { busy: integrationBusy, run: runIntegration } = useSubmitGuard();
   const [submissionsView, setSubmissionsView] = useState<'list' | 'results'>('list');
   const [selectedFormDetail, setSelectedFormDetail] = useState<FormDetailDef | null>(null);
 
@@ -264,42 +267,43 @@ const FormsPage: React.FC = () => {
     }
   };
 
-  const handleAddIntegration = async () => {
-    if (!selectedFormId) return;
+  const handleAddIntegration = () =>
+    runIntegration(async () => {
+      if (!selectedFormId) return;
 
-    // Validate that required mappings are present
-    const targetFields = INTEGRATION_TARGET_FIELDS[integrationType] ?? [];
-    const missingRequired = targetFields.filter((tf) => tf.required && !fieldMappings[tf.key]).map((tf) => tf.label);
-    if (missingRequired.length > 0) {
-      setError(`Required field mappings missing: ${missingRequired.join(', ')}`);
-      return;
-    }
-
-    // Build mappings: { formFieldId → targetFieldName }
-    // The backend expects this direction: form field ID as key, target field name as value
-    const mappings: Record<string, string> = {};
-    for (const [targetKey, formFieldId] of Object.entries(fieldMappings)) {
-      if (formFieldId) {
-        mappings[formFieldId] = targetKey;
+      // Validate that required mappings are present
+      const targetFields = INTEGRATION_TARGET_FIELDS[integrationType] ?? [];
+      const missingRequired = targetFields.filter((tf) => tf.required && !fieldMappings[tf.key]).map((tf) => tf.label);
+      if (missingRequired.length > 0) {
+        setError(`Required field mappings missing: ${missingRequired.join(', ')}`);
+        return;
       }
-    }
 
-    try {
-      const data: FormIntegrationCreate = {
-        target_module: integrationTarget,
-        integration_type: integrationType,
-        field_mappings: mappings,
-        is_active: true,
-      };
-      await formsService.addIntegration(selectedFormId, data);
-      const detail = await formsService.getForm(selectedFormId);
-      setSelectedFormDetail(detail);
-      setFieldMappings({});
-    } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to add integration');
-      setError(message);
-    }
-  };
+      // Build mappings: { formFieldId → targetFieldName }
+      // The backend expects this direction: form field ID as key, target field name as value
+      const mappings: Record<string, string> = {};
+      for (const [targetKey, formFieldId] of Object.entries(fieldMappings)) {
+        if (formFieldId) {
+          mappings[formFieldId] = targetKey;
+        }
+      }
+
+      try {
+        const data: FormIntegrationCreate = {
+          target_module: integrationTarget,
+          integration_type: integrationType,
+          field_mappings: mappings,
+          is_active: true,
+        };
+        await formsService.addIntegration(selectedFormId, data);
+        const detail = await formsService.getForm(selectedFormId);
+        setSelectedFormDetail(detail);
+        setFieldMappings({});
+      } catch (err: unknown) {
+        const message = getErrorMessage(err, 'Failed to add integration');
+        setError(message);
+      }
+    });
 
   const handleDeleteIntegration = async (integrationId: string) => {
     if (!selectedFormId) return;
@@ -980,28 +984,28 @@ const FormsPage: React.FC = () => {
 
               {/* Builder Tab */}
               {detailTab === 'builder' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <FormBuilder formId={editingForm.id} />
                 </div>
               )}
 
               {/* Preview & Submit Tab */}
               {detailTab === 'preview' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <FormRenderer formId={editingForm.id} submitLabel="Submit Form" allowResubmit />
                 </div>
               )}
 
               {/* Submissions Tab */}
               {detailTab === 'submissions' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <SubmissionViewer formId={editingForm.id} allowDelete={canManage} />
                 </div>
               )}
 
               {/* Results Tab */}
               {detailTab === 'results' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <FormResultsPanel formId={editingForm.id} />
                 </div>
               )}
@@ -1021,8 +1025,8 @@ const FormsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
+              <DialogPanel onClose={() => setShowCreateModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 id="create-form-title" className="text-theme-text-primary text-lg font-medium">
@@ -1118,7 +1122,7 @@ const FormsPage: React.FC = () => {
                     {creating ? 'Creating...' : 'Create Form'}
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -1135,8 +1139,8 @@ const FormsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowShareModal(false)} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowShareModal(false)} aria-hidden="true" />
+              <DialogPanel onClose={() => setShowShareModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3
@@ -1327,7 +1331,7 @@ const FormsPage: React.FC = () => {
                     Done
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -1344,12 +1348,8 @@ const FormsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div
-                className="fixed inset-0 bg-black/60"
-                onClick={() => setShowIntegrationModal(false)}
-                aria-hidden="true"
-              />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowIntegrationModal(false)} aria-hidden="true" />
+              <DialogPanel onClose={() => setShowIntegrationModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3
@@ -1572,10 +1572,11 @@ const FormsPage: React.FC = () => {
                       )}
 
                       <button
+                        disabled={integrationBusy}
                         onClick={() => {
                           void handleAddIntegration();
                         }}
-                        className="flex w-full items-center justify-center space-x-2 rounded-lg bg-orange-600/20 px-4 py-2 text-orange-700 transition-colors hover:bg-orange-600/30 dark:text-orange-400"
+                        className="flex w-full items-center justify-center space-x-2 rounded-lg bg-orange-600/20 px-4 py-2 text-orange-700 transition-colors hover:bg-orange-600/30 disabled:cursor-not-allowed disabled:opacity-50 dark:text-orange-400"
                       >
                         <Plus className="h-4 w-4" aria-hidden="true" />
                         <span>Add Integration</span>
@@ -1591,7 +1592,7 @@ const FormsPage: React.FC = () => {
                     Done
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}

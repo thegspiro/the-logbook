@@ -1926,7 +1926,17 @@ class StorefrontService:
 
         settings = await self.get_settings(organization_id)
         accepted = settings.accepted_payment_methods or []
-        if accepted and payment_method.value not in accepted:
+        # build_payment_instructions deliberately keeps showing an order's
+        # ORIGINAL method even after the store stops accepting it (the member
+        # still owes the balance and needs somewhere to send it). Rejecting
+        # that same method here would leave the member unable to report the
+        # payment the instructions told them to make — so the order's own
+        # stored method is grandfathered in; every other non-accepted method
+        # is still rejected.
+        is_grandfathered = (
+            order.payment_method is not None and payment_method == order.payment_method
+        )
+        if accepted and payment_method.value not in accepted and not is_grandfathered:
             raise ValueError("That payment method is not accepted by this store")
 
         order.payment_method = payment_method
@@ -1968,6 +1978,15 @@ class StorefrontService:
         if order.payment_status in (StorePaymentStatus.PAID, StorePaymentStatus.WAIVED):
             raise ValueError(
                 "The payment method cannot be changed after the order is settled"
+            )
+        # A pending report ties payment_reference / payment_reported_at to the
+        # method it was reported against; swapping the method now would leave
+        # those describing a payment that no longer matches the order.
+        if order.payment_status == StorePaymentStatus.PENDING_VERIFICATION:
+            raise ValueError(
+                "A reported payment is awaiting verification. Wait for it to "
+                "be verified, or ask staff to reject the report before "
+                "changing the payment method"
             )
 
         settings = await self.get_settings(organization_id)

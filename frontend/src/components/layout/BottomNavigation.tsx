@@ -6,9 +6,11 @@ import { prefetchRoute } from '../../utils/routePrefetch';
 
 /**
  * Event that asks whichever navigation component is mounted (side or top) to
- * open its mobile menu. Using an event keeps the drawer's open state owned by
- * the component that renders it, rather than lifting it into AppLayout just so
- * this bar can reach it.
+ * open its mobile menu. TopNavigation treats it as a toggle — the bar stays
+ * visible above its menu backdrop, so a second tap on "More" closes the menu.
+ * Using an event keeps the drawer's open state owned by the component that
+ * renders it, rather than lifting it into AppLayout just so this bar can
+ * reach it.
  */
 export const OPEN_MOBILE_NAV_EVENT = 'open-mobile-nav';
 

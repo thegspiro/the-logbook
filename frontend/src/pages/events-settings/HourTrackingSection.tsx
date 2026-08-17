@@ -231,7 +231,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
                 setNewSourceType(type === 'custom' ? 'custom' : 'event_type');
                 setNewSourceValue(source);
               }}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-accent-blue focus:ring-theme-accent-blue block w-full rounded-md border px-3 py-2 text-sm focus:ring-1 focus:outline-none"
+              className="form-input focus:border-theme-accent-blue focus:ring-theme-accent-blue block px-3 text-sm"
             >
               <option value="">Select event source...</option>
               <optgroup label="Built-in Event Types">
@@ -260,7 +260,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
             <select
               value={newCategoryId}
               onChange={(e) => setNewCategoryId(e.target.value)}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-accent-blue focus:ring-theme-accent-blue block w-full rounded-md border px-3 py-2 text-sm focus:ring-1 focus:outline-none"
+              className="form-input focus:border-theme-accent-blue focus:ring-theme-accent-blue block px-3 text-sm focus:ring-1"
             >
               <option value="">Select admin hours category...</option>
               {categories.map((cat) => (
@@ -278,7 +278,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
                 max={100}
                 value={newPercentage}
                 onChange={(e) => setNewPercentage(Number(e.target.value))}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-accent-blue focus:ring-theme-accent-blue block w-20 rounded-md border px-3 py-2 text-sm focus:ring-1 focus:outline-none"
+                className="form-input focus:border-theme-accent-blue focus:ring-theme-accent-blue block w-20 px-3 text-sm focus:ring-1"
               />
               <span className="text-theme-text-muted text-sm">%</span>
             </div>

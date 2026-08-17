@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { DialogPanel } from '../../components/ux/DialogPanel';
 import { useNavigate } from 'react-router';
 import {
   Search,
@@ -38,6 +39,8 @@ interface CommandItem {
   section: string;
   keywords?: string[];
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
   /**
    * Hide this command when the named module is explicitly enabled — for
    * fallback pages that a module supersedes (e.g. /locations when the
@@ -123,6 +126,9 @@ const COMMANDS: CommandItem[] = [
     icon: QrCode,
     section: 'Navigation',
     keywords: ['qr', 'kiosk', 'display', 'check-in', 'checkin', 'print', 'rooms', 'apparatus', 'shift'],
+    // Mirror the route gate — offering the page to anyone else just
+    // navigates them into an Access Denied screen.
+    anyPermission: ['locations.manage', 'facilities.manage', 'apparatus.view'],
   },
   {
     id: 'documents',
@@ -181,7 +187,7 @@ const COMMANDS: CommandItem[] = [
     icon: GraduationCap,
     section: 'Actions',
   },
-  { id: 'my-equipment', label: 'My Equipment', path: '/inventory/my-equipment', icon: Package, section: 'Actions' },
+  { id: 'my-equipment', label: 'My Issued Gear', path: '/inventory/my-equipment', icon: Package, section: 'Actions' },
   { id: 'my-store-orders', label: 'My Store Orders', path: '/store/orders', icon: Package, section: 'Actions' },
 
   // Admin
@@ -220,6 +226,7 @@ export const CommandPalette: React.FC = () => {
     const accessible = COMMANDS.filter(
       (cmd) =>
         (!cmd.permission || checkPermission(cmd.permission)) &&
+        (!cmd.anyPermission || cmd.anyPermission.some(checkPermission)) &&
         // enabledModules is null while loading/unconfigured — hide nothing then
         !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn))
     );
@@ -313,10 +320,11 @@ export const CommandPalette: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-60 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setIsOpen(false)} aria-hidden="true" />
+      <div className="modal-overlay backdrop-blur-xs" onClick={() => setIsOpen(false)} aria-hidden="true" />
       <div className="relative flex min-h-screen items-start justify-center px-4 pt-[15dvh]">
-        <div
-          className="bg-theme-surface-modal border-theme-surface-border w-full max-w-lg overflow-hidden rounded-xl border shadow-2xl"
+        <DialogPanel
+          onClose={() => setIsOpen(false)}
+          className="w-full max-w-lg overflow-hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Command palette"
@@ -406,7 +414,7 @@ export const CommandPalette: React.FC = () => {
               <kbd className="bg-theme-surface-secondary rounded-sm px-1.5 py-0.5 font-mono text-[10px]">Esc</kbd> Close
             </span>
           </div>
-        </div>
+        </DialogPanel>
       </div>
     </div>
   );

@@ -80,23 +80,37 @@ export function deleteDraft(shiftId: string): void {
  * than destroying work silently.
  */
 export function clearAllDrafts(): number {
+  let removed = 0;
   try {
-    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) || '[]') as string[];
-    index.forEach((shiftId) => localStorage.removeItem(getDraftKey(shiftId)));
+    const rawIndex = localStorage.getItem(DRAFT_INDEX_KEY);
+    if (rawIndex) {
+      try {
+        const parsed: unknown = JSON.parse(rawIndex);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((shiftId) => {
+            if (typeof shiftId !== 'string') return;
+            const key = getDraftKey(shiftId);
+            if (localStorage.getItem(key) !== null) removed += 1;
+            localStorage.removeItem(key);
+          });
+        }
+      } catch {
+        // A corrupt index must never prevent the namespace sweep below.
+      }
+    }
     localStorage.removeItem(DRAFT_INDEX_KEY);
 
     // Belt and braces: the index can drift from reality if a write failed
-    // part-way, so sweep any orphaned draft keys too.
-    let orphans = 0;
+    // part-way or contains malformed JSON, so sweep every sensitive namespace.
     for (let i = localStorage.length - 1; i >= 0; i -= 1) {
       const key = localStorage.key(i);
       if (key && (key.startsWith(DRAFT_KEY_PREFIX) || key.startsWith(EQUIPMENT_CHECK_DRAFT_KEY_PREFIX))) {
         localStorage.removeItem(key);
-        orphans += 1;
+        removed += 1;
       }
     }
-    return index.length + orphans;
+    return removed;
   } catch {
-    return 0;
+    return removed;
   }
 }

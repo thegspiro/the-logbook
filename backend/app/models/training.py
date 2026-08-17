@@ -1738,6 +1738,12 @@ class RequirementProgressCredit(Base):
     source_id = Column(String(64), nullable=False)
     units = Column(Float, nullable=False, default=0.0, server_default="0.0")
 
+    # Provenance snapshots for zero-unit sign-offs. These let reversal restore
+    # only state that this entry actually changed.
+    previous_status = Column(String(50), nullable=True)
+    phase_before_id = Column(String(36), nullable=True)
+    phase_after_id = Column(String(36), nullable=True)
+
     applied_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

@@ -6,8 +6,10 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { DialogPanel } from '../../../components/ux/DialogPanel';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle } from 'lucide-react';
 import { eventService } from '../../../services/api';
 import { electionService } from '../../../services/electionService';
@@ -69,6 +71,11 @@ export const MinutesDetailPage: React.FC = () => {
   const canManage = checkPermission('minutes.manage');
 
   const [minutes, setMinutes] = useState<MeetingMinutes | null>(null);
+  // Separate guards: submitting the minutes, adding a motion and adding an
+  // action item are independent controls that can be open at the same time.
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
+  const { busy: motionBusy, run: runMotion } = useSubmitGuard();
+  const { busy: actionItemBusy, run: runActionItem } = useSubmitGuard();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -279,16 +286,17 @@ export const MinutesDetailPage: React.FC = () => {
 
   // ── Workflow ──
 
-  const handleSubmit = async () => {
-    if (!minutesId) return;
-    try {
-      const updated = await minutesService.submitForApproval(minutesId);
-      setMinutes(updated);
-      toast.success('Minutes submitted for approval');
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to submit'));
-    }
-  };
+  const handleSubmit = () =>
+    runSubmit(async () => {
+      if (!minutesId) return;
+      try {
+        const updated = await minutesService.submitForApproval(minutesId);
+        setMinutes(updated);
+        toast.success('Minutes submitted for approval');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to submit'));
+      }
+    });
 
   const handleApprove = async () => {
     if (!minutesId) return;
@@ -316,29 +324,30 @@ export const MinutesDetailPage: React.FC = () => {
 
   // ── Motions ──
 
-  const handleAddMotion = async () => {
-    if (!minutesId || !motionForm.motion_text.trim()) return;
-    try {
-      await minutesService.addMotion(minutesId, {
-        ...motionForm,
-        order: minutes?.motions.length || 0,
-      });
-      setShowMotionForm(false);
-      setMotionForm({
-        motion_text: '',
-        moved_by: '',
-        seconded_by: '',
-        status: 'passed',
-        votes_for: undefined,
-        votes_against: undefined,
-        votes_abstain: undefined,
-      });
-      void fetchMinutes();
-      toast.success('Motion added');
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add motion'));
-    }
-  };
+  const handleAddMotion = () =>
+    runMotion(async () => {
+      if (!minutesId || !motionForm.motion_text.trim()) return;
+      try {
+        await minutesService.addMotion(minutesId, {
+          ...motionForm,
+          order: minutes?.motions.length || 0,
+        });
+        setShowMotionForm(false);
+        setMotionForm({
+          motion_text: '',
+          moved_by: '',
+          seconded_by: '',
+          status: 'passed',
+          votes_for: undefined,
+          votes_against: undefined,
+          votes_abstain: undefined,
+        });
+        void fetchMinutes();
+        toast.success('Motion added');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add motion'));
+      }
+    });
 
   const handleDeleteMotion = async (motionId: string) => {
     if (!minutesId) return;
@@ -362,18 +371,19 @@ export const MinutesDetailPage: React.FC = () => {
 
   // ── Action Items ──
 
-  const handleAddActionItem = async () => {
-    if (!minutesId || !actionForm.description.trim()) return;
-    try {
-      await minutesService.addActionItem(minutesId, actionForm);
-      setShowActionForm(false);
-      setActionForm({ description: '', assignee_name: '', due_date: undefined, priority: 'medium' });
-      void fetchMinutes();
-      toast.success('Action item added');
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add action item'));
-    }
-  };
+  const handleAddActionItem = () =>
+    runActionItem(async () => {
+      if (!minutesId || !actionForm.description.trim()) return;
+      try {
+        await minutesService.addActionItem(minutesId, actionForm);
+        setShowActionForm(false);
+        setActionForm({ description: '', assignee_name: '', due_date: undefined, priority: 'medium' });
+        void fetchMinutes();
+        toast.success('Action item added');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add action item'));
+      }
+    });
 
   const handleUpdateActionItemStatus = async (itemId: string, newStatus: string) => {
     if (!minutesId) return;
@@ -609,10 +619,11 @@ export const MinutesDetailPage: React.FC = () => {
             <div className="flex flex-wrap gap-3">
               {(minutes.status === 'draft' || minutes.status === 'rejected') && (
                 <button
+                  disabled={submitBusy}
                   onClick={() => {
                     void handleSubmit();
                   }}
-                  className="btn-info rounded-md"
+                  className="btn-info rounded-md disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Submit for Approval
                 </button>
@@ -1042,7 +1053,7 @@ export const MinutesDetailPage: React.FC = () => {
                 onClick={() => {
                   void handleAddMotion();
                 }}
-                disabled={!motionForm.motion_text.trim()}
+                disabled={motionBusy || !motionForm.motion_text.trim()}
                 className="rounded-md bg-cyan-600 px-4 py-2 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
               >
                 Add Motion
@@ -1175,7 +1186,7 @@ export const MinutesDetailPage: React.FC = () => {
                 onClick={() => {
                   void handleAddActionItem();
                 }}
-                disabled={!actionForm.description.trim()}
+                disabled={actionItemBusy || !actionForm.description.trim()}
                 className="rounded-md bg-cyan-600 px-4 py-2 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
               >
                 Add Action Item
@@ -1244,7 +1255,7 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Link Event Modal */}
         {showLinkEventModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="modal-overlay flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="link-event-title"
@@ -1252,7 +1263,7 @@ export const MinutesDetailPage: React.FC = () => {
               if (e.key === 'Escape') setShowLinkEventModal(false);
             }}
           >
-            <div className="bg-theme-surface-modal w-full max-w-lg rounded-lg shadow-xl">
+            <DialogPanel onClose={() => setShowLinkEventModal(false)} className="w-full max-w-lg">
               <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
                 <h3 id="link-event-title" className="text-theme-text-primary text-lg font-medium">
                   Link to Meeting Event
@@ -1300,14 +1311,14 @@ export const MinutesDetailPage: React.FC = () => {
                   Cancel
                 </button>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         )}
 
         {/* Reject Modal */}
         {showRejectModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="modal-overlay flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="reject-title"
@@ -1318,7 +1329,7 @@ export const MinutesDetailPage: React.FC = () => {
               }
             }}
           >
-            <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+            <DialogPanel onClose={() => setShowRejectModal(false)} className="w-full max-w-md">
               <div className="border-theme-surface-border border-b px-6 py-4">
                 <h3 id="reject-title" className="text-theme-text-primary text-lg font-medium">
                   Reject Minutes
@@ -1360,7 +1371,7 @@ export const MinutesDetailPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         )}
       </div>

@@ -110,10 +110,8 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
     return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
-  const inputClass =
-    'w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-  const selectClass =
-    'rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+  const inputClass = 'form-input px-3 text-sm focus:border-blue-500 focus:ring-blue-500';
+  const selectClass = 'form-input px-3 text-sm focus:border-blue-500 focus:ring-blue-500';
 
   return (
     <div className="space-y-4">

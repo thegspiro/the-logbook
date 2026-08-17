@@ -81,15 +81,25 @@ class ApparatusRef:
 
     @property
     def type_slug(self) -> Optional[str]:
-        """Lowercased apparatus-type name, for type-level template matching.
+        """The apparatus-type code, for type-level template matching.
 
         The two tables spell this differently — ``BasicApparatus`` stores the
         type inline as a string, while ``Apparatus`` normalizes it into the
         ``apparatus_types`` table — so callers get one shape from here instead
         of branching.
+
+        The ``code`` ("ladder"), not the lowercased display name: templates
+        and per-apparatus config maps are keyed on the code, and the two only
+        coincide for single-word types. Lowercasing "Ladder/Aerial" produced
+        "ladder/aerial", which matched nothing — so ladder checks could not
+        resolve type-level templates and the shift-report form silently fell
+        back to the generic skill list on every non-single-word type.
         """
         if self.full is not None:
             apparatus_type = getattr(self.full, "apparatus_type", None)
+            code = getattr(apparatus_type, "code", None)
+            if code:
+                return code
             name = getattr(apparatus_type, "name", None)
             return name.lower() if name else None
         if self.basic is not None:
@@ -204,12 +214,14 @@ async def resolve_apparatus_display_map(
         )
     )
     for row in full_result.scalars().all():
+        # The code, not the lowercased name — see ApparatusRef.type_slug.
+        type_code = getattr(row.apparatus_type, "code", None)
         type_name = getattr(row.apparatus_type, "name", None)
         found[str(row.id)] = ApparatusDisplay(
             id=str(row.id),
             name=row.name,
             unit_number=row.unit_number,
-            apparatus_type=type_name.lower() if type_name else None,
+            apparatus_type=type_code or (type_name.lower() if type_name else None),
             min_staffing=row.min_staffing,
             positions=row.crew_positions,
         )

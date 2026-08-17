@@ -104,6 +104,15 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
     // As above.
   }
 
+  // A mounted form can have an API request in flight when termination starts.
+  // Sweep again after the asynchronous IndexedDB work so a late state update
+  // cannot leave a localStorage draft behind for the next device user.
+  try {
+    result.drafts += clearAllDrafts();
+  } catch {
+    // localStorage may have become unavailable; the initial sweep still ran.
+  }
+
   result.unsyncedDiscarded = result.queuedChecks + result.queuedReports + result.queuedGeneric;
   return result;
 }

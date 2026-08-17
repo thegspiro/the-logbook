@@ -166,6 +166,13 @@ export function setCache(key: string, data: unknown): void {
     const iter = cache.keys();
     for (let i = 0; i < excess; i++) {
       const oldest = iter.next();
+      // Unreachable at runtime: `excess` is `size - MAX_CACHE_ENTRIES` and the
+      // cap is positive, so the iterator always yields at least `excess` keys.
+      // The check is here for the type system — `next().value` is
+      // `string | undefined`, and `cache.delete` takes a `string`. Removing it
+      // fails typecheck with TS2345 rather than changing behaviour, which is
+      // why mutation testing reports this branch as an equivalent mutant and
+      // no test can kill it.
       if (!oldest.done) {
         cache.delete(oldest.value);
       }

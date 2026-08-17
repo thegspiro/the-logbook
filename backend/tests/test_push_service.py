@@ -24,8 +24,17 @@ from typing import Any, Dict, List
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from py_vapid import Vapid02
 from sqlalchemy import text
+
+# py_vapid ships with pywebpush, which is optional (Web Push is gated behind
+# PUSH_ENABLED) and whose wheel does not build on every platform. A bare
+# module-level import makes that a COLLECTION error, and pytest aborts the
+# entire session on one — so a developer without the optional dependency gets
+# 0 tests, not 4,535. importorskip contains the loss to this module.
+Vapid02 = pytest.importorskip(
+    "py_vapid",
+    reason="py_vapid (from the optional pywebpush dependency) is not installed",
+).Vapid02
 
 from app.core.config import settings
 from app.services.push_service import (

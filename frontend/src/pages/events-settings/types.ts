@@ -43,6 +43,7 @@ export interface PipelineSectionProps extends SettingsSectionProps {
   onUpdateLeadTime: (days: number) => void;
   onUpdateDefaultAssignee: (userId: string | null) => void;
   onTogglePublicVisibility: () => void;
+  onToggleAcceptPublicRequests: () => void;
   onAddTask: () => void;
   onRemoveTask: (taskId: string) => void;
   onReorderTask: (index: number, direction: 'up' | 'down') => void;
