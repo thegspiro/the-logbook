@@ -36,6 +36,7 @@ vi.mock('react-hot-toast', () => ({
   },
 }));
 
+import { csvEscape } from '../utils/csv';
 import ImpactPlannerPage from './ImpactPlannerPage';
 
 const OPTIONS = {
@@ -106,6 +107,23 @@ const RESULT = {
     },
   ],
 };
+
+describe('csvEscape', () => {
+  it.each(['=SUM(1,1)', '+1', '-1', '@command', '\tformula', '\rformula'])(
+    'neutralizes spreadsheet formula input %j',
+    (value) => {
+      const escaped = csvEscape(value);
+      const parsed = escaped.startsWith('"') ? escaped.slice(1, -1).replace(/""/g, '"') : escaped;
+
+      expect(parsed).toBe(`'${value}`);
+    }
+  );
+
+  it('preserves ordinary text while applying standard CSV quoting', () => {
+    expect(csvEscape('Amy Adams')).toBe('Amy Adams');
+    expect(csvEscape('Jacket, "Formal"')).toBe('"Jacket, ""Formal"""');
+  });
+});
 
 describe('ImpactPlannerPage', () => {
   beforeEach(() => {

@@ -46,6 +46,7 @@ import type {
   ImpactPlannerRequestSizesResponse,
   ImpactPlan,
 } from '../types';
+import { csvEscape } from '../utils/csv';
 
 const URGENCY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -108,8 +109,6 @@ const StatCard: React.FC<StatCardProps> = ({ icon, value, label, iconBg }) => (
     </div>
   </div>
 );
-
-const csvEscape = (value: string): string => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
 
 const ImpactPlannerPage: React.FC = () => {
   const [options, setOptions] = useState<ImpactPlannerOptions | null>(null);
