@@ -19,6 +19,7 @@ from app.api.dependencies import (
     _has_permission,
     get_current_user,
     require_permission,
+    user_has_permission,
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
@@ -27,6 +28,7 @@ from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
 from app.models.user import User
 from app.schemas.equipment_check import (
     ApparatusInventoryResponse,
+    CheckLogResponse,
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
@@ -40,6 +42,7 @@ from app.schemas.equipment_check import (
     EquipmentCheckTemplateResponse,
     EquipmentCheckTemplateUpdate,
     FailureLogResponse,
+    FleetReadinessResponse,
     InventoryLinkRequest,
     InventoryLinkResponse,
     InventoryMatchesResponse,
@@ -60,6 +63,7 @@ from app.schemas.equipment_check import (
     TemplateChangeLogListResponse,
 )
 from app.services.equipment_check_service import EquipmentCheckService
+from app.services.equipment_readiness_service import EquipmentReadinessService
 from app.utils.image_processing import optimize_image
 
 router = APIRouter()
@@ -352,28 +356,16 @@ async def link_inventory_items(
     service = EquipmentCheckService(db)
     try:
         changed = await service.link_inventory_items(
-            template_id, current_user.organization_id, data.links
+            template_id,
+            current_user.organization_id,
+            data.links,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if changed is None:
         raise HTTPException(status_code=404, detail="Template not found")
-
-    if changed:
-        await service.log_template_change(
-            organization_id=str(current_user.organization_id),
-            template_id=template_id,
-            user_id=str(current_user.id),
-            user_name=_user_display_name(current_user),
-            action="update",
-            entity_type="template",
-            entity_id=template_id,
-            changes={
-                "inventory_links": data.links,
-                "changed_count": changed,
-            },
-        )
-        await db.commit()
 
     coverage = await service.get_link_coverage(
         template_id, current_user.organization_id
@@ -943,6 +935,69 @@ async def get_my_checklist_history(
         limit=limit,
         offset=offset,
     )
+
+
+# =====================================================================
+# Fleet Readiness / Check Log
+# =====================================================================
+
+
+@router.get("/fleet", response_model=FleetReadinessResponse)
+async def get_fleet_readiness(
+    strip_dates: int = Query(7, ge=1, le=90),
+    expiring_days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.view")),
+):
+    """Readiness roll-up for every apparatus the department runs.
+
+    Officer-level: this reports on other people's checks and on apparatus the
+    caller may not ride, so it sits behind ``equipment_check.view`` rather than
+    the submit permission that opens a member's own checklist.
+    """
+    service = EquipmentReadinessService(db)
+    try:
+        payload = await service.get_fleet_readiness(
+            str(current_user.organization_id),
+            strip_dates=strip_dates,
+            expiring_days=expiring_days,
+        )
+        return await service.resolve_user_names(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=safe_error_detail(exc))
+
+
+@router.get("/log", response_model=CheckLogResponse)
+async def get_check_log(
+    dates: int = Query(14, ge=1, le=90),
+    apparatus_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Expected-vs-actual check history over the most recent duty days.
+
+    Open to every member, but the scope is not the same for everyone: a caller
+    holding ``equipment_check.view`` gets the fleet grid and every member's
+    rows, and one without it gets only the checks they performed themselves.
+    The narrower scope is still strictly more than the old my-checks accordion
+    offered, which could not be filtered by apparatus or date at all.
+    """
+    service = EquipmentReadinessService(db)
+    can_view_fleet = user_has_permission(current_user, "equipment_check.view")
+    try:
+        payload = await service.get_check_log(
+            str(current_user.organization_id),
+            dates=dates,
+            apparatus_id=apparatus_id,
+            only_user_id=None if can_view_fleet else str(current_user.id),
+        )
+        return await service.resolve_user_names(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=safe_error_detail(exc))
 
 
 # =====================================================================

@@ -197,11 +197,21 @@ All form submissions (both public and authenticated) pass through `_sanitize_sub
 | Layer | Protection |
 |-------|-----------|
 | Rate Limiting | 60 views/min, 10 submits/min per IP |
+| Daily Cap | Per-form daily limit (`PUBLIC_FORM_DAILY_LIMIT`) counted against **valid submissions only**; exceeding it returns `429` |
 | Honeypot | Hidden "website" field catches bots |
 | Slug Validation | Strict `^[a-f0-9]{12}$` pattern prevents injection |
 | Sanitization | HTML escape + type validation on all data |
 | DOMPurify | Frontend strips all HTML from server text |
 | Data Isolation | Public submissions flagged, IP/UA captured |
+
+> **Daily cap semantics** _(2026-08-16)_: the cap is enforced inside
+> `FormsService.submit_public_form` (`enforce_daily_cap=True`), **after**
+> authorization, honeypot, and validation. Bots tripping the honeypot and
+> rejected payloads no longer consume the form's daily allowance, so an
+> anonymous flood cannot exhaust the quota and deny service to legitimate
+> submitters. Honeypot hits still receive a fake success response. The public
+> rate limiter also falls back to an in-memory limiter when Redis errors
+> _(2026-08-16)_ rather than failing open.
 
 ### Frontend Defense
 
@@ -351,3 +361,13 @@ Integration configuration includes a visual field mapping interface:
 - **Public form fixes**: Fixed doubled `/v1` in API URL path; removed forced name/email section
 - **Permission fix**: Forms page now uses `forms.view` instead of `settings.manage`
 - **Theme compatibility**: Fixed form editor background and tab text for light/dark themes
+
+## August 12–14, 2026 event connection update
+
+Event Settings now obtains its choices through the event-request forms
+connection point rather than the general form catalog. Discovery requires event
+administration, is organization-scoped, and returns public-outreach forms only.
+A general form viewer therefore cannot enumerate the administrative catalog,
+and a non-outreach or cross-organization form cannot be linked through this
+flow. The user workflow and screenshot state are in
+[training lesson 19](./training/19-august-2026-release-changes.md#events-reminders-check-in-and-outreach-forms).

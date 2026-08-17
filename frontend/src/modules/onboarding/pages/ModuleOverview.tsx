@@ -342,9 +342,7 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
-                    className={`card-secondary p-5 backdrop-blur-xs transition-all ${
-                      isEnabled ? 'border-green-500/60 ring-1 ring-green-500/40' : 'hover:border-theme-surface-hover'
-                    }`}
+                    className={`card-secondary p-5 backdrop-blur-xs transition-all ${isEnabled ? 'border-green-500/60 ring-1 ring-green-500/40' : 'hover:border-theme-surface-hover'}`}
                   >
                     <div className="mb-3 flex items-start justify-between">
                       <div className="flex items-center space-x-2">

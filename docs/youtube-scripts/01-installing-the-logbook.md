@@ -59,11 +59,11 @@ calendar all visible. Quick montage of clicking through different modules.]**
 
 **[CALLOUT: Table showing three tiers]**
 
-| | Minimal | Standard | Full |
-|---|---------|----------|------|
-| **RAM** | 1–2 GB | 4 GB | 8+ GB |
-| **CPU** | 2 cores | 2+ cores | 4+ cores |
-| **Storage** | 10 GB | 20 GB | 50+ GB |
+|              | Minimal                 | Standard         | Full                     |
+| ------------ | ----------------------- | ---------------- | ------------------------ |
+| **RAM**      | 1–2 GB                  | 4 GB             | 8+ GB                    |
+| **CPU**      | 2 cores                 | 2+ cores         | 4+ cores                 |
+| **Storage**  | 10 GB                   | 20 GB            | 50+ GB                   |
 | **Best for** | Raspberry Pi, small VPS | Most departments | Large orgs, all features |
 
 > "If you're running a department of under fifty members, the minimal or
@@ -90,9 +90,16 @@ docker --version
 docker compose version
 ```
 
-> "You'll want Docker 20 or newer and Docker Compose v2. If you don't have
-> these installed yet, Docker's official documentation has guides for every
+> "You'll want Docker 20 or newer and Docker Compose v2 — specifically
+> 2.24.4 or newer, because the production configuration uses a Compose
+> feature that older versions don't understand. If you don't have these
+> installed yet, Docker's official documentation has guides for every
 > operating system. I'll link those in the description."
+
+**[EDITOR (2026-08-16): version line updated — the production override now
+uses `volumes: !override`, which requires Compose v2.24.4+. Same take, no
+timing change; the on-screen `docker compose version` output should show
+≥ 2.24.4.]**
 
 > "For the one-line installer, you'll also need `curl` and `git`, which come
 > pre-installed on most systems."
@@ -299,7 +306,7 @@ service names: mysql, redis, backend, frontend.]**
 > right order."
 
 > "One important note before you go live. That plain `docker compose up -d` you
-> just ran? The base compose file is a *development* configuration — great for
+> just ran? The base compose file is a _development_ configuration — great for
 > kicking the tires, but it skips the production security gate. For a real
 > production deployment, you layer the production override on top of the base
 > file:"
@@ -522,6 +529,17 @@ curl http://localhost:3001/health
 > wizard is designed to be intuitive. But if you want a guided walkthrough with
 > tips on best practices, that next video has you covered."
 
+> "One thing to know before you start it, whichever way you go: **setup runs in
+> one browser tab, in one sitting.** The wizard holds a temporary credential that
+> lets it create your department, and that credential doesn't outlive the tab —
+> deliberately, because on a shared station machine it shouldn't. Open a second
+> tab and it starts a separate session; close the browser partway through and the
+> run is over. So have your department's address, station list, apparatus list and
+> first administrator's details ready, and give yourself an uninterrupted half
+> hour."
+
+**[CALLOUT: "One tab · one sitting · 30-minute idle limit"]**
+
 > "If you run into any issues, the GitHub repository has discussions and issue
 > tracking. The Logbook is open source and community-supported, so don't
 > hesitate to ask questions or report bugs."
@@ -541,9 +559,30 @@ link.]**
 
 The following segments can be cut into standalone short videos:
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| One-Line Install | 4:00–7:30 | "Install The Logbook in One Command" |
-| Environment Setup | 8:30–11:00 | "Configuring The Logbook Environment File" |
-| Raspberry Pi Setup | 13:00–14:00 | "Running The Logbook on a Raspberry Pi" |
-| Troubleshooting | 18:00–19:00 | "3 Common Install Issues (and How to Fix Them)" |
+| Clip               | Timecode    | Standalone Title                                |
+| ------------------ | ----------- | ----------------------------------------------- |
+| One-Line Install   | 4:00–7:30   | "Install The Logbook in One Command"            |
+| Environment Setup  | 8:30–11:00  | "Configuring The Logbook Environment File"      |
+| Raspberry Pi Setup | 13:00–14:00 | "Running The Logbook on a Raspberry Pi"         |
+| Troubleshooting    | 18:00–19:00 | "3 Common Install Issues (and How to Fix Them)" |
+
+## AUGUST 14 RELEASE INSERT — TLS AND SAFE UPGRADES
+
+**Place after “START THE SERVICES.” Add 1:30; re-time every later chapter.**
+
+**[SCREEN: `.env`, with secrets blurred; highlight `SECURITY_REQUIRE_TLS`. Then terminal: `alembic heads` returning one line.]**
+
+> "The production Compose profile now fails closed on transport security. If
+> your database or Redis connection is not using TLS, the application will not
+> quietly start anyway. Configure `DB_SSL` and `REDIS_SSL`, or—only on a network
+> you have deliberately accepted as trusted—set `SECURITY_REQUIRE_TLS=false`.
+> That is an explicit risk decision, not a troubleshooting shortcut."
+>
+> "Before any upgrade, back up the database and encryption keys separately.
+> Run `alembic heads` and require exactly one line. If the active-prospect
+> duplicate preflight in the upgrade notes returns rows, stop: review linked
+> applications, keep the earliest record, mark the other active duplicates
+> inactive, and re-run the query. Only then run `alembic upgrade head`. Never
+> downgrade just to repair a migration fork."
+
+**ON-SCREEN CALLOUT:** Existing audit archives are not permission-migrated; inspect historical archive modes after upgrade.

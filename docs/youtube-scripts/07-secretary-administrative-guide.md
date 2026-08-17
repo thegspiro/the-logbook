@@ -609,3 +609,30 @@ became linkable on 2026-08-11, so a shot of it no longer needs a click.]**
 | Custom Forms Builder         | 13:30–14:00 | "Building Custom Forms for Your Department"   |
 | Email Footers, Once          | 16:05–17:00 | "Change Your Email Footer Once, Not 35 Times" |
 | Secretary's Meeting Workflow | 17:35–19:05 | "The Secretary's Meeting Workflow"            |
+
+## AUGUST 14 RELEASE INSERTS — EVENT DELIVERY AND ACTION CLEANUP
+
+### Add to “CREATING & MANAGING EVENTS”
+
+Use the reminder-audience and check-in narration from Script 04. Demonstrate
+both an optional event (`going`) and a mandatory event (`all`), then change the
+audience explicitly and show that toggling Mandatory no longer overwrites it.
+Show the template selector separately because templates persist their own
+choice. Add 1:30.
+
+### Add to “COMMUNICATIONS”
+
+> "Every targeted department message receives best-effort email at every
+> priority. Urgent adds SMS only when Twilio, consent, and the member preference
+> all allow it. Completing an event or scheduling action archives only the
+> notification carrying the matching organization, entity, and action IDs; an
+> unrelated notification remains."
+
+**[SCREEN: related notification before action; complete action; refresh; unrelated notification remains.]**
+
+### Add to “MEMBER SCANNING”
+
+> "Roster administration and scanning are separate permissions. Directory reads
+> use `members.view`; the scanner requires `users.view` or `members.manage`."
+
+**EDITOR:** Add 2:30; re-time Chapters 3–7, Wrap-Up, and clip rows.

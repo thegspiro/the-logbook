@@ -75,6 +75,14 @@ const EquipmentRequestsPage: React.FC = () => {
     void loadRequests();
   }, [loadRequests]);
 
+  useEffect(() => {
+    // A review/delete can remove the only row on the current page. Return to
+    // the new last page instead of leaving the user on an empty stale offset.
+    if (page > 0 && page * pageSize >= total) {
+      setPage(Math.max(0, Math.ceil(total / pageSize) - 1));
+    }
+  }, [page, total]);
+
   const handleReview = async (decision: 'approved' | 'denied') => {
     if (!reviewModal.request) return;
     setSubmitting(true);
@@ -151,7 +159,7 @@ const EquipmentRequestsPage: React.FC = () => {
               <ClipboardList className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-xl font-bold">Equipment Requests</h1>
+              <h1 className="text-theme-text-primary text-xl font-bold">Gear Requests</h1>
               <p className="text-theme-text-muted text-sm">Review member requests for equipment</p>
             </div>
           </div>

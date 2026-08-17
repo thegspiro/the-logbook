@@ -45,6 +45,24 @@ def _safe_int(value: Any, default: int) -> int:
         return default
 
 
+def _include_empty_calendar_years(yearly: Dict[int, Dict[str, Any]]) -> None:
+    """Fill gaps so year-over-year comparisons never skip a calendar year."""
+    if not yearly:
+        return
+    for year in range(min(yearly), max(yearly) + 1):
+        yearly.setdefault(
+            year,
+            {
+                "year": year,
+                "applicants": 0,
+                "converted": 0,
+                "rejected": 0,
+                "withdrawn": 0,
+                "conversion_days": [],
+            },
+        )
+
+
 class ReportsService:
     """Service for report generation"""
 
@@ -1819,6 +1837,10 @@ class ReportsService:
             if status_value == "transferred":
                 source["converted"] += 1
 
+        # Keep calendar years contiguous. Comparing 2026 to the last populated
+        # cohort in 2024 calls a two-year change "year over year" and hides the
+        # operationally important zero-applicant year in between.
+        _include_empty_calendar_years(yearly)
         yearly_trends = []
         previous_applicants: Optional[int] = None
         for year in sorted(yearly):

@@ -319,6 +319,48 @@ class TestMultiApprovalAndReferenceGates:
                 {"approvals": [{"role": "chief"}]},
             )
 
+    async def test_approval_identity_and_role_come_from_authenticated_signer(self):
+        db = AsyncMock()
+        query_result = MagicMock()
+        query_result.scalar_one_or_none.return_value = SimpleNamespace(
+            id="real-chief", positions=[SimpleNamespace(slug="chief", name="Chief")]
+        )
+        db.execute.return_value = query_result
+        service = MembershipPipelineService(db)
+
+        result = await service._authorized_multi_approval_result(
+            "org-1",
+            "real-chief",
+            {"approvals": [{"role": "chief", "approved_by": "forged-user"}]},
+        )
+
+        assert result == {"approvals": [{"role": "chief", "approved_by": "real-chief"}]}
+
+    async def test_signer_cannot_claim_another_role(self):
+        db = AsyncMock()
+        query_result = MagicMock()
+        query_result.scalar_one_or_none.return_value = SimpleNamespace(
+            id="coordinator",
+            positions=[SimpleNamespace(slug="coordinator", name="Coordinator")],
+        )
+        db.execute.return_value = query_result
+        service = MembershipPipelineService(db)
+
+        with pytest.raises(ValueError, match="role you currently hold"):
+            await service._authorized_multi_approval_result(
+                "org-1", "coordinator", {"approvals": [{"role": "chief"}]}
+            )
+
+    async def test_multiple_claimed_signers_are_rejected(self):
+        service = MembershipPipelineService(AsyncMock())
+
+        with pytest.raises(ValueError, match="own signer"):
+            await service._authorized_multi_approval_result(
+                "org-1",
+                "chief",
+                {"approvals": [{"role": "chief"}, {"role": "president"}]},
+            )
+
     async def test_submitted_references_satisfy_the_gate(self):
         service = MembershipPipelineService(AsyncMock())
         step = SimpleNamespace(

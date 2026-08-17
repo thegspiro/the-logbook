@@ -88,8 +88,7 @@ export const ReportStageGroupsEditor: React.FC<Props> = ({ pipeline, onSaved }) 
 
   const getStageById = (id: string): PipelineStage | undefined => pipeline.stages.find((s) => s.id === id);
 
-  const inputClass =
-    'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:ring-2 focus:ring-theme-focus-ring focus:outline-hidden';
+  const inputClass = 'form-input px-3 text-sm';
 
   return (
     <div className="space-y-6">

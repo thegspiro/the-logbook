@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { getErrorMessage } from '@/utils/errorHandling';
 import {
   FormInput,
@@ -440,7 +441,7 @@ const FormsPage: React.FC = () => {
 
         {/* Tabs */}
         <div
-          className="bg-theme-surface-secondary hscroll mb-6 flex w-fit space-x-1 rounded-lg p-1"
+          className="bg-theme-surface-secondary hscroll mb-6 flex max-w-full space-x-1 rounded-lg p-1"
           role="tablist"
           aria-label="Forms views"
         >
@@ -924,7 +925,7 @@ const FormsPage: React.FC = () => {
 
               {/* Detail Tabs */}
               <div
-                className="bg-theme-surface-secondary hscroll mb-6 flex w-fit space-x-1 rounded-lg p-1"
+                className="bg-theme-surface-secondary hscroll mb-6 flex max-w-full space-x-1 rounded-lg p-1"
                 role="tablist"
                 aria-label="Form editor views"
               >
@@ -980,28 +981,28 @@ const FormsPage: React.FC = () => {
 
               {/* Builder Tab */}
               {detailTab === 'builder' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <FormBuilder formId={editingForm.id} />
                 </div>
               )}
 
               {/* Preview & Submit Tab */}
               {detailTab === 'preview' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <FormRenderer formId={editingForm.id} submitLabel="Submit Form" allowResubmit />
                 </div>
               )}
 
               {/* Submissions Tab */}
               {detailTab === 'submissions' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <SubmissionViewer formId={editingForm.id} allowDelete={canManage} />
                 </div>
               )}
 
               {/* Results Tab */}
               {detailTab === 'results' && (
-                <div className="bg-theme-surface-secondary border-theme-surface-border rounded-xl border p-6">
+                <div className="card-secondary p-6">
                   <FormResultsPanel formId={editingForm.id} />
                 </div>
               )}
@@ -1021,8 +1022,8 @@ const FormsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
+              <DialogPanel onClose={() => setShowCreateModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 id="create-form-title" className="text-theme-text-primary text-lg font-medium">
@@ -1118,7 +1119,7 @@ const FormsPage: React.FC = () => {
                     {creating ? 'Creating...' : 'Create Form'}
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -1135,8 +1136,8 @@ const FormsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowShareModal(false)} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowShareModal(false)} aria-hidden="true" />
+              <DialogPanel onClose={() => setShowShareModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3
@@ -1327,7 +1328,7 @@ const FormsPage: React.FC = () => {
                     Done
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}
@@ -1344,12 +1345,8 @@ const FormsPage: React.FC = () => {
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div
-                className="fixed inset-0 bg-black/60"
-                onClick={() => setShowIntegrationModal(false)}
-                aria-hidden="true"
-              />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-lg rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={() => setShowIntegrationModal(false)} aria-hidden="true" />
+              <DialogPanel onClose={() => setShowIntegrationModal(false)} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3
@@ -1591,7 +1588,7 @@ const FormsPage: React.FC = () => {
                     Done
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}

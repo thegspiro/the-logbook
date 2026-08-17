@@ -150,7 +150,7 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
             }
           }}
           placeholder={placeholder}
-          className="border-theme-surface-border bg-theme-surface text-theme-text-primary flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
+          className="form-input flex-1 px-3 py-1.5 text-sm focus:ring-violet-500"
         />
         <button
           type="button"

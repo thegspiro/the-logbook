@@ -1,5 +1,143 @@
 # Script currency
 
+## Flagged by the 2026-08-15 → 08-16 changes
+
+The window produced one **Wrong** (script 02's auto-save promise), several
+**in-script corrections**, and a set of **B-roll / verify** notes.
+
+### 02 — First-Time Setup & Onboarding · **WRONG — corrected in-script 2026-08-16**
+
+The installation wizard's session identifier moved to tab-scoped storage on
+2026-08-15. Onboarding is now **one tab, one sitting**: a second tab does not
+inherit the run, and closing the browser ends it.
+
+**Chapter 2 promised the exact opposite, on camera.** The Welcome Screen
+narration read:
+
+> ~~"The wizard auto-saves your progress, so if you need to step away or your
+> browser closes, you'll pick up right where you left off."~~
+
+That is now flatly false, and it was already misleading before 08-15 — the server
+session has always expired after 30 minutes idle, so "step away" was never safe
+for long. An installer following it would close the browser on purpose,
+confidently, and lose the run. Recorded, it would have been the most expensive
+kind of error in this series: a viewer does what the narrator told them to and
+the product punishes them for it.
+
+**This has been rewritten in `02-first-time-setup-and-onboarding.md` rather than
+left in this queue**, per the standing rule that no behavioural content lives
+only in SCRIPT_CURRENCY. The replacement narration covers:
+
+- Finish in one tab, in one sitting. Gather the department address, station list,
+  apparatus list and first administrator's details **before** starting.
+- A second tab starts its own session; the step you were on will refuse to save.
+- Closing the browser ends the run. So does 30 minutes idle — the server session
+  always expired on a sliding 30-minute timer.
+- **The trap worth saying out loud on camera:** reopening the wizard after a
+  restart **repaints your typed answers while the session behind them is gone**.
+  Nothing warns you until the next step fails. The filled-in form is a local
+  draft, not a resumed session — restart the wizard rather than re-typing into
+  it.
+- "Onboarding has already been completed" is a _different_ message: a department
+  already exists, so sign in instead of starting setup.
+
+**B-roll check:** any planned shot showing the presenter leaving the wizard and
+coming back must be re-planned — it will now fail on camera, which is either a
+ruined take or, if left in, a demonstration of the opposite of what the narration
+says. If the shot is kept deliberately as a teaching moment, it needs the
+two-frame sequence (repainted form, then the error) rather than a single frame.
+
+**EDITOR:** the replacement is net-longer than the two sentences it removes, so
+Chapter 2's `1:00 – 4:00` band and **every chapter marker and clip-table entry
+after it** re-time. Budget roughly **45–70 seconds added**, depending on delivery
+and on whether the optional two-shot insert is used. Final timecodes are a
+recording-production task — narration pacing determines them.
+
+### 01 — Installing The Logbook · **Incomplete — written in-script 2026-08-16**
+
+Chapter 7 hands the viewer to script 02 and explicitly invites them to "jump
+ahead and explore on your own" — which is exactly the viewer who will lose a
+session. A short form of the caution now sits there: one tab, one sitting, what
+to have ready, and the 30-minute idle limit. **No re-timing needed** beyond
+Chapter 7's own band; it lands inside an existing chapter near the end.
+
+### 03 — IT Manager · **retired, not applicable**
+
+Flagged on 08-16 alongside 01, then withdrawn on inspection. Script 03 is a
+**post-setup** administration guide — it opens with "if you've been handed the
+System Owner account" — and has no install walkthrough to attach the caution to.
+Its nearest neighbour, the Chapter 9 backup/restore drill, is about restoring a
+database, and **a restored install already has an organization, so the onboarding
+wizard cannot run against it at all.** Adding the caution here would teach a
+constraint the viewer will never meet. Recorded rather than silently dropped, so
+the next pass does not re-flag it.
+
+### Any script with full-screen dark-mode B-roll · **B-roll only**
+
+The themed background moved to the root element on 2026-08-15 so it covers the
+browser's scrollbar gutter; before that, dark content showed a **15px white strip**
+down the right edge (measured against the affected training captures — see
+`SCREENSHOT_CURRENCY.md`).
+
+Audio is unaffected — no script describes the page background. **This is a
+per-clip edit decision, not a re-record and not a blanket re-shoot.** Note the
+trigger is _dark content at the right edge_, not dark mode as such: the same
+strip appears on a light page under a **modal overlay**, which is how two of the
+three affected training screenshots picked it up.
+
+Since nothing in the series has been recorded yet, the practical action is to
+**capture new B-roll against a build dated 2026-08-15 or later** and note it in
+the shot list, rather than to audit footage that does not exist.
+
+---
+
+Two items are already **written into the scripts** (same convention as the
+08-12 → 08-14 pass — each carries an inline **EDITOR** note at the insertion
+point):
+
+| Script | Applied update |
+|---|---|
+| **01** | Compose minimum raised to **v2.24.4+** in the prerequisites narration (production override now uses `volumes: !override`); on-screen `docker compose version` output must show ≥ 2.24.4 |
+| **12** | New ~15s beat in Chapter 5: pending nominations are member-visible only while the nomination window is open; managers always see the full list. Chapter 5 onward re-times by ~0:15 |
+
+The rest of the window's changes are **B-roll / verify** items — the words in
+the scripts remain true, but the screens behind them changed. Nothing is
+recorded yet, so these are capture-plan notes, not re-records:
+
+| Script | Kind | What changed on screen |
+|---|---|---|
+| **04** (Fire Chief) | B-roll only | The event-creation Location picker now indents sub-rooms under their container and shows a containment path for a selected nested room (facilities rooms can nest, 2026-08-16). If the demo department has nested rooms, the picker will not look like a flat list. Either seed flat-only demo rooms or let the tree show and don't remark on it. |
+| **06** (Member guide) | B-roll only + verify | Member Directory beat (18:00–18:30): a colleague's profile opened from the directory no longer shows MFA/verification/last-login/account timestamps or role permission lists to members — do not capture or gesture at an account-metadata block that is no longer there. The narration as written makes no such claim; keep it that way. |
+| **07** (Secretary) | B-roll only | Event form location field — same nested-room picker note as script 04. |
+| **08** (Short 8AF) | B-roll only | Room QR Codes directory: nested rooms display with their containment path, so "search for 'Training Room'" may surface "Training Room — Station 1"-style names. Still correct; choose demo data so the searched name is unambiguous. |
+| **03** (IT manager) | Verify before take | If the deployment chapter shows `docker compose` commands or version checks, apply the same v2.24.4+ floor as script 01. Also: `unraid/.env.example` now ships an HTTPS `ALLOWED_ORIGINS` example — any Unraid-flavored aside should not show the old `http://<LAN-IP>` form as the end state. |
+| **All** | B-roll only | Dark-mode captures of public pages (forms, ballots, status) render on the themed gradient now, not white — retake any dark-mode public-page B-roll captured before 2026-08-15. |
+
+No script narrates facility-room management in enough depth to need a nested
+rooms chapter today; if a Facilities deep-dive script is added later, the
+walkthrough source is
+[`../training/06-apparatus-facilities.md`](../training/06-apparatus-facilities.md#nesting-rooms-inside-rooms-2026-08-16).
+
+## Resolved in-script for the 2026-08-12 → 08-14 changes
+
+The previously flagged material is now written word-for-word in the actual
+scripts rather than living only in this queue:
+
+| Scripts    | Applied update                                                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **01, 03** | Fail-closed TLS, duplicate preflight, single Alembic head, audit legacy boundary, reset ceiling, archive modes, export visibility  |
+| **04, 06** | Personal/Organization dashboard scopes, conditional cards, directory/scanner permissions, privacy exports                          |
+| **04, 07** | Event reminder audience, defaults, email preferences, 60-minute Flexible window, overlap/guest edges, related-notification cleanup |
+| **08**     | New Short **8AF**: Room QR search, PNG/print, rotation invalidation, safe demo handling                                            |
+| **12**     | Saved ballot boundaries/settings verification, fresh IDs, frozen roll at issuance/redemption, paper turnout bounds                 |
+| **13**     | Store banner, member payment-method change, activity/status counts and filters, recipient privacy                                  |
+| **14, 16** | Session requirement/course/program linkage and ownership/cross-org edges                                                           |
+| **15, 16** | Point deduction vs overall failure, per-test resume conflicts, server policy and result/export visibility                          |
+
+Every affected file carries an **EDITOR** instruction giving the inserted runtime
+and the chapters/clip tables that must be re-timed. Script text is current; final
+timecodes remain a production edit because pacing depends on the recorded take.
+
 Which YouTube scripts still describe the application, and which have gone out of
 date. Companion to
 [`docs/training/SCREENSHOT_CURRENCY.md`](../training/SCREENSHOT_CURRENCY.md),
@@ -79,13 +217,13 @@ left edge** of the header on every signed-in page.
 **Section: the `SECURITY_REQUIRE_TLS` beat (~35:00, script lines 595–610)** ·
 **Wrong.**
 
-The callout — *"Defaults to false so upgrading can't refuse to boot your
-instance"* — is no longer true for the stack this series installs.
+The callout — _"Defaults to false so upgrading can't refuse to boot your
+instance"_ — is no longer true for the stack this series installs.
 `docker-compose.prod.yml` now defaults `SECURITY_REQUIRE_TLS` to **true**, so
 an upgrade of the documented production stack running the bundled plaintext
 MySQL/Redis **will** refuse to start until the operator either configures
 `DB_SSL`/`REDIS_SSL` or writes an explicit `SECURITY_REQUIRE_TLS=false` into
-`.env`. The *application* default is still `false` — the compose file is what
+`.env`. The _application_ default is still `false` — the compose file is what
 changed — but the narration is delivered over that compose file, so as
 recorded it would promise the opposite of what the viewer experiences.
 Rewrite the beat as: "the production compose ships fail-closed; here is the
@@ -124,7 +262,7 @@ wants: build the slate once, click **Save as Template**, and next year apply
 it instead of rebuilding. Two things worth saying on camera, because they are
 the two questions a secretary will ask: applying one **replaces** the current
 ballot (it confirms twice for that reason), and a template carries the
-ballot's *structure only* — never candidates, voters, votes, or attendance,
+ballot's _structure only_ — never candidates, voters, votes, or attendance,
 so last year's nominees do not haunt this year's ballot. Budget ~45 seconds;
 it also makes a natural short ("Never rebuild your officer ballot again").
 
@@ -134,7 +272,7 @@ election** / **Keep it open** — any capture of the old browser popup is
 stale, and the narration ("confirm") still holds.
 
 **Section: `PAPER BALLOTS, ATTESTATION` (43:00 – 49:00)** · **No change —
-recorded here because the narration got *truer*.** The line "No unverified
+recorded here because the narration got _truer_.** The line "No unverified
 paper ever slides into a certified total" was written before 2026-08-12,
 when a pending batch — excluded from published results — could still steer
 **runoff advancement** and **membership-package outcomes** at close. That

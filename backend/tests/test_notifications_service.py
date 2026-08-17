@@ -62,3 +62,40 @@ class TestNotificationLogEagerRelationships:
         mapper = NotificationLog.__mapper__
         assert mapper.relationships["rule"].lazy == "joined"
         assert mapper.relationships["recipient"].lazy == "joined"
+
+
+class TestRelatedActionArchiving:
+    async def test_archives_only_notification_for_completed_resource(self):
+        result = MagicMock(rowcount=1)
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        count = await NotificationsService(db).archive_related_notifications(
+            "org-1", "event_validation", "event_id", "event-1"
+        )
+
+        assert count == 1
+        statement = db.execute.await_args.args[0]
+        compiled = str(statement.compile(compile_kwargs={"literal_binds": True}))
+        assert "UPDATE notification_logs" in compiled
+        assert "event_validation" in compiled
+        assert "event_id" in compiled
+        assert "event-1" in compiled
+        db.commit.assert_awaited_once()
+        db.rollback.assert_not_awaited()
+
+    async def test_no_match_is_idempotent_without_a_commit(self):
+        result = MagicMock(rowcount=0)
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        count = await NotificationsService(db).archive_related_notifications(
+            "org-1", "shift_validation", "shift_id", "shift-1"
+        )
+
+        assert count == 0
+        db.commit.assert_not_awaited()

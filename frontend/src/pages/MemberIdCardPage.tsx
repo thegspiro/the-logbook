@@ -9,8 +9,9 @@
  * - Member status badge
  *
  * Accessible at /members/:userId/id-card. Any authenticated user can view
- * their own card; viewing another member's card requires users.view or
- * members.manage permission (enforced by GET /users/:id/with-roles).
+ * their own card; viewing another member's card requires users.view,
+ * members.view, or members.manage (enforced by GET /users/:id/with-roles —
+ * members.view is the directory permission every default position carries).
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
@@ -165,7 +166,7 @@ export const MemberIdCardPage: React.FC = () => {
 
       {/* ID Card */}
       <div className="id-card-printable w-full max-w-sm" id="member-id-card">
-        <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-2xl border shadow-lg print:rounded-lg print:border print:border-gray-300 print:shadow-none">
+        <div className="card overflow-hidden shadow-lg print:rounded-lg print:border print:border-gray-300 print:shadow-none">
           {/* Card Header — accent stripe */}
           <div className="bg-linear-to-r from-blue-600 to-indigo-700 px-6 py-4 print:bg-blue-700 print:py-3">
             <div className="flex items-center justify-between">

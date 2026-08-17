@@ -561,3 +561,15 @@ the UPDATE. See CLAUDE.md pitfall 12.
   reconciliation rules
 - [Training guide 18](./training/18-storefront.md) — the user-facing walkthrough
 - [Training guide 16](./training/16-integrations.md) — integrations generally
+
+## August 12–14, 2026 connection update
+
+The admin dashboard now consumes organization-scoped activity and status counts
+from the storefront summary response and applies the same status vocabulary to
+order-list filters. `show_store_open_banner` is persisted in store settings and
+controls navigation/banner presentation. Members may PATCH `/api/v1/store/orders/mine/{order_id}/payment-method`
+on their own order; this records an external method and does not settle payment.
+Canonical product locks prevent option/variant spellings from creating distinct
+locks. Notification and test-send responses never include recipient addresses.
+See [the three-day audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#release-map) and the
+[operator lesson](./training/19-august-2026-release-changes.md#storefront).

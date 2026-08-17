@@ -5,8 +5,12 @@ const mockGet = vi.fn();
 const mockPost = vi.fn();
 const mockPatch = vi.fn();
 const mockDelete = vi.fn();
+const mockPerformSharedRefresh = vi.fn();
+const mockHandleExpiredSession = vi.fn();
 
 vi.mock('./apiClient', () => ({
+  performSharedRefresh: (...args: unknown[]) => mockPerformSharedRefresh(...args) as unknown,
+  handleExpiredSession: (...args: unknown[]) => mockHandleExpiredSession(...args) as unknown,
   default: {
     get: (...args: unknown[]) => mockGet(...args) as unknown,
     post: (...args: unknown[]) => mockPost(...args) as unknown,
@@ -31,6 +35,7 @@ import { formsService, publicFormsService } from './formsServices';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 // ============================================
@@ -367,6 +372,33 @@ describe('publicFormsService', () => {
       );
     });
 
+    it('should send the challenge token as a header, not in the body', async () => {
+      mockAxiosPost.mockResolvedValueOnce({ data: {} });
+
+      await publicFormsService.submitForm('slug', { name: 'Jane' }, undefined, 'challenge-token');
+
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        '/api/public/v1/forms/slug/submit',
+        { data: { name: 'Jane' } },
+        { withCredentials: true, headers: { 'X-Captcha-Token': 'challenge-token' } }
+      );
+    });
+
+    it('should retry with the same challenge token after a session refresh', async () => {
+      localStorage.setItem('has_session', '1');
+      mockAxiosPost.mockRejectedValueOnce({ response: { status: 401 } }).mockResolvedValueOnce({ data: {} });
+      mockPerformSharedRefresh.mockResolvedValueOnce(undefined);
+
+      await publicFormsService.submitForm('slug', {}, undefined, 'challenge-token');
+
+      // The retry must carry the token too — dropping it would trade a 401 for
+      // a challenge failure on a submission the member already solved.
+      expect(mockAxiosPost.mock.calls[1]?.[2]).toEqual({
+        withCredentials: true,
+        headers: { 'X-Captcha-Token': 'challenge-token' },
+      });
+    });
+
     it('should not include honeypot field when empty', async () => {
       mockAxiosPost.mockResolvedValueOnce({ data: {} });
 
@@ -374,6 +406,40 @@ describe('publicFormsService', () => {
 
       const payload = mockAxiosPost.mock.calls[0]?.[1] as Record<string, unknown>;
       expect(payload.website).toBeUndefined();
+    });
+
+    it('refreshes and retries an authenticated submission after a 401', async () => {
+      localStorage.setItem('has_session', '1');
+      mockAxiosPost
+        .mockRejectedValueOnce({ response: { status: 401 } })
+        .mockResolvedValueOnce({ data: { id: 'saved' } });
+      mockPerformSharedRefresh.mockResolvedValueOnce(undefined);
+
+      const result = await publicFormsService.submitForm('annual-report', { calls: 4 });
+
+      expect(mockPerformSharedRefresh).toHaveBeenCalledTimes(1);
+      expect(mockAxiosPost).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({ id: 'saved' });
+    });
+
+    it('does not attempt refresh for an anonymous 401', async () => {
+      const unauthorized = { response: { status: 401 } };
+      mockAxiosPost.mockRejectedValueOnce(unauthorized);
+
+      await expect(publicFormsService.submitForm('members-only', {})).rejects.toBe(unauthorized);
+      expect(mockPerformSharedRefresh).not.toHaveBeenCalled();
+    });
+
+    it('clears an expired session when refresh fails', async () => {
+      localStorage.setItem('has_session', '1');
+      const refreshError = new Error('refresh expired');
+      mockAxiosPost.mockRejectedValueOnce({ response: { status: 401 } });
+      mockPerformSharedRefresh.mockRejectedValueOnce(refreshError);
+
+      await expect(publicFormsService.submitForm('members-only', {})).rejects.toBe(refreshError);
+
+      expect(mockHandleExpiredSession).toHaveBeenCalledTimes(1);
+      expect(mockAxiosPost).toHaveBeenCalledTimes(1);
     });
   });
 });

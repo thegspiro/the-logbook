@@ -157,10 +157,13 @@ which is pure, so it runs in CI's unit job rather than needing MySQL.
 
 **Companion closed.** `POST /finance/dues/{id}/unwaive` under `finance.manage`
 reverses a waiver and lets the ledger decide what the record becomes — PENDING
-when nothing was paid, PARTIAL or PAID when something was. The erased waive
-reason is carried into a `finance.dues_waiver_reversed` audit event, since a
-waive_reason left on an un-waived record would be the same contradictory row
-FIN-6 was about. Requires a reason, like the waive it reverses.
+when nothing was paid, PARTIAL or PAID when something was. The waive reason is
+erased, since a waive_reason left on an un-waived record would be the same
+contradictory row FIN-6 was about — and *(revised 2026-08-13)* it is erased
+outright rather than carried into the `finance.dues_waiver_reversed` audit
+event: free-text waiver reasons may contain personal information, and the
+immutable log must stay reachable by privacy scrubbing. Requires a reason,
+like the waive it reverses.
 
 ORU-8 was originally carried here as a single item needing a product decision on
 what `users.view` may see. On reading the code it is two narrow gaps left behind
@@ -201,25 +204,13 @@ Documented in `KNOWN_LIMITATIONS.md` and shipped as known:
   product question this item was carrying — do drafts survive re-login — has
   already been answered *no*, deliberately, with the reasoning recorded in the
   module docstring. Nothing left to decide.
-- **CI-9** (production DB/Redis TLS only warns) — **reassessed 2026-08-02, does
-  not block.** The audit line reads as fail-open on encryption; the code isn't.
-  The genuinely dangerous case — `DB_SSL=True` with no `DB_SSL_CA`, i.e.
-  encrypted but unverified, a config that *looks* secure and isn't — already
-  raises `RuntimeError` and refuses to start in production/staging, waivable
-  only via an explicit `SECURITY_ALLOW_UNVERIFIED_TLS` that re-warns every boot
-  (`main.py:1290-1309`). What merely warns is `DB_SSL=False`, which is the
-  honest state: nobody is misled into believing they have TLS. And in the
-  supported topology it is close to moot — MySQL and Redis deliberately expose
-  no host ports (SEC-14) and sit on the internal `intranet-network` bridge, so
-  that traffic never leaves the host. The user-facing encryption boundary,
-  which is the one carrying PHI over a real network, is separately enforced by
-  `SECURITY_ENFORCE_HTTPS` as a startup-blocking CRITICAL. Making `DB_SSL`
-  itself mandatory would refuse boot for essentially every single-host install
-  in exchange for protection against an attacker who already has root on the
-  box — and could read `DB_PASSWORD` out of the environment anyway. The real
-  residual risk is a **remote** database (managed MySQL, separate DB host),
-  where the traffic does cross a wire; that is a deployment-profile
-  documentation item, tracked as 1.8 above, not a startup gate.
+- **CI-9** (production DB/Redis TLS only warns) — **resolved 2026-08-12.**
+  `SECURITY_REQUIRE_TLS` now defaults to `True`, promoting absent database or
+  Redis TLS to a startup-blocking CRITICAL in production and staging. A
+  deployment whose trusted private network, service mesh, or sidecar provides
+  equivalent protection can explicitly set `SECURITY_REQUIRE_TLS=false`; the
+  insecure state is no longer the silent application default. Deployment
+  topology documentation remains tracked as 1.8 above.
 - **FIN-4 / FIN-5** (separation of duties on disbursement; reimbursement
   visibility) — real, but both need a new `finance.disburse` permission with
   seed + role + frontend work. Volunteer departments frequently have one

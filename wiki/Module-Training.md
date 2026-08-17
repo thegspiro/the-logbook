@@ -33,7 +33,7 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Member Self-Export** — _(2026-05-29)_ Members can export their own training history as CSV or PDF via `GET /training/module-config/my-training/export`, gated by the org `allow_member_report_export` setting (403 when disabled). Omitting `start_date` returns the member's entire lifetime history
 - **Officer Member-Record Exports** — _(2026-05-29)_ `POST /training/reports/export` (permission `training.manage`) gained `member_records` (bulk export of all active members), `hours_summary`, and `certification` CSV report types. Unknown report types now return 400 instead of silently falling through to a compliance report; bulk PDFs are merged with `pypdf` (empty result → placeholder page)
 - **Recertification Tracking** — _(2026-03-05)_ Automated recertification reminders with configurable lead times. Scheduled Celery task sends tiered notifications before certification expiry
-- **Instructor Management** — _(2026-03-05)_ Track instructor qualifications (instructor, evaluator, lead_instructor, mentor), availability, and assignment to training sessions with validation
+- **Instructor Management** — _(2026-03-05)_ Track instructor qualifications (instructor, evaluator, lead_instructor, mentor), availability, and assignment to training sessions with validation. _(2026-08-11)_ Qualification create/update validate that referenced `user_id`, `course_id`, `skill_evaluation_id`, and `category_id` belong to the caller's organization, and list joins are org-scoped — a colliding id can no longer resolve another tenant's names
 - **Effectiveness Scoring** — _(2026-03-05)_ Training effectiveness measurement using Kirkpatrick model (reaction, learning, behavior, results)
 - **Multi-Agency Training** — _(2026-03-05)_ Joint training session coordination across departments with shared records and mutual aid tracking
 - **xAPI (Tin Can) Integration** — _(2026-03-05)_ Learning Record Store integration for standardized training activity tracking. Async statement delivery via Celery
@@ -1414,3 +1414,11 @@ the ones that come up most:
   already enrolled keeps their existing progress.
 - **Adding a member mid-course invites them only to classes still to come**;
   withdrawing one clears their upcoming RSVPs but keeps their records.
+
+## Personal export visibility (August 14, 2026)
+
+Personal-data exports apply the Training module's result-visibility setting to
+`ShiftCompletionReport` fields. Officer-only evaluation data hidden from the
+trainee in the application is also omitted from a newly generated export;
+completion history remains available. Previously downloaded exports are not
+recalled when the setting changes.

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ranksService } from '../services/api';
 import type { OperationalRankResponse } from '../services/api';
+import { getCachedRanks, setCachedRanks, invalidateRanksCache } from './ranksCache';
 
-let cachedRanks: OperationalRankResponse[] | null = null;
+export { invalidateRanksCache } from './ranksCache';
 
 /**
  * Hook that fetches operational ranks from the API and caches them.
@@ -12,14 +13,14 @@ let cachedRanks: OperationalRankResponse[] | null = null;
  * Only active ranks are returned by default.
  */
 export function useRanks(activeOnly = true) {
-  const [ranks, setRanks] = useState<OperationalRankResponse[]>(cachedRanks ?? []);
-  const [loading, setLoading] = useState(cachedRanks === null);
+  const [ranks, setRanks] = useState<OperationalRankResponse[]>(getCachedRanks() ?? []);
+  const [loading, setLoading] = useState(getCachedRanks() === null);
 
   const fetchRanks = useCallback(async () => {
     try {
       setLoading(true);
       const data = await ranksService.getRanks(activeOnly ? { is_active: true } : undefined);
-      cachedRanks = data;
+      setCachedRanks(data);
       setRanks(data);
     } catch {
       // Fall back to empty; dropdowns will have no options until retry
@@ -29,6 +30,7 @@ export function useRanks(activeOnly = true) {
   }, [activeOnly]);
 
   useEffect(() => {
+    const cachedRanks = getCachedRanks();
     if (cachedRanks !== null) {
       setRanks(cachedRanks);
       setLoading(false);
@@ -38,7 +40,7 @@ export function useRanks(activeOnly = true) {
   }, [fetchRanks]);
 
   const refetch = useCallback(async () => {
-    cachedRanks = null;
+    invalidateRanksCache();
     await fetchRanks();
   }, [fetchRanks]);
 
@@ -55,9 +57,4 @@ export function useRanks(activeOnly = true) {
   );
 
   return { ranks, rankOptions, loading, refetch, formatRank };
-}
-
-/** Invalidate the cached ranks so the next useRanks() call re-fetches. */
-export function invalidateRanksCache() {
-  cachedRanks = null;
 }

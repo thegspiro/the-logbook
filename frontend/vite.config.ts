@@ -15,7 +15,7 @@ function versionJsonPlugin(): Plugin {
     name: 'version-json',
     apply: 'build',
     closeBundle() {
-      const outDir = path.resolve(__dirname, 'dist');
+      const outDir = path.resolve(import.meta.dirname, 'dist');
       fs.writeFileSync(path.join(outDir, 'version.json'), JSON.stringify({ buildId: BUILD_ID }) + '\n');
     },
   };
@@ -199,7 +199,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   server: {
@@ -212,6 +212,15 @@ export default defineConfig({
         ws: true,
       },
       '/docs': {
+        target: process.env.VITE_BACKEND_URL || 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      // The onboarding service gate polls the backend's root /health endpoint
+      // (see modules/onboarding/services/api-client.ts checkHealth). Without
+      // this entry the dev server answers with index.html, the JSON parse
+      // fails, and the gate reports "Unable to connect to backend" forever —
+      // a fresh install can never get past the waiting screen in dev.
+      '/health': {
         target: process.env.VITE_BACKEND_URL || 'http://localhost:3001',
         changeOrigin: true,
       },

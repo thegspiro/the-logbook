@@ -48,6 +48,7 @@ const DashboardStatCard: React.FC<DashboardStatCardProps> = ({
     return (
       <button
         type="button"
+        data-print
         className={`card w-full p-3 text-left sm:p-5 ${clickableClasses}`}
         onClick={onClick}
         aria-label={ariaLabel}

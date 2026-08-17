@@ -48,6 +48,7 @@ export interface ConflictEvent {
   title: string;
   start_datetime: string;
   end_datetime: string;
+  event_type?: EventType;
 }
 
 export interface InitialRecurrence {
@@ -106,9 +107,10 @@ const DEFAULT_FORM_DATA: EventCreate = {
   mandatory_membership_types: undefined,
   allow_guests: false,
   send_reminders: true,
+  reminder_target: 'going',
   reminder_schedule: [24],
   check_in_window_type: 'flexible',
-  check_in_minutes_before: 15,
+  check_in_minutes_before: 60,
   check_in_minutes_after: 15,
   require_checkout: false,
   allow_guest_check_in: false,
@@ -117,16 +119,13 @@ const DEFAULT_FORM_DATA: EventCreate = {
 };
 
 /* Shared Tailwind classes for consistency */
-const inputClass =
-  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+const inputClass = 'form-input py-3';
 
-const selectClass =
-  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+const selectClass = 'form-input py-3';
 
 const labelClass = 'block text-sm font-semibold text-theme-text-primary mb-2';
 
-const checkboxClass =
-  'w-4 h-4 rounded-sm border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring';
+const checkboxClass = 'form-input w-4 h-4 text-blue-600';
 
 const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -238,6 +237,8 @@ export const EventForm: React.FC<EventFormProps> = ({
     initialRecurrence?.recurrence_exceptions || []
   );
   const [newExceptionDate, setNewExceptionDate] = useState('');
+  const checkInLeadTimeEdited = useRef(initialData?.check_in_minutes_before !== undefined);
+  const reminderAudienceEdited = useRef(initialData?.reminder_target !== undefined);
 
   // Existing attachments from initialData (shown when editing)
   const existingAttachments: EventAttachment[] = initialData?.attachments || [];
@@ -345,6 +346,24 @@ export const EventForm: React.FC<EventFormProps> = ({
   const update = (partial: Partial<EventCreate>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
   };
+
+  // Keep the standard one-hour window unless another meeting runs directly
+  // into it. In that case a shorter window prevents members from checking in
+  // to the later meeting while the earlier one is still in progress.
+  useEffect(() => {
+    if (checkInLeadTimeEdited.current || !formData.start_datetime) return;
+    const start = new Date(localToUTC(formData.start_datetime, tz)).getTime();
+    const hasPreviousMeeting = (userEvents || []).some((event) => {
+      if (event.id === editingEventId) return false;
+      if (event.event_type && event.event_type !== EventTypeEnum.BUSINESS_MEETING) return false;
+      const end = new Date(event.end_datetime).getTime();
+      return end <= start && end > start - 60 * 60 * 1000;
+    });
+    const standardLeadTime = hasPreviousMeeting ? 15 : 60;
+    setFormData((prev) =>
+      prev.check_in_minutes_before === standardLeadTime ? prev : { ...prev, check_in_minutes_before: standardLeadTime }
+    );
+  }, [editingEventId, formData.start_datetime, tz, userEvents]);
 
   const handleStartDateChange = (startDate: string) => {
     const changes: Partial<EventCreate> = { start_datetime: startDate };
@@ -1086,12 +1105,16 @@ export const EventForm: React.FC<EventFormProps> = ({
               type="checkbox"
               id="is-mandatory"
               checked={formData.is_mandatory}
-              onChange={(e) =>
+              onChange={(e) => {
+                const isMandatory = e.target.checked;
                 update({
-                  is_mandatory: e.target.checked,
-                  mandatory_membership_types: e.target.checked ? formData.mandatory_membership_types : undefined,
-                })
-              }
+                  is_mandatory: isMandatory,
+                  mandatory_membership_types: isMandatory ? formData.mandatory_membership_types : undefined,
+                  ...(!reminderAudienceEdited.current
+                    ? { reminder_target: isMandatory ? 'all' : 'going', send_reminders: true }
+                    : {}),
+                });
+              }}
               className={checkboxClass}
             />
             <label htmlFor="is-mandatory" className="text-theme-text-secondary text-sm">
@@ -1232,14 +1255,19 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
               className={selectClass}
             >
-              <option value="flexible">Flexible - Anytime before event ends</option>
+              <option value="flexible">Flexible - Configured start through event end</option>
               <option value="strict">Strict - Only during actual event time</option>
               <option value="window">Window - Custom before/after start</option>
             </select>
           </div>
 
-          {formData.check_in_window_type === CheckInWindowType.WINDOW && (
-            <div className="grid grid-cols-2 gap-3 border-l-2 border-red-500/30 pl-4">
+          {(formData.check_in_window_type === CheckInWindowType.FLEXIBLE ||
+            formData.check_in_window_type === CheckInWindowType.WINDOW) && (
+            <div
+              className={`grid gap-3 border-l-2 border-red-500/30 pl-4 ${
+                formData.check_in_window_type === CheckInWindowType.WINDOW ? 'grid-cols-2' : 'grid-cols-1'
+              }`}
+            >
               <div>
                 <label htmlFor="checkin-before" className={labelClass}>
                   Minutes before
@@ -1249,25 +1277,30 @@ export const EventForm: React.FC<EventFormProps> = ({
                   id="checkin-before"
                   min="0"
                   max="120"
-                  value={formData.check_in_minutes_before || 15}
-                  onChange={(e) => update({ check_in_minutes_before: parseInt(e.target.value) || 15 })}
+                  value={formData.check_in_minutes_before ?? 60}
+                  onChange={(e) => {
+                    checkInLeadTimeEdited.current = true;
+                    update({ check_in_minutes_before: parseInt(e.target.value) || 0 });
+                  }}
                   className={inputClass}
                 />
               </div>
-              <div>
-                <label htmlFor="checkin-after" className={labelClass}>
-                  Minutes after
-                </label>
-                <input
-                  type="number"
-                  id="checkin-after"
-                  min="0"
-                  max="120"
-                  value={formData.check_in_minutes_after || 15}
-                  onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
-                  className={inputClass}
-                />
-              </div>
+              {formData.check_in_window_type === CheckInWindowType.WINDOW && (
+                <div>
+                  <label htmlFor="checkin-after" className={labelClass}>
+                    Minutes after
+                  </label>
+                  <input
+                    type="number"
+                    id="checkin-after"
+                    min="0"
+                    max="120"
+                    value={formData.check_in_minutes_after || 15}
+                    onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
+                    className={inputClass}
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -1334,17 +1367,27 @@ export const EventForm: React.FC<EventFormProps> = ({
             <span>Notifications</span>
           </h2>
 
-          <div className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              id="send-reminders"
-              checked={formData.send_reminders}
-              onChange={(e) => update({ send_reminders: e.target.checked })}
-              className={checkboxClass}
-            />
-            <label htmlFor="send-reminders" className="text-theme-text-secondary text-sm">
-              Send event reminders
+          <div>
+            <label htmlFor="reminder-target" className={labelClass}>
+              Who should receive reminders?
             </label>
+            <select
+              id="reminder-target"
+              value={formData.send_reminders ? formData.reminder_target || 'going' : 'none'}
+              onChange={(e) => {
+                const target = e.target.value as 'going' | 'all' | 'none';
+                reminderAudienceEdited.current = true;
+                update({ send_reminders: target !== 'none', reminder_target: target });
+              }}
+              className={selectClass}
+            >
+              <option value="going">Members who sign up</option>
+              <option value="all">All active members</option>
+              <option value="none">No reminders</option>
+            </select>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              In-app reminders go to this group; email also follows each member's notification preferences.
+            </p>
           </div>
 
           {formData.send_reminders && (
@@ -1488,7 +1531,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:ring-theme-focus-ring rounded-lg border px-6 py-3 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+            className="btn-secondary text-theme-text-secondary hover:bg-theme-surface-secondary px-6 py-3 text-sm font-medium focus:ring-offset-2"
           >
             Cancel
           </button>

@@ -4,10 +4,9 @@ The ``/onboarding/session/positions`` (and ``/session/roles``) handler
 rebuilds a system position's permission list from the editor's per-module
 view/manage checkboxes. Sub-permissions granted by DEFAULT_POSITIONS
 (``facilities.view_sensitive``, ``members.assign_positions``, ...) cannot be
-represented by those checkboxes and used to be silently stripped from any
-position whose module row appeared in the submission — a customized Treasurer
-lost the sensitive facility read at save. These tests lock the carry-over
-rules of ``_merge_default_permissions``.
+represented by those checkboxes. Read-only sub-permissions must survive a
+view-only submission, but hidden write permissions must not. These tests lock
+the carry-over rules of ``_merge_default_permissions``.
 """
 
 from app.api.v1.onboarding import RolePermission, _merge_default_permissions
@@ -74,15 +73,19 @@ def test_unsubmitted_module_defaults_are_preserved():
     assert "users.create" in merged
 
 
-def test_carry_over_is_generic_not_a_facilities_special_case():
-    """The next module.something_else permission must survive the rebuild the
-    same way facilities.view_sensitive does."""
-    defaults = ["widgets.view", "widgets.something_else"]
-    submitted = {"widgets": RolePermission(view=True, manage=False)}
-    assert "widgets.something_else" in _merged(submitted, defaults)
+def test_view_only_does_not_carry_hidden_action_permissions():
+    defaults = [
+        "members.view",
+        "members.assign_positions",
+        "members.create",
+        "members.manage",
+    ]
+    submitted = {"members": RolePermission(view=True, manage=False)}
+    merged = set(_merged(submitted, defaults))
+    assert merged == {"members.view"}
 
 
-def test_vice_president_keeps_members_sub_permissions_with_view_only():
+def test_vice_president_keeps_only_read_sub_permissions_with_view_only():
     defaults = DEFAULT_POSITIONS["vice_president"]["permissions"]
     submitted = {
         "members": RolePermission(view=True, manage=False),
@@ -90,4 +93,31 @@ def test_vice_president_keeps_members_sub_permissions_with_view_only():
     }
     merged = set(_merged(submitted, defaults))
     assert "facilities.view_sensitive" in merged
-    assert "members.assign_positions" in merged
+    assert "members.assign_positions" not in merged
+
+
+def test_view_only_drops_default_write_permissions_across_modules():
+    defaults = DEFAULT_POSITIONS["fire_chief"]["permissions"]
+    submitted = {
+        module: RolePermission(view=True, manage=False)
+        for module in ("members", "positions", "events", "apparatus", "facilities")
+    }
+    merged = set(_merged(submitted, defaults))
+    hidden_writes = {
+        "members.assign_positions",
+        "members.create",
+        "positions.create",
+        "positions.delete",
+        "positions.manage_permissions",
+        "events.create",
+        "events.delete",
+        "apparatus.edit",
+        "apparatus.delete",
+        "apparatus.maintenance",
+        "facilities.create",
+        "facilities.edit",
+        "facilities.delete",
+        "facilities.maintenance",
+    }
+    assert merged.isdisjoint(hidden_writes)
+    assert "facilities.view_sensitive" in merged

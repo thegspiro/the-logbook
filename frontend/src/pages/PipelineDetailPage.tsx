@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -41,7 +42,7 @@ import { enumLabel } from '../utils/displayValue';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
-import { checklistDoneIds } from '../utils/checklistItems';
+import { checklistClaimedIds, checklistDoneIds } from '../utils/checklistItems';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ENROLLMENT_STATUSES } from '../types/training';
 import type {
@@ -431,14 +432,14 @@ const EnrollModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-lg flex-col rounded-lg">
+      <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-lg flex-col">
         <div className="border-theme-surface-border border-b p-6">
           <h2 className="text-theme-text-primary text-xl font-bold">Enroll Members</h2>
           <p className="text-theme-text-muted mt-1 text-sm">Enroll members into {programName}</p>
@@ -604,7 +605,7 @@ const EnrollModal: React.FC<{
             </button>
           </div>
         </form>
-      </div>
+      </DialogPanel>
     </div>
   );
 };
@@ -633,7 +634,8 @@ function requirementTarget(req?: TrainingRequirementEnhanced): { value: number; 
 
 const RequirementProgressRow: React.FC<{
   record: RequirementProgressRecord;
-  onUpdate: (progressId: string, updates: RequirementProgressUpdate) => Promise<void>;
+  /** Resolves true when the update was persisted, false when it was refused. */
+  onUpdate: (progressId: string, updates: RequirementProgressUpdate) => Promise<boolean>;
   onReset: (progressId: string, requirementName: string) => Promise<void>;
   saving: boolean;
 }> = ({ record, onUpdate, onReset, saving }) => {
@@ -651,6 +653,7 @@ const RequirementProgressRow: React.FC<{
 
   const checklistItems = req?.requirement_type === 'checklist' ? (req.checklist_items ?? []) : [];
   const doneIds = checklistDoneIds(record);
+  const claimedIds = checklistClaimedIds(record);
 
   const toggleChecklistItem = (itemId: string) => {
     // The whole set goes back, not a single toggle — a retry or a second
@@ -674,7 +677,12 @@ const RequirementProgressRow: React.FC<{
       toast.error('Enter a score between 0 and 100');
       return;
     }
-    void onUpdate(record.id, { test_score: parsed }).then(() => setScore(''));
+    // Clearing the box unconditionally wiped the score the evaluator had just
+    // typed even when the save was refused, leaving them to read it off the
+    // toast and retype it. `saved` is false when handleUpdate caught the error.
+    void onUpdate(record.id, { test_score: parsed }).then((saved) => {
+      if (saved) setScore('');
+    });
   };
 
   return (
@@ -744,6 +752,11 @@ const RequirementProgressRow: React.FC<{
                   className="form-checkbox mt-0.5 shrink-0"
                 />
                 <span className={checked ? 'text-theme-text-muted line-through' : ''}>{item.text}</span>
+                {!checked && claimedIds.includes(item.id) && (
+                  <span className="rounded-sm bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-700 dark:text-blue-400">
+                    Member reported complete — validate
+                  </span>
+                )}
                 {!item.member_visible && (
                   <span
                     title="Officer-only — the member does not see this step"
@@ -896,14 +909,16 @@ const EnrollmentProgressModal: React.FC<{
     }
   }, [isOpen, enrollmentId, load]);
 
-  const handleUpdate = async (progressId: string, updates: RequirementProgressUpdate) => {
+  const handleUpdate = async (progressId: string, updates: RequirementProgressUpdate): Promise<boolean> => {
     setSavingId(progressId);
     try {
       await trainingProgramService.updateProgress(progressId, updates);
       await load(); // pull recalculated percentages/status (may auto-advance the phase)
       onSaved(); // refresh the outer enrollments list (overall %, completion)
+      return true;
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update progress'));
+      return false;
     } finally {
       setSavingId(null);
     }
@@ -1002,14 +1017,14 @@ const EnrollmentProgressModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-lg">
+      <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-2xl flex-col">
         <div className="border-theme-surface-border border-b p-6">
           <div className="flex items-start justify-between">
             <div>
@@ -1190,7 +1205,7 @@ const EnrollmentProgressModal: React.FC<{
             Done
           </button>
         </div>
-      </div>
+      </DialogPanel>
     </div>
   );
 };
@@ -1675,7 +1690,7 @@ const PipelineDetailPage: React.FC = () => {
                   const isExpanded = expandedPhases.has(phase.id);
 
                   return (
-                    <div key={phase.id} className="bg-theme-surface border-theme-surface-border rounded-lg border">
+                    <div key={phase.id} className="card">
                       {/* Phase header */}
                       <div className="flex items-center justify-between p-4">
                         <button
@@ -1812,7 +1827,7 @@ const PipelineDetailPage: React.FC = () => {
                 Always shown to an officer so a phase-less pipeline is editable;
                 shown to everyone else only when it actually has some. */}
             {(canManage || programLevelReqs.length > 0) && (
-              <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+              <div className="card p-4">
                 <div className="mb-3">
                   <h3 className="text-theme-text-primary flex items-center gap-2 font-medium">
                     <ListChecks className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Requirements outside any phase
@@ -1837,7 +1852,7 @@ const PipelineDetailPage: React.FC = () => {
             )}
 
             {/* Milestones */}
-            <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+            <div className="card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-theme-text-primary flex items-center gap-2 font-medium">
                   <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" /> Milestones

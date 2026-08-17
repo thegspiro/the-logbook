@@ -38,18 +38,20 @@ def _svc():
 
 
 class TestGetCheckInWindow:
-    def test_flexible_default_30_before_until_end(self):
+    def test_flexible_default_60_before_until_end(self):
         start, end = EventService._get_check_in_window(
             _event(CheckInWindowType.FLEXIBLE)
         )
-        assert start == START - timedelta(minutes=30)
+        assert start == START - timedelta(minutes=60)
         assert end == END
 
     def test_flexible_custom_before(self):
+        # Deliberately not 60 — that is the default, so it would pass even if
+        # the configured lead time were ignored entirely.
         start, _ = EventService._get_check_in_window(
-            _event(CheckInWindowType.FLEXIBLE, before=60)
+            _event(CheckInWindowType.FLEXIBLE, before=90)
         )
-        assert start == START - timedelta(minutes=60)
+        assert start == START - timedelta(minutes=90)
 
     def test_flexible_uses_actual_end_when_present(self):
         actual_end = datetime(2026, 6, 1, 20, 30, tzinfo=tz.utc)
@@ -93,10 +95,10 @@ class TestGetCheckInWindow:
 
 class TestValidateCheckInWindow:
     def test_flexible_early_allows_with_notice(self):
-        # FLEXIBLE window opens 18:30 UTC; at 18:00 the member is early but
+        # FLEXIBLE window opens 18:00 UTC; at 17:30 the member is early but
         # is allowed in with an informational notice.
         ev = _event(CheckInWindowType.FLEXIBLE)
-        now = datetime(2026, 6, 1, 18, 0, tzinfo=tz.utc)
+        now = datetime(2026, 6, 1, 17, 30, tzinfo=tz.utc)
         ok, err, notice = _svc()._validate_check_in_window(ev, now)
         assert ok is True
         assert err is None
@@ -130,13 +132,13 @@ class TestValidateCheckInWindow:
 
     def test_early_notice_localized(self):
         ev = _event(CheckInWindowType.FLEXIBLE)
-        now = datetime(2026, 6, 1, 18, 0, tzinfo=tz.utc)
+        now = datetime(2026, 6, 1, 17, 30, tzinfo=tz.utc)
         ok, err, notice = _svc()._validate_check_in_window(
             ev, now, tz_name="America/New_York"
         )
         assert ok is True
-        # 18:30 UTC == 2:30 PM EDT
-        assert "02:30 PM" in notice
+        # 18:00 UTC == 2:00 PM EDT
+        assert "02:00 PM" in notice
         assert "EDT" in notice
 
 

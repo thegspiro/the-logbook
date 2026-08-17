@@ -1,0 +1,126 @@
+{
+  "label": "application-review-rotation",
+  "title_prefix": "Application review:",
+  "features": [
+    {
+      "id": "inventory",
+      "name": "Inventory",
+      "scope": "Review catalog, lots, stock, assignments, transfers, temporary issues, returns, scanning, labels, fulfillment, departure clearance, and inventory reporting."
+    },
+    {
+      "id": "facilities",
+      "name": "Facilities",
+      "scope": "Review facilities, rooms, linked locations, maintenance, inspections, utilities, projects, compliance, and sensitive-data permissions."
+    },
+    {
+      "id": "elections",
+      "name": "Elections",
+      "scope": "Review configuration, nominations, ballot modes, eligibility, proxy and token voting, secrecy, lifecycle, tallying, results, templates, and forensic auditability."
+    },
+    {
+      "id": "meetings-minutes",
+      "name": "Meetings and minutes",
+      "scope": "Review meetings, quorum, packages, minutes, attendees, action items, signatures, permissions, and exports."
+    },
+    {
+      "id": "equipment-check",
+      "name": "Equipment checks",
+      "scope": "Review templates, assignment, member access, check execution, expirations, deficiencies, flags, close-out, and reporting."
+    },
+    {
+      "id": "documents",
+      "name": "Documents",
+      "scope": "Review folder access, uploads, downloads, retention, linked records, signatures, deletion, search, and exports."
+    },
+    {
+      "id": "membership-pipeline",
+      "name": "Membership pipeline",
+      "scope": "Review applications, pipelines, stages, interviews, checklist gates, bulk actions, privacy, duplicates, transfers, and public status."
+    },
+    {
+      "id": "notifications",
+      "name": "Notifications",
+      "scope": "Review rules, preferences, push subscriptions, delivery logs, retries, failure visibility, and actionable navigation."
+    },
+    {
+      "id": "integrations",
+      "name": "Integrations",
+      "scope": "Review provider setup, credentials, sync, webhooks, calendars, error history, replay, field mappings, and status visibility."
+    },
+    {
+      "id": "forms",
+      "name": "Forms",
+      "scope": "Review building, publishing, public and authenticated submissions, validation, duplicate controls, integrations, exports, and lifecycle."
+    },
+    {
+      "id": "grants-fundraising",
+      "name": "Grants and fundraising",
+      "scope": "Review applications, awards, budgets, compliance, expenditures, donors, pledges, campaigns, anonymity, reporting, and reconciliation."
+    },
+    {
+      "id": "admin-hours",
+      "name": "Administrative hours",
+      "scope": "Review entry, approval, category configuration, QR flows, reports, exports, and separation of duties."
+    },
+    {
+      "id": "reports-analytics",
+      "name": "Reports and analytics",
+      "scope": "Review permissions, data accuracy, filters, totals, PII handling, exports, saved reports, and scheduled delivery."
+    },
+    {
+      "id": "events",
+      "name": "Events",
+      "scope": "Review creation, recurrence, requests, RSVP, waitlists, check-in, locations, attachments, reminders, analytics, and exports."
+    },
+    {
+      "id": "training",
+      "name": "Training",
+      "scope": "Review courses, programs, cohorts, sessions, external training, credit, recertification, waivers, dashboards, and compliance reporting."
+    },
+    {
+      "id": "scheduling",
+      "name": "Scheduling",
+      "scope": "Review configuration, platoons, eligibility, signup, assignment, swaps, holdovers, apparatus seating, completion, calls, and reporting."
+    },
+    {
+      "id": "finance",
+      "name": "Finance",
+      "scope": "Review requests, approvals, separation of duties, dues, payments, external approvers, budgets, reporting, and reconciliation."
+    },
+    {
+      "id": "orgs-roles-users",
+      "name": "Organizations, roles, and users",
+      "scope": "Review organization boundaries, member administration, role grants, permission ceilings, ranks, stations, imports, and lifecycle."
+    },
+    {
+      "id": "compliance-skills",
+      "name": "Compliance and skills",
+      "scope": "Review requirements, evaluations, attempts, scoring, permissions, progress credit, expiration, dashboards, and disclosure."
+    },
+    {
+      "id": "security-audit-ip",
+      "name": "Security, audit, and IP controls",
+      "scope": "Review monitoring, audit integrity, IP rules, exceptions, retention, shipping, alerts, permissions, and investigative workflows."
+    },
+    {
+      "id": "core-infra",
+      "name": "Core infrastructure",
+      "scope": "Review configuration, middleware, database and Redis handling, caching, errors, observability, concurrency, and startup behavior."
+    },
+    {
+      "id": "onboarding",
+      "name": "Onboarding",
+      "scope": "Review fresh setup, organization creation, roles, modules, integrations, interruption recovery, reset authority, and completion guards."
+    },
+    {
+      "id": "public-portal",
+      "name": "Public portal",
+      "scope": "Review configuration, public content, applications, token access, rate limits, spam controls, privacy, and organization isolation."
+    },
+    {
+      "id": "frontend-shared",
+      "name": "Shared frontend experience",
+      "scope": "Review navigation, search, forms, loading and error states, destructive safeguards, accessibility, responsiveness, PWA behavior, and performance."
+    }
+  ]
+}

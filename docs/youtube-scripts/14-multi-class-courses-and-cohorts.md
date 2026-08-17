@@ -330,3 +330,18 @@ timeline with attendance counts.]**
 | When Plans Change | 6:45–8:45 | "Reschedule, Cancel, and Shift a Class Series" |
 | Reordering Isn't Rescheduling | 8:45–9:30 | "The #1 Mistake With Course Syllabi" |
 | Cohort or Recurring Session? | 10:15–11:00 | "Cohort vs. Recurring Session — Which Do I Want?" |
+
+## AUGUST 14 RELEASE INSERT — SESSION LINKAGE
+
+**Place after “ROSTER AND GENERATE.” Add 1:00.**
+
+**[SCREEN: edit one generated training session; show Requirement, Course, and Program selectors.]**
+
+> "A session can now link to a requirement, course, and program. Approval feeds
+> progress only when those records belong to this organization and form a valid
+> program relationship. A generated cohort already supplies its course context;
+> add a program requirement only when attendance should satisfy that requirement.
+> Deleting a program cannot delete a requirement it does not own, and editing the
+> syllabus still does not retroactively reschedule a running cohort."
+
+**EDITOR:** Re-time Chapters 3–6 and add a “Link a generated session to a requirement” clip.

@@ -157,4 +157,45 @@ describe('StoreOrdersTab payment handling', () => {
       expect(mockGetOrders).toHaveBeenCalledWith(expect.objectContaining({ paymentStatus: 'pending_verification' }));
     });
   });
+
+  it('opens filtered when an order status is supplied', async () => {
+    renderTab({ initialStatusFilter: 'ready_for_pickup' });
+
+    await waitFor(() => {
+      expect(mockGetOrders).toHaveBeenCalledWith(expect.objectContaining({ status: 'ready_for_pickup' }));
+    });
+  });
+
+  it('opens an initially selected order detail', async () => {
+    renderTab({ initialOrderId: 'o1' });
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(mockGetOrders).toHaveBeenCalledWith(expect.objectContaining({ page: 1, pageSize: 25 }));
+  });
+
+  it('opens and can clear a recent-orders queue', async () => {
+    const user = userEvent.setup();
+    renderTab({ initialSubmittedWithinHours: 24 });
+
+    await waitFor(() => {
+      expect(mockGetOrders).toHaveBeenCalledWith(expect.objectContaining({ submittedWithinHours: 24 }));
+    });
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    await waitFor(() => {
+      expect(mockGetOrders).toHaveBeenLastCalledWith(expect.objectContaining({ submittedWithinHours: undefined }));
+    });
+  });
+
+  it('opens and can clear the open-orders queue', async () => {
+    const user = userEvent.setup();
+    renderTab({ initialOpenOnly: true });
+
+    await waitFor(() => {
+      expect(mockGetOrders).toHaveBeenCalledWith(expect.objectContaining({ openOnly: true }));
+    });
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    await waitFor(() => {
+      expect(mockGetOrders).toHaveBeenLastCalledWith(expect.objectContaining({ openOnly: undefined }));
+    });
+  });
 });

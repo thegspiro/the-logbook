@@ -667,6 +667,8 @@ export interface ChecklistItem {
   id: string;
   text: string;
   member_visible: boolean;
+  /** Member may report completion; an officer must still validate it. */
+  member_can_complete?: boolean;
 }
 
 export interface TrainingRequirement {
@@ -1122,6 +1124,8 @@ export interface RequirementProgressNotes {
   }>;
   /** Ids of the checklist steps an officer has ticked off */
   checklist_done?: string[];
+  /** Member-reported checklist steps awaiting officer validation. */
+  checklist_claimed?: string[];
   [key: string]: unknown;
 }
 
@@ -1154,6 +1158,7 @@ export interface RequirementProgressUpdate {
    * single toggle so a retry cannot leave a step half-applied.
    */
   checklist_done?: string[];
+  checklist_claimed?: string[];
 }
 
 export interface ProgramWithDetails extends TrainingProgram {
@@ -1545,6 +1550,7 @@ export interface TrainingSubmission {
   id: string;
   organization_id: string;
   submitted_by: string;
+  submitter_name?: string;
   course_name: string;
   course_code?: string;
   training_type: TrainingType;

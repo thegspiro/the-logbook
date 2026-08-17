@@ -66,7 +66,7 @@ const PATH_LABELS: Record<string, string> = {
   analytics: 'Analytics',
 
   // Inventory module
-  'my-equipment': 'My Equipment',
+  'my-equipment': 'My Issued Gear',
   checkouts: 'Checkouts',
   items: 'Items',
   'storage-areas': 'Storage Areas',

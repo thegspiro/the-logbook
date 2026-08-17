@@ -38,6 +38,7 @@ import type {
   ProxyAuthorization,
   ProxyAuthorizationCreate,
   ProxyVoteCreate,
+  VotingMethod,
   SavedBallotTemplate,
   Vote,
   VoteCreate,
@@ -238,6 +239,8 @@ export const electionService = {
     name: string;
     description?: string;
     ballot_items: BallotItem[];
+    voting_method: VotingMethod;
+    allow_write_ins: boolean;
   }): Promise<SavedBallotTemplate> {
     const response = await api.post<SavedBallotTemplate>('/elections/templates/saved-ballots', payload);
     return response.data;

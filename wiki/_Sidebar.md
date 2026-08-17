@@ -2,6 +2,10 @@
 
 **[🏠 Home](Home)**
 
+**[Recent changes (Aug 10–16, 2026)](Recent-Changes-2026-08-10-to-16)**
+[· Aug 15–16 detail](Recent-Changes-2026-08-15-to-16)
+[· Aug 12–14 detail](Recent-Changes-2026-08-12-to-14)
+
 ---
 
 ### 🎯 Getting Started

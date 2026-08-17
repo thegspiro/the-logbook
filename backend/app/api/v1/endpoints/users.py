@@ -87,7 +87,12 @@ async def _rate_limit_admin_reset(request: Request) -> None:
 @router.get("", response_model=list[UserListResponse])
 async def list_users(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("users.view", "members.manage")),
+    current_user: User = Depends(
+        # members.view ("View member list") is the baseline grant every default
+        # position carries — this is the member directory, and RPT-3 already
+        # settled members.view as the roster-read permission for reports.
+        require_permission("users.view", "members.view", "members.manage")
+    ),
 ):
     """
     List all members in the organization
@@ -216,9 +221,17 @@ async def create_member(
 
     # Use admin-provided password or generate a temporary one
     if user_data.password:
+        from app.core.breached_password import check_password_not_breached
         from app.core.security import validate_password_strength
 
         is_valid, error_msg = validate_password_strength(user_data.password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+
+        is_valid, error_msg = await check_password_not_breached(user_data.password)
         if not is_valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -511,6 +524,24 @@ def _clear_leadership_only_fields(
     """
     payload.date_of_birth = None
     payload.emergency_contacts = []
+
+
+def _clear_directory_only_profile_metadata(payload: UserProfileResponse) -> None:
+    """Remove account and authorization metadata from a directory profile.
+
+    ``members.view`` allows a member to find and open a colleague's directory
+    entry.  It must not also reveal the colleague's account-security state,
+    notification settings, or the permission sets attached to their roles.
+    Role names remain available because they are displayed on the profile.
+    """
+    payload.email_verified = None
+    payload.mfa_enabled = None
+    payload.last_login_at = None
+    payload.created_at = None
+    payload.updated_at = None
+    payload.notification_preferences = None
+    for role in payload.roles:
+        role.permissions = []
 
 
 def _clear_hidden_contact_fields(
@@ -1073,14 +1104,17 @@ async def get_user_with_roles(
 
     This endpoint is for the member profile page and digital ID card.
     Users can always view their own record; viewing another member's record
-    requires `users.view` or `members.manage` permission.
+    requires `users.view`, `members.view`, or `members.manage` — members.view
+    is the directory permission every default position carries, so any
+    department member can open a colleague's (redacted) profile.
 
     Contact information is redacted against the organization's
     `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
     see `_clear_hidden_contact_fields`. Date of birth and emergency contacts are
     leadership-only regardless of that setting — see
-    `_clear_leadership_only_fields`. Members-managers and the subject themselves
-    are exempt from both.
+    `_clear_leadership_only_fields`. A caller relying only on `members.view`
+    also receives no account-security, notification, or role-permission
+    metadata. Members-managers and the subject themselves are exempt.
 
     **Authentication required**
     """
@@ -1088,12 +1122,15 @@ async def get_user_with_roles(
     is_self = str(current_user.id) == str(user_id)
 
     # Self-access needs no permission grant: MemberIdCardPage, MemberProfilePage
-    # and UserSettingsPage all load the caller's own record through here, and
-    # the default Member position carries neither users.view nor members.manage.
-    # The redaction below already treats the subject as exempt on the same
-    # is_self basis, so this gate and that exemption stay in agreement.
+    # and UserSettingsPage all load the caller's own record through here, and a
+    # user can be stripped of every position without losing their own record.
+    # For other members' records, members.view (the directory permission) is
+    # enough — the redaction below withholds contact info per org settings and
+    # keeps DOB/emergency contacts leadership-only, so the profile a plain
+    # member sees matches what the roster already shows them.
     if not is_self and not (
         _has_permission("users.view", user_permissions)
+        or _has_permission("members.view", user_permissions)
         or _has_permission("members.manage", user_permissions)
     ):
         raise HTTPException(
@@ -1145,6 +1182,8 @@ async def get_user_with_roles(
         visibility = await _load_contact_visibility(db, current_user, is_admin)
         _clear_hidden_contact_fields(payload, visibility)
         _clear_leadership_only_fields(payload)
+        if not _has_permission("users.view", user_permissions):
+            _clear_directory_only_profile_metadata(payload)
 
     return payload
 
@@ -1327,9 +1366,17 @@ async def update_user_profile(
                 detail="A member with this membership number already exists",
             )
 
-    # Rank, station, platoon, and membership number changes restricted to
-    # leadership / secretary / membership coordinator
-    restricted_fields = {"rank", "station", "platoon", "membership_number"}
+    # Eligibility and assignment fields are restricted to leadership,
+    # the secretary, or the membership coordinator. In particular, hire_date
+    # drives automatic membership tier advancement and must not be editable
+    # with the broader users.edit grant.
+    restricted_fields = {
+        "hire_date",
+        "rank",
+        "station",
+        "platoon",
+        "membership_number",
+    }
     has_restricted = restricted_fields & update_data.keys()
     if has_restricted:
         perm_result = await db.execute(
@@ -1343,7 +1390,11 @@ async def update_user_profile(
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, platoon, or membership number",
+                detail=(
+                    "Only leadership, the secretary, or the membership coordinator "
+                    "can update hire date, rank, station, platoon, or membership "
+                    "number"
+                ),
             )
 
         # members.manage lets you set rank, but a rank grants its own
@@ -1579,6 +1630,7 @@ async def admin_reset_password(
 
     **Authentication required**
     """
+    from app.core.breached_password import check_password_not_breached
     from app.core.security import hash_password, validate_password_strength
     from app.models.user import Session as UserSession
     from app.services.auth_service import _save_password_to_history
@@ -1608,6 +1660,13 @@ async def admin_reset_password(
 
     # Validate the new password
     is_valid, error_msg = validate_password_strength(reset_data.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
+    is_valid, error_msg = await check_password_not_breached(reset_data.new_password)
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

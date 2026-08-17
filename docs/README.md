@@ -10,6 +10,23 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ## 📚 Documentation Index
 
+### 🔄 Recent-change handoff
+
+**[Six-day change and connection audit — 2026-08-10 through 2026-08-16](./CHANGE_AUDIT_2026-08-10_TO_16.md)**
+is the current release handoff. It carries what the three-day frame could not
+show: every route added across the window with its real permission gate, the
+full 28-revision Alembic route from `20260809_0002` to the then-head
+`20260814_0004` with its
+required preflight, the supply-loop and restock data paths, a client-side
+storage map, and the 2026-08-15 → 08-16 onboarding and canvas changes.
+
+**[Three-day change and connection audit — 2026-08-12 through 2026-08-14](./CHANGE_AUDIT_2026-08-12_TO_14.md)**
+remains authoritative for the middle of that window: the per-area inventory of
+changed pages, API connection points, models/data points, data-sharing
+boundaries, edge cases, training screenshot work, and YouTube script work. Its
+companion [net changed-file manifest](./change-audit/2026-08-12-through-14-files.txt)
+provides the auditable 879-file scope.
+
 ### 🚨 Troubleshooting & Errors
 
 **Start here if you're experiencing issues:**

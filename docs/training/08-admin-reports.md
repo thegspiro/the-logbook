@@ -44,6 +44,41 @@ Each step shows its completion status. You can return to any step to update the 
 
 > **Hint:** The setup checklist is always accessible even after initial setup. Use it as a reference to verify your department's configuration is complete.
 
+### Before this checklist: the installation wizard runs in one tab, one sitting _(2026-08-15)_
+
+Everything above happens **after** you sign in. The one-time installation wizard
+at `/onboarding` — which creates the organization itself, its stations and
+apparatus, the IT team, and the very first System Owner account — comes before
+it, and as of 2026-08-15 it does not survive leaving the tab.
+
+The wizard holds a short-lived credential that authorizes those setup requests.
+It used to be stored where it outlived browser restarts and was readable from
+every tab; it now lives only in the tab that started the run. That is a
+deliberate protection — on a shared or station-kiosk machine, a credential that
+can finish creating a department should not still be sitting there tomorrow
+morning — and it changes how you should plan the install.
+
+| What you do                                               | What happens                                                                                       |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Finish the wizard in one tab without closing it           | Normal path. Nothing to think about                                                                |
+| Open `/onboarding` in a **second tab** to check something | That tab starts its own new session. The step you were on will refuse to save                      |
+| **Close the browser** partway through and come back       | The run is over. Restart the wizard                                                                |
+| Leave it sitting for **more than 30 minutes**             | The server session expires on its own. It always did — the timer resets on each action             |
+| See "Onboarding has already been completed"               | This is **not** an expired session. A department already exists; sign in instead of starting setup |
+
+**The confusing part, and the thing to teach:** your typed answers are saved
+separately and are _not_ cleared. So if you close the browser and reopen the
+wizard, **the form comes back filled in — but the session behind it is gone.**
+Nothing tells you until you try to move to the next step, which then fails and
+asks you to start over. The filled-in form is a local draft, not a resumed
+session. **Do not re-type into it expecting it to save; restart the wizard.**
+
+Practically: block out an uninterrupted half hour, gather the department's
+address, station list, apparatus list and the first administrator's details
+_before_ you begin, and do not close the browser until you reach the dashboard.
+
+> **[SCREENSHOT NEEDED — the wizard after a browser restart: the form repainted with previously entered answers, and the session-expired error raised by the next step. Demo data: begin an onboarding run through the stations step, close the browser, reopen `/onboarding`, and attempt to continue. Capture both states in sequence so the caption can show that a filled-in form does not mean a live session.]**
+
 ---
 
 ## Organization Settings
@@ -63,7 +98,7 @@ Navigate to **Administration > Organization Settings > Organization** to manage 
 - **Mailing and Physical Addresses**
 - **Logo** upload
 
-![Organization Settings page with department name, type, and timezone](./images/08-02-organization-settings.png)
+![Organization Settings page with department name, timezone and contact details](./images/08-02-organization-settings.png)
 
 ### Contact Info Visibility
 
@@ -103,7 +138,7 @@ Configure how membership IDs are assigned:
 
 Navigate to **Settings > Organization** and scroll to the **Modules** section.
 
-Modules are organized into three categories:
+Modules are organized into categories:
 
 ### Core Modules (Always Enabled)
 
@@ -1226,17 +1261,22 @@ All API response schemas now inherit from `UTCResponseBase`, which automatically
 
 ### Dashboard Notification Management
 
-Each card in the dashboard's Notifications panel carries a **dismiss** control
-— the **✕** on the right — which marks that notification as read and removes it
-from the panel. The panel header carries **Clear All**, which marks every
-notification in it as read at once.
+The dashboard's **My Updates** panel merges your notifications and department
+messages into one feed. An amber dot marks each unread row and the header
+counts them; opening a row marks it read and takes you to what it announces —
+a notification's own screen, or the Messages page. A **pinned department
+message** stays in the feed until you clear it with the ✕ beside it; that
+control appears only on persistent messages, which would otherwise never
+leave. **Older Items** at the foot opens the full notification inbox, which
+is where bulk actions such as marking everything read live.
 
-> **Corrected 2026-08-10.** This previously described two controls on each
-> card, a dismiss and a checkmark "clear", with different effects. There is one
-> control per card, the ✕, and it is the mark-as-read action; "Clear All" is a
-> header action, not a per-card one.
+> **Superseded 2026-08-16.** This previously described the Notifications
+> panel — a per-card dismiss ✕ and a Clear All header action. The station
+> board rebuild replaced that panel with the My Updates feed described here;
+> per-notification and bulk mark-as-read now belong to the Notifications
+> inbox.
 
-![The dashboard Notifications panel — a dismiss control on each card and Clear All in the header](./images/08-60-dashboard-notification-cards.png)
+![The dashboard's My Updates feed — unread rows dotted amber, the unread count in the header, and Older Items linking to the full inbox](./images/08-60-dashboard-notification-cards.png)
 
 ### Department Messages
 
@@ -2013,3 +2053,7 @@ look there.
 ---
 
 **Previous:** [Documents & Forms](./07-documents-forms.md) | **Next:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)
+
+## August 12–14, 2026 update
+
+The station-board, calendar-year admin-hours summary, related-notification cleanup, and operator upgrade notes are covered in [the August 12–14 release lesson](./19-august-2026-release-changes.md#dashboard-and-admin-hours).

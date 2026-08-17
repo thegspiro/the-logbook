@@ -4,12 +4,13 @@ describe('onboarding API client session cleanup', () => {
   beforeEach(() => {
     vi.resetModules();
     localStorage.clear();
+    sessionStorage.clear();
     document.cookie = 'onboarding_csrf_token=; path=/; max-age=0';
     vi.unstubAllGlobals();
   });
 
   it('keeps the authenticated-session hint while clearing onboarding data on completion', async () => {
-    localStorage.setItem('onboarding_session_id', 'session-1');
+    sessionStorage.setItem('onboarding_session_id', 'session-1');
     localStorage.setItem('onboarding-storage', '{"state":{"departmentName":"Example"}}');
     localStorage.setItem('has_session', '1');
     document.cookie = 'onboarding_csrf_token=csrf-1; path=/';
@@ -29,7 +30,7 @@ describe('onboarding API client session cleanup', () => {
 
     expect(response.statusCode).toBe(200);
     expect(localStorage.getItem('has_session')).toBe('1');
-    expect(localStorage.getItem('onboarding_session_id')).toBeNull();
+    expect(sessionStorage.getItem('onboarding_session_id')).toBeNull();
     expect(localStorage.getItem('onboarding-storage')).toBeNull();
   });
 
@@ -40,5 +41,14 @@ describe('onboarding API client session cleanup', () => {
     apiClient.clearSession();
 
     expect(localStorage.getItem('has_session')).toBeNull();
+  });
+
+  it('removes onboarding session identifiers persisted by legacy clients', async () => {
+    localStorage.setItem('onboarding_session_id', 'legacy-persistent-session');
+
+    const { apiClient } = await import('./api-client');
+
+    expect(apiClient.hasSession()).toBe(false);
+    expect(localStorage.getItem('onboarding_session_id')).toBeNull();
   });
 });

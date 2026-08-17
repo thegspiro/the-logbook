@@ -49,7 +49,12 @@ class TestNormalization:
             [{"id": "s1", "text": "References called", "member_visible": False}]
         )
         assert items == [
-            {"id": "s1", "text": "References called", "member_visible": False}
+            {
+                "id": "s1",
+                "text": "References called",
+                "member_visible": False,
+                "member_can_complete": False,
+            }
         ]
 
     def test_a_mixed_list_normalizes(self):
@@ -116,10 +121,19 @@ class TestVisibilityAndProgress:
             "checklist_items": TestVisibilityAndProgress.ITEMS,
         }
 
-    def test_member_requirement_response_omits_officer_only_steps(self):
+    def test_member_requirement_response_redacts_officer_only_steps(self):
+        # Redacted, not stripped: the member view folds hidden steps into a
+        # "+N more steps your officer records" count, so the count must
+        # survive while the text and id must not.
         response = _member_requirement(self._requirement_response_data())
 
-        assert [item.id for item in response.checklist_items] == ["s1"]
+        assert [item.id for item in response.checklist_items] == ["s1", None]
+        assert [item.member_visible for item in response.checklist_items] == [
+            True,
+            False,
+        ]
+        hidden = response.checklist_items[1]
+        assert hidden.text == "Recorded by your officer"
 
     def test_member_progress_omits_hidden_step_and_its_signoff_state(self):
         now = datetime.now(timezone.utc)
@@ -138,12 +152,15 @@ class TestVisibilityAndProgress:
             }
         )
 
-        assert [item.id for item in response.requirement.checklist_items] == ["s1"]
+        assert [item.id for item in response.requirement.checklist_items] == [
+            "s1",
+            None,
+        ]
         assert response.progress_notes["checklist_done"] == ["s1"]
 
-    def test_program_requirement_link_omits_officer_only_steps(self):
+    def test_program_requirement_link_redacts_officer_only_steps(self):
         # GET /programs/{id}/requirements nests the full requirement inside
-        # each link row; the member view must strip hidden steps there too.
+        # each link row; the member view must redact hidden steps there too.
         now = datetime.now(timezone.utc)
         response = _member_program_requirement(
             {
@@ -155,7 +172,13 @@ class TestVisibilityAndProgress:
             }
         )
 
-        assert [item.id for item in response.requirement.checklist_items] == ["s1"]
+        assert [item.id for item in response.requirement.checklist_items] == [
+            "s1",
+            None,
+        ]
+        assert response.requirement.checklist_items[1].text == (
+            "Recorded by your officer"
+        )
 
     def test_program_requirement_link_without_nested_requirement(self):
         now = datetime.now(timezone.utc)
@@ -217,7 +240,12 @@ def _svc(progress):
 
 class TestCheckingOffSteps:
     ITEMS = [
-        {"id": "s1", "text": "Gear issued", "member_visible": True},
+        {
+            "id": "s1",
+            "text": "Gear issued",
+            "member_visible": True,
+            "member_can_complete": True,
+        },
         {"id": "s2", "text": "References called", "member_visible": False},
     ]
 
@@ -236,6 +264,37 @@ class TestCheckingOffSteps:
         assert out.status == RequirementProgressStatus.IN_PROGRESS
         assert out.completed_at is None
         assert out.progress_notes["checklist_done"] == ["s1"]
+
+    async def test_member_can_report_enabled_step_for_officer_validation(self):
+        progress = _progress(self.ITEMS, owner="me")
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(checklist_claimed=["s1"]),
+            acting_user_id="me",
+            can_manage=False,
+        )
+
+        assert error is None
+        assert out.progress_notes["checklist_claimed"] == ["s1"]
+        assert out.progress_percentage == 0.0
+
+    async def test_member_cannot_report_officer_only_step(self):
+        progress = _progress(self.ITEMS, owner="me")
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(checklist_claimed=["s2"]),
+            acting_user_id="me",
+            can_manage=False,
+        )
+
+        assert out is None
+        assert "cannot be completed by a member" in error
 
     async def test_every_step_completes_the_requirement(self):
         progress = _progress(self.ITEMS)

@@ -770,6 +770,12 @@ class ModuleSettings(BaseModel):
         description="Department Storefront module (member ordering, sold via "
         "Venmo/PayPal/cash/check)",
     )
+    medical_supplies: bool = Field(
+        default=False,
+        description="Medical Supplies module (EMS stock, lot numbers, "
+        "expiration tracking) — separate from gear and uniforms so a "
+        "department can appoint its own supply officer",
+    )
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
@@ -808,6 +814,7 @@ class ModuleSettingsUpdate(BaseModel):
     hr_payroll: Optional[bool] = None
     grants: Optional[bool] = None
     storefront: Optional[bool] = None
+    medical_supplies: Optional[bool] = None
     prospective_members: Optional[bool] = None
     public_info: Optional[bool] = None
 

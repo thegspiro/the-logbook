@@ -1843,6 +1843,9 @@ async def save_session_organization(
         )
 
 
+_VIEW_ONLY_SUBPERMISSIONS = frozenset({"facilities.view_sensitive"})
+
+
 def _merge_default_permissions(
     permission_list: list[str],
     submitted: dict[str, RolePermission],
@@ -1858,21 +1861,21 @@ def _merge_default_permissions(
 
     1. Whole modules the frontend registry doesn't cover (audit, organization,
        users, locations, meetings, ...) — keep all their defaults.
-    2. Sub-permissions within a submitted module (facilities.view_sensitive,
-       members.assign_positions, equipment_check.submit, ...) — keep them
-       while the module retains any access. An admin who unchecked the module
-       entirely revoked it, so its sub-permissions drop too; a module saved
-       with manage already carries the ``module.*`` wildcard, which covers
-       every sub-permission without cluttering the list.
+    2. Explicitly read-only sub-permissions within a submitted module (currently
+       facilities.view_sensitive) — keep them while the module retains view
+       access. Other action permissions are not representable by the editor and
+       must not survive when an admin clears Manage. A module saved with manage
+       already carries the ``module.*`` wildcard, which covers every
+       sub-permission without cluttering the list.
     """
     merged = list(permission_list)
     for perm in default_perms:
         if "." not in perm:
             continue
-        module_prefix, _, action = perm.partition(".")
+        module_prefix = perm.partition(".")[0]
         if module_prefix not in submitted:
             merged.append(perm)
-        elif action not in ("view", "manage", "*"):
+        elif perm in _VIEW_ONLY_SUBPERMISSIONS:
             module_perms = submitted[module_prefix]
             if module_perms.view and not module_perms.manage:
                 merged.append(perm)

@@ -15,7 +15,8 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security_middleware import InputSanitizer
+from app.core.config import settings
+from app.core.security_middleware import InputSanitizer, daily_cap_exceeded
 from app.core.utils import safe_error_detail
 from app.models.forms import (
     FieldType,
@@ -42,6 +43,7 @@ class FormsService:
     MAX_TEXTAREA_LENGTH = 50000
     MAX_NAME_LENGTH = 255
     MAX_EMAIL_LENGTH = 254
+    PUBLIC_DAILY_CAP_ERROR = "This form is not accepting further submissions today."
 
     # ------------------------------------------------------------------
     # Required target fields and label-based fallback maps per
@@ -350,6 +352,11 @@ class FormsService:
         try:
             fields_data = form_data.pop("fields", None) or []
             integration_type_str = form_data.pop("integration_type", None)
+            # Persist the lightweight ownership marker in addition to the
+            # detailed integration row created below. This keeps module forms
+            # discoverable even when no fields can be mapped automatically.
+            if integration_type_str:
+                form_data["integration_type"] = integration_type_str
 
             form = Form(
                 organization_id=organization_id, created_by=created_by, **form_data
@@ -486,6 +493,7 @@ class FormsService:
         category: Optional[FormCategory] = None,
         search: Optional[str] = None,
         is_template: Optional[bool] = None,
+        integration_type: Optional[IntegrationType] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[Form], int]:
@@ -504,6 +512,20 @@ class FormsService:
 
         if is_template is not None:
             query = query.where(Form.is_template == is_template)
+
+        if integration_type:
+            # Newer forms carry the integration type directly, while forms
+            # created by older module generators only have a related
+            # FormIntegration row. Include both representations so module
+            # settings pages do not lose track of legacy forms.
+            query = query.where(
+                or_(
+                    Form.integration_type == integration_type,
+                    Form.integrations.any(
+                        FormIntegration.integration_type == integration_type
+                    ),
+                )
+            )
 
         if search:
             safe_search = (
@@ -920,6 +942,7 @@ class FormsService:
         user_agent: Optional[str] = None,
         honeypot_value: Optional[str] = None,
         submitted_by: Optional[str] = None,
+        enforce_daily_cap: bool = False,
     ) -> Tuple[Optional[FormSubmission], Optional[str]]:
         """Submit a public form while enforcing its identity policy."""
         try:
@@ -975,6 +998,14 @@ class FormsService:
             )
             if info_error:
                 return None, info_error
+
+            # Reserve daily capacity only after the request has passed every
+            # rejection path. Invalid and honeypot requests must not be able
+            # to consume the quota and deny service to legitimate submitters.
+            if enforce_daily_cap and await daily_cap_exceeded(
+                f"pub_form:{slug}", settings.PUBLIC_FORM_DAILY_LIMIT
+            ):
+                return None, self.PUBLIC_DAILY_CAP_ERROR
 
             submission = FormSubmission(
                 organization_id=form.organization_id,
@@ -1407,7 +1438,12 @@ class FormsService:
                             prospect_id=str(prospect.id),
                             organization_id=str(prospect.organization_id),
                             step_id=str(step.id),
-                            completed_by="system",
+                            # No user performed this. `completed_by` lands on
+                            # two nullable FKs to users.id, so a "system"
+                            # sentinel is not a free-text label — it fails the
+                            # constraint and the advance is lost to the
+                            # except below.
+                            completed_by=None,
                             notes="Auto-advanced on form submission",
                             action_result={
                                 "form_id": str(form.id),

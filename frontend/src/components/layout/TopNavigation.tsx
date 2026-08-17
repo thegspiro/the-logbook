@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import {
   LogOut,
-  Menu,
-  X,
   Sun,
   Moon,
   Monitor,
@@ -20,11 +18,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
+import { canOpenAdministrationSection } from './adminNavigation';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
-import { hasAdministrationAccess } from './adminNavigation';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -36,6 +34,8 @@ interface SubNavItem {
   label: string;
   path: string;
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
   isDivider?: boolean;
 }
 
@@ -43,6 +43,8 @@ interface NavItem {
   label: string;
   path: string;
   permission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  anyPermission?: string[];
   subItems?: SubNavItem[];
   isSectionLabel?: boolean;
 }
@@ -94,7 +96,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  const hasAnyAdminPermission = hasAdministrationAccess(checkPermission);
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
@@ -105,6 +107,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
+    { label: 'Learning Center', path: '/learning' },
+    ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store' } as NavItem] : []),
     ...(isModuleOn('training')
       ? [
           {
@@ -128,11 +132,19 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       subItems: [
         ...(isModuleOn('inventory')
           ? [
-              { label: 'My Equipment', path: '/inventory/my-equipment' },
-              { label: 'Inventory', path: '/inventory' },
+              { label: 'My Issued Gear', path: '/inventory/my-equipment' },
+              { label: 'Gear & Uniforms', path: '/inventory' },
             ]
           : []),
-        ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store' }] : []),
+        ...(isModuleOn('medical_supplies')
+          ? [
+              {
+                label: 'Medical Supplies',
+                path: '/medical-supplies',
+                anyPermission: ['inventory.view_medical', 'inventory.view'],
+              },
+            ]
+          : []),
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus' }]
           : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
@@ -182,7 +194,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   ]
                 : []),
               { label: 'Member Management', path: '/members/admin', permission: 'members.manage' },
-              { label: 'Scan Member ID', path: '/members/scan', permission: 'members.manage' },
+              // Scanning resolves a card to a member profile, which the
+              // backend serves to users.view or members.manage holders.
+              { label: 'Scan Member ID', path: '/members/scan', anyPermission: ['users.view', 'members.manage'] },
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
               DIV,
               { label: 'Manage Events', path: '/events', permission: 'events.manage' },
@@ -190,7 +204,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
               ...(isModuleOn('inventory')
-                ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
+                ? [{ label: 'Gear Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
                 : []),
               ...(isModuleOn('storefront')
                 ? [{ label: 'Store Admin', path: '/store/admin', permission: 'storefront.manage' }]
@@ -303,7 +317,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
             {navItems.map((item) => {
               // Filter sub-items by permission (strip dividers whose neighbours are all hidden)
               const visibleSubItems = item.subItems?.filter(
-                (sub) => sub.isDivider || !sub.permission || checkPermission(sub.permission)
+                (sub) =>
+                  sub.isDivider ||
+                  ((!sub.permission || checkPermission(sub.permission)) &&
+                    (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p))))
               );
 
               // Strip leading, trailing, and consecutive dividers
@@ -315,6 +332,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
               // Skip top-level permission-gated items
               if (item.permission && !checkPermission(item.permission)) return null;
+              if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return null;
 
               // Skip parent groups where all sub-items are hidden
               const realSubItems = cleanedSubItems?.filter((s) => !s.isDivider);
@@ -343,9 +361,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
                     {openDropdown === item.label && (
                       <div
-                        className={`bg-theme-surface-modal border-theme-surface-border animate-scale-in absolute top-full z-50 mt-1 rounded-lg border py-1 shadow-xl ${
-                          item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'
-                        }`}
+                        className={`popover-panel animate-scale-in absolute top-full z-50 mt-1 py-1 ${item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'}`}
                       >
                         {cleanedSubItems.map((subItem, idx) => {
                           if (subItem.isDivider) {
@@ -496,21 +512,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               </button>
             </div>
           </nav>
-
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-theme-text-primary hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2.5 transition-colors focus:ring-2 focus:outline-hidden md:hidden"
-            aria-expanded={mobileMenuOpen}
-            aria-controls="mobile-menu"
-            aria-label={mobileMenuOpen ? 'Close main menu' : 'Open main menu'}
-          >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" aria-hidden="true" />
-            ) : (
-              <Menu className="h-6 w-6" aria-hidden="true" />
-            )}
-          </button>
         </div>
 
         {/* Mobile Navigation */}
@@ -520,7 +521,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               {navItems.map((item) => {
                 // Filter sub-items by permission
                 const visibleSubItems = item.subItems?.filter(
-                  (sub) => sub.isDivider || !sub.permission || checkPermission(sub.permission)
+                  (sub) =>
+                    sub.isDivider ||
+                    ((!sub.permission || checkPermission(sub.permission)) &&
+                      (!sub.anyPermission || sub.anyPermission.some((p) => checkPermission(p))))
                 );
 
                 const cleanedSubItems = visibleSubItems?.filter((sub, i, arr) => {
@@ -531,6 +535,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
                 // Skip top-level permission-gated items
                 if (item.permission && !checkPermission(item.permission)) return null;
+                if (item.anyPermission && !item.anyPermission.some((p) => checkPermission(p))) return null;
 
                 // Skip parent groups where all sub-items are hidden
                 const realSubItems = cleanedSubItems?.filter((s) => !s.isDivider);

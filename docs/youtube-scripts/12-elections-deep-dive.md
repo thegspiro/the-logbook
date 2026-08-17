@@ -212,6 +212,17 @@ eligible-voter-types selector and the attendance toggle.]**
 > them not accepted — they stay visible in your records but voters can't vote
 > for them."
 
+> "And 'your records' means exactly that: members only see pending
+> nominations while the nomination window is open, so nominees can respond.
+> Once it closes, the member-facing candidate list shows accepted candidates
+> only — you, with election-manage permission, always see the full list."
+
+**[EDITOR (2026-08-16): new 15-second beat — pending-nomination visibility
+is now phase-scoped (member list returns accepted-only outside the
+nominations phase). Re-time Chapter 5 onward by ~0:15. B-roll: capture the
+candidate list from a plain member account after closing nominations to show
+the pending entry absent.]**
+
 **[SCREEN: Attempt to delete a candidate who has votes — show the block]**
 
 > "Two guardrails: a candidate with recorded votes can't be deleted — that
@@ -1289,3 +1300,30 @@ PDF]**
 - 12l–12q (added 2026-07-29) pair with Chapters 14–16 and share their demo
   captures — record them in the same session.
 - Each short's `[CALLOUT]` doubles as its YouTube thumbnail text.
+
+## AUGUST 14 RELEASE INSERTS — SAVED BALLOTS, PAPER COUNTS, AND FROZEN ROLLS
+
+### Add to “BALLOT ITEMS & TEMPLATES” — 1:30
+
+**[SCREEN: Your saved ballots shows name, item count, replacement warning, Apply/Delete. Then before/apply/after election settings.]**
+
+> "A saved ballot stores structure and election settings—not candidates, voters,
+> tokens, votes, attendance, or results. The picker only shows its name, item
+> count, warning, and actions, so verify restored voting method and write-in
+> setting on the election form after applying. Applying creates fresh item IDs.
+> Names are case-insensitively unique; replace and delete require confirmation."
+
+### Add to “OPEN & SEND” and “TOKEN VOTING” — 0:50
+
+> "Opening freezes the eligible roll. The server checks it when issuing ballot
+> email and again when redeeming the token, so an old link cannot bypass the
+> snapshot. Use a secretary override for an approved late change. Null snapshots
+> exist only on legacy elections and keep their former live-roll behavior."
+
+### Add to “RECORDING THE TALLY” — 0:40
+
+> "Record the attested physical-paper count as turnout evidence. Combined paper
+> counts cannot exceed the eligible roster. This is separate from entering each
+> position's tally and from electronic vote records."
+
+**EDITOR:** Add 3:00, update runtime and all later timestamps, and add saved-template/frozen-roll clips to the extraction table.

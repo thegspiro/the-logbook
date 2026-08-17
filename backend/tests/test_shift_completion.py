@@ -1042,6 +1042,8 @@ class TestTraineeReportReleaseBoundary:
         await ShiftCompletionService(db).get_reports_for_trainee(
             organization_id=uuid.uuid4(),
             trainee_id="trainee-1",
+            start_date=date.today(),
+            end_date=date.today(),
             released_only=True,
         )
 
@@ -1146,6 +1148,30 @@ class TestTrainingCreditReleaseBoundary:
             {"review_status": "approved"},
         )
         service._trigger_deferred_progress.assert_awaited_once_with(report, "officer-1")
+
+    async def test_reviewer_releases_credit_under_filing_officer(self):
+        org_id = uuid.uuid4()
+        report = SimpleNamespace(
+            organization_id=str(org_id),
+            officer_id="filing-officer",
+            trainee_id="trainee-1",
+            shift_date=date.today(),
+            review_status="pending_review",
+            review_history=[],
+        )
+        db = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        service = ShiftCompletionService(db)
+        service.get_report = AsyncMock(return_value=report)
+        service._trigger_deferred_progress = AsyncMock()
+        service._send_notification = AsyncMock()
+
+        await service.review_report("report-1", org_id, "approving-officer", "approved")
+
+        service._trigger_deferred_progress.assert_awaited_once_with(
+            report, "filing-officer"
+        )
 
 
 # ── Auto-population vs. the officer's own entry ──────────────────────

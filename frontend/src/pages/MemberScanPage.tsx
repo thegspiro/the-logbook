@@ -9,7 +9,11 @@
  *   - QR code (JSON payload with `type: "member_id"` and `id`)
  *   - Code128 barcode of a membership number (looks up member by number)
  *
- * Accessible at /members/scan.
+ * Accessible at /members/scan. Requires users.view or members.manage — the
+ * quartermaster's position grants users.view, so gear checks can validate a
+ * member from their card. This gate is deliberately narrower than the
+ * directory (members.view): the scanner is a validation tool for positions
+ * that check people in, not a general member-lookup surface.
  */
 
 import React, { useRef, useState, useCallback } from 'react';
@@ -123,7 +127,7 @@ export const MemberScanPage: React.FC = () => {
       </div>
 
       {/* Scanner Viewport */}
-      <div className="bg-theme-surface border-theme-surface-border mb-6 overflow-hidden rounded-lg border">
+      <div className="card mb-6 overflow-hidden">
         <div className="relative">
           <div id="scanner-viewport" data-testid="scanner-viewport" className="aspect-square w-full bg-black/90" />
           <ScanSuccessFlash active={flashing} />
@@ -192,7 +196,7 @@ export const MemberScanPage: React.FC = () => {
       )}
 
       {/* Instructions */}
-      <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+      <div className="card p-4">
         <h3 className="text-theme-text-primary mb-2 text-sm font-semibold">How to use</h3>
         <ol className="text-theme-text-secondary list-inside list-decimal space-y-1 text-sm">
           <li>Tap &ldquo;Start Scanning&rdquo; and allow camera access</li>

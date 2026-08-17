@@ -213,11 +213,19 @@ class TestExtractSecrets:
         assert public == {}
         assert secrets == {}
 
-    def test_non_string_secret_stays_public(self):
+    def test_non_string_secret_never_falls_through_to_public_config(self):
         config = {"secret": 123}
         public, secrets = _extract_secrets(config)
-        assert "secret" in public
+        assert "secret" not in public
         assert len(secrets) == 0
+
+    def test_empty_secret_is_a_control_value_not_plaintext_config(self):
+        public, secrets = _extract_secrets(
+            {"refresh_token": "", "instance_url": "https://acme.salesforce.com"}
+        )
+
+        assert public == {"instance_url": "https://acme.salesforce.com"}
+        assert secrets == {}
 
 
 # ============================================

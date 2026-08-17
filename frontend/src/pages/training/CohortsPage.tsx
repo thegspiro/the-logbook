@@ -97,7 +97,7 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) =>
                 onClick={() => {
                   void navigate(`/training/cohorts/${cohort.id}`);
                 }}
-                className="card-secondary hover:bg-theme-surface-hover p-5 text-left transition-colors"
+                className="card-secondary hover:bg-theme-surface-hover p-5 text-left"
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <h3 className="text-theme-text-primary font-semibold">{cohort.name}</h3>

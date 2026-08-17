@@ -30,6 +30,7 @@ export interface Event {
 
   allow_guests: boolean;
   send_reminders: boolean;
+  reminder_target: 'going' | 'all' | 'none';
   reminder_schedule: number[];
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
@@ -105,6 +106,7 @@ export interface EventCreate {
 
   allow_guests?: boolean | undefined;
   send_reminders?: boolean | undefined;
+  reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
   check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
   check_in_minutes_before?: number | undefined;
@@ -136,6 +138,7 @@ export interface EventUpdate {
 
   allow_guests?: boolean | undefined;
   send_reminders?: boolean | undefined;
+  reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
   check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
   check_in_minutes_before?: number | undefined;
@@ -327,6 +330,7 @@ export interface EventTemplate {
   check_in_minutes_after?: number;
   require_checkout: boolean;
   send_reminders: boolean;
+  reminder_target: 'going' | 'all' | 'none';
   reminder_schedule: number[];
   custom_fields_template?: Record<string, unknown>;
   is_active: boolean;
@@ -354,6 +358,7 @@ export interface EventTemplateCreate {
   check_in_minutes_after?: number | undefined;
   require_checkout?: boolean | undefined;
   send_reminders?: boolean | undefined;
+  reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
   custom_fields_template?: Record<string, unknown> | undefined;
 }
@@ -383,11 +388,14 @@ export interface RecurringEventCreate {
 
   allow_guests?: boolean | undefined;
   send_reminders?: boolean | undefined;
+  reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
   check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
   check_in_minutes_before?: number | undefined;
   check_in_minutes_after?: number | undefined;
   require_checkout?: boolean | undefined;
+  allow_guest_check_in?: boolean | undefined;
+  guest_check_in_creates_prospect?: boolean | undefined;
   custom_category?: string | undefined;
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;
@@ -458,6 +466,7 @@ export interface EventModuleSettings {
     allow_guests: boolean;
     is_mandatory: boolean;
     send_reminders: boolean;
+    reminder_target: 'going' | 'all' | 'none';
     reminder_schedule: number[];
     default_reminder_time: string;
     default_duration_minutes: number;

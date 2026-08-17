@@ -29,11 +29,26 @@ import { OrderDetailModal } from './OrderDetailModal';
 
 interface StoreOrdersTabProps {
   onChanged: () => void;
+  /** Order workflow status to open filtered to from the overview. */
+  initialStatusFilter?: string;
   /** Payment status to open filtered to, e.g. arriving from a dashboard counter. */
   initialPaymentFilter?: string;
+  /** Order to open immediately, e.g. when an activity entry is selected. */
+  initialOrderId?: string;
+  /** Restrict the initial queue to orders submitted within this many hours. */
+  initialSubmittedWithinHours?: number | undefined;
+  /** Exclude fulfilled and cancelled orders from the initial queue. */
+  initialOpenOnly?: boolean;
 }
 
-export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initialPaymentFilter }) => {
+export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
+  onChanged,
+  initialStatusFilter,
+  initialPaymentFilter,
+  initialOrderId,
+  initialSubmittedWithinHours,
+  initialOpenOnly,
+}) => {
   const tz = useTimezone();
   const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [windows, setWindows] = useState<StoreOrderWindow[]>([]);
@@ -41,16 +56,18 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [windowFilter, setWindowFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter ?? '');
   const [paymentFilter, setPaymentFilter] = useState(initialPaymentFilter ?? '');
   const [methodFilter, setMethodFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [submittedWithinHours, setSubmittedWithinHours] = useState<number | undefined>(initialSubmittedWithinHours);
+  const [openOnly, setOpenOnly] = useState(initialOpenOnly ?? false);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<string>(StoreOrderStatus.READY_FOR_PICKUP);
   const [bulkPaymentMethod, setBulkPaymentMethod] = useState('');
   const [bulkReference, setBulkReference] = useState('');
   const [busy, setBusy] = useState(false);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(initialOrderId ?? null);
 
   const allSelected = orders.length > 0 && orders.every((o) => selected.includes(o.id));
 
@@ -63,6 +80,8 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
         paymentStatus: paymentFilter || undefined,
         paymentMethod: methodFilter || undefined,
         search: search.trim() || undefined,
+        submittedWithinHours,
+        openOnly: openOnly || undefined,
         page,
         pageSize: DEFAULT_PAGE_SIZE,
       });
@@ -73,7 +92,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
     } finally {
       setLoading(false);
     }
-  }, [methodFilter, page, paymentFilter, search, statusFilter, windowFilter]);
+  }, [methodFilter, openOnly, page, paymentFilter, search, statusFilter, submittedWithinHours, windowFilter]);
 
   useEffect(() => {
     void load();
@@ -179,6 +198,38 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
 
   return (
     <div>
+      {submittedWithinHours && (
+        <div className="card-secondary mb-3 flex items-center justify-between gap-3 px-3 py-2 text-sm">
+          <span className="text-theme-text-secondary">
+            Showing orders submitted in the last {submittedWithinHours} hours
+          </span>
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              setSubmittedWithinHours(undefined);
+              setPage(1);
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+      {openOnly && (
+        <div className="card-secondary mb-3 flex items-center justify-between gap-3 px-3 py-2 text-sm">
+          <span className="text-theme-text-secondary">Showing open orders only</span>
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              setOpenOnly(false);
+              setPage(1);
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap gap-2">
         <div className="min-w-[12rem] flex-1">
           <label htmlFor="order-search" className="sr-only">
