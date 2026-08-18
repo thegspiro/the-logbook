@@ -6,8 +6,16 @@ Counts, per training guide, how many screenshot placeholders have been replaced
 with an image and how many are still outstanding. Run it after
 `apply_placeholders.py` so the tracker reflects what is actually in the guides.
 
-`README.md` is excluded: its placeholder block is the format documentation, not
-a screenshot to capture.
+Files that *document* the marker syntax are excluded, because their examples are
+not requests. `README.md` was already skipped for that reason; `SCREENSHOT_CURRENCY.md`
+and `TRAINING_MATERIALS_REVIEW.md` were not, so three syntax examples were counted
+as outstanding capture work — and the tracker listed the currency audit itself as
+a guide needing two screenshots.
+
+That is the same failure the 2026-08-17 marker fix corrected from the other
+direction: there the regex was too narrow and undercounted by 41; here it is
+applied to files that are not guides and overcounts. A tracker is only useful if
+its number means "captures somebody must go and take".
 """
 
 from __future__ import annotations
@@ -29,11 +37,20 @@ MARKER = re.compile(
 )
 IMAGE = re.compile(r"^!\[.*\]\(\./images/.*\.png\)$")
 
+# Documents *about* the pipeline. Their markers are illustrations of the syntax,
+# so counting them reports work that does not exist.
+NOT_A_GUIDE = {
+    "README.md",
+    "SCREENSHOT_STATUS.md",
+    "SCREENSHOT_CURRENCY.md",
+    "TRAINING_MATERIALS_REVIEW.md",
+}
+
 
 def main() -> int:
     rows = []
     for guide in sorted(DOCS_DIR.glob("*.md")):
-        if guide.name in {"README.md", OUTPUT.name}:
+        if guide.name in NOT_A_GUIDE:
             continue
         lines = guide.read_text().splitlines()
         remaining = sum(1 for line in lines if MARKER.match(line))
