@@ -618,6 +618,24 @@ class Settings(BaseSettings):
     # IP Logging
     IP_LOGGING_ENABLED: bool = True  # Log all request IPs with geo info
 
+    @field_validator("COOKIE_SECURE", mode="before")
+    @classmethod
+    def _empty_cookie_secure_means_auto(cls, v):
+        """Treat an empty COOKIE_SECURE as unset (auto-detect), not an error.
+
+        This field is the only tri-state in the settings — None means
+        auto-detect, and there is no env-var spelling for None. Docker Compose
+        cannot conditionally omit a variable from a mapping-form
+        `environment:` block, so passing it through at all injects "" whenever
+        the operator has not set it. Pydantic rejects "" for `bool | None`, so
+        without this the passthrough would abort startup for every deployment
+        that simply left the setting alone — the failure landing on everyone
+        who did nothing, which is the worst possible blast radius.
+        """
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
     @field_validator("BLOCKED_COUNTRIES", mode="before")
     @classmethod
     def parse_blocked_countries(cls, v):
