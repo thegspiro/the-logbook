@@ -170,6 +170,12 @@ services:
       REDIS_SSL_CA: ${REDIS_SSL_CA:-}
       # Warns rather than blocks, but was unreachable for the same reason.
       VOTE_SIGNING_KEY: ${VOTE_SIGNING_KEY:-}
+      # The setting the SECURITY_ENFORCE_HTTPS message directs operators to,
+      # so it has to be reachable from .env or that advice is a dead end.
+      # Empty means "unset" (auto-detect) via a validator on the field —
+      # there is no env-var spelling for None, and Compose cannot omit a key
+      # from a mapping-form environment block.
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
 
       # Same whitelist gap, non-TLS. TRUSTED_PROXY_IPS is the consequential
       # one: behind a reverse proxy, leaving it unset makes every request

@@ -407,6 +407,7 @@ class TestBaseComposeReachesProductionGates:
             "DEBUG",
             "ENABLE_DOCS",
             "TRUSTED_PROXY_IPS",
+            "COOKIE_SECURE",
         ],
     )
     def test_production_gate_is_settable_from_dot_env(self, setting: str):
