@@ -251,6 +251,33 @@ export function normalizePositions(positions: unknown[] | null | undefined): Pos
   });
 }
 
+/**
+ * Return a shift with both seat lists normalized to `PositionSlot[]`.
+ *
+ * A shift's `positions` is untyped JSON on the backend (`List[Any]`), and both
+ * `ShiftCreate.positions` and rows written before the required/optional flag
+ * existed carry bare strings. Consumers treat the field as `PositionSlot[]` —
+ * the structured position editor spreads each entry, so a string reaches the
+ * database as `{0:'o',1:'f',…}` — so the shape is settled once here, at the
+ * boundary, rather than at each of the dozen call sites.
+ */
+function normalizeShift<T extends { positions?: unknown; apparatus_positions?: unknown }>(shift: T): T {
+  if (!shift) return shift;
+  return {
+    ...shift,
+    ...(shift.positions != null ? { positions: normalizePositions(shift.positions as unknown[]) } : {}),
+    ...(shift.apparatus_positions != null
+      ? { apparatus_positions: normalizePositions(shift.apparatus_positions as unknown[]) }
+      : {}),
+  };
+}
+
+/** Same treatment for an apparatus record, whose seat list is the same JSON. */
+function normalizeApparatus<T extends { positions?: unknown }>(apparatus: T): T {
+  if (!apparatus || apparatus.positions == null) return apparatus;
+  return { ...apparatus, positions: normalizePositions(apparatus.positions as unknown[]) };
+}
+
 export function resolveTemplatePositions(positions: ShiftTemplateRecord['positions']): PositionSlot[] {
   if (!positions) return [];
   // Standard / specialty templates store a plain array
@@ -361,22 +388,22 @@ export const schedulingService = {
       '/scheduling/shifts',
       { params }
     );
-    return response.data;
+    return { ...response.data, shifts: asArray(response.data?.shifts).map(normalizeShift) };
   },
 
   async createShift(data: ShiftCreate): Promise<ShiftRecord> {
     const response = await api.post<ShiftRecord>('/scheduling/shifts', data);
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async getShift(shiftId: string): Promise<ShiftRecord> {
     const response = await api.get<ShiftRecord>(`/scheduling/shifts/${shiftId}`);
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async updateShift(shiftId: string, data: ShiftUpdate): Promise<ShiftRecord> {
     const response = await api.patch<ShiftRecord>(`/scheduling/shifts/${shiftId}`, data);
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async deleteShift(shiftId: string): Promise<void> {
@@ -395,7 +422,7 @@ export const schedulingService = {
 
   async cancelShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/cancel`, reason ? { reason } : {});
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async finalizeShift(
@@ -415,12 +442,12 @@ export const schedulingService = {
     }
     if (opts?.pass_down_notes) body.pass_down_notes = opts.pass_down_notes;
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/finalize`, body);
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async reopenShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/reopen`, reason ? { reason } : {});
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async getShiftHandoff(
@@ -436,7 +463,7 @@ export const schedulingService = {
     const params: Record<string, string> = {};
     if (weekStart) params.week_start = weekStart;
     const response = await api.get<ShiftRecord[]>('/scheduling/calendar/week', { params });
-    return asArray(response.data);
+    return asArray(response.data).map(normalizeShift);
   },
 
   async getMonthCalendar(year?: number, month?: number): Promise<ShiftRecord[]> {
@@ -444,7 +471,7 @@ export const schedulingService = {
     if (year) params.year = year;
     if (month) params.month = month;
     const response = await api.get<ShiftRecord[]>('/scheduling/calendar/month', { params });
-    return asArray(response.data);
+    return asArray(response.data).map(normalizeShift);
   },
 
   async getSummary(): Promise<SchedulingSummary> {
@@ -459,7 +486,7 @@ export const schedulingService = {
     limit?: number;
   }): Promise<{ shifts: ShiftRecord[]; total: number }> {
     const response = await api.get<{ shifts: ShiftRecord[]; total: number }>('/scheduling/my-shifts', { params });
-    return response.data;
+    return { ...response.data, shifts: asArray(response.data?.shifts).map(normalizeShift) };
   },
 
   async getMyAssignments(): Promise<Assignment[]> {
@@ -522,7 +549,7 @@ export const schedulingService = {
   // Active shift lookup
   async getActiveShiftForApparatus(apparatusId: string): Promise<ShiftRecord> {
     const response = await api.get<ShiftRecord>(`/scheduling/apparatus/${apparatusId}/active-shift`);
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   // Shift Check-In / Check-Out
@@ -642,15 +669,15 @@ export const schedulingService = {
   // --- Basic Apparatus (lightweight, for departments without full Apparatus module) ---
   async getBasicApparatus(params?: { is_active?: boolean }): Promise<BasicApparatusRecord[]> {
     const response = await api.get<BasicApparatusRecord[]>('/scheduling/apparatus', { params });
-    return asArray(response.data);
+    return asArray(response.data).map(normalizeApparatus);
   },
   async createBasicApparatus(data: BasicApparatusCreate): Promise<BasicApparatusRecord> {
     const response = await api.post<BasicApparatusRecord>('/scheduling/apparatus', data);
-    return response.data;
+    return normalizeApparatus(response.data);
   },
   async updateBasicApparatus(apparatusId: string, data: BasicApparatusUpdate): Promise<BasicApparatusRecord> {
     const response = await api.patch<BasicApparatusRecord>(`/scheduling/apparatus/${apparatusId}`, data);
-    return response.data;
+    return normalizeApparatus(response.data);
   },
   async deleteBasicApparatus(apparatusId: string): Promise<void> {
     await api.delete(`/scheduling/apparatus/${apparatusId}`);
@@ -659,7 +686,7 @@ export const schedulingService = {
   // --- Apparatus Options (unified vehicle picker for templates) ---
   async getApparatusOptions(): Promise<ApparatusOptionsResponse> {
     const response = await api.get<ApparatusOptionsResponse>('/scheduling/apparatus-options');
-    return response.data;
+    return { ...response.data, options: asArray(response.data?.options).map(normalizeApparatus) };
   },
 
   // --- Shift Signup (member self-service) ---
@@ -683,7 +710,7 @@ export const schedulingService = {
     apparatus_id?: string;
   }): Promise<ShiftRecord[]> {
     const response = await api.get<ShiftRecord[]>('/scheduling/shifts/open', { params });
-    return asArray(response.data);
+    return asArray(response.data).map(normalizeShift);
   },
 
   // --- Shift Calls / Runs ---
