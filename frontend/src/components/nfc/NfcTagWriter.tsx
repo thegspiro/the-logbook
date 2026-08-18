@@ -7,18 +7,24 @@ interface NfcTagWriterProps {
   url: string;
   /** Name of the thing being tagged, used in the confirmation copy. */
   targetLabel: string;
+  /**
+   * What tapping the tag does, as a noun phrase — "clock-in" for admin hours,
+   * "shift check-in" for an apparatus. Reads as "opens Engine 4 shift
+   * check-in", so it must not repeat the label.
+   */
+  actionNoun?: string;
 }
 
 /**
  * Programs a reusable NFC tag with a check-in link, so a station can mount a
- * sticker beside the door instead of reprinting a QR sheet per event.
+ * sticker beside the door — or on the truck — instead of reprinting a QR sheet.
  *
  * On a device without Web NFC this collapses to a single explanatory line
  * rather than disappearing. A chief planning tag rollout is usually at a
  * desktop, where the writer can never run — hiding it outright means the
  * capability is undiscoverable from the only screen that documents it.
  */
-export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel }) => {
+export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel, actionNoun = 'check-in' }) => {
   const { supported, unavailableReason, status, error, writeUrl, cancel, reset } = useNfcWriter();
 
   if (!supported) {
@@ -26,8 +32,8 @@ export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel }) 
       <div className="text-theme-text-muted mt-6 flex items-start gap-2 text-sm">
         <Nfc className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
-          <span className="font-medium">NFC tags:</span> open this page in Chrome on an Android phone to write this
-          check-in link to an NFC tag. {unavailableReason}
+          <span className="font-medium">NFC tags:</span> open this page in Chrome on an Android phone to write this link
+          to an NFC tag. {unavailableReason}
         </p>
       </div>
     );
@@ -41,8 +47,8 @@ export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel }) 
       </div>
 
       <p className="text-theme-text-secondary mb-4 text-sm">
-        Encode this check-in link onto a blank NFC tag or sticker. Members tap the tag with their phone to open{' '}
-        {targetLabel} check-in — no camera needed.
+        Encode this link onto a blank NFC tag or sticker. Members tap the tag with their phone to open {targetLabel}{' '}
+        {actionNoun} — no camera needed.
       </p>
 
       {status === 'waiting' ? (
@@ -62,7 +68,7 @@ export const NfcTagWriter: React.FC<NfcTagWriterProps> = ({ url, targetLabel }) 
           <div className="alert-success flex items-center gap-3">
             <Check className="text-theme-alert-success-icon h-5 w-5" aria-hidden="true" />
             <p className="text-theme-alert-success-text text-sm">
-              Tag written. Tapping it now opens {targetLabel} check-in.
+              Tag written. Tapping it now opens {targetLabel} {actionNoun}.
             </p>
           </div>
           <button type="button" onClick={reset} className="btn-secondary self-start text-sm">

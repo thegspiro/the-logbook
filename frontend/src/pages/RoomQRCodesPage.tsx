@@ -48,6 +48,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useEnabledModules } from '../hooks/useEnabledModules';
+import { buildShiftCheckInUrl } from '../constants/nfc';
 
 /** Rasterize an inline QR SVG to a PNG download (white background for print/signage use). */
 function downloadSvgAsPng(svg: SVGSVGElement, filename: string): void {
@@ -231,7 +232,7 @@ function apparatusCardProps(apparatus: ApparatusListItem): {
   return {
     title: `${apparatus.unitNumber}${apparatus.name ? ` — ${apparatus.name}` : ''}`,
     subtitle: 'Scan to check in or out of your shift',
-    url: `${window.location.origin}/scheduling/checkin?apparatus=${apparatus.id}`,
+    url: buildShiftCheckInUrl({ apparatusId: apparatus.id }),
     icon: 'apparatus',
   };
 }

@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### NFC tags work across modules, not just events (2026-08-18)
+
+**Added**
+
+- **Shift check-in and admin hours clock-in are now taggable**, alongside event
+  check-in. `/admin-hours/categories/:id/qr-code` gains the tag writer beside
+  its QR code, and the apparatus check-in QR on the shift detail panel does
+  too. **Tap Tag** — which routes by what the tag says rather than by where the
+  button lives — is now on the Events page, My Admin Hours, and the scheduling
+  calendar.
+- **Prefer an apparatus-keyed shift tag for anything physically mounted.**
+  `/scheduling/checkin?apparatus=` resolves to whichever shift is running when
+  the tag is tapped, so one tag on the truck serves every shift; a shift-keyed
+  tag is dead the moment that shift ends. `buildShiftCheckInUrl` takes
+  `{ apparatusId }` or `{ shiftId }` so the choice is explicit at the call site.
+
+**Changed**
+
+- **`parseEventTagPath` is now `parseNfcTagPath`, driven by a target registry**
+  (`TAG_TARGETS` in `constants/nfc.ts`, keyed by `NfcTagTarget` in
+  `constants/enums.ts`). It returns `{ target, path }` rather than a bare
+  string. Adding a module means adding one spec, not another parser — and the
+  registry is the whole reachable surface, so what a tag may point at stays
+  reviewable in one place.
+- **The parser handles query-string routes, which it previously stripped.**
+  Shift check-in is `/scheduling/checkin?shift=` or `?apparatus=`, so refusing
+  every query parameter would have made it untaggable. Rather than passing the
+  query through, a spec now _names_ the parameters that may carry an id: each
+  value is validated against the same id pattern as a path segment, only the
+  first valid one survives, and **the route is rebuilt from those pieces**. A
+  parameter the spec does not name is dropped, so a tag cannot smuggle `?next=`
+  past the parser by hanging it off a route that is otherwise legitimate.
+  `shift` is checked before `apparatus` because `ShiftCheckInPage` reads it
+  first — a parsed route has to mean what the page will do with it.
+- **`/display/:code` is deliberately not taggable.** It is a public,
+  unauthenticated kiosk screen for a tablet left in a room, keyed by a
+  non-guessable code. Writing that code to a tag anyone can read hands it to
+  whoever walks past, and sending a member's phone to a wall display is not a
+  check-in. There is a test asserting it stays rejected.
+- **The four remaining hand-built check-in URLs now go through the shared
+  builders** — `RoomQRCodesPage`, `ShiftCheckInPrintPage`, `ShiftDetailPanel`
+  and `AdminHoursQRCodePage` each assembled their own copy of a route the
+  parser has to recognize, which is exactly the drift that makes a tag scan as
+  valid in one place and unknown in another.
+- `NfcTagWriter` takes an `actionNoun` ("clock-in", "shift check-in"), so its
+  copy reads correctly outside events instead of calling everything check-in.
+
 ### Events: NFC tags as a second way in to check-in (2026-08-18)
 
 **Added**

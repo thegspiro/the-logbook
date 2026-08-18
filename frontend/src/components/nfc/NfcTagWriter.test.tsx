@@ -100,6 +100,25 @@ describe('NfcTagWriter', () => {
     expect(screen.queryByText(/hold the back of your phone/i)).not.toBeInTheDocument();
   });
 
+  it('reads correctly for a non-event module via actionNoun', async () => {
+    const user = userEvent.setup();
+    render(
+      <NfcTagWriter
+        url="https://logbook.example.org/admin-hours/cat-9/clock-in"
+        targetLabel="Station Duty"
+        actionNoun="clock-in"
+      />
+    );
+
+    expect(screen.getByText(/to open Station Duty clock-in/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /write tag/i }));
+    await waitFor(() => expect(pending).toHaveLength(1));
+    pending[0]?.resolve();
+
+    expect(await screen.findByText(/Tapping it now opens Station Duty clock-in/i)).toBeInTheDocument();
+  });
+
   it('warns that writing overwrites whatever the tag already held', () => {
     render(<NfcTagWriter url={URL_UNDER_TEST} targetLabel="Monthly Drill" />);
     expect(screen.getByText(/replaces any link already on the tag/i)).toBeInTheDocument();

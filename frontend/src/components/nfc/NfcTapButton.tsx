@@ -5,10 +5,13 @@ import { Modal } from '../Modal';
 import { ScanSuccessFlash } from '../ux/ScanSuccessFlash';
 import { useNfcScanner } from '../../hooks/useNfcScanner';
 import { useScanFeedback } from '../../hooks/useScanFeedback';
-import { parseEventTagPath } from '../../constants/nfc';
+import { parseNfcTagPath } from '../../constants/nfc';
 
 /**
- * Tap an NFC tag to jump straight to that event's check-in page.
+ * Tap an NFC tag to jump straight to whatever it points at — an event
+ * check-in, an admin hours clock-in, or a shift check-in. The tag decides the
+ * destination, so one button serves every module rather than each growing its
+ * own.
  *
  * Renders nothing when Web NFC is unavailable. Unlike the writer — which is
  * documentation as much as a control — this is a pure action, and a permanently
@@ -27,8 +30,8 @@ export const NfcTapButton: React.FC = () => {
 
   const handleRead = useCallback(
     (payload: string) => {
-      const path = parseEventTagPath(payload);
-      if (!path) {
+      const match = parseNfcTagPath(payload);
+      if (!match) {
         // Keep the radio armed: the member is most likely holding a tag from
         // another system, and closing here would make them start over.
         setRejected(true);
@@ -42,7 +45,7 @@ export const NfcTapButton: React.FC = () => {
       // dialog, where nothing on screen says NFC is still listening.
       stopRef.current();
       setOpen(false);
-      void navigate(path);
+      void navigate(match.path);
     },
     [navigate, signalScanSuccess]
   );
@@ -90,13 +93,13 @@ export const NfcTapButton: React.FC = () => {
             <Nfc className="h-10 w-10 text-blue-600 dark:text-blue-400" />
           </div>
           <p className="text-theme-text-secondary text-sm" role="status">
-            {scanning ? 'Hold the back of your phone against the event tag.' : 'Starting NFC…'}
+            {scanning ? 'Hold the back of your phone against the tag.' : 'Starting NFC…'}
           </p>
           {rejected && (
             <div className="alert-warning flex w-full items-start gap-3 text-left">
               <AlertTriangle className="text-theme-alert-warning-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
               <p className="text-theme-alert-warning-text text-sm">
-                That tag is not an event check-in tag for this site. Try a different tag.
+                That tag is not a check-in tag for this site. Try a different tag.
               </p>
             </div>
           )}

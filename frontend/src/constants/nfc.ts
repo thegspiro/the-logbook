@@ -1,3 +1,5 @@
+import { NfcTagTarget } from './enums';
+
 /**
  * Web NFC support detection, payload decoding, and error messaging.
  *
@@ -61,28 +63,88 @@ export function readNdefMessageText(message: NDEFMessage): string | null {
   return null;
 }
 
-// Event ids are string UUIDs, but the bound is deliberately loose-and-capped
-// rather than a strict UUID match so the tag stays readable if id formats ever
-// change; the origin check below is what actually makes the value safe.
-const EVENT_TAG_PATTERNS = [/^\/events\/([A-Za-z0-9_-]{1,64})\/check-in\/?$/, /^\/events\/([A-Za-z0-9_-]{1,64})\/?$/];
+/**
+ * Ids are string UUIDs, but the bound is deliberately loose-and-capped rather
+ * than a strict UUID match so tags stay readable if id formats ever change.
+ * The origin check in `parseNfcTagPath` is what actually makes a value safe;
+ * this only keeps a matched id to a plausible shape.
+ */
+const TAG_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+interface NfcTargetSpec {
+  target: NfcTagTarget;
+  /** Matched against `url.pathname`; every capture group must be a valid id. */
+  pathPattern: RegExp;
+  /**
+   * Query parameters that carry an id, in precedence order. When a spec names
+   * any, at least one must be present and valid for the tag to match, and only
+   * the first valid one is carried into the returned route.
+   */
+  idQueryParams?: readonly string[];
+  /** Rebuilds the canonical in-app route from already-validated pieces. */
+  toPath: (ids: readonly string[], query: { name: string; value: string } | null) => string;
+}
+
+/**
+ * Every destination a tag may point at.
+ *
+ * `/display/:code` is deliberately absent. It is a public, unauthenticated
+ * kiosk screen for a tablet left in a room, keyed by a non-guessable code —
+ * putting that code on a tag anyone can read hands it to whoever walks past,
+ * and routing a member's phone to a wall display is not a check-in anyway.
+ */
+const TAG_TARGETS: readonly NfcTargetSpec[] = [
+  {
+    target: NfcTagTarget.EVENT_CHECK_IN,
+    // A tag written against the plain event page still means "check in here".
+    pathPattern: /^\/events\/([^/]+)(?:\/check-in)?\/?$/,
+    toPath: (ids) => `/events/${ids[0]}/check-in`,
+  },
+  {
+    target: NfcTagTarget.ADMIN_HOURS_CLOCK_IN,
+    pathPattern: /^\/admin-hours\/([^/]+)\/clock-in\/?$/,
+    toPath: (ids) => `/admin-hours/${ids[0]}/clock-in`,
+  },
+  {
+    target: NfcTagTarget.SHIFT_CHECK_IN,
+    pathPattern: /^\/scheduling\/checkin\/?$/,
+    // `apparatus` resolves to whichever shift is running when the tag is
+    // tapped, so a tag on the truck outlives every individual shift. `shift`
+    // is checked first because ShiftCheckInPage prefers it, and the parsed
+    // route has to mean what the page will do with it.
+    idQueryParams: ['shift', 'apparatus'],
+    toPath: (_ids, query) => `/scheduling/checkin?${query?.name}=${encodeURIComponent(query?.value ?? '')}`,
+  },
+];
+
+export interface NfcTagMatch {
+  /** Which kind of destination the tag named. */
+  target: NfcTagTarget;
+  /** Canonical in-app route, rebuilt from validated pieces. */
+  path: string;
+}
 
 /**
  * Turns the raw text read off an NFC tag into an in-app route, or null when
  * the payload is not one of ours.
  *
  * SECURITY — an NFC tag is writable by anyone holding a phone, so its payload
- * is untrusted input on par with a scanned QR code. Two invariants keep a
+ * is untrusted input on par with a scanned QR code. Four invariants keep a
  * hostile tag from turning a tap into an open redirect or a
  * `javascript:`/`data:` navigation:
  *
  *  1. The payload is resolved against this app's own origin and rejected
  *     unless it lands back on that exact origin.
- *  2. Only the two known event paths are accepted, and the *normalized* path
- *     is returned — never the raw string — so callers hand a fixed-shape route
- *     to react-router rather than assigning an attacker-supplied URL to
- *     `window.location`.
+ *  2. Only the paths named in `TAG_TARGETS` are accepted.
+ *  3. Every id — captured from the path or read from a query parameter — must
+ *     match `TAG_ID_PATTERN`. A parameter the spec does not name is dropped
+ *     rather than forwarded, so a tag cannot smuggle `?next=` past the parser
+ *     by hanging it off a route that is otherwise legitimate.
+ *  4. The route is **rebuilt** from those validated pieces — the raw string is
+ *     never returned — so callers hand a fixed-shape path to react-router
+ *     rather than assigning an attacker-supplied URL to `window.location`.
  */
-export function parseEventTagPath(rawPayload: string, origin?: string): string | null {
+export function parseNfcTagPath(rawPayload: string, origin?: string): NfcTagMatch | null {
   const trimmed = rawPayload.trim();
   if (!trimmed) return null;
 
@@ -100,18 +162,56 @@ export function parseEventTagPath(rawPayload: string, origin?: string): string |
   // origin of "null", those schemes too.
   if (url.origin !== appOrigin) return null;
 
-  for (const pattern of EVENT_TAG_PATTERNS) {
-    const match = pattern.exec(url.pathname);
-    const eventId = match?.[1];
-    if (eventId) return `/events/${eventId}/check-in`;
+  for (const spec of TAG_TARGETS) {
+    const match = spec.pathPattern.exec(url.pathname);
+    if (!match) continue;
+
+    const ids = match.slice(1);
+    if (ids.some((id) => !id || !TAG_ID_PATTERN.test(id))) continue;
+
+    let query: { name: string; value: string } | null = null;
+    if (spec.idQueryParams) {
+      for (const name of spec.idQueryParams) {
+        const value = url.searchParams.get(name);
+        if (value && TAG_ID_PATTERN.test(value)) {
+          query = { name, value };
+          break;
+        }
+      }
+      // A spec that names id parameters cannot be satisfied without one.
+      if (!query) continue;
+    }
+
+    return { target: spec.target, path: spec.toPath(ids, query) };
   }
   return null;
 }
 
+function withOrigin(origin: string | undefined, path: string): string {
+  const appOrigin = origin ?? (typeof window !== 'undefined' ? window.location.origin : '');
+  return `${appOrigin}${path}`;
+}
+
 /** Absolute URL to encode onto a tag for an event's self check-in page. */
 export function buildEventCheckInUrl(eventId: string, origin?: string): string {
-  const appOrigin = origin ?? (typeof window !== 'undefined' ? window.location.origin : '');
-  return `${appOrigin}/events/${eventId}/check-in`;
+  return withOrigin(origin, `/events/${eventId}/check-in`);
+}
+
+/** Absolute URL to encode onto a tag for an admin hours category's clock-in. */
+export function buildAdminHoursClockInUrl(categoryId: string, origin?: string): string {
+  return withOrigin(origin, `/admin-hours/${categoryId}/clock-in`);
+}
+
+/**
+ * Absolute URL to encode onto a tag for shift check-in.
+ *
+ * Prefer the apparatus form for anything physically mounted: it resolves to
+ * whichever shift is running at tap time, so one tag on the truck serves every
+ * shift, where a shift-keyed tag is dead the moment that shift ends.
+ */
+export function buildShiftCheckInUrl(ref: { apparatusId: string } | { shiftId: string }, origin?: string): string {
+  const query = 'apparatusId' in ref ? `apparatus=${ref.apparatusId}` : `shift=${ref.shiftId}`;
+  return withOrigin(origin, `/scheduling/checkin?${query}`);
 }
 
 /**

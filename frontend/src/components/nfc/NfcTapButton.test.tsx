@@ -96,6 +96,20 @@ describe('NfcTapButton', () => {
     expect(readers[0]?.signal?.aborted).toBe(true);
   });
 
+  it.each([
+    ['admin hours clock-in', '/admin-hours/cat-9/clock-in', '/admin-hours/cat-9/clock-in'],
+    ['apparatus shift check-in', '/scheduling/checkin?apparatus=eng-4', '/scheduling/checkin?apparatus=eng-4'],
+  ])('routes a %s tag to its own module', async (_label, tagPath, expected) => {
+    const user = userEvent.setup();
+    renderButton();
+    await user.click(screen.getByRole('button', { name: /tap tag/i }));
+    await waitFor(() => expect(readers).toHaveLength(1));
+
+    readers[0]?.emitUrl(`${window.location.origin}${tagPath}`);
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(expected));
+  });
+
   it('rejects an off-origin tag, keeps scanning, and does not navigate', async () => {
     const user = userEvent.setup();
     renderButton();
@@ -104,7 +118,7 @@ describe('NfcTapButton', () => {
 
     readers[0]?.emitUrl('https://evil.example.com/events/abc123/check-in');
 
-    expect(await screen.findByText(/not an event check-in tag/i)).toBeInTheDocument();
+    expect(await screen.findByText(/not a check-in tag/i)).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
     // The dialog stays open so the member can try another tag.
     expect(screen.getByText(/hold the back of your phone/i)).toBeInTheDocument();
@@ -129,7 +143,7 @@ describe('NfcTapButton', () => {
     await waitFor(() => expect(readers).toHaveLength(1));
 
     readers[0]?.emitUrl('https://evil.example.com/events/abc123/check-in');
-    expect(await screen.findByText(/not an event check-in tag/i)).toBeInTheDocument();
+    expect(await screen.findByText(/not a check-in tag/i)).toBeInTheDocument();
 
     readers[0]?.emitUrl(`${window.location.origin}/events/good-id/check-in`);
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/events/good-id/check-in'));
