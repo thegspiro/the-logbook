@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A dropped setting is now named instead of silently becoming a default (2026-08-18)
+
+**Added**
+
+- **`python -m app.preflight` reports whether a configuration can start,
+  without starting it.** Until now the first validation of a configuration was
+  the boot that ran on it, so a bad value was discovered by losing the service.
+  Run `docker compose run --rm backend python -m app.preflight` before
+  restarting: exit `0` means it starts, `1` lists what blocks it, `2` means a
+  value is malformed (an empty string for a boolean, which otherwise surfaces
+  as a pydantic traceback). Every blocking check is gated on production or
+  staging, so a development run proves nothing about production — `--as
+production` evaluates the same values under that environment, and a clean
+  development run now says so rather than printing a bare pass.
+
+- **Startup failures name which settings actually reached the process.** Once
+  pydantic applies defaults, "the operator set this to the default" and "this
+  never arrived" are the same value, so a blocked boot reported the effective
+  value and never the reason. `os.environ` still knows the difference, and a
+  blocked startup now prints it:
+
+  ```
+  SECURITY_ENFORCE_HTTPS   set in environment  'false'
+  SECURITY_REQUIRE_TLS     NOT PRESENT — using built-in default True
+  ```
+
+  with the reason a value goes missing: a Docker Compose `environment:` block
+  is a whitelist, and a variable absent from it cannot be set from `.env` at
+  all. The reported names are derived from the settings model, so a future
+  check that names its setting is covered without registering it anywhere.
+  Values of secrets are withheld; only presence is reported.
+
+- **`docs/UPGRADING.md`** — read before pulling a new version into a running
+  deployment. Records the changes that can stop an existing deployment from
+  starting (`SECURITY_REQUIRE_TLS` defaulting true, `RATE_LIMIT_ENABLED`
+  becoming enforced) with both ways out of each, and requires an entry for any
+  future change that can block a boot. A fresh install passing is not evidence
+  for these: they only ever fail installations that already existed.
+
 ### Production settings in `.env` now reach the backend container (2026-08-18)
 
 **Fixed**
