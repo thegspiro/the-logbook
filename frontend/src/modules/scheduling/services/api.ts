@@ -218,7 +218,7 @@ export interface ShiftTemplateRecord {
   end_time_of_day: string;
   duration_hours: number;
   color?: string;
-  positions?: string[] | EventTemplatePositions;
+  positions?: Array<string | PositionSlot> | EventTemplatePositions;
   min_staffing: number;
   category?: string;
   apparatus_type?: string;
