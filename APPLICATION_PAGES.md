@@ -223,16 +223,18 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ## Locations (when Facilities module is off)
 
-| URL                   | Page                 | Permission                                    |
-| --------------------- | -------------------- | --------------------------------------------- |
-| `/locations`          | Locations Management | Authenticated                                 |
-| `/locations/qr-codes` | Check-In QR Codes    | `locations.manage` **OR** `facilities.manage` |
+| URL                   | Page                 | Permission                                                            |
+| --------------------- | -------------------- | --------------------------------------------------------------------- |
+| `/locations`          | Locations Management | Authenticated                                                         |
+| `/locations/qr-codes` | Check-In QR Codes    | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` |
 
 > Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
 
 > **Name check:** the page's on-screen heading is **"Check-In QR Codes"** — that is what a reader will see and what the command palette calls it. "Room QR Codes" is the component's filename (`RoomQRCodesPage.tsx`) and appears in some engineering notes; it is not a user-facing label. Documentation should use the heading.
 
 > **The QR directory is restricted, unlike the rest of Locations** _(corrected 2026-08-16)_. This page was previously listed here as Authenticated; it is not. The route is registered by the Facilities module (so it resolves in both Locations and Facilities modes) behind `locations.manage` **OR** `facilities.manage`. The restriction is the point: a kiosk display code is a check-in credential, so a bulk directory of every room's code is a different object from any one room's QR. Regenerating a display code invalidates the previous one, and codes are tenant-bound.
+
+> **`apparatus.view` also opens it** _(documented 2026-08-18)_. The page carries apparatus shift check-in codes as well as room kiosk codes, and an apparatus code is a permanent id-based URL rather than a bearer credential — there is nothing in it to leak. Room kiosk codes are redacted by the backend for anyone without `locations.manage` or `facilities.manage`, so those cards simply do not render for an apparatus-only viewer.
 
 ---
 
@@ -385,6 +387,7 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | URL                               | Page                      | Permission         |
 | --------------------------------- | ------------------------- | ------------------ |
 | `/inventory/admin`                | Admin Dashboard           | `inventory.manage` |
+| `/inventory/admin/setup`          | Inventory Setup           | `inventory.manage` |
 | `/inventory/admin/items`          | Manage Items              | `inventory.manage` |
 | `/inventory/admin/pool`           | Pool Items                | `inventory.manage` |
 | `/inventory/admin/categories`     | Categories                | `inventory.manage` |
@@ -417,7 +420,48 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 >
 > **The Qty column reads from in-date lots** for any item that has them, labelled "in-date lots" so it is not mistaken for the pool figure beside it, and the CSV export carries the same number in a **Ready Lot Stock** column. `InventoryItem.quantity` is not maintained for lot-stocked consumables — receiving a lot does not touch it and an equipment-check swap decrements only the lot — so the grid used to report whatever the number happened to be when the item was created. An item whose lots have all expired reads as **zero**, not as its stale quantity.
 
+> **Inventory Setup** (`/inventory/admin/setup`) _(documented 2026-08-18)_ is the
+> guided first-run workflow. Adding an item usefully requires four things to
+> exist first, in order — a room, a storage area inside it, a category (which
+> decides what fields the item form shows), and only then the item — and
+> nothing on the admin hub said so. A new quartermaster met the item form
+> first, found three empty dropdowns, and left them empty; the resulting record
+> cannot be found on a shelf, never appears in a low-stock alert, and has no
+> inspection cycle. This page puts the four steps in dependency order on one
+> screen and carries each answer into the next. Any step can be skipped — a
+> department that already has rooms is not made to re-declare them — and each
+> step links to its full admin page, which remains the place to do the work at
+> volume.
+
 > The admin dashboard provides summary statistics and quick-link navigation with grouped card sections. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests, equipment kits, and variant groups. The **Issuance Allowances** page (`/inventory/admin/allowances`) configures per-category issue limits by role and period (annual/career/one-time). The **Impact Planner** (`/inventory/admin/impact-planner`) scopes a prospective new issue: filter the roster to see who is impacted and the sizes needed, net demand against on-hand stock for the quantity to buy, estimate cost, then act on it (draft reorders, bulk-issue stock, request missing sizes, export PDF/CSV, save named plans). Member uniform/PPE sizing is captured via the **Size Preferences** modal — members edit their own (`/inventory/my/size-preferences`) and quartermasters edit any member's (`/inventory/members/{user_id}/size-preferences`). The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance). Non-admin users see only their own assigned equipment on the inventory dashboard.
+
+---
+
+## Medical Supplies _(documented 2026-08-18)_
+
+| URL                            | Page               | Permission                                       |
+| ------------------------------ | ------------------ | ------------------------------------------------ |
+| `/medical-supplies`            | Medical Supplies   | `inventory.view_medical` **OR** `inventory.view` |
+| `/medical-supplies/categories` | Medical Categories | `inventory.view_medical` **OR** `inventory.view` |
+
+> The EMS side of the department's stock, on its own pages so it can be run by
+> its own officer. Gear and uniforms live under **Inventory** and never appear
+> here. The list opens on what expires rather than on a full item count: dated
+> stock is what goes wrong quietly, and an officer checking in wants to know
+> what is about to lapse before they want an inventory figure.
+
+> **An item is medical because of its category** — there is no item-type field.
+> That is why `/medical-supplies/categories` exists as a page of its own and why
+> it has no type picker: everything created there is medical by construction.
+
+> **Both grants open these pages, and that is deliberate.** The route mirrors
+> the API's OR check rather than gating on the narrow permission alone. A
+> department that runs one supply line grants `inventory.view`; one that
+> appointed an EMS supply officer grants only `inventory.view_medical`. Gating
+> on the narrow permission by itself would bounce the first group off a page the
+> API would have served them — a redirect to the dashboard with no explanation.
+> The shared list lives in `MEDICAL_VIEW_PERMISSIONS` in the module's
+> `routes.tsx` so the two routes cannot drift apart.
 
 ---
 
@@ -445,17 +489,33 @@ Tab-based interface with the following views:
 
 ### Scheduling Admin Pages (2026-03-19)
 
-| URL                           | Page                       | Permission                                                                |
-| ----------------------------- | -------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling/templates`       | Shift Templates Management | `scheduling.manage`                                                       |
-| `/scheduling/patterns`        | Shift Pattern Management   | `scheduling.manage`                                                       |
-| `/scheduling/reports`         | Scheduling Reports         | `scheduling.manage`                                                       |
-| `/scheduling/settings`        | Scheduling Settings        | `scheduling.manage`                                                       |
-| `/scheduling/platoons`        | Platoon Management         | `scheduling.manage`                                                       |
-| `/scheduling/checkin`         | Shift Check-In             | Authenticated                                                             |
-| `/scheduling/supply/expiring` | Expiring Supply Items      | `equipment_check.view` **OR** `inventory.view` **OR** `scheduling.manage` |
+| URL                           | Page                          | Permission                                                                  |
+| ----------------------------- | ----------------------------- | --------------------------------------------------------------------------- |
+| `/scheduling/templates`       | Shift Templates Management    | `scheduling.manage`                                                         |
+| `/scheduling/patterns`        | Shift Pattern Management      | `scheduling.manage`                                                         |
+| `/scheduling/reports`         | Scheduling Reports            | `scheduling.manage`                                                         |
+| `/scheduling/settings`        | Scheduling Settings           | `scheduling.manage`                                                         |
+| `/scheduling/platoons`        | Platoon Management            | `scheduling.manage`                                                         |
+| `/scheduling/qualifications`  | Position Qualification Roster | any of `scheduling.manage`, `training.view_all`, `training.manage`          |
+| `/scheduling/checkin`         | Shift Check-In                | Authenticated                                                               |
+| `/scheduling/supply/expiring` | Expiring Supply Items         | `equipment_check.view` **OR** `inventory.manage` **OR** `scheduling.manage` |
 
 > Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
+
+#### Position Qualification Roster (`/scheduling/qualifications`) _(documented 2026-08-18)_
+
+Answers "who is cleared to drive?" in one screen rather than one apparatus
+operator tab at a time. Shift-position eligibility is OR'd from three
+independent sources — rank, completed training, and the organization's
+open-position list — so a member can hold a position for a reason their
+profile does not show; the roster names the source next to each member. A
+second tab lists **driver exceptions**: members whose rank alone clears them
+to sign up as a driver with no EVOC certification behind it.
+
+> **Training permissions open it, not just scheduling ones.** The screen is a
+> training-compliance view as much as a scheduling one, so `training.view_all`
+> and `training.manage` admit a training officer who holds no scheduling
+> grant.
 
 > **Tab clicks now write `?tab=`** _(2026-08-09)_. Until this was fixed, clicking
 > any tab on `/scheduling` selected it and immediately snapped back to
@@ -508,16 +568,51 @@ Sections are defined in
 
 ### Equipment Check Pages (2026-03-19)
 
-| URL                                                 | Page                             | Permission                                                                |
-| --------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `scheduling.manage`                                                       |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `scheduling.manage`                                                       |
-| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`                                                       |
-| `/scheduling?tab=equipment-checks`                  | My Equipment Checklists          | Authenticated                                                             |
-| `/scheduling/supply/expiring`                       | Expiring on Apparatus            | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
-| `/scheduling/apparatus-inventory`                   | Apparatus Inventory              | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| URL                                                 | Page                             | Permission                                                                   |
+| --------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- |
+| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `scheduling.manage`                                                          |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `scheduling.manage`                                                          |
+| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`                                                          |
+| `/scheduling?tab=equipment-checks`                  | My Equipment Checklists          | Authenticated                                                                |
+| `/scheduling/supply/expiring`                       | Expiring on Apparatus            | any of `scheduling.manage`, `equipment_check.view`, `inventory.manage`       |
+| `/scheduling/apparatus-inventory`                   | Apparatus Inventory              | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view`    |
+| `/scheduling/equipment`                             | Fleet Board                      | any of `equipment_check.view`, `scheduling.manage`                           |
+| `/scheduling/equipment/checks`                      | Check Log                        | any of `equipment_check.submit`, `equipment_check.view`, `scheduling.manage` |
+| `/scheduling/equipment/:apparatusId`                | Apparatus Detail                 | any of `equipment_check.view`, `scheduling.manage`                           |
 
 > The **Template Builder** provides a drag-and-drop interface for creating structured checklists with nested compartments and multiple check types (pass/fail, quantity, level, date/lot, reading). Its quick-add bar searches the inventory catalog as you type, so **adding a position and linking it to a catalog item are one act** _(2026-08-10)_ — and the toolbar carries a linked/unlinked count, because everything the supply screens can do hangs off `inventory_item_id`. For checklists that already exist there is a reviewed bulk pass that proposes a catalog item for every unlinked position; **only exact name matches are pre-selected**, since "Oxygen Mask" scores high against both the adult and the pediatric mask. The **Reports** page has three tabs: Compliance Dashboard, Failure/Deficiency Log, and Item Trend History with CSV and PDF export.
+
+#### Fleet Board (`/scheduling/equipment`) _(documented 2026-08-18)_
+
+The front door for equipment checks, organised around the apparatus rather than
+the checklist assignment — "is E-1 good?" is the question an officer arrives
+with, and the older checklist grid could not answer it because one truck's state
+was spread across several cards, a separate inventory page, and an admin-only
+report. A member's own due checks stay on the page as a strip at the top, ranked
+so an overdue check cannot read as one due next Tuesday.
+
+#### Apparatus Detail (`/scheduling/equipment/:apparatusId`) _(documented 2026-08-18)_
+
+One rig, four tabs, each of which used to be a different page: today's checks,
+what it carries (Apparatus Inventory), what is wrong or expiring with it
+(Supply, plus a failure log only admins could reach), and whether it has been
+getting checked at all. Nothing new is added here — the existing surfaces are
+gathered behind the apparatus they were always about.
+
+#### Check Log (`/scheduling/equipment/checks`) _(documented 2026-08-18)_
+
+Expected-versus-actual check history, in two views over one dataset: a **grid**
+of apparatus against duty days, read by colour, for "is the pattern okay?"; and
+a chronological **log** for "what happened on that one?". Rows for checks that
+_did not happen_ are the reason the page exists — the stored checks alone can
+only ever report 100% completion, so the server reconstructs the expected side
+and a missed check arrives as an entry with no check id. The same component runs
+scoped to a single apparatus as the Check log tab of Apparatus Detail.
+
+> **Crew-level, unlike the rest of the fleet pages.** `equipment_check.submit`
+> opens the Check Log because the server narrows a member without
+> `equipment_check.view` to their own checks rather than returning 403 — the
+> route matches what the API will actually serve.
 
 #### Expiring on Apparatus (`/scheduling/supply/expiring`) _(documented 2026-08-10)_
 

@@ -61,3 +61,28 @@
 16-02-slack-connect.png
 16-04-documenso-connect.png
 16-06-paypal-connect.png
+
+# --- Post-move modal captures (added 2026-08-18) -----------------------------
+#
+# Both were captured AFTER the 2026-08-15 canvas move, so the explanation above
+# does not cover them: nothing about them is stale. Both were opened and read
+# before being listed here.
+#
+# The modal case is structural, not a capture defect. A dialog's scrim is
+# `position: fixed; inset: 0`, and a fixed box is laid out against the initial
+# containing block, which excludes the scrollbar gutter that
+# `scrollbar-gutter: stable` reserves on the root. The scrim therefore stops
+# 15px short of the window edge by definition, and the gutter keeps showing the
+# root gradient underneath. The canvas move fixed the original defect — that
+# strip is no longer the browser's default white — but on a light page under a
+# dark scrim a pale gradient against a dimmed page still trips the luma check.
+#
+# So, unlike every entry above, RE-CAPTURING THESE WILL NOT CLEAR THEM, and any
+# future modal screenshot on a light page will land here too. That makes this
+# section a growing list rather than a shrinking one, which is the opposite of
+# what this file is for; the durable fix is for `check_unpainted_gutter` to stop
+# reporting the subtle light-page-under-scrim tier, which would retire most of
+# the block above along with these two. Left as-is here because that is a change
+# to the check's contract, not a screenshot fix.
+05-75-setup-item-prefilled.png
+06-26-room-delete-subrooms.png

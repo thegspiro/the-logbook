@@ -68,6 +68,21 @@ PROTECTED_RE = re.compile(r"<ProtectedRoute\b")
 REDIRECT_RE = re.compile(r"<Navigate\b")
 PERM_ONE_RE = re.compile(r'requiredPermission="([^"]+)"')
 PERM_ANY_RE = re.compile(r"requiredAnyPermission=\{\[([^\]]*)\]\}")
+# A route may pass a named constant instead of an array literal, so that two
+# routes sharing one gate cannot drift apart:
+#
+#     export const MEDICAL_VIEW_PERMISSIONS = ['inventory.view_medical', ...];
+#     <ProtectedRoute requiredAnyPermission={MEDICAL_VIEW_PERMISSIONS}>
+#
+# Reading only the literal form scored both medical-supplies routes as
+# authenticated-only and demanded the document say so — the checker would have
+# talked the file into the exact error it exists to catch. Resolve the constant
+# from the same file instead.
+PERM_CONST_REF_RE = re.compile(r"requiredAnyPermission=\{([A-Za-z_][A-Za-z0-9_]*)\}")
+CONST_ARRAY_RE = re.compile(
+    r"^(?:export\s+)?const\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*\[([^\]]*)\]",
+    re.M,
+)
 PERM_TOKEN_RE = re.compile(r"[a-z_]+\.(?:\*|[a-z_]+)")
 
 # A table row whose first cell is a route: | `/path` | Page | Permission |
@@ -121,19 +136,36 @@ class Finding:
         )
 
 
-def gate_for(window: str) -> set[str]:
+def gate_for(window: str, consts: dict[str, set[str]], source: str) -> set[str]:
     """Permissions enforced by the first ProtectedRoute in a route's element.
 
     An empty set means authenticated-only. That is the honest reading rather
     than "ungated": every module route sits inside a bare `<ProtectedRoute>` in
     `App.tsx` that wraps the whole app layout, so a child with no gate of its
     own still requires a session.
+
+    `consts` maps the route file's own `const NAME = [...]` arrays to the
+    permissions in them, so a gate passed by name resolves the same as one
+    written inline.
     """
     if not PROTECTED_RE.search(window):
         return set()
     perms = set(PERM_ONE_RE.findall(window))
     for group in PERM_ANY_RE.findall(window):
         perms.update(PERM_TOKEN_RE.findall(group))
+    for name in PERM_CONST_REF_RE.findall(window):
+        if name not in consts:
+            # Silently scoring this as authenticated-only is the one outcome
+            # worth refusing: it would report a gated page as open and then
+            # insist the document agree. An unresolvable name means the array
+            # lives in another file — move it, or teach this script to follow
+            # the import.
+            raise SystemExit(
+                f"{source}: requiredAnyPermission={{{name}}} refers to a "
+                f"permission list this script cannot resolve. Declare the "
+                f"array in the same route file, or extend CONST_ARRAY_RE."
+            )
+        perms.update(consts[name])
     return perms
 
 
@@ -145,6 +177,10 @@ def collect_routes() -> tuple[dict[str, tuple[set[str], str]], set[str]]:
         for file in sorted(glob.glob(str(REPO_ROOT / pattern))):
             text = Path(file).read_text()
             rel = str(Path(file).relative_to(REPO_ROOT))
+            consts = {
+                name: set(PERM_TOKEN_RE.findall(body))
+                for name, body in CONST_ARRAY_RE.findall(text)
+            }
             matches = list(PATH_RE.finditer(text))
             for i, m in enumerate(matches):
                 end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
@@ -155,7 +191,7 @@ def collect_routes() -> tuple[dict[str, tuple[set[str], str]], set[str]]:
                     continue
                 # First definition wins; a later duplicate is a nested index
                 # route, not a second page.
-                routes.setdefault(key, (gate_for(window), rel))
+                routes.setdefault(key, (gate_for(window, consts, rel), rel))
     return {k: v for k, v in routes.items() if k not in redirects}, redirects
 
 
