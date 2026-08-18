@@ -13,7 +13,9 @@ import pytest
 
 from app.core.config import Settings
 from app.core.startup_diagnostics import (
+    boot_blocking_setting_names,
     env_presence_report,
+    missing_from_compose,
     settings_named_in,
     would_block_startup,
 )
@@ -122,3 +124,75 @@ class TestWouldBlockStartup:
         gate = gate[: gate.index("\n@asynccontextmanager")]
         assert '("production", "staging")' in gate
         assert "SECURITY_BLOCK_INSECURE_DEFAULTS" in gate
+
+
+class TestDotenvIsNotReportedAsMissing:
+    """Settings declares env_file=".env", which pydantic reads WITHOUT
+    exporting into os.environ. Treating absent-from-environ as defaulted would
+    tell an operator their .env is being ignored at the moment it is being
+    honoured — the precise false claim this report exists to prevent.
+    """
+
+    def test_value_from_dotenv_is_not_called_missing(self, monkeypatch):
+        monkeypatch.delenv("DB_SSL_CA", raising=False)
+        # Simulates pydantic having loaded the value from a .env file: the
+        # setting differs from its default while absent from os.environ.
+        settings = Settings(**{**_PROD, "DB_SSL_CA": "/etc/ssl/logbook/ca.pem"})
+        joined = "\n".join(
+            env_presence_report(["CRITICAL: DB_SSL_CA is set"], settings)
+        )
+        assert "NOT PRESENT" not in joined
+        assert ".env file read by the application" in joined
+        # And no advice claiming the value fails to arrive.
+        assert "not reaching the container" not in joined.lower()
+
+    def test_a_genuinely_absent_setting_is_still_reported(self, monkeypatch):
+        monkeypatch.delenv("SECURITY_REQUIRE_TLS", raising=False)
+        joined = "\n".join(
+            env_presence_report(["CRITICAL: SECURITY_REQUIRE_TLS"], Settings(**_PROD))
+        )
+        assert "NOT PRESENT" in joined
+
+
+class TestBootBlockingSettingNames:
+    def test_it_finds_the_settings_that_can_block_a_boot(self):
+        names = boot_blocking_setting_names(Settings(**_PROD))
+        for expected in ("SECURITY_REQUIRE_TLS", "DB_SSL", "SECURITY_ENFORCE_HTTPS"):
+            assert expected in names
+
+    def test_names_are_real_settings_not_stray_words(self):
+        names = boot_blocking_setting_names(Settings(**_PROD))
+        fields = set(Settings.model_fields)
+        assert set(names) <= fields
+
+
+class TestMissingFromCompose:
+    def test_it_names_what_a_compose_file_cannot_pass_through(self):
+        compose = """
+services:
+  backend:
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT}
+      SECURITY_ENFORCE_HTTPS: ${SECURITY_ENFORCE_HTTPS}
+"""
+        missing = missing_from_compose(
+            compose, ["ENVIRONMENT", "SECURITY_ENFORCE_HTTPS", "SECURITY_REQUIRE_TLS"]
+        )
+        # Exactly the gap that caused the 2026-08-18 outage.
+        assert missing == ["SECURITY_REQUIRE_TLS"]
+
+    def test_a_name_only_in_a_comment_does_not_count_as_present(self):
+        compose = """
+services:
+  backend:
+    # SECURITY_REQUIRE_TLS could go here one day
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT}
+"""
+        assert "SECURITY_REQUIRE_TLS" in missing_from_compose(
+            compose, ["SECURITY_REQUIRE_TLS"]
+        )
+
+    def test_nothing_missing_returns_empty(self):
+        compose = "environment:\n  DB_SSL: ${DB_SSL:-false}\n"
+        assert missing_from_compose(compose, ["DB_SSL"]) == []

@@ -37,7 +37,31 @@ production` evaluates the same values under that environment, and a clean
   is a whitelist, and a variable absent from it cannot be set from `.env` at
   all. The reported names are derived from the settings model, so a future
   check that names its setting is covered without registering it anywhere.
-  Values of secrets are withheld; only presence is reported.
+  Values of secrets are withheld; only presence is reported, and a value
+  pydantic loaded from a `.env` file is distinguished from a default rather
+  than reported as missing.
+
+**Fixed**
+
+- **Preflight no longer reports success for a TLS configuration that cannot
+  start.** A `DB_SSL_CA` / `REDIS_SSL_CA` path that does not resolve inside the
+  container produces no critical, but aborts startup in
+  `ssl.create_default_context`. Preflight now opens the referenced files and
+  fails with the path named, since the mistake is almost always a host path
+  given to a setting read inside the container.
+
+- **`--as` rejects an unrecognised environment.** Blocking checks run only for
+  production and staging, so a typo such as `--as produciton` ran none of them
+  and still reported success — silently certifying an unchecked configuration.
+
+- **`python -m app.preflight --compose PATH` names the settings a compose file
+  cannot pass through**, before an upgrade starts gating on one of them. The
+  authoritative list is read out of the security validators' own source rather
+  than kept as a list — a list is exactly what goes stale, and staleness is the
+  failure being guarded against. Aimed at hand-maintained compose files that
+  never receive changes from this repository, Unraid's Compose Manager
+  especially; run against the file behind the 2026-08-18 outage it reports
+  `SECURITY_REQUIRE_TLS` among the gaps.
 
 - **`docs/UPGRADING.md`** — read before pulling a new version into a running
   deployment. Records the changes that can stop an existing deployment from

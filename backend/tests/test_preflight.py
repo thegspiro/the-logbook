@@ -93,3 +93,78 @@ class TestAsEnvironment:
         prod_env.setenv("SECURITY_ENFORCE_HTTPS", "true")
         prod_env.setenv("SECURITY_REQUIRE_TLS", "false")
         assert preflight_main(["--as", "production"]) == 0
+
+
+class TestUnknownAsEnvironmentIsRejected:
+    """A typo must not certify an unchecked production configuration.
+
+    Blocking checks run only for production/staging, so `--as produciton`
+    would run none of them and still print "starts" with exit 0.
+    """
+
+    @pytest.mark.parametrize("bad", ["produciton", "Production", "prod", ""])
+    def test_unrecognised_target_is_an_error_not_a_pass(self, prod_env, bad: str):
+        with pytest.raises(SystemExit) as excinfo:
+            preflight_main(["--as", bad])
+        assert excinfo.value.code != 0
+
+
+class TestTlsCertificatePaths:
+    """A CA path produces no critical, so without an explicit check preflight
+    exits 0 for a configuration whose startup dies opening the file.
+    """
+
+    def test_unreadable_ca_blocks_and_is_named(self, prod_env, capsys, tmp_path):
+        prod_env.setenv("SECURITY_ENFORCE_HTTPS", "true")
+        prod_env.setenv("SECURITY_REQUIRE_TLS", "false")
+        prod_env.setenv("DB_SSL", "true")
+        prod_env.setenv("DB_SSL_CA", str(tmp_path / "absent-ca.pem"))
+        assert preflight_main([]) == 1
+        out = capsys.readouterr().out
+        assert "DB_SSL_CA" in out
+        assert "FileNotFoundError" in out
+        # The actionable half: the path resolves inside the container.
+        assert "INSIDE the container" in out
+
+    def test_readable_ca_is_accepted(self, prod_env, tmp_path):
+        ca = tmp_path / "ca.pem"
+        ca.write_text("-----BEGIN CERTIFICATE-----\n")
+        prod_env.setenv("SECURITY_ENFORCE_HTTPS", "true")
+        prod_env.setenv("SECURITY_REQUIRE_TLS", "false")
+        prod_env.setenv("DB_SSL", "true")
+        prod_env.setenv("DB_SSL_CA", str(ca))
+        assert preflight_main([]) == 0
+
+    def test_tls_disabled_does_not_check_paths(self, prod_env):
+        prod_env.setenv("SECURITY_ENFORCE_HTTPS", "true")
+        prod_env.setenv("SECURITY_REQUIRE_TLS", "false")
+        prod_env.setenv("DB_SSL", "false")
+        prod_env.setenv("DB_SSL_CA", "/nonexistent/ca.pem")
+        assert preflight_main([]) == 0
+
+
+class TestComposeCheck:
+    def test_it_names_the_setting_that_caused_the_outage(
+        self, prod_env, capsys, tmp_path
+    ):
+        compose = tmp_path / "compose.yaml"
+        compose.write_text(
+            "services:\n"
+            "  backend:\n"
+            "    environment:\n"
+            "      ENVIRONMENT: ${ENVIRONMENT}\n"
+            "      SECURITY_ENFORCE_HTTPS: ${SECURITY_ENFORCE_HTTPS}\n"
+        )
+        prod_env.setenv("SECURITY_ENFORCE_HTTPS", "true")
+        prod_env.setenv("SECURITY_REQUIRE_TLS", "false")
+        preflight_main(["--compose", str(compose)])
+        out = capsys.readouterr().out
+        assert "COMPOSE PASSTHROUGH CHECK" in out
+        assert "SECURITY_REQUIRE_TLS" in out
+
+    def test_unreadable_compose_path_is_reported_not_raised(self, prod_env, capsys):
+        assert preflight_main(["--compose", "/nonexistent/compose.yaml"]) == 2
+        out = capsys.readouterr().out
+        assert "COMPOSE FILE UNREADABLE" in out
+        # A host path is the likely mistake; name the mount.
+        assert "bind-mount" in out
