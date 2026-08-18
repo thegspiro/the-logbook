@@ -8768,9 +8768,24 @@ class Seeder:
         Submitted through the same public endpoint the request form uses; the
         admin tab otherwise renders "No event requests yet" under a caption
         describing a queue.
+
+        Public intake is opt-in as of 2026-08-17 (EV-5) and defaults to off, so
+        this turns it on first — exactly what an administrator does under
+        **Events -> Settings -> Request pipeline -> Accept Public Requests**.
+        Without it the post fails with a 404 that reads "Organization not
+        found", because a closed department is deliberately indistinguishable
+        from one that does not exist; that is correct behaviour and a very
+        confusing seeder failure, since the organization plainly does exist.
         """
         if items(self.api.get("/event-requests?limit=5"), "requests"):
             return
+        # Left on afterwards rather than restored: the demo department is
+        # meant to look like one that accepts outreach, and guide 04 pictures
+        # the setting itself.
+        self.api.patch(
+            "/events/settings",
+            {"request_pipeline": {"accept_public_requests": True}},
+        )
         org_id = pick(self.api.get("/auth/me"), "organization_id")
         self.api.post(
             f"/event-requests/public?organization_id={org_id}",
