@@ -18,6 +18,9 @@ interface State {
   errorInfo: ErrorInfo | null;
   isChunkError: boolean;
   copied: boolean;
+  /** Where and when the crash happened — see `componentDidCatch`. */
+  occurredAtUrl: string | null;
+  occurredAt: string | null;
 }
 
 function isChunkLoadError(error: Error): boolean {
@@ -39,6 +42,8 @@ export class ErrorBoundary extends Component<Props, State> {
       errorInfo: null,
       isChunkError: false,
       copied: false,
+      occurredAtUrl: null,
+      occurredAt: null,
     };
   }
 
@@ -50,9 +55,15 @@ export class ErrorBoundary extends Component<Props, State> {
     // Log the error to console (or send to error tracking service)
     console.error('ErrorBoundary caught an error:', error, errorInfo);
 
+    // Stamp the location and time here, not where the report is rendered. The
+    // fallback UI stays mounted while the member keeps navigating, so reading
+    // `window.location` at copy time names whatever page they wandered to
+    // afterwards and sends whoever debugs it to the wrong screen.
     this.setState({
       error,
       errorInfo,
+      occurredAtUrl: window.location.href,
+      occurredAt: new Date().toISOString(),
     });
 
     // A chunk-load failure is reported under its own type: it means members
@@ -80,6 +91,8 @@ export class ErrorBoundary extends Component<Props, State> {
       error: null,
       errorInfo: null,
       isChunkError: false,
+      occurredAtUrl: null,
+      occurredAt: null,
     });
   };
 
@@ -87,8 +100,8 @@ export class ErrorBoundary extends Component<Props, State> {
     const errorText = [
       `Error: ${this.state.error?.toString()}`,
       `\nComponent Stack: ${this.state.errorInfo?.componentStack}`,
-      `\nURL: ${window.location.href}`,
-      `\nTime: ${new Date().toISOString()}`,
+      `\nURL: ${this.state.occurredAtUrl ?? window.location.href}`,
+      `\nTime: ${this.state.occurredAt ?? new Date().toISOString()}`,
     ].join('');
 
     try {
