@@ -372,6 +372,54 @@ class TestDockerCompose:
         assert not missing, f"Backend missing required environment vars: {missing}"
 
 
+class TestBaseComposeReachesProductionGates:
+    """ENVIRONMENT=production must not be a one-way door in the base file.
+
+    The base backend `environment:` block is a whitelist and there is no
+    env_file, so a variable missing from it cannot be set from .env at all.
+    ENVIRONMENT itself IS read from .env, so a base-only stack can be put into
+    production mode — where these gates block startup — while the knobs that
+    satisfy or waive them stay unreachable. Editing .env then changes nothing
+    and the container crash-loops with no way out.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.env = yaml.safe_load(_read(ROOT_DIR / "docker-compose.yml"))["services"][
+            "backend"
+        ]["environment"]
+
+    def test_environment_is_read_from_dot_env(self):
+        # The premise of every assertion below: base-only CAN enter production.
+        assert "${ENVIRONMENT:-development}" in str(self.env["ENVIRONMENT"])
+
+    @pytest.mark.parametrize(
+        "setting",
+        [
+            "SECURITY_ENFORCE_HTTPS",
+            "SECURITY_REQUIRE_TLS",
+            "SECURITY_ALLOW_UNVERIFIED_TLS",
+            "DB_SSL",
+            "DB_SSL_CA",
+            "REDIS_SSL",
+            "REDIS_SSL_CA",
+            "VOTE_SIGNING_KEY",
+            "DEBUG",
+            "ENABLE_DOCS",
+            "TRUSTED_PROXY_IPS",
+        ],
+    )
+    def test_production_gate_is_settable_from_dot_env(self, setting: str):
+        assert setting in self.env, (
+            f"{setting} is absent from the base compose environment whitelist, "
+            "so setting it in .env silently does nothing"
+        )
+        assert f"${{{setting}" in str(self.env[setting]), (
+            f"{setting} is hardcoded in the base compose file rather than "
+            "interpolated from .env"
+        )
+
+
 class TestProductionComposeSecuritySwitches:
     """Production must fail closed unless plaintext transport is explicit."""
 

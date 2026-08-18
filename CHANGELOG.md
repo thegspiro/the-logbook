@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Production settings in `.env` now reach the backend container (2026-08-18)
+
+**Fixed**
+
+- **`docker-compose.yml` passed `ENVIRONMENT` through from `.env` but not the
+  settings that production mode then demands.** The backend service has no
+  `env_file` and its `environment:` block is an explicit whitelist, so a
+  variable missing from it could not be set from `.env` at all. Setting
+  `ENVIRONMENT=production` there put the backend into production mode — where
+  `SECURITY_ENFORCE_HTTPS`, `DB_SSL` and `REDIS_SSL` block startup — while
+  every knob that satisfies or waives those gates stayed unreachable. The
+  container crash-looped and editing `.env` did nothing, because the value
+  never arrived. `SECURITY_ENFORCE_HTTPS`, `SECURITY_REQUIRE_TLS`,
+  `SECURITY_ALLOW_UNVERIFIED_TLS`, `DB_SSL`, `DB_SSL_CA`, `REDIS_SSL`,
+  `REDIS_SSL_CA` and `VOTE_SIGNING_KEY` are now passed through, with defaults
+  matching the application's own. The production override sets its own values
+  and still wins on merge, so a hardened deployment is unchanged.
+
+- **`DEBUG`, `ENABLE_DOCS` and `TRUSTED_PROXY_IPS` were silently ignored the
+  same way.** `TRUSTED_PROXY_IPS` is the consequential one: behind a reverse
+  proxy or CDN, leaving it unset makes every request appear to originate from
+  the proxy's container IP, so geo-blocking silently does nothing and all
+  clients share a single rate-limit bucket. An operator who set it in `.env`
+  got that failure with no indication the value had been dropped.
+
+**Changed**
+
+- **The `SECURITY_ENFORCE_HTTPS` startup message no longer claims a protection
+  the code does not provide.** It said the flag was needed "to prevent cookies
+  and credentials from being sent over HTTP", but the flag has no reader
+  anywhere in the backend — nothing emits HSTS and no middleware redirects
+  `http://` to `https://`. The `Secure` attribute on auth cookies is set
+  independently by `COOKIE_SECURE`. The message now states what the flag
+  actually is — an attestation that TLS terminates in front of the app — and
+  points at `COOKIE_SECURE` for cookie behaviour. Actual enforcement remains
+  unimplemented and is left to a separate change.
+
 ### Privacy notice and terms rewritten; department control stated up front (2026-08-17)
 
 **Changed**
@@ -9298,16 +9335,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario | Behavior |
+| Scenario                                      | Behavior                                                                         |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
-| Template with bare string positions | Backward-compatible: defaults to `required=true` |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
-| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
-| All positions filled via bulk assign | "Fill All Open" button hidden |
-| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
-| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
+| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
+| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
+| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
+| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
+| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
+| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 
