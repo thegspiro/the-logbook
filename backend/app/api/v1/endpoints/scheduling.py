@@ -87,6 +87,7 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.scheduling_service import SchedulingService
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.utils.positions import normalize_stored_positions
 
 router = APIRouter()
 
@@ -2242,7 +2243,7 @@ async def create_basic_apparatus(
         name=apparatus.name,
         apparatus_type=apparatus.apparatus_type,
         min_staffing=apparatus.min_staffing,
-        positions=apparatus.positions,
+        positions=normalize_stored_positions(apparatus.positions),
     )
     db.add(new_apparatus)
     await db.commit()
@@ -2266,6 +2267,8 @@ async def update_basic_apparatus(
     )
     existing = ensure_found(result.scalar_one_or_none(), "Apparatus")
     update_data = apparatus.model_dump(exclude_unset=True)
+    if "positions" in update_data:
+        update_data["positions"] = normalize_stored_positions(update_data["positions"])
     for key, value in update_data.items():
         setattr(existing, key, value)
     await db.commit()

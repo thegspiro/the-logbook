@@ -58,6 +58,7 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_display_map,
     resolve_apparatus_ref,
 )
+from app.utils.positions import normalize_stored_positions
 
 
 def _position_label(position) -> str:
@@ -318,6 +319,9 @@ class SchedulingService:
         - ``["officer", "emt"]`` → ``[{"position": "officer", "required": True}, ...]``
         - ``[{"position": "officer", "required": True}, ...]`` → pass-through
         - Event metadata dicts (flat_positions / resources) → expanded
+
+        Display only. Saving this output would flatten an event template's
+        metadata into seats — use ``app.utils.positions`` on a write path.
         """
         if not positions:
             return []
@@ -702,6 +706,10 @@ class SchedulingService:
                         and apparatus_min_staffing is not None
                     ):
                         shift_data["min_staffing"] = apparatus_min_staffing
+            if "positions" in shift_data:
+                shift_data["positions"] = normalize_stored_positions(
+                    shift_data["positions"]
+                )
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
             )
@@ -1367,6 +1375,11 @@ class SchedulingService:
             if requalify_error:
                 return None, requalify_error
 
+            if "positions" in update_data:
+                update_data["positions"] = normalize_stored_positions(
+                    update_data["positions"]
+                )
+
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
                     setattr(shift, key, value)
@@ -1996,6 +2009,10 @@ class SchedulingService:
             self.db, apparatus_id, organization_id
         ):
             return None, "Apparatus not found"
+        if "positions" in template_data:
+            template_data["positions"] = normalize_stored_positions(
+                template_data["positions"]
+            )
         return await self._crud_create(
             ShiftTemplate, template_data, organization_id, created_by
         )
@@ -2037,6 +2054,10 @@ class SchedulingService:
             self.db, apparatus_id, organization_id
         ):
             return None, "Apparatus not found"
+        if "positions" in update_data:
+            update_data["positions"] = normalize_stored_positions(
+                update_data["positions"]
+            )
         return await self._crud_update(template, update_data)
 
     async def delete_template(
