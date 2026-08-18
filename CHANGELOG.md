@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: NFC tags as a second way in to check-in (2026-08-18)
+
+**Added**
+
+- **A station can mount a reusable NFC sticker instead of reprinting a QR sheet
+  per event.** `/events/:id/qr-code` now offers **Write to an NFC tag**, which
+  encodes that event's check-in URL onto a blank tag via Web NFC. Members tap
+  the tag with their phone and land on the same
+  `/events/:id/check-in` page the QR code opens — no camera, which is the part
+  that fails in a dark apparatus bay or with gloves on.
+- **Tap Tag on the Events page** reads a tag while the app is already open, for
+  the case Android does not cover on its own: with the app in the foreground,
+  the OS does not hand a URL tag off to the browser, so a member holding a phone
+  they are already using would otherwise have to close the app to use the tag.
+
+**A tag is untrusted input, and is treated as such.** Anyone with a phone can
+write an NFC tag, so the payload read off one is on par with a scanned QR code
+rather than with configuration. `parseEventTagPath` in `constants/nfc.ts`
+resolves the payload against the app's own origin, rejects anything that does
+not land back on that exact origin — which also disposes of `javascript:` and
+`data:`, whose origin parses as `"null"` — and accepts only the two known event
+paths. It returns the **normalized** route, never the raw string, so a tap hands
+react-router a fixed-shape path instead of assigning an attacker-supplied URL to
+`window.location`. An unrecognized tag leaves the scan armed and says so rather
+than navigating somewhere unintended.
+
+**Notes**
+
+- Web NFC is Chrome-on-Android and secure-context only. `NDEFReader` is declared
+  in `types/webnfc.d.ts` as an optional property of `Window` rather than as a
+  global class, so the feature test is the only route to the constructor and an
+  unguarded `new NDEFReader()` fails to compile instead of throwing on a
+  member's phone.
+- Where NFC is unavailable, the QR code is unchanged and remains the primary
+  path. The writer collapses to one explanatory line rather than disappearing —
+  a chief planning a tag rollout is usually at a desktop, where the writer can
+  never run, and that page is the only place the capability is documented. The
+  reader button hides entirely, being a pure action with nothing to explain.
+- `getNfcUnavailableReason()` separates an insecure origin from a browser that
+  never shipped the API. Both present identically as a missing `NDEFReader`, and
+  an admin on plain HTTP over a LAN IP needs to be told which one they hit.
+- Both hooks abort through an `AbortController` on cancel and on unmount.
+  `NDEFReader.write()` does not resolve when called — it arms the radio and
+  stays pending until a tag is physically present — so without the abort, a
+  member who changes their mind leaves the device armed and the next tag that
+  passes near the phone is silently overwritten.
+
 ### Training: approval roster access is limited to training officers (2026-08-17)
 
 **Security / Fixed**
@@ -9226,16 +9273,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario                                      | Behavior                                                                         |
+| Scenario | Behavior |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
-| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
-| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
-| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
-| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
-| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 
