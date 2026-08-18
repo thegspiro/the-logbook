@@ -37,6 +37,7 @@ from app.schemas.scheduling import (
     BasicApparatusResponse,
     BasicApparatusUpdate,
     CalendarFeedResponse,
+    CallTrackingSettings,
     EligiblePositionsResponse,
     GenerateShiftsRequest,
     PlatoonBulkAssign,
@@ -572,6 +573,13 @@ async def finalize_shift(
     Optionally include ``manual_hours`` to credit members who did not
     check in/out with a specific number of hours.
 
+    Departments on ``count_only`` call tracking report call volume here:
+    ``reported_call_count`` (the number this apparatus ran), an optional
+    ``reported_call_types`` tally, ``member_call_counts`` for members who were
+    not on every call, and ``attach_call_ids`` for calls another unit already
+    logged that this apparatus was also on — attaching is what keeps a single
+    incident counted once for the department when two units roll.
+
     Once finalized the shift is considered closed and attendance is locked.
 
     **Permissions required:** scheduling.manage, or being the shift's officer.
@@ -586,6 +594,11 @@ async def finalize_shift(
             {"user_id": str(entry.user_id), "hours": entry.hours}
             for entry in body.manual_hours
         ]
+    member_credits = None
+    if body.member_call_counts:
+        member_credits = {
+            str(entry.user_id): entry.call_count for entry in body.member_call_counts
+        }
     shift, error = await service.finalize_shift(
         shift_id,
         current_user.organization_id,
@@ -593,6 +606,12 @@ async def finalize_shift(
         manual_hours=manual,
         override_incomplete_checks=body.override_incomplete_checks,
         pass_down_notes=body.pass_down_notes,
+        reported_call_count=body.reported_call_count,
+        reported_call_types=body.reported_call_types,
+        member_call_counts_in=member_credits,
+        attach_call_ids=(
+            [str(c) for c in body.attach_call_ids] if body.attach_call_ids else None
+        ),
     )
     if not shift:
         raise HTTPException(
@@ -2445,6 +2464,7 @@ async def get_scheduling_feature_settings(
             lifecycle.get("restrict_checkin_to_assigned", False)
         ),
         enforce_evoc=service.get_evoc_enforcement(org),
+        call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
     )
 
 
@@ -2498,6 +2518,14 @@ async def update_scheduling_feature_settings(
                 else None
             ),
             enforce_evoc=(data.enforce_evoc if "enforce_evoc" in fields_set else None),
+            # Guarded like every sibling field: a partial save from another
+            # toggle sends only its own key, and passing the schema default
+            # unconditionally would reset the department's call-type list.
+            call_tracking=(
+                data.call_tracking.model_dump()
+                if "call_tracking" in fields_set and data.call_tracking is not None
+                else None
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -2514,6 +2542,11 @@ async def update_scheduling_feature_settings(
             result.get("restrict_checkin_to_assigned", False)
         ),
         enforce_evoc=bool(result.get("enforce_evoc", True)),
+        call_tracking=CallTrackingSettings(
+            **service.get_call_tracking_settings(
+                await service._get_org(current_user.organization_id)
+            )
+        ),
     )
 
 

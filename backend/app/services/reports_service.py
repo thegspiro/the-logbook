@@ -18,6 +18,7 @@ from app.models.admin_hours import (
     AdminHoursEntry,
     AdminHoursEntryStatus,
 )
+from app.models.call_tracking import CallTrackingMode, OrgCall
 from app.models.event import Event, EventRSVP
 from app.models.operational_rank import OperationalRank
 from app.models.training import (
@@ -32,6 +33,7 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import User, UserStatus
+from app.services.call_tracking_service import CallTrackingService
 from app.utils.sql_ordering import nulls_last_asc
 
 
@@ -1199,9 +1201,29 @@ class ReportsService:
         end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Generate call volume report from shift completion reports."""
+        """Generate call volume report.
+
+        Two sources, never mixed. A department on ``count_only`` tracking has
+        its call volume in ``org_calls``, where one incident is one row however
+        many units responded; a department on ``detailed`` tracking has it in
+        the per-incident shift-call records that feed
+        ``ShiftCompletionReport``. Reading both and adding them would count
+        every call twice for an org that has used each mode in turn.
+
+        The count-only branch also reports **unit responses** separately from
+        the department total. Those are different quantities and are not
+        supposed to reconcile: a 400-call department can legitimately show 380
+        engine runs and 240 medic runs, because both rolled on the same MVA.
+        """
         period_start = start_date or date(date.today().year, 1, 1)
         period_end = end_date or date.today()
+
+        call_service = CallTrackingService(self.db)
+        tracking = await call_service.get_settings(str(organization_id))
+        if tracking.get("mode") == CallTrackingMode.COUNT_ONLY:
+            return await self._generate_call_volume_from_counts(
+                organization_id, period_start, period_end, call_service
+            )
 
         reports_result = await self.db.execute(
             select(ShiftCompletionReport).where(
@@ -1257,6 +1279,76 @@ class ReportsService:
                 "busiest_day": busiest["date"] if busiest else "",
                 "busiest_day_count": (busiest["total_calls"] if busiest else 0),
                 "by_type_totals": type_totals,
+            },
+            "entries": report_entries,
+        }
+
+    async def _generate_call_volume_from_counts(
+        self,
+        organization_id: UUID,
+        period_start: date,
+        period_end: date,
+        call_service: "CallTrackingService",
+    ) -> Dict[str, Any]:
+        """Call volume for a department that records counts, not incidents."""
+        calls = (
+            (
+                await self.db.execute(
+                    select(OrgCall).where(
+                        OrgCall.organization_id == str(organization_id),
+                        OrgCall.call_date >= period_start,
+                        OrgCall.call_date <= period_end,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        daily_data: Dict[str, Dict[str, Any]] = {}
+        type_totals: Dict[str, int] = {}
+        for call in calls:
+            day = str(call.call_date)
+            entry = daily_data.setdefault(
+                day, {"date": day, "total_calls": 0, "by_type": {}}
+            )
+            entry["total_calls"] += 1
+            slug = call.call_type or "unclassified"
+            entry["by_type"][slug] = entry["by_type"].get(slug, 0) + 1
+            type_totals[slug] = type_totals.get(slug, 0) + 1
+
+        # The department total is the number of distinct calls — never a sum of
+        # per-unit runs, which multiplies every mutual response by the number
+        # of units on it.
+        total_calls = len(calls)
+        report_entries = sorted(daily_data.values(), key=lambda e: e["date"])
+        num_days = max(1, (period_end - period_start).days + 1)
+        busiest = (
+            max(report_entries, key=lambda e: e["total_calls"])
+            if report_entries
+            else None
+        )
+
+        unit_runs = await call_service.apparatus_run_counts(
+            str(organization_id), period_start, period_end
+        )
+
+        return {
+            "report_type": "call_volume",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "period_start": str(period_start),
+            "period_end": str(period_end),
+            "source": "call_counts",
+            "summary": {
+                "total_calls": total_calls,
+                "avg_calls_per_day": round(total_calls / num_days, 1),
+                "busiest_day": busiest["date"] if busiest else "",
+                "busiest_day_count": (busiest["total_calls"] if busiest else 0),
+                "by_type_totals": type_totals,
+                # Unit responses. Deliberately outside the totals above: these
+                # sum to more than the department ran whenever two units share
+                # a call, which is normal and not an error to reconcile away.
+                "by_apparatus_runs": unit_runs,
             },
             "entries": report_entries,
         }

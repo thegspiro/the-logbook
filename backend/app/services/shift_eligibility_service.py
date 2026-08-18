@@ -15,6 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.apparatus import Apparatus, ApparatusOperator
+from app.models.call_tracking import (
+    DEFAULT_CALL_TYPES,
+    CallTrackingMode,
+)
 from app.models.operational_rank import OperationalRank
 from app.models.training import (
     EnrollmentStatus,
@@ -536,6 +540,45 @@ class ShiftEligibilityService:
             ),
         }
 
+    def get_call_tracking_settings(self, org: Organization) -> Dict[str, Any]:
+        """Return the org's call-volume tracking config.
+
+        Absence means ``detailed`` — the behaviour every existing org already
+        has — never ``off``. Defaulting a missing setting to disabled would
+        silently stop call logging for every installation on upgrade, and
+        nobody connects a missing year of call volume back to a deploy
+        (pitfall #19).
+
+        ``call_types`` degrades to the built-in list rather than raising: this
+        is unvalidated JSON an admin can edit, and an exception here would take
+        out shift close-out for the whole department over one malformed entry.
+        """
+        sched = self._get_scheduling_settings(org)
+        raw = sched.get("call_tracking")
+        if not isinstance(raw, dict):
+            raw = {}
+
+        mode = raw.get("mode")
+        if mode not in CallTrackingMode.ALL:
+            mode = CallTrackingMode.DETAILED
+
+        types = raw.get("call_types")
+        clean_types = []
+        if isinstance(types, list):
+            for entry in types:
+                if not isinstance(entry, dict):
+                    continue
+                slug = str(entry.get("slug") or "").strip()
+                if not slug:
+                    continue
+                clean_types.append(
+                    {"slug": slug, "label": str(entry.get("label") or slug).strip()}
+                )
+        if not clean_types:
+            clean_types = [dict(t) for t in DEFAULT_CALL_TYPES]
+
+        return {"mode": mode, "call_types": clean_types}
+
     async def update_scheduling_settings(
         self,
         organization_id: str,
@@ -549,6 +592,7 @@ class ShiftEligibilityService:
         require_end_of_shift_checks: Optional[bool] = None,
         restrict_checkin_to_assigned: Optional[bool] = None,
         enforce_evoc: Optional[bool] = None,
+        call_tracking: Optional[Dict[str, Any]] = None,
     ) -> dict:
         """Update scheduling eligibility settings on the organization."""
         org = await self._get_org(organization_id)
@@ -581,6 +625,8 @@ class ShiftEligibilityService:
             scheduling["restrict_checkin_to_assigned"] = restrict_checkin_to_assigned
         if enforce_evoc is not None:
             scheduling["enforce_evoc"] = enforce_evoc
+        if call_tracking is not None:
+            scheduling["call_tracking"] = call_tracking
 
         settings["scheduling"] = scheduling
         org.settings = settings

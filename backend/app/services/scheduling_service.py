@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid
+from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
 from app.models.training import (
     AssignmentStatus,
@@ -51,6 +52,7 @@ from app.models.user import (
     User,
     user_positions,
 )
+from app.services.call_tracking_service import CallTrackingService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.notifications_service import NotificationsService
 from app.utils.apparatus_ref import (
@@ -5136,6 +5138,10 @@ class SchedulingService:
         manual_hours: Optional[List[Dict[str, Any]]] = None,
         override_incomplete_checks: bool = False,
         pass_down_notes: Optional[str] = None,
+        reported_call_count: Optional[int] = None,
+        reported_call_types: Optional[Dict[str, int]] = None,
+        member_call_counts_in: Optional[Dict[str, int]] = None,
+        attach_call_ids: Optional[List[str]] = None,
     ) -> Tuple[Optional[Shift], Optional[str]]:
         """Mark a shift as finalized after officer review.
 
@@ -5146,6 +5152,15 @@ class SchedulingService:
         ``manual_hours`` is an optional list of
         ``{"user_id": str, "hours": float}`` dicts that create attendance
         records for members who did not check in/out.
+
+        Call volume comes from one of two places depending on the org's
+        ``call_tracking.mode``. In ``detailed`` mode it is derived from the
+        per-incident ``ShiftCall`` rows, as it always has been. In
+        ``count_only`` mode the officer reports a number at close-out and it is
+        recorded as PII-free ``OrgCall``/``OrgCallResponse`` rows, which then
+        become the source of truth for the snapshot — so re-finalizing cannot
+        wipe a typed number back to zero the way a bare
+        ``COUNT(ShiftCall)`` would.
 
         When the org enables ``require_end_of_shift_checks``, finalization is
         rejected while any end-of-shift equipment check is outstanding, unless
@@ -5164,15 +5179,30 @@ class SchedulingService:
             if shift.end_time and shift.end_time > now:
                 return None, "Cannot finalize a shift that has not ended"
 
+            # One org fetch serves both the equipment-check enforcement below
+            # and the call-tracking mode further down. Reading it twice was a
+            # redundant round-trip on a path that already does several.
+            org = (
+                await self.db.execute(
+                    select(Organization).where(Organization.id == str(organization_id))
+                )
+            ).scalar_one_or_none()
+            # Imported here rather than at module scope, matching the sibling
+            # call site above: a top-level import closes the cycle.
+            from app.services.shift_eligibility_service import (
+                ShiftEligibilityService,
+            )
+
+            eligibility = ShiftEligibilityService(self.db)
+            count_only = (
+                eligibility.get_call_tracking_settings(org).get("mode")
+                == CallTrackingMode.COUNT_ONLY
+                if org
+                else False
+            )
+
             # Enforce end-of-shift equipment checks when the org requires it.
             if not override_incomplete_checks:
-                org = (
-                    await self.db.execute(
-                        select(Organization).where(
-                            Organization.id == str(organization_id)
-                        )
-                    )
-                ).scalar_one_or_none()
                 require_checks = bool(
                     ((org.settings or {}) if org else {})
                     .get("scheduling", {})
@@ -5233,13 +5263,42 @@ class SchedulingService:
                     open_att.duration_minutes = max(int(delta.total_seconds() / 60), 0)
             await self.db.flush()
 
-            # Snapshot call count
-            call_result = await self.db.execute(
-                select(func.count(ShiftCall.id)).where(
-                    ShiftCall.shift_id == str(shift_id)
+            # Snapshot call count. Which source is authoritative depends on
+            # how the department tracks calls — see the docstring.
+            call_service = CallTrackingService(self.db)
+
+            if count_only:
+                # Attach to calls another unit already logged *before*
+                # recording our own, so a shared call is counted toward the
+                # total instead of being duplicated alongside it.
+                for call_id in attach_call_ids or []:
+                    ok, attach_err = await call_service.attach_response(
+                        str(call_id), shift, str(organization_id)
+                    )
+                    if not ok:
+                        return None, attach_err
+
+                if reported_call_count is not None:
+                    _, call_err = await call_service.record_shift_calls(
+                        shift=shift,
+                        organization_id=str(organization_id),
+                        total_calls=reported_call_count,
+                        type_counts=reported_call_types,
+                        recorded_by=finalized_by_user_id,
+                    )
+                    if call_err:
+                        return None, call_err
+
+                shift.call_count = await call_service.shift_response_count(
+                    str(shift_id)
                 )
-            )
-            shift.call_count = call_result.scalar() or 0
+            else:
+                call_result = await self.db.execute(
+                    select(func.count(ShiftCall.id)).where(
+                        ShiftCall.shift_id == str(shift_id)
+                    )
+                )
+                shift.call_count = call_result.scalar() or 0
 
             # Snapshot total hours from attendance duration
             hours_result = await self.db.execute(
@@ -5252,13 +5311,33 @@ class SchedulingService:
                 round(float(total_min) / 60.0, 1) if total_min > 0 else 0.0
             )
 
-            # Snapshot per-member call counts onto attendance records
-            member_call_counts = await self.compute_member_call_counts(shift_id)
+            # Snapshot per-member call counts onto attendance records.
+            #
+            # Member credit is its own quantity, never the shift's number
+            # restated: a member who came on at 0300 was not on the 2200 call.
+            # It is equally never summed back into a department total — with a
+            # four-person crew that multiplies every call by four.
             att_result = await self.db.execute(
                 select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift_id))
             )
-            for att in att_result.scalars().all():
-                att.call_count = member_call_counts.get(str(att.user_id), 0)
+            attendance_rows = att_result.scalars().all()
+
+            if count_only:
+                # No per-incident rows exist to attribute from, so everyone on
+                # the shift is credited with the apparatus's calls unless the
+                # officer adjusted them down for a late arrival or early out.
+                overrides = member_call_counts_in or {}
+                for att in attendance_rows:
+                    override = overrides.get(str(att.user_id))
+                    att.call_count = (
+                        min(int(override), shift.call_count)
+                        if override is not None
+                        else shift.call_count
+                    )
+            else:
+                member_call_counts = await self.compute_member_call_counts(shift_id)
+                for att in attendance_rows:
+                    att.call_count = member_call_counts.get(str(att.user_id), 0)
 
             shift.is_finalized = True
             shift.finalized_at = now

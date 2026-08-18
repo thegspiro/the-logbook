@@ -11,6 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models.call_tracking import MAX_CALLS_PER_SHIFT, CallTrackingMode
 from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
@@ -159,6 +160,18 @@ class ManualHoursEntry(BaseModel):
     hours: float = Field(..., gt=0, le=48)
 
 
+class MemberCallCredit(BaseModel):
+    """One member's personal call credit for a shift.
+
+    Distinct from the shift's own call count on purpose. A member who came on
+    at 0300 was not on the 2200 call, so credit is per-member and is capped at
+    — never derived from, and never summed into — the shift total.
+    """
+
+    user_id: UUID
+    call_count: int = Field(..., ge=0, le=MAX_CALLS_PER_SHIFT)
+
+
 class ShiftFinalizeRequest(BaseModel):
     """Optional request body for finalizing a shift."""
 
@@ -169,6 +182,47 @@ class ShiftFinalizeRequest(BaseModel):
     override_reason: Optional[str] = None
     # Crew-to-crew handoff captured at finalize.
     pass_down_notes: Optional[str] = None
+
+    # -- Call volume (count-only tracking) --------------------------------
+    # How many calls this shift's apparatus ran. None means "not answered",
+    # which is deliberately distinct from 0 ("we ran none"): one is a gap in
+    # the record and the other is data, and a report that conflates them
+    # understates the department's quiet nights as missing.
+    reported_call_count: Optional[int] = Field(
+        default=None, ge=0, le=MAX_CALLS_PER_SHIFT
+    )
+    # {"ems": 3, "fire": 1} keyed by the org's own type slugs. Must not exceed
+    # reported_call_count; the remainder is recorded as unclassified.
+    reported_call_types: Optional[dict[str, int]] = None
+    # Per-member credit. Omitted members default to the shift's count.
+    member_call_counts: Optional[List[MemberCallCredit]] = None
+    # Calls another unit already logged that this shift's apparatus was also
+    # on. Attaching instead of re-reporting is what keeps one incident counted
+    # once for the department when two units roll.
+    attach_call_ids: Optional[List[UUID]] = None
+
+    @model_validator(mode="after")
+    def _validate_call_volume(self) -> "ShiftFinalizeRequest":
+        if self.reported_call_types:
+            for slug, count in self.reported_call_types.items():
+                if not slug or not slug.strip():
+                    raise ValueError("Call type slug cannot be blank")
+                if count < 0:
+                    raise ValueError("Call type counts cannot be negative")
+            if self.reported_call_count is None:
+                raise ValueError(
+                    "A call-type breakdown needs a total call count as well"
+                )
+            if sum(self.reported_call_types.values()) > self.reported_call_count:
+                raise ValueError("Call types add up to more than the total call count")
+        if self.member_call_counts and self.reported_call_count is not None:
+            for entry in self.member_call_counts:
+                if entry.call_count > self.reported_call_count:
+                    raise ValueError(
+                        "A member cannot be credited with more calls than the "
+                        "apparatus ran"
+                    )
+        return self
 
 
 class ShiftCancelRequest(BaseModel):
@@ -819,6 +873,41 @@ class CalendarFeedResponse(BaseModel):
     feed_path: str
 
 
+class CallTypeOption(BaseModel):
+    """One department-defined call type.
+
+    ``slug`` is the stored value and is permanent; ``label`` is display-only.
+    Storing the label instead would orphan every historical call the first time
+    somebody corrected a typo in settings.
+    """
+
+    slug: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9_]+$")
+    label: str = Field(..., min_length=1, max_length=100)
+
+
+class CallTrackingSettings(BaseModel):
+    """How the department records call volume.
+
+    Defaults to ``detailed`` — what every existing org already does. A missing
+    setting must never read as "off" (pitfall #19): that would silently stop
+    call logging for every installation on upgrade.
+    """
+
+    mode: str = Field(default=CallTrackingMode.DETAILED)
+    call_types: List[CallTypeOption] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate(self) -> "CallTrackingSettings":
+        if self.mode not in CallTrackingMode.ALL:
+            raise ValueError(f"mode must be one of {', '.join(CallTrackingMode.ALL)}")
+        seen = set()
+        for entry in self.call_types:
+            if entry.slug in seen:
+                raise ValueError(f"Duplicate call type slug: {entry.slug}")
+            seen.add(entry.slug)
+        return self
+
+
 class SchedulingFeatureSettings(BaseModel):
     """Department-wide scheduling feature toggles (readable by any member)."""
 
@@ -840,6 +929,8 @@ class SchedulingFeatureSettings(BaseModel):
     # sets required_evoc_level_id on an apparatus, so switching it on for
     # existing orgs changes nothing until they opt into the requirement.
     enforce_evoc: bool = True
+    # Call-volume tracking mode and the department's own call-type list.
+    call_tracking: Optional[CallTrackingSettings] = None
 
 
 # ============================================

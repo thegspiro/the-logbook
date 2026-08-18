@@ -41,6 +41,7 @@ from app.models.training import (
     SkillEvaluation,
     TrainingRequirement,
 )
+from app.services.call_tracking_service import CallTrackingService
 from app.services.training_program_service import TrainingProgramService
 
 
@@ -113,11 +114,15 @@ class ShiftCompletionService:
         shift_id: str,
         trainee_id: str,
     ) -> tuple[int, list[str]]:
-        """Query actual ShiftCall records to get a trainee's call count
-        and types.
+        """Get a trainee's call count and types for a shift.
 
-        Searches responding_members JSON arrays for the trainee's user
-        ID and collects the incident_type from each matching call.
+        Prefers per-incident ``ShiftCall`` records, searching their
+        responding_members JSON for the trainee's user ID. A department on
+        ``count_only`` tracking has no such records, so this falls back to the
+        member credit the officer set at close-out
+        (``ShiftAttendance.call_count``) plus the shift's own type tally —
+        otherwise every count-only department's trainees would show zero calls
+        on every report while their shift plainly says five.
 
         Callers must validate shift ownership before invoking.
         """
@@ -128,9 +133,10 @@ class ShiftCompletionService:
             ).where(ShiftCall.shift_id == shift_id)
         )
 
+        rows = result.all()
         calls_responded = 0
         call_types: list[str] = []
-        for members, incident_type in result.all():
+        for members, incident_type in rows:
             if not members:
                 continue
             member_ids = [str(m) for m in members]
@@ -139,7 +145,40 @@ class ShiftCompletionService:
                 if incident_type:
                     call_types.append(incident_type)
 
+        if not rows:
+            return await self._get_trainee_call_data_from_counts(shift_id, trainee_id)
+
         return calls_responded, call_types
+
+    async def _get_trainee_call_data_from_counts(
+        self,
+        shift_id: str,
+        trainee_id: str,
+    ) -> tuple[int, list[str]]:
+        """Count-only fallback: the credit recorded against this member.
+
+        Reads ``ShiftAttendance.call_count`` — the officer's per-member figure,
+        which is already capped at what the apparatus ran — never the shift
+        total directly, so a member who came on mid-tour is not credited with
+        the calls that ran before they arrived.
+        """
+        credited = (
+            await self.db.execute(
+                select(ShiftAttendance.call_count).where(
+                    ShiftAttendance.shift_id == shift_id,
+                    ShiftAttendance.user_id == trainee_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not credited:
+            return 0, []
+
+        call_service = CallTrackingService(self.db)
+        type_counts = await call_service.shift_type_counts(shift_id)
+        types: list[str] = []
+        for slug in sorted(type_counts):
+            types.extend([slug] * type_counts[slug])
+        return int(credited), types[: int(credited)]
 
     async def _get_trainee_hours_from_shift(
         self,
