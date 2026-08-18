@@ -442,9 +442,8 @@ roster.
 > populated, beside the same shift viewed by an ordinary member with the
 > roster absent. Two captures, captioned as the pair. Use a demo department
 > with at least one member on approved leave so the difference is visible.]**
->
-> **[SCREENSHOT NEEDED — the permission error a member without
-> `scheduling.manage` now receives at `/scheduling/platoons`.]**
+
+![Platoon Management refusing a member who does not hold scheduling.manage](./images/19-01-platoons-permission-error.png)
 
 Two scheduling defects were also fixed:
 
@@ -556,10 +555,8 @@ That stage was never doing what its name implied — configure its approvers.
   signal returned. The member most likely to tap it is the one whose app looks
   wrong, who is often the one out of signal.
 
-> **[SCREENSHOT NEEDED — the Minutes page card grid with populated attendee
-> and action-item counts. The existing capture predates the fix and shows
-> zeros; replace it rather than adding a second one.]**
->
+![Meeting cards showing real attendee and action-item counts](./images/19-02-minutes-card-counts.png)
+
 > **[SCREENSHOT NEEDED — Settings → App → Force refresh showing the
 > "server unreachable, nothing was changed" refusal with the button
 > re-enabled. Capture with the backend stopped, not with the device offline —

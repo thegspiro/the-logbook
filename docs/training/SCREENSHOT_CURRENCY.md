@@ -1,5 +1,77 @@
 # Screenshot currency
 
+## Capture run 2026-08-18 — two applied, and why the other 47 were not
+
+A full stack was stood up (MariaDB, Redis, API, dev server, seeded demo
+department) and the pipeline run end to end.
+
+### Applied and verified
+
+- `19-01-platoons-permission-error` — Platoon Management refusing a member
+  without `scheduling.manage`, shot as the member. Verified by opening the
+  image: the Access Denied page under a member's sidebar, which is the point.
+  An admin capture would have shown the working page and taught the opposite of
+  the caption.
+- `19-02-minutes-card-counts` — the Minutes card grid reading **8 attendees ·
+  2 action items** and **4 attendees · 0 action items**. Verified by opening
+  the image; the non-zero counts are the whole subject, since these cards read
+  zeros over real data until 2026-08-17.
+
+Both are the first entries in `manifest.mjs` for guide 19, which had none.
+
+### The run refreshed 105 images that were reverted
+
+`capture.mjs` walks the whole manifest, so a plain run re-shot 105 already-filled
+images against this demo department. **They were reverted rather than committed.**
+They fill no outstanding placeholder, and this file's own standard is that a
+capture is not current until somebody has opened it and checked it against its
+caption — 105 unopened images would have been a large diff asserting exactly the
+verification that had not happened.
+
+Re-shooting deliberately, guide by guide, with the images actually reviewed, is
+worth doing; it is a different task from filling the gaps.
+
+### Why the remaining 47 are still open
+
+Only some of these are waiting on effort. The distinction matters, because a
+tracker that lists an impossible shot beside an unwritten one invites somebody
+to keep retrying the first.
+
+| Class | Count | What is actually needed |
+| --- | ---: | --- |
+| **No manifest entry yet** | ~30 | Ordinary work: a `manifest.mjs` entry with the right route and `prepare` steps. The seeded department already supports most of them. This is the bulk, and the tractable part. |
+| **Needs seed data that does not exist** | 5 | The driver-block trio (refusal at assignment, chief's exception review, a generated pattern reporting a skipped seat) needs an apparatus with a required EVOC level and a driver who lacks it. Also an overdue equipment issue, and a stock ledger whose arithmetic the caption can verify. |
+| **Needs a second account or a paired capture** | 4 | Profile with `members.view` vs `users.view`; the candidate list as member vs manager; the shift roster as scheduler vs member. Two contexts, captioned as a pair — the manifest supports `auth`, so this is doable, just not a single shot. |
+| **Needs external credentials** | 4 | The two CAPTCHA widget shots need a real provider site key; the breached-password refusal needs outbound access to the HIBP range API; the Salesforce readiness preview needs a connected org. None can be faked without publishing a screenshot of something the product does not do. |
+| **Needs a pre-onboarding stack** | 2 | The wizard-after-browser-restart pair can only be shot before onboarding completes. A seeded department has completed it, so this needs its own throwaway stack — the one case where the standard demo environment is the wrong environment. |
+| **Explicitly manual** | 1 | `10-mobile-pwa.md` asks for an annotated capture (44px tap targets marked up). The marker says "manual annotation"; no pipeline produces it. |
+| **Blocked on a product gap** | 1 | The store-order shot: the seeder cannot create one because there is no open order window, which it reports as blocked rather than working around. |
+
+### Pipeline fixes made during the run
+
+- **`apply_placeholders.py` left a stray `>` under a replaced marker.** Where
+  two requests are stacked in one quote, `block_end` deliberately leaves the
+  bare `>` between them — consuming it is how the first replacement used to
+  swallow its siblings. But once the request above becomes an image, that
+  separator is a quoted empty line directly under it, and the next marker's
+  blockquote opens with a blank first line. It is now demoted to a real blank
+  line, which is what separates an image from a quote.
+- **`seed_demo_data.py` could not create the public event request.** Intake
+  became opt-in on 2026-08-17 and a closed department answers 404 exactly like
+  a missing one, so the seeder failed against an organization that plainly
+  existed. It opts in first now — and doing so surfaced that the setting could
+  not be written at all, which is fixed separately in the events schema.
+- **`seed_demo_data.py` fought the product over EVOC levels.** A new
+  organization is seeded with four (`EVOC1`–`EVOC4`) by the product itself; the
+  seeder's blueprint guarded on `code` while the backend enforces uniqueness on
+  `level_number`, so it 400'd, the step failed, and no apparatus got a required
+  EVOC level — leaving the driver-eligibility feature inert and `03-52` with
+  nothing to photograph. It now returns what is already there.
+- **`status_report.py` counted three syntax examples as outstanding work** —
+  see the entry below.
+
+---
+
 ## Flagged by the 2026-08-16 → 08-17 changes
 
 Full reason and data-path context in

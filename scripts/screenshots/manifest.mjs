@@ -9743,6 +9743,37 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // Documents the 2026-08-17 permission change: /scheduling/platoons moved
+    // from scheduling.view (implicit for every member) to scheduling.manage,
+    // so this is the one change in that release that takes away access someone
+    // already had. Shot as the member precisely because the refusal is the
+    // subject -- an admin capture would show the working page and teach the
+    // opposite of the caption.
+    id: "19-01-platoons-permission-error",
+    doc: "19-august-2026-release-changes.md",
+    line: 446,
+    anchor: "the permission error a member without",
+    alt: "Platoon Management refusing a member who does not hold scheduling.manage",
+    route: "/scheduling/platoons",
+    auth: "member",
+    fullPage: false,
+  },
+  {
+    // The cards read "0 attendees - 0 action items" over meetings that had
+    // both until the 2026-08-17 fix. The existing guide-04 capture pictures the
+    // defect, so this replaces rather than supplements it.
+    id: "19-02-minutes-card-counts",
+    doc: "19-august-2026-release-changes.md",
+    line: 559,
+    anchor: "the Minutes page card grid with populated",
+    alt: "Meeting cards showing real attendee and action-item counts",
+    // /minutes is the page; /meetings is the API it was rebuilt onto. Visiting
+    // /meetings silently lands on the dashboard, which is a screenshot of the
+    // wrong screen rather than an error.
+    route: "/minutes",
+    fullPage: true,
+  },
+  {
     id: "03-43-time-off-request-form",
     doc: "03-scheduling.md",
     line: 199,
