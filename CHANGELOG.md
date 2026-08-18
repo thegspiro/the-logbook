@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fleet tags: write a vehicle's check-in tag from the QR directory (2026-08-18)
+
+**Added**
+
+- **`/locations/qr-codes` can now program the tag as well as print the code.**
+  That page is already the department's directory of every check-in code, one
+  card per apparatus, so it is where a box of tags gets written for a fleet in
+  one sitting. **Write NFC tag** joins Copy URL / Download PNG / Regenerate in
+  each card's existing action row — no second card, no reflow of the grid.
+- `NfcTagWriteButton` is the compact form of the writer for rows of small
+  actions. Feedback goes through toasts rather than inline alerts on purpose:
+  the directory is a print-oriented grid of fixed-size cards, and an inline
+  status block would reflow every card beside it mid-write.
+- **A write failure raises a toast rather than passing silently.** With no
+  inline slot to report into, the alternative is a member discovering it by
+  tapping a dead sticker — a silent failure looks exactly like a tag that was
+  written.
+
+**Notes on what already worked**
+
+- **The vehicle tag → shift → member chain needed no new code.** A tag holding
+  `/scheduling/checkin?apparatus=<id>` resolves through
+  `get_active_shift_for_apparatus` (today's non-finalized shift, else one that
+  ended within two hours, else the next upcoming) and `member_check_in` writes
+  the `ShiftAttendance` row for the authenticated member. `ShiftCheckInPage`
+  names the unit, date and hours on screen so the member can see which truck
+  they were matched to before they confirm.
+- **Whether a non-rostered member may check in is already an org setting** —
+  `restrict_checkin_to_assigned`, off by default, toggled under Scheduling →
+  Settings, read by `member_check_in`, and covered by
+  `test_restrict_checkin_to_assigned`. Nothing here changes that behaviour.
+- **The button gates itself on `parseNfcTagPath`**, so it appears on apparatus
+  cards and not on the room kiosk cards beside them — those encode
+  `/display/{code}`, which the parser refuses by design. Offering to write a
+  tag no reader would honour is worse than offering nothing, so one rule now
+  governs both ends.
+
 ### NFC tags work across modules, not just events (2026-08-18)
 
 **Added**

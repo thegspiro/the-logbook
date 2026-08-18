@@ -187,6 +187,21 @@ export function parseNfcTagPath(rawPayload: string, origin?: string): NfcTagMatc
   return null;
 }
 
+/**
+ * What tapping a tag of this kind does, as a noun phrase — "opens Engine 4
+ * shift check-in". Lives beside the registry so a new target cannot be added
+ * without deciding how the UI names it.
+ */
+const TARGET_ACTION_NOUNS: Record<NfcTagTarget, string> = {
+  [NfcTagTarget.EVENT_CHECK_IN]: 'check-in',
+  [NfcTagTarget.ADMIN_HOURS_CLOCK_IN]: 'clock-in',
+  [NfcTagTarget.SHIFT_CHECK_IN]: 'shift check-in',
+};
+
+export function nfcActionNoun(target: NfcTagTarget): string {
+  return TARGET_ACTION_NOUNS[target];
+}
+
 function withOrigin(origin: string | undefined, path: string): string {
   const appOrigin = origin ?? (typeof window !== 'undefined' ? window.location.origin : '');
   return `${appOrigin}${path}`;
