@@ -14,6 +14,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 >
 > [July 2026](docs/changelog/2026-07.md)  ·  [June 2026](docs/changelog/2026-06.md)  ·  [May 2026](docs/changelog/2026-05.md)  ·  [April 2026](docs/changelog/2026-04.md)  ·  [March 2026](docs/changelog/2026-03.md)  ·  [February 2026](docs/changelog/2026-02.md)
 
+### Events: public request intake could not actually be turned on (2026-08-18)
+
+**Fixed**
+
+- **The EV-5 opt-in had no writer.** `accept_public_requests` and
+  `public_daily_limit` were added to `EVENT_SETTINGS_DEFAULTS` and the public
+  intake endpoint gated on them, but neither was declared on
+  `RequestPipelineUpdate`. Pydantic drops undeclared fields silently, so
+  `PATCH /events/settings` deep-merged an empty dict: **the write never
+  happened and the caller got a `200`.**
+
+  The settings screen sends exactly that payload, then reads
+  `accept_public_requests` back out of the unchanged response to choose its
+  toast — so an administrator enabling intake was told *"Your public request
+  form is now closed."* The control looked like one they kept mis-clicking.
+  Public intake could not be enabled at all, by any path.
+
+  Found while standing up the screenshot stack: the seeder's public
+  event-request step failed with `404 Organization not found` against an
+  organization that plainly existed. **That 404 is correct** — a closed
+  department is deliberately indistinguishable from a missing one, so the
+  endpoint cannot be used as an oracle for which departments accept requests.
+  The bug was that there was no way to open it.
+
+  This is the inverse of Pitfall #19: not a switch with no reader, but a switch
+  with no writer. Both present identically — stored state that nothing can
+  move, behind a UI that says otherwise.
+
+  `public_daily_limit` is `ge=1`, not `ge=0`: a zero ceiling would accept
+  nothing while the toggle still read as open, which is a confusing way to
+  spell what `accept_public_requests: false` says plainly.
+
+  The regression test is **structural** rather than field-by-field — any key
+  added to the `request_pipeline` defaults from now on must also be settable,
+  or it is stored-but-unwritable in exactly this way.
+
 ### Documentation gates: two that were not gating (2026-08-18)
 
 **Fixed**
