@@ -6,19 +6,19 @@ Complete reference of all pages in the application, organized by module.
 
 ## Public Pages (No Authentication Required)
 
-| URL                                    | Page                   | Description                                                              |
-| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------ |
-| `/`                                    | Welcome                | Landing / onboarding entry point                                         |
-| `/login`                               | Login                  | User authentication                                                      |
-| `/forgot-password`                     | Forgot Password        | Password reset request                                                   |
-| `/reset-password`                      | Reset Password         | Password reset form                                                      |
-| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)           |
-| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                     |
-| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                       |
-| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)                |
-| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_ |
-| `/privacy`                             | Privacy Policy         | Public privacy notice; department-configurable text                      |
-| `/terms`                               | Terms of Service       | Public terms of use; department-configurable text                        |
+| URL                                    | Page                   | Description                                                                                          |
+| -------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| `/`                                    | Welcome                | Landing / onboarding entry point                                                                     |
+| `/login`                               | Login                  | User authentication                                                                                  |
+| `/forgot-password`                     | Forgot Password        | Password reset request                                                                               |
+| `/reset-password`                      | Reset Password         | Password reset form                                                                                  |
+| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                       |
+| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                 |
+| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                   |
+| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)                                            |
+| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                             |
+| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text |
+| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text   |
 
 > **The guest check-in page is addressed through the room's display code**, not
 > through the event alone, so the backend can resolve the department without a

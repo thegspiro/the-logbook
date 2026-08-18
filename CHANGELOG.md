@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Privacy notice and terms rewritten; department control stated up front (2026-08-17)
+
+**Changed**
+
+- **`/privacy` and `/terms` defaults now open with who controls the system.**
+  Both documents lead with a callout that the department holds full control of
+  the application and of the records in it, and that **access is based on the
+  reader's status within the department** — granted, narrowed, suspended, or
+  ended by the department under its own bylaws, SOPs, and membership policies
+  and applicable state and local law, with a change of status (probation,
+  leave, rank change, suspension, separation) changing access without prior
+  notice. The Logbook is named as the software, never as the party deciding
+  access. The old text said the department was the data controller and stopped
+  there, which is the wrong half of the sentence for the reader who most needs
+  it: the member whose access was just removed.
+
+- **The defaults now carry the sections a privacy review actually checks for.**
+  Added to the notice: a plain-language summary at the top (layered notice),
+  sources of information, public-records and legal disclosure — fire
+  departments are routinely subject to sunshine laws and the old text buried
+  this in one clause — monitoring / no expectation of privacy, breach
+  notification, members under 18 for junior and cadet programs, data location,
+  an explicit no-sale / no-advertising / no-automated-decisions statement, and
+  "changes to this notice". Added to the terms: confidentiality of other
+  members' information, department ownership of records created in the system,
+  personal-device duties, notification channels, enforcement and discipline, an
+  order-of-precedence clause putting department policy, agreements, and law
+  above the terms, and an explicit **not-for-emergencies** disclaimer. That last
+  one is not boilerplate — a member treating a member portal as an alerting
+  path is a safety problem, and nothing on the page previously said otherwise.
+
+- **Both pages show a "Last updated" date.** A notice with no revision date
+  cannot be reviewed or relied on, and annual review is an express CCPA
+  expectation. The built-in date is `DEFAULT_LEGAL_LAST_UPDATED` in
+  `LegalPage.tsx`, bumped whenever the default text changes. A department
+  publishing its own wording supplies `legal.last_updated`; when it does not,
+  no date is shown rather than the built-in one — the built-in date describes
+  the built-in text and would misdate custom wording.
+
+**Added**
+
+- `GET /api/public/v1/legal` returns `lastUpdated` from
+  `settings["legal"]["last_updated"]`.
+
+**Fixed**
+
+- **The public legal endpoint no longer trusts the shape of
+  `settings["legal"]`.** It is unvalidated JSON: a string where a dict was
+  expected raised `AttributeError` on `.get`, turning a hand-edited setting into
+  a 500 on a page anonymous visitors reach. Non-dict `legal`, non-string values,
+  and blank/whitespace text now all fall back to the built-in defaults, and
+  returned text is capped at 100,000 characters so a stray paste cannot make the
+  public response unbounded.
+
+- The privacy notice pointed readers at "the address on our security page" for
+  reporting security issues. There is no such page in the app; it now tells
+  members to notify a department administrator.
+
+**Docs**
+
+- `wiki/Security-Privacy.md`, `wiki/API-Reference.md`,
+  `docs/training/17-privacy-data-rights.md`, `docs/COMPLIANCE.md`, and
+  `APPLICATION_PAGES.md` updated. The member-facing training guide gains a
+  short "the part members ask about most" list, and both it and the wiki note
+  that custom text **replaces** a document wholesale rather than merging with
+  the defaults — so a department publishing its own wording must carry the
+  control and access language across itself.
+
+- The default text is written for a US fire-service deployment and is a
+  starting point, not legal advice; departments should have counsel review what
+  they publish.
+
 ### Training: approval roster access is limited to training officers (2026-08-17)
 
 **Security / Fixed**
@@ -9226,16 +9298,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario                                      | Behavior                                                                         |
+| Scenario | Behavior |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
-| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
-| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
-| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
-| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
-| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 
