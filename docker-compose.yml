@@ -191,6 +191,13 @@ services:
     volumes:
       - ./backend:/app
       - uploads:/app/uploads
+      # Private CA material for DB_SSL_CA / REDIS_SSL_CA. Those settings are
+      # read inside the container, so a host path from .env resolves to
+      # nothing there and ssl.create_default_context raises FileNotFoundError
+      # at startup — a TLS misconfiguration that presents as a boot crash.
+      # Drop the PEM in ./infrastructure/certs and point the setting at the
+      # container path, e.g. DB_SSL_CA=/etc/ssl/logbook/mysql-ca.pem.
+      - ${SSL_CERTS_DIR:-./infrastructure/certs}:/etc/ssl/logbook:ro
     depends_on:
       mysql:
         condition: service_healthy
