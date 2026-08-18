@@ -55,7 +55,7 @@ describe('EquipmentRequestsPage', () => {
 
   it('renders page title and subtitle', async () => {
     renderWithRouter(<EquipmentRequestsPage />);
-    expect(screen.getByText('Equipment Requests')).toBeInTheDocument();
+    expect(screen.getByText('Gear Requests')).toBeInTheDocument();
     expect(screen.getByText('Review member requests for equipment')).toBeInTheDocument();
     await waitFor(() => {
       expect(mockGetEquipmentRequests).toHaveBeenCalledWith({ status: 'pending', skip: 0, limit: 25 });

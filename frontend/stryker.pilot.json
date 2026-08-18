@@ -10,7 +10,7 @@
     "fileName": "reports/mutation/pilot.json"
   },
   "coverageAnalysis": "perTest",
-  "mutate": ["src/utils/formValues.ts", "src/utils/errorHandling.ts", "src/utils/apiCache.ts"],
+  "mutate": ["src/modules/ip-security/store/ipSecurityStore.ts", "src/modules/public-portal/hooks/usePublicPortal.ts"],
   "concurrency": 4,
   "timeoutMS": 20000,
   "dryRunTimeoutMinutes": 10

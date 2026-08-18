@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock3, Info, ListChecks } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { localToUTC } from '../../../utils/dateFormatting';
+import { formatDateCustom, localToUTC } from '../../../utils/dateFormatting';
 
 type DatePreset = 'all' | '30-days' | 'year' | 'custom';
 
@@ -77,21 +77,28 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
 
   const periodLabel = useMemo(() => {
     if (!summary?.periodStart && !summary?.periodEnd) return 'All recorded time';
+    // The echoed bounds are UTC instants converted from reporting-day edges,
+    // so they must be rendered back in the reporting timezone — in UTC, the
+    // end bound of "Mar 31" west of UTC lands on Apr 1.
     const format = (value: string | null) =>
-      value
-        ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value))
-        : 'first record';
+      value ? formatDateCustom(value, { dateStyle: 'medium' }, timezone) : 'first record';
     return `${format(summary.periodStart)} – ${format(summary.periodEnd)}`;
-  }, [summary]);
+  }, [summary, timezone]);
+
+  const totalCategoryMinutes = useMemo(
+    () => (summary?.byCategory ?? []).reduce((total, category) => total + category.totalMinutes, 0),
+    [summary]
+  );
 
   return (
     <div className="space-y-6">
-      <section className="bg-theme-surface border-theme-surface-border rounded-lg border p-5 shadow-sm">
+      <section className="card p-5">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
           <div>
             <h2 className="text-theme-text-primary text-xl font-semibold">Hours summary</h2>
             <p className="text-theme-text-secondary mt-1 max-w-2xl text-sm">
-              Organization-wide completed sessions, grouped by the category assigned when each entry was logged.
+              Organization-wide completed sessions, grouped by each entry&apos;s current category (including any
+              recategorization made during review).
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
@@ -106,7 +113,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
             <select
               value={preset}
               onChange={(event) => setPreset(event.target.value as DatePreset)}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-primary min-w-44 rounded-md border px-3 py-2"
+              className="form-input min-w-44 px-3"
             >
               <option value="all">All time</option>
               <option value="30-days">Last 30 days</option>
@@ -122,7 +129,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                   type="date"
                   value={customStart}
                   onChange={(event) => setCustomStart(event.target.value)}
-                  className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-md border px-3 py-2"
+                  className="form-input px-3"
                 />
               </label>
               <label className="text-theme-text-secondary text-sm">
@@ -132,7 +139,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                   value={customEnd}
                   min={customStart || undefined}
                   onChange={(event) => setCustomEnd(event.target.value)}
-                  className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-md border px-3 py-2"
+                  className="form-input px-3"
                 />
               </label>
               <button
@@ -155,7 +162,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <article className="bg-theme-surface border-theme-surface-border rounded-lg border p-5 shadow-sm">
+            <article className="card p-5">
               <div className="flex items-center justify-between">
                 <p className="text-theme-text-secondary text-sm font-medium">Counted hours</p>
                 <Clock3 className="h-5 w-5 text-blue-500" aria-hidden="true" />
@@ -166,7 +173,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
               </p>
               <p className="text-theme-text-muted mt-1 text-xs">{summary.totalEntries} approved or pending entries</p>
             </article>
-            <article className="bg-theme-surface rounded-lg border border-green-200 p-5 shadow-sm dark:border-green-900">
+            <article className="card border-green-200 p-5 dark:border-green-900">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-green-700 dark:text-green-400">Approved</p>
                 <CheckCircle2 className="h-5 w-5 text-green-600" aria-hidden="true" />
@@ -177,7 +184,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
               </p>
               <p className="text-theme-text-muted mt-1 text-xs">{summary.approvedEntries} finalized entries</p>
             </article>
-            <article className="bg-theme-surface rounded-lg border border-amber-200 p-5 shadow-sm dark:border-amber-900">
+            <article className="card border-amber-200 p-5 dark:border-amber-900">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Needs review</p>
                 <ListChecks className="h-5 w-5 text-amber-600" aria-hidden="true" />
@@ -201,7 +208,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
             </article>
           </div>
 
-          <section className="bg-theme-surface border-theme-surface-border rounded-lg border p-5 shadow-sm">
+          <section className="card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-theme-text-primary font-semibold">Where the hours came from</h3>
@@ -226,11 +233,16 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
             ) : (
               <div className="mt-5 space-y-4">
                 {[...summary.byCategory]
-                  .sort((a, b) => b.totalHours - a.totalHours)
+                  .sort((a, b) => b.totalMinutes - a.totalMinutes)
                   .map((category) => {
+                    // Shares divide exact minutes, not the independently
+                    // rounded totalHours: with small totals the rounded basis
+                    // is materially wrong (two 1-minute categories each showed
+                    // as 67%). The summary exposes no total-minutes field, so
+                    // the denominator is the categories' own minutes.
                     const exactShare =
-                      summary.totalHours > 0
-                        ? Math.min(100, Math.max(0, (category.totalHours / summary.totalHours) * 100))
+                      totalCategoryMinutes > 0
+                        ? Math.min(100, Math.max(0, (category.totalMinutes / totalCategoryMinutes) * 100))
                         : 0;
                     const share = Math.round(exactShare);
                     return (

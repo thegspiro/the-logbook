@@ -86,7 +86,7 @@ Events support QR code-based check-in for tracking attendance:
 2. Click **QR Code** to display or print the check-in QR code.
 3. Display the QR code on a screen or print it for the venue entrance.
 
-![Event QR code display page for member self check-in](./images/04-04-event-qr-code.png)
+![Event QR code display page for member self check-in, its check-in window open](./images/04-04-event-qr-code.png)
 
 ### For Members (Checking In)
 
@@ -201,7 +201,14 @@ or the API if you need it in a report.
 
 **Required Permission:** `events.manage`
 
-Navigate to **Events Admin > Create Event** or click **Create Event** on the events page.
+Navigate to **Manage Events > Create Event** or click **Create Event** on the
+events page.
+
+> **Renamed 2026-08-13:** the sidebar entry is now **Manage Events** (it was
+> "Events Admin") and it opens the events page; the admin hub's Create and
+> Settings sections are deep-linked from there
+> (`/events/admin?tab=create`, `/events/admin?tab=settings`). Wherever this
+> guide says "Events Admin", follow the **Manage Events** entry.
 
 1. Set the **event type**, **title**, **date**, **start time**, and **end time**.
 2. Add a **location** and **description**.
@@ -1468,11 +1475,11 @@ Event and event-template forms now separate **when** reminders are sent from
 **who** receives them. In **Notifications → Who should receive reminders?**,
 choose:
 
-| Choice | In-app reminder audience | Email behavior |
-| --- | --- | --- |
-| **Members who sign up** | Active members whose RSVP is `going` | Email follows each recipient's event-notification preference |
-| **All active members** | Every active member in the event's organization | Email follows each recipient's event-notification preference |
-| **No reminders** | Nobody; saving also disables scheduled reminders | No reminder email |
+| Choice                  | In-app reminder audience                         | Email behavior                                               |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| **Members who sign up** | Active members whose RSVP is `going`             | Email follows each recipient's event-notification preference |
+| **All active members**  | Every active member in the event's organization  | Email follows each recipient's event-notification preference |
+| **No reminders**        | Nobody; saving also disables scheduled reminders | No reminder email                                            |
 
 New optional events and templates default to **Members who sign up**. New
 mandatory events default to **All active members** unless the organizer has

@@ -6,19 +6,19 @@ Complete reference of all pages in the application, organized by module.
 
 ## Public Pages (No Authentication Required)
 
-| URL                                    | Page                   | Description                                                              |
-| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------ |
-| `/`                                    | Welcome                | Landing / onboarding entry point                                         |
-| `/login`                               | Login                  | User authentication                                                      |
-| `/forgot-password`                     | Forgot Password        | Password reset request                                                   |
-| `/reset-password`                      | Reset Password         | Password reset form                                                      |
-| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)           |
-| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                     |
-| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                       |
-| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)                |
-| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_ |
-| `/privacy`                             | Privacy Policy         | Public privacy notice; department-configurable text                      |
-| `/terms`                               | Terms of Service       | Public terms of use; department-configurable text                        |
+| URL                                    | Page                   | Description                                                                                          |
+| -------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| `/`                                    | Welcome                | Landing / onboarding entry point                                                                     |
+| `/login`                               | Login                  | User authentication                                                                                  |
+| `/forgot-password`                     | Forgot Password        | Password reset request                                                                               |
+| `/reset-password`                      | Reset Password         | Password reset form                                                                                  |
+| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                       |
+| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                 |
+| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                   |
+| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)                                            |
+| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                             |
+| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text |
+| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text   |
 
 > **The guest check-in page is addressed through the room's display code**, not
 > through the event alone, so the backend can resolve the department without a
@@ -245,7 +245,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` **OR** `facilities.manage` |
 | `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` **OR** `facilities.manage` |
 
-> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
+> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. **Rooms can be nested inside other rooms** _(2026-08-16)_: the Rooms section renders the containment tree with per-room sub-room counts and an add-a-room-inside action, the room form offers a "Located inside" picker (same facility only, no cycles, five levels max), and deleting a room re-parents its sub-rooms one level up rather than deleting them. A nested room's linked Location carries the full containment path (e.g. "Quartermaster's Storage — Volunteer Office — Station 1"), and the cross-module room picker in Events, Training, and Scheduling indents sub-rooms under their container. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
 
 ---
 
@@ -544,12 +544,15 @@ Checklists → Apparatus Inventory**. Pick an apparatus and see its tracked
 positions compartment by compartment: what is aboard, the lots and dates on each
 position, and the ready stock behind it.
 
-**It is deliberately crew-level.** An equipment check is a scheduled, signed pass
-over a whole apparatus that produces a report; a crew that used the last of
-something at 03:00 needs somewhere to put that fact _now_, not at the next
-morning's check. So the page and every write on it accept
+**Reporting usage is deliberately crew-level.** An equipment check is a
+scheduled, signed pass over a whole apparatus that produces a report; a crew
+that used the last of something at 03:00 needs somewhere to put that fact
+_now_, not at the next morning's check. So reporting an item used accepts
 `equipment_check.submit` — the default member position — as well as the manage
-permissions.
+permissions. **Corrections of record are not** _(2026-08-11)_: withdrawing a
+restock report, swapping a lot onto the apparatus, and rewriting a deployed
+lot's number or expiration date require `equipment_check.manage` or
+`inventory.manage`.
 
 | Action on a position | What it means                                                                                                                     |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |

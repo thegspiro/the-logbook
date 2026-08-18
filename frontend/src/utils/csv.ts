@@ -122,3 +122,17 @@ export function csvValue(record: Record<string, string>, ...names: string[]): st
   }
   return '';
 }
+
+/**
+ * Escape a string for a quoted CSV cell and prevent spreadsheet formula
+ * execution. Formula markers are checked after leading whitespace/control
+ * characters so they cannot be used to bypass the neutralization.
+ */
+export function escapeCsvCell(value: string): string {
+  let contentStart = 0;
+  while (contentStart < value.length && value.charCodeAt(contentStart) <= 0x20) {
+    contentStart += 1;
+  }
+  const safeValue = '=+@-'.includes(value[contentStart] ?? '') ? `'${value}` : value;
+  return `"${safeValue.replace(/"/g, '""')}"`;
+}

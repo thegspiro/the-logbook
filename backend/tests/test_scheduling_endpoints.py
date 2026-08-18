@@ -8,12 +8,14 @@ test the shared validation helpers without needing a running server.
 """
 
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 
 from app.api.v1.endpoints.scheduling import (
     MAX_REPORT_DAYS,
+    _can_view_platoon_roster,
     _parse_and_validate_report_dates,
     router,
 )
@@ -85,6 +87,44 @@ class TestEndpointPermissions:
             deps is not None
         ), "Route /swap-requests/{request_id}/review POST not found"
         assert any("require_permission" in d or "scheduling" in d for d in deps)
+
+    def test_qualification_roster_requires_officer_permission(self):
+        """Baseline scheduling viewers must not see members' training records."""
+        deps = self._get_route_deps("/eligibility/roster", "GET")
+
+        assert deps is not None, "Route /eligibility/roster GET not found"
+        assert deps == [
+            "get_db",
+            "PermissionChecker(scheduling.manage,training.view_all,training.manage)",
+        ]
+
+
+class TestPlatoonRosterPermissions:
+    """The hold-over roster must not disclose member availability broadly."""
+
+    @staticmethod
+    def _user(user_id: str, permissions: list[str]):
+        position = SimpleNamespace(permissions=permissions)
+        return SimpleNamespace(id=user_id, positions=[position], rank=None)
+
+    def test_view_only_member_cannot_view_roster(self):
+        shift = SimpleNamespace(shift_officer_id="officer-id")
+        user = self._user("member-id", ["scheduling.view"])
+
+        assert _can_view_platoon_roster(shift, user) is False
+
+    @pytest.mark.parametrize("permission", ["scheduling.assign", "scheduling.manage"])
+    def test_scheduler_can_view_roster(self, permission):
+        shift = SimpleNamespace(shift_officer_id="officer-id")
+        user = self._user("scheduler-id", [permission])
+
+        assert _can_view_platoon_roster(shift, user) is True
+
+    def test_shift_officer_can_view_roster(self):
+        shift = SimpleNamespace(shift_officer_id="officer-id")
+        user = self._user("officer-id", ["scheduling.view"])
+
+        assert _can_view_platoon_roster(shift, user) is True
 
 
 # ── Date Range Validation Tests ──────────────────────────────────────

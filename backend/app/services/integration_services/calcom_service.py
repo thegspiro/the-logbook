@@ -47,10 +47,14 @@ def parse_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
     emails = [
         a.get("email", "") for a in attendees if isinstance(a, dict) and a.get("email")
     ]
+    event_type = data.get("eventType") or {}
+    if not isinstance(event_type, dict):
+        event_type = {}
     return {
         "trigger": trigger,
         "created": trigger.upper() in BOOKING_CREATED_EVENTS,
         "booking_uid": str(data.get("uid") or ""),
+        "event_type_slug": str(event_type.get("slug") or data.get("type") or ""),
         "attendee_emails": emails,
     }
 

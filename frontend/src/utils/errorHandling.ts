@@ -183,6 +183,21 @@ export function isNetworkError(error: unknown): boolean {
 }
 
 /**
+ * True only when the server explicitly rejected a request and retrying the
+ * unchanged payload cannot reasonably succeed. Transport failures, 5xx
+ * responses, and request-timeout/rate-limit statuses are deliberately retained
+ * for a later attempt by offline queues.
+ */
+export function isNonRetryableHttpError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('response' in error)) return false;
+
+  const status = (error as { response?: { status?: unknown } }).response?.status;
+  return (
+    typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 425 && status !== 429
+  );
+}
+
+/**
  * Detect the soft training-pipeline phase gate (HTTP 409 with a structured
  * `phase_gate` detail) that RSVP / self check-in return when a session is ahead
  * of the member's current phase. Returns the warning message the caller should

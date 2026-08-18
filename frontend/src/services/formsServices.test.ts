@@ -372,6 +372,33 @@ describe('publicFormsService', () => {
       );
     });
 
+    it('should send the challenge token as a header, not in the body', async () => {
+      mockAxiosPost.mockResolvedValueOnce({ data: {} });
+
+      await publicFormsService.submitForm('slug', { name: 'Jane' }, undefined, 'challenge-token');
+
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        '/api/public/v1/forms/slug/submit',
+        { data: { name: 'Jane' } },
+        { withCredentials: true, headers: { 'X-Captcha-Token': 'challenge-token' } }
+      );
+    });
+
+    it('should retry with the same challenge token after a session refresh', async () => {
+      localStorage.setItem('has_session', '1');
+      mockAxiosPost.mockRejectedValueOnce({ response: { status: 401 } }).mockResolvedValueOnce({ data: {} });
+      mockPerformSharedRefresh.mockResolvedValueOnce(undefined);
+
+      await publicFormsService.submitForm('slug', {}, undefined, 'challenge-token');
+
+      // The retry must carry the token too — dropping it would trade a 401 for
+      // a challenge failure on a submission the member already solved.
+      expect(mockAxiosPost.mock.calls[1]?.[2]).toEqual({
+        withCredentials: true,
+        headers: { 'X-Captcha-Token': 'challenge-token' },
+      });
+    });
+
     it('should not include honeypot field when empty', async () => {
       mockAxiosPost.mockResolvedValueOnce({ data: {} });
 

@@ -10,6 +10,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job below sets timeout-minutes. GitHub's default is 360 minutes, which
+# is not a safety net — on 2026-08-17 the MariaDB contract job hung in
+# `apt-get update` and sat there for close to an hour before anyone looked,
+# holding a runner and leaving the PR un-mergeable with no failure to react to.
+# A hang shows up as a red check within the budget instead of as a job that
+# never finishes. Budgets are ~4-6x measured duration, so a slow-but-healthy
+# run is never killed; raise the number if a job legitimately outgrows it
+# rather than removing the key.
 jobs:
   # ──────────────────────────────────────────────
   # Backend
@@ -17,6 +25,7 @@ jobs:
   backend-lint:
     name: Backend Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -68,6 +77,17 @@ jobs:
       - name: Check import order with isort
         if: "!cancelled()"
         run: isort --check-only app/ tests/ alembic/
+
+      # Two branches that each add a migration pick the next number
+      # independently, so both land claiming the same revision id. Git merges
+      # the two files without a word — they do not overlap — and the result is
+      # an ambiguous chain that fails at `alembic upgrade head` with "Multiple
+      # head revisions", after the merge, for everyone. It happened twice in a
+      # single day on 2026-08-16. This is the check that sees it, and it needs
+      # no database.
+      - name: Validate migration chain
+        if: "!cancelled()"
+        run: python scripts/validate_migrations.py
 
       # Repo-root Python (generate_registry.py, scripts/) is outside the
       # backend working-directory and was linted by nothing, which let five
@@ -127,6 +147,7 @@ jobs:
   backend-security:
     name: Backend Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: backend
@@ -172,6 +193,7 @@ jobs:
   backend-test:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: backend
@@ -225,6 +247,7 @@ jobs:
   backend-test-integration:
     name: Backend Integration Tests (${{ matrix.db.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [backend-lint, backend-test]
     strategy:
       # MariaDB is a supported deployment target (docker-compose.arm.yml ships
@@ -417,6 +440,7 @@ jobs:
   backend-test-contract:
     name: Backend API Contract Tests (${{ matrix.db.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [backend-lint, backend-test]
     strategy:
       # Same reasoning as backend-test-integration: MariaDB is a supported
@@ -557,6 +581,7 @@ jobs:
   docker-build:
     name: Docker Image Build & Container Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [backend-lint, frontend-lint]
     defaults:
       run:
@@ -612,6 +637,7 @@ jobs:
   frontend-lint:
     name: Frontend Lint & Typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -636,6 +662,7 @@ jobs:
   frontend-test:
     name: Frontend Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: frontend
@@ -657,6 +684,7 @@ jobs:
   frontend-security:
     name: Frontend Security Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -681,6 +709,7 @@ jobs:
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [frontend-lint, frontend-test]
     defaults:
       run:
@@ -703,6 +732,7 @@ jobs:
   frontend-e2e:
     name: Frontend E2E (Playwright)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [frontend-lint]
     defaults:
       run:
@@ -754,6 +784,7 @@ jobs:
   docs-links:
     name: Docs Link Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 

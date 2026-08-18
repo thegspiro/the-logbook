@@ -35,6 +35,7 @@ import { getSchedulingRoutes } from './modules/scheduling';
 import { getEventsRoutes, getEventsPublicRoutes } from './modules/events';
 import { getTrainingRoutes } from './modules/training';
 import { getInventoryRoutes } from './modules/inventory';
+import { getMedicalSuppliesRoutes } from './modules/medical-supplies';
 import { getStorefrontRoutes } from './modules/storefront';
 import { getElectionsRoutes, getElectionsPublicRoutes } from './modules/elections';
 import { getMinutesRoutes } from './modules/minutes';
@@ -54,20 +55,14 @@ import { getMedicalScreeningRoutes } from './modules/medical-screening';
 
 // Loading fallback component
 const PageLoadingFallback = () => (
-  <div
-    className="flex min-h-screen items-center justify-center"
-    style={{
-      background:
-        'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))',
-    }}
-  >
+  <main className="page-loading-fallback" aria-busy="true">
     <div className="text-center">
-      <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-t-4 border-b-4 border-red-500"></div>
-      <p className="text-lg" style={{ color: 'var(--text-primary)' }}>
+      <div className="page-loading-fallback__spinner" aria-hidden="true" />
+      <p className="page-loading-fallback__message" role="status" aria-live="polite">
         Loading...
       </p>
     </div>
-  </div>
+  </main>
 );
 
 // Critical pages - loaded immediately for fast initial navigation
@@ -142,6 +137,7 @@ function App() {
                     {getDocumentsRoutes()}
                     {getTrainingRoutes()}
                     {getInventoryRoutes()}
+                    {getMedicalSuppliesRoutes()}
                     {getStorefrontRoutes()}
                     {getSchedulingRoutes()}
                     {getFacilitiesRoutes()}
@@ -204,14 +200,10 @@ function App() {
               {/* Toast notifications */}
               <Toaster
                 position="top-right"
-                containerStyle={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
+                containerClassName="app-toaster"
                 toastOptions={{
                   duration: 4000,
-                  style: {
-                    background: 'var(--surface-bg)',
-                    color: 'var(--text-primary)',
-                    border: '1px solid var(--surface-border)',
-                  },
+                  className: 'app-toast',
                   success: {
                     iconTheme: {
                       primary: 'var(--toast-success)',

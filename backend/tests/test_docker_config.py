@@ -372,6 +372,54 @@ class TestDockerCompose:
         assert not missing, f"Backend missing required environment vars: {missing}"
 
 
+class TestBaseComposeReachesProductionGates:
+    """ENVIRONMENT=production must not be a one-way door in the base file.
+
+    The base backend `environment:` block is a whitelist and there is no
+    env_file, so a variable missing from it cannot be set from .env at all.
+    ENVIRONMENT itself IS read from .env, so a base-only stack can be put into
+    production mode — where these gates block startup — while the knobs that
+    satisfy or waive them stay unreachable. Editing .env then changes nothing
+    and the container crash-loops with no way out.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.env = yaml.safe_load(_read(ROOT_DIR / "docker-compose.yml"))["services"][
+            "backend"
+        ]["environment"]
+
+    def test_environment_is_read_from_dot_env(self):
+        # The premise of every assertion below: base-only CAN enter production.
+        assert "${ENVIRONMENT:-development}" in str(self.env["ENVIRONMENT"])
+
+    @pytest.mark.parametrize(
+        "setting",
+        [
+            "SECURITY_ENFORCE_HTTPS",
+            "SECURITY_REQUIRE_TLS",
+            "SECURITY_ALLOW_UNVERIFIED_TLS",
+            "DB_SSL",
+            "DB_SSL_CA",
+            "REDIS_SSL",
+            "REDIS_SSL_CA",
+            "VOTE_SIGNING_KEY",
+            "DEBUG",
+            "ENABLE_DOCS",
+            "TRUSTED_PROXY_IPS",
+        ],
+    )
+    def test_production_gate_is_settable_from_dot_env(self, setting: str):
+        assert setting in self.env, (
+            f"{setting} is absent from the base compose environment whitelist, "
+            "so setting it in .env silently does nothing"
+        )
+        assert f"${{{setting}" in str(self.env[setting]), (
+            f"{setting} is hardcoded in the base compose file rather than "
+            "interpolated from .env"
+        )
+
+
 class TestProductionComposeSecuritySwitches:
     """Production must fail closed unless plaintext transport is explicit."""
 
@@ -461,6 +509,27 @@ class TestDockerComposeArm:
         ), "ARM compose file should specify ARM platform for at least one service"
 
 
+class TestUnraidComposeSecuritySwitches:
+    """The Unraid stack runs ENVIRONMENT=production with bundled plaintext
+    MySQL/Redis, so it must carry an explicit SECURITY_REQUIRE_TLS opt-out —
+    without it the fail-closed default puts every install in a boot loop."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.compose = _read(ROOT_DIR / "unraid" / "docker-compose-unraid.yml")
+        self.setup_script = _read(ROOT_DIR / "unraid" / "unraid-setup.sh")
+
+    def test_compose_passes_explicit_tls_opt_out(self):
+        assert "SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-false}" in self.compose
+
+    @pytest.mark.parametrize("setting", ["DB_SSL", "REDIS_SSL"])
+    def test_compose_passes_through_tls_switches(self, setting: str):
+        assert f"{setting}: ${{{setting}:-false}}" in self.compose
+
+    def test_setup_script_records_the_risk_acceptance(self):
+        assert "SECURITY_REQUIRE_TLS=false" in self.setup_script
+
+
 # ===========================================================================
 # Health Endpoint Contract Tests
 # ===========================================================================
@@ -529,6 +598,13 @@ class TestSupportingFiles:
 
     def test_backend_requirements_exists(self):
         assert (BACKEND_DIR / "requirements.txt").exists()
+
+    def test_full_env_example_does_not_reveal_locked_accounts(self):
+        """Copied defaults must preserve uniform authentication failures."""
+        env_example = _read(ROOT_DIR / ".env.example.full")
+        assert re.search(
+            r"^ACCOUNT_LOCKOUT_REVEAL=false\s*$", env_example, re.MULTILINE
+        )
 
     def test_frontend_nginx_conf_exists(self):
         assert (FRONTEND_DIR / "nginx.conf").exists()

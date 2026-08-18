@@ -170,6 +170,15 @@ class Settings(BaseSettings):
     # archive), giving the audit trail a copy outside the database host.
     AUDIT_SHIP_WEBHOOK_URL: str | None = None
     AUDIT_SHIP_BATCH_SIZE: int = 500
+    # Explicit operator risk acceptance: allow AUDIT_SHIP_WEBHOOK_URL to
+    # resolve to a private/internal address (RFC1918, internal DNS). A normal
+    # on-prem SIEM topology puts the collector on the trusted network, which
+    # the outbound-URL guard otherwise rejects. The default stays closed
+    # because skipping that check lets the shipping task POST signed batches
+    # at arbitrary internal services if the URL is ever mis-set — only the
+    # private-resolution check is waived; HTTPS-scheme and cloud-metadata-
+    # endpoint checks still apply.
+    AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION: bool = False
     # Platform-level retention for blocked-access-attempt telemetry (IP +
     # user-agent rows with no org column). Days; 0 disables the purge.
     # Org-scoped record classes are configured per organization instead —
@@ -192,6 +201,45 @@ class Settings(BaseSettings):
     # confirming the account exists. Set True to instead tell users about the
     # temporary lock (friendlier, but reveals account existence — SEC-14).
     ACCOUNT_LOCKOUT_REVEAL: bool = False
+
+    # Suspicious-IP throttling (credential stuffing).
+    # The per-IP rate limit caps burst speed and the per-account lockout caps
+    # guesses against one user, but neither stops a spray: one IP trying two
+    # passwords each against a thousand usernames stays under 5/min and never
+    # reaches MAX_LOGIN_ATTEMPTS on any single account. This counts *failed*
+    # auth attempts per IP across all accounts over a long window and blocks
+    # the IP once the total crosses the threshold. A successful sign-in from
+    # the IP clears its counter, so a shared NAT egress that is mostly
+    # legitimate does not accumulate toward a block.
+    SUSPICIOUS_IP_THROTTLE_ENABLED: bool = True
+    SUSPICIOUS_IP_MAX_FAILURES: int = 50  # Failures per window before blocking
+    SUSPICIOUS_IP_WINDOW_SECONDS: int = 3600
+    SUSPICIOUS_IP_BLOCK_SECONDS: int = 900
+
+    # Breached-password detection (Have I Been Pwned range API).
+    # Off by default: it makes an outbound request on password set/change, which
+    # some deployments cannot allow. Only the first 5 characters of the SHA-1
+    # hash are ever sent (k-anonymity) — never the password or its full hash.
+    BREACHED_PASSWORD_CHECK_ENABLED: bool = False
+    # Number of times a password must appear in breach corpora before it is
+    # rejected. 1 rejects anything ever seen; a higher value tolerates rare
+    # appearances that are more likely to be corpus noise.
+    BREACHED_PASSWORD_MIN_COUNT: int = 1
+    BREACHED_PASSWORD_API_URL: str = "https://api.pwnedpasswords.com/range"
+    BREACHED_PASSWORD_TIMEOUT_SECONDS: float = 3.0
+
+    # Challenge-response (CAPTCHA) for exposed public forms.
+    # Off by default; operators enable it per the residual noted in the
+    # 2026-08-16 red-team review. "provider" selects the verification endpoint
+    # and response-field name.
+    CAPTCHA_ENABLED: bool = False
+    CAPTCHA_PROVIDER: str = "turnstile"  # turnstile | hcaptcha | recaptcha
+    CAPTCHA_SECRET_KEY: str = ""
+    CAPTCHA_SITE_KEY: str = ""  # Public; served to the frontend
+    CAPTCHA_TIMEOUT_SECONDS: float = 5.0
+    # reCAPTCHA v3 returns a 0.0-1.0 score instead of a pass/fail; tokens below
+    # this are treated as bot traffic. Ignored by Turnstile and hCaptcha.
+    CAPTCHA_MIN_SCORE: float = 0.5
 
     # Vote signing key — used for HMAC-SHA256 vote integrity signatures.
     # Falls back to SECRET_KEY if not set.  A dedicated key is recommended so
@@ -380,16 +428,22 @@ class Settings(BaseSettings):
             if not self.REDIS_PASSWORD:
                 warnings.append("CRITICAL: REDIS_PASSWORD must be set in production")
 
-            # No TLS at all: CRITICAL (blocks boot) only when the deployment
-            # has opted in via SECURITY_REQUIRE_TLS, so upgrading this release
-            # cannot refuse to start an existing prod that terminates TLS
-            # elsewhere.
+            # No TLS at all: CRITICAL (blocks boot) unless the deployment has
+            # explicitly accepted the risk by setting SECURITY_REQUIRE_TLS
+            # False. The flag defaults True (fail closed), so an existing
+            # production install that terminates TLS elsewhere DOES stop
+            # booting on upgrade until it records that acceptance — the
+            # deliberate trade made when the default flipped, and the reason
+            # both messages below name the flag.
             tls_severity = "CRITICAL" if self.SECURITY_REQUIRE_TLS else "WARNING"
 
             if not self.DB_SSL:
                 warnings.append(
                     f"{tls_severity}: DB_SSL should be enabled in production to "
-                    "encrypt database traffic and prevent man-in-the-middle attacks"
+                    "encrypt database traffic and prevent man-in-the-middle "
+                    "attacks. Set DB_SSL=true (plus DB_SSL_CA), or set "
+                    "SECURITY_REQUIRE_TLS=false to accept the risk for a "
+                    "deployment whose network already protects this traffic."
                 )
             elif not self.DB_SSL_CA:
                 # CRITICAL, not WARNING: this configuration *looks* secure and
@@ -408,7 +462,10 @@ class Settings(BaseSettings):
             if not self.REDIS_SSL:
                 warnings.append(
                     f"{tls_severity}: REDIS_SSL should be enabled in production to "
-                    "encrypt Redis traffic and prevent man-in-the-middle attacks"
+                    "encrypt Redis traffic and prevent man-in-the-middle "
+                    "attacks. Set REDIS_SSL=true (plus REDIS_SSL_CA), or set "
+                    "SECURITY_REQUIRE_TLS=false to accept the risk for a "
+                    "deployment whose network already protects this traffic."
                 )
             elif not self.REDIS_SSL_CA:
                 severity = (
@@ -448,10 +505,24 @@ class Settings(BaseSettings):
                     "SECRET_KEY and will be invalidated if SECRET_KEY is rotated."
                 )
 
+            # NOTE: this flag has no reader anywhere in the backend — nothing
+            # sends HSTS, and no middleware redirects http:// to https://. The
+            # Secure attribute on auth cookies is decided independently by
+            # COOKIE_SECURE (see api/v1/endpoints/auth.py), which is why the
+            # old message here — "prevent cookies and credentials from being
+            # sent over HTTP" — described a control that does not exist and
+            # sent operators chasing the wrong setting. Until enforcement is
+            # actually implemented, the flag's only effect is this assertion
+            # that a human deployed behind TLS, so say exactly that rather
+            # than claim protection the code does not provide.
             if not self.SECURITY_ENFORCE_HTTPS:
                 warnings.append(
-                    "CRITICAL: SECURITY_ENFORCE_HTTPS must be True in production "
-                    "to prevent cookies and credentials from being sent over HTTP"
+                    "CRITICAL: SECURITY_ENFORCE_HTTPS must be True in production. "
+                    "It is an attestation that this deployment is served over "
+                    "TLS (typically terminated at a reverse proxy or CDN) — it "
+                    "does not itself redirect HTTP or emit HSTS. Set it True "
+                    "once TLS terminates in front of the app; to control the "
+                    "Secure flag on auth cookies, use COOKIE_SECURE."
                 )
 
         return warnings

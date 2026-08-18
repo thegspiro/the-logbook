@@ -355,14 +355,17 @@
 
 @utility form-checkbox {
   @apply bg-theme-input-bg border-theme-input-border focus:ring-theme-focus-ring h-4 w-4 rounded-sm text-blue-700 dark:text-blue-500;
-  /* A 16px box is the smallest thing on any form. The box stays 16px so
-     layouts are unchanged, but outline-style padding grows the hit area to
-     44px on touch; the negative margin keeps it from displacing neighbours. */
-  @media (max-width: 767px) {
-    padding: 14px;
-    margin: -14px;
-    background-clip: content-box;
-  }
+  /* No padding/negative-margin trick here. A checkbox is a *replaced* element
+     — `appearance: auto` — and every browser discards padding on it, so the
+     `padding: 14px; margin: -14px` pair that used to sit in a max-width:767px
+     block grew no hit area at all while the negative margin stayed fully in
+     effect, pulling the next flex item 14px left. Measured on a 390px
+     viewport, that turned a `gap-3` beside a checkbox into a 2px *overlap*,
+     at every one of the ~100 call sites at once.
+
+     The 44px touch target comes from the <label> the checkbox is paired with,
+     which is what was actually absorbing these taps all along. Give a bare
+     checkbox `mobile-touch-target` on its label, not padding on the box. */
 }
 
 @utility form-label {
@@ -741,6 +744,71 @@
   @media (min-width: 640px) {
     max-height: 90dvh;
   }
+}
+
+/* --- Modals & Overlays --- */
+@utility modal-overlay {
+  /* The scrim behind a dialog. This lived at the call site and had drifted into
+     two different opacities for the same thing (bg-black/50 at 43 sites,
+     bg-black/60 at 47); it settles here on the shared <Modal> component's /50.
+     Layout — flex centring, padding, a raised z-index for a dialog stacked over
+     another — stays at the call site. */
+  @apply fixed inset-0 z-50 bg-black/50;
+}
+
+@utility modal-panel {
+  /* The dialog surface itself. Hand-rolled copies disagreed about whether the
+     panel carried a border (60 sites) or an elevation (46); it carries both.
+     Width caps (max-w-*) and scroll behaviour (see modal-body) are per-dialog
+     and stay at the call site. */
+  @apply bg-theme-surface-modal border-theme-surface-border rounded-lg border shadow-xl;
+}
+
+@utility modal-header {
+  /* The standard dialog header block, as rendered by components/Modal.tsx. The
+     same string was copied into nine sibling modals verbatim. */
+  @apply bg-theme-surface-modal px-4 pt-5 pb-4;
+  @media (min-width: 640px) {
+    padding: 1.5rem 1.5rem 1rem;
+  }
+}
+
+@utility modal-header-sticky {
+  /* Header that stays put while a tall dialog body scrolls under it. Padding is
+     per-dialog and stays at the call site. */
+  @apply bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b;
+}
+
+@utility modal-footer-sticky {
+  /* Pinned action bar for a scrolling dialog. action-bar-safe is what keeps the
+     buttons clear of the iPhone home indicator — the reason this must not be
+     re-typed per page, since dropping it is invisible on a desktop browser. */
+  @apply bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t;
+}
+
+@utility popover-panel {
+  /* Floating surface anchored to a trigger — dropdown menus, autocomplete
+     results, action menus. Shares the modal surface token but is deliberately
+     NOT modal-panel: a popover is dismissed by clicking away and must not take
+     the focus trap, scroll lock or dialog semantics a dialog needs. */
+  @apply bg-theme-surface-modal border-theme-surface-border rounded-lg border shadow-lg;
+}
+
+/* --- Drag & Drop Surfaces --- */
+@utility drop-surface {
+  /* Resting state of a droppable target — kanban columns and reorderable rows. */
+  @apply bg-theme-input-bg border-theme-surface-border rounded-lg border transition-all;
+}
+
+@utility drop-surface-active {
+  /* Pointer is over a valid drop target. Shared with FileDropzone, which keeps
+     its own dashed resting border but signals acceptance the same way. */
+  @apply border-red-500 bg-red-500/5;
+}
+
+@utility drop-surface-dragging {
+  /* The row currently being dragged, as distinct from the target under it. */
+  @apply bg-theme-surface border-red-500/50 opacity-50;
 }
 
 @utility shimmer-skeleton {
@@ -1605,4 +1673,393 @@ tbody tr:last-child {
   .id-card-printable a[href]:after {
     content: '' !important;
   }
+}
+
+/* Printable member training record. */
+.member-training-print-shell {
+  max-width: 8.5in;
+  margin: 2rem auto;
+  background: #fff;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%);
+}
+.member-training-print {
+  padding: 2rem;
+  color: #111;
+  font:
+    10pt/1.5 Georgia,
+    'Times New Roman',
+    serif;
+}
+.member-training-print p,
+.member-training-print dd {
+  margin: 0;
+}
+.member-training-print__header {
+  margin-bottom: 14pt;
+  padding-bottom: 10pt;
+  border-bottom: 3px solid #111;
+}
+.member-training-print__header-layout {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.member-training-print h1 {
+  margin: 0 0 2pt;
+  font-size: 18pt;
+  font-weight: 700;
+}
+.member-training-print__member {
+  font-size: 14pt;
+}
+.member-training-print__metadata {
+  color: #555;
+  font-size: 9pt;
+  text-align: right;
+}
+.member-training-print__compliance {
+  color: #92400e;
+  font-weight: 600;
+}
+.member-training-print__compliance--green {
+  color: #166534;
+}
+.member-training-print__compliance--red {
+  color: #991b1b;
+}
+.member-training-print__compliance--yellow {
+  color: #92400e;
+}
+.member-training-print__stats,
+.member-training-print__summary {
+  display: grid;
+  margin: 0 0 14pt;
+}
+.member-training-print__stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  text-align: center;
+}
+.member-training-print__summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.member-training-print__stats > div,
+.member-training-print__summary > div {
+  padding: 6pt 8pt;
+  border: 1px solid #aaa;
+}
+.member-training-print__stats > div {
+  display: flex;
+  flex-direction: column;
+}
+.member-training-print__stats dd {
+  order: -1;
+  font-size: 16pt;
+  font-weight: 700;
+}
+.member-training-print__stats dt,
+.member-training-print__summary dt {
+  color: #555;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.member-training-print__summary dd {
+  margin-top: 2pt;
+}
+.member-training-print__section h2 {
+  margin: 16pt 0 6pt;
+  padding-bottom: 3pt;
+  border-bottom: 1px solid #bbb;
+  font-size: 11pt;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.member-training-print__table-scroll {
+  overflow-x: auto;
+}
+.member-training-print table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.member-training-print th,
+.member-training-print td {
+  padding: 3pt 6pt;
+  border: 1px solid #aaa;
+  font-size: 9pt;
+  text-align: left;
+  vertical-align: top;
+}
+.member-training-print th {
+  background: #f5f5f5;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.member-training-print__hours {
+  text-align: center !important;
+}
+.member-training-print__expired {
+  color: #991b1b;
+  font-weight: 600;
+}
+.member-training-print__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 24pt;
+  padding-top: 6pt;
+  border-top: 1px solid #bbb;
+  color: #666;
+  font-size: 8pt;
+}
+@media (max-width: 40rem) {
+  .member-training-print__header-layout,
+  .member-training-print__footer {
+    flex-direction: column;
+  }
+  .member-training-print__metadata {
+    text-align: left;
+  }
+  .member-training-print__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .member-training-print__summary {
+    grid-template-columns: 1fr;
+  }
+}
+@media print {
+  .member-training-print-shell {
+    margin: 0;
+    box-shadow: none;
+  }
+  .member-training-print {
+    padding: 0;
+  }
+  .member-training-print__table-scroll {
+    overflow: visible;
+  }
+}
+
+/* Shift completion report: keep the printable document's design out of JSX. */
+.shift-report-print-shell {
+  max-width: 8.5in;
+  margin: 2rem auto;
+  background: white;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%);
+}
+.shift-report-print {
+  padding: 2rem;
+  color: #111;
+  font:
+    11pt/1.6 Georgia,
+    'Times New Roman',
+    serif;
+}
+.shift-report-print p,
+.shift-report-print dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.shift-report-print__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16pt;
+  padding-bottom: 12pt;
+  border-bottom: 3px solid #111;
+}
+.shift-report-print__header h1 {
+  margin: 0 0 2pt;
+  font-size: 18pt;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.shift-report-print__subtitle {
+  color: #555;
+  font-size: 10pt;
+}
+.shift-report-print__metadata {
+  color: #555;
+  font-size: 9pt;
+  text-align: right;
+}
+.shift-report-print__status--approved,
+.shift-report-print__status--flagged {
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.shift-report-print__status--approved {
+  color: #166534;
+}
+.shift-report-print__status--flagged {
+  color: #991b1b;
+}
+.shift-report-print__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 16pt;
+  font-size: 10pt;
+}
+.shift-report-print__facts > div {
+  padding: 6pt 8pt;
+  border: 1px solid #aaa;
+}
+.shift-report-print__fact-wide {
+  grid-column: 1 / -1;
+}
+.shift-report-print dt,
+.shift-report-print__signature h2 {
+  color: #555;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.shift-report-print dd {
+  margin: 0;
+}
+.shift-report-print__section {
+  margin-bottom: 14pt;
+}
+.shift-report-print__section h2 {
+  margin: 0 0 6pt;
+  padding-bottom: 3pt;
+  border-bottom: 1px solid #bbb;
+  font-size: 11pt;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.shift-report-print__rating {
+  font-size: 12pt;
+}
+.shift-report-print__table-scroll {
+  overflow-x: auto;
+}
+.shift-report-print table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10pt;
+}
+.shift-report-print th,
+.shift-report-print td {
+  padding: 4pt 8pt;
+  border: 1px solid #aaa;
+  text-align: left;
+}
+.shift-report-print th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+.shift-report-print__score {
+  width: 80pt;
+  text-align: center !important;
+}
+.shift-report-print__muted {
+  color: #555;
+}
+.shift-report-print__signatures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 40pt;
+  margin-top: 28pt;
+  padding-top: 12pt;
+  border-top: 2px solid #111;
+  break-inside: avoid;
+}
+.shift-report-print__signature h2 {
+  margin: 0 0 4pt;
+}
+.shift-report-print__signature p {
+  margin-bottom: 24pt;
+}
+.shift-report-print__signature span {
+  color: #666;
+  font-size: 8pt;
+}
+.shift-report-print__signature-line {
+  margin-bottom: 4pt;
+  border-bottom: 1px solid #777;
+}
+.shift-report-print__reviewer {
+  grid-column: 1 / -1;
+  color: #555;
+  font-size: 9pt;
+}
+.shift-report-print__footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24pt;
+  padding-top: 6pt;
+  border-top: 1px solid #bbb;
+  color: #666;
+  font-size: 8pt;
+}
+@media (max-width: 40rem) {
+  .shift-report-print__header,
+  .shift-report-print__footer {
+    gap: 0.75rem;
+    flex-direction: column;
+  }
+  .shift-report-print__metadata {
+    text-align: left;
+  }
+  .shift-report-print__facts,
+  .shift-report-print__signatures {
+    grid-template-columns: 1fr;
+  }
+  .shift-report-print__fact-wide,
+  .shift-report-print__reviewer {
+    grid-column: auto;
+  }
+}
+@media print {
+  .shift-report-print-shell {
+    margin: 0;
+    box-shadow: none;
+  }
+  .shift-report-print {
+    padding: 0;
+  }
+  .shift-report-print__table-scroll {
+    overflow: visible;
+  }
+}
+/* Global async-route fallback and toast presentation. */
+.page-loading-fallback {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to));
+}
+.page-loading-fallback__spinner {
+  display: inline-block;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1rem;
+  animation: page-loading-spin 1s linear infinite;
+  border-block: 4px solid var(--color-red-500, #ef4444);
+  border-radius: 9999px;
+}
+@keyframes page-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.page-loading-fallback__message {
+  color: var(--text-primary);
+  font-size: 1.125rem;
+}
+.app-toaster {
+  top: calc(0.5rem + env(safe-area-inset-top)) !important;
+}
+.app-toast {
+  color: var(--text-primary) !important;
+  border: 1px solid var(--surface-border) !important;
+  background: var(--surface-bg) !important;
 }

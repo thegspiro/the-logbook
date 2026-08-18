@@ -149,6 +149,37 @@ services:
 
       # Frontend URL (for CORS)
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+
+      # Production security gates. This environment block is a whitelist with
+      # no env_file, so a variable absent here cannot be set from .env at all.
+      # ENVIRONMENT above IS honored from .env, so a base-only deployment can
+      # put the backend into production mode — where these gates block
+      # startup — while every knob that satisfies or waives them stayed
+      # unreachable. That combination is unbootable AND unfixable: editing
+      # .env changes nothing, because the value never reaches the container.
+      # The prod override sets its own values for these and wins on merge, so
+      # passing them through here only removes the silent no-op; it does not
+      # loosen a hardened deployment. Defaults match app defaults so an
+      # unconfigured dev stack is unchanged.
+      SECURITY_ENFORCE_HTTPS: ${SECURITY_ENFORCE_HTTPS:-false}
+      SECURITY_REQUIRE_TLS: ${SECURITY_REQUIRE_TLS:-true}
+      SECURITY_ALLOW_UNVERIFIED_TLS: ${SECURITY_ALLOW_UNVERIFIED_TLS:-false}
+      DB_SSL: ${DB_SSL:-false}
+      DB_SSL_CA: ${DB_SSL_CA:-}
+      REDIS_SSL: ${REDIS_SSL:-false}
+      REDIS_SSL_CA: ${REDIS_SSL_CA:-}
+      # Warns rather than blocks, but was unreachable for the same reason.
+      VOTE_SIGNING_KEY: ${VOTE_SIGNING_KEY:-}
+
+      # Same whitelist gap, non-TLS. TRUSTED_PROXY_IPS is the consequential
+      # one: behind a reverse proxy, leaving it unset makes every request
+      # appear to originate from the proxy's container IP, so geo-blocking
+      # silently does nothing and all clients share a single rate-limit
+      # bucket. An operator who set it in .env got that failure while the
+      # file said otherwise. Defaults match app defaults.
+      DEBUG: ${DEBUG:-false}
+      ENABLE_DOCS: ${ENABLE_DOCS:-true}
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
     ports:
       - "${BACKEND_PORT:-3001}:3001"
     volumes:

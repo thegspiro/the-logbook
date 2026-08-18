@@ -109,6 +109,16 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed information about the projec
 6. **Get Reviews**: At least one maintainer must approve your PR
 7. **Squash Commits**: Clean up commit history before merging
 
+### PR Description
+
+GitHub prefills the description from
+[`.github/pull_request_template.md`](.github/pull_request_template.md). Fill in
+Summary, Changes and Testing, then work through the Risk checks list: delete the
+lines your diff does not touch and answer the ones it does. Those lines cover
+the failure modes CI cannot catch — cross-tenant data access, silently dropped
+field clears, PHI reaching a cache — so an untouched list is read as "not
+reviewed", not as "all fine".
+
 ### PR Title Format
 
 Use conventional commits format:

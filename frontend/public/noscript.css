@@ -1,0 +1,30 @@
+.noscript-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 1.25rem;
+  background: #0f172a linear-gradient(to bottom right, #0f172a, #7f1d1d, #0f172a);
+  color: #fff;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  text-align: center;
+}
+
+.noscript-message {
+  max-width: 37.5rem;
+}
+
+.noscript-message h1 {
+  margin: 0 0 1rem;
+  font-size: 2rem;
+}
+
+.noscript-message p {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.6;
+}

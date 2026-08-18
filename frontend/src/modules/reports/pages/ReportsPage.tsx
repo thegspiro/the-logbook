@@ -7,6 +7,7 @@
  */
 
 import React, { useMemo } from 'react';
+import { DialogPanel } from '../../../components/ux/DialogPanel';
 import {
   FileText,
   Calendar as CalendarIcon,
@@ -525,11 +526,7 @@ export const ReportsPage: React.FC = () => {
             return (
               <div
                 key={report.id}
-                className={`card-secondary p-6 backdrop-blur-xs transition-all ${
-                  report.available
-                    ? 'hover:bg-theme-surface hover:border-theme-surface-border cursor-pointer'
-                    : 'cursor-not-allowed opacity-60'
-                }`}
+                className={`card-secondary p-6 backdrop-blur-xs transition-all ${report.available ? 'hover:bg-theme-surface hover:border-theme-surface-border cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
               >
                 <div className="mb-4 flex items-start justify-between">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-600/20">
@@ -604,8 +601,8 @@ export const ReportsPage: React.FC = () => {
         {activeCard && activeReportData && activeReportType && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={closeModal} aria-hidden="true" />
-              <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-5xl rounded-lg border shadow-xl">
+              <div className="modal-overlay" onClick={closeModal} aria-hidden="true" />
+              <DialogPanel onClose={closeModal} className="relative w-full max-w-5xl">
                 {/* Modal header */}
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -688,7 +685,7 @@ export const ReportsPage: React.FC = () => {
                     Close
                   </button>
                 </div>
-              </div>
+              </DialogPanel>
             </div>
           </div>
         )}

@@ -688,15 +688,34 @@ expect(mockGetTemplates).toHaveBeenCalledWith(undefined);
 _something_". Use `toHaveBeenCalled()` if you don't care about arguments, or
 specify the expected arguments explicitly.
 
-**This is review discipline, not an enforced rule — nothing catches it for you.**
-An earlier version of this section claimed `vitest/prefer-called-with` enforced
-it at `error` level. That was wrong twice over, and the correction matters
-because it tells you how much vigilance the matcher actually needs:
+**The tooling was the cause, not the cure.** An earlier version of this section
+claimed `vitest/prefer-called-with` enforced this rule at `error` level. The
+opposite was true: that rule is what _created_ these assertions.
 
-- The rule is configured at `warn`, not `error`.
-- More importantly it enforces the _opposite_ direction. It flags
-  `toHaveBeenCalled()` and pushes callers **toward** `toHaveBeenCalledWith`. It
-  says nothing about the zero-argument form, so it has never guarded this.
+`vitest/prefer-called-with` is auto-fixable. It rewrites
+`expect(m).toHaveBeenCalled()` into `expect(m).toHaveBeenCalledWith()` — the
+zero-argument form — without inspecting how the mock was actually called. The
+pre-commit hook runs `eslint --fix`, so the rewrite happened silently on the way
+into every commit, and for any mock called with arguments it converts a passing
+assertion into a failing one:
+
+```ts
+const m = vi.fn();
+m(1, 2);
+expect(m).toHaveBeenCalled(); // passes
+// -- eslint --fix -->
+expect(m).toHaveBeenCalledWith(); // FAILS: expected call with []
+```
+
+That is the mechanism behind "34 of 46 broken tests". It was never developers
+choosing the wrong matcher. It also made the rule above impossible to follow:
+the advice is to use `toHaveBeenCalled()` when arguments are not the point, and
+the hook rewrote exactly that.
+
+**The rule is now `off` in `eslint.config.js` and must stay off.** With it
+disabled, `toHaveBeenCalled()` survives a commit and the guidance above works.
+Nothing now flags a hand-written zero-argument `toHaveBeenCalledWith()`, so that
+part remains review discipline.
 
 A lint rule banning the zero-argument form outright was tried and rejected: of
 the 53 instances in the suite, at least 35 assert against genuinely zero-arity
@@ -844,6 +863,77 @@ it as an `@utility` under the matching group header in `styles/index.css` rather
 than assembling it at the call site — that is what left `toggle-knob` in the
 sheet with no matching track and fifteen hand-built switches around it.
 
+### 18. Notifications Are Email-First; SMS Is an Add-On Behind an Allowlist _(2026-08-16)_
+
+Email is the primary channel and the channel of record. The in-app bell, web
+push and SMS are additions layered on top of an email that still goes out —
+never substitutes for it. A member who reads only their inbox must not miss
+anything, because email is the only channel the department can prove reached
+them.
+
+SMS costs money per message, arrives outside working hours, and is legally
+constrained (US TCPA requires express prior consent). So it is limited to the
+alerts named in `SmsAlert` in `app/services/notification_channels.py`, and that
+list is exhaustive. **Operational and administrative notices are email-only** —
+low-stock and reorder alerts, overdue-property digests, renewal and deadline
+reminders, anything whose recipient acts on it during business hours. A
+quartermaster does not need a 2am text to learn the department is low on gloves,
+and a text can carry neither the item list nor the quantities the email does.
+
+```python
+# WRONG — a hand-rolled filter at the call site, for a routine notice
+sms_svc = SMSService()
+if sms_svc.enabled:
+    phones = [a.phone for a in admins if a.phone and str(a.id) in consented]
+    await sms_svc.send_bulk_sms(phones, "Low Stock Alert: ...")
+
+# CORRECT — the allowlist decides, and it resolves both opt-in gates
+from app.services.notification_channels import SmsAlert, resolve_sms_recipients
+numbers = await resolve_sms_recipients(db, recipients, SmsAlert.URGENT_DEPARTMENT_MESSAGE)
+```
+
+`resolve_sms_recipients` applies Twilio configuration, the recorded TCPA consent
+(fails closed — a member never asked counts as having refused) and the member's
+own `sms_notifications` preference, which mutes texts without touching the
+emails they keep receiving.
+
+**Rule:** Never call `SMSService` directly from a feature. Route through
+`resolve_sms_recipients`, and give a notification a text only by adding a member
+to `SmsAlert` — a visible, reviewable change rather than a call site nobody
+sees. Whatever the SMS gates decide, send the email unconditionally.
+
+### 19. A Config Switch Must Have a Reader Before It Has a UI _(2026-08-16)_
+
+`notification_rules` shipped with a model, CRUD endpoints, an admin screen, a
+create modal and an enable/disable toggle — and **no code that read the table**.
+A chief could create "Event reminders", see it listed as _Active_, toggle it
+off, and the reminders kept going out. A switch wired to nothing is worse than
+no switch: it invites somebody to believe a notification is off when it is not,
+and nothing about the UI says otherwise.
+
+When adding org-level configuration, the reader comes first, and the UI only
+ever offers what a reader consults:
+
+- **Name the wired set in code, on the backend.** `ENFORCED_TRIGGERS` in
+  `models/notification.py` is the authority; `NotificationRuleResponse` reports
+  `enforced` per rule so the screen can label a stored-but-inert one instead of
+  badging it Active. The frontend dropdown offers only the wired values.
+- **Absence must mean "current behaviour", never "off".** A resolver that
+  defaults to disabled when a table is empty silently kills every existing
+  installation's notifications on upgrade, and nobody connects the missed drill
+  notice to the deploy. `NotificationRuleResolver` returns
+  `enabled=True` plus the sender's previous built-in defaults when an org has no
+  rule.
+- **Read free-form JSON config defensively.** `rule.config` is unvalidated JSON;
+  `reminder_schedule_from` degrades a bad value to the built-in default rather
+  than raising, because an exception inside a scheduled task takes out the whole
+  organization's reminders rather than the one setting somebody typed wrong.
+
+**Rule:** Do not ship a setting whose only effect is being stored. Either wire a
+reader in the same change, or mark it in the UI as not yet in effect — and add a
+test asserting the wired set, so the next trigger cannot be added to the list
+without a sender that reads it.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.
@@ -896,6 +986,24 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 ### Optional Services
 
 Enable with `*_ENABLED=true`: `EMAIL_ENABLED`, `TWILIO_ENABLED`, `SENTRY_ENABLED`, `AZURE_AD_ENABLED`, `GOOGLE_OAUTH_ENABLED`, `PUSH_ENABLED` (Web Push; also needs `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` and the optional `pywebpush` dependency). Each requires additional config vars — see `.env.example.full`. (`LDAP_ENABLED` exists in config but gates nothing — LDAP is not implemented.)
+
+### Attack Protection
+
+Four brute-force controls layer on top of each other; when changing one, know which gap it covers so you do not collapse two into one:
+
+| Control                | Counts                           | Keyed on             | On provider/Redis failure |
+| ---------------------- | -------------------------------- | -------------------- | ------------------------- |
+| `check_rate_limit`     | all attempts, short window       | IP + scope           | falls back to in-memory   |
+| Account lockout        | consecutive failures             | user                 | n/a (database)            |
+| Suspicious-IP throttle | **failed** attempts, long window | IP, **all** accounts | falls back to in-memory   |
+| Breached password      | breach-corpus appearances        | password hash prefix | **fails open**            |
+| CAPTCHA                | human challenge                  | request              | **fails closed**          |
+
+The two failure directions are deliberate and opposite. Breached-password detection is supplementary — complexity rules, password history, MFA, and lockout still apply if the lookup is skipped — so an outage must not block password changes. CAPTCHA has no fallback control behind it, so accepting unverified traffic during an outage is the state an attacker wants; it rejects instead. Preserve both directions when touching either.
+
+Two invariants in `app/core/suspicious_ip.py` that are load-bearing: a successful sign-in clears an IP's counter **only after full authentication** (never on a correct password alone, or an attacker holding one leaked password for an MFA-protected account could zero the tally at will), and clearing **never lifts an active block**.
+
+Enabling `CAPTCHA_ENABLED` also widens the CSP in `SecurityHeadersMiddleware` for the configured provider's widget origins — a hardcoded `script-src 'self'` silently blocks the widget, which presents as "the challenge never appears" rather than as a CSP error. New providers need an entry in both `_VERIFY_URLS` and `_WIDGET_ORIGINS`.
 
 ### Module Enablement
 

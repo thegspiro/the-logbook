@@ -111,8 +111,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   // Paint immediately from the cached/mirrored value, then replace with the
   // department-wide copy from the backend. migrateLocal: this panel requires
   // scheduling.manage, so if the backend has never stored settings but this
-  // browser has a pre-backend localStorage copy, that copy is pushed up once
-  // so it becomes the whole department's settings instead of a private one.
+  // browser has a mirror explicitly scoped to the current organization, that
+  // copy is pushed up once. Untagged legacy copies are ignored.
   const [settings, setSettings] = useState<ShiftSettings>(() => getCachedShiftSettings());
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -352,6 +352,34 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                       feature.require_end_of_shift_checks ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
+                </button>
+              </div>
+              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">
+                    Enforce EVOC for drivers
+                    <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      Safety
+                    </span>
+                  </p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    Block assigning or signing up a driver who lacks the EVOC level their apparatus requires. A chief
+                    can approve a time-boxed exception for parades and special events. Turning this off downgrades the
+                    check to an advisory warning.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Enforce EVOC for drivers"
+                  aria-checked={feature.enforce_evoc}
+                  disabled={savingFeature}
+                  onClick={() => {
+                    void saveFeature({ enforce_evoc: !feature.enforce_evoc });
+                  }}
+                  className={`toggle-track-sm ${feature.enforce_evoc ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                >
+                  <span className={`toggle-knob-sm ${feature.enforce_evoc ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>
               <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">

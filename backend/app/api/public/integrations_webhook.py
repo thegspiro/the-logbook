@@ -12,10 +12,9 @@ Security (mirrors the Salesforce inbound webhook):
 - Integration ID validated against the database
 - All inbound payloads are audit-logged
 
-Correlation is by recipient/attendee email: the applicant applied with that
-email, so a completed signature or a new booking for that email advances the
-prospect whose current stage is configured to use the integration. No live API
-call is needed to close the loop.
+Correlation requires both the recipient/attendee email and the configured
+template or booking-link slug for the current stage. This prevents an unrelated
+provider event for the same email from advancing the pipeline.
 """
 
 from typing import Any
@@ -158,6 +157,8 @@ async def documenso_inbound_webhook(
             step_type="document_upload",
             provider_key="signing_provider",
             provider_value="documenso",
+            reference_config_key="documenso_template_id",
+            event_reference=event["template_id"],
             completed_by="integration:documenso",
             action_result={"document_title": event["title"], "source": "documenso"},
         )
@@ -222,6 +223,8 @@ async def calcom_inbound_webhook(
             step_type="meeting",
             provider_key="scheduling_provider",
             provider_value="calcom",
+            reference_config_key="calcom_booking_url",
+            event_reference=event["event_type_slug"],
             completed_by="integration:calcom",
             action_result={"booking_uid": event["booking_uid"], "source": "calcom"},
         )

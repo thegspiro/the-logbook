@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 
 interface EventDeleteConfirmModalProps {
   eventTitle: string;
@@ -15,6 +16,8 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
   onConfirm,
   onClose,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [deleteScope, setDeleteScope] = useState<'single' | 'series'>('single');
 
   return (
@@ -32,8 +35,11 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
-        <div className="bg-theme-surface-modal relative z-10 inline-block transform overflow-hidden rounded-lg text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
-          <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+        <div
+          ref={dialogRef}
+          className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+        >
+          <div className="modal-header">
             <div className="sm:flex sm:items-start">
               <div className="mx-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10 dark:bg-red-500/20">
                 <svg
@@ -103,7 +109,7 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring mt-3 inline-flex w-full justify-center rounded-md border px-4 py-2 text-base font-medium shadow-xs focus:ring-2 focus:ring-offset-2 focus:outline-hidden sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+              className="btn-secondary text-theme-text-secondary mt-3 inline-flex w-full justify-center text-base font-medium shadow-xs focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
             >
               Go Back
             </button>

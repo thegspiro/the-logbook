@@ -4,6 +4,7 @@
 
 import axios from 'axios';
 import api, { handleExpiredSession, performSharedRefresh } from './apiClient';
+import { CAPTCHA_HEADER } from '../hooks/useCaptcha';
 import type {
   FormsSummary,
   FormsListResponse,
@@ -149,12 +150,15 @@ export const formsService = {
 // the bare "/api" base, avoiding a doubled path like "/api/v1/public/v1/...".
 const PUBLIC_API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/v\d+$/, '');
 
-function publicRequestConfig(method: 'GET' | 'POST') {
+function publicRequestConfig(method: 'GET' | 'POST', captchaToken?: string) {
   const csrfMatch = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
   const csrf = csrfMatch?.[1] ? decodeURIComponent(csrfMatch[1]) : null;
+  const headers: Record<string, string> = {};
+  if (method === 'POST' && csrf) headers['X-CSRF-Token'] = csrf;
+  if (captchaToken) headers[CAPTCHA_HEADER] = captchaToken;
   return {
     withCredentials: true,
-    ...(method === 'POST' && csrf ? { headers: { 'X-CSRF-Token': csrf } } : {}),
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
   };
 }
 
@@ -180,7 +184,8 @@ export const publicFormsService = {
   async submitForm(
     slug: string,
     data: Record<string, unknown>,
-    honeypot?: string
+    honeypot?: string,
+    captchaToken?: string
   ): Promise<PublicFormSubmissionResponse> {
     const payload: Record<string, unknown> = { data };
     // Honeypot field - only sent if bot filled it in (real users never will)
@@ -188,9 +193,12 @@ export const publicFormsService = {
       payload.website = honeypot;
     }
     const url = `${PUBLIC_API_BASE}/public/v1/forms/${slug}/submit`;
+    // The challenge token rides in a header rather than the body so the
+    // backend can check it in a dependency, before any body parsing.
+    const config = publicRequestConfig('POST', captchaToken);
     let response;
     try {
-      response = await axios.post<PublicFormSubmissionResponse>(url, payload, publicRequestConfig('POST'));
+      response = await axios.post<PublicFormSubmissionResponse>(url, payload, config);
     } catch (error) {
       // This route deliberately uses the public API base rather than the
       // shared /api/v1 client, but authenticated forms still need the same
@@ -200,10 +208,10 @@ export const publicFormsService = {
       try {
         await performSharedRefresh();
       } catch (refreshError) {
-        handleExpiredSession();
+        await handleExpiredSession();
         throw refreshError;
       }
-      response = await axios.post<PublicFormSubmissionResponse>(url, payload, publicRequestConfig('POST'));
+      response = await axios.post<PublicFormSubmissionResponse>(url, payload, config);
     }
     return response.data;
   },

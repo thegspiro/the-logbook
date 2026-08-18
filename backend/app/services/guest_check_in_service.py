@@ -27,7 +27,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
 from app.models.event import Event, EventExternalAttendee
-from app.models.membership_pipeline import ProspectEventLink, ProspectiveMember
+from app.models.membership_pipeline import (
+    PipelineStepType,
+    ProspectEventLink,
+    ProspectiveMember,
+)
 from app.services.event_service import EventService
 from app.services.membership_pipeline_service import MembershipPipelineService
 
@@ -103,6 +107,7 @@ class GuestCheckInService:
         await self.db.flush()
 
         prospect_created = False
+        prospect: Optional[ProspectiveMember] = None
         if event.guest_check_in_creates_prospect and normalized_email:
             prospect, prospect_created = await self._link_prospect(
                 event=event,
@@ -119,6 +124,11 @@ class GuestCheckInService:
 
         await self.db.commit()
         await self.db.refresh(attendee)
+
+        # After the commit: advancing a stage commits, and the sign-in must be
+        # durable before anything downstream of it runs.
+        if prospect is not None:
+            await self._try_advance_meeting_stage(prospect, event)
 
         return attendee, None, prospect_created
 
@@ -234,6 +244,74 @@ class GuestCheckInService:
             )
         )
         await self.db.flush()
+
+    @staticmethod
+    def _meeting_config_matches_event(config: dict, event: Event) -> bool:
+        """Whether a meeting stage is waiting on *this* event.
+
+        The stage builder records the event type (and optional category) the
+        coordinator chose, then pins ``linked_event_id`` to the next occurrence
+        of it as a convenience. Grading the pinned id first would strand every
+        recurring stage the moment that occurrence passed — an applicant at
+        March's business meeting would not satisfy a stage pinned to January's.
+        So the type the coordinator actually chose wins, the pinned id is the
+        fallback for a stage built without one, and a stage naming no event at
+        all takes any recorded attendance.
+        """
+        linked_event_type = config.get("linked_event_type")
+        if linked_event_type:
+            event_type = (
+                event.event_type.value
+                if hasattr(event.event_type, "value")
+                else event.event_type
+            )
+            if str(event_type) != str(linked_event_type):
+                return False
+            linked_category = config.get("linked_event_category")
+            return not linked_category or event.custom_category == linked_category
+
+        linked_event_id = config.get("linked_event_id")
+        if linked_event_id:
+            return str(linked_event_id) == str(event.id)
+
+        return True
+
+    async def _try_advance_meeting_stage(
+        self, prospect: ProspectiveMember, event: Event
+    ) -> None:
+        """Advance a prospect whose current stage is the meeting they attended.
+
+        A meeting stage offers "auto-advance when attendance is recorded", and a
+        kiosk sign-in is that attendance record — but nothing joined the two, so
+        the box was inert and a coordinator still moved by hand every applicant
+        who had already shown up and signed in.
+
+        As with opening the prospect itself, a failure here must not cost the
+        guest their attendance: the sign-in is the thing they came to do, and it
+        is already committed by this point.
+        """
+        try:
+            await MembershipPipelineService(self.db).try_auto_advance_current_step(
+                prospect_id=str(prospect.id),
+                organization_id=str(prospect.organization_id),
+                step_type=PipelineStepType.MEETING,
+                trigger="event check-in",
+                action_result={
+                    "event_id": str(event.id),
+                    "event_title": event.title,
+                },
+                config_matches=lambda config: self._meeting_config_matches_event(
+                    config, event
+                ),
+            )
+        except Exception as exc:
+            logger.error(
+                "Guest check-in could not advance the meeting stage for "
+                "prospect {} at event {}: {}",
+                prospect.id,
+                event.id,
+                exc,
+            )
 
     @staticmethod
     def check_in_window_state(

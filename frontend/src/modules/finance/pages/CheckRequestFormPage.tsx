@@ -108,7 +108,7 @@ const CheckRequestFormPage: React.FC = () => {
         Back to Check Requests
       </button>
 
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <h1 className="text-theme-text-primary mb-6 text-xl font-bold">New Check Request</h1>
 
         <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-4">

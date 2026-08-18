@@ -224,7 +224,7 @@ const IPSecurityAdminPage: React.FC = () => {
         </div>
 
         {/* Content */}
-        <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
+        <div className="card overflow-hidden">
           {activeTab === 'pending' && (
             <IPExceptionTable
               exceptions={pendingExceptions}
@@ -244,7 +244,7 @@ const IPSecurityAdminPage: React.FC = () => {
                   id="all-status-filter"
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm"
+                  className="form-input px-3 py-1.5 text-sm"
                 >
                   <option value="">All statuses</option>
                   {Object.values(IPExceptionApprovalStatus).map((s) => (

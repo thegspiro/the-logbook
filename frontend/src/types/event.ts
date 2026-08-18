@@ -512,6 +512,10 @@ export interface RequestPipelineSettings {
   min_lead_time_days: number;
   default_assignee_id: string | null;
   public_progress_visible: boolean;
+  /** Whether the department accepts event requests from the public at all (EV-5). Off until an admin turns it on. */
+  accept_public_requests: boolean;
+  /** Per-day ceiling on accepted public requests; counts valid submissions only. */
+  public_daily_limit: number;
   tasks: PipelineTaskConfig[];
   email_triggers: Record<string, EmailTriggerConfig>;
 }

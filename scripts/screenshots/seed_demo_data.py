@@ -593,7 +593,15 @@ PART_STAFFED_SHIFT = (4, 2)
 # phase. Chosen among the requirements the seeded members have *not* finished,
 # so the lock has siblings left to hold back.
 PROGRAM_GATE_REQUIREMENTS = {
-    "Probationary Firefighter Pipeline": "Hose Deployment",
+    "Probationary Firefighter Pipeline": (
+        "Hose Deployment",
+        # A knowledge test is only completable by an explicitly recorded exam
+        # result, so this gate survives the hour auto-credit that quietly
+        # finished Hose Deployment for the seeded members — a gate already
+        # satisfied locks nothing, and the member-facing "Locked until you
+        # finish …" line disappeared with it.
+        "Firefighter I Written Exam",
+    ),
 }
 
 # The one enrollment left past its deadline, so Expired and the reopen dialog
@@ -605,15 +613,19 @@ EXPIRED_ENROLLMENT_DAYS_OVER = 23
 
 # Steps behind a checklist requirement, keyed on the requirement name.
 CHECKLIST_ITEMS = {
+    # The last three are officer-recorded (member_visible False): the member
+    # view folds them into a "+N more steps your officer records" line, which
+    # is the subject of a guide-02 screenshot and renders only when at least
+    # one step is hidden.
     "Station Duties Checklist": [
         "Tour the apparatus bay and name every rig",
         "Meet the duty officer and shift crew",
         "Locate the SCBA fill station and spare bottles",
         "Walk the station's evacuation route",
         "Log in to The Logbook and set a photo",
-        "SCBA fit test on file",
-        "Turnout gear issued and sized",
-        "Emergency contacts recorded",
+        {"text": "SCBA fit test on file", "member_visible": False},
+        {"text": "Turnout gear issued and sized", "member_visible": False},
+        {"text": "Emergency contacts recorded", "member_visible": False},
     ],
     "Officer Sign-Off": [
         "Company officer has observed a full shift",
@@ -737,6 +749,11 @@ SHIFT_REVIEW_TASKS = [
 
 # Per rig class, so an engine crew is not asked about aerial placement and a
 # medic crew is not asked about pump pressures.
+# Keyed by the apparatus-type *code* ("ladder"), which is what
+# ApparatusRef.type_slug now resolves for shifts and templates alike. It
+# briefly matched nothing while the slug was the lowercased display name
+# ("ladder/aerial") — fixed on the backend rather than by renaming these keys,
+# since every UI-configured department already keys on the code.
 APPARATUS_TYPE_SKILLS = {
     "engine": [
         "Pump operations",
@@ -1913,7 +1930,21 @@ class Seeder:
         options = items(
             self.api.get("/scheduling/apparatus-options"), "options", "apparatus"
         )
-        fleet = [o for o in options if pick(o, "id")]
+        # In blueprint order, not endpoint order. The endpoint lists the fleet
+        # alphabetically, which puts Brush 5 ahead of the engines and ladder —
+        # and everything below stripes shifts onto fleet[:3], so a fresh
+        # database quietly rostered the brush truck instead of Ladder 4. The
+        # long-lived demo database never showed this because its front-line
+        # rigs were created before B-5 existed in the blueprint and the
+        # endpoint happened to return them first. The batch shift-report
+        # fixture (and its screenshots) depend on Ladder 4 carrying shifts.
+        unit_order = {unit: index for index, (unit, *_rest) in enumerate(APPARATUS)}
+        fleet = sorted(
+            (o for o in options if pick(o, "id")),
+            key=lambda o: unit_order.get(
+                pick(o, "unit_number", "unitNumber"), len(unit_order)
+            ),
+        )
         if not fleet:
             # Only reachable when the department has neither inventory — the
             # endpoint then serves hardcoded type defaults, which carry no id
@@ -4597,8 +4628,17 @@ class Seeder:
         # Checks belong to a shift — there is no module-level collection to list
         # or post to, so both the idempotency check and the create go through
         # the shift the crew would actually have been working.
+        #
+        # Engine shifts only: the template is type-scoped to engines and the
+        # API rightly refuses it anywhere else ("Template is not applicable to
+        # this shift"). Taking the first three shifts regardless of apparatus
+        # happened to work while the demo database returned engines first, and
+        # crashed the whole step the first time a fresh seed ordered a medic
+        # or ladder shift into the front of the list.
         shifts = items(self.api.get("/scheduling/shifts?limit=20"), "shifts")
-        target_shifts = [s for s in shifts if pick(s, "id")][:3]
+        target_shifts = [
+            s for s in shifts if pick(s, "id") and apparatus_type_of(s) == "engine"
+        ][:3]
         if not target_shifts:
             return {"templates": templates, "checks": []}
         checks = []
@@ -4984,6 +5024,104 @@ class Seeder:
             )
         return logged
 
+    def seed_scheduling_requests(self) -> None:
+        """A pending swap and a pending time-off request for the Requests tab.
+
+        The tab renders both tables, and the long-lived demo database showed
+        rows in them only as leftovers of old manual runs — nothing seeded
+        either, so a fresh database rendered two empty states under a caption
+        describing populated tables.
+        """
+        swaps = items(
+            self.api.get("/scheduling/swap-requests"), "requests", "swap_requests"
+        )
+        time_off = items(self.api.get("/scheduling/time-off"), "requests", "time_off")
+        if swaps and time_off:
+            return
+        member = Api(self.base_url)
+        member.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+        if not swaps:
+            upcoming = [
+                s
+                for s in items(member.get("/scheduling/my-shifts?limit=50"), "shifts")
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") > str(TODAY)
+            ]
+            upcoming.sort(key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""))
+            if upcoming:
+                # The furthest-out assignment, so the member's first upcoming
+                # card — the one the swap-dialog screenshot opens — keeps its
+                # plain Swap button rather than a pending-swap state.
+                member.post(
+                    "/scheduling/swap-requests",
+                    {
+                        "offering_shift_id": pick(upcoming[-1], "id"),
+                        "reason": (
+                            "Family commitment that evening — happy to take "
+                            "any weekday shift in trade."
+                        ),
+                    },
+                )
+            else:
+                self.blocked.append(
+                    "scheduling requests: member has no upcoming shift to offer"
+                )
+        if not time_off:
+            member.post(
+                "/scheduling/time-off",
+                {
+                    "start_date": str(TODAY + timedelta(days=18)),
+                    "end_date": str(TODAY + timedelta(days=21)),
+                    "reason": "Out of town for a family wedding.",
+                },
+            )
+
+        # The dashboard's Next 7 Days list shows only its first handful of
+        # rows, chronologically. The rotation can park the demo member's next
+        # shift days out, which pushes every "Yours" row below the cut — and
+        # 03-60 pictures that pill. Seat them on one of the window's first
+        # shifts when nothing already does.
+        mine = items(member.get("/scheduling/my-shifts?limit=50"), "shifts")
+        soon = str(TODAY + timedelta(days=1))
+        if not any(
+            str(TODAY) <= str(pick(s, "shift_date", "shiftDate") or "") <= soon
+            for s in mine
+        ):
+            member_id = next(
+                (
+                    str(pick(m, "id"))
+                    for m in items(self.api.get("/users?limit=100"), "users")
+                    if pick(m, "username") == DEMO_MEMBER_USERNAME
+                ),
+                "",
+            )
+            shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+            near = sorted(
+                (
+                    s
+                    for s in shifts
+                    if pick(s, "id")
+                    and str(TODAY)
+                    <= str(pick(s, "shift_date", "shiftDate") or "")
+                    <= soon
+                ),
+                key=lambda s: str(pick(s, "start_time", "startTime") or ""),
+            )
+            for shift in near:
+                try:
+                    self.api.post(
+                        f"/scheduling/shifts/{pick(shift, 'id')}/assignments",
+                        {"user_id": member_id, "position": "firefighter"},
+                    )
+                    break
+                except ApiError as exc:
+                    if exc.code not in (400, 409):
+                        raise
+            else:
+                self.blocked.append(
+                    "scheduling requests: no near-term seat for the demo member"
+                )
+
     def seed_shift_reports(self, members: list[dict]) -> list[dict]:
         """Filed, draft, pending-review and flagged shift completion reports.
 
@@ -5043,6 +5181,11 @@ class Seeder:
                 "id",
             )
         )
+        recruit_ids = {
+            str(pick(m, "id"))
+            for m in members
+            if pick(m, "username") in RECRUIT_USERNAMES
+        }
 
         # The demo member's own report is approved on every run, not only on
         # the run that files it. A trainee sees only approved reports, so a
@@ -5093,13 +5236,26 @@ class Seeder:
         # section the guide describes underneath them.
         wanted = {"approved", "pending_review", "flagged", "draft"}
         have = {pick(r, "review_status", "reviewStatus") for r in existing}
-        months = {str(pick(r, "shift_date", "shiftDate"))[:7] for r in existing}
-        if wanted <= have and len(months) >= 2:
+        pending = sum(
+            1
+            for r in existing
+            if pick(r, "review_status", "reviewStatus") == "pending_review"
+        )
+        # `pending >= 4`, not just each state present once: the Review Queue's
+        # batch bar is photographed with several rows selected, and a guard
+        # that only asks whether each state name appears somewhere left the
+        # queue near-empty on a database seeded before the count mattered —
+        # the same lesson _flag_review_queue's docstring records for Flagged.
+        #
+        # `months` is deliberately NOT part of the condition. The schedule
+        # spans two weeks around today, so mid-month every report lands in one
+        # calendar month, the two-month analytics spread is unreachable, and a
+        # guard demanding it re-filed another batch of reports on every single
+        # run until the roster ran out of unreported trainees.
+        if wanted <= have and pending >= 4:
             # The review states still get topped up on the way out. This return
-            # is about not re-filing reports, and a guard that only asks whether
-            # each state name appears somewhere is satisfied by a single flagged
-            # report — which is why the Flagged view stayed a queue of one on
-            # every existing demo database no matter how often it was re-seeded.
+            # is about not re-filing reports.
+            self._ensure_demo_member_report(existing, demo_member_id)
             reports = items(self.api.get("/training/shift-reports/all?limit=50"))
             self._flag_review_queue(reports, demo_member_id)
             return reports
@@ -5118,6 +5274,25 @@ class Seeder:
         if not past:
             self.blocked.append("shift reports: no past shift to file against")
             return []
+
+        # One ladder shift with an evaluable program trainee is reserved: the
+        # batch-report-form screenshots need a crew member whose Evaluate
+        # panel can still be opened, and this loop files newest-first — which
+        # is exactly where the trainee-carrying ladder shifts sit. Without the
+        # reservation, a re-seed quietly consumes the last evaluable trainee
+        # and the two batch-form shots fail on a crew of "Already reported".
+        reserved_shift_id = None
+        for shift in past:
+            if "Ladder" not in str(pick(shift, "apparatus_name", "apparatusName")):
+                continue
+            crew = items(
+                self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
+            )
+            if any(
+                c.get("program_name") and not c.get("has_existing_report") for c in crew
+            ):
+                reserved_shift_id = pick(shift, "id")
+                break
 
         # A report can only be filed about someone who was actually on the
         # shift — the create rejects anyone else with "Trainee has no
@@ -5146,8 +5321,13 @@ class Seeder:
             head, tail = head + 1, tail - 1
 
         for shift in interleaved[:30]:
-            if len(pairs) >= 5:
+            # Nine, not five. Approvals take two, the flagged queue takes two
+            # and the draft one, so a five-report seed left the Review Queue
+            # near-empty — and its batch bar needs several pending rows.
+            if len(pairs) >= 9:
                 break
+            if pick(shift, "id") == reserved_shift_id:
+                continue
             crew = items(
                 self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
             )
@@ -5156,6 +5336,11 @@ class Seeder:
                 for c in crew
                 if not c.get("has_existing_report")
                 and str(c.get("user_id")) not in seen_trainees
+                # Never a recruit: the batch-report screenshots need a program
+                # trainee whose Evaluate control is still live on the ladder
+                # fixture shift, and a report filed about them anywhere on
+                # this loop's walk could land exactly there.
+                and str(c.get("user_id")) not in recruit_ids
             ]
             if not available:
                 continue
@@ -5168,6 +5353,13 @@ class Seeder:
             )
             seen_trainees.add(str(chosen.get("user_id")))
             pairs.append((shift, str(chosen.get("user_id"))))
+
+        # The demo member's report must not be the draft either: the last
+        # pair files with save_as_draft, and a draft is invisible in My
+        # Reports — the same trap as the positional flag below, one state
+        # over. Swap them off the tail rather than dropping the pair.
+        if len(pairs) > 1 and pairs[-1][1] == demo_member_id:
+            pairs[-1], pairs[-2] = pairs[-2], pairs[-1]
 
         # Wired before the reports are filed, not after: the create derives the
         # call count from the run log, and nothing re-derives it later. The
@@ -5280,7 +5472,15 @@ class Seeder:
             for r in queued
             if str(pick(r, "trainee_id", "traineeId")) == demo_member_id
         ]
-        others = [r for r in queued if r not in mine]
+        # Only reports still pending: `others[0]` once landed on an
+        # already-flagged report and quietly re-reviewed it to approved,
+        # shrinking the Flagged queue the 03-62 capture counts on.
+        others = [
+            r
+            for r in queued
+            if r not in mine
+            and pick(r, "review_status", "reviewStatus") == "pending_review"
+        ]
         for report in mine[:1] + others[:1]:
             self.api.post(
                 f"/training/shift-reports/{pick(report, 'id')}/review",
@@ -5288,6 +5488,115 @@ class Seeder:
             )
         self._flag_review_queue(reports, demo_member_id)
         return reports
+
+    def _ensure_demo_member_report(
+        self, existing: list[dict], demo_member_id: str
+    ) -> None:
+        """File and approve one report for the demo member if none exists.
+
+        My Reports and the My Shift Progress stats card render only from the
+        member's own *approved* reports, and the filing loop's states-present
+        early return can leave the one member the `auth: "member"` shots sign
+        in as with nothing — the states were all satisfied by other people's
+        reports before a shift of hers came up.
+        """
+        if not demo_member_id:
+            return
+        mine = [
+            r
+            for r in existing
+            if str(pick(r, "trainee_id", "traineeId")) == demo_member_id
+            and pick(r, "review_status", "reviewStatus") != "draft"
+        ]
+        if any(pick(r, "review_status", "reviewStatus") == "approved" for r in mine):
+            return
+        if mine:
+            self.api.post(
+                f"/training/shift-reports/{pick(mine[0], 'id')}/review",
+                {"review_status": "approved"},
+            )
+            return
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        past = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate")),
+            reverse=True,
+        )
+        for shift in past:
+            crew = items(
+                self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
+            )
+            me = next(
+                (
+                    c
+                    for c in crew
+                    if str(c.get("user_id")) == demo_member_id
+                    and not c.get("has_existing_report")
+                ),
+                None,
+            )
+            if me is None:
+                continue
+            shift_date = str(pick(shift, "shift_date", "shiftDate"))
+            self._name_on_run_log(
+                str(pick(shift, "id")), shift_date, demo_member_id, count=2
+            )
+            report = self.api.post(
+                "/training/shift-reports",
+                {
+                    "shift_id": pick(shift, "id"),
+                    "shift_date": shift_date,
+                    "trainee_id": demo_member_id,
+                    "hours_on_shift": 12.0,
+                    "calls_responded": 2,
+                    "call_types": ["EMS", "Automatic Fire Alarm"],
+                    "performance_rating": 4,
+                    "areas_of_strength": "Excellent patient rapport.",
+                    "areas_for_improvement": (
+                        "Radio traffic is too long — keep it to the point."
+                    ),
+                    "officer_narrative": (
+                        "Good instincts on the medical call — got a full set "
+                        "of vitals before the medic unit arrived."
+                    ),
+                    "skills_observed": [
+                        {
+                            "skill_name": "Pump operations",
+                            "demonstrated": True,
+                            "score": 4,
+                            "notes": "Set the pump and held pressure unprompted.",
+                        },
+                        {
+                            "skill_name": "SCBA donning",
+                            "demonstrated": True,
+                            "score": 5,
+                            "notes": "Under sixty seconds, mask seal checked.",
+                        },
+                    ],
+                    "tasks_performed": [
+                        {
+                            "task": "Apparatus check",
+                            "description": (
+                                "Completed the start-of-shift engine inventory."
+                            ),
+                        }
+                    ],
+                },
+            )
+            self.api.post(
+                f"/training/shift-reports/{pick(report, 'id')}/review",
+                {"review_status": "approved"},
+            )
+            return
+        self.blocked.append(
+            "shift reports: no past shift crews the demo member, so their "
+            "My Reports view stays empty"
+        )
 
     #: Two flagged reports, not one. The Flagged view is a queue, and a queue of
     #: one pictures neither the batch-review bar — which renders only above a
@@ -5331,7 +5640,147 @@ class Seeder:
                 {"review_status": "flagged", "reviewer_notes": note},
             )
 
+    def seed_batch_report_trainee(self) -> None:
+        """Crew a program trainee onto the first past Ladder 4 shift.
+
+        The batch shift-report form renders its per-member Evaluate control
+        only for crew enrolled in a training program, and `03-63` /
+        `03-64` open exactly that: the first ladder shift in the picker,
+        expanded on its trainee. The crew rotation deals members by pool
+        order with no reason to put a recruit on the ladder, so on a fresh
+        database the fixture simply wasn't there — the form opened, listed a
+        crew, and offered nothing to expand.
+
+        Runs after `seed_shift_reports`, whose pair-picker also skips
+        recruits, so no report can exist about the trainee on this shift and
+        the Evaluate control stays live across re-runs.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        ladders = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+                and str(pick(s, "apparatus_unit_number", "apparatusUnitNumber"))
+                == "L-4"
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate")),
+        )
+        if not ladders:
+            self.blocked.append("batch report trainee: no past Ladder 4 shift")
+            return
+        target = ladders[0]
+        shift_id = pick(target, "id")
+
+        crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
+        members = items(self.api.get("/users?limit=100"), "users")
+        recruit_ids = {
+            str(pick(m, "id")): pick(m, "username")
+            for m in members
+            if pick(m, "username") in RECRUIT_USERNAMES
+        }
+        if any(str(c.get("user_id")) in recruit_ids for c in crew):
+            return
+        for user_id in recruit_ids:
+            try:
+                self.api.post(
+                    f"/scheduling/shifts/{shift_id}/assignments",
+                    {"user_id": user_id, "position": "firefighter"},
+                )
+                return
+            except ApiError as exc:
+                # A double-booking refusal means this recruit was on another
+                # rig that day — the next one usually was not.
+                if exc.code not in (400, 409):
+                    raise
+        self.blocked.append(
+            "batch report trainee: every recruit was refused on the ladder shift"
+        )
+
     # -- notification rules ------------------------------------------
+
+    def seed_shift_reminder_notification(self) -> None:
+        """Put a start-of-shift reminder in the administrator's inbox.
+
+        The reminder is written by the `shift_reminders` scheduled task, which
+        looks only `lookahead_hours` (default 2) ahead. On a long-lived
+        deployment it fires as each shift's window opens; a freshly seeded
+        database captured minutes later has no reminder unless a shift happens
+        to start within two hours of the capture. `03-97` pictures the
+        expanded reminder card, so: widen the window far enough to cover the
+        next seeded shift, run the task once, and put the setting back —
+        the notification persists, and `03-39` pictures the 2-hour default.
+
+        The task itself refuses to re-notify a shift it has already covered,
+        so a re-run adds at most the newly seeded shifts' reminders.
+        """
+        logs = self.api.get("/notifications/my?limit=100")
+        rows = (logs.get("logs") if isinstance(logs, dict) else logs) or []
+        if any(
+            "Shift Reminder" in str(r.get("subject") or r.get("title") or "")
+            for r in rows
+        ):
+            return
+
+        # The reminder goes to each *crewed* member, and the rotation only
+        # puts the administrator on today's first shift — already started by
+        # the time this runs, and past shifts are outside every window. Crew
+        # the administrator onto the earliest upcoming shift the task has not
+        # already covered (`start_reminder_sent` in the shift's activities is
+        # permanent — a run that fires while the admin is on none of the
+        # window's shifts burns them all), then size the window to reach it.
+        me = self.api.get("/auth/me")
+        admin_id = str(pick(me, "id") or pick(me.get("user") or {}, "id"))
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        now = datetime.now(timezone.utc)
+        candidates = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and not (pick(s, "activities") or {}).get("start_reminder_sent")
+                and str(pick(s, "start_time", "startTime") or "")
+                > now.strftime("%Y-%m-%dT%H:%M:%S")
+            ),
+            key=lambda s: str(pick(s, "start_time", "startTime")),
+        )
+        if not candidates:
+            self.blocked.append(
+                "shift reminder inbox: no upcoming shift the reminder task "
+                "has not already covered"
+            )
+            return
+        target = candidates[0]
+        try:
+            self.api.post(
+                f"/scheduling/shifts/{pick(target, 'id')}/assignments",
+                {"user_id": admin_id, "position": "officer"},
+            )
+        except ApiError as exc:
+            # Already aboard (or the seat is taken) still means the reminder
+            # will name them if they hold any assignment on the shift.
+            if exc.code not in (400, 409):
+                raise
+
+        starts = str(pick(target, "start_time", "startTime"))
+        start_dt = datetime.fromisoformat(starts.replace("Z", "+00:00"))
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        hours_out = max(2, int((start_dt - now).total_seconds() // 3600) + 2)
+        widened = {
+            "enabled": True,
+            "lookahead_hours": hours_out,
+            "send_email": False,
+        }
+        self.api.patch("/organization/settings", {"shift_reminders": widened})
+        try:
+            self.api.post("/scheduled/run-task?task=shift_reminders", {})
+        finally:
+            self.api.patch(
+                "/organization/settings",
+                {"shift_reminders": {**widened, "lookahead_hours": 2}},
+            )
 
     def seed_notification_rules(self) -> list[dict]:
         """Automations for the notification rules list.
@@ -5885,6 +6334,7 @@ class Seeder:
                 )
         self._strip_phase_number_prefixes(programs)
         self._flag_gating_requirements(programs)
+        self._backfill_checklist_items(programs)
         self._expire_one_enrollment(programs, members)
         self._advance_pipeline_progress(programs)
         self._complete_one_enrollment(programs)
@@ -6025,8 +6475,39 @@ class Seeder:
         """
         for program in programs:
             program_id = pick(program, "id")
-            gate_name = PROGRAM_GATE_REQUIREMENTS.get(str(pick(program, "name") or ""))
-            if not program_id or not gate_name:
+            gate_names = PROGRAM_GATE_REQUIREMENTS.get(str(pick(program, "name") or ""))
+            if not program_id or not gate_names:
+                continue
+            links = items(
+                self.api.get(f"/training/programs/programs/{program_id}/requirements"),
+                "requirements",
+            )
+            for gate_name in gate_names:
+                for link in links:
+                    requirement = pick(link, "requirement") or {}
+                    if str(pick(requirement, "name") or "") != gate_name:
+                        continue
+                    if pick(link, "is_prerequisite"):
+                        break
+                    self.api.patch(
+                        f"/training/programs/programs/{program_id}"
+                        f"/requirements/{pick(link, 'id')}",
+                        {"is_prerequisite": True},
+                    )
+                    break
+
+    def _backfill_checklist_items(self, programs: list[dict]) -> None:
+        """Bring existing checklist requirements up to the blueprint's items.
+
+        The create path only runs once per program (skip-by-name), so a
+        database seeded before the blueprint gained officer-only steps keeps
+        its old list forever — the recurring blueprint-backfill trap. Replaces
+        the list wholesale when the texts or visibilities differ; safe in the
+        demo, where no member has checklist ticks recorded.
+        """
+        for program in programs:
+            program_id = pick(program, "id")
+            if not program_id:
                 continue
             links = items(
                 self.api.get(f"/training/programs/programs/{program_id}/requirements"),
@@ -6034,16 +6515,39 @@ class Seeder:
             )
             for link in links:
                 requirement = pick(link, "requirement") or {}
-                if str(pick(requirement, "name") or "") != gate_name:
+                name = str(pick(requirement, "name") or "")
+                blueprint = CHECKLIST_ITEMS.get(name)
+                if not blueprint:
                     continue
-                if pick(link, "is_prerequisite"):
-                    break
-                self.api.patch(
-                    f"/training/programs/programs/{program_id}"
-                    f"/requirements/{pick(link, 'id')}",
-                    {"is_prerequisite": True},
+                requirement_id = pick(link, "requirement_id") or pick(requirement, "id")
+                detail = self.api.get(
+                    f"/training/programs/requirements/{requirement_id}"
                 )
-                break
+                current = [
+                    (
+                        str(i.get("text") or ""),
+                        bool(i.get("member_visible", True)),
+                    )
+                    for i in pick(detail, "checklist_items") or []
+                ]
+                wanted = [
+                    (
+                        (i if isinstance(i, str) else str(i.get("text") or "")),
+                        (True if isinstance(i, str) else i.get("member_visible", True)),
+                    )
+                    for i in blueprint
+                ]
+                if current == wanted:
+                    continue
+                self.api.patch(
+                    f"/training/programs/requirements/{requirement_id}",
+                    {
+                        "checklist_items": [
+                            {"text": text, "member_visible": visible}
+                            for text, visible in wanted
+                        ]
+                    },
+                )
 
     def _strip_phase_number_prefixes(self, programs: list[dict]) -> None:
         """Drop a "Phase N — " prefix a phase carries in its own name.
@@ -6881,6 +7385,35 @@ class Seeder:
         except ApiError as exc:
             self.blocked.append(f"training attachment: {exc}")
 
+    def seed_training_submission(self) -> None:
+        """A self-reported training submission awaiting officer review.
+
+        The Review Submissions queue reads /training/submissions/pending, and
+        nothing seeded one — the queue rendered its empty state under a
+        caption describing pending rows. Submitted as the demo member so the
+        submitter and the reviewing officer differ; the org default
+        (require_approval on, no auto-approve threshold) routes it to
+        pending review.
+        """
+        if items(self.api.get("/training/submissions/pending")):
+            return
+        member = Api(self.base_url)
+        member.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+        member.post(
+            "/training/submissions",
+            {
+                "course_name": "ICS-200: Basic Incident Command",
+                "training_type": "continuing_education",
+                "description": (
+                    "Completed the FEMA independent-study course online; "
+                    "certificate is in my training file."
+                ),
+                "completion_date": str(TODAY - timedelta(days=3)),
+                "hours_completed": 4.0,
+                "instructor": "FEMA Emergency Management Institute",
+            },
+        )
+
     def seed_training_records(
         self, members: list[dict], courses: list[dict]
     ) -> list[dict]:
@@ -7077,9 +7610,50 @@ class Seeder:
         except ApiError as exc:
             self.blocked.append(f"cancel skills test: {exc}")
 
+    #: One practice attempt is documentary — the member's results list is
+    #: captioned as showing official attempts *and* a practice one, so the
+    #: badge needs an example. More than one is litter.
+    PRACTICE_TESTS_KEPT = 1
+
+    def _prune_practice_tests(self) -> None:
+        """Drop practice tests the capture runs left behind.
+
+        Scoring a test is not a read: `09-16`/`09-18` drive the real scoring
+        screen, and each run files another practice attempt against the demo
+        member. They sort newest-first, so after a dozen runs the member's
+        results panel is a wall of identical "Practice · Passed 100%" rows and
+        the official attempts its caption promises are pushed out of frame.
+
+        Only practice records are touched, and only through the route that
+        refuses anything else — an official result may carry a certification,
+        which is why the API voids those rather than deleting them.
+        """
+        practice = [
+            test
+            for test in items(
+                self.api.get(
+                    "/training/skills-testing/tests" "?limit=200&include_practice=true"
+                ),
+                "tests",
+            )
+            if pick(test, "is_practice", "isPractice")
+        ]
+        if len(practice) <= self.PRACTICE_TESTS_KEPT:
+            return
+        practice.sort(
+            key=lambda t: str(pick(t, "created_at", "createdAt") or ""), reverse=True
+        )
+        for test in practice[self.PRACTICE_TESTS_KEPT :]:
+            try:
+                self.api.delete(f"/training/skills-testing/tests/{pick(test, 'id')}")
+            except ApiError as exc:
+                self.blocked.append(f"practice test cleanup: {exc}")
+                return
+
     def seed_skills_tests(
         self, templates: list[dict], members: list[dict]
     ) -> list[dict]:
+        self._prune_practice_tests()
         tests = items(self.api.get("/training/skills-testing/tests"), "tests")
         if tests:
             # Keyed on the *statuses* present, not on "are there any". The
@@ -8094,6 +8668,128 @@ class Seeder:
         return pool[round_index % len(pool)]
 
     # -- elections ---------------------------------------------------
+
+    def seed_meetings(self, members: list[dict]) -> None:
+        """Meetings for the redesigned Minutes page, with action items.
+
+        The Minutes page was rebuilt onto ``/meetings`` — first-class meeting
+        records with attendees, motions and action items — while this seeder
+        only populated the older ``/minutes-records`` model, so the page
+        rendered "No Meeting Minutes" over a real minutes record. One approved
+        business meeting with open action items and one draft awaiting
+        approval populate the stats row, the list, and the Action Items page.
+        """
+        # Guarded per title, not per collection: a run that dies between the
+        # two creates must add the missing one on the next pass, not decide
+        # the step is done because one row exists.
+        existing_titles = {
+            str(pick(m, "title"))
+            for m in items(self.api.get("/meetings?limit=20"), "meetings")
+        }
+        member_ids = [str(pick(m, "id")) for m in members if pick(m, "id")]
+        if "July Business Meeting" not in existing_titles:
+            approved = self.api.post(
+                "/meetings",
+                {
+                    "title": "July Business Meeting",
+                    "meeting_type": "business",
+                    "meeting_date": str(TODAY - timedelta(days=32)),
+                    "start_time": "19:00:00",
+                    "end_time": "20:30:00",
+                    "location": "Station 1 — Training Room",
+                    "called_by": "President",
+                    "agenda": (
+                        "Old business; equipment purchases; fall open-house "
+                        "planning; new-member vote."
+                    ),
+                    "notes": (
+                        "Quorum met with 18 members present. Treasurer's report "
+                        "accepted as read. Discussion of the aerial ladder "
+                        "service quote deferred to the equipment committee."
+                    ),
+                    "motions": (
+                        "Motion to purchase four SCBA spare cylinders (Osei/"
+                        "Duarte) — carried 16-2. Motion to adopt the revised "
+                        "duty-crew policy (Ruiz/Nakamura) — carried unanimously."
+                    ),
+                    "attendees": [
+                        {"user_id": user_id, "present": True}
+                        for user_id in member_ids[:8]
+                    ],
+                    "action_items": [
+                        {
+                            "description": (
+                                "Collect two more quotes for the aerial ladder "
+                                "annual service."
+                            ),
+                            "assigned_to": member_ids[0] if member_ids else None,
+                            "due_date": str(TODAY + timedelta(days=14)),
+                            "priority": 2,
+                        },
+                        {
+                            "description": (
+                                "Book the school gym for the fall open house."
+                            ),
+                            "assigned_to": (
+                                member_ids[1] if len(member_ids) > 1 else None
+                            ),
+                            "due_date": str(TODAY + timedelta(days=30)),
+                            "priority": 1,
+                        },
+                    ],
+                },
+            )
+            self.api.post(f"/meetings/{pick(approved, 'id')}/approve")
+        if "Officer Meeting — Budget Review" not in existing_titles:
+            self.api.post(
+                "/meetings",
+                {
+                    "title": "Officer Meeting — Budget Review",
+                    "meeting_type": "board",
+                    "meeting_date": str(TODAY - timedelta(days=4)),
+                    "start_time": "18:30:00",
+                    "location": "Station 1 — Office",
+                    "called_by": "Chief",
+                    "agenda": "Mid-year budget review; apparatus fund status.",
+                    "notes": (
+                        "Draft — secretary to circulate for correction before "
+                        "approval at the next business meeting."
+                    ),
+                    "attendees": [
+                        {"user_id": user_id, "present": True}
+                        for user_id in member_ids[:4]
+                    ],
+                },
+            )
+
+    def seed_event_request(self) -> None:
+        """A pending public event request, so the Requests tab has a row.
+
+        Submitted through the same public endpoint the request form uses; the
+        admin tab otherwise renders "No event requests yet" under a caption
+        describing a queue.
+        """
+        if items(self.api.get("/event-requests?limit=5"), "requests"):
+            return
+        org_id = pick(self.api.get("/auth/me"), "organization_id")
+        self.api.post(
+            f"/event-requests/public?organization_id={org_id}",
+            {
+                "contact_name": "Dana Whitmore",
+                "contact_email": "dana.whitmore@oakvilleschools.example.org",
+                "contact_phone": "555-0173",
+                "organization_name": "Oakville Elementary PTA",
+                "outreach_type": "station_tour",
+                "description": (
+                    "Our second-grade classes are studying community helpers "
+                    "and would love a station tour and truck demonstration "
+                    "for about 45 students."
+                ),
+                "date_flexibility": "general_timeframe",
+                "timeframe_description": "Any weekday morning in the next month",
+                "expected_attendees": 45,
+            },
+        )
 
     MINUTES_TITLE = "July Business Meeting"
 
@@ -9141,32 +9837,47 @@ class Seeder:
                     break
 
             for _ in range(target - current):
-                try:
-                    self.api.post(
-                        f"/prospective-members/prospects/{prospect_id}/advance"
-                    )
-                except ApiError as exc:
-                    if "interview" not in str(exc).lower():
-                        self.blocked.append(f"spread applicant: {exc}")
-                        break
-                    try:
-                        self.api.post(
-                            f"/prospective-members/prospects/{prospect_id}/interviews",
-                            {
-                                "recommendation": "recommend",
-                                "interviewer_role": "Membership Coordinator",
-                                "notes": (
-                                    "Panel interview; candidate answered "
-                                    "scenario questions well."
-                                ),
-                            },
-                        )
-                        self.api.post(
-                            f"/prospective-members/prospects/{prospect_id}/advance"
-                        )
-                    except ApiError as inner:
-                        self.blocked.append(f"spread applicant: {inner}")
-                        break
+                if not self._advance_recording_interview(prospect_id, "spread"):
+                    break
+
+    def _advance_recording_interview(self, prospect_id: str, label: str) -> bool:
+        """Advance one stage, recording an interview where the stage demands one.
+
+        Advancing out of an `interview_requirement` stage legitimately refuses
+        until an interview exists (409, "requires at least 1 interview(s)").
+        Recording one and retrying — rather than skipping the stage — keeps the
+        applicant's progress track honest about how they got where they are.
+
+        Shared by the create-path advance loop and the spread: the fallback
+        lived only in the spread, so a *fresh* database — where the create path
+        actually runs — crashed the whole prospective-members step the first
+        time a new applicant had to clear the Interview stage, and the
+        applicants after that one were never created at all.
+        """
+        try:
+            self.api.post(f"/prospective-members/prospects/{prospect_id}/advance")
+            return True
+        except ApiError as exc:
+            if "interview" not in str(exc).lower():
+                self.blocked.append(f"{label} applicant: {exc}")
+                return False
+            try:
+                self.api.post(
+                    f"/prospective-members/prospects/{prospect_id}/interviews",
+                    {
+                        "recommendation": "recommend",
+                        "interviewer_role": "Membership Coordinator",
+                        "notes": (
+                            "Panel interview; candidate answered "
+                            "scenario questions well."
+                        ),
+                    },
+                )
+                self.api.post(f"/prospective-members/prospects/{prospect_id}/advance")
+                return True
+            except ApiError as inner:
+                self.blocked.append(f"{label} applicant: {inner}")
+                return False
 
     PROSPECTS = [
         ("Alex", "Rivera", "Saw the station open house"),
@@ -9256,12 +9967,12 @@ class Seeder:
                 payload["pipeline_id"] = pipeline_id
             prospect = self.api.post("/prospective-members/prospects", payload)
             prospects.append(prospect)
-            # Spread applicants across the board so the kanban shows movement
-            # rather than a single stacked first column.
-            for _ in range(index % len(self.PIPELINE_STAGES)):
-                self.api.post(
-                    f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
-                )
+        # Spreading is left entirely to `_spread_prospects_across_stages`
+        # below. A blind advance loop here used to pre-position each new
+        # applicant, and 409'd the whole step on a fresh database the moment
+        # one crossed the interview stage — advancing out of an
+        # `interview_requirement` stage refuses until an interview exists,
+        # and only the spread helper records one.
         self._spread_prospects_across_stages(pipeline_id)
         self._enable_public_status(pipelines)
         self._seed_report_stage_groups(pipelines)
@@ -9492,6 +10203,201 @@ class Seeder:
                 if exc.code not in (400, 409):
                     raise
                 self.blocked.append(f"election package: {exc}")
+
+    # Approve / Deny, under the 22-member eligible count so the paper batch
+    # passes the plausibility check without an audited override.
+    MEMBERSHIP_VOTE_TALLY = (18, 2)
+
+    def seed_membership_vote_outcome(self) -> None:
+        """Carry the August membership vote through to an Elected package.
+
+        Guide 01 pictures the applicant drawer's ELECTION PACKAGE badge
+        reading Elected, and `elected` is written in exactly one place —
+        `_sync_package_statuses`, when an election whose ballot item carries
+        the package's id closes. No package edit gets there; the vote has to
+        actually happen. So this walks the product's own lifecycle:
+
+        1. mark the package `ready` (the assign endpoint refuses anything
+           else), with a `recommended_ballot_item` that keeps the title and
+           statement `_seed_membership_vote_election` used — and opens the
+           vote to all membership types, because the assign default of
+           regular/life matches nobody in a roster of active/administrative
+           members and an item with zero eligible voters rejects any tally;
+        2. replace the hand-built ballot item with the assign endpoint's —
+           the hand item carried no `prospect_package_id`, so closing an
+           election around it would have synced nothing;
+        3. open the election, record the floor vote as a paper batch, have
+           two officers attest it, and close.
+
+        Each stage checks where a previous run stopped, so a re-run against
+        a database whose election is already closed does nothing.
+        """
+        elections = items(self.api.get("/elections?limit=100"), "elections")
+        election_id = next(
+            (
+                pick(e, "id")
+                for e in elections
+                if pick(e, "title") == self.MEMBERSHIP_ELECTION_TITLE
+            ),
+            None,
+        )
+        if not election_id:
+            self.blocked.append(
+                "membership vote outcome: election not found "
+                f"({self.MEMBERSHIP_ELECTION_TITLE!r})"
+            )
+            return
+
+        packages = items(
+            self.api.get("/prospective-members/election-packages"), "packages"
+        )
+        package = next((p for p in packages if pick(p, "status") != "withdrawn"), None)
+        if not package:
+            self.blocked.append("membership vote outcome: no election package")
+            return
+        prospect_id = pick(package, "prospect_id", "prospectId")
+        pkg_status = pick(package, "status")
+        if pkg_status == "elected":
+            return
+
+        election = self.api.get(f"/elections/{election_id}")
+        election_status = str(pick(election, "status") or "").lower()
+        if election_status == "closed":
+            # The only way here is an election closed around the unlinked
+            # hand item, and a closed election accepts no repair over the
+            # API. Say so rather than half-working.
+            self.blocked.append(
+                "membership vote outcome: election closed but package is "
+                f"'{pkg_status}' — its ballot item never carried the package id"
+            )
+            return
+
+        snapshot = pick(package, "applicant_snapshot", "applicantSnapshot") or {}
+        full_name = (
+            f"{snapshot.get('first_name', '')} {snapshot.get('last_name', '')}"
+        ).strip() or "the applicant"
+
+        if pkg_status in ("draft", "pending"):
+            config = dict(pick(package, "package_config", "packageConfig") or {})
+            config["recommended_ballot_item"] = {
+                "title": f"Membership Approval — {full_name}",
+                "description": SUPPORTING_STATEMENT,
+                "eligible_voter_types": ["all"],
+                "require_attendance": False,
+            }
+            self.api.put(
+                f"/prospective-members/prospects/{prospect_id}/election-package",
+                {"status": "ready", "package_config": config},
+            )
+            pkg_status = "ready"
+
+        try:
+            if election_status == "draft":
+                if pkg_status == "ready":
+                    # Drop the unlinked hand item first, so the ballot does
+                    # not put the same applicant to the floor twice.
+                    remaining = [
+                        item
+                        for item in (pick(election, "ballot_items") or [])
+                        if item.get("id") != "item-membership-okafor"
+                    ]
+                    self.api.patch(
+                        f"/elections/{election_id}", {"ballot_items": remaining}
+                    )
+                    self.api.post(
+                        f"/prospective-members/prospects/{prospect_id}"
+                        "/election-package/assign",
+                        {"election_id": election_id},
+                    )
+                self.api.post(f"/elections/{election_id}/open")
+                election = self.api.get(f"/elections/{election_id}")
+
+            item = next(
+                (
+                    i
+                    for i in (pick(election, "ballot_items") or [])
+                    if i.get("type") == "membership_approval"
+                ),
+                None,
+            )
+            if not item:
+                self.blocked.append(
+                    "membership vote outcome: no membership_approval item "
+                    "on the opened election"
+                )
+                return
+            # The votes-to-item join `_sync_package_statuses` uses: the
+            # item's `position` key when set, its id otherwise.
+            position = item.get("position") or item["id"]
+
+            existing = items(
+                self.api.get(f"/elections/{election_id}/candidates"), "candidates"
+            )
+            by_name = {
+                pick(c, "name"): pick(c, "id")
+                for c in existing
+                if pick(c, "position") == position
+            }
+            candidate_ids = {}
+            for name in ("Approve", "Deny"):
+                candidate_ids[name] = by_name.get(name) or pick(
+                    self.api.post(
+                        f"/elections/{election_id}/candidates",
+                        {
+                            "election_id": election_id,
+                            "name": name,
+                            "position": position,
+                        },
+                    ),
+                    "id",
+                )
+
+            batches = items(
+                self.api.get(f"/elections/{election_id}/manual-ballots"),
+                "batches",
+            )
+            if not batches:
+                approve, deny = self.MEMBERSHIP_VOTE_TALLY
+                self.api.post(
+                    f"/elections/{election_id}/manual-ballots",
+                    {
+                        "entries": [
+                            {
+                                "candidate_id": candidate_ids["Approve"],
+                                "count": approve,
+                            },
+                            {"candidate_id": candidate_ids["Deny"], "count": deny},
+                        ],
+                        "ballots_cast": approve + deny,
+                        "notes": (
+                            "In-room paper tally, August business meeting. "
+                            "Counted by the Secretary, witnessed by the Chief."
+                        ),
+                    },
+                )
+                batches = items(
+                    self.api.get(f"/elections/{election_id}/manual-ballots"),
+                    "batches",
+                )
+            batch = batches[0] if batches else None
+            batch_id = pick(batch, "batch_id", "id") if batch else None
+            # Only a pending batch needs attestations; re-attesting a
+            # confirmed one earns each officer a 400 and a blocked note.
+            if batch_id and pick(batch, "status") == "pending":
+                self._attest_ballot_batch(election_id, batch_id)
+            self.api.post(f"/elections/{election_id}/close")
+        except ApiError as exc:
+            self.blocked.append(f"membership vote outcome: {exc}")
+            return
+
+        final = self.api.get(
+            f"/prospective-members/prospects/{prospect_id}/election-package"
+        )
+        if pick(final, "status") != "elected":
+            self.blocked.append(
+                "membership vote outcome: election closed but package reads "
+                f"'{pick(final, 'status')}' — vote-to-package sync did not run"
+            )
 
     def seed_bulk_prospects(self, pipeline_id: str | None, target: int) -> int:
         """Pad the pipeline out past the board's card ceiling. Opt-in only.
@@ -10461,10 +11367,6 @@ class Seeder:
         self.step("apparatus activity", lambda: self.seed_apparatus_activity(apparatus))
         events = self.step("events", self.seed_events) or []
         self.step(
-            "guest check-in event",
-            lambda: self.seed_guest_check_in_event(stations),
-        )
-        self.step(
             "event rsvps",
             lambda: self.seed_event_rsvps(self.base_url, events, members),
         )
@@ -10474,12 +11376,14 @@ class Seeder:
             lambda: self.seed_scheduling(stations, apparatus, members),
         )
         self.step("shift calls", self.seed_shift_calls)
+        self.step("scheduling requests", self.seed_scheduling_requests)
         training = self.step("training", self.seed_training) or {}
         self.step("course cohort", lambda: self.seed_course_cohort(members))
         self.step(
             "training records",
             lambda: self.seed_training_records(members, training.get("courses", [])),
         )
+        self.step("training submission", self.seed_training_submission)
         self.step("training programs", lambda: self.seed_training_programs(members))
         self.step(
             "training enhancements",
@@ -10537,6 +11441,9 @@ class Seeder:
         self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)
         self.step("notification rules", self.seed_notification_rules)
+        # After scheduling (needs upcoming crewed shifts) — the reminder task
+        # notifies each rostered member, the administrator among them.
+        self.step("shift reminder inbox", self.seed_shift_reminder_notification)
         self.step("officers", lambda: self.seed_officers(members))
         self.step("messages", lambda: self.seed_messages(self.base_url, members))
         forms = self.step("forms", self.seed_forms) or []
@@ -10548,9 +11455,20 @@ class Seeder:
         # Minutes before elections: the closed election links itself to the
         # minutes record at creation, and it cannot be patched once closed.
         minutes = self.step("meeting minutes", self.seed_minutes) or []
+        self.step("meetings", lambda: self.seed_meetings(members))
+        self.step("event request", self.seed_event_request)
         self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}
+        )
+        # After the pipeline exists, deliberately: a guest sign-in creates a
+        # prospect in the DEFAULT pipeline's first stage, and on a fresh
+        # database this step used to run before any pipeline existed — the
+        # guest prospect then had no stage, no kanban card, and the
+        # guest-prospect screenshot had nothing to open.
+        self.step(
+            "guest check-in event",
+            lambda: self.seed_guest_check_in_event(stations),
         )
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []
@@ -10561,6 +11479,9 @@ class Seeder:
                     self.bulk_prospects,
                 ),
             )
+        # After prospective members: the vote consumes the election package
+        # that step creates.
+        self.step("membership vote outcome", self.seed_membership_vote_outcome)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)
@@ -10580,6 +11501,10 @@ class Seeder:
         # depend on that fix is one less thing to get wrong later.
         self.step("supply tracking", lambda: self.seed_supply_tracking(apparatus))
         self.step("shift reports", lambda: self.seed_shift_reports(members))
+        # After the reports: the pair-picker above skips recruits, so crewing
+        # one onto the ladder now leaves their Evaluate control live.
+        self.step("batch report trainee", self.seed_batch_report_trainee)
+        self.step("scheduling requests", self.seed_scheduling_requests)
         # After the reports: finalizing auto-creates drafts for attendees, and
         # doing it first would put a second batch of drafts in the way of the
         # ones seed_shift_reports files deliberately.

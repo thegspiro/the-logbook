@@ -475,6 +475,9 @@ class SecurityHeadersMiddleware:
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        # Built once at startup, not per request: the CAPTCHA provider is fixed
+        # by env config and cannot change while the process runs.
+        self._headers = self._build_headers()
 
     # Pre-build the static header list once (all values are constant).
     _STATIC_HEADERS: list[tuple[bytes, bytes]] = [
@@ -486,23 +489,53 @@ class SecurityHeadersMiddleware:
         # Camera scanners are a first-party platform feature. ``self`` keeps
         # camera access unavailable to embedded third-party origins.
         (b"permissions-policy", b"geolocation=(), microphone=(), camera=(self)"),
-        (
-            b"content-security-policy",
-            b"default-src 'self'; "
-            b"script-src 'self'; "
-            b"style-src 'self' 'unsafe-inline'; "
-            b"style-src-elem 'self' 'unsafe-inline'; "
-            b"style-src-attr 'unsafe-inline'; "
-            b"img-src 'self' data: blob:; "
-            b"font-src 'self'; "
-            b"connect-src 'self'; "
-            b"object-src 'none'; "
-            b"frame-ancestors 'none'; "
-            b"base-uri 'self'; "
-            b"form-action 'self'; "
-            b"upgrade-insecure-requests",
-        ),
     ]
+
+    @staticmethod
+    def _build_headers() -> list[tuple[bytes, bytes]]:
+        """Static headers plus a CSP widened for the configured CAPTCHA widget.
+
+        The CAPTCHA widget loads a script from, and renders an iframe served by,
+        the provider's origin. Under the default ``script-src 'self'`` CSP the
+        browser blocks both, and the failure presents as "the challenge never
+        appears" rather than as anything naming the CSP — so the policy has to
+        know about the provider. Origins are added only for the provider that is
+        actually configured; with CAPTCHA off the policy is byte-for-byte what
+        it was before.
+
+        Imported here rather than at module scope because app.core.captcha
+        imports get_client_ip from this module. __init__ runs at app startup,
+        well after both modules have finished importing.
+        """
+        from app.core.captcha import get_widget_origins
+
+        origins = get_widget_origins()
+        extra = (" " + " ".join(origins)) if origins else ""
+        # frame-src is omitted entirely when CAPTCHA is off: default-src 'self'
+        # already covers frames, so emitting it would change the header for
+        # every deployment without changing what any of them allow.
+        frame_src = f"frame-src 'self'{extra}; " if origins else ""
+
+        csp = (
+            "default-src 'self'; "
+            f"script-src 'self'{extra}; "
+            "style-src 'self' 'unsafe-inline'; "
+            "style-src-elem 'self' 'unsafe-inline'; "
+            "style-src-attr 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self'; "
+            f"connect-src 'self'{extra}; "
+            "object-src 'none'; "
+            f"{frame_src}"
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
+            "upgrade-insecure-requests"
+        )
+        return [
+            *SecurityHeadersMiddleware._STATIC_HEADERS,
+            (b"content-security-policy", csp.encode("ascii")),
+        ]
 
     _API_CACHE_HEADERS: list[tuple[bytes, bytes]] = [
         (b"cache-control", b"no-store, no-cache, must-revalidate, proxy-revalidate"),
@@ -521,7 +554,7 @@ class SecurityHeadersMiddleware:
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                headers.extend(self._STATIC_HEADERS)
+                headers.extend(self._headers)
                 if is_api:
                     headers.extend(self._API_CACHE_HEADERS)
                 message = {**message, "headers": headers}
@@ -586,7 +619,16 @@ async def check_rate_limit(
                 key=f"auth:{scope}:{client_ip}",
                 limit=max_requests,
                 window_seconds=window_seconds,
-                fail_closed=False,  # Fall back to in-memory on error
+                fail_closed=False,
+                # CI-11: without raise_on_error the helper swallows its own
+                # Redis errors and returns False ("not limited"), so the
+                # ``except`` below never ran and the request was limited by
+                # neither backend. Re-raising is what makes the documented
+                # in-memory fallback reachable when Redis is connected but a
+                # command transiently fails. ``fail_closed=False`` still governs
+                # the separate "Redis not connected at all" case, which the
+                # ``is_connected`` guard above already routes to the fallback.
+                raise_on_error=True,
             )
             if exceeded:
                 raise HTTPException(
@@ -901,11 +943,6 @@ class IPBlockingMiddleware:
         self.app = app
         self.enabled = enabled
         self.log_blocked_attempts = log_blocked_attempts
-        # In-process TTL cache for the allowlist so we don't hit Redis/DB on
-        # every request. Refreshed at most once per _ALLOWLIST_TTL seconds.
-        self._allowlist_cache: set = set()
-        self._allowlist_cached_at: float = 0.0
-        self._ALLOWLIST_TTL = 60.0
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Process request and check IP/country restrictions."""
@@ -940,10 +977,11 @@ class IPBlockingMiddleware:
 
         geoip = get_geoip_service()
         if geoip:
-            # Get allowed IPs from database (cached)
-            allowed_ips = await self._get_allowed_ips()
-
-            is_blocked, reason = geoip.is_ip_blocked(client_ip, allowed_ips)
+            # This middleware runs before authentication and therefore has no
+            # trustworthy tenant context. Tenant-scoped IP exceptions cannot
+            # safely be applied here: doing so would let one tenant relax the
+            # geo-blocking policy for every other tenant.
+            is_blocked, reason = geoip.is_ip_blocked(client_ip, set())
 
             if is_blocked:
                 # Log the blocked attempt
@@ -984,55 +1022,6 @@ class IPBlockingMiddleware:
             scope["state"]["client_ip"] = client_ip
 
         await self.app(scope, receive, send)
-
-    async def _get_allowed_ips(self) -> set:
-        """
-        Get the set of currently-approved allowlist IPs (across all orgs).
-
-        Bounded by an in-process TTL cache and a shared Redis cache so the
-        geo-blocking hot path does not query the database on every request.
-        An approved IP exception lets a member through a country block; on any
-        failure we fail closed to an empty allowlist (geo-block still applies).
-        """
-        import time as _time
-
-        now = _time.monotonic()
-        if (
-            self._allowlist_cached_at
-            and (now - self._allowlist_cached_at) < self._ALLOWLIST_TTL
-        ):
-            return self._allowlist_cache
-
-        ips: set | None = None
-        try:
-            from app.core.cache import cache_manager
-
-            if cache_manager.is_connected:
-                cached = await cache_manager.get("ip_allowlist")
-                if cached is not None:
-                    ips = set(cached)
-
-            if ips is None:
-                # Cache miss — load from the DB and repopulate the shared cache.
-                from app.core.database import async_session_factory
-                from app.services.ip_security_service import ip_security_service
-
-                async with async_session_factory() as db:
-                    ips = await ip_security_service.get_all_active_allowed_ips_global(
-                        db
-                    )
-
-                if cache_manager.is_connected:
-                    await cache_manager.set(
-                        "ip_allowlist", list(ips), ttl=int(self._ALLOWLIST_TTL)
-                    )
-        except Exception:
-            ips = set()
-
-        ips = ips or set()
-        self._allowlist_cache = ips
-        self._allowlist_cached_at = now
-        return ips
 
     async def _log_blocked_attempt(
         self, request: Request, client_ip: str, reason: str
