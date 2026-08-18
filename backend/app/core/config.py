@@ -505,10 +505,24 @@ class Settings(BaseSettings):
                     "SECRET_KEY and will be invalidated if SECRET_KEY is rotated."
                 )
 
+            # NOTE: this flag has no reader anywhere in the backend — nothing
+            # sends HSTS, and no middleware redirects http:// to https://. The
+            # Secure attribute on auth cookies is decided independently by
+            # COOKIE_SECURE (see api/v1/endpoints/auth.py), which is why the
+            # old message here — "prevent cookies and credentials from being
+            # sent over HTTP" — described a control that does not exist and
+            # sent operators chasing the wrong setting. Until enforcement is
+            # actually implemented, the flag's only effect is this assertion
+            # that a human deployed behind TLS, so say exactly that rather
+            # than claim protection the code does not provide.
             if not self.SECURITY_ENFORCE_HTTPS:
                 warnings.append(
-                    "CRITICAL: SECURITY_ENFORCE_HTTPS must be True in production "
-                    "to prevent cookies and credentials from being sent over HTTP"
+                    "CRITICAL: SECURITY_ENFORCE_HTTPS must be True in production. "
+                    "It is an attestation that this deployment is served over "
+                    "TLS (typically terminated at a reverse proxy or CDN) — it "
+                    "does not itself redirect HTTP or emit HSTS. Set it True "
+                    "once TLS terminates in front of the app; to control the "
+                    "Secure flag on auth cookies, use COOKIE_SECURE."
                 )
 
         return warnings
