@@ -27,6 +27,9 @@ from app.core.config import settings
 from app.core.database import Base
 from app.models.audit import AuditLog, AuditLogCheckpoint
 
+# Call tracking (PII-free call volume)
+from app.models.call_tracking import OrgCall, OrgCallResponse  # noqa: F401
+
 # Documents
 from app.models.document import Document, DocumentFolder
 
