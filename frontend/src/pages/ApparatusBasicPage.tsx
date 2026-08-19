@@ -363,7 +363,7 @@ export default function ApparatusBasicPage() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
