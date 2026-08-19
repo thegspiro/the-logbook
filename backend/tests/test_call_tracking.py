@@ -617,6 +617,11 @@ async def _make_shift(db_session, org, apparatus_id, on_date=None):
     return shift
 
 
+# These four classes need a live database. CI splits the suite: the unit job
+# runs `-m "not integration ..."` with no MySQL service, and a separate
+# integration job supplies one. Without the marker they ran in the unit job and
+# errored on connect — 14 red checks for tests that were never given a database.
+@pytest.mark.integration
 class TestDepartmentTotalIsNotASum:
     """The single most dangerous bug in this design, asserted directly."""
 
@@ -676,6 +681,7 @@ class TestDepartmentTotalIsNotASum:
         assert await svc.apparatus_run_counts(org.id, *window) == {"engine-5": 5}
 
 
+@pytest.mark.integration
 class TestReconciliation:
     async def test_refinalizing_with_the_same_number_is_idempotent(self, db_session):
         """A bare COUNT-and-rewrite would duplicate the tour's calls on every
@@ -777,6 +783,7 @@ class TestReconciliation:
         assert (await svc.apparatus_run_counts(org.id, *window))["medic-1"] == 1
 
 
+@pytest.mark.integration
 class TestOrgScoping:
     async def test_attach_rejects_a_call_from_another_org(self, db_session):
         """Pitfall #14b: a permission check asserts the caller holds the
@@ -813,6 +820,7 @@ class TestOrgScoping:
         assert "engine-b" not in await svc.apparatus_run_counts(org_a.id, *window)
 
 
+@pytest.mark.integration
 class TestWindowing:
     async def test_calls_outside_the_window_are_excluded(self, db_session):
         org = await _make_org(db_session)
