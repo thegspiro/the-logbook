@@ -6,9 +6,19 @@ on:
   pull_request:
     branches: [main, master]
 
+# No job here needs to write to the repository, so drop the token to
+# read-only at the workflow level (matching secret-scan, supply-chain and
+# application-review-rotation). A job that later needs more grants itself
+# the narrower scope it needs, rather than every job inheriting write.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded PR pushes are cancelled, but a run for main is always allowed
+  # to finish: two merges in quick succession would otherwise cancel the
+  # first, leaving no record of whether that commit was ever green.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Every job below sets timeout-minutes. GitHub's default is 360 minutes, which
 # is not a safety net — on 2026-08-17 the MariaDB contract job hung in
@@ -161,9 +171,11 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libmagic1
+        # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19
+        # it stalled long enough to consume a whole job budget. The script
+        # skips apt when the library is already there and bounds it when it
+        # is not — see its header for the incident.
+        run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
       - name: Install security tools
         run: pip install bandit pip-audit
@@ -207,9 +219,11 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libmagic1
+        # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19
+        # it stalled long enough to consume a whole job budget. The script
+        # skips apt when the library is already there and bounds it when it
+        # is not — see its header for the incident.
+        run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
@@ -322,9 +336,11 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libmagic1
+        # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19
+        # it stalled long enough to consume a whole job budget. The script
+        # skips apt when the library is already there and bounds it when it
+        # is not — see its header for the incident.
+        run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
@@ -505,9 +521,11 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libmagic1
+        # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19
+        # it stalled long enough to consume a whole job budget. The script
+        # skips apt when the library is already there and bounds it when it
+        # is not — see its header for the incident.
+        run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
@@ -757,8 +775,27 @@ jobs:
       # navigation specs, whose destinations sit behind a hamburger menu at
       # that width. Installing the shell directly avoids also downloading the
       # full headed Chromium build, which this CI job never launches.
+      # Cached so the usual run does no network fetch at all. The key is the
+      # lockfile hash, so a Playwright version bump invalidates it and any
+      # other change reuses it.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      # `--with-deps` was removed deliberately. It shells out to apt, and on
+      # 2026-08-19 it stalled there for the job's entire 30-minute budget —
+      # the same failure that took out the two backend jobs that morning. The
+      # ubuntu-latest image already carries the shared libraries the headless
+      # shell needs, so the apt half was buying nothing and risking the job.
+      # If a future runner image drops one of those libraries this step fails
+      # fast at launch, which is a far better signal than a silent 30-minute
+      # hang; add the specific package to install-system-deps.sh at that point.
       - name: Install Playwright Chromium headless shell
-        run: npx playwright install --with-deps chromium-headless-shell
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium-headless-shell
 
       # playwright.config.ts starts `npm run dev` itself via webServer.
       #
@@ -826,3 +863,79 @@ jobs:
         run: |
           python3 scripts/screenshots/audit_images.py \
             --baseline scripts/screenshots/audit_baseline.txt
+
+  # ──────────────────────────────────────────────
+  # Aggregate gate
+  # ──────────────────────────────────────────────
+  #
+  # The single check to require in branch protection. Without it every job has
+  # to be listed there by name, and two of them are matrix jobs whose names
+  # interpolate (`Backend Integration Tests (MySQL 8.0)`) — adding a third
+  # engine or renaming one silently drops a required check with nothing to
+  # notice it.
+  #
+  # It also closes the gap that let 2026-08-19's merge through. A stalled
+  # `apt-get` killed `backend-test`, and the four matrix jobs behind
+  # `needs: backend-test` were then reported **skipped**, not failed. Skipped
+  # is not a pass: it means the check never ran and nobody knows. This job
+  # treats skipped, cancelled and failed alike, so "we did not test this" can
+  # never again present as an absence of bad news.
+  #
+  # Consequence worth knowing before adding `paths`/`paths-ignore` filters to
+  # any job above: a filtered-out job reports `skipped` and would fail this
+  # gate. Route path filtering through the workflow-level `on:` triggers, or
+  # give the skipped job an `if:` that this step tolerates explicitly.
+  ci-success:
+    name: CI Success
+    # always() so the gate still reports when an upstream job failed; without
+    # it this job would itself be skipped and the branch protection check would
+    # sit pending forever.
+    if: always()
+    needs:
+      - backend-lint
+      - backend-security
+      - backend-test
+      - backend-test-integration
+      - backend-test-contract
+      - docker-build
+      - frontend-lint
+      - frontend-test
+      - frontend-security
+      - frontend-build
+      - frontend-e2e
+      - docs-links
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify every job succeeded
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYEOF'
+          import json
+          import os
+          import sys
+
+          results = json.loads(os.environ["NEEDS_JSON"])
+          bad = {
+              job: meta.get("result")
+              for job, meta in sorted(results.items())
+              if meta.get("result") != "success"
+          }
+
+          for job, meta in sorted(results.items()):
+              print(f"{meta.get('result'):>10}  {job}")
+
+          if not bad:
+              print("\nAll jobs succeeded.")
+              sys.exit(0)
+
+          print("\nCI failed. Jobs that did not succeed:")
+          for job, result in bad.items():
+              # Name the distinction explicitly: a skipped job usually means an
+              # upstream `needs:` dependency died, which is a different thing to
+              # debug than a test that ran and failed.
+              hint = " (never ran — an upstream dependency failed)" if result == "skipped" else ""
+              print(f"  - {job}: {result}{hint}")
+          sys.exit(1)
+          PYEOF
