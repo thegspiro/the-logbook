@@ -697,9 +697,13 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: frontend-test-reports
+          # lcov.info only, not the whole coverage/ directory: that is 107 MB,
+          # 90 MB of which is a browsable HTML report and a copy of the sources,
+          # regenerable from this file and uploaded on every single run. lcov is
+          # what a diff-coverage tool reads, which is the point of keeping it.
           path: |
             frontend/reports/
-            frontend/coverage/
+            frontend/coverage/lcov.info
           retention-days: 7
           if-no-files-found: warn
 
