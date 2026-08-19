@@ -24,7 +24,7 @@ module, behind its own consent and access-control story.
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -132,7 +132,10 @@ class CallTrackingService:
             await self.db.execute(delete(OrgCall).where(OrgCall.id == call_id))
         owned = owned[:owned_needed]
 
-        # Retype the survivors so a corrected tally actually lands.
+        # Bring the survivors back in line with the shift as it stands now —
+        # type *and* date. Calls are written when step 2 is saved, but the
+        # shift's date and apparatus stay editable afterwards, so retyping
+        # alone left a corrected shift reporting its calls under the old date.
         if owned:
             existing_rows = (
                 (await self.db.execute(select(OrgCall).where(OrgCall.id.in_(owned))))
@@ -144,6 +147,20 @@ class CallTrackingService:
                 row = by_id.get(call_id)
                 if row is not None:
                     row.call_type = wanted_types[idx]
+                    row.call_date = call_date
+
+        # Same for the unit. A shift reassigned to another apparatus after its
+        # calls were saved otherwise kept crediting the runs to the old one.
+        if apparatus_id is not None:
+            await self.db.execute(
+                update(OrgCallResponse)
+                .where(
+                    OrgCallResponse.shift_id == shift_id,
+                    OrgCallResponse.organization_id == organization_id,
+                    OrgCallResponse.apparatus_id != apparatus_id,
+                )
+                .values(apparatus_id=apparatus_id)
+            )
 
         # Add whatever is still missing.
         for idx in range(len(owned), owned_needed):
