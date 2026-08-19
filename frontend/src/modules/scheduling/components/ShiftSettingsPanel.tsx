@@ -356,6 +356,41 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               </div>
               <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
                 <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Record a call count at close-out</p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    For departments that don&apos;t log individual incidents. The officer is asked how many calls the
+                    apparatus ran when they close the shift out, and the crew&apos;s call credit comes from that number.
+                    Leave this off to keep logging calls one at a time.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Record a call count at close-out"
+                  aria-checked={feature.call_tracking?.mode === 'count_only'}
+                  disabled={savingFeature}
+                  onClick={() => {
+                    const next = feature.call_tracking?.mode === 'count_only' ? 'detailed' : 'count_only';
+                    // Send the existing type list back untouched: the payload
+                    // replaces the whole call_tracking object, so omitting it
+                    // would wipe the department's own call types.
+                    void saveFeature({
+                      call_tracking: { mode: next, call_types: feature.call_tracking?.call_types ?? [] },
+                    });
+                  }}
+                  className={`toggle-track-sm ${
+                    feature.call_tracking?.mode === 'count_only' ? 'bg-violet-600' : 'bg-theme-surface-border'
+                  }`}
+                >
+                  <span
+                    className={`toggle-knob-sm ${
+                      feature.call_tracking?.mode === 'count_only' ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
+                <div>
                   <p className="text-theme-text-primary text-sm font-medium">
                     Enforce EVOC for drivers
                     <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">

@@ -208,7 +208,6 @@ class OrgCallResponse(Base):
         # tally every time an officer corrected a number.
         UniqueConstraint("call_id", "apparatus_id", name="uq_call_response_apparatus"),
         Index("idx_call_response_apparatus", "organization_id", "apparatus_id"),
-        Index("idx_call_response_shift", "shift_id"),
     )
 
     def __repr__(self):

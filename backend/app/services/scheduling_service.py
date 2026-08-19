@@ -5412,12 +5412,47 @@ class SchedulingService:
             .scalars()
             .all()
         )
+        # Assigned members who never checked in have no attendance row, so a
+        # list built from attendance alone leaves them off the close-out
+        # entirely — no hours, no call credit, and no way for the officer to
+        # notice. They are listed with empty times for the officer to fill in;
+        # saving step 1 creates the row. This is what the old checklist's
+        # manual-hours field was for.
+        assigned_ids = (
+            (
+                await self.db.execute(
+                    select(ShiftAssignment.user_id).where(
+                        ShiftAssignment.shift_id == str(shift_id),
+                        ShiftAssignment.assignment_status != AssignmentStatus.CANCELLED,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        attended_ids = {str(a.user_id) for a in att_rows if a.user_id}
+        missing_ids = [str(u) for u in assigned_ids if str(u) not in attended_ids]
+
         name_map = await self._get_user_name_map(
-            [str(a.user_id) for a in att_rows if a.user_id]
+            [str(a.user_id) for a in att_rows if a.user_id] + missing_ids
         )
 
         members = []
         combined_minutes = 0
+        for uid in missing_ids:
+            members.append(
+                {
+                    "user_id": uid,
+                    "user_name": name_map.get(uid, ""),
+                    "checked_in_at": None,
+                    "checked_out_at": None,
+                    "hours": 0.0,
+                    "call_count": None,
+                    # Nothing was recorded at all, which the wizard flags the
+                    # same way as a missing check-out: something to fill in.
+                    "missing_checkout": True,
+                }
+            )
         for att in att_rows:
             minutes = int(att.duration_minutes or 0)
             combined_minutes += minutes
@@ -5437,13 +5472,12 @@ class SchedulingService:
             )
         members.sort(key=lambda m: m["user_name"])
 
-        attachable = []
-        if tracking.get("mode") == CallTrackingMode.COUNT_ONLY and shift.shift_date:
-            attachable = await call_service.list_calls_in_window(
-                str(organization_id),
-                shift.shift_date,
-                exclude_shift_id=str(shift_id),
-            )
+        # Deliberately empty. `list_calls_in_window` costs two queries on every
+        # close-out GET, and nothing consumes the result: claiming another
+        # unit's call has no UI yet, so no client can send `attach_call_ids`.
+        # The field stays on the response so the contract does not change when
+        # the picker lands — it is served empty until something can use it.
+        attachable: List[Dict[str, Any]] = []
 
         return {
             "shift_id": str(shift_id),
@@ -5504,9 +5538,10 @@ class SchedulingService:
             uid = str(entry["user_id"])
             att = existing.get(uid)
             if att is None:
-                # Only members already on the shift's roster. A client-supplied
-                # id must not be able to add someone to a shift through the
-                # close-out, nor pull a user from another org onto this one.
+                # A client-supplied id must not pull a user from another org
+                # onto this shift. This admits any member of the caller's org,
+                # which is deliberate: the close-out is also how an officer
+                # records someone who worked the shift but never checked in.
                 if not await self._user_in_org(uid, organization_id):
                     return None, "One or more members are not in your organization"
                 att = ShiftAttendance(

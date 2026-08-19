@@ -32,6 +32,10 @@ interface ShiftCloseoutWizardProps {
   unitLabel: string;
   /** IANA timezone the crew works in — every time shown is converted to it. */
   tz: string;
+  /** End-of-shift equipment checks still outstanding on this shift. */
+  outstandingChecks: number;
+  /** Whether those checks block close-out for this department. */
+  requireChecks: boolean;
   onCancel: () => void;
   onFinalized: () => void;
 }
@@ -43,8 +47,22 @@ interface MemberDraft {
   inLocal: string;
   outLocal: string;
   missingCheckout: boolean;
-  /** '' means "not set" — the UI shows the shift's count instead. */
+  /**
+   * Always a concrete number, seeded from the apparatus count. Held as a
+   * string so the field shows exactly what state holds — rendering a
+   * fallback the state did not contain meant clearing and retyping appended
+   * to the number on screen.
+   */
   credit: string;
+  /**
+   * Whether the officer actually changed this credit.
+   *
+   * Needed because a seeded credit and a typed one are indistinguishable by
+   * value: on a fresh close-out the count is not known yet, so every credit
+   * seeds to 0, and treating that as an officer's answer pinned the whole
+   * crew at 0 once a real count arrived.
+   */
+  creditTouched: boolean;
 }
 
 const inputClass = 'form-input px-2 py-1 text-sm focus:ring-violet-500';
@@ -53,6 +71,8 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   shiftId,
   unitLabel,
   tz,
+  outstandingChecks,
+  requireChecks,
   onCancel,
   onFinalized,
 }) => {
@@ -62,10 +82,25 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<MemberDraft[]>([]);
   const [counts, setCounts] = useState<Record<string, string>>({});
+  const [passDownNotes, setPassDownNotes] = useState('');
+  const [overrideChecks, setOverrideChecks] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
 
-  /** Seed the local drafts from whatever the server already holds. */
+  // Enforcement is a hard block server-side. Without the override the shift
+  // simply cannot be closed out, so the wizard has to carry it — replacing the
+  // old checklist meant replacing everything it could do, not most of it.
+  const blocked = requireChecks && outstandingChecks > 0;
+  const overrideBlocked = blocked && (!overrideChecks || overrideReason.trim() === '');
+
+  /**
+   * Seed the local drafts from whatever the server already holds.
+   *
+   * `adoptServerStep` is set only on first load. Re-hydrating after a save
+   * must not move the officer: the save handler advances the step itself, and
+   * letting the response drive it too meant two sources for one decision.
+   */
   const hydrate = useCallback(
-    (next: CloseoutState) => {
+    (next: CloseoutState, adoptServerStep = false) => {
       setState(next);
       const seeded: Record<string, string> = { [UNCATEGORISED]: '' };
       next.call_types.forEach((t) => {
@@ -73,8 +108,13 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
       });
       let typed = 0;
       Object.entries(next.reported_call_types || {}).forEach(([slug, n]) => {
-        seeded[slug] = String(n);
-        typed += n;
+        // A type retired since this shift was saved has no row to show it, so
+        // its count folds into the uncategorised remainder below rather than
+        // inflating a total nobody can see or edit.
+        if (slug in seeded) {
+          seeded[slug] = String(n);
+          typed += n;
+        }
       });
       // Whatever the shift recorded beyond its typed breakdown was never given
       // a type, so it belongs in the uncategorised row rather than vanishing.
@@ -84,21 +124,33 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
       // first paint, so the confirm step rendered a frame of empty credit
       // fields before filling them in.
       const seededTotal = deriveCallTotal(seeded) ?? 0;
-      setMembers(
-        next.members.map((m) => ({
-          userId: m.user_id,
-          name: m.user_name,
-          inLocal: formatForDateTimeInput(m.checked_in_at, tz),
-          outLocal: formatForDateTimeInput(m.checked_out_at, tz),
-          missingCheckout: m.missing_checkout,
-          credit: String(
-            m.call_count === null || m.call_count === undefined ? seededTotal : Math.min(m.call_count, seededTotal)
-          ),
-        }))
-      );
+      setMembers((prev) => {
+        const local = new Map(prev.map((m) => [m.userId, m]));
+        return next.members.map((m) => {
+          // Per-member credit is only persisted at finalize, so the server
+          // reports null for it all the way through the wizard. Re-seeding
+          // from that would wipe an adjustment the officer had already made
+          // the moment they stepped back and saved again — silently, and only
+          // for the member they had singled out.
+          const held = local.get(m.user_id);
+          const credit =
+            held?.creditTouched && held.credit.trim() !== ''
+              ? Math.min(num(held.credit), seededTotal)
+              : (m.call_count ?? seededTotal);
+          return {
+            userId: m.user_id,
+            name: m.user_name,
+            inLocal: formatForDateTimeInput(m.checked_in_at, tz),
+            outLocal: formatForDateTimeInput(m.checked_out_at, tz),
+            missingCheckout: m.missing_checkout,
+            credit: String(Math.min(credit, seededTotal)),
+            creditTouched: held?.creditTouched ?? false,
+          };
+        });
+      });
       setCounts(seeded);
       // Resume where the officer left off. A finalized shift has no wizard.
-      setStep(next.is_finalized ? 3 : Math.min(next.closeout_step + 1, 3));
+      if (adoptServerStep) setStep(next.is_finalized ? 3 : Math.min(next.closeout_step + 1, 3));
     },
     [tz]
   );
@@ -108,7 +160,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
     const load = async () => {
       try {
         const next = await schedulingService.getCloseoutState(shiftId);
-        if (!cancelled) hydrate(next);
+        if (!cancelled) hydrate(next, true);
       } catch (err: unknown) {
         if (!cancelled) toast.error(getErrorMessage(err, 'Could not load the close-out'));
       } finally {
@@ -135,26 +187,12 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   );
   const highestCredit = useMemo(() => members.reduce((hi, m) => Math.max(hi, creditOf(m)), 0), [members, creditOf]);
 
-  /**
-   * Keep every credit in step with the apparatus count.
-   *
-   * Seeds a blank credit to the total, and clamps one that now exceeds it
-   * because the officer went back and lowered the count. Doing this here
-   * rather than in the input's `value` keeps state and display identical —
-   * rendering a fallback the state did not hold meant clearing the field and
-   * typing appended to the number on screen, so "3" became "53".
-   */
-  useEffect(() => {
-    setMembers((prev) =>
-      prev.map((m) => {
-        const next = m.credit.trim() === '' ? totalOrZero : Math.min(num(m.credit), totalOrZero);
-        return m.credit === String(next) ? m : { ...m, credit: String(next) };
-      })
-    );
-  }, [totalOrZero]);
-
   const setMemberField = (userId: string, field: 'inLocal' | 'outLocal' | 'credit', value: string) => {
-    setMembers((prev) => prev.map((m) => (m.userId === userId ? { ...m, [field]: value } : m)));
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.userId === userId ? { ...m, [field]: value, creditTouched: m.creditTouched || field === 'credit' } : m
+      )
+    );
   };
 
   const saveAttendance = async () => {
@@ -179,9 +217,10 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   const saveCalls = async () => {
     setSaving(true);
     try {
+      const known = new Set(state?.call_types.map((t) => t.slug) ?? []);
       const types: Record<string, number> = {};
       Object.entries(counts).forEach(([slug, v]) => {
-        if (slug !== UNCATEGORISED && num(v) > 0) types[slug] = num(v);
+        if (slug !== UNCATEGORISED && known.has(slug) && num(v) > 0) types[slug] = num(v);
       });
       hydrate(
         await schedulingService.saveCloseoutCalls(shiftId, {
@@ -204,7 +243,18 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
         user_id: m.userId,
         call_count: creditOf(m),
       }));
-      await schedulingService.finalizeShift(shiftId, undefined, { member_call_counts: credits });
+      const opts: {
+        member_call_counts: MemberCallCredit[];
+        pass_down_notes?: string;
+        override_incomplete_checks?: boolean;
+        override_reason?: string;
+      } = { member_call_counts: credits };
+      if (passDownNotes.trim()) opts.pass_down_notes = passDownNotes.trim();
+      if (blocked && overrideChecks) {
+        opts.override_incomplete_checks = true;
+        if (overrideReason.trim()) opts.override_reason = overrideReason.trim();
+      }
+      await schedulingService.finalizeShift(shiftId, undefined, opts);
       toast.success('Shift closed out');
       onFinalized();
     } catch (err: unknown) {
@@ -224,6 +274,10 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   }
   if (!state) return null;
 
+  // Only the department's current types are offered. A count left behind
+  // against a type an admin has since removed would be invisible, counted in
+  // the total, and rejected by the server as an unknown slug with no field to
+  // clear it — so the row list is the authority and stale keys are dropped.
   const rows = state.call_types.map((t) => ({ slug: t.slug, label: t.label }));
   rows.push({ slug: UNCATEGORISED, label: 'Not categorised' });
 
@@ -392,6 +446,50 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
             The department records {totalOrZero} call{totalOrZero === 1 ? '' : 's'} — per-member credit is never added
             into the department’s total.
           </p>
+
+          <div>
+            <label htmlFor="closeout-pass-down" className="text-theme-text-secondary mb-1 block text-xs font-medium">
+              Pass-down to next crew (optional)
+            </label>
+            <textarea
+              id="closeout-pass-down"
+              rows={2}
+              className={`${inputClass} w-full`}
+              placeholder="Apparatus issues, ongoing incidents, staffing notes…"
+              value={passDownNotes}
+              onChange={(e) => setPassDownNotes(e.target.value)}
+            />
+          </div>
+
+          {blocked && (
+            <div className="space-y-2 rounded-md border border-red-500/20 bg-red-500/5 p-2">
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-red-700 dark:text-red-300">
+                <input
+                  type="checkbox"
+                  checked={overrideChecks}
+                  onChange={(e) => setOverrideChecks(e.target.checked)}
+                  className="border-theme-surface-border rounded"
+                />
+                Close out anyway, with {outstandingChecks} equipment check
+                {outstandingChecks === 1 ? '' : 's'} outstanding
+              </label>
+              {overrideChecks && (
+                <input
+                  type="text"
+                  className={`${inputClass} w-full`}
+                  placeholder="Why are the checks outstanding?"
+                  aria-label="Reason for closing out with checks outstanding"
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                />
+              )}
+              <p className="text-xs text-red-600 dark:text-red-300">
+                {overrideChecks
+                  ? 'A reason is required — it goes on the shift’s record.'
+                  : 'Complete the outstanding checks, or tick the box to override.'}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -407,7 +505,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
         </button>
         <button
           type="button"
-          disabled={saving}
+          disabled={saving || (step === 3 && overrideBlocked)}
           onClick={() => {
             if (step === 1) void saveAttendance();
             else if (step === 2) void saveCalls();

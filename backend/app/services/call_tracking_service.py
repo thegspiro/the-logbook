@@ -258,12 +258,20 @@ class CallTrackingService:
             return False, "Call not found"
 
         apparatus_id = str(shift.apparatus_id) if shift.apparatus_id else None
+        # A shift with no apparatus is identified by the shift itself. Matching
+        # on ``apparatus_id == None`` compiles to ``= NULL``, which is never
+        # true, so every attach inserted another row: the unit's tally climbed
+        # on each save and the third one made this query raise.
+        dedupe = (
+            OrgCallResponse.apparatus_id == apparatus_id
+            if apparatus_id is not None
+            else OrgCallResponse.shift_id == str(shift.id)
+        )
         existing = (
             await self.db.execute(
-                select(OrgCallResponse.id).where(
-                    OrgCallResponse.call_id == str(call_id),
-                    OrgCallResponse.apparatus_id == apparatus_id,
-                )
+                select(OrgCallResponse.id)
+                .where(OrgCallResponse.call_id == str(call_id), dedupe)
+                .limit(1)
             )
         ).scalar_one_or_none()
         if existing is not None:

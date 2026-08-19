@@ -73,9 +73,17 @@ const baseState = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const renderWizard = () =>
+const renderWizard = (outstanding = 0, requireChecks = false) =>
   renderWithRouter(
-    <ShiftCloseoutWizard shiftId="sh1" unitLabel="Engine 5" tz="UTC" onCancel={vi.fn()} onFinalized={vi.fn()} />
+    <ShiftCloseoutWizard
+      shiftId="sh1"
+      unitLabel="Engine 5"
+      tz="UTC"
+      outstandingChecks={outstanding}
+      requireChecks={requireChecks}
+      onCancel={vi.fn()}
+      onFinalized={vi.fn()}
+    />
   );
 
 const total = () => screen.getByTestId('call-total').textContent;
@@ -93,6 +101,106 @@ const total = () => screen.getByTestId('call-total').textContent;
 const setValue = (el: HTMLElement, value: string) => {
   fireEvent.change(el, { target: { value } });
 };
+
+describe('a fresh close-out, start to finish', () => {
+  // Every other case here starts mid-flow with a count already stored. That
+  // blind spot let a regression through in which credits seeded to 0 before
+  // any count existed and stayed pinned there once one arrived, so the whole
+  // crew was finalized with zero calls.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetState.mockResolvedValue(baseState());
+    mockSaveAttendance.mockResolvedValue(baseState({ closeout_step: 1 }));
+    mockSaveCalls.mockImplementation((_id: string, body: { reported_call_count: number | null }) =>
+      Promise.resolve(baseState({ closeout_step: 2, reported_call_count: body.reported_call_count ?? 0 }))
+    );
+    mockFinalize.mockResolvedValue({ id: 'sh1' });
+  });
+
+  it('credits the crew the count the officer entered', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(await screen.findByRole('button', { name: 'Next' }));
+    await user.type(await screen.findByLabelText('EMS calls'), '4');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByLabelText('Calls credited to Capt. Morales')).toHaveValue(4);
+    await user.click(screen.getByRole('button', { name: 'Close out shift' }));
+    await waitFor(() => {
+      expect(mockFinalize).toHaveBeenCalledWith('sh1', undefined, {
+        member_call_counts: [
+          { user_id: 'u1', call_count: 4 },
+          { user_id: 'u2', call_count: 4 },
+        ],
+      });
+    });
+  });
+});
+
+describe('close-out blockers the checklist used to own', () => {
+  // The wizard replaces the finalize checklist for these departments, so it
+  // has to carry everything the checklist could do. Without the override an
+  // org that enforces end-of-shift checks could never close a shift at all.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetState.mockResolvedValue(
+      baseState({ closeout_step: 2, reported_call_count: 5, reported_call_types: { ems: 5 } })
+    );
+    mockFinalize.mockResolvedValue({ id: 'sh1' });
+  });
+
+  it('blocks close-out while enforced checks are outstanding', async () => {
+    renderWizard(2, true);
+    expect(await screen.findByText(/Complete the outstanding checks/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Close out shift/ })).toBeDisabled();
+  });
+
+  it('still blocks once overridden until a reason is given', async () => {
+    const user = userEvent.setup();
+    renderWizard(1, true);
+    await user.click(await screen.findByRole('checkbox'));
+    expect(screen.getByRole('button', { name: /Close out shift/ })).toBeDisabled();
+    await user.type(screen.getByLabelText(/Reason for closing out/), 'Truck out of service');
+    expect(screen.getByRole('button', { name: /Close out shift/ })).toBeEnabled();
+  });
+
+  it('sends the override and its reason', async () => {
+    const user = userEvent.setup();
+    renderWizard(1, true);
+    await user.click(await screen.findByRole('checkbox'));
+    await user.type(screen.getByLabelText(/Reason for closing out/), 'Truck out of service');
+    await user.click(screen.getByRole('button', { name: /Close out shift/ }));
+    await waitFor(() => {
+      expect(mockFinalize).toHaveBeenCalledWith(
+        'sh1',
+        undefined,
+        expect.objectContaining({
+          override_incomplete_checks: true,
+          override_reason: 'Truck out of service',
+        })
+      );
+    });
+  });
+
+  it('does not block when the department does not enforce checks', async () => {
+    renderWizard(3, false);
+    await screen.findByText('Does this look right?');
+    expect(screen.getByRole('button', { name: /Close out shift/ })).toBeEnabled();
+  });
+
+  it('carries the crew hand-off note', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.type(await screen.findByLabelText(/Pass-down to next crew/), 'Pump packing leaking');
+    await user.click(screen.getByRole('button', { name: /Close out shift/ }));
+    await waitFor(() => {
+      expect(mockFinalize).toHaveBeenCalledWith(
+        'sh1',
+        undefined,
+        expect.objectContaining({ pass_down_notes: 'Pump packing leaking' })
+      );
+    });
+  });
+});
 
 describe('deriveCallTotal', () => {
   it('returns null when nothing has been entered', () => {
@@ -260,9 +368,12 @@ describe('ShiftCloseoutWizard', () => {
 
   describe('member credit', () => {
     beforeEach(() => {
-      mockGetState.mockResolvedValue(
-        baseState({ closeout_step: 2, reported_call_count: 5, reported_call_types: { ems: 5 } })
-      );
+      const withCalls = () => baseState({ closeout_step: 2, reported_call_count: 5, reported_call_types: { ems: 5 } });
+      mockGetState.mockResolvedValue(withCalls());
+      // The real endpoint echoes what it stored, so the mock must too —
+      // returning a bare state would collapse the total to zero and make
+      // these assertions test the mock rather than the component.
+      mockSaveCalls.mockImplementation(() => Promise.resolve(withCalls()));
     });
 
     it('defaults everyone to the apparatus count', async () => {
@@ -295,6 +406,26 @@ describe('ShiftCloseoutWizard', () => {
       setValue(a, '99');
       fireEvent.blur(a);
       expect(a.value).toBe('5');
+    });
+
+    it('keeps an adjustment made before stepping back and saving again', async () => {
+      // Per-member credit is only persisted at finalize, so the server reports
+      // null for it throughout the wizard. Re-seeding from that response wiped
+      // the one member the officer had singled out — silently, and only for
+      // them, which is the kind of loss nobody notices until the record is
+      // wrong.
+      const user = userEvent.setup();
+      renderWizard();
+      const okonjo = await screen.findByLabelText('Calls credited to FF Okonjo');
+      setValue(okonjo, '2');
+
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Calls credited to FF Okonjo')).toHaveValue(2);
+      });
+      expect(screen.getByLabelText('Calls credited to Capt. Morales')).toHaveValue(5);
     });
 
     it('never sends a member more calls than the apparatus ran', async () => {

@@ -1234,6 +1234,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               shiftId={shift.id}
               unitLabel={shift.apparatus_unit_number || shift.apparatus_name || 'this apparatus'}
               tz={tz}
+              outstandingChecks={endOfShiftChecks.filter((c) => !c.isCompleted).length}
+              requireChecks={requireEndOfShiftChecks}
               onCancel={() => setShowFinalizeChecklist(false)}
               onFinalized={() => {
                 setShowFinalizeChecklist(false);

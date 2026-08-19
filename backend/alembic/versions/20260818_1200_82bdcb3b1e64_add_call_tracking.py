@@ -123,7 +123,6 @@ def upgrade() -> None:
             "org_call_responses",
             ["organization_id", "apparatus_id"],
         )
-        op.create_index("idx_call_response_shift", "org_call_responses", ["shift_id"])
         # A unit responds to a given call once. Without this, re-finalizing a
         # shift adds a duplicate run to the apparatus tally on every correction.
         op.create_unique_constraint(
