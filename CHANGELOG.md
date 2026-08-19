@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A dropped setting is now named instead of silently becoming a default (2026-08-18)
+
+**Added**
+
+- **`python -m app.preflight` reports whether a configuration can start,
+  without starting it.** Until now the first validation of a configuration was
+  the boot that ran on it, so a bad value was discovered by losing the service.
+  Run `docker compose run --rm backend python -m app.preflight` before
+  restarting: exit `0` means it starts, `1` lists what blocks it, `2` means a
+  value is malformed (an empty string for a boolean, which otherwise surfaces
+  as a pydantic traceback). Every blocking check is gated on production or
+  staging, so a development run proves nothing about production — `--as
+production` evaluates the same values under that environment, and a clean
+  development run now says so rather than printing a bare pass.
+
+- **Startup failures name which settings actually reached the process.** Once
+  pydantic applies defaults, "the operator set this to the default" and "this
+  never arrived" are the same value, so a blocked boot reported the effective
+  value and never the reason. `os.environ` still knows the difference, and a
+  blocked startup now prints it:
+
+  ```
+  SECURITY_ENFORCE_HTTPS   set in environment  'false'
+  SECURITY_REQUIRE_TLS     NOT PRESENT — using built-in default True
+  ```
+
+  with the reason a value goes missing: a Docker Compose `environment:` block
+  is a whitelist, and a variable absent from it cannot be set from `.env` at
+  all. The reported names are derived from the settings model, so a future
+  check that names its setting is covered without registering it anywhere.
+  Values of secrets are withheld; only presence is reported, and a value
+  pydantic loaded from a `.env` file is distinguished from a default rather
+  than reported as missing.
+
+**Fixed**
+
+- **Preflight no longer reports success for a TLS configuration that cannot
+  start.** A `DB_SSL_CA` / `REDIS_SSL_CA` path that does not resolve inside the
+  container produces no critical, but aborts startup in
+  `ssl.create_default_context`. Preflight now opens the referenced files and
+  fails with the path named, since the mistake is almost always a host path
+  given to a setting read inside the container.
+
+- **`--as` rejects an unrecognised environment.** Blocking checks run only for
+  production and staging, so a typo such as `--as produciton` ran none of them
+  and still reported success — silently certifying an unchecked configuration.
+
+- **`python -m app.preflight --compose PATH` names the settings a compose file
+  cannot pass through**, before an upgrade starts gating on one of them. The
+  authoritative list is read out of the security validators' own source rather
+  than kept as a list — a list is exactly what goes stale, and staleness is the
+  failure being guarded against. Aimed at hand-maintained compose files that
+  never receive changes from this repository, Unraid's Compose Manager
+  especially; run against the file behind the 2026-08-18 outage it reports
+  `SECURITY_REQUIRE_TLS` among the gaps.
+
+- **`docs/UPGRADING.md`** — read before pulling a new version into a running
+  deployment. Records the changes that can stop an existing deployment from
+  starting (`SECURITY_REQUIRE_TLS` defaulting true, `RATE_LIMIT_ENABLED`
+  becoming enforced) with both ways out of each, and requires an entry for any
+  future change that can block a boot. A fresh install passing is not evidence
+  for these: they only ever fail installations that already existed.
+
 ### Production settings in `.env` now reach the backend container (2026-08-18)
 
 **Fixed**
