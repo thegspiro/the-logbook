@@ -84,6 +84,20 @@ services.
 > users rather than for prospects. Chapters 4–7 are entirely new as of 2026-08-08;
 > any older skills-testing footage past chapter 3 is out of date.
 >
+> **⚠ Re-shoot and re-write list (2026-08-17 → 08-19).** Full disposition in
+> [`SCRIPT_CURRENCY.md`](./SCRIPT_CURRENCY.md). Three scripts have been
+> **rewritten in place** and need re-recording rather than re-queuing:
+>
+> | What changed                                                                                                                                                                                                                                                       | Footage affected                                                                                                     |
+> | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+> | **Shift close-out is a three-step wizard** for departments recording a call count, and the toggle that switches it on sits on the close-out rules card the presenter already stands on                                                                             | Script 4, close-out chapter (rewritten); Script 8, the end-of-shift-checks short                                     |
+> | **The call-volume report says _unit responses_, not calls** — two units on one incident are counted twice until the cross-unit picker ships. A chief narrating "here's your call volume" over that screen is teaching a reporting error with a funding consequence | Script 4, Scheduling Reports (**caveat now written into the take — do not record the old version**)                  |
+> | **NFC tags** on event, admin-hours and shift check-in. Needs a real Android phone and a real tag; it cannot be captured in the screenshot harness and a mocked shot will look wrong                                                                                | Script 6, QR chapter (rewritten); a new short for Script 8                                                           |
+> | **`python -m app.preflight`** — check the configuration before the restart that would otherwise find out by losing the service                                                                                                                                     | Script 1, new chapter before START THE SERVICES (rewritten); Script 3, `--compose` and the sign-in hardening posture |
+>
+> The call-volume caveat is the one that is **wrong rather than dated**: pull any
+> footage that presents that figure as a department call count.
+
 > **⚠ Priority re-shoot (2026-08-08, later the same day).** The permission model
 > changed again after Script 15 was written, and it changes the module's premise
 > rather than a detail: **any member can now run an official skills test**, and

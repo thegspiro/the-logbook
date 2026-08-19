@@ -183,6 +183,39 @@ The Facilities header has a **Print Labels** button that prints a barcode label 
 
 Every station and room gets a kiosk **display code** when it is created, and its QR code opens the room's public kiosk display (`/display/{code}`) for event check-in. The **Check-In QR Codes** page (`/locations/qr-codes`) collects every code in one printable directory, grouped by station/facility, with a search box for large departments. When the Scheduling module is enabled it also lists each apparatus's **shift check-in code** — a permanent QR encoding `/scheduling/checkin?apparatus={id}` that resolves the apparatus's active shift at scan time, so one printed card on the dashboard covers every shift. Two print layouts: **Cut-out cards** (a compact sheet — print, cut out, and post each code) and **Room signs** (one full-page sign per code, sized for posting on a door or dashboard). Reach the page from the **Check-In QR Codes** button on the Locations page, the matching link in a facility's Rooms section, or the command palette (Ctrl/Cmd+K, search "QR"). Rooms in a facility's Rooms section also have their own QR button to view and copy a single room's code in place, and an individual apparatus card is still available from any shift's detail panel.
 
+#### Writing NFC tags for the fleet _(2026-08-18)_
+
+This directory is where a box of NFC tags gets written for a whole fleet in one
+sitting. Each apparatus card carries a **Write NFC tag** action alongside Copy
+URL, Download PNG and Regenerate. Tap it, hold a blank tag to the phone, move to
+the next card.
+
+> **[SCREENSHOT NEEDED — `/locations/qr-codes` on a phone, an apparatus card
+> with its action row showing Copy URL / Download PNG / Regenerate / **Write NFC
+> tag**, mid-write]**
+
+**Write the apparatus tag, not a shift tag.** The apparatus code resolves to
+whichever shift is running when it is used — today's un-finalized shift, or one
+that ended within the last two hours, or the next one coming up. One sticker on
+the dashboard therefore serves every shift for the life of the truck. A tag tied
+to a single shift is dead the moment that shift ends.
+
+The member lands on a page naming the unit, the date and the hours, so they can
+see which truck they were matched to before confirming.
+
+> **Room cards do not offer the button, and that is deliberate.** A room's kiosk
+> display code opens a public, unauthenticated screen and is effectively a
+> check-in credential. Writing it to a sticker in a hallway hands it to whoever
+> walks past — and sending a member's phone to a wall display is not a check-in
+> anyway.
+
+> **A write that fails says so.** You will get an error toast rather than
+> silence. A silent failure looks exactly like a tag that was written, and the
+> first person to find out would be a member tapping a dead sticker at 0600.
+
+> **Chrome on Android, over HTTPS.** The button is simply absent on iPhone, on a
+> desktop, and on a plain-`http://` LAN deployment. Print the QR code for those.
+
 Each card offers **Download PNG** for embedding a code in your own signage documents. Users with `locations.edit` or `locations.manage` also see **Regenerate**: if a printed code leaks or walks off, regenerating issues a new code and the old `/display/{code}` URL stops working immediately — reprint the posted code and update any kiosk tablets afterward. Regenerations are recorded in the audit log.
 
 ---
