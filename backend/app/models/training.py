@@ -2927,6 +2927,15 @@ class Shift(Base):
     call_count = Column(Integer, nullable=True)
     total_hours = Column(Float, nullable=True)
 
+    # How far the officer got through the close-out wizard. NULL/0 = not
+    # started, 1 = attendance times saved, 2 = calls saved; finalizing clears
+    # it. Each step writes its real records as it goes — attendance rows, call
+    # rows — so this marker only says where to resume, never what was entered.
+    # Without it a phone locking on step 2 sends the officer back to step 1,
+    # and a shift with a genuine zero calls is indistinguishable from one whose
+    # count was never asked for.
+    closeout_step = Column(Integer, nullable=True)
+
     # Finalization — officer formally closes the shift after review
     is_finalized = Column(Boolean, default=False, nullable=False, server_default="0")
     finalized_at = Column(DateTime(timezone=True), nullable=True)

@@ -439,6 +439,12 @@ export interface CallVolumeReport {
   period_end: string;
   summary: CallVolumeSummary;
   entries: CallVolumeEntry[];
+  /**
+   * True when the figures count *unit responses* rather than deduplicated
+   * incidents — one call two units rolled on appears twice. Set by the
+   * count-only source, where nothing yet links two units to one incident.
+   */
+  counts_unit_responses?: boolean;
 }
 
 // ============================================================================

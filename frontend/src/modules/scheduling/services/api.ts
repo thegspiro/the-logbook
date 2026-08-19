@@ -23,6 +23,11 @@ import type {
   TimeOffCreate,
   TimeOffReview,
   TimeOffFilters,
+  CallTypeOption,
+  CloseoutState,
+  CloseoutAttendanceEntry,
+  CloseoutCallsPayload,
+  MemberCallCredit,
   ShiftTemplateCreate,
   ShiftTemplateUpdate,
   ShiftPatternCreate,
@@ -155,6 +160,11 @@ export interface SchedulingFeatureSettings {
   restrict_checkin_to_assigned: boolean;
   /** Block seating a driver who lacks the apparatus's required EVOC level. */
   enforce_evoc: boolean;
+  /**
+   * How the department records call volume. Absent means `detailed` — the
+   * behaviour every existing organisation already has.
+   */
+  call_tracking?: { mode: string; call_types: CallTypeOption[] } | null;
 }
 
 export interface PlatoonMember {
@@ -432,6 +442,7 @@ export const schedulingService = {
       override_incomplete_checks?: boolean;
       override_reason?: string;
       pass_down_notes?: string;
+      member_call_counts?: MemberCallCredit[];
     }
   ): Promise<ShiftRecord> {
     const body: Record<string, unknown> = {};
@@ -441,8 +452,34 @@ export const schedulingService = {
       if (opts.override_reason) body.override_reason = opts.override_reason;
     }
     if (opts?.pass_down_notes) body.pass_down_notes = opts.pass_down_notes;
+    if (opts?.member_call_counts?.length) body.member_call_counts = opts.member_call_counts;
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/finalize`, body);
     return normalizeShift(response.data);
+  },
+
+  // -- Resumable close-out -------------------------------------------------
+
+  async getCloseoutState(shiftId: string): Promise<CloseoutState> {
+    const response = await api.get<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout`);
+    return response.data;
+  },
+
+  async saveCloseoutAttendance(shiftId: string, entries: CloseoutAttendanceEntry[]): Promise<CloseoutState> {
+    const response = await api.patch<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout/attendance`, { entries });
+    return response.data;
+  },
+
+  async saveCloseoutCalls(shiftId: string, payload: CloseoutCallsPayload): Promise<CloseoutState> {
+    const body: Record<string, unknown> = {};
+    // null is meaningful here — it clears a previously reported count — so this
+    // checks for undefined rather than using a falsy guard, which would also
+    // drop a legitimate zero.
+    if (payload.reported_call_count !== undefined) {
+      body.reported_call_count = payload.reported_call_count;
+    }
+    if (payload.reported_call_types) body.reported_call_types = payload.reported_call_types;
+    const response = await api.patch<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout/calls`, body);
+    return response.data;
   },
 
   async reopenShift(shiftId: string, reason?: string): Promise<ShiftRecord> {

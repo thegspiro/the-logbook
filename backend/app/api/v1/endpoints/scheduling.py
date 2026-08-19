@@ -37,6 +37,10 @@ from app.schemas.scheduling import (
     BasicApparatusResponse,
     BasicApparatusUpdate,
     CalendarFeedResponse,
+    CallTrackingSettings,
+    CloseoutAttendanceRequest,
+    CloseoutCallsRequest,
+    CloseoutStateResponse,
     EligiblePositionsResponse,
     GenerateShiftsRequest,
     PlatoonBulkAssign,
@@ -573,6 +577,13 @@ async def finalize_shift(
     Optionally include ``manual_hours`` to credit members who did not
     check in/out with a specific number of hours.
 
+    Departments on ``count_only`` call tracking report call volume here:
+    ``reported_call_count`` (the number this apparatus ran), an optional
+    ``reported_call_types`` tally, ``member_call_counts`` for members who were
+    not on every call, and ``attach_call_ids`` for calls another unit already
+    logged that this apparatus was also on — attaching is what keeps a single
+    incident counted once for the department when two units roll.
+
     Once finalized the shift is considered closed and attendance is locked.
 
     **Permissions required:** scheduling.manage, or being the shift's officer.
@@ -587,6 +598,11 @@ async def finalize_shift(
             {"user_id": str(entry.user_id), "hours": entry.hours}
             for entry in body.manual_hours
         ]
+    member_credits = None
+    if body.member_call_counts:
+        member_credits = {
+            str(entry.user_id): entry.call_count for entry in body.member_call_counts
+        }
     shift, error = await service.finalize_shift(
         shift_id,
         current_user.organization_id,
@@ -594,6 +610,12 @@ async def finalize_shift(
         manual_hours=manual,
         override_incomplete_checks=body.override_incomplete_checks,
         pass_down_notes=body.pass_down_notes,
+        reported_call_count=body.reported_call_count,
+        reported_call_types=body.reported_call_types,
+        member_call_counts_in=member_credits,
+        attach_call_ids=(
+            [str(c) for c in body.attach_call_ids] if body.attach_call_ids else None
+        ),
     )
     if not shift:
         raise HTTPException(
@@ -618,6 +640,114 @@ async def finalize_shift(
     # prompt itself, so every finalize path clears it — not just this endpoint.
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
+
+
+@router.get("/shifts/{shift_id}/closeout", response_model=CloseoutStateResponse)
+async def get_shift_closeout_state(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Everything the close-out wizard needs, plus where to resume.
+
+    ``closeout_step`` is 0 before the officer starts, 1 once attendance times
+    are saved and 2 once calls are, so a phone that locked mid-flow reopens on
+    the screen it left rather than at the beginning.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    state, error = await service.get_closeout_state(
+        shift_id, current_user.organization_id
+    )
+    if state is None:
+        raise HTTPException(
+            status_code=404, detail=_safe_detail("Shift not found.", error)
+        )
+    return state
+
+
+@router.patch(
+    "/shifts/{shift_id}/closeout/attendance", response_model=CloseoutStateResponse
+)
+async def save_shift_closeout_attendance(
+    shift_id: UUID,
+    body: CloseoutAttendanceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Step 1 of close-out — record when each member was actually on.
+
+    Saves immediately rather than holding the answer until the last screen, so
+    an interrupted close-out keeps the hours already confirmed.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    state, error = await service.save_closeout_attendance(
+        shift_id,
+        current_user.organization_id,
+        [
+            {
+                "user_id": str(e.user_id),
+                "checked_in_at": e.checked_in_at,
+                "checked_out_at": e.checked_out_at,
+            }
+            for e in body.entries
+        ],
+    )
+    if state is None:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to save attendance.", error),
+        )
+    return state
+
+
+@router.patch("/shifts/{shift_id}/closeout/calls", response_model=CloseoutStateResponse)
+async def save_shift_closeout_calls(
+    shift_id: UUID,
+    body: CloseoutCallsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Step 2 of close-out — record how many calls the apparatus ran.
+
+    ``attach_call_ids`` claims calls another unit already logged, so a single
+    incident two units rolled on counts once for the department and as a run
+    for each of them.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    state, error = await service.save_closeout_calls(
+        shift_id,
+        current_user.organization_id,
+        reported_call_count=body.reported_call_count,
+        reported_call_types=body.reported_call_types,
+        attach_call_ids=(
+            [str(c) for c in body.attach_call_ids] if body.attach_call_ids else None
+        ),
+        recorded_by=str(current_user.id),
+        # Distinguishes "not sent" from an explicit null, so a client that
+        # only attaches calls does not wipe a count it never mentioned.
+        count_provided="reported_call_count" in body.model_fields_set,
+    )
+    if state is None:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to save call count.", error),
+        )
+    return state
 
 
 @router.post("/shifts/{shift_id}/reopen", response_model=ShiftResponse)
@@ -2448,6 +2578,7 @@ async def get_scheduling_feature_settings(
             lifecycle.get("restrict_checkin_to_assigned", False)
         ),
         enforce_evoc=service.get_evoc_enforcement(org),
+        call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
     )
 
 
@@ -2501,6 +2632,14 @@ async def update_scheduling_feature_settings(
                 else None
             ),
             enforce_evoc=(data.enforce_evoc if "enforce_evoc" in fields_set else None),
+            # Guarded like every sibling field: a partial save from another
+            # toggle sends only its own key, and passing the schema default
+            # unconditionally would reset the department's call-type list.
+            call_tracking=(
+                data.call_tracking.model_dump()
+                if "call_tracking" in fields_set and data.call_tracking is not None
+                else None
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -2517,6 +2656,11 @@ async def update_scheduling_feature_settings(
             result.get("restrict_checkin_to_assigned", False)
         ),
         enforce_evoc=bool(result.get("enforce_evoc", True)),
+        call_tracking=CallTrackingSettings(
+            **service.get_call_tracking_settings(
+                await service._get_org(current_user.organization_id)
+            )
+        ),
     )
 
 
