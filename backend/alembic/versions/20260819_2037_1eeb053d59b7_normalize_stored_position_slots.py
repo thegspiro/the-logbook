@@ -34,7 +34,7 @@ have to guess which rows were strings. It leaves the data normalized, which
 every reader — old and new — still understands.
 
 Revision ID: 1eeb053d59b7
-Revises: 8050e5a61f34
+Revises: 2827079fd66c
 Create Date: 2026-08-19
 """
 
@@ -45,7 +45,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "1eeb053d59b7"
-down_revision = "8050e5a61f34"
+down_revision = "2827079fd66c"
 branch_labels = None
 depends_on = None
 
