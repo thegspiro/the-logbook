@@ -1,0 +1,78 @@
+name: Backend database setup
+description: >-
+  Prepare a backend test environment against a running MySQL/MariaDB service
+  container: Python toolchain, system libraries, dependencies, and a schema in
+  the shape production actually runs against.
+
+# `backend-test-integration` and `backend-test-contract` ran the same six
+# setup steps, duplicated verbatim — including a 15-line Python heredoc that
+# encodes production's startup behaviour. Two copies of that is how one of
+# them silently stops matching main.py. This is the single copy.
+#
+# Not everything could move here. A job's `services:` and `env:` blocks are
+# job-level keys and GitHub Actions does not support YAML anchors, so the
+# MySQL/Redis service definitions and the DB_* environment remain duplicated
+# in both jobs by necessity.
+
+inputs:
+  python-version:
+    description: Python version to install.
+    required: false
+    default: "3.13"
+  database:
+    description: >-
+      Database to normalize the collation on. Must match MYSQL_DATABASE in the
+      calling job's mysql service definition.
+    required: false
+    default: intranet_db
+  root-password:
+    description: >-
+      MySQL root password. Must match MYSQL_ROOT_PASSWORD in the calling job's
+      mysql service definition.
+    required: false
+    default: root
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: backend/requirements.txt
+
+    - name: Install system dependencies
+      shell: bash
+      run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
+
+    - name: Install Python dependencies
+      shell: bash
+      working-directory: ${{ github.workspace }}/backend
+      run: pip install -r requirements.txt
+
+    # Service containers cannot take command-line flags, so the server runs its
+    # stock default collation (utf8mb4_0900_ai_ci on MySQL 8.0,
+    # utf8mb4_general_ci on MariaDB) while docker-compose runs
+    # --collation-server=utf8mb4_unicode_ci. Migrations create some tables with
+    # an explicit unicode_ci collation, and a FK across two collations fails
+    # with error 3780. This ALTER normalizes either default.
+    - name: Align database collation with production
+      shell: bash
+      env:
+        MYSQL_PWD: ${{ inputs.root-password }}
+      run: |
+        mysql --host 127.0.0.1 --port 3306 -uroot \
+          -e "ALTER DATABASE ${{ inputs.database }} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+    - name: Run database migrations
+      shell: bash
+      working-directory: ${{ github.workspace }}/backend
+      run: alembic upgrade head
+
+    # Mirrors what production startup does after migrations; see the module
+    # docstring in the script for the seven contract failures that came from
+    # omitting it.
+    - name: Repair schema to model shape (mirrors production startup)
+      shell: bash
+      working-directory: ${{ github.workspace }}/backend
+      run: python scripts/repair_schema.py

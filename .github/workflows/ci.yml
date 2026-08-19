@@ -329,59 +329,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-          cache: pip
-          cache-dependency-path: backend/requirements.txt
-
-      - name: Install system dependencies
-        # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19
-        # it stalled long enough to consume a whole job budget. The script
-        # skips apt when the library is already there and bounds it when it
-        # is not — see its header for the incident.
-        run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
-
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Align database collation with production
-        # Service containers can't take command-line flags, so the server runs
-        # its stock default collation (utf8mb4_0900_ai_ci on MySQL 8.0,
-        # utf8mb4_general_ci on MariaDB) while docker-compose runs
-        # --collation-server=utf8mb4_unicode_ci. Migrations create some tables
-        # with an explicit unicode_ci collation, and FKs across two collations
-        # fail (error 3780). This ALTER normalizes either default.
-        run: |
-          mysql --host 127.0.0.1 --port 3306 -uroot -proot \
-            -e "ALTER DATABASE intranet_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-
-      - name: Run database migrations
-        run: alembic upgrade head
-
-      - name: Repair schema to model shape (mirrors production startup)
-        # Deployments don't rely on the migration chain alone: startup runs
-        # create_all(checkfirst=True) plus a missing-column repair, which is
-        # how model-only tables (positions, skill_templates, ...) and
-        # later-model columns materialize. Mirror that here so the test
-        # database matches what production actually runs against.
-        run: |
-          python - <<'PYEOF'
-          from sqlalchemy import create_engine
-          from sqlalchemy.pool import NullPool
-
-          from app.core.config import settings
-          from main import _add_missing_model_columns, _import_all_models
-
-          _import_all_models()
-          from app.core.database import Base
-
-          engine = create_engine(settings.SYNC_DATABASE_URL, poolclass=NullPool)
-          with engine.begin() as conn:
-              Base.metadata.create_all(conn, checkfirst=True)
-          _add_missing_model_columns(engine)
-          print("Schema repair complete")
-          PYEOF
+      - name: Set up backend against the database service
+        uses: ./.github/actions/backend-db-setup
 
       - name: Probe async DB connectivity (aiomysql)
         # The test session's database_manager.connect() fails its first
@@ -441,10 +390,10 @@ jobs:
         # without a single test regressing (670 passed, 0 failed).
         #
         # The whole-app ratchet lives on `Backend Unit Tests`
-        # (`--cov-fail-under=46`), which measures the same denominator from
-        # the subset that actually drives most of it. Two gates on one
-        # denominator cannot both be ratchets — one of them just breaks. If
-        # this job should gate again, it needs its own denominator (the
+        # (`--cov-fail-under`, 51 as of 2026-08-19), which measures the same
+        # denominator from the subset that actually drives most of it. Two
+        # gates on one denominator cannot both be ratchets — one of them just
+        # breaks. If this job should gate again, it needs its own denominator (the
         # modules integration tests target) or combined coverage across both
         # jobs, not a second whole-app floor.
         run: |
@@ -514,66 +463,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-          cache: pip
-          cache-dependency-path: backend/requirements.txt
-
-      - name: Install system dependencies
-        # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19
-        # it stalled long enough to consume a whole job budget. The script
-        # skips apt when the library is already there and bounds it when it
-        # is not — see its header for the incident.
-        run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
-
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Align database collation with production
-        # See backend-test-integration for why: the stock server default
-        # (utf8mb4_0900_ai_ci on MySQL, utf8mb4_general_ci on MariaDB) differs
-        # from the unicode_ci that migrations assume, and FKs across two
-        # collations fail with error 3780.
-        run: |
-          mysql --host 127.0.0.1 --port 3306 -uroot -proot \
-            -e "ALTER DATABASE intranet_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-
-      - name: Run database migrations
-        run: alembic upgrade head
-
-      - name: Repair schema to model shape (mirrors production startup)
-        # Same step, same reason as backend-test-integration — and this job
-        # needs it more, because it boots the real app and asserts on what
-        # every public endpoint returns.
-        #
-        # 37 tables exist in the models with no migration that creates them
-        # (`integrations`, `approval_step_records`, `positions`,
-        # `skill_templates`, …); they materialize from startup's
-        # create_all(checkfirst=True). Without this step the contract suite
-        # ran against a database missing them, and every public endpoint that
-        # reads one answered 500 "Internal server error" instead of its
-        # documented 404 — the four inbound webhooks (documenso, calcom,
-        # salesforce, paypal) on `integrations`, and the three finance
-        # approval-token routes on `approval_step_records`. Seven failures,
-        # one missing step: the endpoints were fine, the schema was not.
-        run: |
-          python - <<'PYEOF'
-          from sqlalchemy import create_engine
-          from sqlalchemy.pool import NullPool
-
-          from app.core.config import settings
-          from main import _add_missing_model_columns, _import_all_models
-
-          _import_all_models()
-          from app.core.database import Base
-
-          engine = create_engine(settings.SYNC_DATABASE_URL, poolclass=NullPool)
-          with engine.begin() as conn:
-              Base.metadata.create_all(conn, checkfirst=True)
-          _add_missing_model_columns(engine)
-          print("Schema repair complete")
-          PYEOF
+      - name: Set up backend against the database service
+        uses: ./.github/actions/backend-db-setup
 
       # Schemathesis generates requests from the OpenAPI schema and asserts
       # every response matches what the endpoint declares. The suite drives a
