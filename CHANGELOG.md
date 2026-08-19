@@ -7,6 +7,137 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fleet tags: write a vehicle's check-in tag from the QR directory (2026-08-18)
+
+**Added**
+
+- **`/locations/qr-codes` can now program the tag as well as print the code.**
+  That page is already the department's directory of every check-in code, one
+  card per apparatus, so it is where a box of tags gets written for a fleet in
+  one sitting. **Write NFC tag** joins Copy URL / Download PNG / Regenerate in
+  each card's existing action row — no second card, no reflow of the grid.
+- `NfcTagWriteButton` is the compact form of the writer for rows of small
+  actions. Feedback goes through toasts rather than inline alerts on purpose:
+  the directory is a print-oriented grid of fixed-size cards, and an inline
+  status block would reflow every card beside it mid-write.
+- **A write failure raises a toast rather than passing silently.** With no
+  inline slot to report into, the alternative is a member discovering it by
+  tapping a dead sticker — a silent failure looks exactly like a tag that was
+  written.
+
+**Notes on what already worked**
+
+- **The vehicle tag → shift → member chain needed no new code.** A tag holding
+  `/scheduling/checkin?apparatus=<id>` resolves through
+  `get_active_shift_for_apparatus` (today's non-finalized shift, else one that
+  ended within two hours, else the next upcoming) and `member_check_in` writes
+  the `ShiftAttendance` row for the authenticated member. `ShiftCheckInPage`
+  names the unit, date and hours on screen so the member can see which truck
+  they were matched to before they confirm.
+- **Whether a non-rostered member may check in is already an org setting** —
+  `restrict_checkin_to_assigned`, off by default, toggled under Scheduling →
+  Settings, read by `member_check_in`, and covered by
+  `test_restrict_checkin_to_assigned`. Nothing here changes that behaviour.
+- **The button gates itself on `parseNfcTagPath`**, so it appears on apparatus
+  cards and not on the room kiosk cards beside them — those encode
+  `/display/{code}`, which the parser refuses by design. Offering to write a
+  tag no reader would honour is worse than offering nothing, so one rule now
+  governs both ends.
+
+### NFC tags work across modules, not just events (2026-08-18)
+
+**Added**
+
+- **Shift check-in and admin hours clock-in are now taggable**, alongside event
+  check-in. `/admin-hours/categories/:id/qr-code` gains the tag writer beside
+  its QR code, and the apparatus check-in QR on the shift detail panel does
+  too. **Tap Tag** — which routes by what the tag says rather than by where the
+  button lives — is now on the Events page, My Admin Hours, and the scheduling
+  calendar.
+- **Prefer an apparatus-keyed shift tag for anything physically mounted.**
+  `/scheduling/checkin?apparatus=` resolves to whichever shift is running when
+  the tag is tapped, so one tag on the truck serves every shift; a shift-keyed
+  tag is dead the moment that shift ends. `buildShiftCheckInUrl` takes
+  `{ apparatusId }` or `{ shiftId }` so the choice is explicit at the call site.
+
+**Changed**
+
+- **`parseEventTagPath` is now `parseNfcTagPath`, driven by a target registry**
+  (`TAG_TARGETS` in `constants/nfc.ts`, keyed by `NfcTagTarget` in
+  `constants/enums.ts`). It returns `{ target, path }` rather than a bare
+  string. Adding a module means adding one spec, not another parser — and the
+  registry is the whole reachable surface, so what a tag may point at stays
+  reviewable in one place.
+- **The parser handles query-string routes, which it previously stripped.**
+  Shift check-in is `/scheduling/checkin?shift=` or `?apparatus=`, so refusing
+  every query parameter would have made it untaggable. Rather than passing the
+  query through, a spec now _names_ the parameters that may carry an id: each
+  value is validated against the same id pattern as a path segment, only the
+  first valid one survives, and **the route is rebuilt from those pieces**. A
+  parameter the spec does not name is dropped, so a tag cannot smuggle `?next=`
+  past the parser by hanging it off a route that is otherwise legitimate.
+  `shift` is checked before `apparatus` because `ShiftCheckInPage` reads it
+  first — a parsed route has to mean what the page will do with it.
+- **`/display/:code` is deliberately not taggable.** It is a public,
+  unauthenticated kiosk screen for a tablet left in a room, keyed by a
+  non-guessable code. Writing that code to a tag anyone can read hands it to
+  whoever walks past, and sending a member's phone to a wall display is not a
+  check-in. There is a test asserting it stays rejected.
+- **The four remaining hand-built check-in URLs now go through the shared
+  builders** — `RoomQRCodesPage`, `ShiftCheckInPrintPage`, `ShiftDetailPanel`
+  and `AdminHoursQRCodePage` each assembled their own copy of a route the
+  parser has to recognize, which is exactly the drift that makes a tag scan as
+  valid in one place and unknown in another.
+- `NfcTagWriter` takes an `actionNoun` ("clock-in", "shift check-in"), so its
+  copy reads correctly outside events instead of calling everything check-in.
+
+### Events: NFC tags as a second way in to check-in (2026-08-18)
+
+**Added**
+
+- **A station can mount a reusable NFC sticker instead of reprinting a QR sheet
+  per event.** `/events/:id/qr-code` now offers **Write to an NFC tag**, which
+  encodes that event's check-in URL onto a blank tag via Web NFC. Members tap
+  the tag with their phone and land on the same
+  `/events/:id/check-in` page the QR code opens — no camera, which is the part
+  that fails in a dark apparatus bay or with gloves on.
+- **Tap Tag on the Events page** reads a tag while the app is already open, for
+  the case Android does not cover on its own: with the app in the foreground,
+  the OS does not hand a URL tag off to the browser, so a member holding a phone
+  they are already using would otherwise have to close the app to use the tag.
+
+**A tag is untrusted input, and is treated as such.** Anyone with a phone can
+write an NFC tag, so the payload read off one is on par with a scanned QR code
+rather than with configuration. `parseEventTagPath` in `constants/nfc.ts`
+resolves the payload against the app's own origin, rejects anything that does
+not land back on that exact origin — which also disposes of `javascript:` and
+`data:`, whose origin parses as `"null"` — and accepts only the two known event
+paths. It returns the **normalized** route, never the raw string, so a tap hands
+react-router a fixed-shape path instead of assigning an attacker-supplied URL to
+`window.location`. An unrecognized tag leaves the scan armed and says so rather
+than navigating somewhere unintended.
+
+**Notes**
+
+- Web NFC is Chrome-on-Android and secure-context only. `NDEFReader` is declared
+  in `types/webnfc.d.ts` as an optional property of `Window` rather than as a
+  global class, so the feature test is the only route to the constructor and an
+  unguarded `new NDEFReader()` fails to compile instead of throwing on a
+  member's phone.
+- Where NFC is unavailable, the QR code is unchanged and remains the primary
+  path. The writer collapses to one explanatory line rather than disappearing —
+  a chief planning a tag rollout is usually at a desktop, where the writer can
+  never run, and that page is the only place the capability is documented. The
+  reader button hides entirely, being a pure action with nothing to explain.
+- `getNfcUnavailableReason()` separates an insecure origin from a browser that
+  never shipped the API. Both present identically as a missing `NDEFReader`, and
+  an admin on plain HTTP over a LAN IP needs to be told which one they hit.
+- Both hooks abort through an `AbortController` on cancel and on unmount.
+  `NDEFReader.write()` does not resolve when called — it arms the radio and
+  stays pending until a tag is physically present — so without the abort, a
+  member who changes their mind leaves the device armed and the next tag that
+  passes near the phone is silently overwritten.
+
 ### A dropped setting is now named instead of silently becoming a default (2026-08-18)
 
 **Added**
@@ -9398,16 +9529,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario                                      | Behavior                                                                         |
+| Scenario | Behavior |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
-| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
-| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
-| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
-| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
-| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 

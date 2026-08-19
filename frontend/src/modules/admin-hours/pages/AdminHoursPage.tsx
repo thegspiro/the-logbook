@@ -14,6 +14,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate, formatTime, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
+import { NfcTapButton } from '../../../components/nfc/NfcTapButton';
 
 const PAGE_SIZE = 20;
 
@@ -182,9 +183,12 @@ const AdminHoursPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-6">
-        <h1 className="text-theme-text-primary text-3xl font-bold">My Admin Hours</h1>
-        <p className="text-theme-text-secondary mt-1">Track and view your administrative hours</p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-theme-text-primary text-3xl font-bold">My Admin Hours</h1>
+          <p className="text-theme-text-secondary mt-1">Track and view your administrative hours</p>
+        </div>
+        <NfcTapButton />
       </div>
 
       {/* Active Session Card */}

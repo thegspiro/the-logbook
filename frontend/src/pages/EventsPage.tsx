@@ -51,6 +51,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
+import { NfcTapButton } from '../components/nfc/NfcTapButton';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
@@ -600,6 +601,7 @@ export const EventsPage: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <NfcTapButton />
             {sortedEvents.length > 0 && (
               <button
                 onClick={handleExportCSV}
