@@ -13,10 +13,17 @@ interface Props {
 
 export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
   const { summary } = data;
+  // Name the figure for what it actually is. Where two units on one incident
+  // are still counted twice, calling the number "calls" overstates the
+  // department's volume; "unit responses" is true either way.
+  const unitResponses = data.counts_unit_responses === true;
+  const totalLabel = unitResponses ? 'Unit Responses' : 'Total Calls';
+  const perDayLabel = unitResponses ? 'Avg Responses/Day' : 'Avg Calls/Day';
+  const peakLabel = unitResponses ? 'Peak Responses' : 'Peak Calls';
 
   const columns = [
     { key: 'date', header: 'Date' },
-    { key: 'total_calls', header: 'Total Calls', align: 'right' as const },
+    { key: 'total_calls', header: totalLabel, align: 'right' as const },
     {
       key: 'by_type',
       header: 'Breakdown',
@@ -40,11 +47,17 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
   return (
     <div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total Calls" value={summary.total_calls} />
-        <StatCard label="Avg Calls/Day" value={summary.avg_calls_per_day.toFixed(1)} />
+        <StatCard label={totalLabel} value={summary.total_calls} />
+        <StatCard label={perDayLabel} value={summary.avg_calls_per_day.toFixed(1)} />
         <StatCard label="Busiest Day" value={summary.busiest_day} />
-        <StatCard label="Peak Calls" value={summary.busiest_day_count} />
+        <StatCard label={peakLabel} value={summary.busiest_day_count} />
       </div>
+
+      {unitResponses && (
+        <p className="text-theme-text-muted mb-4 text-xs">
+          Counts each apparatus&rsquo;s responses. An incident two units attended is counted once for each of them.
+        </p>
+      )}
 
       {Object.keys(summary.by_type_totals).length > 0 && (
         <div className="mb-4">

@@ -1339,6 +1339,14 @@ class ReportsService:
             "period_start": str(period_start),
             "period_end": str(period_end),
             "source": "call_counts",
+            # Until a closing officer can say "we were on that one too", each
+            # unit reports its own tour independently and nothing links two
+            # units to one incident. So this figure counts *unit responses*:
+            # an MVA that an engine and a medic both ran appears as two. The
+            # flag travels with the data so a report cannot silently present
+            # it as a deduplicated incident count — the number is truthful
+            # under one name and overstated under the other.
+            "counts_unit_responses": True,
             "summary": {
                 "total_calls": total_calls,
                 "avg_calls_per_day": round(total_calls / num_days, 1),
