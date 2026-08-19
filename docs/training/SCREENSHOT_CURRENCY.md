@@ -90,18 +90,53 @@ because that is what a capture run has to set up and the marker cannot carry.
 
 ### Capture constraints for this batch
 
-- **The NFC captures need a real Android phone on HTTPS.** Web NFC is not
-  available in the headless Chromium the screenshot harness drives, and it is
-  not available over `http://` at all. These cannot be added to
-  `manifest.mjs` — they are manual captures, like the camera-viewfinder shots
-  recorded under the 2026-08-12 entry below.
-- **The close-out wizard captures _can_ be automated** and should be added to
-  `manifest.mjs`, but they need the demo department switched to
-  `call_tracking.mode = "count_only"` and a seeded past shift with a
-  four-person crew. `seed_demo_data.py` does not create that state today.
-- **Do not shoot the wizard against a department left in count-only mode
-  permanently** — the detailed-mode captures in guide 03 have to keep being
-  re-shootable, so the seed needs both departments or a toggle in the run.
+**Four of the six guide-03 captures are now automated** _(2026-08-19)_ —
+`03-74-settings-call-count-toggle`, `03-75-closeout-step1-attendance`,
+`03-76-closeout-step2-calls` and `03-77-closeout-step3-confirm`. They run
+against a dedicated fixture the seeder builds: a past **24-hour tour with four
+crew**, one member checked in but never out, and one assigned member with no
+attendance row at all. Both of those last two are states no other seeded shift
+carries, because `_seed_shift_attendance` checks every past crew fully in and
+out — right for every other shift, useless for this one.
+
+Three things about that group are worth knowing before editing it:
+
+- **Each shot forces the organization's call-tracking mode**, and
+  `03-45-finalize-checklist` forces it back. The mode decides which of two
+  entirely different close-out screens renders, either shot may run first, and a
+  shot that inherited the wrong mode would still **succeed** — it would just
+  write the wrong picture under the right filename. This is the same
+  self-healing rule `capture.mjs` applies to `navigationLayout`.
+- **Each shot walks the wizard from step 1.** The server remembers how far the
+  last run advanced (`shifts.closeout_step`) and reopens there, so without the
+  rewind a second capture run would open at step 3 and the "step 1" shot would
+  quietly contain step 3.
+- **Nothing clicks "Close out shift".** That finalizes, and a finalized shift
+  will not reopen the wizard — one capture run would spend the fixture for every
+  run after it. If the fixture is ever finalized by hand, the seeder says so and
+  refuses to reuse it rather than silently building a second one.
+
+**Two of the six are still manual, with the specific blocker for each:**
+
+- **Close-out with outstanding end-of-shift checks.** Needs
+  `require_end_of_shift_checks` on _and_ a shift with an outstanding check.
+  Equipment-check templates resolve by apparatus type and the demo department
+  writes its checklists for **engines**, while the close-out fixture is
+  deliberately a Medic — putting it on an engine would let it race
+  `03-45-finalize-checklist` for the same shift. Closing this needs either an
+  engine-typed second fixture or a medic checklist template in the seed.
+- **Reports → Call Volume in count-only mode.** Needs actual `org_calls` rows,
+  and the fixture has none: calls are written by the wizard, and the wizard
+  shots deliberately stop short of finalizing. Closing this needs the seeder to
+  POST `PATCH /scheduling/shifts/{id}/closeout/calls` against a _second_ past
+  shift — one the wizard captures do not use, so the two do not fight over
+  `closeout_step`.
+
+**The NFC captures cannot be automated at all.** Web NFC does not exist in the
+headless Chromium the harness drives, and it is not exposed over `http://`
+either. They are manual captures on a real Android phone, like the
+camera-viewfinder shots recorded under the 2026-08-12 entry below, and they must
+not be added to `manifest.mjs`.
 
 ## Tracker corrected 2026-08-17 — the count was never 421 of 423
 

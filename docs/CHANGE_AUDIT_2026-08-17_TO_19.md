@@ -295,23 +295,29 @@ covered by a test in `backend/tests/test_call_tracking.py` (70 tests) or
 
 Full disposition in
 [`youtube-scripts/SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
-Summary:
+Summary — **all five affected scripts are now rewritten in place**, so nothing
+behavioural from this window is left sitting in the queue:
 
-- **04 — Fire Chief / Leadership**: **WRONG for count-only departments.** The
-  close-out walkthrough narrates the single checklist. Needs a branch, and the
-  call-volume figure needs the unit-responses caveat said out loud — a chief
-  reading "400 calls" off a screen that means "400 unit responses" will put the
-  wrong number in a grant application.
-- **08 — Quick Tips & Shorts**: close-out tip re-shoots as a wizard walkthrough;
-  a new short on NFC tags is the obvious addition.
-- **01 — Installing The Logbook**: add the preflight check before the first
-  `docker compose up`. It is the single highest-value 60 seconds available in
-  that script — it turns "find the configuration problem by losing the service"
-  into a command run beforehand.
-- **06 — Member Guide**: NFC tap as a second way in to check-in, and the
-  Android-only caveat.
-- **03 — IT Manager**: preflight and `--compose`; the CAPTCHA/breached-password
-  posture and which way each fails.
+- **04 — Fire Chief / Leadership** _(WRONG, corrected in-script)_. The close-out
+  chapter narrated the single checklist and never mentioned the toggle sitting
+  on the very card the presenter stands on. Worse, Scheduling Reports sent a
+  chief to a figure labelled **unit responses** — a chief reading "400 calls"
+  off a screen that means "400 unit responses" puts the wrong number in a grant
+  application. Both are now in the take; pull any existing footage of the
+  reports beat.
+- **08 — Quick Tips & Shorts** _(written in-script)_. Short 8J gains a shooting
+  note: film it on a detailed-mode department, where it stays correct as filmed.
+  New short **8AG, "Tap Instead of Scan"**, covers NFC.
+- **01 — Installing The Logbook** _(written in-script)_. New chapter **CHECK IT
+  BEFORE YOU START IT** ahead of START THE SERVICES. The highest-value 60
+  seconds available in the series: it turns "find the configuration problem by
+  losing the service" into a command run beforehand.
+- **03 — IT Manager** _(written in-script)_. Chapter 5 gains the brute-force
+  stack and — the load-bearing part — which controls fail **open** and which
+  fail **closed**. Chapter 9 gains preflight and `--compose`.
+- **06 — Member Guide** _(written in-script)_. NFC tap as a second way in, with
+  the Android-only limitation said plainly rather than buried: a member who
+  tries it on an iPhone and fails will assume the app is broken.
 
 ## Verification checklist
 

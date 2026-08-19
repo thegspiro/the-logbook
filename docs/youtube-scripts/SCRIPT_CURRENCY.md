@@ -52,19 +52,22 @@ Reports grows by **~15 seconds** for the caveat. Both sit inside existing
 chapters, so **only the bands from 19:45 onward re-time**, not the whole script.
 Final timecodes are a recording-production task.
 
-### 08 — Quick Tips & Shorts · **one short re-shoots, one short is new**
+### 08 — Quick Tips & Shorts · **written in-script 2026-08-19**
 
-- **The existing end-of-shift-checks short** (`**[SCREEN: An officer opening the
-finalize dialog with checks outstanding …]**`, ~3:64 region) still holds for
-  detailed-mode departments, but for a count-only department the override now
-  lives on the **last step of the wizard**, not in a dialog. Shoot the same beat
-  on the wizard, or caption the existing one.
-- **New short: "Tap instead of scan."** NFC tags are made for this format —
-  hold a phone to a sticker on the truck, land on check-in, done in twenty
-  seconds. The whole caveat fits in one line at the end: _"Chrome on Android,
-  over HTTPS. Everyone else uses the QR code."_
+- **Short 8J** (end-of-shift checks) still holds for detailed-mode
+  departments, but for a count-only department the override moved to the **last
+  step of the wizard** rather than the dialog it shows. A shooting note is now
+  in the short itself: film it on a detailed-mode department, which keeps the
+  take correct as filmed, and do not mix both screens into one 50-second clip —
+  a viewer has to recognise their own screen immediately or the format fails.
+- **New short 8AG, "Tap Instead of Scan"**, is written. Needs a **real Android
+  phone and a real tag**; it cannot be captured in the harness, and anyone who
+  has used NFC will spot a staged shot. Its production note also rules out
+  shooting it on a room kiosk card — those are deliberately not taggable, and
+  showing a viewer hunting for a button that is correctly absent teaches the
+  wrong thing.
 
-### 01 — Installing The Logbook · **Incomplete — written in-script 2026-08-19**
+### 01 — Installing The Logbook · **written in-script 2026-08-19**
 
 A new chapter, **CHECK IT BEFORE YOU START IT (10:45 – 11:00)**, now sits ahead
 of START THE SERVICES in the script. It adds the preflight check before the
@@ -88,9 +91,9 @@ useless:
 **EDITOR:** lands inside the existing pre-launch chapter. Budget **60–80
 seconds**; no chapter re-ordering.
 
-### 03 — IT Manager / System Admin · **INCOMPLETE**
+### 03 — IT Manager / System Admin · **written in-script 2026-08-19**
 
-Two additions, both post-setup and both in scope for this script:
+Two sections added to the script body, both post-setup and both in scope:
 
 - **`python -m app.preflight --compose PATH`** — names the settings a compose
   file _drops_, i.e. values sitting in `.env` that never reach the container.
@@ -107,9 +110,25 @@ Two additions, both post-setup and both in scope for this script:
   origins, and a misconfigured provider presents as _"the challenge never
   appears"_ rather than as an error.
 
-**EDITOR:** ~90 seconds total, both inside existing chapters.
+Written as **Chapter 5 → "Brute-force protection, and which way each control
+fails"** and **Chapter 9 → "Ask before you restart"**.
 
-### 06 — Member Guide · **Incomplete — written in-script 2026-08-19**
+**Do not let a delivery pass compress the fail-open / fail-closed beat into
+"both are security checks."** That they fail in opposite directions is the
+entire content of the section — breached-password checking must not block a
+password change during an outage, and CAPTCHA must not admit unverified traffic
+during one. An editor smoothing those into one sentence removes the only thing
+a viewer needed to hear.
+
+**Demo environment:** the `--compose` beat needs a compose file that genuinely
+drops a setting present in `.env`. Without that fixture the command prints an
+empty list and the section has nothing behind it.
+
+**EDITOR:** ~2:30 total, both inside existing chapters. Chapter 5's addition
+re-times everything from 17:30 onward; Chapter 9's re-times only Chapter 9 and
+the last rows of the clip table.
+
+### 06 — Member Guide · **written in-script 2026-08-19**
 
 `### QR CODE CHECK-IN (6:30 – 7:30)` has gained the NFC alternative in-script.
 The added narration keeps it short, because for most members it is one extra
