@@ -175,7 +175,8 @@ jobs:
         # it stalled long enough to consume a whole job budget. The script
         # skips apt when the library is already there and bounds it when it
         # is not — see its header for the incident.
-        run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
+        run: |
+          "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
       - name: Install security tools
         run: pip install bandit pip-audit
@@ -223,7 +224,8 @@ jobs:
         # it stalled long enough to consume a whole job budget. The script
         # skips apt when the library is already there and bounds it when it
         # is not — see its header for the incident.
-        run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
+        run: |
+          "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt

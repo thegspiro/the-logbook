@@ -43,7 +43,8 @@ runs:
 
     - name: Install system dependencies
       shell: bash
-      run: "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
+      run: |
+        "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
     - name: Install Python dependencies
       shell: bash
