@@ -1,0 +1,4 @@
+# Never commit certificate material.
+*
+!.gitignore
+!README.md

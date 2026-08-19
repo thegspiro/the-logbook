@@ -29,10 +29,19 @@ Usage:
     python3 scripts/screenshots/audit_images.py --check edges    # one check
     python3 scripts/screenshots/audit_images.py --dir path/to/images
 
-Exit code is 0 when nothing is flagged, 1 when something is, so it can gate CI.
+    # what CI runs: fail only on findings that are not already known
+    python3 scripts/screenshots/audit_images.py \
+        --baseline scripts/screenshots/audit_baseline.txt
 
-Requires Pillow (`pip install pillow`). It is deliberately not a dependency of
-the capture pipeline — this is an occasional audit, not part of a run.
+Without `--baseline` every finding is reported and the exit code is 1 if there
+are any — the ad-hoc audit. With one, known filenames are reported but tolerated
+and only *new* findings fail, which is what makes this runnable against an
+existing backlog. A baselined image that no longer flags also fails, so the list
+shrinks as work is done instead of silently suppressing future regressions on
+those same files.
+
+Requires Pillow, already pinned for the backend (`backend/requirements.txt`).
+It is deliberately not part of a capture run — this is an occasional audit.
 """
 
 from __future__ import annotations
@@ -58,10 +67,16 @@ def _luma(pixel: tuple[int, int, int]) -> float:
 
 
 def _mean_luma(image: Image.Image, sample: int = 32) -> float:
-    """Average brightness of the whole image, from a cheap downscale."""
-    thumb = image.resize((sample, sample))
-    pixels = list(thumb.getdata())
-    return sum(_luma(px) for px in pixels) / len(pixels)
+    """Average brightness of the whole image, from a cheap downscale.
+
+    Reads the raw buffer rather than `getdata()`, which Pillow deprecates in 14
+    — the replacement (`get_flattened_data`) does not exist in the pinned 12.3,
+    so the buffer is the option that works on both without a warning.
+    """
+    raw = image.resize((sample, sample)).tobytes()  # RGB, 3 bytes per pixel
+    count = len(raw) // 3
+    total = sum(_luma((raw[i], raw[i + 1], raw[i + 2])) for i in range(0, count * 3, 3))
+    return total / count
 
 
 def check_unpainted_gutter(image: Image.Image) -> str | None:
@@ -134,6 +149,18 @@ CHECKS = {
 }
 
 
+def load_baseline(path: Path) -> set[str]:
+    """Filenames already known to be flagged. Blank lines and `#` are ignored."""
+    if not path.exists():
+        return set()
+    entries = set()
+    for raw in path.read_text().splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line:
+            entries.add(line)
+    return entries
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--dir", type=Path, default=DEFAULT_IMAGE_DIR)
@@ -142,6 +169,15 @@ def main() -> int:
         choices=sorted(CHECKS),
         action="append",
         help="run only this check (repeatable); default runs all",
+    )
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help=(
+            "file of already-known flagged filenames. Those are reported but do "
+            "not fail; anything new does. This is what makes the check usable in "
+            "CI against a backlog."
+        ),
     )
     args = parser.parse_args()
 
@@ -176,17 +212,52 @@ def main() -> int:
     for name in selected:
         print(f"  - {name}: {CHECKS[name][1]}")
 
-    if not findings:
-        print("\nNothing flagged.")
+    if args.baseline is None:
+        # Ad-hoc audit: report everything, and say so by exiting non-zero.
+        if not findings:
+            print("\nNothing flagged.")
+            return 0
+        print(f"\n{len(findings)} flagged:\n")
+        for filename, check_name, detail in findings:
+            print(f"  {filename}\n      [{check_name}] {detail}")
+        print(
+            "\nRecord these in docs/training/SCREENSHOT_CURRENCY.md with the"
+            "\nmeasurement, not as 'check everything' — the point of this script"
+            "\nis the short list."
+        )
+        return 1
+
+    known = load_baseline(args.baseline)
+    flagged = {name for name, _, _ in findings}
+    new = [f for f in findings if f[0] not in known]
+    # A baselined image that no longer flags has been fixed. Failing on that is
+    # deliberate: it costs one deleted line and keeps the baseline shrinking,
+    # whereas tolerating stale entries lets it suppress real regressions on those
+    # exact files forever.
+    stale = sorted(known - flagged)
+
+    if known:
+        print(f"\n{len(known - set(stale))} known, from {args.baseline.name}")
+
+    if not new and not stale:
+        print("No new findings.")
         return 0
 
-    print(f"\n{len(findings)} flagged:\n")
-    for filename, check_name, detail in findings:
-        print(f"  {filename}\n      [{check_name}] {detail}")
-    print(
-        "\nRecord these in docs/training/SCREENSHOT_CURRENCY.md with the measurement,"
-        "\nnot as 'check everything' — the point of this script is the short list."
-    )
+    if new:
+        print(f"\n{len(new)} NEW — not in the baseline:\n")
+        for filename, check_name, detail in new:
+            print(f"  {filename}\n      [{check_name}] {detail}")
+        print(
+            "\nEither re-capture these, or add them to"
+            f"\n{args.baseline} with a note saying why they are acceptable."
+        )
+
+    if stale:
+        noun = "entry" if len(stale) == 1 else "entries"
+        print(f"\n{len(stale)} baseline {noun} no longer flag — delete:\n")
+        for filename in stale:
+            print(f"  {filename}")
+
     return 1
 
 

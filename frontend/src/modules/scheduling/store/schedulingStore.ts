@@ -42,6 +42,8 @@ interface SchedulingState {
   // shift can be finalized. Used to tailor the finalize flow (awareness prompt
   // when off, enforcement when on).
   requireEndOfShiftChecks: boolean;
+  /** 'detailed' | 'count_only' | 'off'. Defaults to 'detailed'. */
+  callTrackingMode: string;
   settingsLoaded: boolean;
 
   // ─── Actions ────────────────────────────────────────────────────────────
@@ -73,6 +75,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
 
   platoonsEnabled: false,
   requireEndOfShiftChecks: false,
+  callTrackingMode: 'detailed',
   settingsLoaded: false,
 
   // ─── Actions ────────────────────────────────────────────────────────────
@@ -84,6 +87,8 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
       set({
         platoonsEnabled: settings.platoons_enabled,
         requireEndOfShiftChecks: settings.require_end_of_shift_checks,
+        // A missing setting means today's behaviour, never 'off'.
+        callTrackingMode: settings.call_tracking?.mode || 'detailed',
         settingsLoaded: true,
       });
     } catch {

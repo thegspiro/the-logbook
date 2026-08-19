@@ -250,10 +250,31 @@ python3 scripts/screenshots/audit_images.py            # all checks
 python3 scripts/screenshots/audit_images.py --check edges
 ```
 
-It exits non-zero when something is flagged, so it can gate CI, and it reports a
-severity so a long list can be triaged without opening every file. Add a check
-to it whenever a global change turns out to have moved pixels — the checks are
-cheap and the alternative is asking a human to compare hundreds of images.
+It reports a severity so a long list can be triaged without opening every file.
+Add a check to it whenever a global change turns out to have moved pixels — the
+checks are cheap, and the alternative is asking a human to compare hundreds of
+images.
+
+**CI runs it against a baseline**, in the Docs Link Check job:
+
+```bash
+python3 scripts/screenshots/audit_images.py \
+    --baseline scripts/screenshots/audit_baseline.txt
+```
+
+`audit_baseline.txt` records the images already known to be flagged — the 39 the
+canvas move left behind — so only **new** findings fail the build. Without that,
+the check could not be turned on at all against an existing backlog.
+
+Two things about the baseline are deliberate:
+
+- **Re-capture an image, then delete its line.** A baselined image that no longer
+  flags _fails_ the build. That costs one deleted line and keeps the list
+  shrinking; tolerating stale entries would let the baseline quietly suppress
+  real regressions on those exact files forever.
+- **Do not add a line to silence a new finding without saying why.** A new
+  finding means something changed that nobody looked at, which is the whole
+  point of the check.
 
 ### Measure before you assign a sweep
 

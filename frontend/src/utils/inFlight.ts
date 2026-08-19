@@ -37,7 +37,9 @@ export function dedupeInFlight<T>(key: string, start: () => Promise<T>): Promise
   // failed request share its rejection, which is correct — it is their request
   // too.
   const started = start().finally(() => {
-    inFlight.delete(key);
+    // The entry may have been cleared at a session boundary and replaced by a
+    // request from the new session. Never let the old request remove that one.
+    if (inFlight.get(key) === started) inFlight.delete(key);
   });
 
   inFlight.set(key, started);
@@ -49,7 +51,7 @@ export function isInFlight(key: string): boolean {
   return inFlight.has(key);
 }
 
-/** Drop all pending entries. Tests only — never call this from app code. */
+/** Stop future callers from sharing requests started by the previous session. */
 export function clearInFlight(): void {
   inFlight.clear();
 }

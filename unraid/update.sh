@@ -198,7 +198,12 @@ if [ -n "$SKIP_BACKUP" ]; then
     warn "Skipping database backup (--skip-backup). No rollback dump will exist."
 else
     info "Backing up the database (consistent mysqldump)..."
+    # Database dumps contain sensitive application data. Do not inherit the
+    # invoking user's commonly permissive umask, and also correct an existing
+    # backup directory that may have been created by an older script version.
+    umask 077
     mkdir -p "$BACKUP_DIR"
+    chmod 700 "$BACKUP_DIR"
 
     # Resolve the db container and confirm it is actually running. `ps -q`
     # prints the container id (empty if the service has no container); inspect
@@ -220,7 +225,7 @@ else
         'exec mysqldump --single-transaction --routines --triggers \
             -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
         2>/dev/null | gzip > "$BACKUP_FILE"; then
-        : # dump command succeeded
+        chmod 600 "$BACKUP_FILE"
     else
         err "mysqldump failed. Aborting before any code changes."
         rm -f "$BACKUP_FILE"

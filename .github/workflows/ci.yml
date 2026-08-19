@@ -10,6 +10,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job below sets timeout-minutes. GitHub's default is 360 minutes, which
+# is not a safety net — on 2026-08-17 the MariaDB contract job hung in
+# `apt-get update` and sat there for close to an hour before anyone looked,
+# holding a runner and leaving the PR un-mergeable with no failure to react to.
+# A hang shows up as a red check within the budget instead of as a job that
+# never finishes. Budgets are ~4-6x measured duration, so a slow-but-healthy
+# run is never killed; raise the number if a job legitimately outgrows it
+# rather than removing the key.
 jobs:
   # ──────────────────────────────────────────────
   # Backend
@@ -17,6 +25,7 @@ jobs:
   backend-lint:
     name: Backend Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -112,6 +121,24 @@ jobs:
         working-directory: .
         run: python3 scripts/check_endpoint_permissions.py
 
+      # The frontend half of the same problem. APPLICATION_PAGES.md is what
+      # support and the training guides answer "who can see this page?" from,
+      # and nothing compared it to the routes. When this was added it found 13
+      # errors, including a page documented as permission-gated whose route has
+      # no gate, an API path listed as a page URL, and a documented page that
+      # does not exist. Same stdlib-only, no-application-import constraint.
+      #
+      # --strict because the document is currently at zero warnings as well as
+      # zero errors. Locking that in is the whole value: a new route with no
+      # entry, or one documenting less than it enforces, fails at the commit
+      # that introduces it rather than during a documentation pass months later.
+      # If the warning tier ever becomes noisy, drop --strict rather than
+      # letting a backlog accumulate silently.
+      - name: Check route permission docs match enforcement
+        if: "!cancelled()"
+        working-directory: .
+        run: python3 scripts/check_route_permissions.py --strict
+
       - name: Check dependency scans have no vulnerability suppressions
         if: "!cancelled()"
         working-directory: .
@@ -120,6 +147,7 @@ jobs:
   backend-security:
     name: Backend Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: backend
@@ -165,6 +193,7 @@ jobs:
   backend-test:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: backend
@@ -218,6 +247,7 @@ jobs:
   backend-test-integration:
     name: Backend Integration Tests (${{ matrix.db.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [backend-lint, backend-test]
     strategy:
       # MariaDB is a supported deployment target (docker-compose.arm.yml ships
@@ -410,6 +440,7 @@ jobs:
   backend-test-contract:
     name: Backend API Contract Tests (${{ matrix.db.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [backend-lint, backend-test]
     strategy:
       # Same reasoning as backend-test-integration: MariaDB is a supported
@@ -550,6 +581,7 @@ jobs:
   docker-build:
     name: Docker Image Build & Container Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [backend-lint, frontend-lint]
     defaults:
       run:
@@ -605,6 +637,7 @@ jobs:
   frontend-lint:
     name: Frontend Lint & Typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -629,6 +662,7 @@ jobs:
   frontend-test:
     name: Frontend Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: frontend
@@ -650,6 +684,7 @@ jobs:
   frontend-security:
     name: Frontend Security Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -674,6 +709,7 @@ jobs:
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [frontend-lint, frontend-test]
     defaults:
       run:
@@ -696,6 +732,7 @@ jobs:
   frontend-e2e:
     name: Frontend E2E (Playwright)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [frontend-lint]
     defaults:
       run:
@@ -747,6 +784,7 @@ jobs:
   docs-links:
     name: Docs Link Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -768,3 +806,23 @@ jobs:
       # third-party outage cannot fail this build.
       - name: Check documentation links
         run: python3 scripts/check_docs_links.py
+
+      # Pinned to the version backend/requirements.txt already declares, so this
+      # job and the application cannot drift onto different Pillow behaviour.
+      - name: Install image-audit dependency
+        run: pip install 'Pillow==12.3.0'
+
+      # Catches the staleness nothing else can see: a global stylesheet change
+      # alters captured screenshots without touching a guide, a placeholder or
+      # the manifest, so no reviewer is prompted to look. That happened on
+      # 2026-08-15, when the themed canvas moved to the root element and left
+      # 39 images showing an unpainted scrollbar gutter.
+      #
+      # Runs against a baseline: those 39 are recorded and tolerated, and only
+      # NEW findings fail. A baselined image that no longer flags fails too —
+      # deliberately, so the list shrinks as captures are redone rather than
+      # growing into a blanket suppression.
+      - name: Audit captured screenshots
+        run: |
+          python3 scripts/screenshots/audit_images.py \
+            --baseline scripts/screenshots/audit_baseline.txt

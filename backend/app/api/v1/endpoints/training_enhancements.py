@@ -378,6 +378,8 @@ async def create_effectiveness_evaluation(
             current_user.organization_id,
             {
                 **data.model_dump(exclude_unset=True),
+                # Evaluations submitted by members are always self-scoped.
+                "user_id": str(current_user.id),
                 "evaluated_by": str(current_user.id),
             },
         )

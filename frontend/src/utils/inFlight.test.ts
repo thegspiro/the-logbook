@@ -83,4 +83,24 @@ describe('dedupeInFlight', () => {
 
     expect(isInFlight('modules')).toBe(false);
   });
+
+  it('does not share a pending request across a clear', async () => {
+    const oldSession = deferred<string>();
+    const newSession = deferred<string>();
+    const start = vi.fn().mockReturnValueOnce(oldSession.promise).mockReturnValueOnce(newSession.promise);
+
+    const oldRequest = dedupeInFlight('modules', start);
+    clearInFlight();
+    const newRequest = dedupeInFlight('modules', start);
+
+    oldSession.resolve('old session');
+    expect(await oldRequest).toBe('old session');
+    // Settling the cleared request must not delete its new-session replacement.
+    expect(isInFlight('modules')).toBe(true);
+
+    newSession.resolve('new session');
+    expect(await newRequest).toBe('new session');
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(isInFlight('modules')).toBe(false);
+  });
 });

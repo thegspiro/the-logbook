@@ -28,6 +28,7 @@ jobs:
   trivy-vulns:
     name: Trivy dependency scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -46,6 +47,7 @@ jobs:
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 

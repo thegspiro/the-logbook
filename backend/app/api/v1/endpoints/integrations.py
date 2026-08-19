@@ -333,6 +333,34 @@ def _extract_secrets(
     return public, secrets
 
 
+def _secrets_to_clear_for_base_url_change(
+    integration: Integration, config: dict[str, Any]
+) -> set[str]:
+    """Prevent a stored credential from being rebound to a new API endpoint."""
+    credential_keys = {
+        "documenso": "api_token",
+        "calcom": "api_key",
+    }
+    secret_key = credential_keys.get(integration.integration_type)
+    if not secret_key or "api_base_url" not in config:
+        return set()
+
+    old_url = (integration.config or {}).get("api_base_url")
+    new_url = config["api_base_url"]
+    if old_url == new_url or not integration.get_secret(secret_key):
+        return set()
+
+    if secret_key not in config:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"{secret_key} must be re-entered or explicitly cleared when "
+                "api_base_url changes"
+            ),
+        )
+    return {secret_key} if config[secret_key] == "" else set()
+
+
 def _validate_urls_in_config(config: dict[str, Any]) -> None:
     """Validate any URL fields in config for SSRF protection."""
     url_keys = {"url", "webhook_url", "api_url", "api_base_url", "instance_url"}
@@ -486,6 +514,7 @@ async def connect_integration(
         and "refresh_token" in config
         and config["refresh_token"] == ""
     )
+    secrets_to_clear = _secrets_to_clear_for_base_url_change(integration, config)
     # Validate config schema
     config = _validate_config(integration.integration_type, config)
     # Validate URLs for SSRF
@@ -499,6 +528,8 @@ async def connect_integration(
     # Store secrets encrypted
     for key, value in secrets.items():
         integration.set_secret(key, value)
+    for key in secrets_to_clear:
+        integration.clear_secret(key)
     if clear_salesforce_refresh_token:
         # An explicit blank switches Salesforce from the interactive refresh
         # grant to client credentials. Discard the cached access token as well
@@ -597,6 +628,7 @@ async def update_integration(
         and "refresh_token" in config
         and config["refresh_token"] == ""
     )
+    secrets_to_clear = _secrets_to_clear_for_base_url_change(integration, config)
     # PATCH validation includes stored public settings so callers can update or
     # clear one secret without resending unrelated required configuration.
     validation_config = {**(integration.config or {}), **config}
@@ -609,6 +641,8 @@ async def update_integration(
     integration.config = {**(integration.config or {}), **public_config}
     for key, value in secrets.items():
         integration.set_secret(key, value)
+    for key in secrets_to_clear:
+        integration.clear_secret(key)
     if clear_salesforce_refresh_token:
         integration.clear_secret("refresh_token")
         integration.clear_secret("access_token")
