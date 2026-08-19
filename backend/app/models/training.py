@@ -2904,7 +2904,9 @@ class Shift(Base):
     color = Column(String(7))  # Hex color from shift template, e.g. "#4f46e5"
 
     # Staffing (from template)
-    positions = Column(JSON)  # ["officer", "firefighter", "firefighter", ...]
+    # Canonical form: [{"position": "officer", "required": True}, ...] — one
+    # entry per seat. See app/utils/positions.py.
+    positions = Column(JSON)
     min_staffing = Column(Integer)
 
     # Notes
@@ -3141,9 +3143,10 @@ class ShiftTemplate(Base):
     color = Column(String(7))  # Hex color for calendar display
 
     # Staffing
-    positions = Column(
-        JSON
-    )  # [{"position": "officer", "count": 1}, {"position": "firefighter", "count": 3}]
+    # Canonical form: [{"position": "officer", "required": True}, ...] — see
+    # app/utils/positions.py. Event-category templates instead store event
+    # metadata here ({"event_type", "resources", "flat_positions"}).
+    positions = Column(JSON)
     min_staffing = Column(Integer, default=1)
 
     # Categorization
@@ -3486,9 +3489,9 @@ class BasicApparatus(Base):
         String(50), nullable=False, default="engine", server_default="engine"
     )
     min_staffing = Column(Integer, default=1)
-    positions = Column(
-        JSON
-    )  # List of position strings e.g. ["officer", "driver", "firefighter"]
+    # Canonical form: [{"position": "officer", "required": True}, ...] — see
+    # app/utils/positions.py.
+    positions = Column(JSON)
     is_active = Column(Boolean, default=True)
 
     # Timestamps

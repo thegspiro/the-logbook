@@ -855,7 +855,11 @@ class ApparatusOption(BaseModel):
     unit_number: Optional[str] = None
     apparatus_type: str
     source: str  # "apparatus", "basic", or "default"
-    positions: Optional[List[str]] = None
+    # Seat lists are stored as {"position", "required"} slots (see
+    # app/utils/positions.py). Declared List[Any] like every other positions
+    # field in this module: a List[str] here rejected the canonical shape and
+    # 500'd the endpoint for any org whose apparatus had seats.
+    positions: Optional[List[Any]] = None
     min_staffing: Optional[int] = None
 
 

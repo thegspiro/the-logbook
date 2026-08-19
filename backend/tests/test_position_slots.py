@@ -57,6 +57,45 @@ class TestFlatSeatLists:
         ]
 
 
+class TestCountedSeats:
+    """ShiftTemplate.positions documents a `count`. Nothing has ever written
+    one, but the migration that rewrites these rows cannot be reversed."""
+
+    def test_expands_a_count_into_that_many_seats(self):
+        assert normalize_stored_positions(
+            [{"position": "firefighter", "count": 3}]
+        ) == [
+            {"position": "firefighter", "required": True},
+            {"position": "firefighter", "required": True},
+            {"position": "firefighter", "required": True},
+        ]
+
+    def test_keeps_the_required_flag_on_every_expanded_seat(self):
+        assert normalize_stored_positions(
+            [{"position": "ems", "count": 2, "required": False}]
+        ) == [
+            {"position": "ems", "required": False},
+            {"position": "ems", "required": False},
+        ]
+
+    def test_expanded_seats_do_not_share_a_dict(self):
+        slots = normalize_stored_positions([{"position": "ems", "count": 2}])
+        slots[0]["position"] = "officer"
+        assert slots[1]["position"] == "ems"
+
+    @pytest.mark.parametrize("count", [None, 0, -1, "3", 1.5, True])
+    def test_an_unusable_count_means_one_seat(self, count):
+        assert normalize_stored_positions([{"position": "ems", "count": count}]) == [
+            {"position": "ems", "required": True}
+        ]
+
+    def test_caps_an_absurd_count(self):
+        # Corrupt data, not a staffing plan — min_staffing itself caps at 50.
+        assert (
+            len(normalize_stored_positions([{"position": "ems", "count": 10**6}])) == 50
+        )
+
+
 class TestNonSeatValues:
     def test_leaves_event_template_metadata_untouched(self):
         # Event templates store resource metadata in this same column.
@@ -175,3 +214,78 @@ class TestWritePathWiring:
 
         assert error is None
         assert shift.positions == [{"position": "ems", "required": True}]
+
+
+class TestApparatusOptionSchema:
+    """The apparatus-options response declared List[str] and 500'd on the
+    canonical shape once the write paths started storing slots."""
+
+    def test_accepts_canonical_slots(self):
+        from app.schemas.scheduling import ApparatusOption
+
+        option = ApparatusOption(
+            name="Engine 1",
+            apparatus_type="engine",
+            source="basic",
+            positions=[{"position": "driver", "required": True}],
+        )
+
+        assert option.positions == [{"position": "driver", "required": True}]
+
+    def test_still_accepts_legacy_strings(self):
+        from app.schemas.scheduling import ApparatusOption
+
+        option = ApparatusOption(
+            name="Engine 1",
+            apparatus_type="engine",
+            source="basic",
+            positions=["driver"],
+        )
+
+        assert option.positions == ["driver"]
+
+
+class TestMigrationTransform:
+    """The migration inlines its own copy of the transform and cannot be
+    reversed, so it gets its own coverage rather than riding on the helper's."""
+
+    @staticmethod
+    def _migration():
+        import importlib.util
+        from pathlib import Path
+
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "alembic"
+            / "versions"
+            / "20260819_2037_1eeb053d59b7_normalize_stored_position_slots.py"
+        )
+        spec = importlib.util.spec_from_file_location("_seat_migration", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_expands_counted_template_seats(self):
+        # Collapsing this would cut a three-firefighter template to one, with
+        # no downgrade to put it back.
+        assert (
+            self._migration()._normalize([{"position": "firefighter", "count": 3}])
+            == [
+                {"position": "firefighter", "required": True},
+            ]
+            * 3
+        )
+
+    def test_converts_legacy_strings(self):
+        assert self._migration()._normalize(["officer"]) == [
+            {"position": "officer", "required": True}
+        ]
+
+    def test_leaves_event_metadata_untouched(self):
+        meta = {"event_type": "parade", "resources": []}
+        assert self._migration()._normalize(meta) == meta
+
+    def test_is_idempotent(self):
+        normalize = self._migration()._normalize
+        once = normalize(["officer", {"position": "ems", "count": 2}])
+        assert normalize(once) == once

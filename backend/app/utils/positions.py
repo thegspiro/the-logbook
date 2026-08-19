@@ -25,6 +25,11 @@ def normalize_stored_positions(positions: Any) -> Any:
 
     Entries with no usable position name are dropped: they cannot be assigned
     to and render blank, so they only inflate the staffing target.
+
+    A ``count`` — the shape ShiftTemplate.positions documents, though nothing
+    in the app has ever written one — expands into that many seats. One slot
+    per seat is what every reader counts, so collapsing a count would quietly
+    cut a three-firefighter template down to one.
     """
     if not isinstance(positions, list):
         return positions
@@ -41,10 +46,25 @@ def normalize_stored_positions(positions: Any) -> Any:
                 # Only an explicit False makes a seat optional, matching the
                 # frontend's `required !== false`. A missing or null flag is a
                 # required seat, which is what every legacy row means.
-                slots.append(
-                    {
-                        "position": name,
-                        "required": entry.get("required") is not False,
-                    }
-                )
+                slot = {
+                    "position": name,
+                    "required": entry.get("required") is not False,
+                }
+                for _ in range(_seat_count(entry.get("count"))):
+                    slots.append(dict(slot))
     return slots
+
+
+# A seat list this long is corrupt data, not a staffing plan; min_staffing caps
+# at 50, so expanding past that would only be a way to exhaust memory from a
+# JSON column.
+_MAX_SEAT_COUNT = 50
+
+
+def _seat_count(count: Any) -> int:
+    """How many seats one entry stands for. Anything unusable means one."""
+    if isinstance(count, bool) or not isinstance(count, int):
+        return 1
+    if count < 1:
+        return 1
+    return min(count, _MAX_SEAT_COUNT)

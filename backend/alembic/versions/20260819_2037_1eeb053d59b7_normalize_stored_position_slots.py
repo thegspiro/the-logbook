@@ -20,6 +20,11 @@ Event-template metadata (a JSON object rather than an array) is left exactly as
 found — flattening it into seats would destroy the resource structure the event
 screens read.
 
+A ``count`` — the shape ShiftTemplate.positions documents, though no writer in
+the app's history has produced one — expands into that many seats rather than
+collapsing to one, so a hand-seeded three-firefighter template does not come
+out of an irreversible migration requiring one.
+
 Idempotent: an already-normalized array transforms to itself and is skipped
 without an UPDATE, so a re-run is a no-op.
 
@@ -65,10 +70,26 @@ def _normalize(positions: Any) -> Any:
         elif isinstance(entry, dict):
             name = str(entry.get("position") or "").strip()
             if name:
-                slots.append(
-                    {"position": name, "required": entry.get("required") is not False}
-                )
+                slot = {
+                    "position": name,
+                    "required": entry.get("required") is not False,
+                }
+                for _ in range(_seat_count(entry.get("count"))):
+                    slots.append(dict(slot))
     return slots
+
+
+def _seat_count(count: Any) -> int:
+    """How many seats one entry stands for. Anything unusable means one.
+
+    Capped at 50 (the min_staffing ceiling): a longer list is corrupt data
+    rather than a staffing plan.
+    """
+    if isinstance(count, bool) or not isinstance(count, int):
+        return 1
+    if count < 1:
+        return 1
+    return min(count, 50)
 
 
 def _has_positions(bind, table: str) -> bool:

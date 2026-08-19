@@ -357,17 +357,6 @@ class SchedulingService:
                 return result
         return []
 
-    @staticmethod
-    def _resolve_template_positions(positions: Any) -> Optional[List[str]]:
-        """Extract a flat list of position strings (legacy helper).
-
-        Delegates to ``normalize_positions`` and strips structure.
-        """
-        slots = SchedulingService.normalize_positions(positions)
-        if not slots:
-            return None
-        return [s["position"] for s in slots]
-
     # ============================================
     # Enrichment Helpers
     # ============================================
@@ -2468,9 +2457,14 @@ class SchedulingService:
                     apparatus_id=getattr(template, "apparatus_id", None),
                     platoon=shift_platoon,
                     color=shift_color,
-                    positions=self._resolve_template_positions(
+                    # Structured slots, not bare strings: this writer is how
+                    # a recurring pattern fills the calendar, so stripping the
+                    # required flag here would re-seed the legacy shape after
+                    # the migration and quietly promote every optional seat.
+                    positions=self.normalize_positions(
                         getattr(template, "positions", None)
-                    ),
+                    )
+                    or None,
                     min_staffing=getattr(template, "min_staffing", None),
                     created_by=created_by,
                 )

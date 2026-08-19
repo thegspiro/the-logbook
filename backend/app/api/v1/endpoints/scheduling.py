@@ -2154,7 +2154,7 @@ async def list_apparatus_options(
                         unit_number=apparatus.unit_number,
                         apparatus_type=type_name.lower(),
                         source="apparatus",
-                        positions=apparatus.crew_positions,
+                        positions=normalize_stored_positions(apparatus.crew_positions),
                         min_staffing=apparatus.min_staffing,
                     )
                 )
@@ -2183,7 +2183,7 @@ async def list_apparatus_options(
                         unit_number=ba.unit_number,
                         apparatus_type=ba.apparatus_type or "other",
                         source="basic",
-                        positions=ba.positions,
+                        positions=normalize_stored_positions(ba.positions),
                         min_staffing=ba.min_staffing,
                     )
                 )
