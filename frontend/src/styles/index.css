@@ -518,6 +518,14 @@
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2;
 }
 
+@utility segmented-group {
+  /* Segmented control shell — the container behind an Upcoming|Past or
+     list|calendar pair. Deliberately not `card`: the mobile block below
+     forces every `.card` to 12px padding, which inflates a 4px segment strip
+     into a chunky block on exactly the screens with the least room to spare. */
+  @apply bg-theme-surface border-theme-surface-border inline-flex shrink-0 items-center rounded-lg border p-1 shadow-sm;
+}
+
 @utility btn-icon-sm {
   /* Compact 36px icon button for dense desktop toolbars. Its own guidance was
      "avoid as a primary control on touch UIs" — rather than leave that to be
@@ -1499,13 +1507,25 @@ option {
     padding: 0.75rem;
   }
 
-  /* #30 Full-width buttons on small mobile screens */
+  /* #30 Full-width buttons on small mobile screens.
+   *
+   * `btn-auto` opts a button out, and toolbars need it. This rule is
+   * unlayered, so it beats a Tailwind `w-auto` at the call site and there is
+   * no way to escape it from the markup alone — a row of toolbar buttons
+   * therefore stacks into one full-width bar each. Where the label is also
+   * hidden on small screens (the common `hidden sm:inline` pattern) the
+   * result is a column of unlabelled full-width bars, which reads as a
+   * mystery control rather than as a button.
+   *
+   * `btn-auto` carries no declarations of its own — it exists only as this
+   * `:not()` hook — so it is deliberately not an `@utility`, which would emit
+   * an empty rule Tailwind then prunes. */
   @media (max-width: 479px) {
-    .btn-primary,
-    .btn-secondary,
-    .btn-success,
-    .btn-info,
-    .btn-warning {
+    .btn-primary:not(.btn-auto),
+    .btn-secondary:not(.btn-auto),
+    .btn-success:not(.btn-auto),
+    .btn-info:not(.btn-auto),
+    .btn-warning:not(.btn-auto) {
       width: 100%;
       justify-content: center;
     }

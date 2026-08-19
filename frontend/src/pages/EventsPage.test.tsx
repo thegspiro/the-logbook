@@ -348,13 +348,42 @@ describe('EventsPage', () => {
     });
 
     it('should link managers directly to event module settings', async () => {
+      const user = userEvent.setup();
       mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
       vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
 
       renderWithRouter(<EventsPage />);
 
+      await user.click(await screen.findByRole('button', { name: /more event actions/i }));
+
       const settingsLink = await screen.findByRole('link', { name: /event module settings/i });
       expect(settingsLink).toHaveAttribute('href', '/events/admin?tab=settings');
+    });
+
+    it('should keep the secondary event actions out of the header until the menu is opened', async () => {
+      const user = userEvent.setup();
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByRole('link', { name: /create event/i });
+      expect(screen.queryByRole('link', { name: /event templates/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /attendance trends/i })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /more event actions/i }));
+
+      expect(screen.getByRole('link', { name: /event templates/i })).toHaveAttribute('href', '/events/templates');
+      expect(screen.getByRole('link', { name: /attendance trends/i })).toHaveAttribute('href', '/events/analytics');
+    });
+
+    it('should not offer an overflow menu to a member with nothing to put in it', async () => {
+      vi.mocked(eventService.getEvents).mockResolvedValue([]);
+
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByText('No events found');
+      expect(screen.queryByRole('button', { name: /more event actions/i })).not.toBeInTheDocument();
     });
 
     it('should not show Create Event button for non-managers', async () => {
@@ -367,6 +396,40 @@ describe('EventsPage', () => {
       });
 
       expect(screen.queryByRole('link', { name: /create event/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Filter Disclosure', () => {
+    it('should hide the secondary filters behind the disclosure until it is opened', async () => {
+      const user = userEvent.setup();
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      const toggle = await screen.findByRole('button', { name: /show filter options/i });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByTestId('event-filter-options')).toHaveClass('hidden');
+
+      await user.click(toggle);
+
+      const openToggle = screen.getByRole('button', { name: /hide filter options/i });
+      expect(openToggle).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByTestId('event-filter-options')).toHaveClass('flex');
+    });
+
+    it('should count only the filters the disclosure hides', async () => {
+      const user = userEvent.setup();
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      const toggle = await screen.findByRole('button', { name: /show filter options/i });
+      expect(toggle).toHaveTextContent('');
+
+      await user.click(toggle);
+      await user.click(screen.getByRole('button', { name: /my events/i }));
+
+      expect(screen.getByRole('button', { name: /hide filter options/i })).toHaveTextContent('1');
     });
   });
 

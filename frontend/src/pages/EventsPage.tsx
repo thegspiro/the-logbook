@@ -32,7 +32,7 @@ import {
   Trash2,
   AlertCircle,
   BarChart3,
-  Zap,
+  MoreHorizontal,
   Settings,
   Pencil,
 } from 'lucide-react';
@@ -98,6 +98,11 @@ const ALL_EVENT_TYPES: EventType[] = [
   EventTypeEnum.OTHER,
 ];
 
+/* One row of the overflow menu. `max-md` grows it to the 44px touch minimum
+   without inflating the same menu on a desktop pointer. */
+const MENU_ITEM_CLASS =
+  'text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors max-md:min-h-[44px]';
+
 export const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -118,11 +123,16 @@ export const EventsPage: React.FC = () => {
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
-  // Quick-create from template state
+  // Templates offered inside the overflow menu (quick-create)
   const [templates, setTemplates] = useState<EventTemplate[]>([]);
-  const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
-  const quickCreateRef = React.useRef<HTMLDivElement>(null);
+
+  // Header overflow menu, and the phone-only disclosure over the secondary
+  // filters. Both are open-by-intent: on a desktop pointer the filters are
+  // laid out inline and the disclosure button is not rendered at all.
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const moreMenuRef = React.useRef<HTMLDivElement>(null);
 
   // CSV Import state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -192,18 +202,20 @@ export const EventsPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [showPresetMenu]);
 
-  // Close quick-create dropdown on outside click
+  // Close the overflow menu on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (quickCreateRef.current && !quickCreateRef.current.contains(e.target as Node)) {
-        setShowQuickCreate(false);
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
       }
     };
-    if (showQuickCreate) {
+    if (showMoreMenu) {
       document.addEventListener('mousedown', handler);
     }
     return () => document.removeEventListener('mousedown', handler);
-  }, [showQuickCreate]);
+  }, [showMoreMenu]);
+
+  const closeMoreMenu = useCallback(() => setShowMoreMenu(false), []);
 
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
@@ -412,6 +424,20 @@ export const EventsPage: React.FC = () => {
     URL.revokeObjectURL(url);
   }, [sortedEvents, tz]);
 
+  const handleExportFromMenu = useCallback(() => {
+    setShowMoreMenu(false);
+    handleExportCSV();
+  }, [handleExportCSV]);
+
+  // Drives the count on the phone-only filter button. Only the filters hidden
+  // behind the disclosure are counted — the ones still on screen (upcoming/past,
+  // list/calendar, search) say what they are without a badge.
+  const activeFilterCount = (showMyEventsOnly ? 1 : 0) + (sortBy !== 'date' ? 1 : 0);
+
+  // With no events to export and no management rights the menu has no rows, so
+  // the trigger would open an empty panel.
+  const hasMoreActions = canManage || sortedEvents.length > 0;
+
   const handleDuplicate = useCallback(
     async (eventId: string, e: React.MouseEvent) => {
       e.preventDefault();
@@ -588,7 +614,7 @@ export const EventsPage: React.FC = () => {
         <Breadcrumbs />
 
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="shrink-0 rounded-lg bg-red-600 p-2">
               <Calendar className="h-6 w-6 text-white" aria-hidden="true" />
@@ -600,64 +626,39 @@ export const EventsPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+
+          {/* One row at every width: the create action, with everything else
+              behind a single overflow menu. As eight sibling buttons these
+              wrapped to a column of full-width bars on a phone — and since
+              each hid its label below 640px, a column of unlabelled ones —
+              which pushed the first event most of a screen below the fold. */}
+          <div className="flex items-center gap-2">
             <NfcTapButton />
-            {sortedEvents.length > 0 && (
-              <button
-                onClick={handleExportCSV}
-                className="btn-secondary inline-flex items-center gap-2"
-                title="Export to CSV"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Export</span>
-              </button>
-            )}
             {canManage && (
-              <>
+              <Link
+                to="/events/admin?tab=create"
+                className="btn-primary btn-auto inline-flex flex-1 items-center justify-center gap-2 sm:flex-none"
+              >
+                <Plus className="h-5 w-5" aria-hidden="true" />
+                Create Event
+              </Link>
+            )}
+            {hasMoreActions && (
+              <div className="relative shrink-0" ref={moreMenuRef}>
                 <button
-                  onClick={() => setShowImportModal(true)}
-                  className="btn-secondary inline-flex items-center gap-2"
-                  title="Import from CSV"
+                  type="button"
+                  onClick={() => setShowMoreMenu((prev) => !prev)}
+                  className="btn-secondary btn-auto btn-icon"
+                  aria-label="More event actions"
+                  aria-haspopup="true"
+                  aria-expanded={showMoreMenu}
                 >
-                  <Upload className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Import</span>
+                  <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
                 </button>
-                <Link
-                  to="/events/templates"
-                  className="btn-secondary inline-flex items-center gap-2"
-                  title="Event Templates"
-                >
-                  <FileText className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Templates</span>
-                </Link>
-                <Link
-                  to="/events/analytics"
-                  className="btn-secondary inline-flex items-center gap-2"
-                  title="Attendance Trends"
-                >
-                  <BarChart3 className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Analytics</span>
-                </Link>
-                <Link
-                  to="/events/admin?tab=settings"
-                  className="btn-secondary btn-icon"
-                  title="Module Settings"
-                  aria-label="Event module settings"
-                >
-                  <Settings className="h-5 w-5" aria-hidden="true" />
-                </Link>
-                <div className="relative" ref={quickCreateRef}>
-                  <button
-                    onClick={() => setShowQuickCreate((prev) => !prev)}
-                    className="btn-primary inline-flex items-center gap-2"
-                    title="Quick Create from Template"
-                  >
-                    <Zap className="h-5 w-5" aria-hidden="true" />
-                    <span className="hidden sm:inline">Quick Create</span>
-                  </button>
-                  {showQuickCreate && (
-                    <div className="popover-panel absolute right-0 z-50 mt-2 w-64">
-                      <div className="p-2">
+                {showMoreMenu && (
+                  <div className="popover-panel absolute right-0 z-50 mt-2 w-64">
+                    {canManage && (
+                      <div className="border-theme-surface-border border-b p-2">
                         <p className="text-theme-text-secondary px-3 py-1.5 text-xs font-semibold tracking-wider uppercase">
                           Create from Template
                         </p>
@@ -666,213 +667,277 @@ export const EventsPage: React.FC = () => {
                         ) : templates.length === 0 ? (
                           <p className="text-theme-text-secondary px-3 py-2 text-sm">No templates available</p>
                         ) : (
-                          templates.map((template) => (
-                            <button
-                              key={template.id}
-                              onClick={() => {
-                                setShowQuickCreate(false);
-                                void navigate(`/events/admin?tab=create&template=${template.id}`);
-                              }}
-                              className="text-theme-text-primary hover:bg-theme-surface-hover w-full rounded-md px-3 py-2 text-left text-sm transition-colors"
-                            >
-                              <span className="font-medium">{template.name}</span>
-                              {template.description && (
-                                <span className="text-theme-text-secondary block truncate text-xs">
-                                  {template.description}
+                          <div className="max-h-48 overflow-y-auto">
+                            {templates.map((template) => (
+                              <button
+                                key={template.id}
+                                onClick={() => {
+                                  setShowMoreMenu(false);
+                                  void navigate(`/events/admin?tab=create&template=${template.id}`);
+                                }}
+                                className={MENU_ITEM_CLASS}
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate font-medium">{template.name}</span>
+                                  {template.description && (
+                                    <span className="text-theme-text-secondary block truncate text-xs">
+                                      {template.description}
+                                    </span>
+                                  )}
                                 </span>
-                              )}
-                            </button>
-                          ))
+                              </button>
+                            ))}
+                          </div>
                         )}
                       </div>
+                    )}
+                    <div className="p-2">
+                      {sortedEvents.length > 0 && (
+                        <button type="button" onClick={handleExportFromMenu} className={MENU_ITEM_CLASS}>
+                          <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          Export to CSV
+                        </button>
+                      )}
+                      {canManage && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowMoreMenu(false);
+                              setShowImportModal(true);
+                            }}
+                            className={MENU_ITEM_CLASS}
+                          >
+                            <Upload className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            Import from CSV
+                          </button>
+                          <Link to="/events/templates" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
+                            <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            Event Templates
+                          </Link>
+                          <Link to="/events/analytics" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
+                            <BarChart3 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            Attendance Trends
+                          </Link>
+                          <Link to="/events/admin?tab=settings" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
+                            <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            Event Module Settings
+                          </Link>
+                        </>
+                      )}
                     </div>
-                  )}
-                </div>
-                <Link to="/events/admin?tab=create" className="btn-primary inline-flex items-center gap-2">
-                  <Plus className="h-5 w-5" aria-hidden="true" />
-                  Create Event
-                </Link>
-              </>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
 
-        {/* Upcoming / Past Toggle + View Mode + Search + My Events + Sort */}
-        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="card inline-flex p-1">
+        {/* Mode + view + search stay on screen; the filters nobody changes on
+            every visit sit behind a disclosure on phones, where each one cost
+            a full-width row above the first event. */}
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+          <div className="flex items-center gap-2">
+            <div className="segmented-group">
+              <button
+                onClick={() => setShowPastEvents(false)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+                  !showPastEvents
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+              >
+                Upcoming
+              </button>
+              <button
+                onClick={() => setShowPastEvents(true)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+                  showPastEvents
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+              >
+                Past
+              </button>
+            </div>
+            <div className="segmented-group">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
+                  viewMode === 'list'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+                aria-label="List view"
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
+                  viewMode === 'calendar'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+                aria-label="Calendar view"
+                title="Calendar view"
+              >
+                <Calendar className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 md:min-w-0 md:flex-1">
+            <div className="relative min-w-0 flex-1 md:max-w-sm">
+              <Search
+                className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+                aria-hidden="true"
+              />
+              <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                type="text"
+                aria-label="Search events..."
+                placeholder="Search events..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="form-input pr-4 pl-10"
+              />
+            </div>
             <button
-              onClick={() => setShowPastEvents(false)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-                !showPastEvents
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
+              type="button"
+              onClick={() => setShowFilters((prev) => !prev)}
+              className="btn-secondary btn-auto btn-icon relative shrink-0 md:hidden"
+              aria-controls="event-filter-options"
+              aria-expanded={showFilters}
+              aria-label={showFilters ? 'Hide filter options' : 'Show filter options'}
             >
-              Upcoming
-            </button>
-            <button
-              onClick={() => setShowPastEvents(true)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-                showPastEvents
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-            >
-              Past
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
           </div>
-          <div className="card inline-flex p-1">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
-                viewMode === 'list'
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-              aria-label="List view"
-              title="List view"
-            >
-              <List className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('calendar')}
-              className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
-                viewMode === 'calendar'
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-              aria-label="Calendar view"
-              title="Calendar view"
-            >
-              <Calendar className="h-4 w-4" />
-            </button>
-          </div>
-          <button
-            onClick={() => setShowMyEventsOnly((prev) => !prev)}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-              showMyEventsOnly
-                ? 'border-red-600 bg-red-600 text-white shadow-sm'
-                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'
-            }`}
+
+          <div
+            id="event-filter-options"
+            data-testid="event-filter-options"
+            className={`${showFilters ? 'flex' : 'hidden'} flex-col gap-2 md:flex md:flex-row md:items-center md:gap-3`}
           >
-            <User className="h-4 w-4" aria-hidden="true" />
-            My Events
-          </button>
-          <div className="relative max-w-sm flex-1">
-            <Search
-              className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
-              aria-hidden="true"
-            />
-            <input
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              type="text"
-              aria-label="Search events..."
-              placeholder="Search events..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="form-input pr-4 pl-10"
-            />
-          </div>
-          <div className="relative">
-            <SlidersHorizontal
-              className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
-              aria-hidden="true"
-            />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'date' | 'title' | 'rsvp_count')}
-              className="form-input appearance-none pr-8 pl-9"
-            >
-              <option value="date">Sort by Date</option>
-              <option value="title">Sort by Title</option>
-              <option value="rsvp_count">Sort by RSVP Count</option>
-            </select>
-          </div>
-
-          {/* Filter Presets */}
-          <div className="relative" ref={presetMenuRef}>
             <button
-              onClick={() => {
-                setShowPresetMenu((prev) => !prev);
-                setShowSavePresetInput(false);
-                setPresetName('');
-              }}
-              className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 text-sm font-medium max-md:min-h-[44px] max-md:min-w-[44px]"
-              title="Filter presets"
+              onClick={() => setShowMyEventsOnly((prev) => !prev)}
+              className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+                showMyEventsOnly
+                  ? 'border-red-600 bg-red-600 text-white shadow-sm'
+                  : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'
+              }`}
             >
-              <Bookmark className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Presets</span>
+              <User className="h-4 w-4" aria-hidden="true" />
+              My Events
             </button>
+            <div className="relative">
+              <SlidersHorizontal
+                className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+                aria-hidden="true"
+              />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'date' | 'title' | 'rsvp_count')}
+                className="form-input appearance-none pr-8 pl-9"
+              >
+                <option value="date">Sort by Date</option>
+                <option value="title">Sort by Title</option>
+                <option value="rsvp_count">Sort by RSVP Count</option>
+              </select>
+            </div>
 
-            {showPresetMenu && (
-              <div className="popover-panel absolute top-full right-0 z-40 mt-1 w-72">
-                <div className="border-theme-surface-border border-b p-2">
-                  {!showSavePresetInput ? (
-                    <button
-                      onClick={() => setShowSavePresetInput(true)}
-                      className="text-theme-text-primary hover:bg-theme-surface-hover inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors"
-                    >
-                      <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
-                      Save Current Filters
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={presetName}
-                        onChange={(e) => setPresetName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSavePreset();
-                          if (e.key === 'Escape') {
-                            setShowSavePresetInput(false);
-                            setPresetName('');
-                          }
-                        }}
-                        placeholder="Preset name..."
-                        className="form-input-sm flex-1"
-                        autoFocus
-                      />
+            {/* Filter Presets */}
+            <div className="relative" ref={presetMenuRef}>
+              <button
+                onClick={() => {
+                  setShowPresetMenu((prev) => !prev);
+                  setShowSavePresetInput(false);
+                  setPresetName('');
+                }}
+                className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary inline-flex w-full items-center justify-center gap-1.5 px-3 text-sm font-medium max-md:min-h-[44px]"
+                title="Filter presets"
+              >
+                <Bookmark className="h-4 w-4" aria-hidden="true" />
+                Presets
+              </button>
+
+              {showPresetMenu && (
+                <div className="popover-panel absolute top-full right-0 z-40 mt-1 w-72">
+                  <div className="border-theme-surface-border border-b p-2">
+                    {!showSavePresetInput ? (
                       <button
-                        onClick={handleSavePreset}
-                        disabled={!presetName.trim()}
-                        className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                        onClick={() => setShowSavePresetInput(true)}
+                        className="text-theme-text-primary hover:bg-theme-surface-hover inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors"
                       >
-                        Save
+                        <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
+                        Save Current Filters
                       </button>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={presetName}
+                          onChange={(e) => setPresetName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSavePreset();
+                            if (e.key === 'Escape') {
+                              setShowSavePresetInput(false);
+                              setPresetName('');
+                            }
+                          }}
+                          placeholder="Preset name..."
+                          className="form-input-sm flex-1"
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleSavePreset}
+                          disabled={!presetName.trim()}
+                          className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {presets.length === 0 ? (
+                      <p className="text-theme-text-muted px-3 py-4 text-center text-sm">No saved presets yet</p>
+                    ) : (
+                      <ul className="py-1">
+                        {presets.map((preset) => (
+                          <li key={preset.id} className="flex items-center gap-1 px-2">
+                            <button
+                              onClick={() => handleLoadPreset(preset)}
+                              className="text-theme-text-primary hover:bg-theme-surface-hover flex-1 truncate rounded-md px-2 py-2 text-left text-sm transition-colors"
+                              title={`Load "${preset.name}"`}
+                            >
+                              {preset.name}
+                            </button>
+                            <button
+                              onClick={() => handleDeletePreset(preset.id)}
+                              className="text-theme-text-muted hover:bg-theme-surface-hover shrink-0 rounded-md p-1.5 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                              title={`Delete "${preset.name}"`}
+                              aria-label={`Delete preset ${preset.name}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-                <div className="max-h-60 overflow-y-auto">
-                  {presets.length === 0 ? (
-                    <p className="text-theme-text-muted px-3 py-4 text-center text-sm">No saved presets yet</p>
-                  ) : (
-                    <ul className="py-1">
-                      {presets.map((preset) => (
-                        <li key={preset.id} className="flex items-center gap-1 px-2">
-                          <button
-                            onClick={() => handleLoadPreset(preset)}
-                            className="text-theme-text-primary hover:bg-theme-surface-hover flex-1 truncate rounded-md px-2 py-2 text-left text-sm transition-colors"
-                            title={`Load "${preset.name}"`}
-                          >
-                            {preset.name}
-                          </button>
-                          <button
-                            onClick={() => handleDeletePreset(preset.id)}
-                            className="text-theme-text-muted hover:bg-theme-surface-hover shrink-0 rounded-md p-1.5 transition-colors hover:text-red-600 dark:hover:text-red-400"
-                            title={`Delete "${preset.name}"`}
-                            aria-label={`Delete preset ${preset.name}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
@@ -999,7 +1064,10 @@ export const EventsPage: React.FC = () => {
                                 />
                               </svg>
                             )}
-                            <h3 className="text-theme-text-primary truncate text-lg font-medium">{event.title}</h3>
+                            {/* Two lines rather than one truncated one: on a phone the card is a
+     single column and the manager chips claim the right quarter of it,
+     which cut most titles to "Monthly Traini…". */}
+                            <h3 className="text-theme-text-primary line-clamp-2 text-lg font-medium">{event.title}</h3>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-2">
                             <span
