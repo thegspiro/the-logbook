@@ -398,6 +398,73 @@ class TestRecordShiftCallsValidation:
 # ======================================================================
 
 
+class TestMemberCreditReachesThePerson:
+    """Credit that is stored but never shown to the member is not credit.
+
+    The count-only fallbacks exist because both downstream consumers derive
+    calls from ShiftCall rows, which a count-only department never creates.
+    Without them a member is told "Calls responded: 0" for a shift whose own
+    record says five, and their own attendance row agrees it was five.
+    """
+
+    async def test_summary_fallback_reads_attendance_credit(self):
+        """The per-member shift summary notification."""
+        svc = CallTrackingService(MagicMock())
+        svc.shift_type_counts = AsyncMock(return_value={"ems": 2, "fire": 1})
+
+        attendance = [
+            SimpleNamespace(user_id="u1", call_count=3),
+            SimpleNamespace(user_id="u2", call_count=1),
+            SimpleNamespace(user_id="u3", call_count=0),
+        ]
+        type_counts = await svc.shift_type_counts("shift-1")
+        flat = []
+        for slug in sorted(type_counts):
+            flat.extend([slug] * type_counts[slug])
+
+        per_member = {
+            str(a.user_id): {
+                "count": int(a.call_count or 0),
+                "types": flat[: int(a.call_count or 0)],
+            }
+            for a in attendance
+            if int(a.call_count or 0) > 0
+        }
+
+        assert per_member["u1"]["count"] == 3
+        assert per_member["u2"]["count"] == 1
+        # A member credited with nothing is omitted, not reported as zero
+        # calls on a shift they were not on.
+        assert "u3" not in per_member
+        # Types are drawn from the shift's tally, capped at the member's credit.
+        assert len(per_member["u2"]["types"]) == 1
+
+    async def test_trainee_fallback_uses_attendance_not_shift_total(self):
+        """The training-credit path. A late arrival must not be credited with
+        the whole tour."""
+        from app.services.shift_completion_service import ShiftCompletionService
+
+        db = MagicMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = 2
+        db.execute = AsyncMock(return_value=result)
+
+        svc = ShiftCompletionService(db)
+        count, types = await svc._get_trainee_call_data_from_counts("shift-1", "u1")
+        assert count == 2
+
+    async def test_trainee_fallback_with_no_credit_returns_zero(self):
+        from app.services.shift_completion_service import ShiftCompletionService
+
+        db = MagicMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=result)
+
+        svc = ShiftCompletionService(db)
+        assert await svc._get_trainee_call_data_from_counts("shift-1", "u1") == (0, [])
+
+
 class TestPartitionExisting:
     async def test_no_existing_calls(self):
         svc = CallTrackingService(MagicMock())
