@@ -5342,6 +5342,8 @@ class SchedulingService:
             shift.is_finalized = True
             shift.finalized_at = now
             shift.finalized_by = finalized_by_user_id
+            # The wizard is done; a reopened shift starts it over.
+            shift.closeout_step = None
             if pass_down_notes is not None:
                 shift.pass_down_notes = pass_down_notes.strip() or None
 
@@ -5379,6 +5381,207 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    # ============================================
+    # Resumable close-out
+    # ============================================
+
+    async def get_closeout_state(
+        self, shift_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Everything the close-out wizard needs, in one round trip.
+
+        Serves the resume point alongside the current saved values, so a phone
+        that locked on step 2 reopens where it was rather than at step 1.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift:
+            return None, "Shift not found"
+
+        call_service = CallTrackingService(self.db)
+        tracking = await call_service.get_settings(str(organization_id))
+
+        att_rows = (
+            (
+                await self.db.execute(
+                    select(ShiftAttendance).where(
+                        ShiftAttendance.shift_id == str(shift_id)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        name_map = await self._get_user_name_map(
+            [str(a.user_id) for a in att_rows if a.user_id]
+        )
+
+        members = []
+        combined_minutes = 0
+        for att in att_rows:
+            minutes = int(att.duration_minutes or 0)
+            combined_minutes += minutes
+            members.append(
+                {
+                    "user_id": str(att.user_id),
+                    "user_name": name_map.get(str(att.user_id), ""),
+                    "checked_in_at": att.checked_in_at,
+                    "checked_out_at": att.checked_out_at,
+                    "hours": round(minutes / 60.0, 2) if minutes else 0.0,
+                    # NULL means "never asked", which the wizard shows as the
+                    # apparatus count rather than as a deliberate zero.
+                    "call_count": att.call_count,
+                    "missing_checkout": att.checked_in_at is not None
+                    and att.checked_out_at is None,
+                }
+            )
+        members.sort(key=lambda m: m["user_name"])
+
+        attachable = []
+        if tracking.get("mode") == CallTrackingMode.COUNT_ONLY and shift.shift_date:
+            attachable = await call_service.list_calls_in_window(
+                str(organization_id),
+                shift.shift_date,
+                exclude_shift_id=str(shift_id),
+            )
+
+        return {
+            "shift_id": str(shift_id),
+            "is_finalized": bool(shift.is_finalized),
+            # Resume point. Finalized shifts report 0 — the wizard is done, and
+            # reopening deliberately restarts it.
+            "closeout_step": (
+                0 if shift.is_finalized else int(shift.closeout_step or 0)
+            ),
+            "call_tracking_mode": tracking.get("mode"),
+            "call_types": tracking.get("call_types", []),
+            "members": members,
+            # "Combined hours" and not "hours": summed across the crew, it is
+            # several times the length of the shift and reads as a mistake
+            # without the word.
+            "combined_hours": round(combined_minutes / 60.0, 2),
+            "reported_call_count": await call_service.shift_response_count(
+                str(shift_id)
+            ),
+            "reported_call_types": await call_service.shift_type_counts(str(shift_id)),
+            "attachable_calls": attachable,
+        }, None
+
+    async def save_closeout_attendance(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+        entries: List[Dict[str, Any]],
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Step 1 — record when each member was actually on.
+
+        Writes the real attendance rows rather than staging a draft, so the
+        hours are correct the moment they are saved even if the officer never
+        reaches the last step.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift:
+            return None, "Shift not found"
+        if shift.is_finalized:
+            return None, "Shift is already finalized — reopen it to make changes"
+
+        existing = {
+            str(a.user_id): a
+            for a in (
+                (
+                    await self.db.execute(
+                        select(ShiftAttendance).where(
+                            ShiftAttendance.shift_id == str(shift_id)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        }
+
+        for entry in entries:
+            uid = str(entry["user_id"])
+            att = existing.get(uid)
+            if att is None:
+                # Only members already on the shift's roster. A client-supplied
+                # id must not be able to add someone to a shift through the
+                # close-out, nor pull a user from another org onto this one.
+                if not await self._user_in_org(uid, organization_id):
+                    return None, "One or more members are not in your organization"
+                att = ShiftAttendance(
+                    id=generate_uuid(),
+                    shift_id=str(shift_id),
+                    user_id=uid,
+                )
+                self.db.add(att)
+                existing[uid] = att
+
+            checked_in = entry.get("checked_in_at")
+            checked_out = entry.get("checked_out_at")
+            if checked_in and checked_out and checked_out <= checked_in:
+                return None, (
+                    "A member cannot be recorded as leaving before they arrived"
+                )
+            att.checked_in_at = checked_in
+            att.checked_out_at = checked_out
+            if checked_in and checked_out:
+                minutes = int((checked_out - checked_in).total_seconds() / 60)
+                if minutes > 48 * 60:
+                    return None, "A single shift cannot exceed 48 hours"
+                att.duration_minutes = max(minutes, 0)
+            else:
+                att.duration_minutes = None
+
+        shift.closeout_step = max(int(shift.closeout_step or 0), 1)
+        await self.db.commit()
+        return await self.get_closeout_state(shift_id, organization_id)
+
+    async def save_closeout_calls(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+        reported_call_count: Optional[int] = None,
+        reported_call_types: Optional[Dict[str, int]] = None,
+        attach_call_ids: Optional[List[str]] = None,
+        recorded_by: Optional[str] = None,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Step 2 — record how many calls the apparatus ran.
+
+        The rows written here are the department's real call record before the
+        shift is finalized, which is correct: the calls happened. Figures from
+        an unfinalized shift are already labelled preliminary everywhere they
+        surface, and ``record_shift_calls`` reconciles rather than appends, so
+        a later correction moves the number instead of doubling it.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift:
+            return None, "Shift not found"
+        if shift.is_finalized:
+            return None, "Shift is already finalized — reopen it to make changes"
+
+        call_service = CallTrackingService(self.db)
+        for call_id in attach_call_ids or []:
+            ok, err = await call_service.attach_response(
+                str(call_id), shift, str(organization_id)
+            )
+            if not ok:
+                return None, err
+
+        if reported_call_count is not None:
+            _, err = await call_service.record_shift_calls(
+                shift=shift,
+                organization_id=str(organization_id),
+                total_calls=reported_call_count,
+                type_counts=reported_call_types,
+                recorded_by=recorded_by,
+            )
+            if err:
+                return None, err
+
+        shift.closeout_step = max(int(shift.closeout_step or 0), 2)
+        await self.db.commit()
+        return await self.get_closeout_state(shift_id, organization_id)
 
     async def reopen_shift(
         self,

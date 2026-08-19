@@ -493,6 +493,89 @@ class TestPartitionExisting:
 
 
 # ======================================================================
+# Resumable close-out — schema contract
+# ======================================================================
+
+
+class TestCloseoutStepSchemas:
+    """The wizard saves each step as it advances, so each step's payload is
+    validated on its own rather than only at the end."""
+
+    def test_attendance_rejects_leaving_before_arriving(self):
+        from app.schemas.scheduling import CloseoutAttendanceEntry
+
+        with pytest.raises(ValidationError):
+            CloseoutAttendanceEntry(
+                user_id="11111111-1111-1111-1111-111111111111",
+                checked_in_at=datetime(2026, 8, 19, 20, 0, tzinfo=timezone.utc),
+                checked_out_at=datetime(2026, 8, 19, 8, 0, tzinfo=timezone.utc),
+            )
+
+    def test_attendance_allows_open_checkout(self):
+        """A member still on when the officer starts the close-out."""
+        from app.schemas.scheduling import CloseoutAttendanceEntry
+
+        entry = CloseoutAttendanceEntry(
+            user_id="11111111-1111-1111-1111-111111111111",
+            checked_in_at=datetime(2026, 8, 19, 8, 0, tzinfo=timezone.utc),
+        )
+        assert entry.checked_out_at is None
+
+    def test_calls_step_rejects_tally_over_total(self):
+        from app.schemas.scheduling import CloseoutCallsRequest
+
+        with pytest.raises(ValidationError):
+            CloseoutCallsRequest(reported_call_count=2, reported_call_types={"ems": 5})
+
+    def test_calls_step_rejects_breakdown_without_total(self):
+        from app.schemas.scheduling import CloseoutCallsRequest
+
+        with pytest.raises(ValidationError):
+            CloseoutCallsRequest(reported_call_types={"ems": 1})
+
+    def test_calls_step_rejects_over_cap(self):
+        from app.schemas.scheduling import CloseoutCallsRequest
+
+        with pytest.raises(ValidationError):
+            CloseoutCallsRequest(reported_call_count=MAX_CALLS_PER_SHIFT + 1)
+
+    def test_calls_step_accepts_attachments_alone(self):
+        """Claiming another unit's call without reporting a total of your own."""
+        from app.schemas.scheduling import CloseoutCallsRequest
+
+        body = CloseoutCallsRequest(
+            attach_call_ids=["22222222-2222-2222-2222-222222222222"]
+        )
+        assert body.reported_call_count is None
+        assert len(body.attach_call_ids) == 1
+
+    @pytest.mark.parametrize(
+        "field", ["address", "patient_name", "narrative", "dispatched_at"]
+    )
+    def test_calls_step_has_nowhere_for_incident_detail(self, field):
+        """The PII boundary holds on the per-step endpoint too, not only on
+        finalize — a second write path is a second chance to leak."""
+        from app.schemas.scheduling import CloseoutCallsRequest
+
+        body = CloseoutCallsRequest(**{"reported_call_count": 1, field: "sensitive"})
+        assert not hasattr(body, field)
+
+    def test_state_response_defaults_are_empty_not_absent(self):
+        """A fresh close-out renders as an empty wizard, not a crash."""
+        from app.schemas.scheduling import CloseoutStateResponse
+
+        state = CloseoutStateResponse(
+            shift_id="33333333-3333-3333-3333-333333333333",
+            is_finalized=False,
+            call_tracking_mode=CallTrackingMode.COUNT_ONLY,
+        )
+        assert state.closeout_step == 0
+        assert state.members == []
+        assert state.attachable_calls == []
+        assert state.combined_hours == 0.0
+
+
+# ======================================================================
 # Integration — the arithmetic that matters, against a real database
 # ======================================================================
 

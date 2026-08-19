@@ -225,6 +225,132 @@ class ShiftFinalizeRequest(BaseModel):
         return self
 
 
+class CallTypeOption(BaseModel):
+    """One department-defined call type.
+
+    ``slug`` is the stored value and is permanent; ``label`` is display-only.
+    Storing the label instead would orphan every historical call the first time
+    somebody corrected a typo in settings.
+    """
+
+    slug: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9_]+$")
+    label: str = Field(..., min_length=1, max_length=100)
+
+
+class CallTrackingSettings(BaseModel):
+    """How the department records call volume.
+
+    Defaults to ``detailed`` — what every existing org already does. A missing
+    setting must never read as "off" (pitfall #19): that would silently stop
+    call logging for every installation on upgrade.
+    """
+
+    mode: str = Field(default=CallTrackingMode.DETAILED)
+    call_types: List[CallTypeOption] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate(self) -> "CallTrackingSettings":
+        if self.mode not in CallTrackingMode.ALL:
+            raise ValueError(f"mode must be one of {', '.join(CallTrackingMode.ALL)}")
+        seen = set()
+        for entry in self.call_types:
+            if entry.slug in seen:
+                raise ValueError(f"Duplicate call type slug: {entry.slug}")
+            seen.add(entry.slug)
+        return self
+
+
+class CloseoutAttendanceEntry(BaseModel):
+    """One member's actual on/off times, as confirmed by the officer."""
+
+    user_id: UUID
+    checked_in_at: Optional[datetime] = None
+    checked_out_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _order(self) -> "CloseoutAttendanceEntry":
+        if (
+            self.checked_in_at
+            and self.checked_out_at
+            and self.checked_out_at <= self.checked_in_at
+        ):
+            raise ValueError("A member cannot leave before they arrived")
+        return self
+
+
+class CloseoutAttendanceRequest(BaseModel):
+    """Step 1 of close-out — who was on, and when."""
+
+    entries: List[CloseoutAttendanceEntry] = Field(default_factory=list)
+
+
+class CloseoutCallsRequest(BaseModel):
+    """Step 2 of close-out — how many calls the apparatus ran.
+
+    Carries no incident detail, for the same reason the finalize payload does
+    not: there is nowhere to put an address or a narrative, so none can arrive.
+    """
+
+    reported_call_count: Optional[int] = Field(
+        default=None, ge=0, le=MAX_CALLS_PER_SHIFT
+    )
+    reported_call_types: Optional[dict[str, int]] = None
+    attach_call_ids: Optional[List[UUID]] = None
+
+    @model_validator(mode="after")
+    def _validate(self) -> "CloseoutCallsRequest":
+        if self.reported_call_types:
+            if self.reported_call_count is None:
+                raise ValueError(
+                    "A call-type breakdown needs a total call count as well"
+                )
+            if any(v < 0 for v in self.reported_call_types.values()):
+                raise ValueError("Call type counts cannot be negative")
+            if sum(self.reported_call_types.values()) > self.reported_call_count:
+                raise ValueError("Call types add up to more than the total call count")
+        return self
+
+
+class CloseoutMemberState(UTCResponseBase):
+    """A member's saved close-out state, for redisplay on resume."""
+
+    user_id: UUID
+    user_name: str = ""
+    checked_in_at: Optional[datetime] = None
+    checked_out_at: Optional[datetime] = None
+    hours: float = 0.0
+    # None means the officer has not set credit yet — the wizard shows the
+    # apparatus count, not a deliberate zero.
+    call_count: Optional[int] = None
+    missing_checkout: bool = False
+
+
+class CloseoutAttachableCall(UTCResponseBase):
+    """A call another unit logged that this shift's apparatus may also claim."""
+
+    id: UUID
+    call_date: date
+    call_type: Optional[str] = None
+    source: str
+    apparatus_ids: List[str] = Field(default_factory=list)
+
+
+class CloseoutStateResponse(UTCResponseBase):
+    """Everything the close-out wizard needs, including where to resume."""
+
+    shift_id: UUID
+    is_finalized: bool
+    # 0 = not started, 1 = attendance saved, 2 = calls saved.
+    closeout_step: int = 0
+    call_tracking_mode: str
+    call_types: List[CallTypeOption] = Field(default_factory=list)
+    members: List[CloseoutMemberState] = Field(default_factory=list)
+    combined_hours: float = 0.0
+    reported_call_count: int = 0
+    reported_call_types: dict[str, int] = Field(default_factory=dict)
+    attachable_calls: List[CloseoutAttachableCall] = Field(default_factory=list)
+
+
 class ShiftCancelRequest(BaseModel):
     """Optional request body for cancelling a shift."""
 
@@ -871,41 +997,6 @@ class CalendarFeedResponse(BaseModel):
 
     token: str
     feed_path: str
-
-
-class CallTypeOption(BaseModel):
-    """One department-defined call type.
-
-    ``slug`` is the stored value and is permanent; ``label`` is display-only.
-    Storing the label instead would orphan every historical call the first time
-    somebody corrected a typo in settings.
-    """
-
-    slug: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9_]+$")
-    label: str = Field(..., min_length=1, max_length=100)
-
-
-class CallTrackingSettings(BaseModel):
-    """How the department records call volume.
-
-    Defaults to ``detailed`` — what every existing org already does. A missing
-    setting must never read as "off" (pitfall #19): that would silently stop
-    call logging for every installation on upgrade.
-    """
-
-    mode: str = Field(default=CallTrackingMode.DETAILED)
-    call_types: List[CallTypeOption] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def _validate(self) -> "CallTrackingSettings":
-        if self.mode not in CallTrackingMode.ALL:
-            raise ValueError(f"mode must be one of {', '.join(CallTrackingMode.ALL)}")
-        seen = set()
-        for entry in self.call_types:
-            if entry.slug in seen:
-                raise ValueError(f"Duplicate call type slug: {entry.slug}")
-            seen.add(entry.slug)
-        return self
 
 
 class SchedulingFeatureSettings(BaseModel):

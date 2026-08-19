@@ -38,6 +38,9 @@ from app.schemas.scheduling import (
     BasicApparatusUpdate,
     CalendarFeedResponse,
     CallTrackingSettings,
+    CloseoutAttendanceRequest,
+    CloseoutCallsRequest,
+    CloseoutStateResponse,
     EligiblePositionsResponse,
     GenerateShiftsRequest,
     PlatoonBulkAssign,
@@ -636,6 +639,111 @@ async def finalize_shift(
     # prompt itself, so every finalize path clears it — not just this endpoint.
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
+
+
+@router.get("/shifts/{shift_id}/closeout", response_model=CloseoutStateResponse)
+async def get_shift_closeout_state(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Everything the close-out wizard needs, plus where to resume.
+
+    ``closeout_step`` is 0 before the officer starts, 1 once attendance times
+    are saved and 2 once calls are, so a phone that locked mid-flow reopens on
+    the screen it left rather than at the beginning.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    state, error = await service.get_closeout_state(
+        shift_id, current_user.organization_id
+    )
+    if state is None:
+        raise HTTPException(
+            status_code=404, detail=_safe_detail("Shift not found.", error)
+        )
+    return state
+
+
+@router.patch(
+    "/shifts/{shift_id}/closeout/attendance", response_model=CloseoutStateResponse
+)
+async def save_shift_closeout_attendance(
+    shift_id: UUID,
+    body: CloseoutAttendanceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Step 1 of close-out — record when each member was actually on.
+
+    Saves immediately rather than holding the answer until the last screen, so
+    an interrupted close-out keeps the hours already confirmed.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    state, error = await service.save_closeout_attendance(
+        shift_id,
+        current_user.organization_id,
+        [
+            {
+                "user_id": str(e.user_id),
+                "checked_in_at": e.checked_in_at,
+                "checked_out_at": e.checked_out_at,
+            }
+            for e in body.entries
+        ],
+    )
+    if state is None:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to save attendance.", error),
+        )
+    return state
+
+
+@router.patch("/shifts/{shift_id}/closeout/calls", response_model=CloseoutStateResponse)
+async def save_shift_closeout_calls(
+    shift_id: UUID,
+    body: CloseoutCallsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Step 2 of close-out — record how many calls the apparatus ran.
+
+    ``attach_call_ids`` claims calls another unit already logged, so a single
+    incident two units rolled on counts once for the department and as a run
+    for each of them.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    state, error = await service.save_closeout_calls(
+        shift_id,
+        current_user.organization_id,
+        reported_call_count=body.reported_call_count,
+        reported_call_types=body.reported_call_types,
+        attach_call_ids=(
+            [str(c) for c in body.attach_call_ids] if body.attach_call_ids else None
+        ),
+        recorded_by=str(current_user.id),
+    )
+    if state is None:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to save call count.", error),
+        )
+    return state
 
 
 @router.post("/shifts/{shift_id}/reopen", response_model=ShiftResponse)
