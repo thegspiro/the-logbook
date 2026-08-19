@@ -100,6 +100,17 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     try {
       const updated = await schedulingService.updateFeatureSettings(patch);
       setFeature(updated);
+      // Mirror into the store the rest of the app reads. `loadSettings` is a
+      // once-per-session cache, so without this an admin who switched call
+      // tracking on kept seeing the old close-out — which never asks for a
+      // count — while the backend had already moved to count-only and would
+      // finalize the shift with none recorded.
+      useSchedulingStore.setState({
+        platoonsEnabled: updated.platoons_enabled,
+        requireEndOfShiftChecks: updated.require_end_of_shift_checks,
+        callTrackingMode: updated.call_tracking?.mode || 'detailed',
+        settingsLoaded: true,
+      });
       toast.success('Settings saved');
     } catch {
       toast.error('Failed to save settings');

@@ -493,6 +493,60 @@ class TestPartitionExisting:
 
 
 # ======================================================================
+# Settings sanitising — degrade, never raise
+# ======================================================================
+
+
+class TestCallTypeSanitising:
+    """The sanitiser must drop exactly what CallTypeOption would reject.
+
+    Letting a malformed entry through turned the promised safe degradation
+    into a 500 for the whole organisation: it survived the filter, then failed
+    schema construction on the settings endpoint and on every close-out.
+    """
+
+    def _resolve(self, call_types):
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={"scheduling": {"call_tracking": {"call_types": call_types}}}
+        )
+        return svc.get_call_tracking_settings(org)["call_types"]
+
+    def test_drops_a_slug_the_schema_would_reject(self):
+        assert self._resolve(
+            [{"slug": "EMS", "label": "Upper"}, {"slug": "ems", "label": "EMS"}]
+        ) == [{"slug": "ems", "label": "EMS"}]
+
+    def test_drops_duplicate_slugs(self):
+        assert self._resolve(
+            [{"slug": "ems", "label": "First"}, {"slug": "ems", "label": "Second"}]
+        ) == [{"slug": "ems", "label": "First"}]
+
+    def test_drops_an_overlong_slug(self):
+        assert self._resolve([{"slug": "x" * 51, "label": "Long"}]) == [
+            dict(t) for t in DEFAULT_CALL_TYPES
+        ]
+
+    def test_blank_label_falls_back_to_the_slug(self):
+        assert self._resolve([{"slug": "fire", "label": "   "}]) == [
+            {"slug": "fire", "label": "fire"}
+        ]
+
+    def test_everything_it_returns_satisfies_the_schema(self):
+        resolved = self._resolve(
+            [
+                {"slug": "EMS", "label": "bad"},
+                {"slug": "ems", "label": "EMS"},
+                {"slug": "ems", "label": "dup"},
+                {"slug": "y" * 80, "label": "long"},
+                {"slug": "fire", "label": ""},
+            ]
+        )
+        # Constructing this is what used to blow up.
+        assert CallTrackingSettings(call_types=resolved).call_types
+
+
+# ======================================================================
 # Resumable close-out — schema contract
 # ======================================================================
 

@@ -5423,7 +5423,17 @@ class SchedulingService:
                 await self.db.execute(
                     select(ShiftAssignment.user_id).where(
                         ShiftAssignment.shift_id == str(shift_id),
-                        ShiftAssignment.assignment_status != AssignmentStatus.CANCELLED,
+                        # Only those who actually took the shift. Excluding
+                        # just CANCELLED left DECLINED, PENDING and NO_SHOW on
+                        # the roster, and a member listed there gets an
+                        # attendance row and the apparatus's full call count by
+                        # default — crediting calls to people who never worked.
+                        ShiftAssignment.assignment_status.in_(
+                            [
+                                AssignmentStatus.ASSIGNED,
+                                AssignmentStatus.CONFIRMED,
+                            ]
+                        ),
                     )
                 )
             )
@@ -5580,14 +5590,17 @@ class SchedulingService:
         reported_call_types: Optional[Dict[str, int]] = None,
         attach_call_ids: Optional[List[str]] = None,
         recorded_by: Optional[str] = None,
+        count_provided: bool = False,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Step 2 — record how many calls the apparatus ran.
 
         The rows written here are the department's real call record before the
-        shift is finalized, which is correct: the calls happened. Figures from
-        an unfinalized shift are already labelled preliminary everywhere they
-        surface, and ``record_shift_calls`` reconciles rather than appends, so
-        a later correction moves the number instead of doubling it.
+        shift is finalized, which is correct: the calls happened, and
+        ``record_shift_calls`` reconciles rather than appends, so a later
+        correction moves the number instead of doubling it. Note the
+        consequence: an officer who saves this step and abandons the wizard has
+        already moved the department's call-volume report, which carries no
+        preliminary marker of its own.
         """
         shift = await self.get_shift_by_id(shift_id, organization_id)
         if not shift:
@@ -5603,11 +5616,17 @@ class SchedulingService:
             if not ok:
                 return None, err
 
-        if reported_call_count is not None:
+        # Three states, three behaviours (CLAUDE.md pitfall #1): an omitted
+        # field leaves the record alone, an explicit null is the officer saying
+        # "we did not track it" and must clear whatever a previous answer left
+        # behind, and a number is reconciled to. Treating null as "skip" kept
+        # the old rows, so a shift corrected back to untracked still reported
+        # its previous total.
+        if count_provided:
             _, err = await call_service.record_shift_calls(
                 shift=shift,
                 organization_id=str(organization_id),
-                total_calls=reported_call_count,
+                total_calls=reported_call_count or 0,
                 type_counts=reported_call_types,
                 recorded_by=recorded_by,
             )

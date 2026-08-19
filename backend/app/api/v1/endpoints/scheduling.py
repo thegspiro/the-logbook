@@ -737,6 +737,9 @@ async def save_shift_closeout_calls(
             [str(c) for c in body.attach_call_ids] if body.attach_call_ids else None
         ),
         recorded_by=str(current_user.id),
+        # Distinguishes "not sent" from an explicit null, so a client that
+        # only attaches calls does not wipe a count it never mentioned.
+        count_provided="reported_call_count" in body.model_fields_set,
     )
     if state is None:
         raise HTTPException(

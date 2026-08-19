@@ -173,12 +173,23 @@ class ShiftCompletionService:
         if not credited:
             return 0, []
 
+        # Types are only knowable when the member was on every call the
+        # apparatus ran; then the shift's tally is theirs in full. Credited
+        # with fewer, nothing records *which* ones they attended, and the
+        # alphabetical prefix this used to take was an invention that
+        # `create_report` then spent against type-specific requirements — one
+        # credit on a shift of one EMS and one fire always became EMS.
         call_service = CallTrackingService(self.db)
+        shift_total = await call_service.shift_response_count(shift_id)
+        credited = int(credited)
+        if credited < shift_total:
+            return credited, []
+
         type_counts = await call_service.shift_type_counts(shift_id)
         types: list[str] = []
         for slug in sorted(type_counts):
             types.extend([slug] * type_counts[slug])
-        return int(credited), types[: int(credited)]
+        return credited, types
 
     async def _get_trainee_hours_from_shift(
         self,

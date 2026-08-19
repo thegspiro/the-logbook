@@ -7,6 +7,7 @@ positions, membership type, and EVOC certification levels.
 """
 
 import copy
+import re
 from datetime import date
 from typing import Any, Dict, List, Optional, Set
 
@@ -48,6 +49,11 @@ DEFAULT_EXCLUDED_MEMBERSHIP_TYPES = [
     "honorary",
     "prospective",
 ]
+
+
+# Mirrors the pattern and length bound on CallTypeOption. Kept beside the
+# sanitizer so the two cannot drift into rejecting different things.
+_CALL_TYPE_SLUG = re.compile(r"[a-z0-9_]{1,50}")
 
 
 class ShiftEligibilityService:
@@ -564,16 +570,23 @@ class ShiftEligibilityService:
 
         types = raw.get("call_types")
         clean_types = []
+        seen = set()
         if isinstance(types, list):
             for entry in types:
                 if not isinstance(entry, dict):
                     continue
                 slug = str(entry.get("slug") or "").strip()
-                if not slug:
+                # Match what CallTypeOption accepts, not merely "non-blank".
+                # A hand-edited or legacy entry with an uppercase slug, a
+                # duplicate, or an over-long value passed this filter and then
+                # failed schema construction — turning the promised safe
+                # degradation into a 500 for the whole organization, on both
+                # the settings endpoint and every close-out.
+                if not _CALL_TYPE_SLUG.fullmatch(slug) or slug in seen:
                     continue
-                clean_types.append(
-                    {"slug": slug, "label": str(entry.get("label") or slug).strip()}
-                )
+                label = str(entry.get("label") or "").strip()[:100] or slug
+                seen.add(slug)
+                clean_types.append({"slug": slug, "label": label})
         if not clean_types:
             clean_types = [dict(t) for t in DEFAULT_CALL_TYPES]
 
