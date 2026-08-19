@@ -19,6 +19,17 @@ two cannot drift apart, and so it can be run by hand when reproducing a CI
 failure locally.
 """
 
+import sys
+from pathlib import Path
+
+# `python - <<EOF` fed the old heredoc on stdin, where Python puts the *current
+# directory* on sys.path — so `app` and `main` resolved from backend/. Running a
+# file instead puts the *script's own directory* there, i.e. backend/scripts/,
+# and both imports below fail with ModuleNotFoundError. Same bootstrap as the
+# sibling scripts in this directory; it also makes the script runnable by hand
+# from anywhere, not just from backend/.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
