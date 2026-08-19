@@ -151,7 +151,7 @@ GET    /api/v1/equipment-checks/reports/export               # CSV/PDF export
 
 The bridge between Inventory and the Equipment Check system. **Reads** accept
 `equipment_check.view` or `inventory.view`. **Writes** are split by intent
-*(tightened 2026-08-11)*: reporting an item used — and deployed-lot quantity
+_(tightened 2026-08-11)_: reporting an item used — and deployed-lot quantity
 updates — accept `equipment_check.submit` (the default member position) as
 well as `equipment_check.manage` / `inventory.manage`, because recording what
 you just used is crew work. Corrections of record are manage-only: withdrawing
@@ -424,7 +424,7 @@ GET    /api/v1/auth/oauth/microsoft/callback             # Microsoft OAuth callb
 See [Authentication > OAuth](Security-Authentication#oauth) for the
 link-existing-only policy, domain restriction, and callback error codes.
 
-*(2026-08-12)* When the matched account has TOTP MFA enabled, the callback no
+_(2026-08-12)_ When the matched account has TOTP MFA enabled, the callback no
 longer issues session cookies: it 302-redirects to the SPA with a short-lived
 `mfa_pending` token in the **URL fragment** (`/auth/callback#mfa_token=…`),
 and the client completes the second factor through the normal
@@ -923,19 +923,26 @@ organization. Audit logs and election records are never modified.
 
 ---
 
-## Public Legal Text _(2026-07-31)_
+## Public Legal Text _(2026-07-31, updated 2026-08-17)_
 
 Unauthenticated, rate-limited (30/min per IP). Backs the public `/privacy` and
 `/terms` pages.
 
 ```
-GET    /api/public/v1/legal                              # { organizationName, privacyPolicy, termsOfService }
+GET    /api/public/v1/legal    # { organizationName, privacyPolicy, termsOfService, lastUpdated }
 ```
 
 Returns the single organization's configured text
-(`settings.legal.privacy_policy` / `legal.terms_of_service`); `null` values
-mean the frontend renders its built-in defaults. On a multi-organization
-install all fields are `null` — with no org context, no tenant's text is served.
+(`settings.legal.privacy_policy` / `legal.terms_of_service`, with an optional
+`legal.last_updated` revision date shown above custom text); `null` values mean
+the frontend renders its built-in defaults, which carry their own date. On a
+multi-organization install all fields are `null` — with no org context, no
+tenant's text is served.
+
+`settings["legal"]` is unvalidated JSON, so values are read defensively: a
+non-string value, a non-dict `legal` key, or blank/whitespace text all return
+`null` (the defaults render) rather than erroring on a page anonymous visitors
+reach, and returned text is capped at 100,000 characters.
 
 ---
 

@@ -138,6 +138,178 @@ than navigating somewhere unintended.
   member who changes their mind leaves the device armed and the next tag that
   passes near the phone is silently overwritten.
 
+### A dropped setting is now named instead of silently becoming a default (2026-08-18)
+
+**Added**
+
+- **`python -m app.preflight` reports whether a configuration can start,
+  without starting it.** Until now the first validation of a configuration was
+  the boot that ran on it, so a bad value was discovered by losing the service.
+  Run `docker compose run --rm backend python -m app.preflight` before
+  restarting: exit `0` means it starts, `1` lists what blocks it, `2` means a
+  value is malformed (an empty string for a boolean, which otherwise surfaces
+  as a pydantic traceback). Every blocking check is gated on production or
+  staging, so a development run proves nothing about production — `--as
+production` evaluates the same values under that environment, and a clean
+  development run now says so rather than printing a bare pass.
+
+- **Startup failures name which settings actually reached the process.** Once
+  pydantic applies defaults, "the operator set this to the default" and "this
+  never arrived" are the same value, so a blocked boot reported the effective
+  value and never the reason. `os.environ` still knows the difference, and a
+  blocked startup now prints it:
+
+  ```
+  SECURITY_ENFORCE_HTTPS   set in environment  'false'
+  SECURITY_REQUIRE_TLS     NOT PRESENT — using built-in default True
+  ```
+
+  with the reason a value goes missing: a Docker Compose `environment:` block
+  is a whitelist, and a variable absent from it cannot be set from `.env` at
+  all. The reported names are derived from the settings model, so a future
+  check that names its setting is covered without registering it anywhere.
+  Values of secrets are withheld; only presence is reported, and a value
+  pydantic loaded from a `.env` file is distinguished from a default rather
+  than reported as missing.
+
+**Fixed**
+
+- **Preflight no longer reports success for a TLS configuration that cannot
+  start.** A `DB_SSL_CA` / `REDIS_SSL_CA` path that does not resolve inside the
+  container produces no critical, but aborts startup in
+  `ssl.create_default_context`. Preflight now opens the referenced files and
+  fails with the path named, since the mistake is almost always a host path
+  given to a setting read inside the container.
+
+- **`--as` rejects an unrecognised environment.** Blocking checks run only for
+  production and staging, so a typo such as `--as produciton` ran none of them
+  and still reported success — silently certifying an unchecked configuration.
+
+- **`python -m app.preflight --compose PATH` names the settings a compose file
+  cannot pass through**, before an upgrade starts gating on one of them. The
+  authoritative list is read out of the security validators' own source rather
+  than kept as a list — a list is exactly what goes stale, and staleness is the
+  failure being guarded against. Aimed at hand-maintained compose files that
+  never receive changes from this repository, Unraid's Compose Manager
+  especially; run against the file behind the 2026-08-18 outage it reports
+  `SECURITY_REQUIRE_TLS` among the gaps.
+
+- **`docs/UPGRADING.md`** — read before pulling a new version into a running
+  deployment. Records the changes that can stop an existing deployment from
+  starting (`SECURITY_REQUIRE_TLS` defaulting true, `RATE_LIMIT_ENABLED`
+  becoming enforced) with both ways out of each, and requires an entry for any
+  future change that can block a boot. A fresh install passing is not evidence
+  for these: they only ever fail installations that already existed.
+
+### Production settings in `.env` now reach the backend container (2026-08-18)
+
+**Fixed**
+
+- **`docker-compose.yml` passed `ENVIRONMENT` through from `.env` but not the
+  settings that production mode then demands.** The backend service has no
+  `env_file` and its `environment:` block is an explicit whitelist, so a
+  variable missing from it could not be set from `.env` at all. Setting
+  `ENVIRONMENT=production` there put the backend into production mode — where
+  `SECURITY_ENFORCE_HTTPS`, `DB_SSL` and `REDIS_SSL` block startup — while
+  every knob that satisfies or waives those gates stayed unreachable. The
+  container crash-looped and editing `.env` did nothing, because the value
+  never arrived. `SECURITY_ENFORCE_HTTPS`, `SECURITY_REQUIRE_TLS`,
+  `SECURITY_ALLOW_UNVERIFIED_TLS`, `DB_SSL`, `DB_SSL_CA`, `REDIS_SSL`,
+  `REDIS_SSL_CA` and `VOTE_SIGNING_KEY` are now passed through, with defaults
+  matching the application's own. The production override sets its own values
+  and still wins on merge, so a hardened deployment is unchanged.
+
+- **`DEBUG`, `ENABLE_DOCS` and `TRUSTED_PROXY_IPS` were silently ignored the
+  same way.** `TRUSTED_PROXY_IPS` is the consequential one: behind a reverse
+  proxy or CDN, leaving it unset makes every request appear to originate from
+  the proxy's container IP, so geo-blocking silently does nothing and all
+  clients share a single rate-limit bucket. An operator who set it in `.env`
+  got that failure with no indication the value had been dropped.
+
+**Changed**
+
+- **The `SECURITY_ENFORCE_HTTPS` startup message no longer claims a protection
+  the code does not provide.** It said the flag was needed "to prevent cookies
+  and credentials from being sent over HTTP", but the flag has no reader
+  anywhere in the backend — nothing emits HSTS and no middleware redirects
+  `http://` to `https://`. The `Secure` attribute on auth cookies is set
+  independently by `COOKIE_SECURE`. The message now states what the flag
+  actually is — an attestation that TLS terminates in front of the app — and
+  points at `COOKIE_SECURE` for cookie behaviour. Actual enforcement remains
+  unimplemented and is left to a separate change.
+
+### Privacy notice and terms rewritten; department control stated up front (2026-08-17)
+
+**Changed**
+
+- **`/privacy` and `/terms` defaults now open with who controls the system.**
+  Both documents lead with a callout that the department holds full control of
+  the application and of the records in it, and that **access is based on the
+  reader's status within the department** — granted, narrowed, suspended, or
+  ended by the department under its own bylaws, SOPs, and membership policies
+  and applicable state and local law, with a change of status (probation,
+  leave, rank change, suspension, separation) changing access without prior
+  notice. The Logbook is named as the software, never as the party deciding
+  access. The old text said the department was the data controller and stopped
+  there, which is the wrong half of the sentence for the reader who most needs
+  it: the member whose access was just removed.
+
+- **The defaults now carry the sections a privacy review actually checks for.**
+  Added to the notice: a plain-language summary at the top (layered notice),
+  sources of information, public-records and legal disclosure — fire
+  departments are routinely subject to sunshine laws and the old text buried
+  this in one clause — monitoring / no expectation of privacy, breach
+  notification, members under 18 for junior and cadet programs, data location,
+  an explicit no-sale / no-advertising / no-automated-decisions statement, and
+  "changes to this notice". Added to the terms: confidentiality of other
+  members' information, department ownership of records created in the system,
+  personal-device duties, notification channels, enforcement and discipline, an
+  order-of-precedence clause putting department policy, agreements, and law
+  above the terms, and an explicit **not-for-emergencies** disclaimer. That last
+  one is not boilerplate — a member treating a member portal as an alerting
+  path is a safety problem, and nothing on the page previously said otherwise.
+
+- **Both pages show a "Last updated" date.** A notice with no revision date
+  cannot be reviewed or relied on, and annual review is an express CCPA
+  expectation. The built-in date is `DEFAULT_LEGAL_LAST_UPDATED` in
+  `LegalPage.tsx`, bumped whenever the default text changes. A department
+  publishing its own wording supplies `legal.last_updated`; when it does not,
+  no date is shown rather than the built-in one — the built-in date describes
+  the built-in text and would misdate custom wording.
+
+**Added**
+
+- `GET /api/public/v1/legal` returns `lastUpdated` from
+  `settings["legal"]["last_updated"]`.
+
+**Fixed**
+
+- **The public legal endpoint no longer trusts the shape of
+  `settings["legal"]`.** It is unvalidated JSON: a string where a dict was
+  expected raised `AttributeError` on `.get`, turning a hand-edited setting into
+  a 500 on a page anonymous visitors reach. Non-dict `legal`, non-string values,
+  and blank/whitespace text now all fall back to the built-in defaults, and
+  returned text is capped at 100,000 characters so a stray paste cannot make the
+  public response unbounded.
+
+- The privacy notice pointed readers at "the address on our security page" for
+  reporting security issues. There is no such page in the app; it now tells
+  members to notify a department administrator.
+
+**Docs**
+
+- `wiki/Security-Privacy.md`, `wiki/API-Reference.md`,
+  `docs/training/17-privacy-data-rights.md`, `docs/COMPLIANCE.md`, and
+  `APPLICATION_PAGES.md` updated. The member-facing training guide gains a
+  short "the part members ask about most" list, and both it and the wiki note
+  that custom text **replaces** a document wholesale rather than merging with
+  the defaults — so a department publishing its own wording must carry the
+  control and access language across itself.
+
+- The default text is written for a US fire-service deployment and is a
+  starting point, not legal advice; departments should have counsel review what
+  they publish.
+
 ### Training: approval roster access is limited to training officers (2026-08-17)
 
 **Security / Fixed**

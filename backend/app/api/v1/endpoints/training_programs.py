@@ -790,6 +790,7 @@ async def delete_training_program(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+    await db.commit()
 
 
 # ==================== Program Phase Endpoints ====================

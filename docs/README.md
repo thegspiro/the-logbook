@@ -364,17 +364,22 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Step-by-step deployment guide for all supported methods
     - See also the platform-specific guides in [deployment/](./deployment/) (AWS, Proxmox, Synology, Unraid)
 
-13. **[DOCKER-BUILD-PUBLISH.md](./DOCKER-BUILD-PUBLISH.md)**
+13. **[UPGRADING.md](./UPGRADING.md)**
+    - Read before pulling a new version into a running deployment
+    - How to check a configuration with `python -m app.preflight` before restarting
+    - Changes that can stop an existing deployment from starting, and both ways out
+
+14. **[DOCKER-BUILD-PUBLISH.md](./DOCKER-BUILD-PUBLISH.md)**
     - Building Docker images and publishing them to GitHub Container Registry (ghcr.io)
 
-14. **[PORT_CONFIGURATION.md](./PORT_CONFIGURATION.md)**
+15. **[PORT_CONFIGURATION.md](./PORT_CONFIGURATION.md)**
     - Port layouts used by each deployment method and how to change them
 
-15. **[ALEMBIC_MIGRATIONS.md](./ALEMBIC_MIGRATIONS.md)**
+16. **[ALEMBIC_MIGRATIONS.md](./ALEMBIC_MIGRATIONS.md)**
     - Migration revision tracking — consult before creating a new migration
     - Prevents revision-ID collisions and broken `down_revision` chains
 
-16. **[EMAIL_DELIVERABILITY.md](./EMAIL_DELIVERABILITY.md)**
+17. **[EMAIL_DELIVERABILITY.md](./EMAIL_DELIVERABILITY.md)**
     - DNS records (SPF, DKIM, DMARC) and SMTP configuration for reliable email delivery to Gmail, Microsoft 365, and other providers
 
 ---

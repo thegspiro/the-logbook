@@ -475,20 +475,19 @@ class IPSecurityService:
     # ============================================
 
     # ============================================
-    # Query: Get All Active Allowed IPs
+    # Query: Get Active Allowed IPs for Organization
     # ============================================
 
-    async def get_all_active_allowed_ips_global(
+    async def get_all_active_allowed_ips(
         self,
         db: AsyncSession,
+        organization_id: str,
     ) -> Set[str]:
         """
-        Get all currently active approved allowlist IPs across ALL orgs.
+        Get all currently active approved allowlist IPs for an organization.
 
-        Used by the pre-authentication geo-blocking middleware, which has no
-        organization context (it runs before the user is known). An approved
-        allowlist exception for any org admits that source IP past the country
-        block — the per-user/route authorization checks still apply downstream.
+        The organization filter is required: an exception belonging to one
+        tenant must never relax network controls for another tenant.
         """
         now = datetime.now(timezone.utc)
 
@@ -496,6 +495,7 @@ class IPSecurityService:
             select(IPException.ip_address)
             .where(IPException.exception_type == IPExceptionType.ALLOWLIST)
             .where(IPException.approval_status == IPExceptionApprovalStatus.APPROVED)
+            .where(IPException.organization_id == str(organization_id))
             .where(IPException.valid_from <= now)
             .where(IPException.valid_until > now)
         )
