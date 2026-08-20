@@ -51,8 +51,8 @@ describe('RequestsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckPermission.mockReturnValue(false);
-    mockGetSwapRequests.mockResolvedValue([]);
-    mockGetTimeOffRequests.mockResolvedValue([]);
+    mockGetSwapRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
+    mockGetTimeOffRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
   });
 
   it('should render swap and time-off view toggles', async () => {
@@ -79,17 +79,22 @@ describe('RequestsTab', () => {
   });
 
   it('should render swap requests when loaded', async () => {
-    mockGetSwapRequests.mockResolvedValue([
-      {
-        id: 'swap-1',
-        requesting_user_id: 'user-1',
-        user_name: 'John Smith',
-        offering_shift_id: 'shift-1',
-        status: 'pending',
-        reason: 'Family event',
-        created_at: '2026-02-25T00:00:00Z',
-      },
-    ]);
+    mockGetSwapRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'swap-1',
+          requesting_user_id: 'user-1',
+          user_name: 'John Smith',
+          offering_shift_id: 'shift-1',
+          status: 'pending',
+          reason: 'Family event',
+          created_at: '2026-02-25T00:00:00Z',
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 20,
+    });
 
     renderWithRouter(<RequestsTab />);
 
@@ -116,16 +121,21 @@ describe('RequestsTab', () => {
 
   it('should show swap requests for admin users after loading', async () => {
     mockCheckPermission.mockReturnValue(true);
-    mockGetSwapRequests.mockResolvedValue([
-      {
-        id: 'swap-1',
-        requesting_user_id: 'user-2',
-        user_name: 'Jane Doe',
-        offering_shift_id: 'shift-1',
-        status: 'pending',
-        created_at: '2026-02-25T00:00:00Z',
-      },
-    ]);
+    mockGetSwapRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'swap-1',
+          requesting_user_id: 'user-2',
+          user_name: 'Jane Doe',
+          offering_shift_id: 'shift-1',
+          status: 'pending',
+          created_at: '2026-02-25T00:00:00Z',
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 20,
+    });
 
     renderWithRouter(<RequestsTab />);
 
@@ -149,5 +159,42 @@ describe('RequestsTab', () => {
     renderWithRouter(<RequestsTab />);
     const select = await screen.findByLabelText('Filter requests by status');
     expect(select.className).toMatch(/sm:w-\S+/);
+  });
+
+  it('displays server totals and loads a second page', async () => {
+    mockGetSwapRequests
+      .mockResolvedValueOnce({
+        items: [{ id: 'swap-1', offering_shift_id: 'shift-1', status: 'pending', created_at: '2026-02-25' }],
+        total: 2,
+        skip: 0,
+        limit: 20,
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 'swap-2', offering_shift_id: 'shift-2', status: 'pending', created_at: '2026-02-24' }],
+        total: 2,
+        skip: 1,
+        limit: 20,
+      });
+    const user = userEvent.setup();
+    renderWithRouter(<RequestsTab />);
+
+    expect((await screen.findByText(/Swap Requests/)).closest('button')).toHaveTextContent('(2)');
+    await user.click(await screen.findByRole('button', { name: /load more swap requests/i }));
+    await waitFor(() =>
+      expect(mockGetSwapRequests).toHaveBeenLastCalledWith({ status: 'pending', skip: 1, limit: 20 })
+    );
+    expect(screen.getAllByText(/Offering shift \(details unavailable\)/i)).toHaveLength(2);
+  });
+
+  it('resets pagination when the status filter changes', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<RequestsTab />);
+    await waitFor(() => expect(mockGetSwapRequests).toHaveBeenCalled());
+
+    await user.selectOptions(screen.getByLabelText('Filter requests by status'), 'approved');
+
+    await waitFor(() =>
+      expect(mockGetSwapRequests).toHaveBeenLastCalledWith({ status: 'approved', skip: 0, limit: 20 })
+    );
   });
 });
