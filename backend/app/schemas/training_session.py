@@ -5,7 +5,7 @@ Request and response schemas for training session endpoints.
 """
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -204,7 +204,9 @@ class TrainingSessionResponse(UTCResponseBase):
     credit_hours: float
     instructor: Optional[str]
     instructor_id: Optional[UUID] = None
-    co_instructors: Optional[List[Any]] = None
+    # User ids, per the column's own documentation. Declared List[Any]
+    # before, which promised the frontend (string[]) nothing.
+    co_instructors: Optional[List[str]] = None
     apparatus_id: Optional[UUID] = None
 
     issues_certification: bool

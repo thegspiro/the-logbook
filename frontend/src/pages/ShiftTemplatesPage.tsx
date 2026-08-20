@@ -16,7 +16,7 @@ import {
   Truck,
   Filter,
 } from 'lucide-react';
-import { schedulingService } from '../modules/scheduling/services/api';
+import { normalizePositions, schedulingService } from '../modules/scheduling/services/api';
 import type { ApparatusOption } from '../modules/scheduling/services/api';
 import type { ShiftTemplateCreate, ShiftPatternCreate } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
@@ -163,15 +163,11 @@ export const ShiftTemplatesPage: React.FC = () => {
     let positions: PositionEntry[] = [];
 
     if ((t.category || 'standard') === 'event' && t.positions && !Array.isArray(t.positions)) {
-      const meta = t.positions as { event_type?: string; resources?: ResourceUnit[] };
+      const meta = t.positions;
       eventType = (meta.event_type as EventType) || '';
       resources = meta.resources || [];
     } else if (Array.isArray(t.positions)) {
-      positions = (t.positions as Array<string | { position: string; required?: boolean }>).map((p) =>
-        typeof p === 'string'
-          ? { position: p, required: true }
-          : { position: p.position, required: p.required !== false }
-      );
+      positions = normalizePositions(t.positions);
     }
 
     return {
@@ -405,7 +401,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                       template.positions != null &&
                       !Array.isArray(template.positions) &&
                       (() => {
-                        const meta = template.positions as { event_type?: string; resources?: ResourceUnit[] };
+                        const meta = template.positions;
                         const evType = EVENT_TYPES.find((e) => e.value === meta.event_type);
                         return (
                           <div className="mb-4 space-y-2">
@@ -453,27 +449,37 @@ export const ShiftTemplatesPage: React.FC = () => {
                       })()}
 
                     {/* Positions (for standard/specialty templates) */}
-                    {Array.isArray(template.positions) && (template.positions as string[]).length > 0 && (
-                      <div className="mb-4">
-                        <p className="text-theme-text-muted mb-1.5 flex items-center gap-1 text-xs">
-                          <Users className="h-3 w-3" aria-hidden="true" />
-                          Positions ({(template.positions as string[]).length})
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {(template.positions as string[]).map((pos, i) => {
-                            const allOpts = getPositionOptions();
-                            return (
-                              <span
-                                key={i}
-                                className="rounded-sm bg-red-500/10 px-2 py-0.5 text-xs text-red-700 capitalize dark:text-red-400"
-                              >
-                                {allOpts.find((o) => o.value === pos)?.label || pos}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    {Array.isArray(template.positions) &&
+                      (() => {
+                        // Seats are stored as `{ position, required }` objects since the
+                        // optional-seat flag was added, and as bare strings before that.
+                        const slots = normalizePositions(template.positions);
+                        if (slots.length === 0) return null;
+                        const allOpts = getPositionOptions();
+                        return (
+                          <div className="mb-4">
+                            <p className="text-theme-text-muted mb-1.5 flex items-center gap-1 text-xs">
+                              <Users className="h-3 w-3" aria-hidden="true" />
+                              Positions ({slots.length})
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {slots.map((slot, i) => (
+                                <span
+                                  key={i}
+                                  className={`rounded-sm px-2 py-0.5 text-xs capitalize ${
+                                    slot.required
+                                      ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                                      : 'bg-theme-surface-hover text-theme-text-muted'
+                                  }`}
+                                >
+                                  {allOpts.find((o) => o.value === slot.position)?.label || slot.position}
+                                  {!slot.required && ' (opt)'}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                     <div className="border-theme-surface-border flex items-center gap-2 border-t pt-3">
                       <button

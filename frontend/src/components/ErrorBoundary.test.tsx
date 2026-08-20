@@ -185,6 +185,40 @@ describe('ErrorBoundary', () => {
     expect(reloadMock).toHaveBeenCalledTimes(1);
   });
 
+  it('copies the URL and time of the crash, not of the copy', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: writeTextMock },
+    });
+
+    // An earlier case in this file swaps window.location for a plain object, so
+    // set the address directly rather than going through history.pushState.
+    const setUrl = (href: string): void => {
+      Object.defineProperty(window, 'location', {
+        writable: true,
+        value: { ...window.location, href },
+      });
+    };
+    setUrl('http://localhost:3000/scheduling/templates?tab=templates');
+
+    render(
+      <ErrorBoundary>
+        <ThrowingChild shouldThrow={true} />
+      </ErrorBoundary>
+    );
+
+    // The fallback stays mounted while the member keeps navigating, so by the
+    // time they hit Copy the address bar names a different page entirely.
+    setUrl('http://localhost:3000/scheduling?view=week');
+
+    fireEvent.click(screen.getByRole('button', { name: /Copy error details/i }));
+
+    expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('/scheduling/templates?tab=templates'));
+    expect(writeTextMock).toHaveBeenCalledWith(expect.not.stringContaining('view=week'));
+
+    await screen.findByText('Copied to clipboard!');
+  });
+
   it('Go to Dashboard button navigates to /dashboard', () => {
     // Set up a writable location mock
     const locationMock = { ...window.location, href: '' };

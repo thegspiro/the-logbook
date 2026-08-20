@@ -934,6 +934,45 @@ reader in the same change, or mark it in the UI as not yet in effect — and add
 test asserting the wired set, so the next trigger cannot be added to the list
 without a sender that reads it.
 
+### 20. Untyped JSON Columns Get One Canonical Shape, Settled at the Write _(2026-08-19)_
+
+`shifts.positions`, `shift_templates.positions` and `basic_apparatus.positions`
+are untyped JSON, and three writers filled them three different ways: bare
+strings from onboarding and the pre-2026-08 UI, `{"position", "required"}`
+objects from the current template form, and — on templates only — an
+event-metadata dict that is not a seat list at all. Every reader then had to
+tell those apart, and the templates screen did not: it rendered an entry
+straight into a span and took the page down with React error #31.
+
+The frontend types said `string[]`. The column had held objects for months.
+
+**Rule:** a JSON column gets exactly one canonical stored shape, normalized on
+every write path, plus a migration that settles the rows already there. A
+reader-side conversion is a stopgap: it fixes the screen you are looking at and
+leaves the next reader to rediscover the problem.
+
+Seat lists are `[{"position": str, "required": bool}]`, one entry per seat.
+`app/utils/positions.normalize_stored_positions` is the write-side authority.
+
+**The four normalizers are deliberate, not duplication to tidy away:**
+
+| Where                                   | Why it exists                                                                                                                       |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `app/utils/positions.py`                | write side — settles a flat list, passes a dict (event metadata) through untouched                                                  |
+| `SchedulingService.normalize_positions` | display side — _flattens_ event metadata into seats, which is right for rendering and destructive as a value to save                |
+| `frontend .../services/api.ts`          | read boundary — the API can still serve rows written before the migration                                                           |
+| the migration's inlined `_normalize`    | frozen — a migration must keep transforming rows the way it did the day it ran, so it cannot import a helper that is free to change |
+
+Collapsing the first two is the specific mistake to avoid: saving the display
+normalizer's output turns an event template's resources into a flat seat list
+and loses the structure the event screens read.
+
+**Also:** a backfill that cannot be reversed needs its irreversibility stated in
+the migration docstring and needs to preserve information the old shape carried
+implicitly. `20260819_2037_1eeb053d59b7` expands a legacy `count` into that many
+seats for exactly this reason — collapsing it would have cut a three-firefighter
+template to one, permanently, with no downgrade to undo it.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

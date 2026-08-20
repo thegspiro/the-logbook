@@ -258,6 +258,25 @@ export const EVENT_TEMPLATE_STARTERS: EventTemplateStarter[] = [
   },
 ];
 
+/** Metadata stored in an event template's `positions` field. */
+export interface EventTemplateMeta {
+  event_type?: string;
+  resources?: ResourceUnit[];
+  flat_positions?: string[];
+}
+
+/**
+ * A template's stored `positions`, in every shape the API can return.
+ *
+ * Standard and specialty templates hold a flat seat list: plain strings for
+ * templates saved before the required/optional flag existed, `PositionEntry`
+ * objects for every template saved since. Event templates put resource
+ * metadata here instead of a seat list. The backend column is untyped JSON, so
+ * all three shapes coexist indefinitely — pass a flat list through
+ * `normalizePositions` before rendering rather than assuming strings.
+ */
+export type TemplatePositions = Array<string | PositionEntry> | EventTemplateMeta;
+
 export interface ShiftTemplate {
   id: string;
   organization_id: string;
@@ -267,7 +286,7 @@ export interface ShiftTemplate {
   end_time_of_day: string;
   duration_hours: number;
   color?: string;
-  positions?: unknown;
+  positions?: TemplatePositions | null;
   min_staffing: number;
   category?: string;
   apparatus_type?: string;
