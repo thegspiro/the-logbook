@@ -738,9 +738,11 @@
 }
 
 @utility modal-body {
-  /* One bounded dialog surface and one internal scroller. dvh follows the
-     visual viewport when a software keyboard opens; safe action-bar padding
-     keeps the final action above the home indicator. */
+  /* Keep legacy panels scrollable when their contents exceed this bound.
+     The shared <Modal> supplies its own nested scroller and clips this panel,
+     but hand-built consumers apply modal-body directly to their only surface.
+     dvh follows the visual viewport when a software keyboard opens. */
+  @apply overflow-y-auto;
   max-height: calc(100dvh - 2rem);
   @media (min-width: 640px) {
     max-height: calc(100dvh - 4rem);
