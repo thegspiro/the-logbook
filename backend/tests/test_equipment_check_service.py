@@ -16,6 +16,23 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.equipment_check_service import EquipmentCheckService
+from app.services.scheduling_service import SchedulingService
+
+
+def template_item(item_id, name="Authoritative name", compartment="Cab"):
+    return SimpleNamespace(
+        id=item_id,
+        name=name,
+        _check_compartment_name=compartment,
+        check_type="pass_fail",
+        required_quantity=2,
+        critical_minimum_quantity=1,
+        level_unit=None,
+        serial_number="SERIAL",
+        lot_number="LOT",
+        has_expiration=False,
+        expiration_date=None,
+    )
 
 
 @pytest.fixture
@@ -345,6 +362,11 @@ class TestSubmitCheckResumeOverride:
             ),
             patch.object(
                 service,
+                "_load_checkable_template_items",
+                AsyncMock(return_value={"item-1": template_item("item-1")}),
+            ),
+            patch.object(
+                service,
                 "complete_incomplete_check",
                 AsyncMock(return_value=MagicMock()),
             ) as complete,
@@ -353,7 +375,10 @@ class TestSubmitCheckResumeOverride:
                 shift_id="shift-1",
                 organization_id="org-1",
                 checked_by="manager-9",
-                data={"template_id": "tmpl-1", "items": [{"status": "pass"}]},
+                data={
+                    "template_id": "tmpl-1",
+                    "items": [{"template_item_id": "item-1", "status": "pass"}],
+                },
                 allow_manage=True,
             )
         assert complete.await_args.kwargs["allow_any"] is True
@@ -380,6 +405,11 @@ class TestSubmitCheckResumeOverride:
             ),
             patch.object(
                 service,
+                "_load_checkable_template_items",
+                AsyncMock(return_value={"item-1": template_item("item-1")}),
+            ),
+            patch.object(
+                service,
                 "complete_incomplete_check",
                 AsyncMock(return_value=MagicMock()),
             ) as complete,
@@ -388,7 +418,10 @@ class TestSubmitCheckResumeOverride:
                 shift_id="shift-1",
                 organization_id="org-1",
                 checked_by="member-1",
-                data={"template_id": "tmpl-1", "items": [{"status": "pass"}]},
+                data={
+                    "template_id": "tmpl-1",
+                    "items": [{"template_item_id": "item-1", "status": "pass"}],
+                },
                 allow_manage=False,
             )
         assert complete.await_args.kwargs["allow_any"] is False
@@ -415,7 +448,14 @@ class TestFailureAlertDetails:
                 AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
             ),
             patch.object(
-                service, "_load_template_items_map", AsyncMock(return_value={})
+                service,
+                "_load_checkable_template_items",
+                AsyncMock(
+                    return_value={
+                        "item-1": template_item("item-1", "Suction unit"),
+                        "item-2": template_item("item-2", "O2 bottle"),
+                    }
+                ),
             ),
             patch.object(service, "_create_check_items", AsyncMock(return_value=[])),
             patch.object(service, "_update_apparatus_deficiency", AsyncMock()),
@@ -436,12 +476,14 @@ class TestFailureAlertDetails:
                     "template_id": "tmpl-1",
                     "items": [
                         {
+                            "template_item_id": "item-1",
                             "item_name": "Suction unit",
                             "compartment_name": "Cab",
                             "check_type": "functional",
                             "status": "out_of_service",
                         },
                         {
+                            "template_item_id": "item-2",
                             "item_name": "O2 bottle",
                             "compartment_name": "Cab",
                             "check_type": "pass_fail",
@@ -458,7 +500,7 @@ class TestFailureAlertDetails:
             {
                 "name": "Suction unit",
                 "compartment": "Cab",
-                "check_type": "functional",
+                "check_type": "pass_fail",
                 "out_of_service": True,
             }
         ]
@@ -520,3 +562,89 @@ class TestShiftCheckStatusItemCount:
         assert len(summaries) == 1
         # Five template rows, of which a header and a text row are captions.
         assert summaries[0]["total_items"] == 3
+
+
+class TestAuthoritativeSubmissionItems:
+    @pytest.fixture
+    def authoritative(self):
+        return {
+            "item-1": template_item("item-1", "Mask", "Left cabinet"),
+            "item-2": template_item("item-2", "Cylinder", "Right cabinet"),
+        }
+
+    def test_one_item_partial_submission_is_rejected(self, authoritative):
+        with pytest.raises(ValueError, match="missing template items"):
+            EquipmentCheckService._validate_and_snapshot_submission(
+                [{"template_item_id": "item-1", "status": "pass"}], authoritative
+            )
+
+    def test_missing_template_item_id_is_rejected(self, authoritative):
+        with pytest.raises(ValueError, match="template_item_id is required"):
+            EquipmentCheckService._validate_and_snapshot_submission(
+                [{"status": "pass"}, {"template_item_id": "item-2"}], authoritative
+            )
+
+    def test_duplicate_template_item_ids_are_rejected(self, authoritative):
+        with pytest.raises(ValueError, match="Duplicate"):
+            EquipmentCheckService._validate_and_snapshot_submission(
+                [{"template_item_id": "item-1"}, {"template_item_id": "item-1"}],
+                authoritative,
+            )
+
+    def test_foreign_template_item_id_is_rejected(self, authoritative):
+        with pytest.raises(ValueError, match="do not belong"):
+            EquipmentCheckService._validate_and_snapshot_submission(
+                [
+                    {"template_item_id": "item-1"},
+                    {"template_item_id": "foreign-item"},
+                ],
+                authoritative,
+            )
+
+    def test_valid_complete_submission_uses_template_snapshots(self, authoritative):
+        items = [
+            {
+                "template_item_id": "item-1",
+                "status": "pass",
+                "item_name": "Client forgery",
+                "required_quantity": 999,
+            },
+            {"template_item_id": "item-2", "status": "pass"},
+        ]
+        EquipmentCheckService._validate_and_snapshot_submission(items, authoritative)
+        assert items[0]["item_name"] == "Mask"
+        assert items[0]["compartment_name"] == "Left cabinet"
+        assert items[0]["required_quantity"] == 2
+        assert EquipmentCheckService._compute_check_status(items, authoritative) == (
+            2,
+            2,
+            0,
+            "pass",
+        )
+
+    async def test_partial_end_of_shift_submission_cannot_clear_finalization_gate(
+        self, authoritative
+    ):
+        with pytest.raises(ValueError, match="missing template items"):
+            EquipmentCheckService._validate_and_snapshot_submission(
+                [{"template_item_id": "item-1", "status": "pass"}], authoritative
+            )
+
+        equipment = MagicMock()
+        equipment.get_shift_check_status = AsyncMock(
+            return_value=[
+                {
+                    "check_timing": "end_of_shift",
+                    "is_completed": False,
+                    "overall_status": "incomplete",
+                }
+            ]
+        )
+        with patch(
+            "app.services.equipment_check_service.EquipmentCheckService",
+            return_value=equipment,
+        ):
+            outstanding = await SchedulingService(
+                AsyncMock()
+            )._count_incomplete_end_checks("shift-1", "org-1")
+        assert outstanding == 1
