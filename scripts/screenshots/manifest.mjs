@@ -915,7 +915,7 @@ async function openBatchReportForm(page) {
         if (!crewRes.ok) continue;
         const body = await crewRes.json();
         const crew = Array.isArray(body) ? body : (body.crew ?? []);
-        if (crew.some((m) => m.program_name && !m.already_reported)) {
+        if (crew.some((m) => m.program_name && !m.has_existing_report)) {
           return shift.shift_date;
         }
       }
