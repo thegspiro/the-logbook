@@ -49,10 +49,13 @@ vi.mock('react-hot-toast', () => ({
 
 describe('RequestsTab', () => {
   beforeEach(() => {
-    // Reset queued `mockResolvedValueOnce` pages as well as call history so a
-    // failed or interrupted pagination assertion cannot leak a page into the
-    // next test (CI runs this suite in randomized order).
-    vi.resetAllMocks();
+    // Clear queued pages as well as call history without resetting unrelated
+    // module mocks owned by the shared test environment.
+    mockGetSwapRequests.mockReset();
+    mockGetTimeOffRequests.mockReset();
+    mockReviewSwapRequest.mockReset();
+    mockReviewTimeOff.mockReset();
+    mockCheckPermission.mockReset();
     mockCheckPermission.mockReturnValue(false);
     mockGetSwapRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
     mockGetTimeOffRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
@@ -199,5 +202,18 @@ describe('RequestsTab', () => {
     await waitFor(() =>
       expect(mockGetSwapRequests).toHaveBeenLastCalledWith({ status: 'approved', skip: 0, limit: 20 })
     );
+  });
+
+  it('resets pagination when the request type changes', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<RequestsTab />);
+    await waitFor(() => expect(mockGetTimeOffRequests).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: /time off/i }));
+
+    await waitFor(() => {
+      expect(mockGetTimeOffRequests).toHaveBeenCalledTimes(2);
+      expect(mockGetTimeOffRequests).toHaveBeenLastCalledWith({ status: 'pending', skip: 0, limit: 20 });
+    });
   });
 });
