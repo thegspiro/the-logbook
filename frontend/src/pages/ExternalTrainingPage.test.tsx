@@ -110,3 +110,20 @@ describe('ExternalTrainingPage — category mappings', () => {
     );
   });
 });
+
+describe('ExternalTrainingPage — modal behavior', () => {
+  it('only activates dialog behavior when a modal is open', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+
+    await screen.findByRole('button', { name: /^Mappings$/ });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.body.style.overflow).not.toBe('hidden');
+
+    const addProvider = screen.getByRole('button', { name: /add provider/i });
+    await userEvent.click(addProvider);
+
+    expect(await screen.findByRole('dialog', { name: 'Select Provider Type' })).toBeInTheDocument();
+    await waitFor(() => expect(addProvider).not.toHaveFocus());
+    expect(document.body.style.overflow).toBe('hidden');
+  });
+});
