@@ -467,7 +467,7 @@ const DocumentsPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="card overflow-hidden">
+                <div className="card overflow-x-auto">
                   <table className="rwd-table w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
