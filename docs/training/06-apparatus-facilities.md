@@ -154,12 +154,12 @@ The compliance section shows which standards apply and whether the apparatus is 
 
 Navigate to **Facilities** in the sidebar. The facilities module has a dashboard landing page and dedicated detail pages:
 
-| Page                | URL                       | Description                                                            |
-| ------------------- | ------------------------- | ---------------------------------------------------------------------- |
-| **Dashboard**       | `/facilities`             | Summary statistics, recent activity, and searchable facility card grid |
-| **Facility Detail** | `/facilities/:id`         | Full-page detail with sidebar navigation to all sections               |
-| **Maintenance**     | `/facilities/maintenance` | Cross-facility maintenance records and work orders                     |
-| **Inspections**     | `/facilities/inspections` | Cross-facility inspection records and scheduling                       |
+| Page                | URL                       | Description                                                                           |
+| ------------------- | ------------------------- | ------------------------------------------------------------------------------------- |
+| **Dashboard**       | `/facilities`             | Summary statistics, recent maintenance completions, and searchable facility card grid |
+| **Facility Detail** | `/facilities/:id`         | Full-page detail with sidebar navigation to all sections                              |
+| **Maintenance**     | `/facilities/maintenance` | Cross-facility maintenance records and work orders                                    |
+| **Inspections**     | `/facilities/inspections` | Cross-facility inspection records and scheduling                                      |
 
 ### Dashboard
 

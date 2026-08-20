@@ -40,7 +40,7 @@ Event creation, editing, and duplication with type filtering. RSVP with admin ov
 Unified location management that serves as the single source of truth for rooms, buildings, and venues across all modules. Location Setup Wizard with address, building, floor, room, and capacity fields.
 
 - **Kiosk Display** — Each location gets a non-guessable display URL (`/display/{code}`) designed for tablets left in rooms. The page automatically shows the current event's QR code and cycles to the next event. No authentication required on the display — auth happens on the scanning member's device.
-- **Facility Bridge** — When the Facilities module is enabled, locations can optionally link to a Facility record for deep building management data (maintenance, inspections, utilities).
+- **Facility Bridge** — Facility Rooms own and synchronize their linked Location records for shared scheduling and check-in. Standalone Locations may optionally reference a Facility for context, but they do not create or update Facility Rooms.
 - **Universal Picker** — Events, Training, and Meetings all reference the same `locations` table. Turning Facilities on or off never breaks location references.
 
 ### Training & Certification Tracking ([Documentation](docs/TRAINING_PROGRAMS.md))

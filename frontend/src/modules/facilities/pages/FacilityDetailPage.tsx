@@ -32,7 +32,7 @@ import { getVisibleFacilitySections, type FacilitySectionId } from '../facilityD
 export default function FacilityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { canManage, canEdit, canViewSensitive } = useFacilitiesAccess();
+  const { canManage, canCreate, canEdit, canMaintenance, canViewSensitive } = useFacilitiesAccess();
   const {
     selectedFacility: facility,
     isLoadingDetail,
@@ -213,33 +213,48 @@ export default function FacilityDetailPage() {
               facility={facility}
               facilityTypes={facilityTypes}
               facilityStatuses={facilityStatuses}
-              canManage={canManage}
+              canManage={canEdit}
             />
           )}
-          {section === 'rooms' && <RoomsSection facilityId={facility.id} canManage={canManage} />}
-          {section === 'systems' && <SystemsSection facilityId={facility.id} canManage={canManage} />}
-          {section === 'maintenance' && <MaintenanceSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'rooms' && (
+            <RoomsSection facilityId={facility.id} canCreate={canCreate} canEdit={canEdit} canDelete={canManage} />
+          )}
+          {section === 'systems' && (
+            <SystemsSection facilityId={facility.id} canCreate={canCreate} canEdit={canEdit} canDelete={canManage} />
+          )}
+          {section === 'maintenance' && (
+            <MaintenanceSection facilityId={facility.id} canEdit={canMaintenance} canDelete={canManage} />
+          )}
           {section === 'inspections' && <InspectionsSection facilityId={facility.id} canManage={canManage} />}
           {section === 'utilities' && (
-            <UtilitiesSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+            <UtilitiesSection facilityId={facility.id} canManage={canManage} canCreate={canCreate} canEdit={canEdit} />
           )}
-          {section === 'contacts' && <ContactsSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'contacts' && (
+            <ContactsSection facilityId={facility.id} canCreate={canCreate} canEdit={canEdit} canDelete={canManage} />
+          )}
           {section === 'access-keys' && (
-            <AccessKeysSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+            <AccessKeysSection facilityId={facility.id} canManage={canManage} canCreate={canCreate} canEdit={canEdit} />
           )}
           {section === 'shutoffs' && (
-            <ShutoffsSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+            <ShutoffsSection facilityId={facility.id} canManage={canManage} canCreate={canCreate} canEdit={canEdit} />
           )}
           {section === 'capital-projects' && (
-            <CapitalProjectsSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+            <CapitalProjectsSection
+              facilityId={facility.id}
+              canManage={canManage}
+              canCreate={canCreate}
+              canEdit={canEdit}
+            />
           )}
           {section === 'insurance' && (
-            <InsuranceSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+            <InsuranceSection facilityId={facility.id} canManage={canManage} canCreate={canCreate} canEdit={canEdit} />
           )}
           {section === 'occupants' && (
-            <OccupantsSection facilityId={facility.id} canManage={canManage} canEdit={canEdit} />
+            <OccupantsSection facilityId={facility.id} canManage={canManage} canCreate={canCreate} canEdit={canEdit} />
           )}
-          {section === 'compliance' && <ComplianceSection facilityId={facility.id} canManage={canManage} />}
+          {section === 'compliance' && (
+            <ComplianceSection facilityId={facility.id} canCreate={canCreate} canDelete={canManage} />
+          )}
         </div>
       </div>
     </div>

@@ -31,6 +31,40 @@ class FacilityDashboardCounts(BaseModel):
     model_config = _response_config
 
 
+class FacilityDashboardMaintenancePreview(BaseModel):
+    """Bounded maintenance row with its facility name for dashboard display."""
+
+    id: str
+    facility_id: str
+    facility_name: str
+    description: Optional[str] = None
+    due_date: Optional[date] = None
+    completed_date: Optional[date] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = _response_config
+
+
+class FacilityDashboardInspectionPreview(BaseModel):
+    """Bounded upcoming inspection row with its facility name."""
+
+    id: str
+    facility_id: str
+    facility_name: str
+    title: str
+    next_inspection_date: date
+
+    model_config = _response_config
+
+
+class FacilityDashboardSummary(FacilityDashboardCounts):
+    """Counts plus globally ordered, bounded Facilities dashboard previews."""
+
+    overdue_maintenance_records: List[FacilityDashboardMaintenancePreview]
+    upcoming_inspection_records: List[FacilityDashboardInspectionPreview]
+    recent_maintenance_completions: List[FacilityDashboardMaintenancePreview]
+
+
 # =============================================================================
 # Schema Enums (mirror model enums for API layer)
 # =============================================================================
@@ -455,6 +489,17 @@ class FacilityListItem(BaseModel):
     is_archived: bool
     facility_type: Optional[FacilityTypeListItem] = None
     status_record: Optional[FacilityStatusListItem] = None
+    model_config = _response_config
+
+
+class FacilityPageResponse(BaseModel):
+    """A page of facilities plus the total matching organization-wide count."""
+
+    items: List[FacilityListItem]
+    total: int
+    skip: int
+    limit: int
+
     model_config = _response_config
 
 
