@@ -1908,6 +1908,12 @@ class SchedulingService:
             if not shift:
                 return None, "Shift not found"
 
+            tracking = await CallTrackingService(self.db).get_settings(
+                str(organization_id)
+            )
+            if tracking.get("mode") != CallTrackingMode.DETAILED:
+                return None, "Detailed call records are disabled for this organization"
+
             call = ShiftCall(
                 shift_id=shift_id, organization_id=organization_id, **call_data
             )
