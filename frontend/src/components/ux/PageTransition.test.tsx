@@ -54,6 +54,7 @@ describe('PageTransition accessibility', () => {
     );
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Members'));
+    expect(document.title).toBe('Members | The Logbook');
     expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(screen.getByRole('button')).not.toHaveAttribute('aria-live');
     expect(await axe(container)).toHaveNoViolations();
@@ -124,10 +125,12 @@ describe('PageTransition accessibility', () => {
     // about it — but the old page is no longer claimed either.
     expect(screen.getByRole('status')).toHaveTextContent('');
     expect(screen.getByRole('status')).not.toHaveTextContent('Roster');
+    expect(document.title).toBe('The Logbook');
 
     // …and the watch still settles on the heading when it lands: one
     // announcement per navigation, not permanent silence.
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Members'));
+    expect(document.title).toBe('Members | The Logbook');
   });
 
   it('falls back to a generic announcement when no heading ever arrives', async () => {
@@ -150,6 +153,7 @@ describe('PageTransition accessibility', () => {
         vi.advanceTimersByTime(6000);
       });
       expect(screen.getByRole('status')).toHaveTextContent('Page loaded');
+      expect(document.title).toBe('The Logbook');
     } finally {
       vi.useRealTimers();
     }
