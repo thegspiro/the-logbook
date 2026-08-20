@@ -8,33 +8,29 @@
 
 import { create } from 'zustand';
 import { facilitiesService } from '../../../services/api';
+import type { Facility, FacilityType, FacilityStatus, MaintenanceType, Room, FacilitySystem } from '../types';
 import type {
-  Facility,
-  FacilityType,
-  FacilityStatus,
-  MaintenanceType,
-  MaintenanceRecord,
-  Inspection,
-  Room,
-  FacilitySystem,
-} from '../types';
-import type { EmergencyContact, FacilityCreate } from '../../../services/facilitiesServices';
+  EmergencyContact,
+  FacilityCreate,
+  FacilityDashboardInspectionPreview,
+  FacilityDashboardMaintenancePreview,
+} from '../../../services/facilitiesServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { getTodayLocalDate, toLocalDateString } from '../../../utils/dateFormatting';
 
 interface DashboardStats {
   totalFacilities: number;
   operationalCount: number;
   overdueMaintenanceCount: number;
-  upcomingInspections: Inspection[];
+  upcomingInspections: FacilityDashboardInspectionPreview[];
   upcomingInspectionCount: number;
-  overdueMaintenanceRecords: MaintenanceRecord[];
-  recentActivity: MaintenanceRecord[];
+  overdueMaintenanceRecords: FacilityDashboardMaintenancePreview[];
+  recentActivity: FacilityDashboardMaintenancePreview[];
 }
 
 interface FacilitiesState {
   // Core data
   facilities: Facility[];
+  facilitiesTotal: number;
   facilityTypes: FacilityType[];
   facilityStatuses: FacilityStatus[];
   maintenanceTypes: MaintenanceType[];
@@ -76,6 +72,7 @@ interface FacilitiesState {
 export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
   // Initial state
   facilities: [],
+  facilitiesTotal: 0,
   facilityTypes: [],
   facilityStatuses: [],
   maintenanceTypes: [],
@@ -125,48 +122,22 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
   loadDashboardStats: async () => {
     set({ isLoadingDashboard: true });
     try {
-      const [facilities, maintenance, inspections, counts] = await Promise.all([
-        facilitiesService.getFacilities({ is_archived: false }),
-        facilitiesService.getMaintenanceRecords({}),
-        facilitiesService.getInspections({}),
-        facilitiesService.getDashboardCounts(),
+      const [facilityPage, dashboard] = await Promise.all([
+        facilitiesService.getFacilitiesPage({ is_archived: false, skip: 0, limit: 24 }),
+        facilitiesService.getDashboard(),
       ]);
 
-      const overdueMaintenanceRecords = maintenance.filter((r) => r.isOverdue && !r.isCompleted);
-
-      // Compare calendar dates, not instants: the backend count treats
-      // next_inspection_date >= today as upcoming, so an inspection dated
-      // today must appear in this preview all day — parsing the date-only
-      // string into a Date and comparing against `new Date()` dropped it
-      // for most of the day (count and preview disagreed).
-      const todayStr = getTodayLocalDate();
-      const cutoffStr = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
-      const upcomingInspections = inspections.filter((i) => {
-        if (!i.nextInspectionDate) return false;
-        const dateStr = i.nextInspectionDate.slice(0, 10);
-        return dateStr >= todayStr && dateStr <= cutoffStr;
-      });
-
-      // Recent activity: last 5 completed maintenance records
-      const recentActivity = [...maintenance]
-        .filter((r) => r.isCompleted)
-        .sort((a, b) => {
-          const dateA = a.completedDate || a.updatedAt;
-          const dateB = b.completedDate || b.updatedAt;
-          return new Date(dateB).getTime() - new Date(dateA).getTime();
-        })
-        .slice(0, 5);
-
       set({
-        facilities,
+        facilities: facilityPage.items,
+        facilitiesTotal: facilityPage.total,
         dashboardStats: {
-          totalFacilities: counts.totalFacilities,
-          operationalCount: counts.operationalFacilities,
-          overdueMaintenanceCount: counts.overdueMaintenance,
-          upcomingInspections,
-          upcomingInspectionCount: counts.upcomingInspections,
-          overdueMaintenanceRecords,
-          recentActivity,
+          totalFacilities: dashboard.totalFacilities,
+          operationalCount: dashboard.operationalFacilities,
+          overdueMaintenanceCount: dashboard.overdueMaintenance,
+          upcomingInspections: dashboard.upcomingInspectionRecords,
+          upcomingInspectionCount: dashboard.upcomingInspections,
+          overdueMaintenanceRecords: dashboard.overdueMaintenanceRecords,
+          recentActivity: dashboard.recentMaintenanceCompletions,
         },
         isLoadingDashboard: false,
       });

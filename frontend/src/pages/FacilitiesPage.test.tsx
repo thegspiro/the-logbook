@@ -12,7 +12,8 @@ const mockGetFacility = vi.fn();
 const mockGetMaintenanceRecords = vi.fn();
 const mockGetMaintenanceTypes = vi.fn();
 const mockGetInspections = vi.fn();
-const mockGetDashboardCounts = vi.fn();
+const mockGetFacilitiesPage = vi.fn();
+const mockGetDashboard = vi.fn();
 
 vi.mock('../services/api', () => ({
   facilitiesService: {
@@ -24,7 +25,8 @@ vi.mock('../services/api', () => ({
     getMaintenanceRecords: (...args: unknown[]) => mockGetMaintenanceRecords(...args) as unknown,
     getMaintenanceTypes: (...args: unknown[]) => mockGetMaintenanceTypes(...args) as unknown,
     getInspections: (...args: unknown[]) => mockGetInspections(...args) as unknown,
-    getDashboardCounts: (...args: unknown[]) => mockGetDashboardCounts(...args) as unknown,
+    getFacilitiesPage: (...args: unknown[]) => mockGetFacilitiesPage(...args) as unknown,
+    getDashboard: (...args: unknown[]) => mockGetDashboard(...args) as unknown,
     archiveFacility: vi.fn().mockResolvedValue({}),
     restoreFacility: vi.fn().mockResolvedValue({}),
     getRooms: vi.fn().mockResolvedValue([]),
@@ -94,6 +96,7 @@ describe('FacilitiesDashboard', () => {
     // Reset the store between tests
     useFacilitiesStore.setState({
       facilities: [],
+      facilitiesTotal: 0,
       facilityTypes: [],
       facilityStatuses: [],
       maintenanceTypes: [],
@@ -114,16 +117,20 @@ describe('FacilitiesDashboard', () => {
       isAuthenticated: true,
     });
     mockGetFacilities.mockResolvedValue(mockFacilities);
+    mockGetFacilitiesPage.mockResolvedValue({ items: mockFacilities, total: 2, skip: 0, limit: 24 });
     mockGetTypes.mockResolvedValue(mockTypes);
     mockGetStatuses.mockResolvedValue(mockStatuses);
     mockGetMaintenanceTypes.mockResolvedValue([]);
     mockGetMaintenanceRecords.mockResolvedValue([]);
     mockGetInspections.mockResolvedValue([]);
-    mockGetDashboardCounts.mockResolvedValue({
+    mockGetDashboard.mockResolvedValue({
       totalFacilities: 2,
       operationalFacilities: 2,
       overdueMaintenance: 0,
       upcomingInspections: 0,
+      overdueMaintenanceRecords: [],
+      upcomingInspectionRecords: [],
+      recentMaintenanceCompletions: [],
     });
     mockGetFacility.mockResolvedValue(mockFacilities[0]);
   });
@@ -223,7 +230,7 @@ describe('FacilitiesDashboard', () => {
   });
 
   it('shows empty state when no facilities exist', async () => {
-    mockGetFacilities.mockResolvedValue([]);
+    mockGetFacilitiesPage.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 24 });
     renderPage();
 
     await waitFor(() => {
@@ -235,7 +242,7 @@ describe('FacilitiesDashboard', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
+      expect(mockGetFacilitiesPage).toHaveBeenCalledWith({ is_archived: false, skip: 0, limit: 24 });
     });
   });
 
@@ -247,12 +254,32 @@ describe('FacilitiesDashboard', () => {
     await user.type(screen.getByRole('searchbox', { name: 'Search facilities' }), 'spring');
 
     await waitFor(() => {
-      expect(mockGetFacilities).toHaveBeenCalledWith({
+      expect(mockGetFacilitiesPage).toHaveBeenCalledWith({
         is_archived: false,
         search: 'spring',
-        limit: 100,
+        skip: 0,
+        limit: 24,
       });
     });
+  });
+
+  it('loads the next server-backed facility page', async () => {
+    const user = userEvent.setup();
+    mockGetFacilitiesPage
+      .mockResolvedValueOnce({ items: mockFacilities, total: 25, skip: 0, limit: 24 })
+      .mockResolvedValueOnce({ items: [mockFacilities[0]], total: 25, skip: 24, limit: 24 });
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Next' }));
+
+    await waitFor(() => {
+      expect(mockGetFacilitiesPage).toHaveBeenLastCalledWith({
+        is_archived: false,
+        skip: 24,
+        limit: 24,
+      });
+    });
+    expect(await screen.findByText('Page 2 of 2 · 25 facilities')).toBeInTheDocument();
   });
 
   it('shows overdue maintenance section', async () => {
