@@ -380,25 +380,88 @@ describe('EventForm', () => {
       await user.selectOptions(screen.getByLabelText(/event type/i), 'recruitment');
     };
 
-    it('prompts to wire guest sign-in into the pipeline when Recruitment is chosen', async () => {
+    const guestSignIn = () => screen.getByLabelText(/allow guest \(non-member\) sign-in/i);
+    const createsProspect = () => screen.getByLabelText(/add guests to the prospective members pipeline/i);
+
+    it('turns both guest sign-in switches on for a new recruitment event', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       await selectRecruitment(userEvent.setup());
 
-      expect(await screen.findByRole('button', { name: /enable guest sign-in/i })).toBeInTheDocument();
-      expect(screen.getByLabelText(/allow guest \(non-member\) sign-in/i)).not.toBeChecked();
+      await waitFor(() => {
+        expect(guestSignIn()).toBeChecked();
+        expect(createsProspect()).toBeChecked();
+      });
+      // The default is stated, not silent.
+      expect(screen.getByText(/will be added to the prospective members pipeline/i)).toBeInTheDocument();
     });
 
-    it('turns on both guest sign-in switches from the prompt', async () => {
+    it('withdraws its own defaults when the type changes away again', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
       await selectRecruitment(user);
+      await waitFor(() => expect(guestSignIn()).toBeChecked());
+
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'social');
+
+      await waitFor(() => expect(guestSignIn()).not.toBeChecked());
+    });
+
+    it('leaves a hand-set guest choice alone when the type changes', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const user = userEvent.setup();
+      await screen.findByRole('group', { name: 'Other' });
+      await user.click(guestSignIn());
+      await waitFor(() => expect(guestSignIn()).toBeChecked());
+
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'recruitment');
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'social');
+
+      // Auto-defaults never applied, so nothing may be withdrawn either.
+      expect(guestSignIn()).toBeChecked();
+    });
+
+    it('does not change guest settings on an event that already exists', async () => {
+      renderWithRouter(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          editingEventId="event-1"
+          initialData={{
+            title: 'Standing open house',
+            event_type: 'social',
+            start_datetime: '2026-09-01T18:00:00Z',
+            end_datetime: '2026-09-01T20:00:00Z',
+            allow_guest_check_in: false,
+            guest_check_in_creates_prospect: false,
+          }}
+        />
+      );
+
+      const user = userEvent.setup();
+      await selectRecruitment(user);
+
+      expect(guestSignIn()).not.toBeChecked();
+      expect(await screen.findByRole('button', { name: /enable guest sign-in/i })).toBeInTheDocument();
+    });
+
+    it('turns on both switches from the prompt when they are off', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const user = userEvent.setup();
+      await selectRecruitment(user);
+      await waitFor(() => expect(guestSignIn()).toBeChecked());
+
+      await user.click(guestSignIn());
+      await waitFor(() => expect(guestSignIn()).not.toBeChecked());
+
       await user.click(await screen.findByRole('button', { name: /enable guest sign-in/i }));
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/allow guest \(non-member\) sign-in/i)).toBeChecked();
-        expect(screen.getByLabelText(/add guests to the prospective members pipeline/i)).toBeChecked();
+        expect(guestSignIn()).toBeChecked();
+        expect(createsProspect()).toBeChecked();
       });
       expect(screen.queryByRole('button', { name: /enable guest sign-in/i })).not.toBeInTheDocument();
     });
