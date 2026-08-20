@@ -15,7 +15,7 @@ const APPLICATION_NAME = 'The Logbook';
  * arrives after a slow request—or whose text is filled in later—still wins.
  */
 export function RouteTitleManager(): null {
-  const { pathname } = useLocation();
+  const location = useLocation();
 
   useLayoutEffect(() => {
     const originalPushState = window.history.pushState.bind(window.history);
@@ -50,7 +50,13 @@ export function RouteTitleManager(): null {
     document.title = APPLICATION_NAME;
 
     const updateTitle = () => {
-      const heading = document.querySelector<HTMLElement>('[role="main"] h1, main h1, h1');
+      // A comma-separated selector returns the first match in document order,
+      // not the first selector's match. Query in priority order so an
+      // onboarding/header brand h1 cannot outrank the actual page heading.
+      const heading =
+        document.querySelector<HTMLElement>('[role="main"] h1') ??
+        document.querySelector<HTMLElement>('main h1') ??
+        document.querySelector<HTMLElement>('h1');
       const headingText = heading?.textContent?.replace(/\s+/g, ' ').trim();
       document.title = headingText ? `${headingText} | ${APPLICATION_NAME}` : APPLICATION_NAME;
     };
@@ -60,7 +66,7 @@ export function RouteTitleManager(): null {
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
     return () => observer.disconnect();
-  }, [pathname]);
+  }, [location.hash, location.key, location.pathname, location.search]);
 
   return null;
 }

@@ -40,6 +40,53 @@ describe('RouteTitleManager', () => {
     expect(document.title).toBe('Dashboard | The Logbook');
   });
 
+  it('prefers the page heading over an earlier header heading', () => {
+    render(
+      <RouterHarness>
+        <header>
+          <h1>Fire Department</h1>
+        </header>
+        <main>
+          <h1>Choose Your Modules</h1>
+        </main>
+      </RouterHarness>
+    );
+
+    expect(document.title).toBe('Choose Your Modules | The Logbook');
+  });
+
+  it.each([
+    ['pushes', false],
+    ['replaces', true],
+  ])('restores the title when a same-page query update %s history without changing the DOM', async (_, replace) => {
+    window.history.replaceState(null, '', '/medical-screening');
+    const Requirements = () => {
+      const navigate = useNavigate();
+      return (
+        <main>
+          <h1>Medical Screening</h1>
+          <button type="button" onClick={() => void navigate('?tab=requirements', { replace })}>
+            Requirements
+          </button>
+        </main>
+      );
+    };
+
+    render(
+      <BrowserRouter>
+        <RouteTitleManager />
+        <Routes>
+          <Route path="/medical-screening" element={<Requirements />} />
+        </Routes>
+      </BrowserRouter>
+    );
+
+    expect(document.title).toBe('Medical Screening | The Logbook');
+    fireEvent.click(screen.getByRole('button', { name: 'Requirements' }));
+    await waitFor(() => expect(document.title).toBe('Medical Screening | The Logbook'));
+    expect(window.location.search).toBe('?tab=requirements');
+  });
+
   it('replaces a protected-page title when navigating to a public route', async () => {
     const Dashboard = () => {
       const navigate = useNavigate();
