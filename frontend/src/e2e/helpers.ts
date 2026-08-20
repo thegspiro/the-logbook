@@ -26,7 +26,34 @@ export const TEST_USER = {
   first_name: 'Alex',
   last_name: 'Tester',
   is_active: true,
-  permissions: [],
+  // E2E represents an administrator so permission-gated pages exercise their
+  // substantive body rather than merely proving that AppLayout rendered.
+  permissions: [
+    'members.view',
+    'members.manage',
+    'users.view',
+    'scheduling.view',
+    'scheduling.manage',
+    'scheduling.reports',
+    'forms.view',
+    'forms.manage',
+    'prospective_members.view',
+    'prospective_members.manage',
+    'communications.view',
+    'communications.manage',
+    'settings.view',
+    'organization.manage',
+    'positions.manage_permissions',
+    'events.view',
+    'events.manage',
+    'training.view',
+    'training.manage',
+    'inventory.view',
+    'inventory.manage',
+    'documents.view',
+    'documents.manage',
+    'admin.access',
+  ],
   roles: [],
   positions: [],
 };
@@ -149,10 +176,12 @@ const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
 
   ['**/api/v1/messages/inbox**', () => []],
   ['**/api/v1/messages/inbox/unread-count', () => ({ unread_count: 0 })],
+  ['**/api/v1/messages/threads**', () => ({ threads: [], total: 0 })],
 
   ['**/api/v1/scheduling/my-shifts**', () => (empty ? { shifts: [], total: 0 } : myShifts())],
   ['**/api/v1/scheduling/shifts/open**', () => []],
   ['**/api/v1/scheduling/summary**', () => ({ hours_worked_this_month: 24 })],
+  ['**/api/v1/scheduling/reports**', () => ({ reports: [], total: 0 })],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
 
@@ -176,6 +205,10 @@ const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
   ['**/api/v1/inventory/summary**', () => ({})],
   ['**/api/v1/inventory/low-stock**', () => []],
 
+  ['**/api/v1/forms**', () => ({ forms: [], total: 0 })],
+  ['**/api/v1/prospective-members**', () => ({ applicants: [], total: 0 })],
+  ['**/api/v1/members**', () => ({ members: [], users: [], total: 0 })],
+  ['**/api/v1/settings**', () => ({})],
   ['**/api/v1/events**', () => []],
 ];
 

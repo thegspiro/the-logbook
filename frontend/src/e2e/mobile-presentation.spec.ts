@@ -47,26 +47,20 @@ interface RouteCheck {
    * arbitrary values and are deliberately exempt there.
    */
   maxTinyText: number;
-  /**
-   * Renders only layout chrome under the E2E mock — the permission gate hides
-   * the body, or the endpoints it needs are not mocked. Not a defect here, but
-   * it does mean this route proves less than the others.
-   */
-  chromeOnly?: boolean;
 }
 
 const ROUTES: RouteCheck[] = [
   { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/scheduling/reports', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/scheduling/reports', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
@@ -79,12 +73,12 @@ const ROUTES: RouteCheck[] = [
   { path: '/elections', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/forms', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/analytics', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/messages', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
-  { path: '/settings', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/messages', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/settings', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/profile', maxSmallTargets: 0, maxTinyText: 0 },
 ];
 
@@ -192,7 +186,7 @@ test.describe('mobile presentation', () => {
       }
       // Reported, not asserted: under the E2E mock a page can legitimately be
       // empty, so this cannot distinguish "no data" from "rendered nothing".
-      if (!route.chromeOnly && m.textLength < 600) blank.push(route.path);
+      if (m.textLength < 600) blank.push(route.path);
 
       table.push(
         [
@@ -201,7 +195,6 @@ test.describe('mobile presentation', () => {
           `tap ${String(m.smallTargets).padStart(2)}/${String(m.totalTargets).padEnd(3)}`,
           `tiny ${String(m.tinyText).padStart(2)}`,
           `text ${String(m.textLength).padStart(5)}`,
-          route.chromeOnly ? '(chrome only)' : '',
         ].join('  ')
       );
     }
