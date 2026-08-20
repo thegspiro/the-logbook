@@ -55,6 +55,16 @@ class EquipmentCheckService:
         self.db = db
 
     @staticmethod
+    def is_check_completed(check: Optional[ShiftEquipmentCheck]) -> bool:
+        """Return the canonical completion state for an equipment check.
+
+        A saved draft is still outstanding.  Keep this predicate in one place
+        so shift lists, shift detail, and close-out enforcement cannot disagree
+        merely because a ``ShiftEquipmentCheck`` row exists.
+        """
+        return check is not None and check.overall_status != "incomplete"
+
+    @staticmethod
     def _trend_bucket_for_status(status: str) -> Optional[str]:
         """Map every stored item outcome to its reporting bucket."""
         if status == "pass":
@@ -623,7 +633,7 @@ class EquipmentCheckService:
         checklists = []
         for tmpl in templates:
             check = existing_checks.get(tmpl.id)
-            is_completed = check is not None and check.overall_status != "incomplete"
+            is_completed = self.is_check_completed(check)
             checklists.append(
                 {
                     "template": tmpl,
@@ -687,7 +697,7 @@ class EquipmentCheckService:
                     "template_name": tmpl.name,
                     "check_timing": tmpl.check_timing,
                     "assigned_positions": tmpl.assigned_positions,
-                    "is_completed": check is not None,
+                    "is_completed": self.is_check_completed(check),
                     "overall_status": check.overall_status if check else None,
                     "checked_by_name": (
                         user_map.get(check.checked_by, "")
