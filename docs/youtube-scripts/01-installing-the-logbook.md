@@ -283,9 +283,45 @@ python3 -c "import secrets; print(secrets.token_hex(16))"
 
 **[CALLOUT: Note that modules are managed in-app under Organization Settings > Modules]**
 
+### CHECK IT BEFORE YOU START IT (10:45 – 11:00) — ADDED 2026-08-19
+
+> "Before we start anything, there's one command worth sixty seconds of your
+> life. It answers 'will this configuration actually boot' — without you finding
+> out the hard way, which normally means finding out by losing the service."
+
+**[SCREEN: Run the preflight check]**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  run --rm --build backend python -m app.preflight
+```
+
+**[SCREEN: Show a clean run — exit 0.]**
+
+> "Zero means it starts. One means it doesn't, and it lists exactly what's
+> blocking. Two means a value is malformed."
+
+**[SCREEN: Show a failing run — exit 1 with the blocking items listed.]**
+
+> "Two details here are load-bearing, and getting either wrong makes this
+> command lie to you. First, `--build`. Without it, Compose uses the image
+> that's already there — so you'd be checking the version you're replacing, not
+> the one you're deploying. Second, pass **the same `-f` files your deployment
+> uses**. A bare `docker compose run` only evaluates the base development
+> configuration, and it'll happily tell you a setup nobody runs is fine."
+
+**[CALLOUT: "--build, and the same -f files. Otherwise it's answering about a
+different configuration."]**
+
+> "There's also `--compose`, which takes a compose file path and tells you which
+> settings that file **drops** — values sitting in your `.env` that never reach
+> the container. Those used to just silently become defaults, which is how a
+> production stack ends up running a development setting with nothing anywhere
+> saying so."
+
 ### START THE SERVICES (11:00 – 12:00)
 
-> "With the environment file configured, we're ready to start."
+> "With the environment file configured — and checked — we're ready to start."
 
 **[SCREEN: Run the Docker Compose command]**
 

@@ -31,7 +31,7 @@ const RemindNonVotersModal: React.FC<RemindNonVotersModalProps> = ({
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="remind-modal-title"

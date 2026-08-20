@@ -61,6 +61,8 @@ import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
+import { buildShiftCheckInUrl } from '../../constants/nfc';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
@@ -2360,7 +2362,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               {showQR && (
                 <div className="border-theme-surface-border mt-2 inline-block rounded-lg border bg-white p-4">
                   <QRCodeSVG
-                    value={`${window.location.origin}/scheduling/checkin?apparatus=${shift.apparatus_id}`}
+                    value={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
                     size={200}
                     level="M"
                     includeMargin
@@ -2380,6 +2382,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     Print QR Card
                   </button>
                 </div>
+              )}
+              {showQR && (
+                <NfcTagWriter
+                  url={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
+                  targetLabel={shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
+                  actionNoun="shift check-in"
+                />
               )}
             </div>
           )}

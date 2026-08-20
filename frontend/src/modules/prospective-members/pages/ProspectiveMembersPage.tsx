@@ -1143,7 +1143,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
-        <div className="modal-overlay flex items-center justify-center p-4">
+        <div className="modal-overlay z-50 flex items-center justify-center p-4">
           <div ref={dialogRef2} className="modal-panel w-full max-w-md">
             <div className="p-6">
               <div className="mb-4 flex items-center gap-3">
@@ -1212,7 +1212,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Add Applicant Modal */}
       {showAddModal && (
-        <div className="modal-overlay flex items-center justify-center p-4">
+        <div className="modal-overlay z-50 flex items-center justify-center p-4">
           <div ref={dialogRef3} className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Add Applicant</h2>
