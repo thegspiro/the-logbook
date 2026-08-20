@@ -965,6 +965,22 @@
   }
 }
 
+/* Inside an overlay there is no bottom bar left to clear: AppLayout hides it
+ * for as long as any dialog, drawer or sheet is open (see useOverlaySurface).
+ * Without this reset `action-bar-safe` and `pb-safe` keep reserving the bar's
+ * height, and a sheet's buttons float above a band of dead space.
+ *
+ * Both selectors are needed, one per dialog shape. Where the scrim is the fixed
+ * container the panel is its descendant and inherits from `.modal-overlay`;
+ * where the scrim is an empty sibling of the panel it cannot reach it, so the
+ * panel classes carry it too. Page-level action bars sit outside both subtrees
+ * and keep the allowance — the bar is still there for them. */
+.modal-overlay,
+.modal-panel,
+.drawer-panel {
+  --bottom-nav-height: 0px;
+}
+
 @utility safe-top {
   /* Top padding equal to the device safe-area inset. For FIXED elements
      pinned to top:0 (mobile header, nav drawer) — these are positioned against

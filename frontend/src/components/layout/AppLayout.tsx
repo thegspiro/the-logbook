@@ -11,6 +11,7 @@ import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useNotificationPoller } from '../../hooks/useNotificationCount';
 import { useOfflineSyncEngine } from '../../hooks/useOfflineSyncEngine';
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
+import { useAnyOverlaySurface } from '../../hooks/useOverlaySurface';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import { usePullToRefreshContext } from '../../contexts/PullToRefreshContext';
 import { useScrollToTopOnNavigate } from '../../hooks/useScrollToTopOnNavigate';
@@ -132,6 +133,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     setShowLogoutModal(false);
   };
 
+  // A dialog, drawer or sheet is showing. The bar is fixed at z-50 and renders
+  // after the page, so left up it paints over the dialog rather than under it.
+  const overlayOpen = useAnyOverlaySurface();
+
   const content = children ?? <Outlet />;
 
   // WCAG 2.4.1: the first tab stop lets keyboard and screen-reader users jump
@@ -185,7 +190,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {/* Reserve room so the fixed bottom bar never covers the footer. */}
           <div className="pb-[var(--bottom-nav-height,0px)] md:ml-0">{footer}</div>
         </div>
-        <BottomNavigation hidden={keyboardInset > 0} />
+        <BottomNavigation hidden={keyboardInset > 0 || overlayOpen} />
         <ConfirmDialog
           isOpen={showLogoutModal}
           onConfirm={() => {
@@ -219,7 +224,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       </div>
       {/* Reserve room so the fixed bottom bar never covers the footer. */}
       <div className="pb-[var(--bottom-nav-height,0px)]">{footer}</div>
-      <BottomNavigation hidden={keyboardInset > 0} />
+      <BottomNavigation hidden={keyboardInset > 0 || overlayOpen} />
       <ConfirmDialog
         isOpen={showLogoutModal}
         onConfirm={() => {

@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import {
   X,
   Users,
@@ -79,6 +80,10 @@ interface ShiftDetailPanelProps {
 }
 
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initialShift, onClose, onRefresh }) => {
+  // Mounted only while open. Takes the mobile bottom bar off the drawer, whose
+  // full-height panel otherwise runs behind it.
+  useOverlaySurface();
+
   const navigate = useNavigate();
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
