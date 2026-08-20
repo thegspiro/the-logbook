@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { json, signIn } from './helpers';
+import { json, mockApi, signIn } from './helpers';
 
 const VIEWPORTS = [
   { name: 'narrow portrait', width: 320, height: 568 },
@@ -57,6 +57,7 @@ for (const viewport of VIEWPORTS) {
     for (const workflow of WORKFLOWS) {
       test(`${workflow.name} @critical-mobile`, async ({ page }) => {
         if (workflow.path === '/login') {
+          await mockApi(page);
           await page.route(
             '**/api/v1/auth/login',
             (route) => void route.fulfill(json({ mfa_required: true, mfa_token: 'mfa-e2e' }))

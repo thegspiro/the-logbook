@@ -167,6 +167,7 @@ const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
   ['**/api/v1/auth/oauth-config', () => ({ googleEnabled: false, microsoftEnabled: false })],
   ['**/api/v1/auth/session-settings', () => ({ session_timeout_minutes: 60 })],
   ['**/api/v1/auth/logout', () => ({ message: 'Logged out' })],
+  ['**/api/v1/onboarding/status', () => ({ is_complete: true })],
 
   ['**/api/v1/organization/modules', () => ({})],
 
@@ -182,6 +183,11 @@ const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
   ['**/api/v1/scheduling/shifts/open**', () => []],
   ['**/api/v1/scheduling/summary**', () => ({ hours_worked_this_month: 24 })],
   ['**/api/v1/scheduling/reports**', () => ({ reports: [], total: 0 })],
+  [
+    '**/api/v1/scheduling/reports/member-hours**',
+    () => ({ members: [], period_start: '2026-08-01', period_end: '2026-08-20', total_members: 0 }),
+  ],
+  ['**/api/v1/ranks**', () => []],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
 
@@ -234,11 +240,14 @@ export async function mockApi(page: Page, options: MockOptions = {}): Promise<vo
  * calling `/auth/me` is worthwhile.
  */
 export async function signIn(page: Page, options: MockOptions = {}): Promise<void> {
+  // Install routes before the first document load. Login mounts branding and
+  // onboarding queries immediately; registering afterward leaked them to the
+  // dev-server proxy and made every workflow wait for failed network calls.
+  await mockApi(page, options);
   await page.goto('/login');
   await page.evaluate(() => {
     localStorage.setItem('has_session', '1');
   });
-  await mockApi(page, options);
 }
 
 /** Ensure no session flag is set, so ProtectedRoute redirects to /login. */

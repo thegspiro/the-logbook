@@ -49,7 +49,7 @@ interface RouteCheck {
   maxTinyText: number;
 }
 
-const ROUTES: RouteCheck[] = [
+const ALL_ROUTES: RouteCheck[] = [
   { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
@@ -81,6 +81,11 @@ const ROUTES: RouteCheck[] = [
   { path: '/settings', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/profile', maxSmallTargets: 0, maxTinyText: 0 },
 ];
+
+// Useful when diagnosing one newly exposed permission-gated body locally;
+// omitted in CI and normal runs, where the complete ratchet always executes.
+const routeFilter = process.env.MOBILE_ROUTE_FILTER;
+const ROUTES = routeFilter ? ALL_ROUTES.filter(({ path }) => path.includes(routeFilter)) : ALL_ROUTES;
 
 /** iPhone 14/15 class — the narrow end of what members actually carry. */
 const PHONE = { width: 390, height: 844 };
@@ -195,6 +200,7 @@ test.describe('mobile presentation', () => {
           `tap ${String(m.smallTargets).padStart(2)}/${String(m.totalTargets).padEnd(3)}`,
           `tiny ${String(m.tinyText).padStart(2)}`,
           `text ${String(m.textLength).padStart(5)}`,
+          m.smallExamples.join(', '),
         ].join('  ')
       );
     }
