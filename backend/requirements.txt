@@ -139,6 +139,11 @@ pytest-randomly==4.1.0
 pytest-timeout==2.4.0
 hypothesis==6.165.7  # schemathesis 4.x requires >=6.130.12
 schemathesis==4.24.3
+# Schemathesis 4.24.3 calls CanonicalSchema.is_satisfiable(), which was
+# removed in jsonschema-rs 0.50.  Keep the transitive dependency on the last
+# compatible minor until Schemathesis adds 0.50 support; otherwise every API
+# contract case with a path parameter fails before making a request.
+jsonschema-rs==0.49.9
 faker==40.36.0
 
 # Code Quality
