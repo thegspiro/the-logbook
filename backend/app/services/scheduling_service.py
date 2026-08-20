@@ -5226,8 +5226,7 @@ class SchedulingService:
         return sum(
             1
             for s in summaries
-            if s.get("check_timing") == "end_of_shift"
-            and (not s.get("is_completed") or s.get("overall_status") == "incomplete")
+            if s.get("check_timing") == "end_of_shift" and not s.get("is_completed")
         )
 
     async def finalize_shift(
