@@ -978,7 +978,7 @@ class FacilityRoomBase(BaseModel):
     facility_id: str
     # Room this one sits inside, e.g. a storage space within the volunteer
     # office. None means the room hangs directly off the facility.
-    parent_room_id: Optional[str] = None
+    parent_room_id: Optional[str] = Field(None, min_length=1)
     name: str = Field(..., max_length=200)
     room_number: Optional[str] = Field(None, max_length=50)
     floor: Optional[int] = None
@@ -1000,7 +1000,7 @@ class FacilityRoomUpdate(BaseModel):
     facility_id: Optional[str] = None
     # An explicit null moves the room back up to the facility's top level;
     # omitting the key leaves the current parent alone.
-    parent_room_id: Optional[str] = None
+    parent_room_id: Optional[str] = Field(None, min_length=1)
     name: Optional[str] = Field(None, max_length=200)
     room_number: Optional[str] = Field(None, max_length=50)
     floor: Optional[int] = None
