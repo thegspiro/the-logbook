@@ -5,6 +5,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useSubmitGuard } from '../hooks/useSubmitGuard';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -18,6 +20,7 @@ export const RoleManagementPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const { busy, run } = useSubmitGuard();
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const roleModalRef = useFocusTrap<HTMLDivElement>(showCreateModal);
 
@@ -74,29 +77,30 @@ export const RoleManagementPage: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  const handleSubmit = async () => {
-    try {
-      setError(null);
+  const handleSubmit = () =>
+    run(async () => {
+      try {
+        setError(null);
 
-      if (editingRole) {
-        // Update existing role
-        await roleService.updateRole(editingRole.id, {
-          name: formData.name !== editingRole.name ? formData.name : undefined,
-          description: formData.description !== editingRole.description ? formData.description : undefined,
-          permissions: formData.permissions,
-          priority: formData.priority !== editingRole.priority ? formData.priority : undefined,
-        });
-      } else {
-        // Create new role
-        await roleService.createRole(formData);
+        if (editingRole) {
+          // Update existing role
+          await roleService.updateRole(editingRole.id, {
+            name: formData.name !== editingRole.name ? formData.name : undefined,
+            description: formData.description !== editingRole.description ? formData.description : undefined,
+            permissions: formData.permissions,
+            priority: formData.priority !== editingRole.priority ? formData.priority : undefined,
+          });
+        } else {
+          // Create new role
+          await roleService.createRole(formData);
+        }
+
+        await fetchData();
+        setShowCreateModal(false);
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Unable to save the role. Please check your input and try again.'));
       }
-
-      await fetchData();
-      setShowCreateModal(false);
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to save the role. Please check your input and try again.'));
-    }
-  };
+    });
 
   const handleDelete = async (role: Role) => {
     if (
@@ -234,7 +238,7 @@ export const RoleManagementPage: React.FC = () => {
         {showCreateModal && (
           <div
             ref={roleModalRef}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            className="modal-overlay z-50 flex items-center justify-center"
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-modal-title"
@@ -242,7 +246,10 @@ export const RoleManagementPage: React.FC = () => {
               if (e.key === 'Escape') setShowCreateModal(false);
             }}
           >
-            <div className="bg-theme-surface-modal mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-lg shadow-xl">
+            <DialogPanel
+              onClose={() => setShowCreateModal(false)}
+              className="mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden"
+            >
               <div className="border-theme-surface-border shrink-0 border-b px-6 py-4">
                 <h3 id="role-modal-title" className="text-theme-text-primary text-lg font-medium">
                   {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
@@ -361,20 +368,21 @@ export const RoleManagementPage: React.FC = () => {
               >
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium"
+                  className="btn-secondary text-theme-text-secondary text-sm font-medium"
                 >
                   Cancel
                 </button>
                 <button
+                  disabled={busy}
                   onClick={() => {
                     void handleSubmit();
                   }}
-                  className="btn-info rounded-md text-sm font-medium"
+                  className="btn-info rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {editingRole ? 'Save Changes' : 'Create Role'}
                 </button>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         )}
       </div>

@@ -7,6 +7,7 @@ The Apparatus module manages department vehicles, equipment assignments, mainten
 ## Key Features
 
 ### Full Apparatus Module
+
 - **Vehicle Management** — Complete CRUD for department apparatus (engines, ladders, rescues, ambulances, etc.)
 - **Crew Positions** — Define crew positions per vehicle type with minimum staffing requirements
 - **Maintenance Tracking** — Schedule and track vehicle maintenance, inspections, and repairs
@@ -17,6 +18,7 @@ The Apparatus module manages department vehicles, equipment assignments, mainten
 - **Deficiency Tracking** — Automatic deficiency flagging when equipment check items fail, with auto-clear on passing checks
 
 ### Apparatus Basic (Lightweight)
+
 - **Simple Vehicle List** — Unit numbers, names, and types
 - **Crew Positions** — Define crew positions per vehicle
 - **Shift Integration** — Vehicles appear in shift creation dropdown
@@ -26,13 +28,13 @@ The Apparatus module manages department vehicles, equipment assignments, mainten
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/apparatus` | Apparatus List | Authenticated |
-| `/apparatus/new` | Add Apparatus | Authenticated |
-| `/apparatus/:id` | Apparatus Detail | Authenticated |
-| `/apparatus/:id/edit` | Edit Apparatus | Authenticated |
-| `/apparatus-basic` | Apparatus Basic | Authenticated |
+| URL                   | Page             | Permission    |
+| --------------------- | ---------------- | ------------- |
+| `/apparatus`          | Apparatus List   | Authenticated |
+| `/apparatus/new`      | Add Apparatus    | Authenticated |
+| `/apparatus/:id`      | Apparatus Detail | Authenticated |
+| `/apparatus/:id/edit` | Edit Apparatus   | Authenticated |
+| `/apparatus-basic`    | Apparatus Basic  | Authenticated |
 
 > `/apparatus-basic` is the lightweight alternative used when the full Apparatus module is disabled. The side navigation automatically shows the correct link.
 
@@ -41,6 +43,7 @@ The Apparatus module manages department vehicles, equipment assignments, mainten
 ## API Endpoints
 
 ### Full Module
+
 ```
 GET    /api/v1/apparatus                     # List apparatus
 POST   /api/v1/apparatus                     # Create apparatus
@@ -50,6 +53,7 @@ DELETE /api/v1/apparatus/{id}                # Delete
 ```
 
 ### Basic (Scheduling Integration)
+
 ```
 GET    /api/v1/scheduling/apparatus          # List basic apparatus
 POST   /api/v1/scheduling/apparatus          # Create basic apparatus
@@ -74,21 +78,21 @@ The Equipment Check system provides structured vehicle and equipment inspections
 - **Deficiency Flag** — Failed checks auto-set `has_deficiency` and `deficiency_since` on the apparatus; passing checks auto-clear the flag
 - **Failure Notifications** — In-app and optional email alerts to shift officers and configurable roles on check failures
 - **Reports** — Compliance dashboard, failure log, and item trend history with CSV and PDF export
-- **Catalog Linking** — *(2026-08-10)* The quick-add bar searches the inventory catalog as you type, so adding a position and linking it are one act; picking a result inherits the catalog's name, counted-vs-serialized setting and dated-stock flag. A reviewed bulk pass proposes a link for every unlinked position on an existing template, and the toolbar shows a linked/unlinked count. Everything below hangs off `inventory_item_id`
-- **Live On-Truck Counts** — *(2026-08-10)* A position records `quantity_on_truck` against its target. **NULL means never counted**, and the target stands in
-- **Restock Reports** — *(2026-08-10)* A crew reports an item used or pulled *at the time they use it*, rather than leaving the gap for the next morning's check. Behind `equipment_check.submit`, the default member position
-- **Deployed Lots** — *(2026-08-10)* `check_item_deployed_lots` records each lot aboard a position separately, so a four-slot bracket holding three lots with three dates reports its **soonest** date rather than whichever was restocked last
-- **Standing Apparatus View** — *(2026-08-10)* `/scheduling/apparatus-inventory` shows what a truck is carrying outside any check, with the ready stock behind each position
+- **Catalog Linking** — _(2026-08-10)_ The quick-add bar searches the inventory catalog as you type, so adding a position and linking it are one act; picking a result inherits the catalog's name, counted-vs-serialized setting and dated-stock flag. A reviewed bulk pass proposes a link for every unlinked position on an existing template, and the toolbar shows a linked/unlinked count. Everything below hangs off `inventory_item_id`
+- **Live On-Truck Counts** — _(2026-08-10)_ A position records `quantity_on_truck` against its target. **NULL means never counted**, and the target stands in
+- **Restock Reports** — _(2026-08-10)_ A crew reports an item used or pulled _at the time they use it_, rather than leaving the gap for the next morning's check. Behind `equipment_check.submit`, the default member position. _(2026-08-11)_ Withdrawing a restock report and swapping lots are corrections of record and require `equipment_check.manage` / `inventory.manage`
+- **Deployed Lots** — _(2026-08-10)_ `check_item_deployed_lots` records each lot aboard a position separately, so a four-slot bracket holding three lots with three dates reports its **soonest** date rather than whichever was restocked last
+- **Standing Apparatus View** — _(2026-08-10)_ `/scheduling/apparatus-inventory` shows what a truck is carrying outside any check, with the ready stock behind each position
 
 ### Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/scheduling/equipment-check-templates/new` | Template Builder | `equipment_check.manage` |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Template | `equipment_check.manage` |
-| `/scheduling/equipment-check-reports` | Reports Dashboard | `scheduling.manage` |
-| `/scheduling/supply/expiring` | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `equipment_check.view`, `inventory.view` |
-| `/scheduling/apparatus-inventory` | Apparatus Inventory *(2026-08-10)* | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| URL                                                 | Page                                    | Permission                                                                |
+| --------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| `/scheduling/equipment-check-templates/new`         | Template Builder                        | `equipment_check.manage`                                                  |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Template                           | `equipment_check.manage`                                                  |
+| `/scheduling/equipment-check-reports`               | Reports Dashboard                       | `scheduling.manage`                                                       |
+| `/scheduling/supply/expiring`                       | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
+| `/scheduling/apparatus-inventory`                   | Apparatus Inventory _(2026-08-10)_      | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
 
 ### API Endpoints — Equipment Checks
 
@@ -134,25 +138,25 @@ GET    /api/v1/equipment-checks/reports/export/pdf               # PDF export
 
 ### Data Model
 
-| Table | Description |
-|-------|-------------|
-| `equipment_check_templates` | Master template (name, timing, type, assigned positions) |
-| `check_template_compartments` | Named sections, nested via `parent_compartment_id` |
-| `check_template_items` | Items with check type, expiration, serial/lot, quantity |
-| `shift_equipment_checks` | Submitted check records linked to shifts |
-| `shift_equipment_check_items` | Individual item results |
+| Table                         | Description                                              |
+| ----------------------------- | -------------------------------------------------------- |
+| `equipment_check_templates`   | Master template (name, timing, type, assigned positions) |
+| `check_template_compartments` | Named sections, nested via `parent_compartment_id`       |
+| `check_template_items`        | Items with check type, expiration, serial/lot, quantity  |
+| `shift_equipment_checks`      | Submitted check records linked to shifts                 |
+| `shift_equipment_check_items` | Individual item results                                  |
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Expired item submitted as pass | Auto-fails regardless of submitted result |
-| Item below required quantity | Auto-fails |
-| Single failed item on apparatus | Sets `has_deficiency` on the apparatus record |
-| Subsequent passing check | Clears deficiency flag only when ALL items pass |
-| Position-based assignment | Only members assigned to those positions see the checklist |
-| Photo upload limit | Max 3 photos per item, max 10 MB each, auto-converted to WebP |
-| Template cloning | Deep clones all compartments and items to the target apparatus |
+| Scenario                        | Behavior                                                       |
+| ------------------------------- | -------------------------------------------------------------- |
+| Expired item submitted as pass  | Auto-fails regardless of submitted result                      |
+| Item below required quantity    | Auto-fails                                                     |
+| Single failed item on apparatus | Sets `has_deficiency` on the apparatus record                  |
+| Subsequent passing check        | Clears deficiency flag only when ALL items pass                |
+| Position-based assignment       | Only members assigned to those positions see the checklist     |
+| Photo upload limit              | Max 3 photos per item, max 10 MB each, auto-converted to WebP  |
+| Template cloning                | Deep clones all compartments and items to the target apparatus |
 
 ### Cross-Module Data Sharing
 
@@ -196,10 +200,47 @@ Compliance Dashboard / Failure Log / Item Trends
 
 ### Data Model Changes
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field                           | Type              | Description                                                      |
+| ------------------------------- | ----------------- | ---------------------------------------------------------------- |
 | `apparatus.required_evoc_level` | String (nullable) | Minimum EVOC level (basic, intermediate, advanced) for operators |
 
 ---
 
 **See also:** [Scheduling Module](Module-Scheduling) | [Inventory Module](Module-Inventory)
+
+---
+
+## NFC Tags on the Fleet _(2026-08-18)_
+
+**Check-In QR Codes** (`/locations/qr-codes`) is already the department's
+directory of every check-in code, one card per apparatus, so it is where a box
+of tags gets written for a fleet in one sitting. **Write NFC tag** joins Copy
+URL / Download PNG / Regenerate in each card's existing action row.
+
+**Prefer an apparatus-keyed tag for anything physically mounted.** The URL is
+`/scheduling/checkin?apparatus=<id>`, which resolves to whichever shift is
+running when the tag is tapped — today's non-finalized shift, else one that
+ended within two hours, else the next upcoming. One tag on the truck therefore
+serves every shift. A shift-keyed tag is dead the moment that shift ends.
+
+The member lands on the shift check-in page, which names the unit, date and
+hours on screen so they can see which truck they were matched to before they
+confirm. Whether a non-rostered member may check in is the existing
+`restrict_checkin_to_assigned` setting (off by default, under Scheduling →
+Settings); nothing about NFC changes it.
+
+> **The button does not appear on the room kiosk cards beside the apparatus
+> ones.** Those encode `/display/{code}`, a public unauthenticated screen keyed
+> by a non-guessable code — writing that code to a tag anyone can read hands it
+> to whoever walks past, and sending a member's phone to a wall display is not a
+> check-in. One rule (`parseNfcTagPath`) governs both what the button offers and
+> what a scan will accept.
+
+> **A failed write raises a toast, not a silent no-op.** The directory is a
+> print-oriented grid of fixed-size cards with no inline slot to report into,
+> and a silent failure looks exactly like a tag that was written — the member
+> finds out by tapping a dead sticker.
+
+> **Chrome on Android, over HTTPS.** Web NFC exists nowhere else and browsers
+> expose it only in a secure context, so the button renders nothing on iOS,
+> desktop, or a plain-`http://` LAN deployment. QR remains the universal path.

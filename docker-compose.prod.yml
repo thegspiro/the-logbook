@@ -57,9 +57,16 @@ services:
     # Production runs the app WITHOUT --reload (no live code execution surface).
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001"]
     # Do NOT bind-mount the source tree in production — use the built image.
-    volumes:
+    # `!override` clears every volume inherited from the development file before
+    # adding these persistent data volumes (requires Docker Compose v2.24.4+).
+    volumes: !override
       - uploads:/app/uploads
       - audit_archives:/app/audit_archives
+      # Restated because `!override` clears every volume inherited from the
+      # base file — without this line, production is the one environment that
+      # silently loses the CA mount, which is precisely where private-CA TLS
+      # is actually used.
+      - ${SSL_CERTS_DIR:-./infrastructure/certs}:/etc/ssl/logbook:ro
     # Do NOT publish the backend port to the host in production; it sits behind
     # the reverse proxy on the internal Docker network. The `!reset` tag clears
     # the base file's port publish (requires Docker Compose v2.24+); on older

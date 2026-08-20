@@ -16,6 +16,7 @@ import { markLoginComplete, clearTempAccessToken } from '../services/apiClient';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
 import { clearCache } from '../utils/apiCache';
+import { clearInFlight } from '../utils/inFlight';
 import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import type { PurgeResult } from '../utils/purgeLocalMemberData';
 import { clearQueuedReports } from '../services/errorReporting';
@@ -193,6 +194,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // SEC: Start the new session with a clean cache in case a prior user's
       // session ended without a clean logout (crash/tab-close on a shared tab).
       clearCache();
+      clearInFlight();
       invalidateRanksCache();
 
       // Wait for auth cookies to be stored before navigating to the
@@ -278,6 +280,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       localStorage.setItem('has_session', '1');
       clearCache(); // SEC: fresh session starts with a clean cache
+      clearInFlight();
       invalidateRanksCache();
       await waitForLoginCookies(csrfBefore);
       markLoginComplete();
@@ -312,6 +315,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // SEC: Tokens are stored in httpOnly cookies by the backend response.
       localStorage.setItem('has_session', '1');
       clearCache(); // SEC: fresh session starts with a clean cache
+      clearInFlight();
       invalidateRanksCache();
 
       await get().loadUser();
@@ -328,6 +332,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    // Disable draft autosave before waiting on either the logout request or
+    // the asynchronous device purge. The form remains mounted during both.
+    localStorage.removeItem('has_session');
     try {
       await authService.logout();
     } catch {
@@ -342,9 +349,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // cache key carries no user identity, so a stale entry would otherwise be
       // served to the next user who logs in on the same tab without a reload.
       clearCache();
+      clearInFlight();
       invalidateRanksCache();
       clearQueuedReports();
-      localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       // SEC (FE-6/FE-7): shift-report drafts (localStorage) and the offline
@@ -407,6 +414,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
+      await purgeLocalMemberData();
       set({
         user: null,
         isAuthenticated: false,

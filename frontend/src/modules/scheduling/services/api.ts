@@ -23,6 +23,11 @@ import type {
   TimeOffCreate,
   TimeOffReview,
   TimeOffFilters,
+  CallTypeOption,
+  CloseoutState,
+  CloseoutAttendanceEntry,
+  CloseoutCallsPayload,
+  MemberCallCredit,
   ShiftTemplateCreate,
   ShiftTemplateUpdate,
   ShiftPatternCreate,
@@ -47,6 +52,7 @@ import type {
   AvailabilityRecord,
   ShiftSignupResponse,
   EligiblePositionsResponse,
+  PositionRosterResponse,
   EvocWarning,
   SchedulingEligibilitySettings,
   ShiftCallRecord,
@@ -72,6 +78,8 @@ import type {
   LotSwapResult,
   InventoryMatchesResult,
   InventoryLinkResult,
+  FleetReadinessResponse,
+  CheckLogResponse,
 } from '../types/equipmentCheck';
 import { blankToNull } from '@/utils/formValues';
 
@@ -111,7 +119,6 @@ export interface ShiftRecord {
   color?: string | null;
   notes?: string;
   activities?: unknown;
-  pass_down_notes?: string | null;
   open_to_all_members?: boolean;
   attendee_count: number;
   call_count: number;
@@ -151,6 +158,13 @@ export interface SchedulingFeatureSettings {
   auto_generate_weeks: number;
   require_end_of_shift_checks: boolean;
   restrict_checkin_to_assigned: boolean;
+  /** Block seating a driver who lacks the apparatus's required EVOC level. */
+  enforce_evoc: boolean;
+  /**
+   * How the department records call volume. Absent means `detailed` — the
+   * behaviour every existing organisation already has.
+   */
+  call_tracking?: { mode: string; call_types: CallTypeOption[] } | null;
 }
 
 export interface PlatoonMember {
@@ -401,6 +415,7 @@ export const schedulingService = {
       override_incomplete_checks?: boolean;
       override_reason?: string;
       pass_down_notes?: string;
+      member_call_counts?: MemberCallCredit[];
     }
   ): Promise<ShiftRecord> {
     const body: Record<string, unknown> = {};
@@ -410,7 +425,33 @@ export const schedulingService = {
       if (opts.override_reason) body.override_reason = opts.override_reason;
     }
     if (opts?.pass_down_notes) body.pass_down_notes = opts.pass_down_notes;
+    if (opts?.member_call_counts?.length) body.member_call_counts = opts.member_call_counts;
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/finalize`, body);
+    return response.data;
+  },
+
+  // -- Resumable close-out -------------------------------------------------
+
+  async getCloseoutState(shiftId: string): Promise<CloseoutState> {
+    const response = await api.get<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout`);
+    return response.data;
+  },
+
+  async saveCloseoutAttendance(shiftId: string, entries: CloseoutAttendanceEntry[]): Promise<CloseoutState> {
+    const response = await api.patch<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout/attendance`, { entries });
+    return response.data;
+  },
+
+  async saveCloseoutCalls(shiftId: string, payload: CloseoutCallsPayload): Promise<CloseoutState> {
+    const body: Record<string, unknown> = {};
+    // null is meaningful here — it clears a previously reported count — so this
+    // checks for undefined rather than using a falsy guard, which would also
+    // drop a legitimate zero.
+    if (payload.reported_call_count !== undefined) {
+      body.reported_call_count = payload.reported_call_count;
+    }
+    if (payload.reported_call_types) body.reported_call_types = payload.reported_call_types;
+    const response = await api.patch<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout/calls`, body);
     return response.data;
   },
 
@@ -705,6 +746,12 @@ export const schedulingService = {
     const response = await api.get<EligiblePositionsResponse>('/scheduling/eligibility/positions', { params });
     return response.data;
   },
+  async getPositionRoster(position: string): Promise<PositionRosterResponse> {
+    const response = await api.get<PositionRosterResponse>('/scheduling/eligibility/roster', {
+      params: { position },
+    });
+    return response.data;
+  },
   async getEligibilitySettings(): Promise<SchedulingEligibilitySettings> {
     const response = await api.get<SchedulingEligibilitySettings>('/scheduling/eligibility/settings');
     return response.data;
@@ -958,6 +1005,27 @@ export const schedulingService = {
   }): Promise<ShiftEquipmentCheckRecord[]> {
     const response = await api.get<ShiftEquipmentCheckRecord[]>('/equipment-checks/my-checklists/history', { params });
     return asArray(response.data);
+  },
+
+  // =====================================================================
+  // Fleet Readiness / Check Log
+  // =====================================================================
+
+  async getFleetReadiness(params?: { strip_dates?: number; expiring_days?: number }): Promise<FleetReadinessResponse> {
+    const response = await api.get<FleetReadinessResponse>('/equipment-checks/fleet', { params });
+    return response.data;
+  },
+
+  /**
+   * Expected-vs-actual check history.
+   *
+   * The server decides the scope from the caller's permissions — a member
+   * without `equipment_check.view` gets only their own checks and no grid —
+   * so there is no client-side flag to get wrong here.
+   */
+  async getCheckLog(params?: { dates?: number; apparatus_id?: string }): Promise<CheckLogResponse> {
+    const response = await api.get<CheckLogResponse>('/equipment-checks/log', { params });
+    return response.data;
   },
 
   // =====================================================================

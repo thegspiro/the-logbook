@@ -124,7 +124,7 @@ const ModuleConfigTemplate: React.FC = () => {
 
         <div className="mb-6 grid gap-6 md:grid-cols-2">
           {/* View Access Card */}
-          <div className="bg-theme-surface border-theme-alert-success-border rounded-lg border p-6 backdrop-blur-xs">
+          <div className="card border-theme-alert-success-border p-6">
             <div className="mb-4 flex items-center">
               <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-lg bg-green-600">
                 <Eye aria-hidden="true" className="h-6 w-6 text-white" />
@@ -153,7 +153,7 @@ const ModuleConfigTemplate: React.FC = () => {
           </div>
 
           {/* Manage Access Card */}
-          <div className="bg-theme-surface border-theme-alert-warning-border rounded-lg border p-6 backdrop-blur-xs">
+          <div className="card border-theme-alert-warning-border p-6">
             <div className="mb-4 flex items-center">
               <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-lg bg-orange-600">
                 <Edit3 aria-hidden="true" className="h-6 w-6 text-white" />
@@ -229,7 +229,7 @@ const ModuleConfigTemplate: React.FC = () => {
         </div>
 
         {/* Quick Tips */}
-        <div className="bg-theme-surface-secondary border-theme-input-border mb-6 rounded-lg border p-4">
+        <div className="card-secondary border-theme-input-border mb-6 p-4">
           <h3 className="text-theme-text-primary mb-2 font-semibold">Quick Tips</h3>
           <ul className="text-theme-text-secondary space-y-2 text-sm">
             <li className="flex items-start">

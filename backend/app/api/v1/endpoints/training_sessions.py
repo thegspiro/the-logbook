@@ -12,7 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.event import Event
@@ -264,6 +269,7 @@ async def finalize_training_session(
         training_session_id=training_session_id,
         organization_id=current_user.organization_id,
         finalized_by=current_user.id,
+        can_manage_training=user_has_permission(current_user, "training.manage"),
     )
 
     if error:
@@ -294,19 +300,18 @@ async def finalize_training_session(
 async def get_training_approval(
     token: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Get training approval data by token
 
     Returns the roster (attendee names/emails) for an officer to review
     before approving. Requires an authenticated officer in the approval's
-    organization — the token alone is not sufficient. Gated by
-    ``events.manage`` to match the POST approval endpoint and the rest of
-    the training-session lifecycle (create/finalize).
+    organization — the token alone is not sufficient. Because the response
+    contains attendee PII, it is restricted to training officers.
 
     **Authentication required**
-    **Requires permission: events.manage**
+    **Requires permission: training.manage**
     """
     service = TrainingSessionService(db)
 
@@ -345,6 +350,7 @@ async def submit_training_approval(
         approval_notes=approval_data.approval_notes,
         approved_by=current_user.id,
         organization_id=current_user.organization_id,
+        can_manage_training=user_has_permission(current_user, "training.manage"),
     )
 
     if error:

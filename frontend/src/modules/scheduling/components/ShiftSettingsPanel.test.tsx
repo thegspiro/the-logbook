@@ -30,6 +30,8 @@ vi.mock('../store/schedulingStore', () => ({
   useSchedulingStore: (selector?: (s: typeof storeState) => unknown) => (selector ? selector(storeState) : storeState),
 }));
 
+const mockUpdateFeatureSettings = vi.fn();
+
 vi.mock('../services/api', () => ({
   schedulingService: {
     getFeatureSettings: vi.fn().mockResolvedValue({
@@ -40,8 +42,10 @@ vi.mock('../services/api', () => ({
       auto_generate_weeks: 4,
       require_end_of_shift_checks: false,
       restrict_checkin_to_assigned: false,
+      enforce_evoc: true,
     }),
-    updateFeatureSettings: vi.fn().mockResolvedValue({}),
+    // Arrow-deferred so the hoisted factory can reference the const below it.
+    updateFeatureSettings: (...a: unknown[]) => mockUpdateFeatureSettings(...a) as unknown,
   },
 }));
 
@@ -87,6 +91,7 @@ describe('ShiftSettingsPanel', () => {
     mockLoadShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
     mockSaveShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
     mockResetShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    mockUpdateFeatureSettings.mockResolvedValue({});
   });
 
   it('renders the requested section only', () => {
@@ -155,5 +160,21 @@ describe('ShiftSettingsPanel', () => {
     await waitFor(() => {
       expect(mockResetShiftSettings).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('shows EVOC driver enforcement as on, matching the backend default', async () => {
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /enforce evoc for drivers/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('turns EVOC driver enforcement off through the backend', async () => {
+    const user = userEvent.setup();
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /enforce evoc for drivers/i });
+
+    await user.click(toggle);
+
+    await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ enforce_evoc: false }));
   });
 });

@@ -408,11 +408,7 @@ const ITTeamBackupAccess: React.FC = () => {
                       type="email"
                       value={backupEmail}
                       onChange={(e) => setBackupEmail(e.target.value)}
-                      className={`form-input placeholder-theme-text-muted py-3 pr-4 pl-12 transition-all ${
-                        errors.backupEmail
-                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                          : 'border-theme-input-border focus:ring-theme-focus-ring'
-                      }`}
+                      className={`form-input placeholder-theme-text-muted py-3 pr-4 pl-12 transition-all ${errors.backupEmail ? 'border-theme-accent-red focus:ring-theme-focus-ring' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                       placeholder="backup-admin@example.com"
                     />
                   </div>
@@ -436,11 +432,7 @@ const ITTeamBackupAccess: React.FC = () => {
                       type="tel"
                       value={backupPhone}
                       onChange={(e) => setBackupPhone(e.target.value)}
-                      className={`form-input placeholder-theme-text-muted py-3 pr-4 pl-12 transition-all ${
-                        errors.backupPhone
-                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                          : 'border-theme-input-border focus:ring-theme-focus-ring'
-                      }`}
+                      className={`form-input placeholder-theme-text-muted py-3 pr-4 pl-12 transition-all ${errors.backupPhone ? 'border-theme-accent-red focus:ring-theme-focus-ring' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                       placeholder="(555) 987-6543"
                     />
                   </div>
@@ -462,11 +454,7 @@ const ITTeamBackupAccess: React.FC = () => {
                       type="email"
                       value={secondaryAdminEmail}
                       onChange={(e) => setSecondaryAdminEmail(e.target.value)}
-                      className={`form-input placeholder-theme-text-muted py-3 pr-4 pl-12 transition-all ${
-                        errors.secondaryAdminEmail
-                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                          : 'border-theme-input-border focus:ring-theme-focus-ring'
-                      }`}
+                      className={`form-input placeholder-theme-text-muted py-3 pr-4 pl-12 transition-all ${errors.secondaryAdminEmail ? 'border-theme-accent-red focus:ring-theme-focus-ring' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                       placeholder="secondary-admin@example.com"
                     />
                   </div>

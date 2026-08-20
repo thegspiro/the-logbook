@@ -100,6 +100,17 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     try {
       const updated = await schedulingService.updateFeatureSettings(patch);
       setFeature(updated);
+      // Mirror into the store the rest of the app reads. `loadSettings` is a
+      // once-per-session cache, so without this an admin who switched call
+      // tracking on kept seeing the old close-out — which never asks for a
+      // count — while the backend had already moved to count-only and would
+      // finalize the shift with none recorded.
+      useSchedulingStore.setState({
+        platoonsEnabled: updated.platoons_enabled,
+        requireEndOfShiftChecks: updated.require_end_of_shift_checks,
+        callTrackingMode: updated.call_tracking?.mode || 'detailed',
+        settingsLoaded: true,
+      });
       toast.success('Settings saved');
     } catch {
       toast.error('Failed to save settings');
@@ -111,8 +122,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   // Paint immediately from the cached/mirrored value, then replace with the
   // department-wide copy from the backend. migrateLocal: this panel requires
   // scheduling.manage, so if the backend has never stored settings but this
-  // browser has a pre-backend localStorage copy, that copy is pushed up once
-  // so it becomes the whole department's settings instead of a private one.
+  // browser has a mirror explicitly scoped to the current organization, that
+  // copy is pushed up once. Untagged legacy copies are ignored.
   const [settings, setSettings] = useState<ShiftSettings>(() => getCachedShiftSettings());
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -352,6 +363,69 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                       feature.require_end_of_shift_checks ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
+                </button>
+              </div>
+              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Record a call count at close-out</p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    For departments that don&apos;t log individual incidents. The officer is asked how many calls the
+                    apparatus ran when they close the shift out, and the crew&apos;s call credit comes from that number.
+                    Leave this off to keep logging calls one at a time.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Record a call count at close-out"
+                  aria-checked={feature.call_tracking?.mode === 'count_only'}
+                  disabled={savingFeature}
+                  onClick={() => {
+                    const next = feature.call_tracking?.mode === 'count_only' ? 'detailed' : 'count_only';
+                    // Send the existing type list back untouched: the payload
+                    // replaces the whole call_tracking object, so omitting it
+                    // would wipe the department's own call types.
+                    void saveFeature({
+                      call_tracking: { mode: next, call_types: feature.call_tracking?.call_types ?? [] },
+                    });
+                  }}
+                  className={`toggle-track-sm ${
+                    feature.call_tracking?.mode === 'count_only' ? 'bg-violet-600' : 'bg-theme-surface-border'
+                  }`}
+                >
+                  <span
+                    className={`toggle-knob-sm ${
+                      feature.call_tracking?.mode === 'count_only' ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">
+                    Enforce EVOC for drivers
+                    <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      Safety
+                    </span>
+                  </p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    Block assigning or signing up a driver who lacks the EVOC level their apparatus requires. A chief
+                    can approve a time-boxed exception for parades and special events. Turning this off downgrades the
+                    check to an advisory warning.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Enforce EVOC for drivers"
+                  aria-checked={feature.enforce_evoc}
+                  disabled={savingFeature}
+                  onClick={() => {
+                    void saveFeature({ enforce_evoc: !feature.enforce_evoc });
+                  }}
+                  className={`toggle-track-sm ${feature.enforce_evoc ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                >
+                  <span className={`toggle-knob-sm ${feature.enforce_evoc ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>
               <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">

@@ -51,6 +51,58 @@ class TestKioskCheckInWindow:
         ids = [e.id for e in events]
         assert ids == ["open"]  # the not-yet-open STRICT event is filtered out
 
+    async def test_prefilter_horizon_covers_max_flexible_lead(self):
+        # FLEXIBLE opening check-in 4h early (check_in_minutes_before validates
+        # up to 1440 = 24h). Its window is open now, so it must be returned —
+        # and the SQL prefilter must not have excluded it in the first place:
+        # the old now+1h horizon dropped any event opening check-in more than
+        # an hour early from the candidate set, making it check-in-open via
+        # direct check-in but invisible on the kiosk until T-60.
+        early_flexible = _event(
+            "early-flex", CheckInWindowType.FLEXIBLE, 180, minutes_before=240
+        )
+        # FLEXIBLE starting in 3h with the default lead (60 min) — inside the
+        # widened horizon but its window is not open yet, so the canonical
+        # per-event window filter must still drop it.
+        not_open_yet = _event("not-open", CheckInWindowType.FLEXIBLE, 180)
+
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [early_flexible, not_open_yet]
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        events = await LocationService(db).get_current_events_in_check_in_window(
+            "loc-1", "org-1"
+        )
+
+        assert [e.id for e in events] == ["early-flex"]
+
+        # Inspect the query actually issued: its start_datetime horizon must
+        # cover the maximum configurable lead (~24h), not just 1h.
+        query = db.execute.await_args.args[0]
+        params = query.compile().params
+        horizons = [
+            value
+            for key, value in params.items()
+            if key.startswith("start_datetime") and isinstance(value, datetime)
+        ]
+        assert horizons, "expected a start_datetime bound param in the prefilter"
+        assert all(h >= NOW + timedelta(hours=23) for h in horizons)
+
+    async def test_prefilter_excludes_draft_events(self):
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        await LocationService(db).get_current_events_in_check_in_window(
+            "loc-1", "org-1"
+        )
+
+        query = db.execute.await_args.args[0]
+        where_clause = str(query.whereclause)
+        assert "events.is_draft IS false" in where_clause
+
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

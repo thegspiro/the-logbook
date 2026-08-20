@@ -1,6 +1,6 @@
 # The Logbook - Training Documentation
 
-> **New release lesson:** [August 12–14, 2026 workflow updates](./19-august-2026-release-changes.md) covers changed workflows, permissions, data-sharing boundaries, edge cases, exact screenshot states, and required demo data.
+> **New release lesson:** [August 12–19, 2026 workflow updates](./19-august-2026-release-changes.md) covers changed workflows, permissions, data-sharing boundaries, edge cases, exact screenshot states, and required demo data across three change windows. The August 17–19 section is the current one: **counting calls without an RMS** (and why the report says _unit responses_, which matters before anyone quotes the figure in a grant application), the **three-step shift close-out** that saves as it goes, **NFC tags** for event / admin-hours / shift check-in, and the `python -m app.preflight` check to run _before_ an upgrade rather than after it fails. Earlier sections cover nested facility rooms, candidate-list visibility, profile privacy, the security hardening batch, and the August 15 change that makes the installation wizard a **one tab, one sitting** operation.
 
 Welcome to the training documentation for The Logbook. These guides are designed to help new users learn the system and serve as a reference for experienced users.
 

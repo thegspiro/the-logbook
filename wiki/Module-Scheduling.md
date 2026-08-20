@@ -25,17 +25,17 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **Shift Completion Reports** — Officers file reports that auto-credit training programs
 - **Leave of Absence Integration** — Members on leave excluded from scheduling
 - **Multiple Reports** — Hours, coverage, call volume, availability analytics
-- **Manual Shift Report Page** — *(2026-04-11)* Standalone page at `/training/manual-shift-report` for departments without the scheduling module enabled. Officers manually enter shift date, start/end times, apparatus, crew, and trainee evaluations
-- **Shift Report Hardening** — *(2026-04-11)* 20+ security and data integrity fixes for production readiness including submit-all-drafts scope fix, enrollment ID whitelist validation, draft regression guard, and print button restoration
-- **End-of-Shift Member Summary** — *(2026-05-29)* New scheduled task emails (and in-app notifies) each attending active member a summary of their hours, calls, and a report link after their shift
-- **Trainee Report Follow-Up** — *(2026-05-29)* New daily escalation reminds trainees of approved-but-unacknowledged reports, plus low-rating officer alerts to training officers
-- **Richer Shift Reminders** — *(2026-05-29)* Pre-shift reminders now include apparatus, the active-member crew roster, and equipment checklists, with a "Mark Arrival" deep link; email is sent by default
-- **Shift Call / Run Logging** — *(2026-06-09)* Officers (`scheduling.manage`) log the calls a crew ran during a shift: incident type/number, dispatched/on-scene/cleared times, cancelled-en-route and medical-refusal flags, responding members, and notes. Read-only once the shift is finalized
-- **Staffing-Based Open Shifts** — *(2026-06-09)* The Open Shifts list now ranks by **actual staffing** (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`) instead of a fixed page, so fully-staffed shifts no longer push genuinely-open ones out of view (capped at 500 candidates per window)
-- **Scheduling Query Performance** — *(2026-06-09)* New composite index `idx_shift_assign_shift_status` on `shift_assignments(shift_id, assignment_status)`, plus batch-loading across the scheduled reminder/validation/auto-checkout tasks and the compliance report (eliminates N+1 officer/attendance/assignment/leave queries)
-- **Platoon Rotations (opt-in)** — *(2026-06-19)* Person-level platoon membership (A/B/C) drives multi-platoon rotation generation with leave-aware staffing and a hold-over roster. Off by default; toggled per department (see below)
-- **Full Shift Lifecycle** — *(2026-07-16)* Per-shift officer authority, a live readiness panel, cancel-instead-of-delete, reopen/unfinalize, crew pass-down notes, and optional server-side close-out enforcement (require end-of-shift checks; restrict check-in to the roster). See below
-- **Personal Calendar Feed & Automation** — *(2026-07-16)* Members subscribe to their shifts in Google/Apple Calendar via a private ICS link; departments can auto-generate shifts from patterns on a rolling horizon and get overtime/hours advisories. See below
+- **Manual Shift Report Page** — _(2026-04-11)_ Standalone page at `/training/manual-shift-report` for departments without the scheduling module enabled. Officers manually enter shift date, start/end times, apparatus, crew, and trainee evaluations
+- **Shift Report Hardening** — _(2026-04-11)_ 20+ security and data integrity fixes for production readiness including submit-all-drafts scope fix, enrollment ID whitelist validation, draft regression guard, and print button restoration
+- **End-of-Shift Member Summary** — _(2026-05-29)_ New scheduled task emails (and in-app notifies) each attending active member a summary of their hours, calls, and a report link after their shift
+- **Trainee Report Follow-Up** — _(2026-05-29)_ New daily escalation reminds trainees of approved-but-unacknowledged reports, plus low-rating officer alerts to training officers
+- **Richer Shift Reminders** — _(2026-05-29)_ Pre-shift reminders now include apparatus, the active-member crew roster, and equipment checklists, with a "Mark Arrival" deep link; email is sent by default
+- **Shift Call / Run Logging** — _(2026-06-09)_ Officers (`scheduling.manage`) log the calls a crew ran during a shift: incident type/number, dispatched/on-scene/cleared times, cancelled-en-route and medical-refusal flags, responding members, and notes. Read-only once the shift is finalized
+- **Staffing-Based Open Shifts** — _(2026-06-09)_ The Open Shifts list now ranks by **actual staffing** (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`) instead of a fixed page, so fully-staffed shifts no longer push genuinely-open ones out of view (capped at 500 candidates per window)
+- **Scheduling Query Performance** — _(2026-06-09)_ New composite index `idx_shift_assign_shift_status` on `shift_assignments(shift_id, assignment_status)`, plus batch-loading across the scheduled reminder/validation/auto-checkout tasks and the compliance report (eliminates N+1 officer/attendance/assignment/leave queries)
+- **Platoon Rotations (opt-in)** — _(2026-06-19)_ Person-level platoon membership (A/B/C) drives multi-platoon rotation generation with leave-aware staffing and a hold-over roster. Off by default; toggled per department (see below)
+- **Full Shift Lifecycle** — _(2026-07-16)_ Per-shift officer authority, a live readiness panel, cancel-instead-of-delete, reopen/unfinalize, crew pass-down notes, and optional server-side close-out enforcement (require end-of-shift checks; restrict check-in to the roster). See below
+- **Personal Calendar Feed & Automation** — _(2026-07-16)_ Members subscribe to their shifts in Google/Apple Calendar via a private ICS link; departments can auto-generate shifts from patterns on a rolling horizon and get overtime/hours advisories. See below
 
 ---
 
@@ -51,7 +51,7 @@ member-facing conveniences.
   `scheduling.manage`/`assign` grant. Editing/deleting the shift itself still
   requires `scheduling.manage`.
 - **Readiness panel** — the shift detail shows present-vs-assigned, staffing vs.
-  target (understaffed flag), and outstanding start-of-shift checks *during* the
+  target (understaffed flag), and outstanding start-of-shift checks _during_ the
   shift, not just at finalize.
 - **Cancel a shift** — cancels instead of deleting: the record is kept, the crew
   is notified, and the shift drops out of open-shift signup. Finalized shifts
@@ -63,10 +63,13 @@ member-facing conveniences.
 
 ### Close-out rules (department settings, off by default)
 
-| Setting | Default | Effect |
-|---------|---------|--------|
-| `require_end_of_shift_checks` | `false` | Blocks finalize while end-of-shift equipment checks are outstanding; officers can override with a logged reason |
-| `restrict_checkin_to_assigned` | `false` | Only rostered members may check in (open shifts exempt) |
+**Scheduling → Settings → General → Shift close-out rules.**
+
+| Setting                                                     | Default    | Effect                                                                                                                                                             |
+| ----------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `require_end_of_shift_checks`                               | `false`    | Blocks finalize while end-of-shift equipment checks are outstanding; officers can override with a logged reason                                                    |
+| `restrict_checkin_to_assigned`                              | `false`    | Only rostered members may check in (open shifts exempt)                                                                                                            |
+| **Record a call count at close-out** (`call_tracking.mode`) | `detailed` | Switches close-out from the single finalize checklist to the three-step wizard, and switches call volume from per-incident logging to counted calls _(2026-08-19)_ |
 
 ### Member conveniences
 
@@ -87,6 +90,126 @@ member-facing conveniences.
 - An officer can mark a crew-board seat as a supervised training slot and link
   it to the trainee's program + evaluator; finalizing drafts a completion report
   against that program.
+
+---
+
+## Call Volume Without an RMS (2026-08-18 → 08-19)
+
+A department that does not run incident reporting still has to answer _"how
+many calls did we run, and what did each apparatus go on?"_ — for grant
+applications, ISO ratings, apparatus replacement and staffing cases. The
+`count_only` mode records exactly that and deliberately nothing more.
+
+### What is deliberately not collected
+
+No address, no cross streets, no patient or caller identity, no narrative, no
+dispatch/on-scene/clear times, and no CAD incident number for display. Those
+are the fields that make a call record PHI/PII, and collecting them is what the
+department declined to do.
+
+This is enforced **by absence** — there is no parameter to pass one to and no
+column to land it in. `call_date` is a **date, not a timestamp**, because a
+timestamp would let response times be reconstructed, which is the first step
+back toward an incident record. A department that wants incident-level records
+wants an incident module, behind its own consent and access-control story.
+
+### The three numbers, and why they do not add up
+
+They are computed by three separate code paths on purpose. Collapsing any two
+produces a figure that looks right and is wrong.
+
+| Number                     | Where it lives                     | What it means                                                                                                                                                            |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Department call volume** | distinct `org_calls` rows          | One call is one call, however many units rolled                                                                                                                          |
+| **Apparatus runs**         | `org_call_responses` rows per unit | Unit responses. A 400-call department can legitimately show 380 engine runs and 240 medic runs — these do not sum to the department total and are not supposed to        |
+| **Member credit**          | `shift_attendance.call_count`      | Per member. Someone who came on at 0300 was not on the 2200 call. Never summed back into a department total — with a four-person crew that multiplies every call by four |
+
+**Why a call row exists at all, rather than an integer on the shift.** Two
+integers cannot be deduplicated. When Engine 5 reports 5 runs and Medic 1
+reports 3, nothing in those numbers says whether they were on the same MVA or
+on eight unrelated calls, so a department total summed from per-unit counts
+double-counts every mutual response. The call row is the shared thing both
+units point at.
+
+### Call types
+
+Nine are seeded for a department that has not defined its own: fire, EMS, MVA,
+rescue, hazmat, service, alarm / good intent, mutual aid, other.
+
+The **slug** is stored and permanent; the label is display-only and may be
+renamed freely. Storing the label instead would orphan every historical call
+the first time somebody fixed a typo in settings.
+
+### The three-step close-out wizard
+
+Opened by **Close out shift** on the shift detail panel, for
+`scheduling.manage` or the shift's own officer, on a past shift that is neither
+finalized nor cancelled.
+
+| Step | Question                              | Saved on **Next**       |
+| ---- | ------------------------------------- | ----------------------- |
+| 1    | When was each member actually on?     | Attendance times        |
+| 2    | How many calls did the apparatus run? | Call rows and responses |
+| 3    | Confirm each member's credit          | Finalize                |
+
+**Each step saves as it advances**, so a phone that locks at 0700 in an
+apparatus bay resumes where it left off instead of starting over. The server's
+`shifts.closeout_step` decides the entry screen — nothing is held only in the
+browser. Reopening a finalized shift deliberately restarts the wizard at step 1.
+
+**The total on step 2 is derived from the per-type rows and is read-only.**
+There is exactly one source for the number. A design with a total field _and_ a
+breakdown needs a reconciliation rule per direction, and the downward one was
+missing — revising a count down left the old total on screen, and that stale
+figure was what got saved.
+
+**The wizard carries everything the checklist could do** — the end-of-shift
+check override (still gated on a logged reason, still audited) and pass-down
+notes. Without them, a count-only department that enforces equipment checks
+could never close a shift at all.
+
+### Reading the call volume report
+
+`GET /scheduling/reports/call-volume` picks **one** source and never mixes:
+count-only departments from the call tables, detailed departments from the
+per-incident records. Reading both and adding them would count every call twice
+for a department that has used each mode in turn.
+
+In count-only mode the report relabels itself **Unit Responses**, **Avg
+Responses/Day** and **Peak Responses**, with a footnote saying an incident two
+units attended is counted once for each. That is not cosmetic: until the
+cross-unit attach picker ships, two units closing out independently each report
+their own call, so calling the figure "calls" would overstate the department's
+volume. **Do not put that number in a grant application as a call count.**
+
+### Edge cases worth knowing
+
+- **Blank and zero are different answers.** Leaving the count blank records
+  "we did not track it"; entering `0` records a quiet tour. A report that
+  conflates them understates quiet nights as missing data.
+- **A breakdown that adds up to less than the total is fine** — the remainder
+  is recorded as unclassified. Requiring it to reconcile exactly would just
+  teach officers to invent a type at 0700 to get the close-out to submit.
+- **You cannot lower the total below the calls this shift already shares with
+  another unit.** The wizard says so and names the number; detaching a shared
+  call is an explicit act, not something a lowered total should do behind your
+  back.
+- **Correcting a shift's date or apparatus after close-out moves its calls
+  with it.** Before this was fixed the totals stayed right while the daily and
+  per-apparatus reports pointed at the wrong day and the wrong truck.
+- **Only `ASSIGNED` and `CONFIRMED` crew are listed.** Declined, pending and
+  no-show members were previously shown — and every listed member gets the
+  apparatus's full call count by default, which credited calls to people who
+  never worked the shift.
+- **Assigned members who never checked in are still listed**, with empty times
+  to fill in. Otherwise they were invisible: no hours, no credit, and no way
+  for the officer to notice.
+- **A member credited with fewer calls than the apparatus ran gets a count,
+  not types.** Which calls they were on is not knowable, and inventing an
+  alphabetical prefix meant a trainee's single credit on a shift of one EMS and
+  one fire was always spent against EMS-specific requirements.
+- **100 calls per shift is a hard cap.** An officer closing out a shift is
+  reporting a tour, not a year.
 
 ---
 
@@ -114,11 +237,11 @@ managers set it from the member admin UI (one-click control + card badge).
 Each platoon runs the same cycle offset by `i × cycle_length / num_platoons`
 days, so the platoons tile to exactly one on-duty platoon per day:
 
-| Rotation | Cycle | Platoons | Offsets (days) |
-|----------|-------|----------|----------------|
-| 24/48 | 3 | 3 | 0, 1, 2 |
-| Kelly (9-day) | 9 | 3 | 0, 3, 6 |
-| 48/96 | 6 | 3 | 0, 2, 4 |
+| Rotation      | Cycle | Platoons | Offsets (days) |
+| ------------- | ----- | -------- | -------------- |
+| 24/48         | 3     | 3        | 0, 1, 2        |
+| Kelly (9-day) | 9     | 3        | 0, 3, 6        |
+| 48/96         | 6     | 3        | 0, 2, 4        |
 
 ### Leave Integration & Hold-Over Roster
 
@@ -193,6 +316,7 @@ days, so the platoons tile to exactly one on-duty platoon per day:
 ## Recent Improvements (2026-04-11)
 
 ### Shift Completion Service Hardening
+
 - **Submit-all-drafts scope**: `POST /api/v1/training/shift-reports/drafts/submit-all` now correctly scopes to the current officer's drafts only
 - **Enrollment ID validation**: Draft-to-submitted transition validates that the trainee still has an active enrollment before crediting program progress
 - **Draft regression guard**: Prevents re-creation of draft reports for shifts that already have submitted or reviewed reports
@@ -203,23 +327,23 @@ days, so the platoons tile to exactly one on-duty platoon per day:
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/scheduling` | Scheduling Hub | Authenticated |
-| `/scheduling/supply/expiring` | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `equipment_check.view`, `inventory.view` |
-| `/scheduling/apparatus-inventory` | Apparatus Inventory *(2026-08-10)* | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| URL                               | Page                                    | Permission                                                                |
+| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| `/scheduling`                     | Scheduling Hub                          | Authenticated                                                             |
+| `/scheduling/supply/expiring`     | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
+| `/scheduling/apparatus-inventory` | Apparatus Inventory _(2026-08-10)_      | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
 
 ### Scheduling Tabs
 
-| Tab | Description | Admin Only |
-|-----|-------------|------------|
-| Schedule | Calendar view of shifts | No |
-| My Shifts | Personal shifts, confirm/decline, swap/time-off | No |
-| Open Shifts | Browse and sign up for available shifts | No |
-| Requests | Swap and time-off request management | No |
-| Templates | Shift template and pattern management | Yes |
-| Reports | Hours, coverage, call volume, availability | Yes |
-| Settings | Scheduling configuration | Yes |
+| Tab         | Description                                     | Admin Only |
+| ----------- | ----------------------------------------------- | ---------- |
+| Schedule    | Calendar view of shifts                         | No         |
+| My Shifts   | Personal shifts, confirm/decline, swap/time-off | No         |
+| Open Shifts | Browse and sign up for available shifts         | No         |
+| Requests    | Swap and time-off request management            | No         |
+| Templates   | Shift template and pattern management           | Yes        |
+| Reports     | Hours, coverage, call volume, availability      | Yes        |
+| Settings    | Scheduling configuration                        | Yes        |
 
 ---
 
@@ -243,14 +367,44 @@ GET    /api/v1/scheduling/shifts/{id}/unavailable-members  # Unavailable user ID
 GET    /api/v1/scheduling/my-attendance-history            # My attendance history (optional start_date/end_date, embeds shift date/time) (2026-05-29)
 ```
 
-### Equipment-Check Supply Endpoints *(2026-08-10)*
+### Shift Close-Out Endpoints _(2026-08-19)_
+
+```
+GET    /api/v1/scheduling/shifts/{id}/closeout              # Wizard state + resume point
+PATCH  /api/v1/scheduling/shifts/{id}/closeout/attendance   # Step 1 — who was on, and when
+PATCH  /api/v1/scheduling/shifts/{id}/closeout/calls        # Step 2 — how many calls
+POST   /api/v1/scheduling/shifts/{id}/finalize              # Step 3 — confirm and close
+```
+
+All four require `scheduling.manage` **or** being the shift's own officer.
+
+`POST …/finalize` accepts `reported_call_count`, `reported_call_types`,
+`member_call_counts`, `attach_call_ids`, `manual_hours`,
+`override_incomplete_checks` + `override_reason`, and `pass_down_notes`.
+
+`attach_call_ids` claims a call another unit already logged, and is what keeps
+a single incident counted once for the department when two units roll. It has
+**no UI yet** — `attachable_calls` on the close-out GET is served empty on
+purpose, and the field stays on the response so the contract does not change
+when the picker lands.
+
+### Equipment-Check Supply Endpoints _(2026-08-10)_
 
 Everything below lives under `/api/v1/equipment-checks`. Reads accept
-`equipment_check.view` / `inventory.view`; **writes accept
-`equipment_check.submit`** — the default member position — as well as
-`equipment_check.manage` / `inventory.manage`, because recording what you just
-used is crew work and gating it behind a manage permission is what leaves the
-gap for the next morning's check to find.
+`equipment_check.view` / `inventory.view`. Writes are split by intent
+_(tightened 2026-08-11)_:
+
+- **Reporting what you just used** (`POST /items/{id}/used`, and deployed-lot
+  quantity updates) accepts `equipment_check.submit` — the default member
+  position — as well as `equipment_check.manage` / `inventory.manage`.
+  Recording consumption is crew work; gating it behind a manage permission is
+  what leaves the gap for the next morning's check to find.
+- **Corrections of record** now require `equipment_check.manage` or
+  `inventory.manage` only: withdrawing a restock report
+  (`DELETE /items/{id}/used`), swapping a ready-stock lot onto the apparatus
+  (`POST /items/{id}/swap`), and editing a deployed lot's identity fields
+  (`lot_number`, `expiration_date`) — a submit-only member changing those on a
+  deployed lot gets a 403, though quantity edits still go through.
 
 ```
 GET    /supply/expiring-items?days_ahead=30              # The supply worklist: expiring, expired,
@@ -276,12 +430,14 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 ## Recent Improvements (2026-03-02)
 
 ### Component Decomposition & Architecture
+
 - **ShiftSettingsPanel decomposed**: Split from an 800+ line component into 6 focused card components: `ApparatusTypeDefaultsCard`, `DepartmentDefaultsCard`, `PositionNamesCard`, `ResourceTypeDefaultsCard`, `TemplatesOverviewCard`, `PositionListEditor`
 - **Dedicated types**: New `shiftSettings.ts` type file for scheduling configuration types
 - **Route module extraction**: Scheduling routes defined in `modules/scheduling/routes.tsx` with `lazyWithRetry()` for chunk-loading resilience
 - **Type safety**: Full TypeScript typing added to scheduling service API
 
 ### Shift Editing & Position Changes (2026-03-01)
+
 - **Expanded shift editing**: Officers can edit shift times, apparatus assignment, color, notes, and custom creation times directly from the shift detail panel
 - **Inline position change UI**: Change member position assignments (Officer, Driver, Firefighter, etc.) directly on shift cards without opening a separate modal
 
@@ -290,6 +446,7 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 ## Improvements (2026-02-28)
 
 ### Architecture Refactor
+
 - **Modular architecture**: Scheduling refactored from a monolithic 1,200-line page into a proper module structure under `frontend/src/modules/scheduling/`
 - **Dedicated Zustand store** (`schedulingStore.ts`): Centralized state management for shifts, templates, patterns, members, and apparatus
 - **Dedicated API service** (`modules/scheduling/services/api.ts`): All scheduling API calls moved from the global service into a module-scoped client using `createApiClient()`
@@ -299,6 +456,7 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 - **Scheduling store tests**: Unit tests for store state and async actions
 
 ### Features & Fixes
+
 - **Fire department shift pattern presets**: Built-in patterns (24/48, 48/96, Kelly Schedule, California 3-Platoon, ABCAB) plus custom pattern builder with 30-day preview
 - **Vehicle linking on templates**: Shift templates can be linked to actual department vehicles from the Apparatus module
 - **Auto-default shift officer**: Assigning the "Officer" position automatically sets that member as the shift officer
@@ -350,14 +508,14 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 ### Edge Cases (2026-03-24)
 
-| Scenario | Behavior |
-|----------|----------|
-| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
-| Template with bare string positions | Defaults to `required=true` (backward-compatible) |
-| Open-ended shift on different date | No false overlap; restricted to same date |
-| Reminder for already-started shift | Skipped |
-| Member on leave in assignment dropdown | Filtered out |
-| Dark mode with light template color | Text auto-adjusted for WCAG AA contrast |
+| Scenario                               | Behavior                                          |
+| -------------------------------------- | ------------------------------------------------- |
+| Bulk confirm with API failure          | Optimistic UI reverts; toast shows error          |
+| Template with bare string positions    | Defaults to `required=true` (backward-compatible) |
+| Open-ended shift on different date     | No false overlap; restricted to same date         |
+| Reminder for already-started shift     | Skipped                                           |
+| Member on leave in assignment dropdown | Filtered out                                      |
+| Dark mode with light template color    | Text auto-adjusted for WCAG AA contrast           |
 
 ---
 
@@ -372,12 +530,12 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 ### Edge Cases (2026-03-23)
 
-| Scenario | Behavior |
-|----------|----------|
-| User has `scheduling.assign` but not `scheduling.manage` | Can assign members but cannot edit/delete shifts |
-| User has `scheduling.manage` but not `scheduling.assign` | Can edit/delete shifts but cannot directly assign members |
-| Self-signup on non-apparatus shifts | Available to all authenticated users, no permission required |
-| Calls/Incidents API endpoints | Still functional at `POST /api/v1/scheduling/shifts/{id}/calls` for programmatic access |
+| Scenario                                                 | Behavior                                                                                |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| User has `scheduling.assign` but not `scheduling.manage` | Can assign members but cannot edit/delete shifts                                        |
+| User has `scheduling.manage` but not `scheduling.assign` | Can edit/delete shifts but cannot directly assign members                               |
+| Self-signup on non-apparatus shifts                      | Available to all authenticated users, no permission required                            |
+| Calls/Incidents API endpoints                            | Still functional at `POST /api/v1/scheduling/shifts/{id}/calls` for programmatic access |
 
 ---
 
@@ -401,33 +559,33 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 ### New Pages (2026-03-19)
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/scheduling/templates` | Scheduling Templates | `scheduling.manage` |
-| `/scheduling/patterns` | Scheduling Patterns | `scheduling.manage` |
-| `/scheduling/reports` | Scheduling Reports | `scheduling.manage` |
-| `/scheduling/settings` | Scheduling Settings | `scheduling.manage` |
-| `/scheduling/equipment-check-templates/new` | Equipment Check Template Builder | `equipment_check.manage` |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template | `equipment_check.manage` |
-| `/scheduling/equipment-check-reports` | Equipment Check Reports | `scheduling.manage` |
+| URL                                                 | Page                             | Permission               |
+| --------------------------------------------------- | -------------------------------- | ------------------------ |
+| `/scheduling/templates`                             | Scheduling Templates             | `scheduling.manage`      |
+| `/scheduling/patterns`                              | Scheduling Patterns              | `scheduling.manage`      |
+| `/scheduling/reports`                               | Scheduling Reports               | `scheduling.manage`      |
+| `/scheduling/settings`                              | Scheduling Settings              | `scheduling.manage`      |
+| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `equipment_check.manage` |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `equipment_check.manage` |
+| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`      |
 
 ### Data Model Changes (2026-03-19)
 
-| Table | Column | Description |
-|-------|--------|-------------|
-| `operational_ranks` | `eligible_positions` (JSON) | Shift positions this rank is qualified for |
-| `shift_assignments` | `position_slot_id` (String, nullable) | Links to a structured position slot |
+| Table               | Column                                | Description                                |
+| ------------------- | ------------------------------------- | ------------------------------------------ |
+| `operational_ranks` | `eligible_positions` (JSON)           | Shift positions this rank is qualified for |
+| `shift_assignments` | `position_slot_id` (String, nullable) | Links to a structured position slot        |
 
 ### Edge Cases (2026-03-19)
 
-| Scenario | Behavior |
-|----------|----------|
-| Ranks with no `eligible_positions` | Default to all positions being eligible (backward-compatible) |
-| Dashboard signup button | Only appears for shifts with open positions the member's rank qualifies for |
-| Previously cancelled signup | Cleaned up before re-enrollment to avoid constraint violations |
-| Shift create from scheduling page | Converts local times to UTC using org timezone before API call |
-| Template-generated shifts | Inherit timezone-correct start/end times |
-| Declined assignments | Create open slots visible to other members |
+| Scenario                           | Behavior                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------- |
+| Ranks with no `eligible_positions` | Default to all positions being eligible (backward-compatible)               |
+| Dashboard signup button            | Only appears for shifts with open positions the member's rank qualifies for |
+| Previously cancelled signup        | Cleaned up before re-enrollment to avoid constraint violations              |
+| Shift create from scheduling page  | Converts local times to UTC using org timezone before API call              |
+| Template-generated shifts          | Inherit timezone-correct start/end times                                    |
+| Declined assignments               | Create open slots visible to other members                                  |
 
 ---
 
@@ -441,10 +599,10 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Shifts created before migration | `positions` and `min_staffing` are `NULL`; UI falls back to apparatus-level positions |
-| `toTimeValue` with invalid datetime | Returns empty string instead of crashing |
+| Scenario                            | Behavior                                                                                |
+| ----------------------------------- | --------------------------------------------------------------------------------------- |
+| Shifts created before migration     | `positions` and `min_staffing` are `NULL`; UI falls back to apparatus-level positions   |
+| `toTimeValue` with invalid datetime | Returns empty string instead of crashing                                                |
 | Template edits after shift creation | Existing shifts retain original positions; only newly created shifts get updated values |
 
 ---
@@ -463,12 +621,12 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 ### Edge Cases (2026-03-22)
 
-| Scenario | Behavior |
-|----------|----------|
-| User with `scheduling.manage` but not `scheduling.manage_assignments` | Can now assign members (permission broadened) |
-| Declined shift in "My Upcoming Shifts" | Filtered from dashboard display |
-| Desktop with only user-facing camera | Falls back automatically for scanning |
-| Member re-signing up after cancellation | Previous cancelled assignment cleaned up to avoid constraint violation |
+| Scenario                                                              | Behavior                                                               |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| User with `scheduling.manage` but not `scheduling.manage_assignments` | Can now assign members (permission broadened)                          |
+| Declined shift in "My Upcoming Shifts"                                | Filtered from dashboard display                                        |
+| Desktop with only user-facing camera                                  | Falls back automatically for scanning                                  |
+| Member re-signing up after cancellation                               | Previous cancelled assignment cleaned up to avoid constraint violation |
 
 ---
 
@@ -499,13 +657,13 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 ## Bug Fixes (2026-03-25)
 
-| Issue | Fix |
-|-------|-----|
-| Apparatus type/status badges showing icon names as text | Fixed to render actual Lucide icon components |
-| `navigate(-1)` causing unexpected navigation from deep links | Replaced with hardcoded parent page paths and breadcrumbs |
-| Chrome ignoring custom label page sizes | Switched to iframe-based printing with top-level `@page` rules |
-| App crash when MySQL not ready at startup | Added retry with exponential backoff on migration check |
-| Alembic multiple migration heads | Merged divergent branches into single linear chain |
+| Issue                                                        | Fix                                                            |
+| ------------------------------------------------------------ | -------------------------------------------------------------- |
+| Apparatus type/status badges showing icon names as text      | Fixed to render actual Lucide icon components                  |
+| `navigate(-1)` causing unexpected navigation from deep links | Replaced with hardcoded parent page paths and breadcrumbs      |
+| Chrome ignoring custom label page sizes                      | Switched to iframe-based printing with top-level `@page` rules |
+| App crash when MySQL not ready at startup                    | Added retry with exponential backoff on migration check        |
+| Alembic multiple migration heads                             | Merged divergent branches into single linear chain             |
 
 ---
 
@@ -517,27 +675,29 @@ A new **Shift Reports** sub-tab within Scheduling Settings provides centralized 
 
 **Settings stored in `org.settings["shift_reports"]`:**
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `checklist_timing.start_of_shift_enabled` | `true` | Start-of-shift equipment checklists active |
-| `checklist_timing.end_of_shift_enabled` | `true` | End-of-shift equipment checklists active |
-| `post_shift_validation.enabled` | `true` | Post-shift validation reminders active |
-| `post_shift_validation.require_officer_report` | `false` | Mandatory shift completion report per shift |
-| `post_shift_validation.validation_window_hours` | `2` | Hours after shift end for validation reminders |
+| Setting                                         | Default | Description                                                                                                                                           |
+| ----------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checklist_timing.start_of_shift_enabled`       | `true`  | Start-of-shift equipment checklists active                                                                                                            |
+| `checklist_timing.end_of_shift_enabled`         | `true`  | End-of-shift equipment checklists active                                                                                                              |
+| `checklist_timing.checkin_opens_hours_before`   | `2`     | _(2026-08-11)_ How many hours before shift start the check-in link opens                                                                              |
+| `checklist_timing.checkin_closes_hours_after`   | `12`    | _(2026-08-11)_ How many hours after shift end check-in still works — a link to a shift that ended last week is refused instead of stamping an arrival |
+| `post_shift_validation.enabled`                 | `true`  | Post-shift validation reminders active                                                                                                                |
+| `post_shift_validation.require_officer_report`  | `false` | Mandatory shift completion report per shift                                                                                                           |
+| `post_shift_validation.validation_window_hours` | `2`     | Hours after shift end for validation reminders                                                                                                        |
 
 ### Report Form Section Toggles
 
 Controls which optional sections appear on the shift completion report form (stored on `training_module_configs`):
 
-| Toggle | Default | Controls |
-|--------|---------|----------|
-| `form_show_performance_rating` | `true` | Rating stars/scale |
-| `form_show_areas_of_strength` | `true` | Strengths text field |
-| `form_show_areas_for_improvement` | `true` | Improvement areas text field |
-| `form_show_officer_narrative` | `true` | Free-form officer assessment |
-| `form_show_skills_observed` | `true` | Structured skills checklist |
-| `form_show_tasks_performed` | `true` | Structured tasks list |
-| `form_show_call_types` | `true` | Call type selection |
+| Toggle                            | Default | Controls                     |
+| --------------------------------- | ------- | ---------------------------- |
+| `form_show_performance_rating`    | `true`  | Rating stars/scale           |
+| `form_show_areas_of_strength`     | `true`  | Strengths text field         |
+| `form_show_areas_for_improvement` | `true`  | Improvement areas text field |
+| `form_show_officer_narrative`     | `true`  | Free-form officer assessment |
+| `form_show_skills_observed`       | `true`  | Structured skills checklist  |
+| `form_show_tasks_performed`       | `true`  | Structured tasks list        |
+| `form_show_call_types`            | `true`  | Call type selection          |
 
 These toggles are **separate** from the existing `show_*` visibility columns, which control what trainees see after submission.
 
@@ -552,15 +712,20 @@ When filing a report linked to a shift with an assigned apparatus, the form auto
 
 ### Rating Scale Customization
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `rating_label` | "Performance Rating" | Custom label for the rating input |
-| `rating_scale_type` | "stars" | "stars" or "descriptive" |
-| `rating_scale_labels` | `null` | Custom labels per level (e.g., `{1: "Needs Improvement", 5: "Exceptional"}`) |
+| Setting               | Default              | Description                                                                  |
+| --------------------- | -------------------- | ---------------------------------------------------------------------------- |
+| `rating_label`        | "Performance Rating" | Custom label for the rating input                                            |
+| `rating_scale_type`   | "stars"              | "stars" or "descriptive"                                                     |
+| `rating_scale_labels` | `null`               | Custom labels per level (e.g., `{1: "Needs Improvement", 5: "Exceptional"}`) |
 
 ### Save as Draft
 
-Officers can save incomplete reports as drafts. Drafts do not trigger training pipeline progress until completed and transitioned to `approved` or `pending_review`.
+Officers can save incomplete reports as drafts. Drafts do not trigger training
+pipeline progress — and _(2026-08-11/12)_ neither does `pending_review`:
+credit toward training requirements is released only when a report reaches
+`approved`, so a report awaiting second review cannot credit a trainee early
+or credit twice. Trainees also cannot read a report before it is approved,
+even when the optional second-review workflow is disabled.
 
 ### Auto-Filter Trainee List
 
@@ -568,24 +733,25 @@ When a shift report is linked to a specific shift, the trainee dropdown filters 
 
 ### Bug Fixes (2026-04-04)
 
-| Issue | Fix |
-|-------|-----|
-| Standalone checklist submission failing | Made `shift_id` nullable in `shift_equipment_checks` for ad-hoc checks |
-| Equipment check empty templates | Return "No items to check" instead of empty form |
-| Equipment check duplicate submissions | Added composite unique constraint on shift + apparatus + timing |
-| Equipment check status logic | Corrected pass/fail computation for mixed check types |
-| Shift report with assignment but no attendance | Gracefully handles missing attendance; allows manual hour entry |
-| Report shift_date mismatch | Validates report date matches linked shift's actual date |
-| Pipeline enrollment field name | Fixed incorrect field reference causing 500 errors |
-| Requirement progress started_at | Added missing column referenced by training program service |
-| NotificationLog metadata attribute | Renamed from reserved `metadata` to `notification_metadata` |
-| Post-shift validation notification UX | Fixed "Start Checklist" / "View Shift" button logic |
-| Notification deep-linking | Shift check notifications now link to checklist page |
-| Equipment check query performance | Added composite indexes on `(shift_id, template_id)` and `(check_id, template_item_id)` |
+| Issue                                          | Fix                                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Standalone checklist submission failing        | Made `shift_id` nullable in `shift_equipment_checks` for ad-hoc checks                  |
+| Equipment check empty templates                | Return "No items to check" instead of empty form                                        |
+| Equipment check duplicate submissions          | Added composite unique constraint on shift + apparatus + timing                         |
+| Equipment check status logic                   | Corrected pass/fail computation for mixed check types                                   |
+| Shift report with assignment but no attendance | Gracefully handles missing attendance; allows manual hour entry                         |
+| Report shift_date mismatch                     | Validates report date matches linked shift's actual date                                |
+| Pipeline enrollment field name                 | Fixed incorrect field reference causing 500 errors                                      |
+| Requirement progress started_at                | Added missing column referenced by training program service                             |
+| NotificationLog metadata attribute             | Renamed from reserved `metadata` to `notification_metadata`                             |
+| Post-shift validation notification UX          | Fixed "Start Checklist" / "View Shift" button logic                                     |
+| Notification deep-linking                      | Shift check notifications now link to checklist page                                    |
+| Equipment check query performance              | Added composite indexes on `(shift_id, template_id)` and `(check_id, template_item_id)` |
 
 ### Component Architecture (2026-04-03)
 
 ShiftTemplatesPage decomposed into focused components:
+
 - `TemplateFormModal` — Create/edit shift template
 - `PatternFormModal` — Create/edit shift pattern
 - `GenerateShiftsModal` — Bulk generate shifts from pattern
@@ -593,14 +759,14 @@ ShiftTemplatesPage decomposed into focused components:
 
 ### Edge Cases (2026-04-04)
 
-| Scenario | Behavior |
-|----------|----------|
-| All form sections toggled off | Core fields (trainee, date, hours, calls) remain; form submittable |
-| Apparatus type with no mapped skills | Falls back to org-wide defaults; empty if none configured |
-| Draft saved with missing fields | Validation deferred until final submission |
-| Standalone equipment check (no shift) | Saved with `shift_id=NULL`; not linked to shift finalization |
-| Descriptive rating with no labels | Falls back to numeric display (1-5) |
-| Duplicate equipment check | Blocked by composite constraint; descriptive error returned |
+| Scenario                              | Behavior                                                           |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| All form sections toggled off         | Core fields (trainee, date, hours, calls) remain; form submittable |
+| Apparatus type with no mapped skills  | Falls back to org-wide defaults; empty if none configured          |
+| Draft saved with missing fields       | Validation deferred until final submission                         |
+| Standalone equipment check (no shift) | Saved with `shift_id=NULL`; not linked to shift finalization       |
+| Descriptive rating with no labels     | Falls back to numeric display (1-5)                                |
+| Duplicate equipment check             | Blocked by composite constraint; descriptive error returned        |
 
 ---
 
@@ -637,6 +803,7 @@ Review modal renders complete report content (hours, calls, rating, strengths, i
 ### Skill Linkage in Apparatus Settings
 
 `ShiftReportsSettingsPanel` shows green/amber tags for each apparatus-type skill:
+
 - **Green**: Matches a `SkillEvaluation` record (tracks competency)
 - **Amber**: No match (observed but not formally tracked)
 
@@ -649,24 +816,24 @@ Powered by `GET /api/v1/training/module-config/skill-names`.
 
 ### Bug Fixes (2026-04-07)
 
-| Issue | Fix |
-|-------|-----|
+| Issue                                        | Fix                                                   |
+| -------------------------------------------- | ----------------------------------------------------- |
 | Decimal TypeError in weekly/monthly calendar | MySQL `SUM()` returns `Decimal`; wrapped in `float()` |
-| `??` → `||` for optional fields | 35 instances in prospective-members and apparatus |
-| `shift_date` type mismatch | Changed from optional to required in TS types |
-| Unused `LogOut` import | Removed from `MyShiftsTab` |
-| Numeric column alignment | Center-aligned trainee summary table columns |
+| `??` → `                                     |                                                       | ` for optional fields | 35 instances in prospective-members and apparatus |
+| `shift_date` type mismatch                   | Changed from optional to required in TS types         |
+| Unused `LogOut` import                       | Removed from `MyShiftsTab`                            |
+| Numeric column alignment                     | Center-aligned trainee summary table columns          |
 
 ### Edge Cases (2026-04-07)
 
-| Scenario | Behavior |
-|----------|----------|
-| Skill score outside 1-5 | 422 error via Pydantic `Field(ge=1, le=5)` |
-| Batch review >100 IDs | Rejected by `max_length=100` |
-| Batch review with invalid IDs | Valid reports processed; failed count returned |
-| Flagged report re-approved | Moves to approved; deferred pipeline progress triggered |
-| Non-authorized user reads report by ID | 403 Forbidden |
-| Trainee reads own report | Visibility-filtered; `reviewer_notes` stripped |
+| Scenario                               | Behavior                                                |
+| -------------------------------------- | ------------------------------------------------------- |
+| Skill score outside 1-5                | 422 error via Pydantic `Field(ge=1, le=5)`              |
+| Batch review >100 IDs                  | Rejected by `max_length=100`                            |
+| Batch review with invalid IDs          | Valid reports processed; failed count returned          |
+| Flagged report re-approved             | Moves to approved; deferred pipeline progress triggered |
+| Non-authorized user reads report by ID | 403 Forbidden                                           |
+| Trainee reads own report               | Visibility-filtered; `reviewer_notes` stripped          |
 
 ---
 
@@ -693,6 +860,7 @@ When a shift is linked to an apparatus type, the **Add Task** dialog pre-populat
 ### Score Label Improvements
 
 The 1-5 skill score buttons now show descriptive label text inline next to the button (not just as tooltips):
+
 - 1 = Needs work
 - 2 = Developing
 - 3 = Competent
@@ -710,19 +878,19 @@ This applies to both `ShiftReportPage` and `ShiftReportsTab` and uses a consiste
 
 ### New API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
+| Method | Path                                     | Description                                        |
+| ------ | ---------------------------------------- | -------------------------------------------------- |
 | `POST` | `/api/v1/shift-completion-reports/batch` | Batch-create shift reports for all crew on a shift |
 
 ### Edge Cases (2026-04-07)
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario                                         | Behavior                                                     |
+| ------------------------------------------------ | ------------------------------------------------------------ |
 | Batch create with mixed trainee/non-trainee crew | Non-trainees get hours/calls credit only; no evaluation data |
-| Reports already exist for some crew members | Existing reports skipped; `skipped` count returned |
-| Shift with no crew assignments | Empty crew list shown; submit button disabled |
-| Task defaults after apparatus type change | Defaults update to match new apparatus type |
-| Review comment required for flagging | Modal blocks submission without text |
+| Reports already exist for some crew members      | Existing reports skipped; `skipped` count returned           |
+| Shift with no crew assignments                   | Empty crew list shown; submit button disabled                |
+| Task defaults after apparatus type change        | Defaults update to match new apparatus type                  |
+| Review comment required for flagging             | Modal blocks submission without text                         |
 
 ---
 
@@ -751,12 +919,12 @@ When connectivity is lost during report submission, reports are queued in **Inde
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Browser closed with unsaved form | Auto-saved draft restored on next visit |
-| 21st draft saved | Oldest draft evicted to stay within 20 limit |
-| Connectivity restored with queued reports | Queue drains automatically; no duplicate submissions |
-| Queue item fails on retry | Retry counter incremented; kept in queue for next attempt |
+| Scenario                                  | Behavior                                                  |
+| ----------------------------------------- | --------------------------------------------------------- |
+| Browser closed with unsaved form          | Auto-saved draft restored on next visit                   |
+| 21st draft saved                          | Oldest draft evicted to stay within 20 limit              |
+| Connectivity restored with queued reports | Queue drains automatically; no duplicate submissions      |
+| Queue item fails on retry                 | Retry counter incremented; kept in queue for next attempt |
 
 ---
 
@@ -773,11 +941,11 @@ New route at `/scheduling/shift-reports/print` renders a shift completion report
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Redacted fields on printed report | Shows "[Redacted]" placeholder text |
+| Scenario                                            | Behavior                                              |
+| --------------------------------------------------- | ----------------------------------------------------- |
+| Redacted fields on printed report                   | Shows "[Redacted]" placeholder text                   |
 | Print page for report with all sections toggled off | Only core fields (trainee, date, hours, calls) appear |
-| Browser blocks auto-print dialog | Page remains visible for manual Ctrl+P |
+| Browser blocks auto-print dialog                    | Page remains visible for manual Ctrl+P                |
 
 ---
 
@@ -797,11 +965,11 @@ Previously, incomplete checks could not be resumed. Now:
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Resume check after template items were added | New items appear as unanswered alongside previously answered items |
-| Resume check after template items were removed | Orphaned answers preserved but marked as "template item removed" |
-| Submit with 0 items answered | Confirmation dialog warns; submission still allowed for edge cases |
+| Scenario                                       | Behavior                                                           |
+| ---------------------------------------------- | ------------------------------------------------------------------ |
+| Resume check after template items were added   | New items appear as unanswered alongside previously answered items |
+| Resume check after template items were removed | Orphaned answers preserved but marked as "template item removed"   |
+| Submit with 0 items answered                   | Confirmation dialog warns; submission still allowed for edge cases |
 
 ---
 
@@ -824,13 +992,13 @@ morning's check, which is exactly the window in which a truck runs a call short.
 
 ### What a checklist position now records
 
-| Column | Meaning |
-|--------|---------|
-| `required_quantity` | The state-mandated floor. Outranks `expected_quantity` where both exist |
-| `expected_quantity` | The department's own target |
-| `quantity_on_truck` | The **live** count. **NULL means nobody has counted since the item was defined**, and the target stands in — reading NULL as zero would report every untouched truck as stripped |
-| `restock_needed` (+ `restock_reported_by` / `_at` / `_note`) | A report raised by whoever used the unit, at the time they used it |
-| `inventory_item_id` | The catalog link everything above hangs off |
+| Column                                                       | Meaning                                                                                                                                                                          |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `required_quantity`                                          | The state-mandated floor. Outranks `expected_quantity` where both exist                                                                                                          |
+| `expected_quantity`                                          | The department's own target                                                                                                                                                      |
+| `quantity_on_truck`                                          | The **live** count. **NULL means nobody has counted since the item was defined**, and the target stands in — reading NULL as zero would report every untouched truck as stripped |
+| `restock_needed` (+ `restock_reported_by` / `_at` / `_note`) | A report raised by whoever used the unit, at the time they used it                                                                                                               |
+| `inventory_item_id`                                          | The catalog link everything above hangs off                                                                                                                                      |
 
 ### Lots aboard, not one lot per position
 
@@ -853,19 +1021,19 @@ aboard** — was unrepresentable.
 
 ### Edge cases
 
-| Scenario | Behavior |
-|----------|----------|
-| A crew reports more used than the record held | Draws what was there. That is a correction to the record, not a negative quantity |
-| A position carries units with no lot row, and a lot is added | The existing units are given a row **first**, or the lot sum would become the authority and the uncounted units would vanish |
-| A recount lands over the record | The surplus goes into an **undated** row — the honest answer to when found stock expires is that nobody knows |
-| A recount lands under the record | The difference comes off soonest-expiring-first, like any other consumption |
-| A lot is drawn down to zero | The row is removed, so a spent box stops contributing its date to the position's reading |
-| A restock puts the truck part-way back | The report **stays open**. Two of four back is still a truck short two; clearing the flag there would close the gap on paper and leave it open on the apparatus |
-| A counted position is below target with no report behind it | It reaches the supply worklist anyway, showing the numbers |
-| Shelf stock has expired | Excluded from the on-hand count, flagged in the payload, struck through in the UI and **refused by the swap** |
-| Everything on a position has expired | Counted as **expired**, reported apart from *expiring*, and the count renders red — two of two expired units meet the number and are still nothing a crew can use |
-| Headers and free-text checklist lines | Not shown on the apparatus view. They are scaffolding, not things anyone stocks |
-| A template is cloned | The catalog link is carried across. It used to be dropped, silently severing tracking on the copy — which is how a department stands up its second engine |
+| Scenario                                                     | Behavior                                                                                                                                                          |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A crew reports more used than the record held                | Draws what was there. That is a correction to the record, not a negative quantity                                                                                 |
+| A position carries units with no lot row, and a lot is added | The existing units are given a row **first**, or the lot sum would become the authority and the uncounted units would vanish                                      |
+| A recount lands over the record                              | The surplus goes into an **undated** row — the honest answer to when found stock expires is that nobody knows                                                     |
+| A recount lands under the record                             | The difference comes off soonest-expiring-first, like any other consumption                                                                                       |
+| A lot is drawn down to zero                                  | The row is removed, so a spent box stops contributing its date to the position's reading                                                                          |
+| A restock puts the truck part-way back                       | The report **stays open**. Two of four back is still a truck short two; clearing the flag there would close the gap on paper and leave it open on the apparatus   |
+| A counted position is below target with no report behind it  | It reaches the supply worklist anyway, showing the numbers                                                                                                        |
+| Shelf stock has expired                                      | Excluded from the on-hand count, flagged in the payload, struck through in the UI and **refused by the swap**                                                     |
+| Everything on a position has expired                         | Counted as **expired**, reported apart from _expiring_, and the count renders red — two of two expired units meet the number and are still nothing a crew can use |
+| Headers and free-text checklist lines                        | Not shown on the apparatus view. They are scaffolding, not things anyone stocks                                                                                   |
+| A template is cloned                                         | The catalog link is carried across. It used to be dropped, silently severing tracking on the copy — which is how a department stands up its second engine         |
 
 ### Where the numbers come from on a check form
 

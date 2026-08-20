@@ -60,15 +60,16 @@ attendance or readiness information.
 5. [Shift Assignments](#shift-assignments)
 6. [Attendance Tracking](#attendance-tracking)
 7. [Call Logging](#call-logging)
-8. [Time-Off Requests](#time-off-requests)
-9. [Shift Swap Requests](#shift-swap-requests)
-10. [Shift Templates and Patterns](#shift-templates-and-patterns)
-11. [Minimum Staffing and Coverage Rules](#minimum-staffing-and-coverage-rules)
-12. [Shift Reports and Compliance](#shift-reports-and-compliance)
-13. [How Shift Hours Feed Training Compliance](#how-shift-hours-feed-training-compliance)
-14. [Realistic Example: Setting Up a 24/48 Platoon Rotation](#realistic-example-setting-up-a-2448-platoon-rotation)
-15. [Supply Tracking: Keeping the Truck and the Shelf in Step](#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
-16. [Troubleshooting](#troubleshooting)
+8. [Counting Calls Without an RMS](#counting-calls-without-an-rms-2026-08-18)
+9. [Time-Off Requests](#time-off-requests)
+10. [Shift Swap Requests](#shift-swap-requests)
+11. [Shift Templates and Patterns](#shift-templates-and-patterns)
+12. [Minimum Staffing and Coverage Rules](#minimum-staffing-and-coverage-rules)
+13. [Shift Reports and Compliance](#shift-reports-and-compliance)
+14. [How Shift Hours Feed Training Compliance](#how-shift-hours-feed-training-compliance)
+15. [Realistic Example: Setting Up a 24/48 Platoon Rotation](#realistic-example-setting-up-a-2448-platoon-rotation)
+16. [Supply Tracking: Keeping the Truck and the Shelf in Step](#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
+17. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -246,6 +247,117 @@ Calls logged against a shift contribute to **call-based training requirements** 
 
 ![Inline log call form with incident type and times](./images/03-09-log-call-form.png)
 
+> **This section describes the department default.** A department that has
+> switched on **Record a call count at close-out** does not use Calls / Runs at
+> all — see [Counting Calls Without an RMS](#counting-calls-without-an-rms-2026-08-18)
+> immediately below.
+
+---
+
+## Counting Calls Without an RMS _(2026-08-18)_
+
+Plenty of departments do not run incident reporting software. They still have to
+answer _"how many calls did we run last year, and what did each apparatus go
+on?"_ — for a grant application, an ISO rating, an apparatus replacement case,
+or a staffing argument at a budget hearing.
+
+**Record a call count at close-out** is for exactly that department. The officer
+reports a number when they close the shift out, and nothing else is collected.
+
+### Turning it on
+
+**Scheduling → Settings → General → Shift close-out rules → Record a call count
+at close-out.**
+
+> **[SCREENSHOT NEEDED — Scheduling → Settings → General, scrolled to the
+> _Shift close-out rules_ block, with the "Record a call count at close-out"
+> toggle switched on and its explanatory paragraph legible]**
+
+It takes effect immediately — no reload, no restart. **Tell your officers before
+you flip it**, because it changes what they see at 0700 the same morning: the
+familiar close-out checklist is replaced by a three-step wizard.
+
+Leaving it off keeps the per-incident **Calls / Runs** logging described above.
+A department that has never touched this setting keeps doing exactly what it
+does today — absence of the setting means _current behaviour_, never _off_.
+
+### What is recorded, and what is deliberately not
+
+Recorded: the **date**, an optional **call type** from your own list, and
+**which units responded**.
+
+Not recorded, and not recordable:
+
+- No address or cross streets
+- No patient, caller, or complainant identity
+- No narrative
+- No dispatch, on-scene, or clear times
+- No CAD incident number that anyone can read on screen
+
+That is the point of the mode rather than an oversight. Those are the fields
+that turn a call record into protected health information, and there is nowhere
+in this feature to put one — no field to type it into and no column to store it
+in. A department that wants incident-level records wants an incident module,
+with its own consent and access-control story behind it.
+
+**The date is a date, not a time.** Storing a timestamp would let response times
+be reconstructed, and that is the first step back toward an incident record.
+
+### Call types
+
+Nine are provided to start with: Fire, EMS, Motor Vehicle Accident, Rescue,
+Hazmat, Service Call, Alarm / Good Intent, Mutual Aid, and Other. A department
+can define its own instead.
+
+**You can rename a type freely without touching history.** What gets stored on
+each call is the type's internal slug, not the label you see — so fixing a typo
+in a label does not orphan last year's calls. What you should _not_ do casually
+is delete a type: existing calls keep the deleted slug, and it will show as
+unclassified.
+
+### The three numbers, and why they will not add up
+
+This is the part that causes arguments in a budget meeting, so it is worth
+getting straight before anyone quotes a figure.
+
+| Number                     | What it counts                                        | Where you see it                           |
+| -------------------------- | ----------------------------------------------------- | ------------------------------------------ |
+| **Department call volume** | One call is one call, however many units rolled on it | Reports → Call Volume                      |
+| **Apparatus runs**         | One per unit, per call                                | Per-apparatus reporting                    |
+| **Member credit**          | Calls an individual was actually on                   | The member's own hours and training credit |
+
+A 400-call department can legitimately show **380 engine runs and 240 medic
+runs**. Those do not sum to 400 and they are not supposed to — both units rolled
+on the same MVA, and it was one call for the department and one run for each of
+them.
+
+Member credit is a third thing again, and is never the shift's number restated.
+A member who came on at 0300 was not on the 2200 call.
+
+> **[SCREENSHOT NEEDED — Reports → Call Volume for a count-only department,
+> showing the "Unit Responses" / "Avg Responses/Day" / "Peak Responses" stat
+> cards and the footnote beneath them. Caption it alongside the same report for
+> a detailed-mode department so a reader can see the labels differ and
+> understand why]**
+
+### Read the report label before you quote the number
+
+In count-only mode the report says **Unit Responses**, not **Total Calls**.
+
+That wording is doing real work. Two units that closed out independently each
+reported their own call, and nothing has yet linked them to one incident — so
+the figure counts an incident once per responding unit. **Do not put it in a
+grant application as a department call count.** Reconcile mutual responses by
+hand, or wait for the cross-unit feature described below.
+
+### What is not built yet
+
+Claiming a call another unit already logged — the thing that makes two units on
+one MVA count as one call for the department — **has no screen yet**. The
+capability exists in the API, and the close-out screen already reserves the
+place it will appear. Until it ships, the honest label on the report is the
+mitigation.
+
 ---
 
 ## Time-Off Requests
@@ -340,7 +452,7 @@ To generate shifts from a pattern:
 3. Click **Generate Shifts**.
 4. Review and confirm the generated shifts.
 
-![Shift pattern creation page with the pattern type selector](./images/03-13-shift-patterns.png)
+![The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action](./images/03-13-shift-patterns.png)
 
 ### Understanding Platoon Rotations
 
@@ -779,15 +891,16 @@ which positions are open to everyone regardless of rank.
 
 **How it affects shift signup:**
 
-- Every open shift on the Dashboard offers a **Sign Up** button. Eligibility is
-  checked when you press it, not before — the card gives no advance warning
-- Pressing **Sign Up** expands the card into a position dropdown holding **only
-  the positions your rank qualifies for**
-- If your rank qualifies for none of the open positions, the expanded card says
+- Every open slot in the Dashboard's **Next 7 Days** list offers a **Sign Up**
+  button. Eligibility is checked when you press it, not before — the row gives
+  no advance warning
+- Pressing **Sign Up** expands the row into a position dropdown holding **only
+  the positions your rank qualifies for**, with a Confirm button beside it
+- If your rank qualifies for none of the open positions, the expanded row says
   **"Not eligible for this shift."** instead of a dropdown
 - Ranks with no `eligible_positions` defined default to all positions being eligible (backward-compatible)
 
-![An open shift expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for](./images/03-62-dashboard-signup-positions.png)
+![An open shift row expanded after pressing Sign Up, its position dropdown holding only the positions the member's rank qualifies for](./images/03-62-dashboard-signup-positions.png)
 
 > **The button is not a promise.** It appears on every shift, so a member can
 > press Sign Up and be told they are not eligible. This is a known rough edge —
@@ -1007,7 +1120,7 @@ report carries who raised it, when, and an optional note, and it appears on the
 supply worklist beside the expiring items — to a supply officer, "expires
 Thursday" and "the crew used it last night" are the same job.
 
-![The report-used sheet: quantity stepper, optional note, and the position's current count](./images/03-60-report-used-sheet.png)
+![The Flag sheet on a counted position — it raises the restock report with an optional note, leaving the count to the minus button](./images/03-60-report-used-sheet.png)
 
 **A report is settled only when the truck is back at its target.** Two of four
 back is still a truck short two, and clearing the flag there would close the gap
@@ -1185,6 +1298,12 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
 
 ![The close-out checklist with the equipment-check block, attendance, call count, pass-down notes and the Close out shift button](./images/03-45-finalize-checklist.png)
 
+> **This checklist is what a department on per-incident call logging sees.** If
+> your department has **Record a call count at close-out** switched on, the
+> button opens a three-step wizard instead — see
+> [The three-step close-out wizard](#the-three-step-close-out-wizard-2026-08-19)
+> below. Everything else on this page still applies.
+
 3. The checklist validates:
    - **End-of-shift equipment checks** — outstanding checks are called out,
      but they only _block_ finalization when the department has turned on
@@ -1227,6 +1346,107 @@ remove buttons — reopening is what unlocks the shift, not the badge alone.
 | Deleting a shift with completion reports | Blocked — returns "Cannot delete a shift with completion reports" error     |
 | Draft creation fails for one trainee     | Error logged; remaining trainees still get draft reports                    |
 | Attendee with no active enrollment       | No draft created for that attendee                                          |
+
+### The three-step close-out wizard _(2026-08-19)_
+
+For departments recording a call count, **Close out shift** opens a wizard
+rather than the single checklist. Same button, same permissions
+(`scheduling.manage`, or being the shift's own officer), same past-and-not-yet-
+finalized shift — different screen.
+
+#### Why three screens instead of one
+
+Close-out happens at 0700 in an apparatus bay, on a phone, by somebody who has
+been awake for twenty-four hours. **Each step saves the moment you press Next.**
+If the phone locks, the battery dies, or a call drops on the way out the door,
+reopening the shift puts you back on the screen you left — not at the beginning
+with everything retyped.
+
+#### Step 1 — When was everyone actually on?
+
+The crew is listed with their check-in and check-out times, already filled in
+from what they recorded, and editable. Underneath, a **combined hours** figure
+for the whole crew.
+
+Anyone who never checked out is flagged, and **anyone who was assigned but never
+checked in is listed too, with empty times for you to fill in**. That is
+deliberate: they used to be invisible, which meant no hours, no credit, and
+nothing on screen to tell the officer somebody had been missed.
+
+> **[SCREENSHOT NEEDED — close-out wizard step 1: the crew list with editable
+> on/off times, the combined-hours figure, and at least one member carrying the
+> "missing check-out" flag. Use a four-person crew so the combined figure is
+> visibly several times the shift length]**
+
+> **"Combined hours" is not the shift's length.** Summed across a four-person
+> crew on a 24-hour tour it is 96, which reads as a mistake without the word
+> "combined" in front of it.
+
+#### Step 2 — How many calls did the apparatus run?
+
+One row per call type. Enter a number against each type you ran; the **total is
+calculated from those rows and cannot be typed into**.
+
+> **[SCREENSHOT NEEDED — close-out wizard step 2: the per-type rows with a
+> couple filled in, and the derived read-only total beside them. This is the
+> screen that teaches "the rows are the only source" and it needs the picture]**
+
+There is exactly one place the number comes from. An earlier design let you type
+a total _and_ a breakdown, and revising a count downward left the old total
+sitting on screen — which is the figure that then got saved.
+
+**Blank and zero are different answers.** Leaving every row blank records _"we
+did not track it"_. Entering `0` records _"we ran none"_ — a genuinely quiet
+tour. The report treats those differently, and it should: a quiet night is data,
+a blank is a gap.
+
+**A breakdown that adds up to less than your total is fine.** Say you ran six
+and can only remember that four were EMS — the other two are recorded as
+unclassified. Requiring the breakdown to reconcile exactly would just teach
+officers to invent a type at 0700 to get the form to submit.
+
+**One hundred calls is the ceiling for a single shift.** You are reporting a
+tour, not a year, and the cap stops a fat-fingered "500" from skewing every
+report that reads it.
+
+#### Step 3 — Confirm each member's credit
+
+Every member starts credited with the apparatus's full count. Adjust anyone who
+came on late or left early.
+
+> **[SCREENSHOT NEEDED — close-out wizard step 3: per-member credit seeded from
+> the apparatus count, with one member adjusted downward, plus the pass-down
+> notes field and the final "Close out shift" button]**
+
+**A member credited with fewer calls than the apparatus ran gets a count, but
+not call types.** Which of the night's calls they were on is not something the
+system knows, and guessing produced real damage: a trainee credited with one
+call on a shift of one EMS and one fire was always assigned "EMS", and that
+invented type was then spent against EMS-specific training requirements.
+
+Pass-down notes for the next crew are entered here, as before.
+
+#### If your department requires end-of-shift equipment checks
+
+Outstanding checks are called out on the final step, with the override checkbox
+and its required reason — the same behaviour as the old checklist, because the
+wizard replaces that screen and has to carry everything it could do. The
+override is still logged and still audited.
+
+> **[SCREENSHOT NEEDED — close-out wizard with outstanding end-of-shift checks,
+> showing the warning, the override checkbox, and the reason field it requires]**
+
+#### Wizard edge cases
+
+| Scenario                                                                      | Behavior                                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phone locks or the browser closes mid-flow                                    | Reopening the shift resumes on the last screen you completed. Anything already saved is kept                                                                                                                  |
+| Officer lowers the call count below calls this shift shares with another unit | Refused, with a message naming the count. Detaching a shared call has to be deliberate — a lowered total must not silently remove another unit's run from the record                                          |
+| Shift's date or apparatus is corrected after close-out                        | The calls follow the shift onto the new date and the new unit. The totals were always right; before this was fixed the daily and per-apparatus reports pointed at the wrong day and the wrong truck           |
+| Declined, pending, or no-show crew                                            | Not listed. Every listed member takes the apparatus's full count by default, so listing them credited calls to people who never worked the shift                                                              |
+| A call type the admin deleted after you started                               | Dropped from what gets submitted, rather than travelling along invisibly and failing the save with no field to clear                                                                                          |
+| Reopening a finalized shift                                                   | Restarts the wizard at step 1                                                                                                                                                                                 |
+| Department switches back to per-incident logging                              | Calls already recorded stay recorded. The report reads whichever source matches the current mode — it never adds the two together, which for a department that used each in turn would count every call twice |
 
 ### Shift Reports Settings _(2026-04-04)_
 
@@ -1366,7 +1586,7 @@ or is removed:
 > says so under the heading. A shift with none configured shows a plain Crew
 > Roster of whoever is assigned, with no open slots to fill.
 
-![A shift's crew board — one filled position and three open, each with Assign and Sign Up](./images/03-54-crew-board-open-slots.png)
+![A shift's crew board — open positions each offering Assign someone and Sign myself up, with the bulk Fill All Open action beneath them](./images/03-54-crew-board-open-slots.png)
 
 ### Additional Fixes (2026-03-19)
 
@@ -1568,7 +1788,7 @@ Report cards now display **trainee and officer names** alongside dates:
   collapsed card, so a list of reports is readable without opening any of them
 - Review modal: Shows shift date alongside trainee and officer names in the header
 
-![A shift report card naming the trainee in its header and the filing officer in its footer](./images/03-49-report-card-names.png)
+![A shift report card naming the trainee in its header, with the filing officer in the metadata row beneath it](./images/03-49-report-card-names.png)
 
 ### Full Report Content in Review Modal
 
@@ -1668,10 +1888,10 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 
 The shift assignment UI previously required the `scheduling.manage_assignments` permission, which was more restrictive than intended. As of 2026-03-22, users with the broader `scheduling.manage` permission can assign members to shifts.
 
-There is no button called "Add Assignment": the control is **Assign Member**,
-beneath the crew board on a rig with riding positions, or **Assign** in the
-Crew Roster heading on one without. Either opens the same form, which asks for
-the position first and defaults it to the first open seat.
+There is no button called "Add Assignment": the control is **Assign someone**,
+on each open seat of the crew board (its narrow-screen label is just
+**Assign**). It opens the assignment form, which asks for the position first
+and defaults it to the seat you pressed it on.
 
 The member list is not filtered by who is qualified for that seat — it excludes
 only members who are unavailable for the shift at all (on leave, or already
@@ -1680,7 +1900,7 @@ EVOC level the apparatus requires and the assignment is still created; what you
 get is a warning toast afterwards, alongside any overtime warning. The list is
 long on a large roster, so the search box above it filters by name.
 
-![The Assign Member form on a shift, with its position and member pickers](./images/03-58-assign-member-form.png)
+![The Assign someone form on a shift, with its position and member pickers](./images/03-58-assign-member-form.png)
 
 ### Open Shifts Self-Signup Fix
 
@@ -1690,21 +1910,25 @@ The self-signup button visibility on the Open Shifts tab had a fallback permissi
 
 ### Dashboard Shift Display
 
-The "My Upcoming Shifts" section on the dashboard now correctly filters out:
+The dashboard's shift panels were merged into a single **Next 7 Days**
+timeline: your own shifts (marked **Yours**), open slots you can sign up for,
+and upcoming events in one seven-day list, with a line noting how much more
+lies beyond the window. The old "My Upcoming Shifts" filtering rules carry
+over — declined and cancelled assignments do not appear:
 
 - Declined assignments (shifts you said "no" to)
 - Cancelled assignments (shifts that were cancelled after you were assigned)
 
 Only pending and confirmed assignments appear.
 
-The panel does not distinguish the two: there is no status badge on a dashboard
-row, only the date, the hours and the shift officer. Which of your shifts are
-still awaiting your confirmation is a question for **My Shifts**, where each
-card carries its badge and the bulk Confirm All / Decline All bar sits above
-them. What the dashboard promises is narrower — that everything listed is a
-shift you are still on.
+The timeline does not distinguish the two: there is no status badge on a
+dashboard row, only the time, the shift officer and the staffing. Which of
+your shifts are still awaiting your confirmation is a question for **My
+Shifts**, where each card carries its badge and the bulk Confirm All /
+Decline All bar sits above them. What the dashboard promises is narrower —
+that everything marked Yours is a shift you are still on.
 
-![The dashboard's My Upcoming Shifts panel, listing only shifts the member is still on](./images/03-60-dashboard-my-shifts.png)
+![The dashboard's Next 7 Days timeline, listing the member's own shifts alongside open slots and events](./images/03-60-dashboard-my-shifts.png)
 
 ### Desktop Camera Scanning
 
@@ -2246,7 +2470,7 @@ Previously, if you started an equipment check but couldn't finish it, the check 
 3. The button follows the state: **Continue checklist** on a part-answered card, **Open checklist** otherwise. Continuing opens the form with the answered items already filled in
 4. Complete what is left and submit
 
-![My Equipment Checklists — one check part-answered with its progress and a Resume control, one finished, and the untouched ones offering Start Check](./images/03-99-checklists-resume.png)
+![My Equipment Checklists — a part-answered check with its progress and Continue checklist button, a finished one reading Passed, and the untouched ones offering Open checklist](./images/03-99-checklists-resume.png)
 
 ### Edge Cases
 

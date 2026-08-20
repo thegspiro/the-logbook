@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import { Truck, Plus, Search, Pencil, Trash2, Loader2, X, Save, Shield, Users, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../modules/scheduling/services/api';
@@ -229,9 +230,10 @@ export default function ApparatusBasicPage() {
 
   const getTypeInfo = (type: string) =>
     APPARATUS_TYPES.find((t) => t.value === type) || APPARATUS_TYPES[APPARATUS_TYPES.length - 1];
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'form-input py-2.5';
   const labelCls = 'form-label';
+
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showModal, onClose: () => setShowModal(false) });
 
   return (
     <div className="space-y-6">
@@ -298,10 +300,7 @@ export default function ApparatusBasicPage() {
           {filtered.map((apparatus) => {
             const typeInfo = getTypeInfo(apparatus.apparatus_type);
             return (
-              <div
-                key={apparatus.id}
-                className="bg-theme-surface border-theme-surface-border group hover:border-theme-text-muted/30 rounded-xl border p-5 transition-colors"
-              >
+              <div key={apparatus.id} className="card group hover:border-theme-text-muted/30 p-5">
                 <div className="mb-3 flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-lg">
@@ -364,14 +363,14 @@ export default function ApparatusBasicPage() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl border">
+          <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editing ? 'Edit Apparatus' : 'Add Apparatus'}

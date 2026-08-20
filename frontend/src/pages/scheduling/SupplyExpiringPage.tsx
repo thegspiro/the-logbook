@@ -350,7 +350,7 @@ const SupplyExpiringPage: React.FC = () => {
 
       {/* Inline add-stock modal */}
       {stockTarget && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+        <div className="modal-overlay z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="bg-theme-surface border-theme-surface-border w-full rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">

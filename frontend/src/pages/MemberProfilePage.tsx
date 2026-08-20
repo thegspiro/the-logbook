@@ -86,12 +86,13 @@ export const MemberProfilePage: React.FC = () => {
   // Edit mode states
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  // null = not loaded / unreadable, so the UI claims nothing either way.
+  const [smsConsentGranted, setSmsConsentGranted] = useState<boolean | null>(null);
   const [editForm, setEditForm] = useState<ContactInfoUpdate>({
     email: '',
     phone: '',
     mobile: '',
     notification_preferences: {
-      email: true,
       email_notifications: true,
       sms_notifications: true,
       event_reminders: true,
@@ -239,13 +240,24 @@ export const MemberProfilePage: React.FC = () => {
     }
   }, []);
 
+  // The training-records and admin-hours APIs silently substitute the
+  // CALLER's id for non-managers, so fetching them for a colleague would
+  // render the VIEWER's own records and hours as the colleague's. Only
+  // fetch (and render) these sections for self, or for holders of the
+  // permission the backend honors for target-scoped reads.
+  const isSelf = currentUser?.id === userId;
+  const canViewTargetTraining = isSelf || checkPermission('training.manage');
+  const canViewTargetAdminHours = isSelf || checkPermission('admin_hours.manage');
+
   useEffect(() => {
     if (userId) {
       void fetchUserData(userId);
       void fetchModuleStatus(userId);
       void fetchLeaves(userId);
-      void fetchAdminHours(userId);
-      if (trainingEnabled) {
+      if (canViewTargetAdminHours) {
+        void fetchAdminHours(userId);
+      }
+      if (trainingEnabled && canViewTargetTraining) {
         void fetchTrainingRecords(userId);
         void fetchComplianceSummary(userId);
       }
@@ -253,6 +265,8 @@ export const MemberProfilePage: React.FC = () => {
   }, [
     userId,
     trainingEnabled,
+    canViewTargetTraining,
+    canViewTargetAdminHours,
     fetchUserData,
     fetchModuleStatus,
     fetchLeaves,
@@ -292,12 +306,27 @@ export const MemberProfilePage: React.FC = () => {
   };
 
   const handleEditClick = () => {
+    // The SMS preference in this form is meaningless without the member's own
+    // consent, so load it alongside. Read-only: staff can see the consent and
+    // mute a consenting member, but cannot grant consent on their behalf.
+    if (userId) {
+      userService
+        .getUserConsents(userId)
+        .then((items) => {
+          const sms = items.find((c) => c.consent_type === 'sms_notifications');
+          setSmsConsentGranted(sms?.granted === true);
+        })
+        .catch(() => {
+          // Unknown rather than assumed: leaving it null keeps the checkbox
+          // disabled and shows no claim about what the member agreed to.
+          setSmsConsentGranted(null);
+        });
+    }
     setEditForm({
       email: user?.email || '',
       phone: user?.phone || '',
       mobile: user?.mobile || '',
       notification_preferences: user?.notification_preferences || {
-        email: true,
         email_notifications: true,
         sms_notifications: true,
         event_reminders: true,
@@ -347,7 +376,6 @@ export const MemberProfilePage: React.FC = () => {
   const handleNotificationToggle = (type: keyof NotificationPreferences) => {
     setEditForm((prev) => {
       const currentPrefs = prev.notification_preferences ?? {
-        email: true,
         email_notifications: true,
         sms_notifications: true,
         event_reminders: true,
@@ -677,8 +705,10 @@ export const MemberProfilePage: React.FC = () => {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Left Column */}
           <div className="space-y-6 lg:col-span-2">
-            {/* Training & Certifications */}
-            {trainingEnabled && (
+            {/* Training & Certifications — hidden when the viewer has no
+                target-scoped access; an empty card would wrongly imply the
+                member has no training. */}
+            {trainingEnabled && canViewTargetTraining && (
               <TrainingSection
                 userId={userId ?? ''}
                 trainings={trainings}
@@ -789,6 +819,7 @@ export const MemberProfilePage: React.FC = () => {
               onSaveContact={handleSaveContact}
               onFormChange={handleFormChange}
               onNotificationToggle={handleNotificationToggle}
+              smsConsentGranted={smsConsentGranted}
             />
 
             {/* Address & Personal Email */}
@@ -851,7 +882,7 @@ export const MemberProfilePage: React.FC = () => {
                           personal_email: e.target.value,
                         }))
                       }
-                      className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input px-3 text-sm"
                       placeholder="Home email for post-separation contact"
                     />
                   </div>
@@ -866,7 +897,7 @@ export const MemberProfilePage: React.FC = () => {
                           address_street: e.target.value,
                         }))
                       }
-                      className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input px-3 text-sm"
                     />
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -881,7 +912,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_city: e.target.value,
                           }))
                         }
-                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input px-3 text-sm"
                       />
                     </div>
                     <div>
@@ -895,7 +926,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_state: e.target.value,
                           }))
                         }
-                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input px-3 text-sm"
                       />
                     </div>
                   </div>
@@ -911,7 +942,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_zip: e.target.value,
                           }))
                         }
-                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input px-3 text-sm"
                       />
                     </div>
                     <div>
@@ -925,7 +956,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_country: e.target.value,
                           }))
                         }
-                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input px-3 text-sm"
                       />
                     </div>
                   </div>
@@ -942,7 +973,7 @@ export const MemberProfilePage: React.FC = () => {
                     <button
                       onClick={() => setEditingAddress(false)}
                       disabled={savingAddress}
-                      className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex-1 rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
+                      className="btn-secondary text-theme-text-secondary flex-1 text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -1002,7 +1033,7 @@ export const MemberProfilePage: React.FC = () => {
             <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
               <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Quick Stats</h2>
               <div className="space-y-3">
-                {trainingEnabled && (
+                {trainingEnabled && canViewTargetTraining && (
                   <>
                     <div className="flex items-center justify-between">
                       <span className="text-theme-text-secondary text-sm">Active Training</span>
@@ -1082,7 +1113,7 @@ export const MemberProfilePage: React.FC = () => {
 
         {/* Status Change Modal */}
         {statusModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="modal-overlay z-50 flex items-center justify-center">
             <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
               <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Change Member Status</h3>
               <div className="space-y-4">
@@ -1091,7 +1122,7 @@ export const MemberProfilePage: React.FC = () => {
                   <select
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value)}
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="form-input px-3 text-sm focus:ring-blue-500"
                   >
                     {Object.values(UserStatus).map((s) => (
                       <option key={s} value={s}>
@@ -1107,7 +1138,7 @@ export const MemberProfilePage: React.FC = () => {
                     onChange={(e) => setStatusReason(e.target.value)}
                     rows={3}
                     placeholder="Reason for the status change..."
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="form-input px-3 text-sm focus:ring-blue-500"
                   />
                 </div>
                 {(newStatus === UserStatus.DROPPED_VOLUNTARY || newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
@@ -1130,7 +1161,7 @@ export const MemberProfilePage: React.FC = () => {
                   type="button"
                   onClick={() => setStatusModalOpen(false)}
                   disabled={statusChanging}
-                  className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex-1 rounded-md border px-4 py-2 text-sm font-medium transition disabled:opacity-50"
+                  className="btn-secondary text-theme-text-secondary flex-1 text-sm font-medium transition"
                 >
                   Cancel
                 </button>

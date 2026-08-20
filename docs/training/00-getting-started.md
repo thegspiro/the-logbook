@@ -169,22 +169,22 @@ These links are available to all active members:
 Three of them are **groups** that expand when you click them, rather than links
 of their own — Training, Operations and Governance:
 
-| Menu Item            | Description                                                                                    |
-| -------------------- | ---------------------------------------------------------------------------------------------- |
-| **Dashboard**        | Your home page with quick stats and upcoming items                                             |
-| **Learning Center**  | Short task-based paths through the app — open a task, do it, tick it off                       |
-| **Members**          | Department roster and member profiles                                                          |
-| **Events**           | Upcoming and past department events                                                            |
-| **Documents**        | Shared files, SOPs, and policies                                                               |
-| **Training** ▾       | My Training, Submit Training, Course Library, Programs, Skills Testing                         |
-| **Admin Hours**      | Log administrative work hours (if module enabled)                                              |
-| **Shift Scheduling** | Duty roster, your shifts, and open shifts                                                      |
-| **Operations** ▾     | My Equipment, Inventory, Department Store, Apparatus, Facilities                               |
-| **Governance** ▾     | Elections, Minutes, Action Items                                                               |
-| **Notifications**    | Your inbox, with an unread count on the item itself                                            |
-| **Messages**         | Department messages and announcements                                                          |
-| **My Account**       | Your own settings — account, password, security, emergency contacts, appearance, notifications |
-| **My ID Card**       | Your digital member ID, with its QR code and barcode                                           |
+| Menu Item            | Description                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| **Dashboard**        | Your home page with quick stats and upcoming items                                              |
+| **Learning Center**  | Short task-based paths through the app — open a task, do it, tick it off                        |
+| **Members**          | Department roster and member profiles                                                           |
+| **Events**           | Upcoming and past department events                                                             |
+| **Documents**        | Shared files, SOPs, and policies                                                                |
+| **Training** ▾       | My Training, Submit Training, Course Library, Programs, Skills Testing                          |
+| **Admin Hours**      | Log administrative work hours (if module enabled)                                               |
+| **Shift Scheduling** | Duty roster, your shifts, and open shifts                                                       |
+| **Operations** ▾     | My Issued Gear, Gear & Uniforms, Apparatus, Facilities (Department Store is its own item above) |
+| **Governance** ▾     | Elections, Minutes, Action Items                                                                |
+| **Notifications**    | Your inbox, with an unread count on the item itself                                             |
+| **Messages**         | Department messages and announcements                                                           |
+| **My Account**       | Your own settings — account, password, security, emergency contacts, appearance, notifications  |
+| **My ID Card**       | Your digital member ID, with its QR code and barcode                                            |
 
 Which of the grouped items appear depends on the modules your department has
 enabled: a department not running elections has no Elections link under
@@ -202,7 +202,7 @@ If you have administrative permissions (officers, IT Manager, etc.), you will se
 | **Members** ▾               | Prospective, Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening |
 | **Events Admin**            | Create events, view analytics                                                                 |
 | **Training Admin**          | Review submissions, manage requirements, compliance                                           |
-| **Inventory Admin**         | Manage items, view member equipment                                                           |
+| **Gear Admin**              | Manage gear and uniform items, view member issued equipment                                   |
 | **Store Admin**             | Storefront products, order windows, and fulfilment                                            |
 | **Admin Hours**             | Review and approve administrative hours                                                       |
 | **Forms & Comms** ▾         | Email Templates, Messages, Forms, Integrations                                                |

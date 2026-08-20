@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parseCsv, parseCsvRecords, csvValue, normalizeHeader } from './csv';
+import { parseCsv, parseCsvRecords, csvValue, escapeCsvCell, normalizeHeader } from './csv';
 
 describe('parseCsv', () => {
   it('splits plain rows and columns', () => {
@@ -112,5 +112,22 @@ describe('csvValue', () => {
 
   it('returns an empty string when no alias matches', () => {
     expect(csvValue(record, 'nothing')).toBe('');
+  });
+});
+
+describe('escapeCsvCell', () => {
+  it('escapes quotes and commas for CSV syntax', () => {
+    expect(escapeCsvCell('Smith, "Jane"')).toBe('"Smith, ""Jane"""');
+  });
+
+  it.each(['=1+1', '+cmd', '-2+3', '@SUM(A1:A2)', '  =1+1', '\t@SUM(A1:A2)'])(
+    'neutralizes formula-like value %j',
+    (value) => {
+      expect(escapeCsvCell(value)).toBe(`"'${value}"`);
+    }
+  );
+
+  it('does not alter ordinary text containing formula markers', () => {
+    expect(escapeCsvCell('Jane = Treasurer')).toBe('"Jane = Treasurer"');
   });
 });

@@ -9,6 +9,7 @@
  * 15-minute floor vote) before opening.
  */
 import React, { useState, useCallback } from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 import { formatDateTime, formatForDateTimeInput } from '../../utils/dateFormatting';
 
@@ -21,8 +22,7 @@ interface EditDatesModalProps {
   timezone: string;
 }
 
-const inputClass =
-  'mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring';
+const inputClass = 'form-input mt-1 block shadow-xs px-3';
 
 const quickButtonClass =
   'px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover';
@@ -35,6 +35,8 @@ const EditDatesModal: React.FC<EditDatesModalProps> = ({
   onClose,
   timezone,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+
   const [newStartDate, setNewStartDate] = useState(formatForDateTimeInput(new Date(currentStartDate), timezone));
   const [newEndDate, setNewEndDate] = useState(formatForDateTimeInput(new Date(currentEndDate), timezone));
 
@@ -67,13 +69,13 @@ const EditDatesModal: React.FC<EditDatesModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-dates-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+      <div ref={dialogRef} className="modal-panel w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="edit-dates-modal-title" className="text-theme-text-primary text-lg font-medium">
             Edit Voting Window

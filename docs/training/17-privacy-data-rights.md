@@ -34,11 +34,11 @@ they are not needed to run the department, so you decide.
 
 Go to **My Account → Security → Privacy Choices**.
 
-| Choice | What it means if you turn it on |
-|--------|--------------------------------|
-| **Photo use** | The department may use your photo in publications, on social media, and in other public material |
-| **Public roster listing** | Your name and rank may appear on the department's public website roster |
-| **Text message notifications** | The department may send you notifications by SMS at your mobile number |
+| Choice                         | What it means if you turn it on                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| **Photo use**                  | The department may use your photo in publications, on social media, and in other public material |
+| **Public roster listing**      | Your name and rank may appear on the department's public website roster                          |
+| **Text message notifications** | The department may send you notifications by SMS at your mobile number                           |
 
 ![Account security settings showing the privacy choices section](./images/17-01-privacy-choices.png)
 
@@ -48,7 +48,7 @@ Three things worth knowing:
   affect your standing, your training records, or your ability to use the
   system.
 - **"Not answered" counts as no.** If you have never made a choice, the label
-  reads *(not answered)* and the department treats it exactly as if you had
+  reads _(not answered)_ and the department treats it exactly as if you had
   said no. Your silence is never read as permission.
 - **You can change your mind at any time.** Every change is recorded with a
   timestamp, so there is always a clear record of what you agreed to and when.
@@ -78,16 +78,16 @@ You can download everything the system stores about you at any time.
 
 ### What is in the export
 
-| Included | Not included |
-|----------|--------------|
-| Profile, contact details, emergency contacts | Your password (only an unreadable hash is ever stored) |
-| Training records, certifications, qualifications | Your two-factor authentication secret and backup codes |
-| Shift, event, and meeting attendance | Password-reset and calendar-feed tokens |
-| Admin hours, leaves of absence | Other members' records |
-| Medical screening records about you | Reviewer-only internal notes on evaluations |
-| Skill tests, dues, equipment assigned to you | |
-| Your privacy choices | |
-| A **summary** of your audit history (how many entries, first and last date) | The full audit entries themselves |
+| Included                                                                    | Not included                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Profile, contact details, emergency contacts                                | Your password (only an unreadable hash is ever stored) |
+| Training records, certifications, qualifications                            | Your two-factor authentication secret and backup codes |
+| Shift, event, and meeting attendance                                        | Password-reset and calendar-feed tokens                |
+| Admin hours, leaves of absence                                              | Other members' records                                 |
+| Medical screening records about you                                         | Reviewer-only internal notes on evaluations            |
+| Skill tests, dues, equipment assigned to you                                |                                                        |
+| Your privacy choices                                                        |                                                        |
+| A **summary** of your audit history (how many entries, first and last date) | The full audit entries themselves                      |
 
 > **Hint:** The file is JSON — plain text in a structured format. Any text
 > editor will open it. If you want it in a spreadsheet, most sections can be
@@ -117,15 +117,28 @@ their duties require:
   enabled contact-info visibility, and only the fields it has enabled (email,
   phone, mobile can each be shown or hidden). See
   [Administration & Reports > Contact Info Visibility](./08-admin-reports.md#contact-info-visibility).
-  The setting is now enforced on *every* view of a member record
-  *(2026-08-02)*, the individual profile page included. Two endpoints
+  The setting is now enforced on _every_ view of a member record
+  _(2026-08-02)_, the individual profile page included. Two endpoints
   previously returned the full record regardless, so a member who was refused
   an email address on the roster could obtain it by loading a different
   screen. **Home address and personal email are never shown to ordinary
   members at any visibility setting** — those are visible only to members who
   manage the roster.
+- **Your account-security details are not part of your directory entry**
+  _(2026-08-16)_. A colleague who can open your profile through the member
+  directory (`members.view`) does not see whether you have MFA enabled,
+  whether your email is verified, when you last logged in, when your account
+  was created or changed, your notification preferences, or the permission
+  lists behind your roles — only the role names the profile displays. Those
+  fields remain visible to user administrators (`users.view`), roster
+  managers, and you on your own record.
+
+> **[SCREENSHOT NEEDED — the same member profile viewed with `members.view`
+> only and with `users.view`, side by side, showing the account-security
+> block absent in the first; use a demo member with MFA enabled.]**
+
 - **Date of birth and emergency contacts are restricted to leadership**
-  *(2026-08-02)* — the chiefs, captains, president, vice-president,
+  _(2026-08-02)_ — the chiefs, captains, president, vice-president,
   secretaries and membership coordinator, plus you on your own record. There
   is deliberately no setting that publishes them: your department cannot opt
   into showing them on the roster.
@@ -140,6 +153,7 @@ their duties require:
   When a leader opens your profile, the audit log records whether that
   restricted information was actually disclosed — so "who saw my family's
   phone number" is a question with an answer, not just "who opened the page".
+
 - **Medical screening records** are restricted to members holding medical
   screening permissions specifically. A general administrator role does not
   include them.
@@ -155,16 +169,49 @@ their duties require:
 
 Your department publishes a privacy notice at `/privacy` and terms of service
 at `/terms`. Both are public pages — you do not have to be signed in to read
-them, and they are linked from the bottom of the login screen.
+them, and they are linked from the bottom of the login screen. Each shows a
+**Last updated** date at the top, so you can tell when the wording last
+changed.
 
-The notice explains what the department collects, why, who can see it, how
-long it is kept, and what rights you have. If your department has written its
-own wording, that is what you will see; otherwise the platform's defaults
-apply, which are written for a fire-service deployment.
+The notice explains what the department collects, where it comes from, why it
+is used, who can see it, how long it is kept, and what you can ask for. If your
+department has written its own wording, that is what you will see; otherwise
+the platform's defaults apply, which are written for a fire-service deployment.
+
+### The part members ask about most
+
+Both documents say the same thing near the top, and it is worth reading before
+you need it:
+
+- **The department holds full control of this application and of the records
+  in it.** The Logbook is the software; the department decides how it is used.
+- **Your access is based on your status in the department** — decided by the
+  department under its own bylaws, SOPs, and membership policies, and under
+  state and local law.
+- **Access changes when your status changes.** A leave of absence, a change of
+  rank or assignment, a suspension, or leaving the department changes or ends
+  your access, and it can happen without prior notice.
+- **Records you create here belong to the department.** Reports, minutes,
+  attendance, and messages are department records, kept on the department's
+  retention schedule — they do not leave with you.
+- **Your activity is logged.** Sign-ins and record access are recorded to an
+  audit trail the department can review. Treat this as a department system, not
+  a private one.
+- **It is not a dispatch or alerting system.** Never rely on it to report an
+  emergency or receive a call for service.
+
+The notice also covers monitoring, public-records requests, breach
+notification, junior and cadet members under 18, and an explicit statement that
+your information is never sold and never used for advertising.
 
 > **Note:** The department, not The Logbook, is responsible for the content of
 > these pages and for the data itself. The Logbook is the software the
 > department runs.
+
+> **Admins:** if you replace the wording with your own, it replaces the
+> platform default **entirely** — the two are not merged. Carry the control and
+> access language above into your version, and set `legal.last_updated` so
+> readers see a revision date. Have counsel review anything you publish.
 
 ---
 
@@ -179,13 +226,13 @@ than fixed.
 Retention is set per **record class**. Each class has a default and a
 **minimum floor** you cannot go below:
 
-| Record class | What it covers | Default | Floor |
-|--------------|----------------|---------|-------|
-| Message history | Delivery records for sent emails and texts (recipients, subjects, status) | 90 days | 30 days |
-| Notification logs | In-app / email / SMS notification delivery records | Keep forever | 30 days |
-| Form submissions | Public and internal form responses, which may hold applicant PII | Keep forever | 90 days |
+| Record class      | What it covers                                                            | Default      | Floor   |
+| ----------------- | ------------------------------------------------------------------------- | ------------ | ------- |
+| Message history   | Delivery records for sent emails and texts (recipients, subjects, status) | 90 days      | 30 days |
+| Notification logs | In-app / email / SMS notification delivery records                        | Keep forever | 30 days |
+| Form submissions  | Public and internal form responses, which may hold applicant PII          | Keep forever | 90 days |
 
-A daily job applies the schedule. Setting a class to *keep forever* means
+A daily job applies the schedule. Setting a class to _keep forever_ means
 nothing in it is ever deleted automatically.
 
 > **Note:** **Documents and meeting minutes are deliberately never
@@ -229,7 +276,7 @@ its interview notes and uploaded documents.
 
 Training completions and certifications, attendance and service hours,
 property custody and departure clearance, dues and financial records, meeting
-attendance, and — importantly — screening *status and dates*, so you can still
+attendance, and — importantly — screening _status and dates_, so you can still
 prove the member was compliant at the time.
 
 ### What is never touched
@@ -353,17 +400,17 @@ and re-introducing her name would defeat the purpose.
 
 ## Troubleshooting
 
-| Symptom | Resolution |
-|---------|------------|
-| "Download my data" returns an error about too many requests | The export is limited to three per hour because it reads every module's records. Wait an hour. |
+| Symptom                                                                  | Resolution                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Download my data" returns an error about too many requests              | The export is limited to three per hour because it reads every module's records. Wait an hour.                                                                                                                       |
 | A privacy choice shows "(not answered)" even though I remember answering | The label reflects a stored choice. If you answered on a different account (for example a duplicate record created during onboarding), the choice lives there. Ask an administrator to check for duplicate accounts. |
-| Anonymize is refused with "Only departed members can be anonymized" | The member is still active. Change their status to dropped or archived first, then retry. |
-| Anonymize is refused with "Member is already anonymized" | It has already been run on this record. Anonymization is irreversible and only happens once. |
-| Anonymize returns "User not found" for a member I can see | The member belongs to a different organization. Every by-id lookup is scoped to your own organization by design. |
-| Retention setting rejected as below the minimum | Each record class has a floor (30 days for message history and notification logs, 90 days for form submissions). Choose a value at or above it. |
-| Old message history is not being deleted even though retention is set | The job runs daily. Also confirm the value is not set to *keep forever*, and that the records are genuinely older than the retention period — the cutoff is measured from the sent date. |
-| Documents older than our retention schedule are still present | Intentional. Documents and meeting minutes are never auto-deleted; disposing of official records is a manual decision. |
-| An export is missing a module we use | The export covers models holding personal data about the member. If something is genuinely missing, that is a bug worth reporting — the export is table-driven and adding a section is a small change. |
+| Anonymize is refused with "Only departed members can be anonymized"      | The member is still active. Change their status to dropped or archived first, then retry.                                                                                                                            |
+| Anonymize is refused with "Member is already anonymized"                 | It has already been run on this record. Anonymization is irreversible and only happens once.                                                                                                                         |
+| Anonymize returns "User not found" for a member I can see                | The member belongs to a different organization. Every by-id lookup is scoped to your own organization by design.                                                                                                     |
+| Retention setting rejected as below the minimum                          | Each record class has a floor (30 days for message history and notification logs, 90 days for form submissions). Choose a value at or above it.                                                                      |
+| Old message history is not being deleted even though retention is set    | The job runs daily. Also confirm the value is not set to _keep forever_, and that the records are genuinely older than the retention period — the cutoff is measured from the sent date.                             |
+| Documents older than our retention schedule are still present            | Intentional. Documents and meeting minutes are never auto-deleted; disposing of official records is a manual decision.                                                                                               |
+| An export is missing a module we use                                     | The export covers models holding personal data about the member. If something is genuinely missing, that is a bug worth reporting — the export is table-driven and adding a section is a small change.               |
 
 ---
 

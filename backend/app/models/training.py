@@ -1738,6 +1738,12 @@ class RequirementProgressCredit(Base):
     source_id = Column(String(64), nullable=False)
     units = Column(Float, nullable=False, default=0.0, server_default="0.0")
 
+    # Provenance snapshots for zero-unit sign-offs. These let reversal restore
+    # only state that this entry actually changed.
+    previous_status = Column(String(50), nullable=True)
+    phase_before_id = Column(String(36), nullable=True)
+    phase_after_id = Column(String(36), nullable=True)
+
     applied_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -2918,6 +2924,15 @@ class Shift(Base):
     # Summary totals — computed on finalization, also served live via API
     call_count = Column(Integer, nullable=True)
     total_hours = Column(Float, nullable=True)
+
+    # How far the officer got through the close-out wizard. NULL/0 = not
+    # started, 1 = attendance times saved, 2 = calls saved; finalizing clears
+    # it. Each step writes its real records as it goes — attendance rows, call
+    # rows — so this marker only says where to resume, never what was entered.
+    # Without it a phone locking on step 2 sends the officer back to step 1,
+    # and a shift with a genuine zero calls is indistinguishable from one whose
+    # count was never asked for.
+    closeout_step = Column(Integer, nullable=True)
 
     # Finalization — officer formally closes the shift after review
     is_finalized = Column(Boolean, default=False, nullable=False, server_default="0")

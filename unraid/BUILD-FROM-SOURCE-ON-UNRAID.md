@@ -333,11 +333,13 @@ consistent snapshot). Take a manual dump any time:
 ```bash
 cd /mnt/user/appdata/the-logbook
 
-# Consistent dump of the running database, gzipped to the backups share
-docker compose exec -T db sh -c \
-  'mysqldump --single-transaction --routines --triggers \
-     -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
-  | gzip > /mnt/user/backups/the-logbook/manual_$(date +%Y%m%d_%H%M%S).sql.gz
+# Consistent dump of the running database, restricted to the current host user
+(umask 077
+ install -d -m 700 /mnt/user/backups/the-logbook
+ docker compose exec -T db sh -c \
+   'mysqldump --single-transaction --routines --triggers \
+      -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+   | gzip > /mnt/user/backups/the-logbook/manual_$(date +%Y%m%d_%H%M%S).sql.gz)
 
 # View backups
 ls -lh /mnt/user/backups/the-logbook/

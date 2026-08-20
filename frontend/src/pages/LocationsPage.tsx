@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { Link } from 'react-router';
 import {
   MapPin,
@@ -136,8 +137,7 @@ function LocationSetupWizard({
   const [isSaving, setIsSaving] = useState(false);
   const [roomForm, setRoomForm] = useState<WizardRoom>({ name: '', room_number: '', floor: '', capacity: '' });
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'form-input py-2.5';
   const labelCls = 'form-label';
 
   /* ── Step navigation ── */
@@ -297,12 +297,11 @@ function LocationSetupWizard({
 
   /* ── Render ── */
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border">
+    <div className="modal-overlay z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <DialogPanel
+        onClose={() => onDismiss?.()}
+        className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden"
+      >
         {/* Progress bar */}
         <div className="px-6 pt-5 pb-2">
           <div className="mb-2 flex items-center justify-between">
@@ -709,7 +708,7 @@ function LocationSetupWizard({
                           {stationRooms.map((room, rIdx) => (
                             <span
                               key={rIdx}
-                              className="bg-theme-surface border-theme-surface-border text-theme-text-secondary inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs"
+                              className="card text-theme-text-secondary inline-flex items-center gap-1 px-2 py-0.5 text-xs"
                             >
                               <DoorOpen className="h-3 w-3" /> {room.name}
                             </span>
@@ -797,7 +796,7 @@ function LocationSetupWizard({
             </>
           )}
         </div>
-      </div>
+      </DialogPanel>
     </div>
   );
 }
@@ -832,7 +831,7 @@ function RoomCard({
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border group flex flex-col rounded-lg border p-3">
+    <div className="card group flex flex-col p-3">
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <DoorOpen className="text-theme-text-muted h-4 w-4 shrink-0" />
@@ -1171,8 +1170,7 @@ export default function LocationsPage() {
     }
   };
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'form-input py-2.5';
   const labelCls = 'form-label';
 
   const isSingleStation = stationMode === 'single_station';
@@ -1358,10 +1356,7 @@ export default function LocationsPage() {
             const address = [station.address, station.city, station.state, station.zip].filter(Boolean).join(', ');
 
             return (
-              <div
-                key={station.id}
-                className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border"
-              >
+              <div key={station.id} className="card overflow-hidden">
                 {/* Station Header */}
                 <div className="flex flex-wrap items-center gap-4 p-5">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
@@ -1446,7 +1441,7 @@ export default function LocationsPage() {
 
           {/* Orphan rooms (rooms without a station) */}
           {rooms.has('__other__') && (
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+            <div className="card p-5">
               <h3 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {(rooms.get('__other__') || []).map((room) => (
@@ -1468,14 +1463,14 @@ export default function LocationsPage() {
       {/* Station Modal */}
       {showStationModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowStationModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+          <DialogPanel onClose={() => setShowStationModal(false)} className="w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingStation ? 'Edit Station' : 'Add Station'}
@@ -1569,21 +1564,21 @@ export default function LocationsPage() {
                 {editingStation ? 'Update' : 'Add Station'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
 
       {/* Room Modal */}
       {showRoomModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowRoomModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+          <DialogPanel onClose={() => setShowRoomModal(false)} className="w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}
@@ -1668,7 +1663,7 @@ export default function LocationsPage() {
                 {editingRoom ? 'Update' : 'Add Room'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

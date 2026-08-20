@@ -150,11 +150,15 @@ GET    /api/v1/equipment-checks/reports/export               # CSV/PDF export
 ### Supply & Deployed Lots _(2026-08-10)_
 
 The bridge between Inventory and the Equipment Check system. **Reads** accept
-`equipment_check.view` or `inventory.view`; **writes** accept
-`equipment_check.submit` — the default member position — as well as
-`equipment_check.manage` / `inventory.manage`. Recording what you just used is
-crew work; gating it behind a manage permission is what leaves the gap for the
-next morning's check to find.
+`equipment_check.view` or `inventory.view`. **Writes** are split by intent
+_(tightened 2026-08-11)_: reporting an item used — and deployed-lot quantity
+updates — accept `equipment_check.submit` (the default member position) as
+well as `equipment_check.manage` / `inventory.manage`, because recording what
+you just used is crew work. Corrections of record are manage-only: withdrawing
+a restock report (`DELETE /items/{id}/used`), lot swaps
+(`POST /items/{id}/swap`), and edits touching a deployed lot's `lot_number`
+or `expiration_date` require `equipment_check.manage` or `inventory.manage`
+(a submit-only caller gets 403; quantity-only lot updates still pass).
 
 ```
 GET    /api/v1/equipment-checks/supply/expiring-items                        # ?days_ahead=30 (1-365)
@@ -234,10 +238,50 @@ POST   /api/v1/training/shift-reports/{report_id}/review               # Officer
 POST   /api/v1/scheduling/shifts/{id}/finalize                         # Finalize shift (snapshot data, create draft reports)
 ```
 
+## Shift Close-Out _(2026-08-19)_
+
+The resumable close-out wizard for departments recording a call count rather
+than per-incident detail. All four endpoints require `scheduling.manage`
+**or** being the shift's own officer.
+
+```
+GET    /api/v1/scheduling/shifts/{id}/closeout              # State + resume point
+PATCH  /api/v1/scheduling/shifts/{id}/closeout/attendance   # Step 1 — who was on, and when
+PATCH  /api/v1/scheduling/shifts/{id}/closeout/calls        # Step 2 — how many calls
+POST   /api/v1/scheduling/shifts/{id}/finalize              # Step 3 — confirm and close
+```
+
+Each step writes real records as it advances, so an interrupted close-out
+resumes rather than restarting. `closeout_step` in the GET response is `0`
+(not started), `1` (attendance saved) or `2` (calls saved); a finalized shift
+reports `0`, and reopening restarts the wizard.
+
+**`PATCH …/closeout/calls`** accepts `reported_call_count`,
+`reported_call_types` and `attach_call_ids`. An explicit `null` count is
+meaningful — it clears a previously reported figure — and is distinguished from
+an omitted field, so a client that only attaches calls does not wipe a count it
+never mentioned. `reported_call_types` is keyed by the organization's own type
+slugs and must not exceed the total; the remainder is recorded as unclassified.
+
+**`POST …/finalize`** additionally accepts `manual_hours`,
+`member_call_counts`, `override_incomplete_checks` + `override_reason`
+(audited as `shift_finalized_check_override`), and `pass_down_notes`.
+
+`attach_call_ids` claims a call another unit already logged, which is what
+keeps a single incident counted once for the department when two units roll.
+`attachable_calls` in the GET response is **served empty** — the picker has no
+UI yet, and the field stays on the contract so it does not change when one
+lands.
+
 ## Shift Calls / Runs _(2026-06-09)_
 
 Log the calls/runs a crew responded to during a shift. Read: `scheduling.view`;
 write: `scheduling.manage`. Hidden once a shift is finalized.
+
+> **This is the `detailed` call-tracking path.** A department on `count_only`
+> tracking does not use these endpoints — its volume lives in `org_calls` /
+> `org_call_responses` and is written through close-out. See
+> [Module-Scheduling → Call Volume Without an RMS](Module-Scheduling#call-volume-without-an-rms-2026-08-18--08-19).
 
 ```
 GET    /api/v1/scheduling/shifts/{shift_id}/calls                       # List calls for a shift
@@ -420,7 +464,7 @@ GET    /api/v1/auth/oauth/microsoft/callback             # Microsoft OAuth callb
 See [Authentication > OAuth](Security-Authentication#oauth) for the
 link-existing-only policy, domain restriction, and callback error codes.
 
-*(2026-08-12)* When the matched account has TOTP MFA enabled, the callback no
+_(2026-08-12)_ When the matched account has TOTP MFA enabled, the callback no
 longer issues session cookies: it 302-redirects to the SPA with a short-lived
 `mfa_pending` token in the **URL fragment** (`/auth/callback#mfa_token=…`),
 and the client completes the second factor through the normal
@@ -605,7 +649,11 @@ to an event somewhere else.
 | `hp_website`        | string | no       | **Honeypot.** Hidden in the real form; only a bot fills it in        |
 
 **Response** (`GuestCheckInResponse`): `status` (`checked_in` | `already_checked_in`),
-`attendee_id`, `event_name`, `checked_in_at`, `prospect_created`, `message`.
+`attendee_id`, `event_name`, `checked_in_at`, `message`. _(2026-08-11)_
+`prospect_created` was removed from the response: an unauthenticated kiosk
+caller could use it to probe whether a name/email already exists as a
+prospect. The "someone will follow up" notice is now driven client-side from
+the event's `collects_prospect_details` flag.
 
 **GET response** (`GuestCheckInEventInfo`) exposes only what a visitor standing in
 the room can already see — name, type, start/end, room, department name,
@@ -915,19 +963,26 @@ organization. Audit logs and election records are never modified.
 
 ---
 
-## Public Legal Text _(2026-07-31)_
+## Public Legal Text _(2026-07-31, updated 2026-08-17)_
 
 Unauthenticated, rate-limited (30/min per IP). Backs the public `/privacy` and
 `/terms` pages.
 
 ```
-GET    /api/public/v1/legal                              # { organizationName, privacyPolicy, termsOfService }
+GET    /api/public/v1/legal    # { organizationName, privacyPolicy, termsOfService, lastUpdated }
 ```
 
 Returns the single organization's configured text
-(`settings.legal.privacy_policy` / `legal.terms_of_service`); `null` values
-mean the frontend renders its built-in defaults. On a multi-organization
-install all fields are `null` — with no org context, no tenant's text is served.
+(`settings.legal.privacy_policy` / `legal.terms_of_service`, with an optional
+`legal.last_updated` revision date shown above custom text); `null` values mean
+the frontend renders its built-in defaults, which carry their own date. On a
+multi-organization install all fields are `null` — with no org context, no
+tenant's text is served.
+
+`settings["legal"]` is unvalidated JSON, so values are read defensively: a
+non-string value, a non-dict `legal` key, or blank/whitespace text all return
+`null` (the defaults render) rather than erroring on a page anonymous visitors
+reach, and returned text is capped at 100,000 characters.
 
 ---
 

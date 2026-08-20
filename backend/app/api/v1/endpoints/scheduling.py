@@ -21,6 +21,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, CodedValueError
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.training import (
     AssignmentStatus,
@@ -36,11 +37,16 @@ from app.schemas.scheduling import (
     BasicApparatusResponse,
     BasicApparatusUpdate,
     CalendarFeedResponse,
+    CallTrackingSettings,
+    CloseoutAttendanceRequest,
+    CloseoutCallsRequest,
+    CloseoutStateResponse,
     EligiblePositionsResponse,
     GenerateShiftsRequest,
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
     PlatoonOverviewResponse,
+    PositionRosterResponse,
     SchedulingEligibilitySettings,
     SchedulingEligibilitySettingsResponse,
     SchedulingFeatureSettings,
@@ -83,7 +89,6 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
-from app.services.notifications_service import NotificationsService
 from app.services.scheduling_service import SchedulingService
 from app.services.shift_eligibility_service import ShiftEligibilityService
 
@@ -111,6 +116,15 @@ def _is_shift_officer(shift, user: User) -> bool:
     return bool(shift.shift_officer_id and str(shift.shift_officer_id) == str(user.id))
 
 
+def _can_view_platoon_roster(shift, user: User) -> bool:
+    """True when ``user`` may see the shift's staffing availability details."""
+    return (
+        user_has_permission(user, "scheduling.assign")
+        or user_has_permission(user, "scheduling.manage")
+        or _is_shift_officer(shift, user)
+    )
+
+
 async def _authorize_shift_management(
     service: SchedulingService,
     current_user: User,
@@ -130,6 +144,36 @@ async def _authorize_shift_management(
         raise HTTPException(status_code=404, detail="Shift not found")
     if user_has_permission(current_user, permission) or _is_shift_officer(
         shift, current_user
+    ):
+        return shift
+    raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
+async def _authorize_handoff_access(
+    service: SchedulingService,
+    current_user: User,
+    shift_id: UUID,
+):
+    """Allow handoff access only to the incoming crew or shift managers."""
+    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
+    if shift is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    if user_has_permission(current_user, "scheduling.manage") or _is_shift_officer(
+        shift, current_user
+    ):
+        return shift
+
+    assignments = await service.get_shift_assignments(
+        shift_id, current_user.organization_id
+    )
+    active_statuses = {
+        AssignmentStatus.ASSIGNED.value,
+        AssignmentStatus.CONFIRMED.value,
+    }
+    if any(
+        str(assignment.user_id) == str(current_user.id)
+        and assignment.assignment_status in active_statuses
+        for assignment in assignments
     ):
         return shift
     raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -265,6 +309,9 @@ async def _enrich_shifts(
     enriched = []
     for s in shifts:
         d = {c.key: getattr(s, c.key) for c in s.__table__.columns}
+        # Pass-downs are operationally sensitive and are served exclusively by
+        # the roster-authorized handoff endpoint below.
+        d.pop("pass_down_notes", None)
         service._enrich_shift_dict(d, apparatus_map, user_name_map)
         d["attendee_count"] = attendee_counts.get(str(s.id), 0)
         d["call_count"] = call_counts.get(str(s.id), 0)
@@ -424,6 +471,7 @@ async def get_shift(
     officer_ids = [shift.shift_officer_id] if shift.shift_officer_id else []
     user_name_map = await service._get_user_name_map(officer_ids)
     d = {c.key: getattr(shift, c.key) for c in shift.__table__.columns}
+    d.pop("pass_down_notes", None)
     service._enrich_shift_dict(d, apparatus_map, user_name_map)
 
     member_call_counts = await service.compute_member_call_counts(shift_id)
@@ -449,7 +497,14 @@ async def get_shift(
         attendance_records, member_call_counts
     )
 
-    platoon_roster = await service.get_platoon_roster_for_shift(shift)
+    # The roster reveals other members' availability and leave status. Keep
+    # general shift details visible to members, but only fetch and expose these
+    # staffing details to schedulers or the officer responsible for the shift.
+    platoon_roster = (
+        await service.get_platoon_roster_for_shift(shift)
+        if _can_view_platoon_roster(shift, current_user)
+        else []
+    )
 
     # Whether check-in is open, decided by the same helper the check-in endpoint
     # enforces with. Published so the check-in screen can disable its own button
@@ -521,6 +576,13 @@ async def finalize_shift(
     Optionally include ``manual_hours`` to credit members who did not
     check in/out with a specific number of hours.
 
+    Departments on ``count_only`` call tracking report call volume here:
+    ``reported_call_count`` (the number this apparatus ran), an optional
+    ``reported_call_types`` tally, ``member_call_counts`` for members who were
+    not on every call, and ``attach_call_ids`` for calls another unit already
+    logged that this apparatus was also on — attaching is what keeps a single
+    incident counted once for the department when two units roll.
+
     Once finalized the shift is considered closed and attendance is locked.
 
     **Permissions required:** scheduling.manage, or being the shift's officer.
@@ -535,6 +597,11 @@ async def finalize_shift(
             {"user_id": str(entry.user_id), "hours": entry.hours}
             for entry in body.manual_hours
         ]
+    member_credits = None
+    if body.member_call_counts:
+        member_credits = {
+            str(entry.user_id): entry.call_count for entry in body.member_call_counts
+        }
     shift, error = await service.finalize_shift(
         shift_id,
         current_user.organization_id,
@@ -542,6 +609,12 @@ async def finalize_shift(
         manual_hours=manual,
         override_incomplete_checks=body.override_incomplete_checks,
         pass_down_notes=body.pass_down_notes,
+        reported_call_count=body.reported_call_count,
+        reported_call_types=body.reported_call_types,
+        member_call_counts_in=member_credits,
+        attach_call_ids=(
+            [str(c) for c in body.attach_call_ids] if body.attach_call_ids else None
+        ),
     )
     if not shift:
         raise HTTPException(
@@ -562,14 +635,118 @@ async def finalize_shift(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-    await NotificationsService(db).archive_related_notifications(
-        current_user.organization_id,
-        "shift_validation",
-        "shift_id",
-        shift_id,
-    )
+    # SchedulingService.finalize_shift archives the related shift-validation
+    # prompt itself, so every finalize path clears it — not just this endpoint.
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
+
+
+@router.get("/shifts/{shift_id}/closeout", response_model=CloseoutStateResponse)
+async def get_shift_closeout_state(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Everything the close-out wizard needs, plus where to resume.
+
+    ``closeout_step`` is 0 before the officer starts, 1 once attendance times
+    are saved and 2 once calls are, so a phone that locked mid-flow reopens on
+    the screen it left rather than at the beginning.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    state, error = await service.get_closeout_state(
+        shift_id, current_user.organization_id
+    )
+    if state is None:
+        raise HTTPException(
+            status_code=404, detail=_safe_detail("Shift not found.", error)
+        )
+    return state
+
+
+@router.patch(
+    "/shifts/{shift_id}/closeout/attendance", response_model=CloseoutStateResponse
+)
+async def save_shift_closeout_attendance(
+    shift_id: UUID,
+    body: CloseoutAttendanceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Step 1 of close-out — record when each member was actually on.
+
+    Saves immediately rather than holding the answer until the last screen, so
+    an interrupted close-out keeps the hours already confirmed.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    state, error = await service.save_closeout_attendance(
+        shift_id,
+        current_user.organization_id,
+        [
+            {
+                "user_id": str(e.user_id),
+                "checked_in_at": e.checked_in_at,
+                "checked_out_at": e.checked_out_at,
+            }
+            for e in body.entries
+        ],
+    )
+    if state is None:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to save attendance.", error),
+        )
+    return state
+
+
+@router.patch("/shifts/{shift_id}/closeout/calls", response_model=CloseoutStateResponse)
+async def save_shift_closeout_calls(
+    shift_id: UUID,
+    body: CloseoutCallsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Step 2 of close-out — record how many calls the apparatus ran.
+
+    ``attach_call_ids`` claims calls another unit already logged, so a single
+    incident two units rolled on counts once for the department and as a run
+    for each of them.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    state, error = await service.save_closeout_calls(
+        shift_id,
+        current_user.organization_id,
+        reported_call_count=body.reported_call_count,
+        reported_call_types=body.reported_call_types,
+        attach_call_ids=(
+            [str(c) for c in body.attach_call_ids] if body.attach_call_ids else None
+        ),
+        recorded_by=str(current_user.id),
+        # Distinguishes "not sent" from an explicit null, so a client that
+        # only attaches calls does not wipe a count it never mentioned.
+        count_provided="reported_call_count" in body.model_fields_set,
+    )
+    if state is None:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to save call count.", error),
+        )
+    return state
 
 
 @router.post("/shifts/{shift_id}/reopen", response_model=ShiftResponse)
@@ -615,11 +792,13 @@ async def reopen_shift(
 async def get_shift_handoff(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """Return the previous crew's pass-down for this shift (same apparatus),
-    or null when there is none."""
+    or null when there is none. Access is limited to the incoming roster, its
+    officer, and organization-wide scheduling managers."""
     service = SchedulingService(db)
+    await _authorize_handoff_access(service, current_user, shift_id)
     return await service.get_previous_pass_down(shift_id, current_user.organization_id)
 
 
@@ -1298,7 +1477,15 @@ async def generate_shifts_from_pattern(
             f"{len(result)} shift(s) were published to the schedule.",
         )
     enriched = await _enrich_shifts(service, current_user.organization_id, result)
-    return {"shifts_created": len(result), "shifts": enriched}
+    response: dict = {"shifts_created": len(result), "shifts": enriched}
+
+    # Driver seats the pattern could not fill because the member lacks the
+    # apparatus's EVOC level. Reported rather than silently dropped — an
+    # unfilled driver seat the officer does not know about is worse than the
+    # unqualified assignment enforcement just prevented.
+    if service.last_generation_warnings:
+        response["driver_warnings"] = service.last_generation_warnings
+    return response
 
 
 # ============================================
@@ -1336,6 +1523,21 @@ async def get_unavailable_members(
     return {"unavailable_user_ids": user_ids}
 
 
+def _driver_block(exc: CodedValueError) -> CodedHTTPException:
+    """Turn the driver qualification refusal into a 400 that keeps its code.
+
+    The message names what is missing and how to resolve it; the code
+    (``LB-SCHED-001``) is what the UI keys its "request an exception" offer
+    off, so it must survive the trip rather than being flattened into an
+    anonymous 400.
+    """
+    return CodedHTTPException(
+        status_code=400,
+        detail=str(exc),
+        error_code=exc.error_code,
+    )
+
+
 @router.post(
     "/shifts/{shift_id}/assignments",
     response_model=ShiftAssignmentResponse,
@@ -1360,9 +1562,12 @@ async def create_assignment(
         service, current_user, shift_id, "scheduling.assign"
     )
     assignment_data = assignment.model_dump(exclude_none=True)
-    result, error = await service.create_assignment(
-        current_user.organization_id, shift_id, assignment_data, current_user.id
-    )
+    try:
+        result, error = await service.create_assignment(
+            current_user.organization_id, shift_id, assignment_data, current_user.id
+        )
+    except CodedValueError as e:
+        raise _driver_block(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to create assignment.", error)
@@ -1398,15 +1603,26 @@ async def update_assignment(
     service = SchedulingService(db)
     await _authorize_assignment_management(service, current_user, assignment_id)
     update_data = assignment.model_dump(exclude_unset=True)
-    result, error = await service.update_assignment(
-        assignment_id, current_user.organization_id, update_data
-    )
+    try:
+        result, error = await service.update_assignment(
+            assignment_id, current_user.organization_id, update_data
+        )
+    except CodedValueError as e:
+        raise _driver_block(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update assignment.", error)
         )
     enriched = await service.enrich_assignments([result])
-    return enriched[0]
+    response = enriched[0]
+
+    # An edit that moves someone into the driver seat under an approved
+    # exception carries that exception's operating restrictions. The crew-board
+    # position editor uses this endpoint, and an officer who never sees them is
+    # relying on a control that did not reach them.
+    if service.last_assignment_warnings:
+        response["evoc_warnings"] = service.last_assignment_warnings
+    return response
 
 
 @router.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1945,13 +2161,16 @@ async def signup_for_shift(
         "user_id": str(current_user.id),
         "position": signup.position.value,
     }
-    result, error = await service.create_assignment(
-        current_user.organization_id,
-        shift_id,
-        assignment_data,
-        current_user.id,
-        self_signup=True,
-    )
+    try:
+        result, error = await service.create_assignment(
+            current_user.organization_id,
+            shift_id,
+            assignment_data,
+            current_user.id,
+            self_signup=True,
+        )
+    except CodedValueError as e:
+        raise _driver_block(e)
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to sign up for shift.", error)
@@ -2238,6 +2457,39 @@ async def get_eligible_positions(
 
 
 @router.get(
+    "/eligibility/roster",
+    response_model=PositionRosterResponse,
+)
+async def get_position_roster(
+    position: str = Query(
+        "driver",
+        description="Shift position to build the roster for",
+        max_length=50,
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("scheduling.manage", "training.view_all", "training.manage")
+    ),
+):
+    """
+    List every active member eligible for a shift position, and why.
+
+    Answers "who is cleared to drive?" without opening each apparatus in
+    turn. Each entry reports the sources of the member's eligibility (rank,
+    completed training, or the org's open-position list), their current EVOC
+    level, and the apparatus they hold an operator record on.
+
+    **Permissions required:** scheduling.manage, training.view_all, or training.manage
+    """
+    service = ShiftEligibilityService(db)
+    roster = await service.get_position_roster(
+        organization_id=current_user.organization_id,
+        position=position.strip().lower(),
+    )
+    return PositionRosterResponse(**roster)
+
+
+@router.get(
     "/eligibility/settings",
     response_model=SchedulingEligibilitySettingsResponse,
 )
@@ -2322,6 +2574,8 @@ async def get_scheduling_feature_settings(
         restrict_checkin_to_assigned=bool(
             lifecycle.get("restrict_checkin_to_assigned", False)
         ),
+        enforce_evoc=service.get_evoc_enforcement(org),
+        call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
     )
 
 
@@ -2339,7 +2593,13 @@ async def update_scheduling_feature_settings(
         fields_set = data.model_fields_set
         result = await service.update_scheduling_settings(
             organization_id=current_user.organization_id,
-            platoons_enabled=data.platoons_enabled,
+            # Guarded like every sibling field. Passed unconditionally, a
+            # partial save from any single toggle (which sends only its own
+            # key) carried the schema default False and switched platoon
+            # scheduling off behind the user's back.
+            platoons_enabled=(
+                data.platoons_enabled if "platoons_enabled" in fields_set else None
+            ),
             max_hours_per_window=(
                 (data.max_hours_per_window or 0.0)
                 if "max_hours_per_window" in fields_set
@@ -2368,6 +2628,15 @@ async def update_scheduling_feature_settings(
                 if "restrict_checkin_to_assigned" in fields_set
                 else None
             ),
+            enforce_evoc=(data.enforce_evoc if "enforce_evoc" in fields_set else None),
+            # Guarded like every sibling field: a partial save from another
+            # toggle sends only its own key, and passing the schema default
+            # unconditionally would reset the department's call-type list.
+            call_tracking=(
+                data.call_tracking.model_dump()
+                if "call_tracking" in fields_set and data.call_tracking is not None
+                else None
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -2382,6 +2651,12 @@ async def update_scheduling_feature_settings(
         ),
         restrict_checkin_to_assigned=bool(
             result.get("restrict_checkin_to_assigned", False)
+        ),
+        enforce_evoc=bool(result.get("enforce_evoc", True)),
+        call_tracking=CallTrackingSettings(
+            **service.get_call_tracking_settings(
+                await service._get_org(current_user.organization_id)
+            )
         ),
     )
 
@@ -2424,7 +2699,7 @@ async def rotate_calendar_feed(
 @router.get("/platoons/overview", response_model=PlatoonOverviewResponse)
 async def get_platoon_overview(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Department-wide platoon roster: every named platoon plus the unassigned
     bucket, with each platoon's active members."""

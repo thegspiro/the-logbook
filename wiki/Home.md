@@ -1,7 +1,7 @@
 # Welcome to The Logbook Wiki
 
-> **Release handoff:** [Changes from August 12–14, 2026](Recent-Changes-2026-08-12-to-14)
-> maps new pages, APIs, data, migrations, sharing boundaries, edge cases, and
+> **Release handoff:** [Changes from August 17–19, 2026](Recent-Changes-2026-08-17-to-19) — PII-free call volume tracking and the resumable shift close-out wizard (two migrations, `82bdcb3b1e64` and `2827079fd66c`), NFC tags across events / admin hours / shift check-in, the `python -m app.preflight` upgrade check, and the sign-in hardening batch. Earlier windows: [August 10–16 rollup](Recent-Changes-2026-08-10-to-16), with per-window detail for [August 15–16](Recent-Changes-2026-08-15-to-16) (nested facility rooms, the security/privacy hardening batch, the `20260816_0001` migration) and [August 12–14](Recent-Changes-2026-08-12-to-14). All of them
+> map new pages, APIs, data, migrations, sharing boundaries, edge cases, and
 > documentation/media follow-up.
 
 ![The Logbook](https://img.shields.io/badge/Version-1.0.0-blue.svg)
@@ -92,7 +92,7 @@ docker compose up -d
 
 ### 🛠️ Troubleshooting
 
-- **[Error Codes](Error-Codes)** - What an on-screen LB-* code means and how to resolve it
+- **[Error Codes](Error-Codes)** - What an on-screen LB-\* code means and how to resolve it
 - **[Common Issues](Troubleshooting)** - Solutions to common problems
 - **[Container Diagnostics](Troubleshooting#container--docker-diagnostics)** - Docker container issues
 - **[Frontend Diagnostics](Troubleshooting#frontend--browser-diagnostics)** - Frontend not loading

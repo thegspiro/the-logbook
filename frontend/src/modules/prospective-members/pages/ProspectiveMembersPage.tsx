@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import {
   Users,
   UserPlus,
@@ -348,6 +349,12 @@ export const ProspectiveMembersPage: React.FC = () => {
     [currentPipeline]
   );
 
+  const dialogRef1 = useDialog<HTMLDivElement>({ isOpen: showFilters, onClose: () => setShowFilters(false) });
+
+  const dialogRef2 = useDialog<HTMLDivElement>({ isOpen: showPurgeConfirm, onClose: () => setShowPurgeConfirm(false) });
+
+  const dialogRef3 = useDialog<HTMLDivElement>({ isOpen: showAddModal, onClose: () => setShowAddModal(false) });
+
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
       {/* Header */}
@@ -383,21 +390,21 @@ export const ProspectiveMembersPage: React.FC = () => {
       {pipelineStats && !isLoadingStats && (
         <>
           <div className="mb-2 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
-            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+            <div className="card bg-theme-input-bg p-4">
               <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
                 <Users className="h-3.5 w-3.5" />
                 Total Active
               </div>
               <p className="text-theme-text-primary text-2xl font-bold">{pipelineStats.active_applicants}</p>
             </div>
-            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+            <div className="card bg-theme-input-bg p-4">
               <div className="mb-1 flex items-center gap-2 text-xs text-blue-700 dark:text-blue-400">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Converted
               </div>
               <p className="text-theme-text-primary text-2xl font-bold">{pipelineStats.converted_count}</p>
             </div>
-            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+            <div className="card bg-theme-input-bg p-4">
               <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
                 <Clock className="h-3.5 w-3.5" />
                 Avg. Days to Convert
@@ -406,7 +413,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 {pipelineStats.avg_days_to_convert > 0 ? pipelineStats.avg_days_to_convert : '—'}
               </p>
             </div>
-            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+            <div className="card bg-theme-input-bg p-4">
               <div className="mb-1 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
                 <TrendingUp className="h-3.5 w-3.5" />
                 Conversion Rate
@@ -425,7 +432,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               </div>
             )}
             {pipelineStats.inactive_count > 0 && (
-              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+              <div className="card bg-theme-input-bg p-4">
                 <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
                   <XCircle className="h-3.5 w-3.5" />
                   Inactive
@@ -434,7 +441,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               </div>
             )}
             {pipelineStats.withdrawn_count > 0 && (
-              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+              <div className="card bg-theme-input-bg p-4">
                 <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
                   <Archive className="h-3.5 w-3.5" />
                   Withdrawn
@@ -508,7 +515,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 const pipeline = pipelines.find((p) => p.id === e.target.value);
                 if (pipeline) void fetchPipeline(pipeline.id);
               }}
-              className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+              className="form-input px-3 text-sm"
             >
               {pipelines.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -527,7 +534,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="Search applicants..."
               placeholder="Search applicants..."
-              className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border py-2 pr-4 pl-10 text-sm focus:ring-2 focus:outline-hidden"
+              className="form-input placeholder-theme-text-muted pr-4 pl-10 text-sm"
             />
           </div>
 
@@ -556,7 +563,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               )}
             </button>
             {showFilters && (
-              <div className="bg-theme-surface-modal border-theme-surface-border absolute top-full left-0 z-10 mt-2 w-48 rounded-lg border py-1 shadow-xl">
+              <div ref={dialogRef1} className="modal-panel absolute top-full left-0 z-10 mt-2 w-48 py-1">
                 {(['active', 'on_hold', 'withdrawn', 'converted', 'rejected'] as ApplicantStatus[]).map((status) => (
                   <button
                     key={status}
@@ -601,7 +608,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           </button>
 
           {/* View Toggle */}
-          <div className="bg-theme-surface border-theme-surface-border flex items-center rounded-lg border">
+          <div className="card flex items-center">
             <button
               onClick={() => setViewMode('kanban')}
               className={`flex items-center gap-1.5 rounded-l-lg px-3 py-2 text-sm transition-colors ${
@@ -652,7 +659,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             <>
               {/* Bulk Actions Bar */}
               {selectedApplicants.size > 0 && (
-                <div className="bg-theme-surface border-theme-surface-border mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3">
+                <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
                   <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -775,7 +782,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         <div>
           {/* Inactive Bulk Actions */}
           {selectedInactive.size > 0 && (
-            <div className="bg-theme-surface border-theme-surface-border mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3">
+            <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
               <span className="text-theme-text-secondary text-sm">{selectedInactive.size} selected</span>
               <div className="ml-auto flex items-center gap-2">
                 <button
@@ -809,7 +816,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : inactiveApplicants.length === 0 ? (
-            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border border-dashed py-20 text-center">
+            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
               <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No inactive applications</h3>
               <p className="text-theme-text-muted text-sm">
@@ -817,7 +824,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="bg-theme-input-bg border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
+            <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-theme-surface-border border-b">
@@ -963,7 +970,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {/* Purge Note */}
           {inactiveApplicants.length > 0 && (
-            <div className="bg-theme-input-bg border-theme-surface-border mt-4 flex items-start gap-2 rounded-lg border p-3">
+            <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
               <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
               <p className="text-theme-text-muted text-xs">
                 Inactive applications are excluded from pipeline statistics. Purging permanently deletes applicant data
@@ -982,7 +989,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : withdrawnApplicants.length === 0 ? (
-            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border border-dashed py-20 text-center">
+            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
               <Archive className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No withdrawn applications</h3>
               <p className="text-theme-text-muted text-sm">
@@ -990,7 +997,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="bg-theme-input-bg border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
+            <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-theme-surface-border border-b">
@@ -1123,7 +1130,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {/* Info Note */}
           {withdrawnApplicants.length > 0 && (
-            <div className="bg-theme-input-bg border-theme-surface-border mt-4 flex items-start gap-2 rounded-lg border p-3">
+            <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
               <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
               <p className="text-theme-text-muted text-xs">
                 Withdrawn applications are from prospective members who voluntarily left the pipeline process. You can
@@ -1136,8 +1143,8 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+        <div className="modal-overlay z-50 flex items-center justify-center p-4">
+          <div ref={dialogRef2} className="modal-panel w-full max-w-md">
             <div className="p-6">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
@@ -1205,8 +1212,8 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Add Applicant Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+        <div className="modal-overlay z-50 flex items-center justify-center p-4">
+          <div ref={dialogRef3} className="modal-panel w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Add Applicant</h2>
               <button

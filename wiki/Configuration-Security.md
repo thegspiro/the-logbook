@@ -20,29 +20,108 @@ Configure security settings for The Logbook, including authentication, encryptio
 
 ## Password Policy
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Minimum length | 12 characters | Configurable |
-| Requires uppercase | Yes | At least one uppercase letter |
-| Requires lowercase | Yes | At least one lowercase letter |
-| Requires number | Yes | At least one digit |
-| Requires special | Yes | At least one special character |
-| Password history | 12 | Cannot reuse last 12 passwords |
-| Max password age | 90 days | Forced change after 90 days |
-| Lockout threshold | 5 attempts | Account locked after 5 failed logins |
-| Lockout duration | 30 minutes | Auto-unlock after 30 minutes |
+| Setting            | Default       | Description                          |
+| ------------------ | ------------- | ------------------------------------ |
+| Minimum length     | 12 characters | Configurable                         |
+| Requires uppercase | Yes           | At least one uppercase letter        |
+| Requires lowercase | Yes           | At least one lowercase letter        |
+| Requires number    | Yes           | At least one digit                   |
+| Requires special   | Yes           | At least one special character       |
+| Password history   | 12            | Cannot reuse last 12 passwords       |
+| Max password age   | 90 days       | Forced change after 90 days          |
+| Lockout threshold  | 5 attempts    | Account locked after 5 failed logins |
+| Lockout duration   | 30 minutes    | Auto-unlock after 30 minutes         |
+
+---
+
+## Attack Protection _(2026-08-16 → 08-17)_
+
+Four brute-force controls layer on top of each other. When changing one, know
+which gap it covers so you do not collapse two into one.
+
+| Control                | Counts                           | Keyed on             | On provider/Redis failure |
+| ---------------------- | -------------------------------- | -------------------- | ------------------------- |
+| `check_rate_limit`     | all attempts, short window       | IP + scope           | falls back to in-memory   |
+| Account lockout        | consecutive failures             | user                 | n/a (database)            |
+| Suspicious-IP throttle | **failed** attempts, long window | IP, **all** accounts | falls back to in-memory   |
+| Breached password      | breach-corpus appearances        | password hash prefix | **fails open**            |
+| CAPTCHA                | human challenge                  | request              | **fails closed**          |
+
+**The two failure directions are deliberate and opposite.** Breached-password
+detection is supplementary — complexity rules, password history, MFA and
+lockout all still apply if the lookup is skipped — so an outage must not block
+password changes. CAPTCHA has no fallback control behind it, so accepting
+unverified traffic during an outage is the state an attacker wants; it rejects
+instead. Preserve both directions when touching either.
+
+### Breached-password rejection
+
+| Variable                            | Default                                | Description                                                                                                                            |
+| ----------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `BREACHED_PASSWORD_CHECK_ENABLED`   | `false`                                | Off by default: it makes an outbound request on password set/change, which some deployments cannot allow                               |
+| `BREACHED_PASSWORD_MIN_COUNT`       | `1`                                    | Appearances before rejecting. `1` rejects anything ever seen; a higher value tolerates rare appearances more likely to be corpus noise |
+| `BREACHED_PASSWORD_API_URL`         | `https://api.pwnedpasswords.com/range` |                                                                                                                                        |
+| `BREACHED_PASSWORD_TIMEOUT_SECONDS` | `3.0`                                  |                                                                                                                                        |
+
+**Only the first 5 characters of the SHA-1 hash are ever sent** (k-anonymity).
+The password and its full hash never leave the server. The hash is marked
+not-for-security in code — it is a corpus lookup key, not a credential store.
+
+### Suspicious-IP throttle
+
+| Variable                         | Default | Description                                                              |
+| -------------------------------- | ------- | ------------------------------------------------------------------------ |
+| `SUSPICIOUS_IP_THROTTLE_ENABLED` | `true`  | Counts **failed** authentication attempts per IP across **all** accounts |
+| `SUSPICIOUS_IP_MAX_FAILURES`     | `50`    | Failures per window before blocking                                      |
+| `SUSPICIOUS_IP_WINDOW_SECONDS`   | `3600`  |                                                                          |
+| `SUSPICIOUS_IP_BLOCK_SECONDS`    | `900`   |                                                                          |
+
+Two invariants in `app/core/suspicious_ip.py` are load-bearing:
+
+1. **A successful sign-in clears an IP's counter only after _full_
+   authentication** — never on a correct password alone. Otherwise an attacker
+   holding one leaked password for an MFA-protected account could zero the
+   tally at will.
+2. **Clearing never lifts an active block.**
+
+This is the control that covers the gap account lockout leaves: lockout is
+per-user, so spraying one password across a thousand accounts never trips it.
+
+### CAPTCHA
+
+| Variable                  | Default     | Description                                                                                            |
+| ------------------------- | ----------- | ------------------------------------------------------------------------------------------------------ |
+| `CAPTCHA_ENABLED`         | `false`     |                                                                                                        |
+| `CAPTCHA_PROVIDER`        | `turnstile` | `turnstile` \| `hcaptcha` \| `recaptcha`                                                               |
+| `CAPTCHA_SECRET_KEY`      | —           | Enabling without this logs an error and enforces **nothing**                                           |
+| `CAPTCHA_SITE_KEY`        | —           | Public; served to the browser                                                                          |
+| `CAPTCHA_TIMEOUT_SECONDS` | `5.0`       |                                                                                                        |
+| `CAPTCHA_MIN_SCORE`       | `0.5`       | reCAPTCHA v3 only — it returns a 0.0–1.0 score instead of pass/fail. Ignored by Turnstile and hCaptcha |
+
+Applied to the two internet-exposed forms: public form submission and public
+event-request intake.
+
+> **Enabling CAPTCHA widens the CSP.** `SecurityHeadersMiddleware` adds the
+> configured provider's widget origins. A hardcoded `script-src 'self'`
+> silently blocks the widget, which presents as _"the challenge never appears"_
+> rather than as a CSP error. A new provider needs an entry in **both**
+> `_VERIFY_URLS` and `_WIDGET_ORIGINS` in `app/core/captcha.py`.
+
+> **`X-Captcha-Token` is allowed in CORS** _(2026-08-17)_. Without it, a
+> cross-origin frontend's preflight rejects the header and the challenge can
+> never be submitted.
 
 ---
 
 ## Session Management
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Access token lifetime | 8 hours | JWT access token expiration |
-| Refresh token lifetime | 7 days | JWT refresh token expiration |
-| Inactivity timeout | 30 minutes | Auto-logout on no mouse/keyboard/touch activity |
-| Concurrent sessions | 3 max | Per user |
-| Session IP validation | Enabled | Alerts on IP change during session |
+| Setting                | Default    | Description                                     |
+| ---------------------- | ---------- | ----------------------------------------------- |
+| Access token lifetime  | 8 hours    | JWT access token expiration                     |
+| Refresh token lifetime | 7 days     | JWT refresh token expiration                    |
+| Inactivity timeout     | 30 minutes | Auto-logout on no mouse/keyboard/touch activity |
+| Concurrent sessions    | 3 max      | Per user                                        |
+| Session IP validation  | Enabled    | Alerts on IP change during session              |
 
 ---
 
@@ -50,35 +129,35 @@ Configure security settings for The Logbook, including authentication, encryptio
 
 The Logbook supports multiple authentication methods:
 
-| Method | Description | Configuration |
-|--------|-------------|---------------|
-| **Local** | Username/password with Argon2id hashing | Default, always available |
-| **OAuth (Google / Microsoft)** | "Sign in with Google" and "Sign in with Microsoft" (Azure AD, single-tenant); link-existing-only, domain-restricted *(2026-05-29)* | `GOOGLE_*` / `AZURE_AD_*` env vars |
-| ~~**SAML**~~ | **Not implemented.** Previously documented in error | — |
-| ~~**LDAP / Active Directory**~~ | **Not implemented.** The `LDAP_*` settings exist in config but gate nothing *(clarified 2026-07-31)* | — |
-| **TOTP MFA** | Time-based one-time passwords (Google Authenticator, etc.) | Per-user opt-in or admin-enforced |
+| Method                          | Description                                                                                                                        | Configuration                      |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| **Local**                       | Username/password with Argon2id hashing                                                                                            | Default, always available          |
+| **OAuth (Google / Microsoft)**  | "Sign in with Google" and "Sign in with Microsoft" (Azure AD, single-tenant); link-existing-only, domain-restricted _(2026-05-29)_ | `GOOGLE_*` / `AZURE_AD_*` env vars |
+| ~~**SAML**~~                    | **Not implemented.** Previously documented in error                                                                                | —                                  |
+| ~~**LDAP / Active Directory**~~ | **Not implemented.** The `LDAP_*` settings exist in config but gate nothing _(clarified 2026-07-31)_                               | —                                  |
+| **TOTP MFA**                    | Time-based one-time passwords (Google Authenticator, etc.)                                                                         | Per-user opt-in or admin-enforced  |
 
 ---
 
 ## Encryption
 
-| Layer | Algorithm | Details |
-|-------|-----------|---------|
-| **Passwords** | Argon2id | OWASP-recommended, memory-hard |
-| **Data at rest** | AES-256-GCM | Authenticated encryption of sensitive fields; a tampered value fails to decrypt (fails closed). Values written under the legacy Fernet (AES-128-CBC) scheme still decrypt; `backend/scripts/reencrypt_to_aesgcm.py` backfills them (see [`docs/AES256_GCM_BACKFILL_RUNBOOK.md`](../docs/AES256_GCM_BACKFILL_RUNBOOK.md)) |
-| **Data in transit** | TLS 1.3 | HTTPS required in production |
-| **Audit logs** | Keyed HMAC-SHA256 hash chain | Tamper-evident chain keyed with the signing key, so forging it requires the key, not just DB write access (legacy pre-upgrade rows remain unkeyed SHA-256 for verification) |
+| Layer               | Algorithm                    | Details                                                                                                                                                                                                                                                                                                                  |
+| ------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Passwords**       | Argon2id                     | OWASP-recommended, memory-hard                                                                                                                                                                                                                                                                                           |
+| **Data at rest**    | AES-256-GCM                  | Authenticated encryption of sensitive fields; a tampered value fails to decrypt (fails closed). Values written under the legacy Fernet (AES-128-CBC) scheme still decrypt; `backend/scripts/reencrypt_to_aesgcm.py` backfills them (see [`docs/AES256_GCM_BACKFILL_RUNBOOK.md`](../docs/AES256_GCM_BACKFILL_RUNBOOK.md)) |
+| **Data in transit** | TLS 1.3                      | HTTPS required in production                                                                                                                                                                                                                                                                                             |
+| **Audit logs**      | Keyed HMAC-SHA256 hash chain | Tamper-evident chain keyed with the signing key, so forging it requires the key, not just DB write access (legacy pre-upgrade rows remain unkeyed SHA-256 for verification)                                                                                                                                              |
 
 ---
 
 ## Rate Limiting
 
-| Endpoint | Limit | Description |
-|----------|-------|-------------|
-| Login | 5/minute | Per IP address |
-| API (general) | 60/minute | Per authenticated user |
-| Public forms (view) | 60/minute | Per IP |
-| Public forms (submit) | 10/minute | Per IP |
+| Endpoint              | Limit     | Description            |
+| --------------------- | --------- | ---------------------- |
+| Login                 | 5/minute  | Per IP address         |
+| API (general)         | 60/minute | Per authenticated user |
+| Public forms (view)   | 60/minute | Per IP                 |
+| Public forms (submit) | 10/minute | Per IP                 |
 
 ---
 
@@ -109,7 +188,7 @@ The application automatically sets these security headers in production:
 
 ---
 
-## Client IP Resolution & GeoIP *(2026-05-29)*
+## Client IP Resolution & GeoIP _(2026-05-29)_
 
 ### Spoof-Proof Client IP
 
@@ -165,7 +244,7 @@ single organization.
 
 ---
 
-## Host Header Allowlist *(2026-07)*
+## Host Header Allowlist _(2026-07)_
 
 `TrustedHostMiddleware` rejects any request whose `Host` header is not in the
 allowlist with an HTTP 400, so Host-derived values (emailed links, OAuth
@@ -182,7 +261,7 @@ header.
 
 ---
 
-## Database & Redis TLS Verification *(updated 2026-08)*
+## Database & Redis TLS Verification _(updated 2026-08)_
 
 `DB_SSL` / `REDIS_SSL` enable TLS for the database and Redis connections. If they
 are enabled **without** the corresponding CA path set, the connection is
@@ -191,7 +270,7 @@ offers no protection against an active man-in-the-middle.
 
 **This blocks startup in production and staging.** It used to be a warning.
 The reasoning: a channel that looks encrypted but authenticates nobody is
-*worse* than honest plaintext on a private network, because it is
+_worse_ than honest plaintext on a private network, because it is
 indistinguishable from a correct configuration — nobody goes looking for a
 problem the dashboard says you do not have.
 
@@ -201,9 +280,15 @@ problem the dashboard says you do not have.
   logged loudly on every boot, so the acceptance does not quietly outlive the
   person who made it. Clear the flag once a CA is configured.
 
-Plaintext DB/Redis (`DB_SSL` unset) remains a **warning**, not a block — a
-container-internal network is a legitimate deployment, and promoting it would
-break every existing install at startup.
+Plaintext DB/Redis (`DB_SSL` unset) **blocks startup in production and
+staging** unless the deployment opts out: `SECURITY_REQUIRE_TLS` defaults to
+`true`, and without `DB_SSL`/`REDIS_SSL` configured the backend refuses to
+start. A container-internal network is still a legitimate deployment — the
+bundled installers (`install.sh`, `scripts/universal-install.sh`, the Unraid
+setup) write an explicit `SECURITY_REQUIRE_TLS=false` risk acceptance into the
+generated `.env` because their bundled MySQL/Redis do not terminate TLS. Set
+the flag `false` yourself only when a trusted topology (private VPC, service
+mesh, sidecar) provides equivalent transport protection.
 
 ### Rate limiting is now a real switch
 

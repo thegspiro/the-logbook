@@ -212,6 +212,35 @@ class ComplianceSummary(BaseModel):
     items: List[ComplianceItem]
 
 
+class MyComplianceSummary(BaseModel):
+    """The caller's own screening compliance, reduced to counts.
+
+    Deliberately carries no requirement names, screening types, dates or
+    statuses — only how many are outstanding and how soon the next one lapses.
+
+    This is what the dashboard reads, and the dashboard is a shared surface:
+    The Logbook is installed as a kiosk on tablets left at stations, so a line
+    reading "Psychological evaluation expired" is legible to whoever walks past.
+    Counts answer "am I clear tonight" without disclosing which screening or
+    what it found. The member sees the detail on their own screening page,
+    which they open deliberately.
+    """
+
+    total_requirements: int
+    compliant_count: int
+    non_compliant_count: int
+    expiring_soon_count: int
+    is_fully_compliant: bool
+    days_until_next_expiration: Optional[int] = Field(
+        default=None,
+        description=(
+            "Days until the soonest still-valid screening lapses, or None when "
+            "nothing is due. Negative values are never returned — an already "
+            "lapsed screening is counted in non_compliant_count instead."
+        ),
+    )
+
+
 class ExpiringScreening(BaseModel):
     """A screening record that is expiring soon."""
 

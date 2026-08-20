@@ -59,11 +59,11 @@ calendar all visible. Quick montage of clicking through different modules.]**
 
 **[CALLOUT: Table showing three tiers]**
 
-| | Minimal | Standard | Full |
-|---|---------|----------|------|
-| **RAM** | 1–2 GB | 4 GB | 8+ GB |
-| **CPU** | 2 cores | 2+ cores | 4+ cores |
-| **Storage** | 10 GB | 20 GB | 50+ GB |
+|              | Minimal                 | Standard         | Full                     |
+| ------------ | ----------------------- | ---------------- | ------------------------ |
+| **RAM**      | 1–2 GB                  | 4 GB             | 8+ GB                    |
+| **CPU**      | 2 cores                 | 2+ cores         | 4+ cores                 |
+| **Storage**  | 10 GB                   | 20 GB            | 50+ GB                   |
 | **Best for** | Raspberry Pi, small VPS | Most departments | Large orgs, all features |
 
 > "If you're running a department of under fifty members, the minimal or
@@ -90,9 +90,16 @@ docker --version
 docker compose version
 ```
 
-> "You'll want Docker 20 or newer and Docker Compose v2. If you don't have
-> these installed yet, Docker's official documentation has guides for every
+> "You'll want Docker 20 or newer and Docker Compose v2 — specifically
+> 2.24.4 or newer, because the production configuration uses a Compose
+> feature that older versions don't understand. If you don't have these
+> installed yet, Docker's official documentation has guides for every
 > operating system. I'll link those in the description."
+
+**[EDITOR (2026-08-16): version line updated — the production override now
+uses `volumes: !override`, which requires Compose v2.24.4+. Same take, no
+timing change; the on-screen `docker compose version` output should show
+≥ 2.24.4.]**
 
 > "For the one-line installer, you'll also need `curl` and `git`, which come
 > pre-installed on most systems."
@@ -276,9 +283,45 @@ python3 -c "import secrets; print(secrets.token_hex(16))"
 
 **[CALLOUT: Note that modules are managed in-app under Organization Settings > Modules]**
 
+### CHECK IT BEFORE YOU START IT (10:45 – 11:00) — ADDED 2026-08-19
+
+> "Before we start anything, there's one command worth sixty seconds of your
+> life. It answers 'will this configuration actually boot' — without you finding
+> out the hard way, which normally means finding out by losing the service."
+
+**[SCREEN: Run the preflight check]**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  run --rm --build backend python -m app.preflight
+```
+
+**[SCREEN: Show a clean run — exit 0.]**
+
+> "Zero means it starts. One means it doesn't, and it lists exactly what's
+> blocking. Two means a value is malformed."
+
+**[SCREEN: Show a failing run — exit 1 with the blocking items listed.]**
+
+> "Two details here are load-bearing, and getting either wrong makes this
+> command lie to you. First, `--build`. Without it, Compose uses the image
+> that's already there — so you'd be checking the version you're replacing, not
+> the one you're deploying. Second, pass **the same `-f` files your deployment
+> uses**. A bare `docker compose run` only evaluates the base development
+> configuration, and it'll happily tell you a setup nobody runs is fine."
+
+**[CALLOUT: "--build, and the same -f files. Otherwise it's answering about a
+different configuration."]**
+
+> "There's also `--compose`, which takes a compose file path and tells you which
+> settings that file **drops** — values sitting in your `.env` that never reach
+> the container. Those used to just silently become defaults, which is how a
+> production stack ends up running a development setting with nothing anywhere
+> saying so."
+
 ### START THE SERVICES (11:00 – 12:00)
 
-> "With the environment file configured, we're ready to start."
+> "With the environment file configured — and checked — we're ready to start."
 
 **[SCREEN: Run the Docker Compose command]**
 
@@ -299,7 +342,7 @@ service names: mysql, redis, backend, frontend.]**
 > right order."
 
 > "One important note before you go live. That plain `docker compose up -d` you
-> just ran? The base compose file is a *development* configuration — great for
+> just ran? The base compose file is a _development_ configuration — great for
 > kicking the tires, but it skips the production security gate. For a real
 > production deployment, you layer the production override on top of the base
 > file:"
@@ -522,6 +565,17 @@ curl http://localhost:3001/health
 > wizard is designed to be intuitive. But if you want a guided walkthrough with
 > tips on best practices, that next video has you covered."
 
+> "One thing to know before you start it, whichever way you go: **setup runs in
+> one browser tab, in one sitting.** The wizard holds a temporary credential that
+> lets it create your department, and that credential doesn't outlive the tab —
+> deliberately, because on a shared station machine it shouldn't. Open a second
+> tab and it starts a separate session; close the browser partway through and the
+> run is over. So have your department's address, station list, apparatus list and
+> first administrator's details ready, and give yourself an uninterrupted half
+> hour."
+
+**[CALLOUT: "One tab · one sitting · 30-minute idle limit"]**
+
 > "If you run into any issues, the GitHub repository has discussions and issue
 > tracking. The Logbook is open source and community-supported, so don't
 > hesitate to ask questions or report bugs."
@@ -541,12 +595,12 @@ link.]**
 
 The following segments can be cut into standalone short videos:
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| One-Line Install | 4:00–7:30 | "Install The Logbook in One Command" |
-| Environment Setup | 8:30–11:00 | "Configuring The Logbook Environment File" |
-| Raspberry Pi Setup | 13:00–14:00 | "Running The Logbook on a Raspberry Pi" |
-| Troubleshooting | 18:00–19:00 | "3 Common Install Issues (and How to Fix Them)" |
+| Clip               | Timecode    | Standalone Title                                |
+| ------------------ | ----------- | ----------------------------------------------- |
+| One-Line Install   | 4:00–7:30   | "Install The Logbook in One Command"            |
+| Environment Setup  | 8:30–11:00  | "Configuring The Logbook Environment File"      |
+| Raspberry Pi Setup | 13:00–14:00 | "Running The Logbook on a Raspberry Pi"         |
+| Troubleshooting    | 18:00–19:00 | "3 Common Install Issues (and How to Fix Them)" |
 
 ## AUGUST 14 RELEASE INSERT — TLS AND SAFE UPGRADES
 

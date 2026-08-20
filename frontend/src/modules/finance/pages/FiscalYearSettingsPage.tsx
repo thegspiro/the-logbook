@@ -79,8 +79,8 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="border-theme-surface-border bg-theme-surface mx-4 w-full max-w-md rounded-lg border p-6 shadow-xl">
+    <div className="modal-overlay z-50 flex items-center justify-center">
+      <div className="card mx-4 w-full max-w-md p-6 shadow-xl">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Create Fiscal Year</h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
@@ -173,8 +173,8 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="border-theme-surface-border bg-theme-surface mx-4 w-full max-w-md rounded-lg border p-6 shadow-xl">
+    <div className="modal-overlay z-50 flex items-center justify-center">
+      <div className="card mx-4 w-full max-w-md p-6 shadow-xl">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Create Budget Category</h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
@@ -309,7 +309,7 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* ================================================================== */}
       {/* Fiscal Years Section                                               */}
       {/* ================================================================== */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Calendar className="text-theme-text-secondary h-5 w-5 shrink-0" />
@@ -387,7 +387,7 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* ================================================================== */}
       {/* Budget Categories Section                                          */}
       {/* ================================================================== */}
-      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+      <div className="card p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Tag className="text-theme-text-secondary h-5 w-5 shrink-0" />

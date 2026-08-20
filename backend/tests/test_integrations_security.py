@@ -19,6 +19,7 @@ from app.api.v1.endpoints.integrations import (
     _extract_secrets,
     _integration_to_dict,
     _sanitize_config,
+    _secrets_to_clear_for_base_url_change,
     _validate_config,
 )
 from app.schemas.integration import (
@@ -228,6 +229,64 @@ class TestExtractSecrets:
         assert secrets == {}
 
 
+class TestBaseUrlSecretBinding:
+    @staticmethod
+    def _integration(integration_type: str, secret_key: str):
+        integration = MagicMock()
+        integration.integration_type = integration_type
+        integration.config = {"api_base_url": "https://vendor.example/api/v1"}
+        integration.get_secret.return_value = f"stored-{secret_key}"
+        return integration
+
+    @pytest.mark.parametrize(
+        ("integration_type", "secret_key"),
+        [("documenso", "api_token"), ("calcom", "api_key")],
+    )
+    def test_requires_credential_when_base_url_changes(
+        self, integration_type, secret_key
+    ):
+        integration = self._integration(integration_type, secret_key)
+
+        with pytest.raises(HTTPException, match="must be re-entered") as exc_info:
+            _secrets_to_clear_for_base_url_change(
+                integration, {"api_base_url": "https://attacker.example/api/v1"}
+            )
+
+        assert exc_info.value.status_code == 422
+
+    def test_reentered_credential_allows_base_url_change(self):
+        integration = self._integration("documenso", "api_token")
+
+        result = _secrets_to_clear_for_base_url_change(
+            integration,
+            {
+                "api_base_url": "https://new-vendor.example/api/v1",
+                "api_token": "replacement-token",
+            },
+        )
+
+        assert result == set()
+
+    def test_explicit_blank_clears_credential_on_base_url_change(self):
+        integration = self._integration("calcom", "api_key")
+
+        result = _secrets_to_clear_for_base_url_change(
+            integration,
+            {"api_base_url": "https://new-vendor.example/api/v1", "api_key": ""},
+        )
+
+        assert result == {"api_key"}
+
+    def test_unchanged_base_url_preserves_stored_credential(self):
+        integration = self._integration("documenso", "api_token")
+
+        result = _secrets_to_clear_for_base_url_change(
+            integration, {"api_base_url": "https://vendor.example/api/v1"}
+        )
+
+        assert result == set()
+
+
 # ============================================
 # URL Validation Tests
 # ============================================
@@ -297,9 +356,10 @@ class TestValidateUrls:
 
     def test_allows_http_in_development(self):
         """HTTP is permitted only when ENVIRONMENT == 'development'."""
-        with patch("app.utils.url_validator.settings") as mock_settings, patch(
-            "app.utils.url_validator.socket.getaddrinfo"
-        ) as mock_dns:
+        with (
+            patch("app.utils.url_validator.settings") as mock_settings,
+            patch("app.utils.url_validator.socket.getaddrinfo") as mock_dns,
+        ):
             mock_settings.ENVIRONMENT = "development"
             mock_dns.return_value = self._dns("54.230.1.1")
             result = validate_integration_url("http://example.com/webhook")

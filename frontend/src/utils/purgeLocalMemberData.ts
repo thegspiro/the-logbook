@@ -7,8 +7,8 @@
  * by the next person to sit down.
  *
  * These stores hold member PII beyond the session:
- *   - shift-report drafts (localStorage): crew names, trainee evaluations,
- *     narrative remarks
+ *   - shift-report and equipment-check drafts (localStorage): crew names,
+ *     trainee evaluations, apparatus results, and narrative remarks
  *   - the offline queues (IndexedDB): unsent equipment checks *including photo
  *     blobs*, submitted shift reports, training submissions, and event RSVPs
  *
@@ -27,7 +27,7 @@ import { clearAllQueuedReports } from './shiftReportOfflineQueue';
 import { clearAllGenericQueued } from './genericOfflineQueue';
 
 export interface PurgeResult {
-  /** Shift-report drafts removed from localStorage. */
+  /** Shift-report and equipment-check drafts removed from localStorage. */
   drafts: number;
   /** Unsent equipment checks discarded from IndexedDB. */
   queuedChecks: number;
@@ -102,6 +102,15 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
     result.queuedGeneric = await bounded(clearAllGenericQueued(), 0);
   } catch {
     // As above.
+  }
+
+  // A mounted form can have an API request in flight when termination starts.
+  // Sweep again after the asynchronous IndexedDB work so a late state update
+  // cannot leave a localStorage draft behind for the next device user.
+  try {
+    result.drafts += clearAllDrafts();
+  } catch {
+    // localStorage may have become unavailable; the initial sweep still ran.
   }
 
   result.unsyncedDiscarded = result.queuedChecks + result.queuedReports + result.queuedGeneric;

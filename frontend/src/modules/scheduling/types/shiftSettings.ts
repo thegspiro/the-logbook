@@ -126,8 +126,9 @@ export interface ShiftSettings {
  *
  * This is a PREFIX, not the key itself: the mirror is written per
  * organization as `scheduling_settings:{orgId}`, so logging into another
- * department on the same browser cannot be served this one's settings. The
- * bare, untagged key is only read once, to adopt a pre-backend copy.
+ * department on the same browser cannot be served this one's settings. A
+ * legacy bare key is deliberately ignored because its owning organization
+ * cannot be established safely.
  */
 export const SETTINGS_KEY = 'scheduling_settings';
 

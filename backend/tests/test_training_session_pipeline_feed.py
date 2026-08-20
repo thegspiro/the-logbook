@@ -29,6 +29,7 @@ def _one(obj):
 class RecordingSession:
     def __init__(self, results=None):
         self._results = list(results or [])
+        self.statements = []
         self.commit = AsyncMock()
         self.refresh = AsyncMock()
         self.rollback = AsyncMock()
@@ -37,6 +38,8 @@ class RecordingSession:
         pass
 
     async def execute(self, *args, **kwargs):
+        if args:
+            self.statements.append(args[0])
         return self._results.pop(0) if self._results else MagicMock()
 
 
@@ -46,13 +49,25 @@ class TestResolveCategoryRequirementIds:
             [MagicMock(all=MagicMock(return_value=[("r1",), ("r2",)]))]
         )
         svc = TrainingSessionService(db)
-        ids = await svc._resolve_category_requirement_ids("prog-1", "cat-1")
+        ids = await svc._resolve_category_requirement_ids("prog-1", "cat-1", "phase-1")
         assert ids == ["r1", "r2"]
+        assert "phase-1" in db.statements[0].compile().params.values()
 
     async def test_empty_when_no_matches(self):
         db = RecordingSession([MagicMock(all=MagicMock(return_value=[]))])
         svc = TrainingSessionService(db)
-        assert await svc._resolve_category_requirement_ids("prog-1", "cat-1") == []
+        assert (
+            await svc._resolve_category_requirement_ids("prog-1", "cat-1", "phase-1")
+            == []
+        )
+
+    async def test_null_phase_only_matches_program_level_requirements(self):
+        db = RecordingSession([MagicMock(all=MagicMock(return_value=[]))])
+        svc = TrainingSessionService(db)
+
+        await svc._resolve_category_requirement_ids("prog-1", "cat-1", None)
+
+        assert "program_requirements.phase_id IS NULL" in str(db.statements[0])
 
 
 class TestApplyPipelineProgress:
@@ -76,6 +91,7 @@ class TestApplyPipelineProgress:
             organization_id=org,
             verified_by=officer,
             session_id="sess-9",
+            can_manage_training=True,
         )
 
         mock_credit.assert_awaited_once()
@@ -88,6 +104,8 @@ class TestApplyPipelineProgress:
         assert kwargs["source_type"] == ProgressCreditSource.TRAINING_SESSION
         assert kwargs["source_id"] == "sess-9"
         assert kwargs["units"] == 10.0
+        assert kwargs["acting_user_id"] == officer
+        assert kwargs["can_manage"] is True
 
     async def test_noop_without_active_enrollment(self, monkeypatch):
         db = RecordingSession([_one(None)])
@@ -143,7 +161,7 @@ class TestApplyPipelineUpdates:
             ("u1", "p1", "r1", 4.0, "sess-1"),
             ("u2", "p1", "r2", 8.0, "sess-1"),
         ]
-        await svc._apply_pipeline_updates(updates, org, officer)
+        await svc._apply_pipeline_updates(updates, org, officer, True)
 
         assert svc._apply_pipeline_progress.await_count == 2
         first = svc._apply_pipeline_progress.await_args_list[0].kwargs
@@ -152,6 +170,7 @@ class TestApplyPipelineUpdates:
         assert first["organization_id"] == org
         assert first["verified_by"] == officer
         assert first["session_id"] == "sess-1"
+        assert first["can_manage_training"] is True
 
 
 if __name__ == "__main__":  # pragma: no cover

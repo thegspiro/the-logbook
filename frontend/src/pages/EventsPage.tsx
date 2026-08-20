@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -48,7 +49,9 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
+import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
+import { NfcTapButton } from '../components/nfc/NfcTapButton';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
@@ -280,8 +283,12 @@ export const EventsPage: React.FC = () => {
         )
       );
       setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
-    } catch {
-      // Silently fail — user can retry
+    } catch (err: unknown) {
+      // The card is only updated on success, so without this the tap looks
+      // exactly like a tap that never registered — the member re-taps and
+      // assumes the button is broken rather than that the RSVP was refused
+      // (event locked, roster full, session expired).
+      toast.error(getErrorMessage(err, 'Could not save your RSVP'));
     } finally {
       setRsvpLoading((prev) => ({ ...prev, [eventId]: false }));
     }
@@ -467,6 +474,7 @@ export const EventsPage: React.FC = () => {
     try {
       setBulkActionLoading(true);
       let cancelled = 0;
+      let failed = 0;
       for (const evt of selected) {
         try {
           await eventService.cancelEvent(evt.id, {
@@ -475,10 +483,14 @@ export const EventsPage: React.FC = () => {
           });
           cancelled++;
         } catch {
-          // Continue with remaining events
+          // Keep going so one rejected event doesn't strand the rest, but count
+          // it — reporting only the successes made a run where every cancel was
+          // refused read as "Cancelled 0 events" in a success toast.
+          failed++;
         }
       }
-      toast.success(`Cancelled ${cancelled} event${cancelled !== 1 ? 's' : ''}`);
+      if (cancelled > 0) toast.success(`Cancelled ${cancelled} event${cancelled !== 1 ? 's' : ''}`);
+      if (failed > 0) toast.error(`${failed} event${failed !== 1 ? 's' : ''} could not be cancelled`);
       setSelectedEvents(new Set());
       setShowCancelConfirm(false);
       void fetchEvents();
@@ -589,6 +601,7 @@ export const EventsPage: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <NfcTapButton />
             {sortedEvents.length > 0 && (
               <button
                 onClick={handleExportCSV}
@@ -643,7 +656,7 @@ export const EventsPage: React.FC = () => {
                     <span className="hidden sm:inline">Quick Create</span>
                   </button>
                   {showQuickCreate && (
-                    <div className="border-theme-surface-border bg-theme-surface-modal absolute right-0 z-50 mt-2 w-64 rounded-lg border shadow-lg">
+                    <div className="popover-panel absolute right-0 z-50 mt-2 w-64">
                       <div className="p-2">
                         <p className="text-theme-text-secondary px-3 py-1.5 text-xs font-semibold tracking-wider uppercase">
                           Create from Template
@@ -686,7 +699,7 @@ export const EventsPage: React.FC = () => {
 
         {/* Upcoming / Past Toggle + View Mode + Search + My Events + Sort */}
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="border-theme-surface-border bg-theme-surface inline-flex rounded-lg border p-1">
+          <div className="card inline-flex p-1">
             <button
               onClick={() => setShowPastEvents(false)}
               className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
@@ -708,7 +721,7 @@ export const EventsPage: React.FC = () => {
               Past
             </button>
           </div>
-          <div className="border-theme-surface-border bg-theme-surface inline-flex rounded-lg border p-1">
+          <div className="card inline-flex p-1">
             <button
               onClick={() => setViewMode('list')}
               className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
@@ -786,7 +799,7 @@ export const EventsPage: React.FC = () => {
                 setShowSavePresetInput(false);
                 setPresetName('');
               }}
-              className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] max-md:min-w-[44px]"
+              className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 text-sm font-medium max-md:min-h-[44px] max-md:min-w-[44px]"
               title="Filter presets"
             >
               <Bookmark className="h-4 w-4" aria-hidden="true" />
@@ -794,7 +807,7 @@ export const EventsPage: React.FC = () => {
             </button>
 
             {showPresetMenu && (
-              <div className="bg-theme-surface-modal border-theme-surface-border absolute top-full right-0 z-40 mt-1 w-72 rounded-lg border shadow-lg">
+              <div className="popover-panel absolute top-full right-0 z-40 mt-1 w-72">
                 <div className="border-theme-surface-border border-b p-2">
                   {!showSavePresetInput ? (
                     <button
@@ -964,9 +977,7 @@ export const EventsPage: React.FC = () => {
                   )}
                   <Link
                     to={`/events/${event.id}`}
-                    className={`card block transition-all hover:border-red-300 hover:shadow-md ${
-                      selectedEvents.has(event.id) ? 'border-red-300 ring-2 ring-red-500/50' : ''
-                    }`}
+                    className={`card block transition-all hover:border-red-300 hover:shadow-md ${selectedEvents.has(event.id) ? 'border-red-300 ring-2 ring-red-500/50' : ''}`}
                   >
                     <div className={`p-5 ${canManage ? 'pl-10' : ''}`}>
                       <div className="flex items-start justify-between">
@@ -1176,7 +1187,7 @@ export const EventsPage: React.FC = () => {
 
       {/* Floating Bulk Action Bar */}
       {selectedEvents.size > 0 && (
-        <div className="bg-theme-surface-modal border-theme-surface-border fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-xl border px-6 py-3 shadow-lg">
+        <div className="popover-panel fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 px-6 py-3">
           <span className="text-theme-text-primary text-sm font-medium">{selectedEvents.size} selected</span>
           <div className="bg-theme-surface-border h-5 w-px" />
           <button
@@ -1214,8 +1225,8 @@ export const EventsPage: React.FC = () => {
           aria-modal="true"
           aria-label="Import Events from CSV"
         >
-          <div className="fixed inset-0 bg-black/50" onClick={handleCloseImportModal} aria-hidden="true" />
-          <div className="bg-theme-surface-modal relative mx-4 w-full max-w-lg rounded-lg p-6 shadow-xl">
+          <div className="modal-overlay" onClick={handleCloseImportModal} aria-hidden="true" />
+          <DialogPanel onClose={handleCloseImportModal} className="relative mx-4 w-full max-w-lg p-6">
             <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Import Events from CSV</h3>
 
             {!importResult ? (
@@ -1258,7 +1269,7 @@ export const EventsPage: React.FC = () => {
                   <div className="flex gap-3">
                     <button
                       onClick={handleCloseImportModal}
-                      className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium"
+                      className="btn-secondary text-theme-text-secondary text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -1364,15 +1375,15 @@ export const EventsPage: React.FC = () => {
                 </div>
               </>
             )}
-          </div>
+          </DialogPanel>
         </div>
       )}
 
       {/* Cancel Confirmation Modal */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
-          <div className="bg-theme-surface-modal relative mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
+          <div className="modal-overlay" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
+          <DialogPanel onClose={() => setShowCancelConfirm(false)} className="relative mx-4 w-full max-w-md p-6">
             <h3 className="text-theme-text-primary mb-2 text-lg font-medium">
               Cancel {selectedEvents.size} Event{selectedEvents.size !== 1 ? 's' : ''}?
             </h3>
@@ -1383,7 +1394,7 @@ export const EventsPage: React.FC = () => {
               <button
                 onClick={() => setShowCancelConfirm(false)}
                 disabled={bulkActionLoading}
-                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium"
+                className="btn-secondary text-theme-text-secondary text-sm font-medium"
               >
                 Go Back
               </button>
@@ -1397,7 +1408,7 @@ export const EventsPage: React.FC = () => {
                 {bulkActionLoading ? 'Cancelling...' : 'Confirm Cancel'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

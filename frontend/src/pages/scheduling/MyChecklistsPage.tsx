@@ -349,7 +349,7 @@ export const MyChecklistsPage: React.FC = () => {
           &larr; Back to checklists
         </button>
 
-        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 sm:p-6">
+        <div className="card p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-theme-text-primary text-lg font-semibold">Completed checklist</h2>
             {statusBadge(selectedCheck.overallStatus)}
@@ -453,7 +453,7 @@ export const MyChecklistsPage: React.FC = () => {
               these". This is the way to record that without starting one. */}
           <Link
             to="/scheduling/apparatus-inventory"
-            className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+            className="btn-secondary text-theme-text-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
           >
             <Truck className="h-3.5 w-3.5" />
             Apparatus Inventory
@@ -461,7 +461,7 @@ export const MyChecklistsPage: React.FC = () => {
           {canManage && (
             <Link
               to="/scheduling/settings?tab=equipment"
-              className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+              className="btn-secondary text-theme-text-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
             >
               <Settings className="h-3.5 w-3.5" />
               Manage Templates
@@ -477,7 +477,7 @@ export const MyChecklistsPage: React.FC = () => {
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-theme-text-primary text-base font-semibold">Due now and coming up</h2>
           {activeChecklists.length > 1 && (
-            <div className="border-theme-surface-border bg-theme-surface flex items-center gap-1 rounded-lg border p-0.5">
+            <div className="card flex items-center gap-1 p-0.5">
               {(
                 [
                   ['all', 'All'],
@@ -508,7 +508,7 @@ export const MyChecklistsPage: React.FC = () => {
             <span className="text-theme-text-muted ml-2 text-sm">Loading checklists...</span>
           </div>
         ) : activeChecklists.length === 0 ? (
-          <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-8 text-center">
+          <div className="card p-8 text-center">
             <ClipboardCheck className="text-theme-text-muted mx-auto h-10 w-10" />
             <p className="text-theme-text-muted mt-3 text-sm">
               No active checklists. Equipment checks will appear here when you&apos;re assigned to a shift with
@@ -649,7 +649,7 @@ export const MyChecklistsPage: React.FC = () => {
               })}
             {activeChecklists.length > 0 &&
               activeChecklists.filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter).length === 0 && (
-                <div className="border-theme-surface-border bg-theme-surface col-span-full rounded-lg border p-6 text-center">
+                <div className="card col-span-full p-6 text-center">
                   <p className="text-theme-text-muted text-sm">
                     No {timingFilter === 'start_of_shift' ? 'start of shift' : 'end of shift'} checklists.
                   </p>
@@ -665,7 +665,7 @@ export const MyChecklistsPage: React.FC = () => {
       <section>
         <button
           onClick={() => setShowHistory((prev) => !prev)}
-          className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors"
+          className="btn-secondary flex w-full items-center justify-between py-3 text-left"
           aria-expanded={showHistory}
           aria-controls="check-history-content"
         >
@@ -698,7 +698,7 @@ export const MyChecklistsPage: React.FC = () => {
                 placeholder="Search history..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted w-full rounded-lg border py-2 pr-4 pl-9 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="form-input placeholder:text-theme-text-muted pr-4 pl-9 text-sm focus:ring-blue-500"
               />
             </div>
 
@@ -708,7 +708,7 @@ export const MyChecklistsPage: React.FC = () => {
                 <span className="text-theme-text-muted ml-2 text-sm">Loading history...</span>
               </div>
             ) : displayedHistory.length === 0 ? (
-              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6 text-center">
+              <div className="card p-6 text-center">
                 <p className="text-theme-text-muted text-sm">No check history found.</p>
               </div>
             ) : (
@@ -717,7 +717,7 @@ export const MyChecklistsPage: React.FC = () => {
                   <button
                     key={record.id}
                     onClick={() => void handleViewCheckDetail(record.id)}
-                    className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover flex w-full flex-col gap-2 rounded-lg border px-3 py-3 text-left transition-colors sm:flex-row sm:items-center sm:justify-between sm:px-4"
+                    className="btn-secondary flex w-full flex-col gap-2 px-3 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:px-4"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -761,11 +761,11 @@ export const MyChecklistsPage: React.FC = () => {
         >
           <div className="flex min-h-full items-center justify-center p-4">
             <div
-              className="fixed inset-0 bg-black/50 transition-opacity"
+              className="modal-overlay transition-opacity"
               onClick={() => setShowTemplatePicker(false)}
               aria-hidden="true"
             />
-            <div className="border-theme-surface-border bg-theme-surface relative w-full max-w-md rounded-xl border shadow-xl">
+            <div className="card relative w-full max-w-md shadow-xl">
               <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
                 <h2 className="text-theme-text-primary text-base font-semibold">Pick a checklist</h2>
                 <button
@@ -802,7 +802,7 @@ export const MyChecklistsPage: React.FC = () => {
                       <button
                         key={tmpl.id}
                         onClick={() => void handleStartStandaloneCheck(tmpl.id)}
-                        className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover group flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors"
+                        className="btn-secondary group flex w-full items-center gap-3 py-3 text-left"
                       >
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
                           <ClipboardCheck className="h-4 w-4 text-blue-600" />

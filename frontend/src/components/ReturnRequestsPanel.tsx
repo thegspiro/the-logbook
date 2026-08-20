@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { ArrowDownToLine, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import type { ReturnRequestItem } from '../services/eventServices';
@@ -102,18 +103,18 @@ const ReturnRequestsPanel: React.FC = () => {
 
       {/* List */}
       {loading ? (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center">
+        <div className="card p-8 text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-500" />
         </div>
       ) : requests.length === 0 ? (
-        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center">
+        <div className="card p-8 text-center">
           <ArrowDownToLine className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-secondary">No return requests found.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {requests.map((req) => (
-            <div key={req.id} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+            <div key={req.id} className="card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center gap-2">
@@ -189,11 +190,14 @@ const ReturnRequestsPanel: React.FC = () => {
         >
           <div className="flex min-h-screen items-center justify-center px-4">
             <div
-              className="fixed inset-0 bg-black/60"
+              className="modal-overlay"
               onClick={() => setReviewModal({ open: false, request: null })}
               aria-hidden="true"
             />
-            <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-md rounded-lg border shadow-xl">
+            <DialogPanel
+              onClose={() => setReviewModal({ open: false, request: null })}
+              className="relative w-full max-w-md"
+            >
               <div className="px-4 pt-5 pb-4 sm:px-6">
                 <h3 className="text-theme-text-primary mb-4 text-lg font-medium">
                   {reviewAction === RequestStatus.APPROVED ? 'Approve Return' : 'Deny Return'}
@@ -276,7 +280,7 @@ const ReturnRequestsPanel: React.FC = () => {
                   {submitting ? 'Processing...' : reviewAction === RequestStatus.APPROVED ? 'Approve & Return' : 'Deny'}
                 </button>
               </div>
-            </div>
+            </DialogPanel>
           </div>
         </div>
       )}

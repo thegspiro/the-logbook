@@ -46,10 +46,12 @@ class TestGetCheckInWindow:
         assert end == END
 
     def test_flexible_custom_before(self):
+        # Deliberately not 60 — that is the default, so it would pass even if
+        # the configured lead time were ignored entirely.
         start, _ = EventService._get_check_in_window(
-            _event(CheckInWindowType.FLEXIBLE, before=60)
+            _event(CheckInWindowType.FLEXIBLE, before=90)
         )
-        assert start == START - timedelta(minutes=60)
+        assert start == START - timedelta(minutes=90)
 
     def test_flexible_uses_actual_end_when_present(self):
         actual_end = datetime(2026, 6, 1, 20, 30, tzinfo=tz.utc)
@@ -98,6 +100,26 @@ class TestValidateCheckInWindow:
         ev = _event(CheckInWindowType.FLEXIBLE)
         now = datetime(2026, 6, 1, 17, 30, tzinfo=tz.utc)
         ok, err, notice = _svc()._validate_check_in_window(ev, now)
+        assert ok is True
+        assert err is None
+        assert "official check-in window" in notice
+
+    def test_flexible_more_than_one_hour_early_blocks(self):
+        # FLEXIBLE window opens 18:00 UTC; the early-arrival grace must not let
+        # a caller claim attendance days (or even a few hours) in advance.
+        ev = _event(CheckInWindowType.FLEXIBLE)
+        now = datetime(2026, 6, 1, 16, 59, tzinfo=tz.utc)
+        ok, err, notice = _svc()._validate_check_in_window(ev, now)
+        assert ok is False
+        assert "not available yet" in err
+        assert notice is None
+
+    def test_window_one_hour_early_allows_with_notice(self):
+        ev = _event(CheckInWindowType.WINDOW)
+        check_in_start, _ = EventService._get_check_in_window(ev)
+        ok, err, notice = _svc()._validate_check_in_window(
+            ev, check_in_start - timedelta(hours=1)
+        )
         assert ok is True
         assert err is None
         assert "official check-in window" in notice

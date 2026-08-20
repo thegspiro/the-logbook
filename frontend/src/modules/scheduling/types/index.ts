@@ -156,6 +156,39 @@ export interface SchedulingEligibilitySettings {
   open_positions: string[];
 }
 
+/** Why a member holds a position: their rank, a completed program, or an
+ *  org-wide open position. `label` names the specific rank or program. */
+export interface PositionEligibilitySource {
+  type: 'rank' | 'training' | 'open';
+  label: string;
+}
+
+export interface RosterApparatusClearance {
+  apparatus_id: string;
+  unit_number: string;
+  certification_expiration: string | null;
+}
+
+export interface PositionRosterMember {
+  user_id: string;
+  user_name: string;
+  rank: string | null;
+  rank_display_name: string | null;
+  membership_type: string;
+  platoon: string | null;
+  sources: PositionEligibilitySource[];
+  evoc_level_number: number | null;
+  evoc_level_name: string | null;
+  apparatus_cleared: RosterApparatusClearance[];
+}
+
+export interface PositionRosterResponse {
+  position: string;
+  members: PositionRosterMember[];
+  excluded_membership_types: string[];
+  is_open_position: boolean;
+}
+
 // ============================================================================
 // Pattern Create/Update/Generate
 // ============================================================================
@@ -345,6 +378,67 @@ export interface ShiftCallRecord {
   responding_members?: string[] | null;
   notes?: string | null;
   created_at: string;
+}
+
+// ============================================================================
+// Shift Close-Out (resumable wizard)
+// ============================================================================
+
+/** One department-defined call type. The slug is stored; the label is display. */
+export interface CallTypeOption {
+  slug: string;
+  label: string;
+}
+
+export interface CloseoutMemberState {
+  user_id: string;
+  user_name: string;
+  checked_in_at?: string | null;
+  checked_out_at?: string | null;
+  hours: number;
+  /** null means the officer has not set credit — the UI shows the shift count. */
+  call_count?: number | null;
+  missing_checkout: boolean;
+}
+
+export interface CloseoutAttachableCall {
+  id: string;
+  call_date: string;
+  call_type?: string | null;
+  source: string;
+  apparatus_ids: string[];
+}
+
+export interface CloseoutState {
+  shift_id: string;
+  is_finalized: boolean;
+  /** 0 = not started, 1 = attendance saved, 2 = calls saved. */
+  closeout_step: number;
+  call_tracking_mode: string;
+  call_types: CallTypeOption[];
+  members: CloseoutMemberState[];
+  /** Summed across the crew — several times the length of the shift. */
+  combined_hours: number;
+  reported_call_count: number;
+  reported_call_types: Record<string, number>;
+  /** Served by the API; unused until the shared-call picker ships. */
+  attachable_calls: CloseoutAttachableCall[];
+}
+
+export interface CloseoutAttendanceEntry {
+  user_id: string;
+  checked_in_at?: string | null;
+  checked_out_at?: string | null;
+}
+
+export interface CloseoutCallsPayload {
+  reported_call_count?: number | null;
+  reported_call_types?: Record<string, number> | undefined;
+}
+
+export interface MemberCallCredit {
+  user_id: string;
+  call_count: number;
 }
 
 export interface ShiftCallCreate {

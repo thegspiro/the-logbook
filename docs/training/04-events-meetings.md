@@ -8,7 +8,7 @@ The Events module handles department events, attendance tracking with QR code ch
 
 1. [Events Overview](#events-overview)
 2. [Viewing and RSVPing to Events](#viewing-and-rsvping-to-events)
-3. [QR Code Check-In](#qr-code-check-in)
+3. [QR Code Check-In](#qr-code-check-in) — including [NFC tags](#nfc-tags--a-second-way-in-2026-08-18)
 4. [Guest Check-In for Non-Members](#guest-check-in-for-non-members-2026-08-09)
 5. [Creating Events (Officers)](#creating-events-officers)
 6. [Event Templates and Recurring Events](#event-templates-and-recurring-events)
@@ -86,7 +86,7 @@ Events support QR code-based check-in for tracking attendance:
 2. Click **QR Code** to display or print the check-in QR code.
 3. Display the QR code on a screen or print it for the venue entrance.
 
-![Event QR code display page for member self check-in](./images/04-04-event-qr-code.png)
+![Event QR code display page for member self check-in, its check-in window open](./images/04-04-event-qr-code.png)
 
 ### For Members (Checking In)
 
@@ -94,6 +94,54 @@ Events support QR code-based check-in for tracking attendance:
 2. You will be taken to the self check-in page.
 3. Confirm your check-in.
 4. When leaving, scan again to check out.
+
+### NFC Tags — a second way in _(2026-08-18)_
+
+A QR code has to be reprinted for every event and needs a working camera. In a
+dark apparatus bay, or with gloves on, the camera is the part that fails.
+
+An **NFC tag** is a reusable sticker you write once and mount on the wall. A
+member holds their phone near it and lands on the same check-in page the QR code
+opens.
+
+**Writing one (officers):** open the same **QR Code** page, tap **Write to an
+NFC tag**, and hold a blank tag to the back of the phone.
+
+> **[SCREENSHOT NEEDED — `/events/:id/qr-code` with the "Write to an NFC tag"
+> control visible beneath the QR code, mid-write, showing the "hold a tag to
+> your phone" state]**
+
+**Tapping one (members):** with the app closed, Android opens the link by
+itself. With the app already open on screen, Android does _not_ hand the tag
+off — so use **Tap Tag** on the Events page instead.
+
+> **[SCREENSHOT NEEDED — the Events page with Tap Tag pressed and the scan
+> armed, waiting for a tag]**
+
+**Requirements: Chrome on Android, over HTTPS.** Web NFC exists nowhere else —
+not on iPhone, not on a desktop browser — and browsers only expose it on a
+secure connection, so a department running on plain `http://` over the LAN
+cannot use it. The page says which of the two you are hitting rather than a bare
+"unavailable". **QR codes still work everywhere**; NFC is an addition, never a
+replacement.
+
+#### An unrecognized tag does nothing, on purpose
+
+Anyone with a phone can write an NFC tag, so a tag is treated like a QR code
+somebody handed you — untrusted until checked. The app accepts only links that
+point back at your own Logbook and only to check-in pages it knows. Anything
+else leaves the scan waiting and says so, rather than sending you somewhere you
+did not intend to go.
+
+> **[SCREENSHOT NEEDED — Tap Tag after reading an unrecognized tag: the
+> explanatory message with the scan still armed. This is the security
+> behaviour and a reader will not believe it without seeing it]**
+
+> **Room kiosk display codes cannot be written to a tag, and that is
+> deliberate.** A kiosk code is a check-in credential for an unauthenticated
+> screen; putting it on a sticker in a public hallway hands it to whoever walks
+> past. You will see **Write NFC tag** on apparatus cards and not on room cards
+> in the same directory, for this reason.
 
 ### Monitoring Check-Ins
 
@@ -201,7 +249,14 @@ or the API if you need it in a report.
 
 **Required Permission:** `events.manage`
 
-Navigate to **Events Admin > Create Event** or click **Create Event** on the events page.
+Navigate to **Manage Events > Create Event** or click **Create Event** on the
+events page.
+
+> **Renamed 2026-08-13:** the sidebar entry is now **Manage Events** (it was
+> "Events Admin") and it opens the events page; the admin hub's Create and
+> Settings sections are deep-linked from there
+> (`/events/admin?tab=create`, `/events/admin?tab=settings`). Wherever this
+> guide says "Events Admin", follow the **Manage Events** entry.
 
 1. Set the **event type**, **title**, **date**, **start time**, and **end time**.
 2. Add a **location** and **description**.
@@ -1468,11 +1523,11 @@ Event and event-template forms now separate **when** reminders are sent from
 **who** receives them. In **Notifications → Who should receive reminders?**,
 choose:
 
-| Choice | In-app reminder audience | Email behavior |
-| --- | --- | --- |
-| **Members who sign up** | Active members whose RSVP is `going` | Email follows each recipient's event-notification preference |
-| **All active members** | Every active member in the event's organization | Email follows each recipient's event-notification preference |
-| **No reminders** | Nobody; saving also disables scheduled reminders | No reminder email |
+| Choice                  | In-app reminder audience                         | Email behavior                                               |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| **Members who sign up** | Active members whose RSVP is `going`             | Email follows each recipient's event-notification preference |
+| **All active members**  | Every active member in the event's organization  | Email follows each recipient's event-notification preference |
+| **No reminders**        | Nobody; saving also disables scheduled reminders | No reminder email                                            |
 
 New optional events and templates default to **Members who sign up**. New
 mandatory events default to **All active members** unless the organizer has

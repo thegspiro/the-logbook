@@ -14,6 +14,7 @@ import { shiftCompletionService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import type { ShiftCompletionReport } from '../../types/training';
+import PrintPageStyles from '../../components/print/PrintPageStyles';
 
 const ShiftReportPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -45,7 +46,9 @@ const ShiftReportPrintPage: React.FC = () => {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-gray-500">Loading report...</p>
+        <p className="text-gray-500" role="status" aria-live="polite">
+          Loading report...
+        </p>
       </div>
     );
   }
@@ -53,7 +56,9 @@ const ShiftReportPrintPage: React.FC = () => {
   if (error || !report) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-red-600">{error || 'Report not found'}</p>
+        <p className="text-red-600" role="alert">
+          {error || 'Report not found'}
+        </p>
       </div>
     );
   }
@@ -70,394 +75,179 @@ const ShiftReportPrintPage: React.FC = () => {
     report.areas_for_improvement ||
     (report.skills_observed && report.skills_observed.length > 0);
 
+  const filedDate = formatDateCustom(report.created_at, { month: 'short', day: 'numeric', year: 'numeric' }, tz);
+  const reviewedDate = report.reviewed_at
+    ? formatDateCustom(report.reviewed_at, { month: 'short', day: 'numeric', year: 'numeric' }, tz)
+    : null;
+
   return (
     <>
-      <style>{`
-        @page { size: letter; margin: 0.6in 0.75in; }
-        @media print { body { margin: 0; padding: 0; } }
-        @media screen { body { background: #f3f4f6; } }
-      `}</style>
+      <PrintPageStyles margin="0.6in 0.75in" />
 
-      <div className="mx-auto my-8 max-w-[8.5in] bg-white shadow-lg print:my-0 print:shadow-none">
-        <div
-          className="p-8 print:p-0"
-          style={{
-            fontFamily: 'Georgia, "Times New Roman", serif',
-            color: '#111',
-            fontSize: '11pt',
-            lineHeight: '1.6',
-          }}
-        >
-          {/* Header */}
-          <div style={{ borderBottom: '3px solid #111', paddingBottom: '12pt', marginBottom: '16pt' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <h1 style={{ fontSize: '18pt', fontWeight: 'bold', margin: '0 0 2pt 0', letterSpacing: '-0.01em' }}>
-                  Shift Completion Report
-                </h1>
-                <p style={{ fontSize: '10pt', color: '#555', margin: 0 }}>End-of-Shift Documentation</p>
-              </div>
-              <div style={{ textAlign: 'right', fontSize: '9pt', color: '#666' }}>
-                <p style={{ margin: 0 }}>Report ID: {report.id.slice(0, 8).toUpperCase()}</p>
-                <p style={{ margin: 0 }}>
-                  Filed: {formatDateCustom(report.created_at, { month: 'short', day: 'numeric', year: 'numeric' }, tz)}
-                </p>
-                {report.review_status === 'approved' && (
-                  <p style={{ margin: 0, color: '#166534', fontWeight: 600 }}>APPROVED</p>
-                )}
-                {report.review_status === 'flagged' && (
-                  <p style={{ margin: 0, color: '#991b1b', fontWeight: 600 }}>FLAGGED</p>
-                )}
-              </div>
+      <main className="shift-report-print-shell" id="main-content">
+        <article className="shift-report-print" aria-labelledby="shift-report-title">
+          <header className="shift-report-print__header">
+            <div>
+              <h1 id="shift-report-title">Shift Completion Report</h1>
+              <p className="shift-report-print__subtitle">End-of-Shift Documentation</p>
             </div>
-          </div>
+            <div className="shift-report-print__metadata">
+              <p>Report ID: {report.id.slice(0, 8).toUpperCase()}</p>
+              <p>Filed: {filedDate}</p>
+              {report.review_status === 'approved' && <p className="shift-report-print__status--approved">Approved</p>}
+              {report.review_status === 'flagged' && <p className="shift-report-print__status--flagged">Flagged</p>}
+            </div>
+          </header>
 
-          {/* Shift Information Grid */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16pt', fontSize: '10pt' }}>
-            <tbody>
-              <tr>
-                <td style={{ border: '1px solid #ccc', padding: '6pt 8pt', width: '50%', verticalAlign: 'top' }}>
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      fontSize: '8pt',
-                      letterSpacing: '0.05em',
-                      color: '#555',
-                      display: 'block',
-                    }}
-                  >
-                    Member
-                  </span>
-                  {report.trainee_name || 'Unknown'}
-                </td>
-                <td style={{ border: '1px solid #ccc', padding: '6pt 8pt', width: '50%', verticalAlign: 'top' }}>
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      fontSize: '8pt',
-                      letterSpacing: '0.05em',
-                      color: '#555',
-                      display: 'block',
-                    }}
-                  >
-                    Shift Date
-                  </span>
-                  {dateStr}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid #ccc', padding: '6pt 8pt', verticalAlign: 'top' }}>
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      fontSize: '8pt',
-                      letterSpacing: '0.05em',
-                      color: '#555',
-                      display: 'block',
-                    }}
-                  >
-                    Hours on Shift
-                  </span>
-                  {report.hours_on_shift}
-                </td>
-                <td style={{ border: '1px solid #ccc', padding: '6pt 8pt', verticalAlign: 'top' }}>
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      fontSize: '8pt',
-                      letterSpacing: '0.05em',
-                      color: '#555',
-                      display: 'block',
-                    }}
-                  >
-                    Calls Responded
-                  </span>
-                  {report.calls_responded}
-                </td>
-              </tr>
-              {report.call_types && report.call_types.length > 0 && (
-                <tr>
-                  <td colSpan={2} style={{ border: '1px solid #ccc', padding: '6pt 8pt', verticalAlign: 'top' }}>
-                    <span
-                      style={{
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        fontSize: '8pt',
-                        letterSpacing: '0.05em',
-                        color: '#555',
-                        display: 'block',
-                      }}
-                    >
-                      Call Types
-                    </span>
-                    {report.call_types.join(', ')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <dl className="shift-report-print__facts">
+            <div>
+              <dt>Member</dt>
+              <dd>{report.trainee_name || 'Unknown'}</dd>
+            </div>
+            <div>
+              <dt>Shift Date</dt>
+              <dd>{dateStr}</dd>
+            </div>
+            <div>
+              <dt>Hours on Shift</dt>
+              <dd>{report.hours_on_shift}</dd>
+            </div>
+            <div>
+              <dt>Calls Responded</dt>
+              <dd>{report.calls_responded}</dd>
+            </div>
+            {report.call_types && report.call_types.length > 0 && (
+              <div className="shift-report-print__fact-wide">
+                <dt>Call Types</dt>
+                <dd>{report.call_types.join(', ')}</dd>
+              </div>
+            )}
+          </dl>
 
-          {/* Performance Rating */}
           {report.performance_rating && (
-            <div style={{ marginBottom: '14pt' }}>
-              <h2
-                style={{
-                  fontSize: '11pt',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  borderBottom: '1px solid #ddd',
-                  paddingBottom: '3pt',
-                  marginBottom: '6pt',
-                }}
-              >
-                Performance Rating
-              </h2>
-              <p style={{ margin: 0, fontSize: '12pt' }}>
+            <section className="shift-report-print__section" aria-labelledby="performance-rating-heading">
+              <h2 id="performance-rating-heading">Performance Rating</h2>
+              <p className="shift-report-print__rating">
                 <strong>{report.performance_rating}</strong> / 5
               </p>
-            </div>
+            </section>
           )}
-
-          {/* Narrative Sections */}
           {report.areas_of_strength && (
-            <div style={{ marginBottom: '14pt' }}>
-              <h2
-                style={{
-                  fontSize: '11pt',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  borderBottom: '1px solid #ddd',
-                  paddingBottom: '3pt',
-                  marginBottom: '6pt',
-                }}
-              >
-                Areas of Strength
-              </h2>
-              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{report.areas_of_strength}</p>
-            </div>
+            <section className="shift-report-print__section" aria-labelledby="strengths-heading">
+              <h2 id="strengths-heading">Areas of Strength</h2>
+              <p>{report.areas_of_strength}</p>
+            </section>
           )}
-
           {report.areas_for_improvement && (
-            <div style={{ marginBottom: '14pt' }}>
-              <h2
-                style={{
-                  fontSize: '11pt',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  borderBottom: '1px solid #ddd',
-                  paddingBottom: '3pt',
-                  marginBottom: '6pt',
-                }}
-              >
-                Areas for Improvement
-              </h2>
-              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{report.areas_for_improvement}</p>
-            </div>
+            <section className="shift-report-print__section" aria-labelledby="improvement-heading">
+              <h2 id="improvement-heading">Areas for Improvement</h2>
+              <p>{report.areas_for_improvement}</p>
+            </section>
           )}
-
           {report.officer_narrative && (
-            <div style={{ marginBottom: '14pt' }}>
-              <h2
-                style={{
-                  fontSize: '11pt',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  borderBottom: '1px solid #ddd',
-                  paddingBottom: '3pt',
-                  marginBottom: '6pt',
-                }}
-              >
-                Officer Narrative
-              </h2>
-              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{report.officer_narrative}</p>
-            </div>
+            <section className="shift-report-print__section" aria-labelledby="narrative-heading">
+              <h2 id="narrative-heading">Officer Narrative</h2>
+              <p>{report.officer_narrative}</p>
+            </section>
           )}
 
-          {/* Skills Observed Table */}
           {report.skills_observed && report.skills_observed.length > 0 && (
-            <div style={{ marginBottom: '14pt' }}>
-              <h2
-                style={{
-                  fontSize: '11pt',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  borderBottom: '1px solid #ddd',
-                  paddingBottom: '3pt',
-                  marginBottom: '6pt',
-                }}
+            <section className="shift-report-print__section" aria-labelledby="skills-heading">
+              <h2 id="skills-heading">Skills Observed</h2>
+              <div
+                className="shift-report-print__table-scroll"
+                tabIndex={0}
+                role="region"
+                aria-label="Skills observed table"
               >
-                Skills Observed
-              </h2>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f5f5f5' }}>
-                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>
-                      Skill
-                    </th>
-                    <th
-                      style={{
-                        border: '1px solid #ccc',
-                        padding: '4pt 8pt',
-                        textAlign: 'center',
-                        fontWeight: 600,
-                        width: '80pt',
-                      }}
-                    >
-                      Score
-                    </th>
-                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>
-                      Comments
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.skills_observed.map((skill, i) => (
-                    <tr key={i}>
-                      <td style={{ border: '1px solid #ccc', padding: '4pt 8pt' }}>{skill.skill_name}</td>
-                      <td style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'center' }}>
-                        {skill.score ? `${skill.score}/5` : '—'}
-                      </td>
-                      <td style={{ border: '1px solid #ccc', padding: '4pt 8pt', color: '#555' }}>
-                        {skill.comment || skill.notes || '—'}
-                      </td>
+                <table>
+                  <caption className="sr-only">Observed skills, scores, and comments</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Skill</th>
+                      <th scope="col" className="shift-report-print__score">
+                        Score
+                      </th>
+                      <th scope="col">Comments</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {report.skills_observed.map((skill, i) => (
+                      <tr key={i}>
+                        <td>{skill.skill_name}</td>
+                        <td className="shift-report-print__score">{skill.score ? `${skill.score}/5` : '—'}</td>
+                        <td className="shift-report-print__muted">{skill.comment || skill.notes || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           )}
 
-          {/* Tasks Performed Table */}
           {report.tasks_performed && report.tasks_performed.length > 0 && (
-            <div style={{ marginBottom: '14pt' }}>
-              <h2
-                style={{
-                  fontSize: '11pt',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  borderBottom: '1px solid #ddd',
-                  paddingBottom: '3pt',
-                  marginBottom: '6pt',
-                }}
+            <section className="shift-report-print__section" aria-labelledby="tasks-heading">
+              <h2 id="tasks-heading">Tasks Performed</h2>
+              <div
+                className="shift-report-print__table-scroll"
+                tabIndex={0}
+                role="region"
+                aria-label="Tasks performed table"
               >
-                Tasks Performed
-              </h2>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f5f5f5' }}>
-                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>
-                      Task
-                    </th>
-                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>
-                      Description
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.tasks_performed.map((task, i) => (
-                    <tr key={i}>
-                      <td style={{ border: '1px solid #ccc', padding: '4pt 8pt' }}>{task.task}</td>
-                      <td style={{ border: '1px solid #ccc', padding: '4pt 8pt', color: '#555' }}>
-                        {task.description || '—'}
-                      </td>
+                <table>
+                  <caption className="sr-only">Tasks performed and their descriptions</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Task</th>
+                      <th scope="col">Description</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {report.tasks_performed.map((task, i) => (
+                      <tr key={i}>
+                        <td>{task.task}</td>
+                        <td className="shift-report-print__muted">{task.description || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           )}
 
-          {/* Signature Block */}
-          <div style={{ marginTop: '28pt', pageBreakInside: 'avoid' }}>
-            <div style={{ borderTop: '2px solid #111', paddingTop: '12pt' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ width: '50%', paddingRight: '20pt', verticalAlign: 'bottom' }}>
-                      <p
-                        style={{
-                          margin: '0 0 4pt 0',
-                          fontWeight: 600,
-                          textTransform: 'uppercase',
-                          fontSize: '8pt',
-                          letterSpacing: '0.05em',
-                          color: '#555',
-                        }}
-                      >
-                        Filing Officer
-                      </p>
-                      <p style={{ margin: '0 0 24pt 0' }}>{report.officer_name || '—'}</p>
-                      <div style={{ borderBottom: '1px solid #999', marginBottom: '4pt' }} />
-                      <p style={{ margin: 0, fontSize: '8pt', color: '#999' }}>Signature / Date</p>
-                    </td>
-                    <td style={{ width: '50%', paddingLeft: '20pt', verticalAlign: 'bottom' }}>
-                      {hasEvaluation && (
-                        <>
-                          <p
-                            style={{
-                              margin: '0 0 4pt 0',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              fontSize: '8pt',
-                              letterSpacing: '0.05em',
-                              color: '#555',
-                            }}
-                          >
-                            {report.trainee_acknowledged ? 'Member Acknowledgment' : 'Member Acknowledgment (Pending)'}
-                          </p>
-                          <p style={{ margin: '0 0 24pt 0' }}>
-                            {report.trainee_acknowledged
-                              ? `${report.trainee_name || '—'} — Acknowledged`
-                              : report.trainee_name || '—'}
-                          </p>
-                          <div style={{ borderBottom: '1px solid #999', marginBottom: '4pt' }} />
-                          <p style={{ margin: 0, fontSize: '8pt', color: '#999' }}>Signature / Date</p>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {report.reviewer_name && (
-                <div style={{ marginTop: '16pt' }}>
-                  <p style={{ margin: 0, fontSize: '9pt', color: '#666' }}>
-                    <strong>Reviewed by:</strong> {report.reviewer_name}
-                    {report.reviewed_at &&
-                      ` on ${formatDateCustom(report.reviewed_at, { month: 'short', day: 'numeric', year: 'numeric' }, tz)}`}
-                  </p>
-                </div>
-              )}
+          <section className="shift-report-print__signatures" aria-label="Signatures and review">
+            <div className="shift-report-print__signature">
+              <h2>Filing Officer</h2>
+              <p>{report.officer_name || '—'}</p>
+              <div className="shift-report-print__signature-line" />
+              <span>Signature / Date</span>
             </div>
-          </div>
+            {hasEvaluation && (
+              <div className="shift-report-print__signature">
+                <h2>{report.trainee_acknowledged ? 'Member Acknowledgment' : 'Member Acknowledgment (Pending)'}</h2>
+                <p>
+                  {report.trainee_acknowledged
+                    ? `${report.trainee_name || '—'} — Acknowledged`
+                    : report.trainee_name || '—'}
+                </p>
+                <div className="shift-report-print__signature-line" />
+                <span>Signature / Date</span>
+              </div>
+            )}
+            {report.reviewer_name && (
+              <p className="shift-report-print__reviewer">
+                <strong>Reviewed by:</strong> {report.reviewer_name}
+                {reviewedDate && ` on ${reviewedDate}`}
+              </p>
+            )}
+          </section>
 
-          {/* Footer */}
-          <div
-            style={{
-              marginTop: '24pt',
-              borderTop: '1px solid #ddd',
-              paddingTop: '6pt',
-              display: 'flex',
-              justifyContent: 'space-between',
-              fontSize: '8pt',
-              color: '#aaa',
-            }}
-          >
+          <footer className="shift-report-print__footer">
             <span>The Logbook — Shift Completion Report</span>
             <span>Generated {formatDate(new Date(), tz)}</span>
-          </div>
-        </div>
-      </div>
+          </footer>
+        </article>
+      </main>
     </>
   );
 };

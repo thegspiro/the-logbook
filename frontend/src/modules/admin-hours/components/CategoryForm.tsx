@@ -15,10 +15,19 @@ interface CategoryFormProps {
   onChange: (data: AdminHoursCategoryCreate) => void;
   onSubmit: (e: React.FormEvent) => void;
   isEditing: boolean;
+  /** True while a submit is in flight — blocks the double-click duplicate. */
+  submitting?: boolean;
   onCancel: () => void;
 }
 
-const CategoryForm: React.FC<CategoryFormProps> = ({ formData, onChange, onSubmit, isEditing, onCancel }) => {
+const CategoryForm: React.FC<CategoryFormProps> = ({
+  formData,
+  onChange,
+  onSubmit,
+  isEditing,
+  submitting = false,
+  onCancel,
+}) => {
   return (
     <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md">
       <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">
@@ -109,7 +118,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ formData, onChange, onSubmi
         </div>
 
         <div className="flex gap-3">
-          <button type="submit" className="btn-info transition">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="btn-info transition disabled:cursor-not-allowed disabled:opacity-50"
+          >
             {isEditing ? 'Update' : 'Create'}
           </button>
           <button

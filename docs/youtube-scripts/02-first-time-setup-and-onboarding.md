@@ -15,7 +15,7 @@
 **[SCREEN: Browser open to The Logbook's Welcome page — the onboarding wizard
 greeting screen with the logo and "Welcome to The Logbook" text.]**
 
-> "Your Logbook is installed and running. Now let's turn it into *your*
+> "Your Logbook is installed and running. Now let's turn it into _your_
 > department's platform. The onboarding wizard walks you through everything step
 > by step, and in this video, I'm going to walk you through the wizard — with
 > tips on what to pick and why."
@@ -44,14 +44,42 @@ greeting screen with the logo and "Welcome to The Logbook" text.]**
 indicator at the top showing all steps.]**
 
 > "This is the Welcome page. You can see the progress indicator at the top —
-> it shows every step in the onboarding process. The wizard auto-saves your
-> progress, so if you need to step away or your browser closes, you'll pick up
-> right where you left off."
+> it shows every step in the onboarding process."
 
 **[CALLOUT: Arrow pointing to progress indicator bar]**
 
-> "Notice the auto-save indicator — every time you move to the next step, your
-> data is saved automatically."
+> "Before we go further, one thing about how this wizard works — and it's the
+> thing most likely to cost you an afternoon if nobody tells you."
+
+> "Set up runs in **one browser tab, in one sitting**. The wizard is holding a
+> temporary credential that lets it create your department, and for good reason
+> that credential doesn't outlive the tab. Open a second tab to look something
+> up and that tab starts its own separate session — the step you were on will
+> refuse to save. Close the browser partway through and the run is over. Leave
+> it sitting for more than thirty minutes and it times out on its own."
+
+**[CALLOUT: "One tab · one sitting · 30-minute idle limit"]**
+
+> "Here's the part that catches people. If you close the browser and come back,
+> **the form fills itself back in** — your answers are still there. It looks like
+> you can carry on. You can't. Those answers are a local draft; the session
+> behind them is gone, and nothing tells you until you try to move to the next
+> step and it fails."
+
+**[SCREEN: Optional two-shot insert — the wizard reopened with answers repainted,
+then the session-expired error on attempting to continue. If you show this, show
+**both** frames. A single frame of the refilled form teaches exactly the wrong
+lesson.]**
+
+> "So if that happens to you: don't re-type into it. Start the wizard over. And
+> if you instead see 'Onboarding has already been completed' — that's a different
+> message entirely. It means a department already exists on this install. Sign in
+> rather than setting up again."
+
+> "So before we click Get Started: have your department's address, your station
+> list, your apparatus list and the first administrator's details in front of
+> you, and give yourself an uninterrupted half hour. We'll be done well inside
+> that."
 
 **[SCREEN: Click "Get Started"]**
 
@@ -142,7 +170,7 @@ indicator at the top showing all steps.]**
 ### TWO-FACTOR AUTHENTICATION (5:30 – 6:30)
 
 > "After creating the account, you'll be prompted to set up two-factor
-> authentication. I *strongly* recommend enabling this, especially for the
+> authentication. I _strongly_ recommend enabling this, especially for the
 > System Owner account."
 
 **[SCREEN: Show the 2FA setup screen with QR code if it appears during
@@ -326,7 +354,7 @@ positions with permission toggles.]**
 > member can hold multiple positions."
 
 > "**Membership Types** are classifications like Active, Retired, Honorary,
-> Administrative. Membership types do *not* carry permissions — they're just
+> Administrative. Membership types do _not_ carry permissions — they're just
 > labels for categorization."
 
 **[CALLOUT: "Positions = permissions. Membership Types = classification only."]**
@@ -529,9 +557,26 @@ link.]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Organization Setup | 1:30–4:00 | "Setting Up Your Organization in The Logbook" |
+| Clip                    | Timecode    | Standalone Title                                    |
+| ----------------------- | ----------- | --------------------------------------------------- |
+| Organization Setup      | 1:30–4:00   | "Setting Up Your Organization in The Logbook"       |
 | Understanding Positions | 12:00–15:00 | "Fire Department Positions & Permissions Explained" |
-| Module Selection | 8:30–12:00 | "Which Modules Should Your Department Enable?" |
-| First Steps After Setup | 18:00–19:00 | "5 Things to Do After Setting Up The Logbook" |
+| Module Selection        | 8:30–12:00  | "Which Modules Should Your Department Enable?"      |
+| First Steps After Setup | 18:00–19:00 | "5 Things to Do After Setting Up The Logbook"       |
+
+> **EDITOR — re-time before publishing (2026-08-16).** The Welcome Screen
+> narration in Chapter 2 was rewritten: it previously told viewers the wizard
+> would resume after the browser closed, which stopped being true on 2026-08-15
+> and was misleading before that (the session has always expired after 30 minutes
+> idle). The replacement caution — one tab, one sitting, and the refilled-form
+> trap — adds roughly **45–70 seconds**, more if the optional two-shot insert
+> (repainted form, then the session-expired error) is used.
+>
+> Consequently **every timecode in this script and in the table above shifts**
+> from Chapter 2 onward. Do not publish the chapter markers or clip timecodes as
+> written; set them from the recorded take, since narration pacing determines
+> them. The band labels in the headings are targets, not measurements.
+>
+> A candidate new clip: **"Before You Start Setup"** (the caution block), which
+> stands alone well as a short and is the single most support-load-reducing
+> thing in this script.

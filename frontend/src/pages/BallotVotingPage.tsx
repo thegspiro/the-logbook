@@ -20,6 +20,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { DialogPanel } from '../components/ux/DialogPanel';
 import { electionService } from '../services/api';
 import type {
   BallotElection,
@@ -392,10 +393,7 @@ export const BallotVotingPage: React.FC = () => {
               isMultiSelect && selectionCap !== null && (itemChoice?.candidate_ids.length ?? 0) >= selectionCap;
 
             return (
-              <div
-                key={item.id}
-                className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border shadow-xs"
-              >
+              <div key={item.id} className="card overflow-hidden shadow-xs">
                 {/* Item Header */}
                 <div className="bg-theme-surface-secondary border-theme-surface-border border-b px-6 py-4">
                   <div className="flex items-start gap-3">
@@ -614,7 +612,7 @@ export const BallotVotingPage: React.FC = () => {
       {/* Confirmation Modal */}
       {showConfirmation && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+          className="modal-overlay z-50 flex items-center justify-center bg-black/75 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-ballot-title"
@@ -622,7 +620,10 @@ export const BallotVotingPage: React.FC = () => {
             if (e.key === 'Escape' && !submitting) setShowConfirmation(false);
           }}
         >
-          <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg shadow-xl">
+          <DialogPanel
+            onClose={() => setShowConfirmation(false)}
+            className="max-h-[90dvh] w-full max-w-lg overflow-y-auto"
+          >
             <div className="border-theme-surface-border bg-theme-surface-secondary border-b px-6 py-4">
               <h3 id="confirm-ballot-title" className="text-theme-text-primary text-lg font-bold">
                 Confirm Your Ballot
@@ -690,7 +691,7 @@ export const BallotVotingPage: React.FC = () => {
                 {submitting ? 'Submitting...' : 'Cast Ballot'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

@@ -14,6 +14,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate, formatTime, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
+import { NfcTapButton } from '../../../components/nfc/NfcTapButton';
 
 const PAGE_SIZE = 20;
 
@@ -182,9 +183,12 @@ const AdminHoursPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-6">
-        <h1 className="text-theme-text-primary text-3xl font-bold">My Admin Hours</h1>
-        <p className="text-theme-text-secondary mt-1">Track and view your administrative hours</p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-theme-text-primary text-3xl font-bold">My Admin Hours</h1>
+          <p className="text-theme-text-secondary mt-1">Track and view your administrative hours</p>
+        </div>
+        <NfcTapButton />
       </div>
 
       {/* Active Session Card */}
@@ -293,7 +297,7 @@ const AdminHoursPage: React.FC = () => {
       <div className="mb-6 flex gap-3">
         <button
           onClick={() => setShowManualForm(!showManualForm)}
-          className="bg-theme-surface text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-4 py-2 transition max-md:min-h-[44px]"
+          className="btn-secondary flex items-center gap-2 transition max-md:min-h-[44px]"
         >
           <Plus className="h-4 w-4" />
           Log Hours Manually
@@ -397,7 +401,7 @@ const AdminHoursPage: React.FC = () => {
             setStatusFilter(e.target.value);
             setPage(0);
           }}
-          className="bg-theme-surface border-theme-surface-border text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm max-md:min-h-[44px]"
+          className="form-input px-3 py-1.5 text-sm max-md:min-h-[44px]"
         >
           <option value="">All Statuses</option>
           <option value="approved">Approved</option>
@@ -411,7 +415,7 @@ const AdminHoursPage: React.FC = () => {
             setCategoryFilter(e.target.value);
             setPage(0);
           }}
-          className="bg-theme-surface border-theme-surface-border text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm max-md:min-h-[44px]"
+          className="form-input px-3 py-1.5 text-sm max-md:min-h-[44px]"
         >
           <option value="">All Categories</option>
           {categories.map((cat) => (

@@ -71,7 +71,7 @@ const RecordAttachmentsModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="modal-overlay z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-theme-surface w-full max-w-lg rounded-lg p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
@@ -349,7 +349,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 aria-label="Export period"
                 value={exportPeriod}
                 onChange={(e) => setExportPeriod(e.target.value as TrainingExportPeriod)}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-2 text-sm"
+                className="form-input px-3 text-sm"
               >
                 {Object.values(TrainingExportPeriod).map((p) => (
                   <option key={p} value={p}>

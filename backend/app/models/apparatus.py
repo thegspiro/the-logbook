@@ -1264,6 +1264,12 @@ class ApparatusOperator(Base):
         ForeignKey("evoc_levels.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Present only on eligibility granted by a specific training completion.
+    completion_credit_id = Column(
+        String(36),
+        ForeignKey("requirement_progress_credits.id", ondelete="CASCADE"),
+        nullable=True,
+    )
 
     # Certification
     is_certified = Column(Boolean, default=True, nullable=False, server_default="1")
@@ -1317,10 +1323,148 @@ class ApparatusOperator(Base):
         ),
         Index("idx_apparatus_operators_active", "is_active"),
         Index("idx_apparatus_operators_evoc", "evoc_level_id"),
+        Index("idx_apparatus_operators_completion_credit", "completion_credit_id"),
     )
 
     def __repr__(self):
         return f"<ApparatusOperator(apparatus_id={self.apparatus_id}, user_id={self.user_id})>"
+
+
+# =============================================================================
+# Driver Qualification Exception
+# =============================================================================
+
+
+class DriverExceptionStatus(str, enum.Enum):
+    """Lifecycle of a driver qualification exception."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    REVOKED = "revoked"
+
+
+class DriverExceptionReason(str, enum.Enum):
+    """Why the EVOC requirement is being waived."""
+
+    PARADE = "parade"
+    SPECIAL_EVENT = "special_event"
+    NON_EMERGENCY_TRANSPORT = "non_emergency_transport"
+    MUTUAL_AID = "mutual_aid"
+    OTHER = "other"
+
+
+class DriverException(Base):
+    """
+    A chief-approved, time-boxed exception to the EVOC driving requirement.
+
+    EVOC enforcement is a hard block: a member without the apparatus's required
+    certification cannot be assigned or sign up as its driver. That is correct
+    for emergency response and wrong for the parade a fifty-year life member has
+    driven since before the certification existed. This record is the sanctioned
+    way around the block, and it is deliberately expensive to obtain:
+
+    * It must be **requested and approved by different people** (separation of
+      duties) — an officer cannot wave themselves onto a truck.
+    * It requires a **chief-level permission** to approve
+      (``apparatus.approve_driver_exception``), not merely the ability to
+      assign shifts.
+    * It is **bounded in time**. There is no permanent waiver of a safety
+      control; ``valid_until`` is required, so an exception granted for one
+      parade cannot quietly become a standing qualification.
+    * Approval, denial, and revocation are **audit-logged**.
+
+    A NULL ``apparatus_id`` means the exception covers any apparatus the member
+    would otherwise be blocked from — used when the specific unit is not known
+    at approval time. It is the broader grant, so the UI asks for a unit first.
+    """
+
+    __tablename__ = "driver_exceptions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # NULL = any apparatus.
+    #
+    # CASCADE, deliberately, not SET NULL. SET NULL would leave a deleted
+    # unit's exception looking identical to a blanket one, so an approval
+    # granted for a retired parade antique would silently start authorizing
+    # the member on every remaining vehicle until it expired — a safety grant
+    # widening itself as a side effect of fleet housekeeping. Deleting the
+    # exception with its apparatus fails closed instead, and the approval
+    # itself remains reconstructible from the audit log, which records the
+    # exception id, subject, apparatus and reviewer independently of this row.
+    apparatus_id = Column(
+        String(36),
+        ForeignKey("apparatus.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
+    reason = Column(
+        Enum(DriverExceptionReason, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=DriverExceptionReason.PARADE,
+    )
+    justification = Column(Text, nullable=False)
+    # Free-text operating limits carried onto the roster and the shift, e.g.
+    # "parade route only, no emergency response, no lights or siren".
+    restrictions = Column(Text, nullable=True)
+
+    valid_from = Column(Date, nullable=False)
+    valid_until = Column(Date, nullable=False)
+
+    status = Column(
+        Enum(DriverExceptionStatus, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=DriverExceptionStatus.PENDING,
+        index=True,
+    )
+
+    requested_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requested_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    reviewed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user = relationship("User", foreign_keys=[user_id])
+    apparatus = relationship("Apparatus", foreign_keys=[apparatus_id])
+    requester = relationship("User", foreign_keys=[requested_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+    __table_args__ = (
+        # The enforcement lookup: active exceptions for one member on one date.
+        Index("idx_driver_exceptions_lookup", "organization_id", "user_id", "status"),
+        Index("idx_driver_exceptions_validity", "valid_from", "valid_until"),
+        CheckConstraint(
+            "valid_until >= valid_from", name="ck_driver_exception_date_order"
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<DriverException(user_id={self.user_id}, "
+            f"status={self.status}, valid_until={self.valid_until})>"
+        )
 
 
 # =============================================================================

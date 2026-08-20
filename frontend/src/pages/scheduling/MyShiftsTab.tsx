@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { DialogPanel } from '../../components/ux/DialogPanel';
 import {
   Clock,
   Check,
@@ -323,8 +324,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     void loadData();
   };
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+  const inputCls = 'form-input py-2.5 focus:ring-violet-500';
 
   if (loading) {
     return (
@@ -390,7 +390,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       {/* Hours summary for past shifts */}
       {view === 'past' && attendanceMap.size > 0 && (
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-center">
+          <div className="card p-3 text-center">
             <p className="text-theme-text-primary text-xl font-bold">
               {Math.round(
                 ([...attendanceMap.values()]
@@ -402,13 +402,13 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             </p>
             <p className="text-theme-text-muted text-xs">Total Hours</p>
           </div>
-          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-center">
+          <div className="card p-3 text-center">
             <p className="text-theme-text-primary text-xl font-bold">
               {[...attendanceMap.values()].filter((a) => a.checked_in_at).length}
             </p>
             <p className="text-theme-text-muted text-xs">Shifts Logged</p>
           </div>
-          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-center">
+          <div className="card p-3 text-center">
             <p className="text-theme-text-primary text-xl font-bold">
               {attendanceMap.size > 0
                 ? Math.round(
@@ -489,10 +489,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             const shiftDate = shift ? new Date(shift.shift_date + 'T12:00:00') : null;
 
             return (
-              <div
-                key={assignment.id}
-                className="bg-theme-surface border-theme-surface-border hover:border-theme-text-muted/30 rounded-xl border p-4 transition-colors sm:p-5"
-              >
+              <div key={assignment.id} className="card hover:border-theme-text-muted/30 p-4 sm:p-5">
                 {/* Stacks on a phone so the actions get a full-width row of
                     their own. They carry visible labels, and a phone has no
                     hover to reveal a title attribute — four bare glyphs on the
@@ -662,15 +659,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       {/* Swap Request Modal */}
       {showSwapModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Request shift swap"
         >
-          <div
-            ref={swapModalRef}
-            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border"
-          >
+          <DialogPanel onClose={() => setShowSwapModal(false)} ref={swapModalRef} className="w-full max-w-md">
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Shift Swap</h2>
               <p className="text-theme-text-secondary mt-1 text-sm">
@@ -772,22 +766,19 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 {submittingSwap ? 'Submitting...' : 'Submit Request'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
 
       {/* Time Off Modal */}
       {showTimeOffModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Request time off"
         >
-          <div
-            ref={timeOffModalRef}
-            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border"
-          >
+          <DialogPanel onClose={() => setShowTimeOffModal(false)} ref={timeOffModalRef} className="w-full max-w-md">
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Time Off</h2>
             </div>
@@ -872,7 +863,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 {submittingTimeOff ? 'Submitting...' : 'Submit Request'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

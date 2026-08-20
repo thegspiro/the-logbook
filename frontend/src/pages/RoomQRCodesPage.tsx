@@ -48,6 +48,8 @@ import { copyToClipboard } from '../utils/clipboard';
 import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useEnabledModules } from '../hooks/useEnabledModules';
+import { buildShiftCheckInUrl } from '../constants/nfc';
+import { NfcTagWriteButton } from '../components/nfc/NfcTagWriteButton';
 
 /** Rasterize an inline QR SVG to a PNG download (white background for print/signage use). */
 function downloadSvgAsPng(svg: SVGSVGElement, filename: string): void {
@@ -153,9 +155,7 @@ function QRCard({
 
   return (
     <div
-      className={`bg-theme-surface border-theme-surface-border flex flex-col items-center rounded-xl border text-center print:border-gray-300 ${
-        isSign ? 'qr-sign p-8' : 'qr-card p-4'
-      }`}
+      className={`card flex flex-col items-center text-center print:border-gray-300 ${isSign ? 'qr-sign p-8' : 'qr-card p-4'}`}
     >
       <div className={`flex items-center gap-1.5 ${isSign ? 'mb-1' : 'mb-2'}`}>
         <Icon className="text-theme-text-muted h-4 w-4 shrink-0 print:hidden" aria-hidden="true" />
@@ -196,6 +196,7 @@ function QRCard({
           <Download className="h-3 w-3" aria-hidden="true" />
           Download PNG
         </button>
+        <NfcTagWriteButton url={url} label={title} />
         {onRegenerate && (
           <button
             onClick={() => {
@@ -233,7 +234,7 @@ function apparatusCardProps(apparatus: ApparatusListItem): {
   return {
     title: `${apparatus.unitNumber}${apparatus.name ? ` — ${apparatus.name}` : ''}`,
     subtitle: 'Scan to check in or out of your shift',
-    url: `${window.location.origin}/scheduling/checkin?apparatus=${apparatus.id}`,
+    url: buildShiftCheckInUrl({ apparatusId: apparatus.id }),
     icon: 'apparatus',
   };
 }

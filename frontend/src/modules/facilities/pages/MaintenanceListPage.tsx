@@ -6,6 +6,7 @@
  */
 
 import { useEffect } from 'react';
+import { DialogPanel } from '../../../components/ux/DialogPanel';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
   Wrench,
@@ -151,7 +152,7 @@ export default function MaintenanceListPage() {
           {filtered.map((record) => (
             <div
               key={record.id}
-              className="bg-theme-surface border-theme-surface-border hover:border-theme-surface-border group flex items-center gap-4 rounded-lg border p-4 transition-all"
+              className="card hover:border-theme-surface-border group flex items-center gap-4 p-4 transition-all"
             >
               <div
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -241,14 +242,14 @@ export default function MaintenanceListPage() {
 
       {canMaintenance && showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowModal(false);
           }}
         >
-          <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl border">
+          <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRecord ? 'Edit Maintenance Record' : 'New Maintenance Record'}
@@ -395,7 +396,7 @@ export default function MaintenanceListPage() {
                 {editingRecord ? 'Update' : 'Create'}
               </button>
             </div>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </div>

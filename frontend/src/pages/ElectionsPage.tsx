@@ -6,6 +6,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import { electionService, eventService, meetingsService, ranksService } from '../services/api';
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
 import type { EventListItem } from '../types/event';
@@ -20,6 +21,7 @@ import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
+import { DialogPanel } from '../components/ux/DialogPanel';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -28,6 +30,7 @@ export const ElectionsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const { busy, run } = useSubmitGuard();
   const [createError, setCreateError] = useState<string | null>(null);
   const [formData, setFormData] = useState<ElectionCreate>({
     title: '',
@@ -193,45 +196,47 @@ export const ElectionsPage: React.FC = () => {
     setFormData({ ...formData, end_date: formatForDateTimeInput(end, tz) });
   };
 
-  const handleCreateElection = async (e: React.FormEvent) => {
+  const handleCreateElection = (e: React.FormEvent) => {
     e.preventDefault();
-    setCreateError(null);
+    return run(async () => {
+      setCreateError(null);
 
-    try {
-      // Convert local datetime-local values to UTC before sending to backend
-      const submitData = {
-        ...formData,
-        description: formData.description?.trim() || undefined,
-        start_date: localToUTC(formData.start_date, tz),
-        end_date: localToUTC(formData.end_date, tz),
-      };
-      await electionService.createElection(submitData);
-      setShowCreateModal(false);
-      setFormData({
-        title: '',
-        description: '',
-        election_type: 'general',
-        positions: [],
-        start_date: '',
-        end_date: '',
-        anonymous_voting: true,
-        allow_write_ins: false,
-        max_votes_per_position: 1,
-        results_visible_immediately: false,
-        voting_method: VM.SIMPLE_MAJORITY,
-        victory_condition: VC.MOST_VOTES,
-        enable_runoffs: false,
-        runoff_type: RunoffType.TOP_TWO,
-        max_runoff_rounds: 3,
-        auto_open: false,
-        reminder_hours_before_close: undefined,
-        tie_policy: 'co_winners',
-      });
-      setPositionInput('');
-      await fetchElections();
-    } catch (err: unknown) {
-      setCreateError(getErrorMessage(err, 'Failed to create election'));
-    }
+      try {
+        // Convert local datetime-local values to UTC before sending to backend
+        const submitData = {
+          ...formData,
+          description: formData.description?.trim() || undefined,
+          start_date: localToUTC(formData.start_date, tz),
+          end_date: localToUTC(formData.end_date, tz),
+        };
+        await electionService.createElection(submitData);
+        setShowCreateModal(false);
+        setFormData({
+          title: '',
+          description: '',
+          election_type: 'general',
+          positions: [],
+          start_date: '',
+          end_date: '',
+          anonymous_voting: true,
+          allow_write_ins: false,
+          max_votes_per_position: 1,
+          results_visible_immediately: false,
+          voting_method: VM.SIMPLE_MAJORITY,
+          victory_condition: VC.MOST_VOTES,
+          enable_runoffs: false,
+          runoff_type: RunoffType.TOP_TWO,
+          max_runoff_rounds: 3,
+          auto_open: false,
+          reminder_hours_before_close: undefined,
+          tie_policy: 'co_winners',
+        });
+        setPositionInput('');
+        await fetchElections();
+      } catch (err: unknown) {
+        setCreateError(getErrorMessage(err, 'Failed to create election'));
+      }
+    });
   };
 
   const addPosition = () => {
@@ -564,7 +569,7 @@ export const ElectionsPage: React.FC = () => {
 
         {showCreateModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="modal-overlay z-50 flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-election-title"
@@ -572,7 +577,10 @@ export const ElectionsPage: React.FC = () => {
               if (e.key === 'Escape') setShowCreateModal(false);
             }}
           >
-            <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
+            <DialogPanel
+              onClose={() => setShowCreateModal(false)}
+              className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto"
+            >
               <div className="border-theme-surface-border border-b px-6 py-4">
                 <h3 id="create-election-title" className="text-theme-text-primary text-lg font-medium">
                   Create New Election
@@ -775,7 +783,7 @@ export const ElectionsPage: React.FC = () => {
                               if (filtered.length === 0) return null;
                               return (
                                 <ul
-                                  className="bg-theme-surface-modal border-theme-input-border absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-md border shadow-lg"
+                                  className="popover-panel absolute z-20 mt-1 max-h-48 w-full overflow-auto"
                                   role="listbox"
                                   aria-label="Available positions"
                                 >
@@ -1162,12 +1170,16 @@ export const ElectionsPage: React.FC = () => {
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn-info rounded-md">
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="btn-info rounded-md disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     Create Election
                   </button>
                 </div>
               </form>
-            </div>
+            </DialogPanel>
           </div>
         )}
       </div>

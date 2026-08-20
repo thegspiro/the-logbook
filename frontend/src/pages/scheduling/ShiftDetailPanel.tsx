@@ -57,8 +57,12 @@ import {
   formatDateCustom,
   localToUTC,
 } from '../../utils/dateFormatting';
-import { getErrorMessage } from '../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../utils/errorHandling';
+import { DriverBlockedDialog } from './DriverBlockedDialog';
+import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
+import { buildShiftCheckInUrl } from '../../constants/nfc';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
@@ -66,6 +70,7 @@ import { AssignmentActions } from './AssignmentActions';
 import { PositionEditor } from './PositionEditor';
 import { CrewBoardSlot } from './CrewBoardSlot';
 import { ShiftCallsSection } from './ShiftCallsSection';
+import { ShiftCloseoutWizard } from './ShiftCloseoutWizard';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -85,6 +90,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     loadMembers,
     platoonsEnabled,
     requireEndOfShiftChecks,
+    callTrackingMode,
     loadSettings,
   } = useSchedulingStore();
   useEffect(() => {
@@ -367,6 +373,27 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     if (messages.length > 0) toast(messages.join(' '), { icon: '⚠️' });
   };
 
+  // A driver refused for want of an EVOC certification is a dead end unless we
+  // say who can authorize the exception. Keyed off the support code, not the
+  // message text, which would break the moment the wording changed.
+  const [driverBlock, setDriverBlock] = useState<{
+    userId: string;
+    userName: string;
+    reason: string;
+  } | null>(null);
+
+  /** Open the blocked dialog for LB-SCHED-001; otherwise toast as usual. */
+  const handleAssignmentError = (err: unknown, fallback: string, userId: string, userName: string) => {
+    const appError = toAppError(err);
+    if (appError.code === DRIVER_NOT_QUALIFIED_CODE) {
+      setDriverBlock({ userId, userName, reason: appError.message });
+      return;
+    }
+    toast.error(getErrorMessage(err, fallback));
+  };
+
+  const memberName = (userId: string) => memberOptions.find((m) => m.id === userId)?.label ?? 'This member';
+
   const handleAssignFromRoster = async (userId: string) => {
     setPendingFlag('assigningRoster', true);
     try {
@@ -395,7 +422,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to sign up for shift'));
+      handleAssignmentError(
+        err,
+        'Failed to sign up for shift',
+        String(user?.id ?? ''),
+        user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'You'
+      );
     } finally {
       setPendingFlag('signingUp', false);
     }
@@ -575,7 +607,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to assign member'));
+      handleAssignmentError(err, 'Failed to assign member', assignForm.user_id, memberName(assignForm.user_id));
     } finally {
       setPendingFlag('assigning', false);
     }
@@ -830,8 +862,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     }
   }, [positionOptions, assignForm.position, openPositions]);
 
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+  const inputCls = 'form-input px-3 text-sm focus:ring-violet-500';
 
   const renderAssignmentRow = (assignment: Assignment) => {
     const isCurrentUser = assignment.user_id === user?.id;
@@ -950,12 +981,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} aria-hidden="true" />
+      <div className="modal-overlay z-40" onClick={onClose} aria-hidden="true" />
 
       {/* Panel — uses drawer-panel CSS class for mobile-responsive width */}
       <div className="drawer-panel overflow-y-auto overscroll-contain">
         {/* Header */}
-        <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b p-4 sm:p-6">
+        <div className="modal-header-sticky p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 pr-2">
               <h2 className="text-theme-text-primary text-lg font-bold sm:text-xl">Shift Details</h2>
@@ -1083,7 +1114,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 (c) => c.checkTiming === 'start_of_shift' && !c.isCompleted
               ).length;
               return (
-                <div className="bg-theme-surface border-theme-surface-border flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2 text-xs">
+                <div className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-xs">
                   <span className="text-theme-text-secondary font-semibold">Readiness</span>
                   {/* Two counts with different denominators — "0/2 present" beside
                       "2/3 staffed" — read as though the screen contradicted
@@ -1197,8 +1228,29 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             </div>
           )}
 
+          {/* Close-out. A department that records call counts rather than
+              incidents gets the three-step wizard, which saves each step as it
+              goes; everyone else keeps the single checklist below unchanged. */}
+          {showFinalizeChecklist && callTrackingMode === 'count_only' && (
+            <ShiftCloseoutWizard
+              shiftId={shift.id}
+              unitLabel={shift.apparatus_unit_number || shift.apparatus_name || 'this apparatus'}
+              tz={tz}
+              outstandingChecks={endOfShiftChecks.filter((c) => !c.isCompleted).length}
+              requireChecks={requireEndOfShiftChecks}
+              onCancel={() => setShowFinalizeChecklist(false)}
+              onFinalized={() => {
+                setShowFinalizeChecklist(false);
+                // Mirrors handleFinalize: refresh the panel's own copy of the
+                // shift and let the parent list re-read it too.
+                void schedulingService.getShift(shift.id).then(setShift);
+                onRefresh?.();
+              }}
+            />
+          )}
+
           {/* Finalize Checklist */}
-          {showFinalizeChecklist && (
+          {showFinalizeChecklist && callTrackingMode !== 'count_only' && (
             <div className="space-y-3 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
               <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                 <CheckCircle2 className="h-4 w-4 text-green-600" /> Before you close this shift
@@ -1336,7 +1388,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                                   [a.user_id]: e.target.value,
                                 }))
                               }
-                              className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-20 rounded-md border px-2 py-1 text-right text-sm"
+                              className="form-input w-20 px-2 py-1 text-right text-sm"
                             />
                           </div>
                         ))}
@@ -1347,7 +1399,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
                 {/* Call count */}
                 {shift.call_count !== undefined && shift.call_count !== null && (
-                  <div className="bg-theme-surface border-theme-surface-border flex items-center gap-2 rounded-md border p-2">
+                  <div className="card flex items-center gap-2 p-2">
                     <FileText className="text-theme-text-muted h-4 w-4 shrink-0" />
                     <span className="text-theme-text-secondary">
                       {shift.call_count} call{shift.call_count !== 1 ? 's' : ''} recorded
@@ -1517,14 +1569,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Pass-down from this shift */}
-          {shift.pass_down_notes && (
-            <div className="bg-theme-surface border-theme-surface-border rounded-lg border px-3 py-2">
-              <p className="text-theme-text-secondary mb-0.5 text-xs font-semibold">Pass-down for next crew</p>
-              <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{shift.pass_down_notes}</p>
             </div>
           )}
 
@@ -2318,7 +2362,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               {showQR && (
                 <div className="border-theme-surface-border mt-2 inline-block rounded-lg border bg-white p-4">
                   <QRCodeSVG
-                    value={`${window.location.origin}/scheduling/checkin?apparatus=${shift.apparatus_id}`}
+                    value={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
                     size={200}
                     level="M"
                     includeMargin
@@ -2338,6 +2382,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     Print QR Card
                   </button>
                 </div>
+              )}
+              {showQR && (
+                <NfcTagWriter
+                  url={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
+                  targetLabel={shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
+                  actionNoun="shift check-in"
+                />
               )}
             </div>
           )}
@@ -2521,6 +2572,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           )}
         </div>
       </div>
+
+      {driverBlock && (
+        <DriverBlockedDialog
+          isOpen
+          onClose={() => setDriverBlock(null)}
+          userId={driverBlock.userId}
+          userName={driverBlock.userName}
+          apparatusId={shift.apparatus_id}
+          apparatusUnitNumber={shift.apparatus_unit_number}
+          shiftDate={shift.shift_date}
+          blockedReason={driverBlock.reason}
+        />
+      )}
     </>
   );
 };

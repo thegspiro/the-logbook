@@ -15,6 +15,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.breached_password import check_password_not_breached
 from app.core.config import settings
 from app.core.constants import ROLE_MEMBER
 from app.core.security import (
@@ -178,11 +179,10 @@ class AuthService:
             logger.warning("Authentication failed for login attempt")
             return None, "Incorrect username or password"
 
-        # Check if account is locked. By default (ACCOUNT_LOCKOUT_REVEAL) tell
-        # the user it's a temporary lock and roughly how long remains, so they
-        # stop retrying a lock that is otherwise disguised as a wrong password.
-        # Set ACCOUNT_LOCKOUT_REVEAL=False for the strict anti-enumeration
-        # behaviour (generic message that never confirms the account exists).
+        # Check if account is locked. The default strict anti-enumeration path
+        # returns the same generic response as every other credential failure.
+        # Trusted, private deployments can explicitly enable the friendlier
+        # account-revealing message with ACCOUNT_LOCKOUT_REVEAL=True.
         locked_until = (
             user.locked_until.replace(tzinfo=timezone.utc)
             if user.locked_until and user.locked_until.tzinfo is None
@@ -478,6 +478,13 @@ class AuthService:
         if not is_valid:
             return None, error_msg
 
+        # Complexity rules pass plenty of passwords that already sit in a breach
+        # corpus, which is what credential stuffing tries first. Fails open on a
+        # provider outage; disabled unless BREACHED_PASSWORD_CHECK_ENABLED.
+        is_valid, error_msg = await check_password_not_breached(password)
+        if not is_valid:
+            return None, error_msg
+
         # Check if username or email already exists.
         # Use a generic error message to prevent user enumeration (SEC-13).
         _generic_conflict = (
@@ -633,6 +640,10 @@ class AuthService:
 
         # Validate new password strength
         is_valid, error_msg = validate_password_strength(new_password)
+        if not is_valid:
+            return False, error_msg
+
+        is_valid, error_msg = await check_password_not_breached(new_password)
         if not is_valid:
             return False, error_msg
 
@@ -930,6 +941,10 @@ class AuthService:
 
         # Validate new password strength
         is_valid, error_msg = validate_password_strength(new_password)
+        if not is_valid:
+            return False, error_msg
+
+        is_valid, error_msg = await check_password_not_breached(new_password)
         if not is_valid:
             return False, error_msg
 

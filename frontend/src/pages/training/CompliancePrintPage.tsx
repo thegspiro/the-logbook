@@ -13,6 +13,7 @@ import { trainingService } from '../../services/api';
 import type { ComplianceMatrix, ComplianceMatrixMember } from '../../services/communicationsServices';
 import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
+import PrintPageStyles from '@/components/print/PrintPageStyles';
 
 const CompliancePrintPage: React.FC = () => {
   const tz = useTimezone();
@@ -72,11 +73,7 @@ const CompliancePrintPage: React.FC = () => {
 
   return (
     <>
-      <style>{`
-        @page { size: letter landscape; margin: 0.4in 0.5in; }
-        @media print { body { margin: 0; } }
-        @media screen { body { background: #f3f4f6; } }
-      `}</style>
+      <PrintPageStyles size="letter landscape" margin="0.4in 0.5in" />
 
       <div className="mx-auto my-8 max-w-[11in] bg-white shadow-lg print:my-0 print:shadow-none">
         <div

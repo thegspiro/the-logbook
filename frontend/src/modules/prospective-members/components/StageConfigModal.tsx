@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useDialog } from '../../../hooks/useDialog';
 import {
   X,
   FileText,
@@ -342,6 +343,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   editingStage,
   existingStageCount,
 }) => {
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
+
   const tz = useTimezone();
   const { isConnected: isIntegrationConnected, loading: integrationsLoading } = useConnectedIntegrations();
   const [name, setName] = useState('');
@@ -690,7 +693,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="stage-config-modal-title"
@@ -698,7 +701,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal border-theme-surface-border modal-body w-full max-w-2xl rounded-xl border">
+      <div ref={dialogRef} className="modal-panel modal-body w-full max-w-2xl">
         {/* Header */}
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="stage-config-modal-title" className="text-theme-text-primary text-xl font-bold">

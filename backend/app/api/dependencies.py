@@ -232,6 +232,24 @@ def user_has_permission(user: User, permission: str) -> bool:
     return _has_permission(permission, _collect_user_permissions(user))
 
 
+def can_view_kiosk_display_codes(user: User) -> bool:
+    """Whether *user* may read kiosk display codes.
+
+    A location's ``display_code`` is a bearer credential: the unauthenticated
+    public kiosk endpoints (``/api/public/v1/display/{code}``) trust it alone,
+    so serving it to every authenticated user lets anyone enumerate the exact
+    kiosk URLs the manager-gated QR directory protects. Only users who manage
+    locations/facilities — or hold ``locations.edit``, which can already
+    rotate a code and must see the replacement — may read them. Shared here so
+    the locations and facilities-rooms endpoints redact by the same rule.
+    """
+    return (
+        user_has_permission(user, "locations.manage")
+        or user_has_permission(user, "facilities.manage")
+        or user_has_permission(user, "locations.edit")
+    )
+
+
 def can_view_officer_training_data(user: User) -> bool:
     """True if *user* may see officer-only training data.
 

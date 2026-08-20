@@ -101,6 +101,14 @@ nomination-deadline auto-close. Closing finalizes results and runs the
 anonymous-election IP/salt purge — a privacy guarantee, not a
 convenience — and an in-flight nomination phase must always be closeable.
 
+**Pending-nomination visibility** _(2026-08-16)_: the member-facing
+candidate list (`GET /elections/{id}/candidates`) returns pending
+(unaccepted) nominations only while the election is in its nominations
+phase — so nominees can see and respond to their nomination. In every
+other phase, members see accepted candidates only; callers holding
+`elections.manage` always see the full list. Pending nominations outside
+that window are election-management records, not member-visible data.
+
 ### Paper-Ballot Attestation (2026-07-29)
 
 With attestations required (the default is 2 — e.g. the secretary records,
