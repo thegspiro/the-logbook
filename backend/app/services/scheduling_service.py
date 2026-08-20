@@ -3670,7 +3670,11 @@ class SchedulingService:
         status: SwapRequestStatus,
         reviewer_notes: Optional[str] = None,
     ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
-        """Review (approve/deny) a shift swap request"""
+        """Review (approve/deny) a shift swap request.
+
+        This is a manager-review workflow, not participant acceptance: neither
+        the requester nor a targeted participant may review the request.
+        """
         try:
             swap_request = await self.get_swap_request_by_id(
                 request_id, organization_id
@@ -3680,6 +3684,17 @@ class SchedulingService:
 
             if swap_request.status != SwapRequestStatus.PENDING:
                 return None, "Swap request is no longer pending"
+
+            # Enforce separation of duties before mutating either the request
+            # or its assignments. A target participant's agreement, if a
+            # dedicated acceptance workflow is added, must remain distinct
+            # from the manager approval performed by this endpoint.
+            if str(reviewer_id) == str(swap_request.requesting_user_id):
+                return None, "Requesters cannot review their own swap requests"
+            if swap_request.target_user_id and str(reviewer_id) == str(
+                swap_request.target_user_id
+            ):
+                return None, "Target participants cannot manager-review swap requests"
 
             swap_request.status = status
             swap_request.reviewed_by = reviewer_id
@@ -3864,6 +3879,11 @@ class SchedulingService:
 
             if time_off.status != TimeOffStatus.PENDING:
                 return None, "Time-off request is no longer pending"
+
+            # Check before changing fields or cancelling assignments so a
+            # rejected self-review leaves the request completely pending.
+            if str(reviewer_id) == str(time_off.user_id):
+                return None, "Requesters cannot review their own time-off requests"
 
             time_off.status = status
             time_off.approved_by = reviewer_id
