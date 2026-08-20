@@ -28,6 +28,18 @@ export const RequestsTab: React.FC = () => {
   const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // The API enforces this scope; keep the member UI defensive as well so a
+  // stale cache or accidentally broadened response cannot expose another
+  // member's request details.
+  const visibleSwapRequests = canManage
+    ? swapRequests
+    : swapRequests.filter(
+        (request) => request.requesting_user_id === currentUser?.id || request.target_user_id === currentUser?.id
+      );
+  const visibleTimeOffRequests = canManage
+    ? timeOffRequests
+    : timeOffRequests.filter((request) => request.user_id === currentUser?.id);
+
   // Review modal
   const [reviewing, setReviewing] = useState<{ type: 'swap' | 'timeoff'; id: string } | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
@@ -148,13 +160,13 @@ export const RequestsTab: React.FC = () => {
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'swaps' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
             <ArrowLeftRight className="h-4 w-4" /> <span className="hidden sm:inline">Swap Requests</span>
-            <span className="sm:hidden">Swaps</span> ({swapRequests.length})
+            <span className="sm:hidden">Swaps</span> ({visibleSwapRequests.length})
           </button>
           <button
             onClick={() => setActiveView('timeoff')}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'timeoff' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
-            <CalendarOff className="h-4 w-4" /> Time Off ({timeOffRequests.length})
+            <CalendarOff className="h-4 w-4" /> Time Off ({visibleTimeOffRequests.length})
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -184,7 +196,7 @@ export const RequestsTab: React.FC = () => {
         </div>
       ) : activeView === 'swaps' ? (
         /* Swap Requests */
-        swapRequests.length === 0 ? (
+        visibleSwapRequests.length === 0 ? (
           <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
             <ArrowLeftRight className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
             <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No swap requests</h3>
@@ -196,7 +208,7 @@ export const RequestsTab: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {swapRequests.map((req) => {
+            {visibleSwapRequests.map((req) => {
               const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
               return (
                 <div key={req.id} className="card p-4 sm:p-5">
@@ -331,7 +343,7 @@ export const RequestsTab: React.FC = () => {
           </div>
         )
       ) : /* Time Off Requests */
-      timeOffRequests.length === 0 ? (
+      visibleTimeOffRequests.length === 0 ? (
         <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
           <CalendarOff className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No time-off requests</h3>
@@ -343,7 +355,7 @@ export const RequestsTab: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {timeOffRequests.map((req) => {
+          {visibleTimeOffRequests.map((req) => {
             const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
             return (
               <div key={req.id} className="card p-4 sm:p-5">

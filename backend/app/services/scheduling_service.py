@@ -3651,6 +3651,23 @@ class SchedulingService:
 
         return swap_requests, total
 
+    async def get_swap_requests_for_user(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        status: Optional[SwapRequestStatus] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[ShiftSwapRequest], int]:
+        """Get only swaps in which ``user_id`` is a participant.
+
+        Member-facing callers should use this method rather than accepting an
+        optional client filter on the organization-wide query.
+        """
+        return await self.get_swap_requests(
+            organization_id, status=status, user_id=user_id, skip=skip, limit=limit
+        )
+
     async def get_swap_request_by_id(
         self, request_id: UUID, organization_id: UUID
     ) -> Optional[ShiftSwapRequest]:
@@ -3659,6 +3676,23 @@ class SchedulingService:
             select(ShiftSwapRequest)
             .where(ShiftSwapRequest.id == str(request_id))
             .where(ShiftSwapRequest.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_swap_request_for_user_by_id(
+        self, request_id: UUID, organization_id: UUID, user_id: UUID
+    ) -> Optional[ShiftSwapRequest]:
+        """Get a swap only when ``user_id`` is its requester or target."""
+        result = await self.db.execute(
+            select(ShiftSwapRequest)
+            .where(ShiftSwapRequest.id == str(request_id))
+            .where(ShiftSwapRequest.organization_id == str(organization_id))
+            .where(
+                or_(
+                    ShiftSwapRequest.requesting_user_id == str(user_id),
+                    ShiftSwapRequest.target_user_id == str(user_id),
+                )
+            )
         )
         return result.scalar_one_or_none()
 
@@ -3848,6 +3882,19 @@ class SchedulingService:
 
         return time_off_requests, total
 
+    async def get_time_off_requests_for_user(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        status: Optional[TimeOffStatus] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[ShiftTimeOff], int]:
+        """Get only ``user_id``'s time-off requests for member-facing reads."""
+        return await self.get_time_off_requests(
+            organization_id, status=status, user_id=user_id, skip=skip, limit=limit
+        )
+
     async def get_time_off_by_id(
         self, time_off_id: UUID, organization_id: UUID
     ) -> Optional[ShiftTimeOff]:
@@ -3856,6 +3903,18 @@ class SchedulingService:
             select(ShiftTimeOff)
             .where(ShiftTimeOff.id == str(time_off_id))
             .where(ShiftTimeOff.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_time_off_for_user_by_id(
+        self, time_off_id: UUID, organization_id: UUID, user_id: UUID
+    ) -> Optional[ShiftTimeOff]:
+        """Get a time-off request only when it belongs to ``user_id``."""
+        result = await self.db.execute(
+            select(ShiftTimeOff)
+            .where(ShiftTimeOff.id == str(time_off_id))
+            .where(ShiftTimeOff.organization_id == str(organization_id))
+            .where(ShiftTimeOff.user_id == str(user_id))
         )
         return result.scalar_one_or_none()
 

@@ -98,6 +98,54 @@ describe('RequestsTab', () => {
     });
   });
 
+  it("shows only the current member's requests in member view", async () => {
+    mockGetSwapRequests.mockResolvedValue([
+      {
+        id: 'mine',
+        requesting_user_id: 'user-1',
+        user_name: 'Current Member',
+        offering_shift_id: 'shift-1',
+        status: 'pending',
+        reason: 'My swap',
+        created_at: '2026-02-25T00:00:00Z',
+      },
+      {
+        id: 'targeted-at-me',
+        requesting_user_id: 'user-2',
+        target_user_id: 'user-1',
+        user_name: 'Swap Partner',
+        offering_shift_id: 'shift-1',
+        status: 'pending',
+        reason: 'Swap involving me',
+        created_at: '2026-02-25T00:00:00Z',
+      },
+      {
+        id: 'unrelated',
+        requesting_user_id: 'user-2',
+        target_user_id: 'user-3',
+        user_name: 'Unrelated Member',
+        offering_shift_id: 'shift-1',
+        status: 'pending',
+        reason: 'Private unrelated swap',
+        created_at: '2026-02-25T00:00:00Z',
+      },
+    ]);
+    mockGetTimeOffRequests.mockResolvedValue([
+      { id: 'my-leave', user_id: 'user-1', status: 'pending', reason: 'My leave' },
+      { id: 'other-leave', user_id: 'user-2', status: 'pending', reason: 'Private leave' },
+    ]);
+
+    renderWithRouter(<RequestsTab />);
+
+    expect(await screen.findByText('My swap')).toBeInTheDocument();
+    expect(screen.getByText('Swap involving me')).toBeInTheDocument();
+    expect(screen.queryByText('Private unrelated swap')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText(/Time Off/));
+    expect(await screen.findByText('My leave')).toBeInTheDocument();
+    expect(screen.queryByText('Private leave')).not.toBeInTheDocument();
+  });
+
   it('should switch to time off view', async () => {
     renderWithRouter(<RequestsTab />);
     const user = userEvent.setup();
