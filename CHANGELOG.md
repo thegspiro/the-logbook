@@ -270,10 +270,14 @@ the report says _unit responses_. Recorded as **SCHED-10** in
   button lives — is now on the Events page, My Admin Hours, and the scheduling
   calendar.
 - **Prefer an apparatus-keyed shift tag for anything physically mounted.**
-  `/scheduling/checkin?apparatus=` resolves to whichever shift is running when
-  the tag is tapped, so one tag on the truck serves every shift; a shift-keyed
-  tag is dead the moment that shift ends. `buildShiftCheckInUrl` takes
-  `{ apparatusId }` or `{ shiftId }` so the choice is explicit at the call site.
+  `/scheduling/checkin?apparatus=` resolves at tap time rather than naming a
+  shift, so one tag on the truck serves every shift; a shift-keyed tag is dead
+  the moment that shift ends. `buildShiftCheckInUrl` takes `{ apparatusId }` or
+  `{ shiftId }` so the choice is explicit at the call site. _(Corrected
+  2026-08-19: this originally read "resolves to whichever shift is running",
+  which overstates `get_active_shift_for_apparatus` — it takes the
+  earliest-starting non-finalized shift dated today, checking neither the
+  start/end window nor `status == cancelled`. See `docs/KNOWN_LIMITATIONS.md`.)_
 
 **Changed**
 

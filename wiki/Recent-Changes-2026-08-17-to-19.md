@@ -64,9 +64,13 @@ Either wait for the picker, or reconcile mutual responses by hand.
 
 ## Operational notes
 
-- **Enabling _Record a call count at close-out_ takes effect immediately** — no
-  reload. It changes what officers see at 0700 the same day, so tell them
-  before you flip it.
+- **Enabling _Record a call count at close-out_ takes effect immediately in the
+  admin's own browser** — but **anyone already signed in must reload**. A
+  session opened before the change keeps the settings it loaded at sign-in, so
+  that officer still sees the old checklist, which never asks for a call count
+  while the backend has already switched. A shift closed from a stale tab
+  finalizes with no calls recorded. Flip it at a shift change, and tell working
+  officers to refresh.
 - **A count-only department that enforces end-of-shift equipment checks can
   still close out.** The wizard carries the override and its logged reason, and
   the pass-down notes field, because it replaces the checklist rather than

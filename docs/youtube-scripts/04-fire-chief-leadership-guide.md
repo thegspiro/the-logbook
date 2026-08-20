@@ -599,6 +599,26 @@ cards long enough that "Unit Responses" is readable. — ADDED 2026-08-19]**
 **[CALLOUT: "Unit responses ≠ incidents. Reconcile mutual responses before this
 goes in a grant application."]**
 
+**[PRODUCTION NOTE (2026-08-19, from the Codex review of PR #1573): three
+constraints on this beat. **(a)** Do **not** cut to a per-incident-mode report
+as the "correct" contrast — that figure sums per-trainee shift completion
+reports, so a shift with two enrolled trainees counts twice; neither mode yields
+a quotable incident count. **(b)** Do **not** show a CSV export here: it still
+labels the column "Total Calls" in both modes and would contradict the tile on
+screen. **(c)** Do **not** promise a per-apparatus breakdown — the API returns
+one, the screen does not render it. SCHED-13/15/16 in
+`docs/KNOWN_LIMITATIONS.md`.]**
+
+> "And one more thing before you quote any of this. If you export it to a
+> spreadsheet, the column still comes out headed 'total calls' — the export
+> hasn't caught up with the label on screen. Rename it before you send it
+> anywhere. Same goes if your department switched how it records calls part-way
+> through the year: this report only covers the way you record them **now**, so
+> run each period separately rather than trusting one date range across the
+> change."
+
+**[CALLOUT: "Exported column still says 'Total Calls' — rename it"]**
+
 > "So it's the right number for 'how hard did we work this truck.' It is not the
 > department's call count, and if you're filling in a grant application or an
 > ISO submission, reconcile your mutual responses first."

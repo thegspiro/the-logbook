@@ -194,14 +194,22 @@ the next card.
 > with its action row showing Copy URL / Download PNG / Regenerate / **Write NFC
 > tag**, mid-write]**
 
-**Write the apparatus tag, not a shift tag.** The apparatus code resolves to
-whichever shift is running when it is used — today's un-finalized shift, or one
-that ended within the last two hours, or the next one coming up. One sticker on
-the dashboard therefore serves every shift for the life of the truck. A tag tied
-to a single shift is dead the moment that shift ends.
+**Write the apparatus tag, not a shift tag.** The apparatus code resolves when
+it is used rather than naming a shift, so one sticker on the dashboard serves
+every shift for the life of the truck. A tag tied to a single shift is dead the
+moment that shift ends.
+
+**What it resolves to is looser than "the shift running right now."** It takes
+the truck's earliest open shift dated today, then one that ended within the last
+two hours, then the next one coming up — it does not check the shift's start and
+end times, and it does not skip cancelled shifts. On a truck with a day and a
+night crew, a tap at 2000 lands on the day shift; a shift nobody closed out
+keeps winning until somebody does.
 
 The member lands on a page naming the unit, the date and the hours, so they can
-see which truck they were matched to before confirming.
+see which shift they were matched to before confirming. **Tell members to
+actually read it** — that page is the only thing standing between a mis-resolved
+tag and an hour logged against the wrong shift.
 
 > **Room cards do not offer the button, and that is deliberate.** A room's kiosk
 > display code opens a public, unauthenticated screen and is effectively a

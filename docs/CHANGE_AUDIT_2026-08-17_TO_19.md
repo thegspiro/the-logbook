@@ -201,11 +201,14 @@ covered by a test in `backend/tests/test_call_tracking.py` (70 tests) or
   It previously admitted any non-blank slug, so a hand-edited uppercase or
   over-long entry passed the filter and then failed schema construction —
   taking out the settings endpoint and every close-out for that organization.
-- **The mode toggle takes effect immediately.** `loadSettings` is a
-  once-per-session cache; without mirroring the save into the store an admin
-  who enabled count-only kept seeing the old checklist (which never asks for a
-  count) while the backend had already moved and would finalize with none
-  recorded.
+- **The mode toggle takes effect immediately — in the saving browser only.**
+  `loadSettings` is a once-per-session cache; mirroring the save into the store
+  fixes it for the admin who flipped it. It does **not** reach another
+  officer's already-open session, which keeps the stale mode and is shown a
+  checklist that never asks for a count while the backend has already moved —
+  so that officer's close-out finalizes with none recorded. Documented as
+  "tell working officers to reload" rather than fixed; a correct fix
+  re-validates the cached settings, which is a behaviour change.
 - **Count-only departments that enforce end-of-shift checks can still close
   out.** The wizard carries the override (gated on a logged reason) and
   pass-down notes, because it _replaces_ the finalize checklist rather than
