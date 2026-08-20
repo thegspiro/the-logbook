@@ -19,6 +19,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
+import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
@@ -111,6 +112,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const ThemeIcon = themeIcon;
 
   const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
+  const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
@@ -166,11 +168,15 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       ],
     },
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
-    ...(isModuleOn('elections') || isModuleOn('minutes')
+    // Legal Documents is not behind a module flag: every deployment publishes
+    // /privacy and /terms, so the group has to appear for a department that
+    // runs neither elections nor minutes — which is also why the group's own
+    // path cannot assume /elections exists.
+    ...(isModuleOn('elections') || isModuleOn('minutes') || canReviewLegalDocuments
       ? [
           {
             label: 'Governance',
-            path: '/elections',
+            path: isModuleOn('elections') ? '/elections' : '#',
             subItems: [
               ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections' }] : []),
               ...(isModuleOn('minutes')
@@ -179,6 +185,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                     { label: 'Action Items', path: '/action-items' },
                   ]
                 : []),
+              ...(canReviewLegalDocuments ? [{ label: 'Legal Documents', path: '/governance/legal' }] : []),
             ],
           } as NavItem,
         ]

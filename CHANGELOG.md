@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Governance → Legal Documents: departments edit their own privacy notice and terms (2026-08-18)
+
+**Added**
+
+- **`/governance/legal`** — the secretary and department leaders read what
+  `/privacy` and `/terms` currently publish and propose alternative wording for
+  their own bylaws, SOPs, and local law. Before this the only way to change
+  those pages was to hand-edit `organizations.settings["legal"]` in the
+  database, which is not a thing a secretary can do and not a thing anyone
+  should do without a record of who changed what.
+
+- **Proposing is a separate grant from publishing** — `legal.propose` reaches
+  the screen and writes drafts, `legal.publish` changes what the public sees.
+  They are backfilled onto existing positions from `settings.view` and
+  `settings.manage` respectively (migration `06adc68a8b84`), which is the split
+  departments already understand: by default the secretary, chiefs, captains,
+  lieutenants, president, VP, treasurer, board, quartermaster, membership
+  coordinator, and assistant secretary can propose; the Fire Chief, President,
+  and IT Manager can publish; regular members and firefighters hold neither and
+  never see the screen. Both are assignable like any other permission for a
+  department that wants a different split. Without the backfill the screen
+  would have been reachable only on organizations created after the deploy,
+  since positions are seeded at organization creation.
+
+- **`legal_document_revisions`** — every proposal carries a **required** change
+  note naming the bylaw, SOP, statute, or counsel advice behind the wording,
+  and publishing archives the previous version instead of overwriting it. The
+  live text still lives in `organizations.settings["legal"]`, so the anonymous
+  public page needs no join and gains no new failure mode; these rows are the
+  governance record around it. That is what makes the question a records
+  request actually asks — what did this page say on that date, and who decided
+  — answerable at all.
+
+- Endpoints under `/api/v1/legal-documents` (list, propose, edit, discard,
+  publish, revert-to-default), audited as `legal.revision_proposed`,
+  `legal.document_published`, and `legal.document_reverted_to_default`.
+
+**Changed**
+
+- **The built-in privacy notice and terms moved from JSX into structured data**
+  (`pages/legal/legalContent.ts`), rendered to the public page by
+  `LegalSections` and to plain text by `toPlainText`. This is what makes
+  "propose an alternative" workable: a new proposal opens seeded with the text
+  members are actually reading — the department's own if it has published one,
+  otherwise the platform default — rather than an empty box. Retyping a
+  multi-section notice by hand is how a department ends up publishing one that
+  quietly drops the sections it never got to, and the
+  department-control/status-based-access language is exactly the part a rewrite
+  loses first. The public pages render identically; their tests are unchanged.
+
+- The Governance nav group no longer requires the elections or minutes module
+  to appear. Every deployment publishes `/privacy` and `/terms`, so a
+  department running neither module still needs the group. In the top nav the
+  group's own path no longer assumes `/elections` exists.
+
+**Fixed**
+
+- Publishing writes the organization's settings through a `copy.deepcopy`, not
+  a shallow copy. A nested mutation of a JSON column compares equal to
+  SQLAlchemy's committed state and skips the UPDATE entirely, which here would
+  mean publishing reports success, archives the previous revision, and leaves
+  members reading the old notice (pitfall #12). Covered by DB-free unit tests,
+  including one asserting the previous settings object is not mutated in place.
+
+**Docs**
+
+- `wiki/Security-Privacy.md`, `wiki/API-Reference.md`, `wiki/Role-System.md`,
+  `ROLE_SYSTEM_README.md`, `docs/COMPLIANCE.md`, `APPLICATION_PAGES.md`, and
+  the member training guide, which gains a step-by-step officer section on
+  proposing and publishing — including that custom text **replaces** a document
+  wholesale rather than merging with the default, so the control and access
+  language has to be carried across deliberately.
+
 ### Privacy notice and terms rewritten; department control stated up front (2026-08-17)
 
 **Changed**

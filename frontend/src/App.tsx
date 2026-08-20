@@ -42,6 +42,7 @@ import { getMinutesRoutes } from './modules/minutes';
 import { getFacilitiesRoutes, getFacilitiesPublicRoutes } from './modules/facilities';
 import { getDocumentsRoutes } from './modules/documents';
 import { getActionItemsRoutes } from './modules/action-items';
+import { getGovernanceRoutes } from './modules/governance';
 import { getNotificationsRoutes } from './modules/notifications';
 import { getFormsRoutes, getFormsPublicRoutes } from './modules/forms';
 import { getIntegrationsRoutes } from './modules/integrations';
@@ -144,6 +145,7 @@ function App() {
                     {getElectionsRoutes()}
                     {getMinutesRoutes()}
                     {getActionItemsRoutes()}
+                    {getGovernanceRoutes()}
                     {getNotificationsRoutes()}
                     {getFormsRoutes()}
                     {getIntegrationsRoutes()}

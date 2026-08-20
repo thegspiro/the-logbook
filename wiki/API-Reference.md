@@ -923,6 +923,40 @@ organization. Audit logs and election records are never modified.
 
 ---
 
+## Legal Documents (Governance) _(2026-08-18)_
+
+Authenticated. Backs Governance -> Legal Documents, where the secretary and
+department leaders read what `/privacy` and `/terms` publish and propose
+alternatives for local rules.
+
+```
+GET    /api/v1/legal-documents                              # legal.propose | legal.publish | settings.manage
+POST   /api/v1/legal-documents/revisions                    # legal.propose | legal.publish | settings.manage
+PUT    /api/v1/legal-documents/revisions/{id}               # legal.propose | legal.publish | settings.manage
+DELETE /api/v1/legal-documents/revisions/{id}               # legal.propose | legal.publish | settings.manage
+POST   /api/v1/legal-documents/revisions/{id}/publish       # legal.publish | settings.manage
+POST   /api/v1/legal-documents/{document_type}/revert-to-default   # legal.publish | settings.manage
+```
+
+`GET` returns both documents: what members currently see (from
+`organizations.settings["legal"]`, which is what the anonymous public endpoint
+serves), the open drafts, the published history, and `canPublish` for the
+caller so the screen can hide controls it would only 403 on.
+
+Proposing is deliberately separate from publishing. `legal.propose` is
+backfilled onto every position holding `settings.view` and `legal.publish` onto
+every position holding `settings.manage` (migration `06adc68a8b84`), which is
+the split that already distinguishes leadership from the general membership.
+
+Only drafts are editable or deletable — a published revision is what the
+department is on record as having published on a date. A proposer may modify
+their own draft; a publisher may modify anyone's. Publishing archives the
+previous published revision, writes the body into the organization's settings,
+and audits as `legal.document_published`. Reverting archives the published
+revision and removes the custom text so the built-in default renders again.
+
+---
+
 ## Public Legal Text _(2026-07-31, updated 2026-08-17)_
 
 Unauthenticated, rate-limited (30/min per IP). Backs the public `/privacy` and

@@ -23,18 +23,21 @@ The RBAC system allows fine-grained control over what users can see and do withi
 The system uses a simplified two-tier permission model for each module:
 
 ### View Access
+
 - Read-only access to module data
 - Typically granted to all members by default
 - Allows viewing lists, details, and reports
 - Example: View member directory, see training records
 
 ### Manage Access
+
 - Full CRUD (Create, Read, Update, Delete) operations
 - Granted to specific roles based on responsibility
 - Includes all View permissions plus modification rights
 - Example: Add new members, edit training records, delete events
 
 This model simplifies permission management while maintaining security:
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Module: Training                                     │
@@ -167,6 +170,7 @@ The following roles are automatically created for each organization:
 Permissions are organized into the following categories:
 
 ### Users & Members
+
 - `users.view` - View user list
 - `users.create` - Create new users
 - `users.edit` - Edit user information
@@ -178,6 +182,7 @@ Permissions are organized into the following categories:
 - `members.assign_roles` - Assign roles to members
 
 ### Roles
+
 - `roles.view` - View roles
 - `roles.create` - Create new roles
 - `roles.edit` - Edit roles
@@ -186,38 +191,47 @@ Permissions are organized into the following categories:
 - `roles.manage_permissions` - Manage role permissions
 
 ### Organization & Settings
+
 - `organization.view` - View organization info
 - `organization.edit` - Edit organization info
 - `organization.update_settings` - Update organization settings
 - `settings.view` - View settings
 - `settings.edit` - Edit settings
 - `settings.manage_contact_visibility` - Control contact info display
+- `legal.propose` - View the public privacy notice / terms and propose revisions
+- `legal.publish` - Publish a legal-document revision to the public pages
 
 ### Modules
+
 Each module has view and manage permissions:
 
 **Essential Modules:**
+
 - Members (`members.view`, `members.manage`)
 - Events (`events.view`, `events.create`, `events.edit`, `events.delete`, `events.manage`)
 - Documents (`documents.view`, `documents.manage`)
 
 **Operations Modules:**
+
 - Training (`training.view`, `training.manage`)
 - Inventory (`inventory.view`, `inventory.manage`)
 - Scheduling (`scheduling.view`, `scheduling.manage`)
 - Locations (`locations.view`, `locations.create`, `locations.edit`, `locations.delete`, `locations.manage`)
 
 **Governance Modules:**
+
 - Elections (`elections.view`, `elections.manage`)
 - Minutes (`minutes.view`, `minutes.manage`)
 - Reports (`reports.view`, `reports.manage`)
 - Compliance (`compliance.view`, `compliance.manage`)
 
 **Communication Modules:**
+
 - Notifications (`notifications.view`, `notifications.manage`)
 - Mobile (`mobile.view`, `mobile.manage`)
 
 **Advanced Modules:**
+
 - Forms (`forms.view`, `forms.manage`)
   - `forms.view`: View forms list, form details, and submissions
   - `forms.manage`: Create/edit/delete forms, manage fields, publish/archive, configure public access, manage cross-module integrations
@@ -225,6 +239,7 @@ Each module has view and manage permissions:
 - Integrations (`integrations.view`, `integrations.manage`)
 
 **Legacy/Additional Modules:**
+
 - Meetings (`meetings.view`, `meetings.manage`)
 - Fundraising (`fundraising.view`, `fundraising.manage`)
 - Incidents (`incidents.view`, `incidents.manage`)
@@ -236,17 +251,17 @@ Each module has view and manage permissions:
 ### Reads Gated at the Source, Not at the Report _(2026-08-09)_
 
 Some reads carry the same personal data as the records they are drawn from, and
-holding the *reporting* permission was letting a member read data they could not
+holding the _reporting_ permission was letting a member read data they could not
 fetch directly. Three were closed by requiring **the permission that protects the
 data at its source**, deliberately reusing existing permissions so that no new
 grant is needed and no current user is locked out:
 
-| Read | Was | Now |
-| --- | --- | --- |
-| **Member roster report** (email, membership number) | `reports.view` | `reports.view` **and** `members.view` |
-| **Pipeline overview report** (applicant name, email, PII) | `reports.view` | `reports.view` **and** `prospective_members.view` |
-| **Full integration config** (list/get, includes credentials) | authenticated | `integrations.manage` |
-| **Expense-report reimbursements** (payee, amounts owed) | `finance.view` | `finance.view` sees **only their own submissions**; the full org queue needs the finance-manager permission |
+| Read                                                         | Was            | Now                                                                                                         |
+| ------------------------------------------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Member roster report** (email, membership number)          | `reports.view` | `reports.view` **and** `members.view`                                                                       |
+| **Pipeline overview report** (applicant name, email, PII)    | `reports.view` | `reports.view` **and** `prospective_members.view`                                                           |
+| **Full integration config** (list/get, includes credentials) | authenticated  | `integrations.manage`                                                                                       |
+| **Expense-report reimbursements** (payee, amounts owed)      | `finance.view` | `finance.view` sees **only their own submissions**; the full org queue needs the finance-manager permission |
 
 Notes:
 
@@ -262,7 +277,7 @@ Notes:
   integrations-admin permission.
 
 > **`require_permission(...)` does not scope the object.** It asserts the caller
-> holds the permission *in their own organization*; it says nothing about which
+> holds the permission _in their own organization_; it says nothing about which
 > record they are touching. Every by-id read and mutation must still be resolved
 > through an org-scoped fetch — see CLAUDE.md pitfall #14.
 
@@ -294,11 +309,13 @@ Role Management (`/settings/roles`), which shows the full permission list.
 After onboarding, settings are split into two areas:
 
 **User Account** (accessible to all authenticated users):
+
 ```
 My Account → /account (Profile, password, appearance, notifications)
 ```
 
 **Organization Settings** (Administration section, requires `settings.manage`):
+
 ```
 Organization Settings (expandable menu)
 ├── Organization      → /settings         (Organization settings)
@@ -353,6 +370,7 @@ The following pages are available from the Settings navigation:
 ### Editing System Roles
 
 System roles (indicated by a blue "System Role" badge) have restrictions:
+
 - **Name and priority cannot be changed**
 - **Permissions can be modified** to suit your organization
 - **Cannot be deleted**
@@ -364,6 +382,7 @@ This allows you to customize permissions while maintaining the core role structu
 ### Endpoints
 
 **Roles**:
+
 - `GET /api/v1/roles` - List all roles
 - `GET /api/v1/roles/{id}` - Get specific role
 - `POST /api/v1/roles` - Create custom role
@@ -373,6 +392,7 @@ This allows you to customize permissions while maintaining the core role structu
 - `GET /api/v1/roles/permissions/by-category` - Permissions grouped by category
 
 **User Roles**:
+
 - `GET /api/v1/users/with-roles` - List users with roles
 - `GET /api/v1/users/{id}/roles` - Get user's roles
 - `PUT /api/v1/users/{id}/roles` - Assign roles (replaces all)
@@ -389,6 +409,7 @@ python -m app.core.seed
 ```
 
 This will:
+
 1. Create a test organization (if it doesn't exist)
 2. Create all default system roles with proper permissions
 
@@ -421,6 +442,7 @@ async def admin_route(
 ### Adding New Permissions
 
 1. Add permission constant in `backend/app/core/permissions.py`:
+
 ```python
 MY_NEW_PERMISSION = Permission(
     "module.action",
@@ -436,6 +458,7 @@ MY_NEW_PERMISSION = Permission(
 ### Adding New Modules
 
 When adding new modules:
+
 1. Create view and manage permissions
 2. Add to permission categories
 3. Update default roles to include appropriate permissions

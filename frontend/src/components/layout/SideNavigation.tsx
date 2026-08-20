@@ -36,6 +36,7 @@ import {
   Activity,
   CreditCard,
   ScanLine,
+  Scale,
   Stethoscope,
   Store,
 } from 'lucide-react';
@@ -46,6 +47,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
+import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -155,6 +157,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   // section items' gates — extend it there, never inline, so Side/Top
   // navigation cannot drift apart.
   const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
+  const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
@@ -247,7 +250,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     },
     // When Facilities module is off, show a lightweight Locations page
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations', icon: MapPin } as NavItem]),
-    ...(isModuleOn('elections') || isModuleOn('minutes')
+    // Legal Documents is not behind a module flag: every deployment publishes
+    // /privacy and /terms, so the group has to appear for a department that
+    // runs neither elections nor minutes.
+    ...(isModuleOn('elections') || isModuleOn('minutes') || canReviewLegalDocuments
       ? [
           {
             label: 'Governance',
@@ -266,6 +272,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                       label: 'Action Items',
                       path: '/action-items',
                       icon: AlertTriangle,
+                    },
+                  ]
+                : []),
+              ...(canReviewLegalDocuments
+                ? [
+                    {
+                      label: 'Legal Documents',
+                      path: '/governance/legal',
+                      icon: Scale,
                     },
                   ]
                 : []),
