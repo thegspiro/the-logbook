@@ -174,8 +174,41 @@ def setup_sentry(
     try:
         import sentry_sdk
         from sentry_sdk.integrations.fastapi import FastApiIntegration
-        from sentry_sdk.integrations.loguru import LoguruIntegration
+        from sentry_sdk.integrations.loguru import (
+            LoguruBreadcrumbHandler,
+            LoguruEventHandler,
+            LoguruIntegration,
+            loguru_sentry_logs_handler,
+        )
         from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+        class _SafeLoguruIntegration(LoguruIntegration):
+            """Install Sentry handlers without rendering exception locals."""
+
+            @staticmethod
+            def setup_once() -> None:
+                if LoguruIntegration.level is not None:
+                    logger.add(
+                        LoguruBreadcrumbHandler(level=LoguruIntegration.level),
+                        level=LoguruIntegration.level,
+                        format=LoguruIntegration.breadcrumb_format,
+                        diagnose=False,
+                    )
+
+                if LoguruIntegration.event_level is not None:
+                    logger.add(
+                        LoguruEventHandler(level=LoguruIntegration.event_level),
+                        level=LoguruIntegration.event_level,
+                        format=LoguruIntegration.event_format,
+                        diagnose=False,
+                    )
+
+                if LoguruIntegration.sentry_logs_level is not None:
+                    logger.add(
+                        loguru_sentry_logs_handler,
+                        level=LoguruIntegration.sentry_logs_level,
+                        diagnose=False,
+                    )
 
         sentry_sdk.init(
             dsn=sentry_dsn,
@@ -186,7 +219,7 @@ def setup_sentry(
             integrations=[
                 FastApiIntegration(),
                 SqlalchemyIntegration(),
-                LoguruIntegration(),
+                _SafeLoguruIntegration(),
             ],
             send_default_pii=False,
         )
