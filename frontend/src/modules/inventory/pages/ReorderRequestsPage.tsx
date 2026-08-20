@@ -24,7 +24,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate as formatDateUtil } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Modal } from '../../../components/Modal';
-import { blankToNull } from '../../../utils/formValues';
+import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { VendorName } from '../components/VendorName';
 import type {
   ReorderRequest,
@@ -151,10 +151,12 @@ const ReorderFormModal: React.FC<{
           vendor: blankToNull(f.vendor),
           vendor_id: f.vendor_id || null,
           vendor_contact: blankToNull(f.vendor_contact),
-          estimated_unit_cost: f.estimated_unit_cost ? Number(f.estimated_unit_cost) : undefined,
-          expected_delivery_date: f.expected_delivery_date || undefined,
+          estimated_unit_cost: numberOrNull(f.estimated_unit_cost),
+          expected_delivery_date: f.expected_delivery_date || null,
+          notes: blankToNull(f.notes),
+          // Not nulled: `urgency` is a NOT NULL enum column with a default, so
+          // a blank select must leave the stored value alone rather than clear it.
           urgency: f.urgency || undefined,
-          notes: f.notes.trim() || undefined,
         };
         await inventoryService.updateReorderRequest(editRequest.id, updateData);
         toast.success('Reorder request updated');

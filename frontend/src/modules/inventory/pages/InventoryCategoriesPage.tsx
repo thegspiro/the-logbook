@@ -16,6 +16,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
+import { formCoercions } from '../../../utils/formValues';
 
 const ITEM_TYPE_COLORS: Record<string, string> = {
   uniform: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
@@ -121,16 +122,22 @@ const InventoryCategoriesPage: React.FC = () => {
     }
     setIsSaving(true);
     try {
+      // Create and edit want opposite things from a blank box. On create a blank
+      // is omitted so `""` never reaches a Pydantic validator; on edit it goes
+      // as an explicit null, because the backend dumps update payloads with
+      // `exclude_unset` and an omitted key means "leave this alone" — the clear
+      // was being lost behind a success toast (CLAUDE.md pitfall #1).
+      const { text, num } = formCoercions(Boolean(editingCategory));
       const threshold = parseInt(formData.low_stock_threshold, 10);
       const payload: InventoryCategoryCreate = {
         name: formData.name.trim(),
-        description: formData.description.trim() || undefined,
+        description: text(formData.description),
         item_type: formData.item_type,
         requires_serial_number: formData.requires_serial_number,
         requires_maintenance: formData.requires_maintenance,
         requires_assignment: formData.requires_assignment,
         nfpa_tracking_enabled: formData.nfpa_tracking_enabled,
-        low_stock_threshold: isNaN(threshold) ? undefined : threshold,
+        low_stock_threshold: isNaN(threshold) ? num('') : threshold,
       };
       if (editingCategory) {
         await inventoryService.updateCategory(editingCategory.id, payload);

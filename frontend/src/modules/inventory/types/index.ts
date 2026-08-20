@@ -34,6 +34,7 @@ export type {
   BatchReturnResponse,
   LabelFormat,
   NFPACompliance,
+  NFPACompliancePayload,
   NFPAExposureRecord,
   NFPASummary,
   NFPARetirementDueItem,

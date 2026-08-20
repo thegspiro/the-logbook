@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { blankToNull } from '../../../utils/formValues';
+import { blankToNull, formCoercions } from '../../../utils/formValues';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import type {
@@ -294,34 +294,46 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     // Standard single-item path
     setSaving(true);
     try {
+      // Create and edit want opposite things from a blank box, so the mode
+      // decides once here rather than per field. On create a blank is omitted so
+      // `""` never reaches a Pydantic validator; on edit it goes as an explicit
+      // null, because the backend dumps update payloads with `exclude_unset` and
+      // an omitted key means "leave this alone" — the clear was being lost
+      // behind a success toast (CLAUDE.md pitfall #1).
+      const isEdit = Boolean(editItem);
+      const { text, pick, num } = formCoercions(isEdit);
+
       const p: InventoryItemCreate = {
         name: f.name.trim(),
-        description: f.description.trim() || undefined,
-        category_id: f.category_id || undefined,
+        description: text(f.description),
+        category_id: pick(f.category_id),
+        serial_number: text(f.serial_number),
+        asset_tag: text(f.asset_tag),
+        barcode: text(f.barcode),
+        size: text(f.size),
+        color: text(f.color),
+        purchase_price: num(f.purchase_price),
+        current_value: num(f.current_value),
+        purchase_date: pick(f.purchase_date),
+        vendor: isEdit ? blankToNull(f.vendor) : f.vendor.trim() || undefined,
+        vendor_id: f.vendor_id || (isEdit ? null : undefined),
+        warranty_expiration: pick(f.warranty_expiration),
+        replacement_cost: num(f.replacement_cost),
+        location_id: pick(f.location_id),
+        storage_area_id: pick(f.storage_area_id),
+        unit_of_measure: text(f.unit_of_measure),
+        reorder_point: num(f.reorder_point),
+        inspection_interval_days: num(f.inspection_interval_days),
+        notes: text(f.notes),
+        // Deliberately omitted rather than nulled on edit, all three for
+        // backend reasons rather than schema ones: `condition` is a NOT NULL
+        // enum column, and `update_item` builds `ItemCondition(value)` and
+        // compares `quantity < 0` for a pool item — both raise on None.
+        // `tracking_type` re-shapes how the item is counted and is not a field
+        // a blank box should clear.
         tracking_type: f.tracking_type || undefined,
-        serial_number: f.serial_number.trim() || undefined,
-        asset_tag: f.asset_tag.trim() || undefined,
-        barcode: f.barcode.trim() || undefined,
-        size: f.size.trim() || undefined,
-        color: f.color.trim() || undefined,
-        purchase_price: f.purchase_price ? Number(f.purchase_price) : undefined,
-        current_value: f.current_value ? Number(f.current_value) : undefined,
-        purchase_date: f.purchase_date || undefined,
-        // On edit these go as explicit nulls so unlinking a vendor, or clearing
-        // the typed-in name, actually persists — an omitted key means "leave it
-        // alone" to the backend (CLAUDE.md pitfall #1).
-        vendor: editItem ? blankToNull(f.vendor) : f.vendor.trim() || undefined,
-        vendor_id: f.vendor_id || (editItem ? null : undefined),
-        warranty_expiration: f.warranty_expiration || undefined,
-        replacement_cost: f.replacement_cost ? Number(f.replacement_cost) : undefined,
-        location_id: f.location_id || undefined,
-        storage_area_id: f.storage_area_id || undefined,
         quantity: f.quantity ? Number(f.quantity) : undefined,
-        unit_of_measure: f.unit_of_measure.trim() || undefined,
-        reorder_point: f.reorder_point ? Number(f.reorder_point) : undefined,
-        inspection_interval_days: f.inspection_interval_days ? Number(f.inspection_interval_days) : undefined,
         condition: f.condition || undefined,
-        notes: f.notes.trim() || undefined,
       };
       if (editItem) {
         await inventoryService.updateItem(editItem.id, p);

@@ -21,6 +21,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
+import { formCoercions } from '../../../utils/formValues';
 
 interface LineItemFormData {
   item_id: string;
@@ -196,9 +197,13 @@ const EquipmentKitsPage: React.FC = () => {
 
     setIsSaving(true);
     try {
+      // On edit a cleared description goes as an explicit null: the backend
+      // dumps update payloads with `exclude_unset`, so omitting the key leaves
+      // the old text in place behind a success toast (CLAUDE.md pitfall #1).
+      const { text } = formCoercions(Boolean(editingKit));
       const payload: EquipmentKitCreate = {
         name: formData.name.trim(),
-        description: formData.description.trim() || undefined,
+        description: text(formData.description),
         line_items: validItems.map((li) => ({
           item_id: li.item_id || undefined,
           category_id: li.category_id || undefined,
