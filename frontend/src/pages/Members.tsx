@@ -28,6 +28,7 @@ import { SortableHeader, sortItems } from '../components/ux/SortableHeader';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
 import { UserStatus } from '../constants/enums';
+import { buildCsv, downloadCsv } from '../utils/csvExport';
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
@@ -218,14 +219,7 @@ const Members: React.FC = () => {
       m.membership_number || '',
       m.hire_date ? formatDate(m.hire_date, tz) : '',
     ]);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `members-${getTodayLocalDate(tz)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(buildCsv([headers, ...rows]), `members-${getTodayLocalDate(tz)}.csv`);
   }, [filteredMembers, selectedIds, tz]);
 
   const getStatusColor = (status: string) => {

@@ -1507,25 +1507,36 @@ option {
     padding: 0.75rem;
   }
 
-  /* #30 Full-width buttons on small mobile screens.
+  /* #30 Full-width buttons on small mobile screens — but only where a button
+   * owns its line.
    *
-   * `btn-auto` opts a button out, and toolbars need it. This rule is
-   * unlayered, so it beats a Tailwind `w-auto` at the call site and there is
-   * no way to escape it from the markup alone — a row of toolbar buttons
-   * therefore stacks into one full-width bar each. Where the label is also
-   * hidden on small screens (the common `hidden sm:inline` pattern) the
-   * result is a column of unlabelled full-width bars, which reads as a
-   * mystery control rather than as a button.
+   * This rule is unlayered, so it beats a Tailwind width at the call site and
+   * cannot be escaped from the markup. Applied to every button it reached
+   * past the ones it was written for: a toolbar row became one full-width bar
+   * per button (and, where the label is `hidden sm:inline`, a column of
+   * unlabelled ones); an `hscroll` strip became a carousel showing a single
+   * link at a time; a button beside a heading squeezed the heading.
    *
-   * `btn-auto` carries no declarations of its own — it exists only as this
-   * `:not()` hook — so it is deliberately not an `@utility`, which would emit
-   * an empty rule Tailwind then prunes. */
+   * So it is matched to stacking contexts instead of subtracted from rows.
+   * The parent selector decides: a block or grid parent, or a flex parent
+   * that is a column on this screen, still gets a full-width button. A flex
+   * row does not match at all — deliberately, rather than being overridden
+   * with `width: auto`, so that a call site asking for `w-full` or `flex-1`
+   * inside a row is honoured rather than fought.
+   *
+   * `flex-col-reverse` counts as a column: it is the standard modal footer
+   * (`flex flex-col-reverse sm:flex-row`), which stacks on a phone with the
+   * primary action on top, and there are 39 of them.
+   *
+   * `btn-auto` still force-opts a button out — needed where the parent is a
+   * positioning wrapper rather than the row itself. It carries no
+   * declarations of its own, existing only as this `:not()` hook, so it is
+   * deliberately not an `@utility` (which would emit an empty rule Tailwind
+   * then prunes). */
   @media (max-width: 479px) {
-    .btn-primary:not(.btn-auto),
-    .btn-secondary:not(.btn-auto),
-    .btn-success:not(.btn-auto),
-    .btn-info:not(.btn-auto),
-    .btn-warning:not(.btn-auto) {
+    :not(.flex, .inline-flex) > :is(.btn-primary, .btn-secondary, .btn-success, .btn-info, .btn-warning):not(.btn-auto),
+    :is(.flex, .inline-flex):is(.flex-col, .flex-col-reverse)
+      > :is(.btn-primary, .btn-secondary, .btn-success, .btn-info, .btn-warning):not(.btn-auto) {
       width: 100%;
       justify-content: center;
     }

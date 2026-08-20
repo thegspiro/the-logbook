@@ -50,6 +50,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
+import { buildCsv, downloadCsv } from '../utils/csvExport';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
@@ -414,14 +415,7 @@ export const EventsPage: React.FC = () => {
       e.is_mandatory ? 'Yes' : 'No',
       e.is_cancelled ? 'Yes' : 'No',
     ]);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `events-${getTodayLocalDate(tz)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(buildCsv([headers, ...rows]), `events-${getTodayLocalDate(tz)}.csv`);
   }, [sortedEvents, tz]);
 
   const handleExportFromMenu = useCallback(() => {

@@ -33,6 +33,7 @@ import { FieldType } from '../../constants/enums';
 import type { FormSubmission, FormField } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatShortDateTime } from '../../utils/dateFormatting';
+import { buildCsv, downloadCsv } from '../../utils/csvExport';
 
 export interface SubmissionViewerProps {
   /** Fetch submissions for this form */
@@ -202,18 +203,7 @@ const SubmissionViewer = ({
       ...fieldIds.map((fId) => formatValue(fId, s.data[fId])),
     ]);
 
-    const csv = [
-      headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(','),
-      ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')),
-    ].join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `submissions-${formId || 'export'}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(buildCsv([headers, ...rows]), `submissions-${formId || 'export'}.csv`);
   };
 
   if (loading) {

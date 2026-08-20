@@ -18,6 +18,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatShortDateTime } from '../../utils/dateFormatting';
 import { toDisplayString } from '../../utils/displayValue';
 import { FieldType } from '../../constants/enums';
+import { buildCsv, downloadCsv, type CsvValue } from '../../utils/csvExport';
 
 const CHOICE_TYPES = new Set(['select', 'multiselect', 'checkbox', 'radio']);
 const TEXT_TYPES = new Set(['text', 'textarea', 'email', 'phone']);
@@ -182,7 +183,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
   }, [fields, submissions]);
 
   const exportResultsCsv = () => {
-    const lines: string[] = ['Field,Type,Responses,Summary'];
+    const rows: CsvValue[][] = [['Field', 'Type', 'Responses', 'Summary']];
     for (const s of summaries) {
       let summaryText = '';
       if (s.choices) {
@@ -194,20 +195,10 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
       } else if (s.dateRange) {
         summaryText = `${s.dateRange.earliest} to ${s.dateRange.latest}`;
       }
-      lines.push(
-        [s.field.label, s.field.field_type, String(s.responseCount), summaryText]
-          .map((v) => `"${v.replace(/"/g, '""')}"`)
-          .join(',')
-      );
+      rows.push([s.field.label, s.field.field_type, s.responseCount, summaryText]);
     }
 
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `form-results-${formId}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(buildCsv(rows), `form-results-${formId}.csv`);
   };
 
   if (loading) {
