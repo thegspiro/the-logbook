@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/tsc-native.mjs && vite build",
+    "validate:pwa": "npm run build && node scripts/validate-pwa.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
+    "test:pwa": "playwright test --config playwright.pwa.config.ts",
     "lint": "eslint --max-warnings 10",
     "lint:fix": "eslint --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
