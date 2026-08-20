@@ -33,7 +33,13 @@ def _svc_with_prospects(prospects):
 
 
 async def test_calcom_booking_advances_matching_meeting_stage():
-    step = _step("meeting", {"scheduling_provider": "calcom"})
+    step = _step(
+        "meeting",
+        {
+            "scheduling_provider": "calcom",
+            "calcom_booking_url": "https://cal.com/team/interview",
+        },
+    )
     svc = _svc_with_prospects([_prospect("applicant@x.com", step)])
 
     advanced = await svc.complete_current_step_for_integration_event(
@@ -42,6 +48,8 @@ async def test_calcom_booking_advances_matching_meeting_stage():
         step_type="meeting",
         provider_key="scheduling_provider",
         provider_value="calcom",
+        reference_config_key="calcom_booking_url",
+        event_reference="interview",
         completed_by="integration:calcom",
     )
 
@@ -50,7 +58,10 @@ async def test_calcom_booking_advances_matching_meeting_stage():
 
 
 async def test_documenso_signature_advances_matching_document_stage():
-    step = _step("document_upload", {"signing_provider": "documenso"})
+    step = _step(
+        "document_upload",
+        {"signing_provider": "documenso", "documenso_template_id": "template-1"},
+    )
     svc = _svc_with_prospects([_prospect("signer@x.com", step)])
 
     advanced = await svc.complete_current_step_for_integration_event(
@@ -59,11 +70,56 @@ async def test_documenso_signature_advances_matching_document_stage():
         step_type="document_upload",
         provider_key="signing_provider",
         provider_value="documenso",
+        reference_config_key="documenso_template_id",
+        event_reference="template-1",
         completed_by="integration:documenso",
     )
 
     assert advanced is not None
     svc.complete_step.assert_awaited_once()
+
+
+async def test_unrelated_provider_event_does_not_advance_matching_email():
+    step = _step(
+        "meeting",
+        {
+            "scheduling_provider": "calcom",
+            "calcom_booking_url": "https://cal.com/team/membership-interview",
+        },
+    )
+    svc = _svc_with_prospects([_prospect("applicant@x.com", step)])
+
+    advanced = await svc.complete_current_step_for_integration_event(
+        organization_id="org-1",
+        emails=["applicant@x.com"],
+        step_type="meeting",
+        provider_key="scheduling_provider",
+        provider_value="calcom",
+        reference_config_key="calcom_booking_url",
+        event_reference="unrelated-event",
+        completed_by="integration:calcom",
+    )
+
+    assert advanced is None
+    svc.complete_step.assert_not_awaited()
+
+
+async def test_event_without_reference_is_rejected_before_email_query():
+    svc = _svc_with_prospects([])
+
+    advanced = await svc.complete_current_step_for_integration_event(
+        organization_id="org-1",
+        emails=["applicant@x.com"],
+        step_type="meeting",
+        provider_key="scheduling_provider",
+        provider_value="calcom",
+        reference_config_key="calcom_booking_url",
+        event_reference="",
+        completed_by="integration:calcom",
+    )
+
+    assert advanced is None
+    svc.db.execute.assert_not_called()
 
 
 async def test_no_email_short_circuits_without_query():
@@ -75,6 +131,8 @@ async def test_no_email_short_circuits_without_query():
         step_type="meeting",
         provider_key="scheduling_provider",
         provider_value="calcom",
+        reference_config_key="calcom_booking_url",
+        event_reference="interview",
         completed_by="integration:calcom",
     )
 
@@ -95,6 +153,8 @@ async def test_wrong_stage_type_does_not_advance():
         step_type="meeting",
         provider_key="scheduling_provider",
         provider_value="calcom",
+        reference_config_key="calcom_booking_url",
+        event_reference="interview",
         completed_by="integration:calcom",
     )
 
@@ -113,6 +173,8 @@ async def test_meeting_without_calcom_provider_does_not_advance():
         step_type="meeting",
         provider_key="scheduling_provider",
         provider_value="calcom",
+        reference_config_key="calcom_booking_url",
+        event_reference="interview",
         completed_by="integration:calcom",
     )
 

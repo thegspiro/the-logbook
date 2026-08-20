@@ -61,6 +61,8 @@ import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
+import { buildShiftCheckInUrl } from '../../constants/nfc';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
@@ -68,6 +70,7 @@ import { AssignmentActions } from './AssignmentActions';
 import { PositionEditor } from './PositionEditor';
 import { CrewBoardSlot } from './CrewBoardSlot';
 import { ShiftCallsSection } from './ShiftCallsSection';
+import { ShiftCloseoutWizard } from './ShiftCloseoutWizard';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -87,6 +90,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     loadMembers,
     platoonsEnabled,
     requireEndOfShiftChecks,
+    callTrackingMode,
     loadSettings,
   } = useSchedulingStore();
   useEffect(() => {
@@ -1224,8 +1228,29 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             </div>
           )}
 
+          {/* Close-out. A department that records call counts rather than
+              incidents gets the three-step wizard, which saves each step as it
+              goes; everyone else keeps the single checklist below unchanged. */}
+          {showFinalizeChecklist && callTrackingMode === 'count_only' && (
+            <ShiftCloseoutWizard
+              shiftId={shift.id}
+              unitLabel={shift.apparatus_unit_number || shift.apparatus_name || 'this apparatus'}
+              tz={tz}
+              outstandingChecks={endOfShiftChecks.filter((c) => !c.isCompleted).length}
+              requireChecks={requireEndOfShiftChecks}
+              onCancel={() => setShowFinalizeChecklist(false)}
+              onFinalized={() => {
+                setShowFinalizeChecklist(false);
+                // Mirrors handleFinalize: refresh the panel's own copy of the
+                // shift and let the parent list re-read it too.
+                void schedulingService.getShift(shift.id).then(setShift);
+                onRefresh?.();
+              }}
+            />
+          )}
+
           {/* Finalize Checklist */}
-          {showFinalizeChecklist && (
+          {showFinalizeChecklist && callTrackingMode !== 'count_only' && (
             <div className="space-y-3 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
               <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                 <CheckCircle2 className="h-4 w-4 text-green-600" /> Before you close this shift
@@ -2337,7 +2362,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               {showQR && (
                 <div className="border-theme-surface-border mt-2 inline-block rounded-lg border bg-white p-4">
                   <QRCodeSVG
-                    value={`${window.location.origin}/scheduling/checkin?apparatus=${shift.apparatus_id}`}
+                    value={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
                     size={200}
                     level="M"
                     includeMargin
@@ -2357,6 +2382,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     Print QR Card
                   </button>
                 </div>
+              )}
+              {showQR && (
+                <NfcTagWriter
+                  url={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
+                  targetLabel={shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
+                  actionNoun="shift check-in"
+                />
               )}
             </div>
           )}

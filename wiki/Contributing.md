@@ -141,6 +141,19 @@ npm run lint:fix
 npm run format
 ```
 
+> **Run `npm install` before any of these, and treat a `MODULE_NOT_FOUND` as a
+> stop sign.** With no `node_modules`, `npx <tool>` does not fail — it silently
+> downloads whatever version is current on the registry and runs _that_ instead
+> of the one this repo pins. On 2026-08-16 that turned a routine
+> `npx prettier --write` over some Markdown into three corrupted literals,
+> including a quoted API error string (`end_date` → `end*date`) in prose the
+> author had never touched. The pinned Prettier does not do that; the fetched one
+> did.
+>
+> The formatter is only the example. Anything reached through `npx` — ESLint,
+> Prettier, `tsc` — is a different program when the workspace is empty. Use
+> `npx --no-install <tool>` if you want it to fail loudly rather than improvise.
+
 ### Best Practices
 
 - **DRY**: Don't Repeat Yourself
@@ -271,21 +284,21 @@ pull request.
 ### Test Structure
 
 ```typescript
-describe('UserService', () => {
-  describe('createUser', () => {
-    it('should create a new user with valid data', async () => {
+describe("UserService", () => {
+  describe("createUser", () => {
+    it("should create a new user with valid data", async () => {
       // Arrange
-      const userData = { username: 'test', email: 'test@example.com' };
-      
+      const userData = { username: "test", email: "test@example.com" };
+
       // Act
       const result = await userService.createUser(userData);
-      
+
       // Assert
       expect(result).toBeDefined();
-      expect(result.username).toBe('test');
+      expect(result.username).toBe("test");
     });
-    
-    it('should throw error with duplicate email', async () => {
+
+    it("should throw error with duplicate email", async () => {
       // Test error case
     });
   });
@@ -304,7 +317,7 @@ describe('UserService', () => {
 ```typescript
 /**
  * Verifies the integrity of audit log chain
- * 
+ *
  * @param startId - First log entry ID to verify
  * @param endId - Last log entry ID to verify
  * @returns Verification results with any errors found
@@ -312,7 +325,7 @@ describe('UserService', () => {
  */
 async function verifyLogIntegrity(
   startId: number,
-  endId: number
+  endId: number,
 ): Promise<VerificationResult> {
   // Implementation
 }
@@ -353,6 +366,7 @@ By contributing, you agree that your contributions will be licensed under the MI
 ## Recognition
 
 Contributors will be recognized in:
+
 - README.md contributors section
 - Release notes
 - Annual contributor highlights

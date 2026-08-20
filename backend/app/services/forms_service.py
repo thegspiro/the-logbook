@@ -1432,15 +1432,18 @@ class FormsService:
             await self.db.commit()
 
         # Auto-advance pipeline steps linked to this form
-        await self._auto_advance_pipeline_step(form)
+        await self._auto_advance_pipeline_step(form, submission)
 
-    async def _auto_advance_pipeline_step(self, form: Form) -> None:
-        """Auto-complete pipeline steps linked to this form.
+    async def _auto_advance_pipeline_step(
+        self, form: Form, submission: FormSubmission
+    ) -> None:
+        """Auto-complete the pipeline step linked to this submission.
 
         When a form_submission pipeline step has ``auto_advance``
         enabled in its config and its ``form_id`` matches the
-        submitted form, find every prospect currently on that step
-        and complete it (which also advances them to the next step).
+        submitted form, advance only the prospect bound to this specific
+        submission. A form submission is not evidence that unrelated
+        prospects on the same step have completed the form.
         """
         from loguru import logger
 
@@ -1486,6 +1489,7 @@ class FormsService:
                     select(ProspectiveMember).where(
                         ProspectiveMember.current_step_id == step.id,
                         ProspectiveMember.status == ProspectStatus.ACTIVE,
+                        ProspectiveMember.form_submission_id == submission.id,
                     )
                 )
                 prospects = prospect_result.scalars().all()
@@ -1504,6 +1508,7 @@ class FormsService:
                             notes="Auto-advanced on form submission",
                             action_result={
                                 "form_id": str(form.id),
+                                "form_submission_id": str(submission.id),
                                 "auto_advanced": True,
                             },
                         )
@@ -1515,7 +1520,7 @@ class FormsService:
                         )
                     except Exception as e:
                         logger.error(
-                            f"Failed to auto-advance " f"prospect {prospect.id}: {e}"
+                            f"Failed to auto-advance prospect {prospect.id}: {e}"
                         )
         except Exception as e:
             logger.error(f"Pipeline auto-advance check failed: {e}")
@@ -2322,8 +2327,7 @@ class FormsService:
             return {
                 "success": False,
                 "error": (
-                    f"Event request missing required mapping(s): "
-                    f"{', '.join(missing)}"
+                    f"Event request missing required mapping(s): {', '.join(missing)}"
                 ),
             }
 

@@ -104,6 +104,26 @@ class TestValidateCheckInWindow:
         assert err is None
         assert "official check-in window" in notice
 
+    def test_flexible_more_than_one_hour_early_blocks(self):
+        # FLEXIBLE window opens 18:00 UTC; the early-arrival grace must not let
+        # a caller claim attendance days (or even a few hours) in advance.
+        ev = _event(CheckInWindowType.FLEXIBLE)
+        now = datetime(2026, 6, 1, 16, 59, tzinfo=tz.utc)
+        ok, err, notice = _svc()._validate_check_in_window(ev, now)
+        assert ok is False
+        assert "not available yet" in err
+        assert notice is None
+
+    def test_window_one_hour_early_allows_with_notice(self):
+        ev = _event(CheckInWindowType.WINDOW)
+        check_in_start, _ = EventService._get_check_in_window(ev)
+        ok, err, notice = _svc()._validate_check_in_window(
+            ev, check_in_start - timedelta(hours=1)
+        )
+        assert ok is True
+        assert err is None
+        assert "official check-in window" in notice
+
     def test_strict_early_blocks(self):
         # STRICT is a hard gate — no early check-in, no notice.
         ev = _event(CheckInWindowType.STRICT)

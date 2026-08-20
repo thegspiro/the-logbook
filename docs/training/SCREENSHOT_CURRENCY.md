@@ -1,5 +1,143 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-17 → 08-19 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-17_TO_19.md`](../CHANGE_AUDIT_2026-08-17_TO_19.md#documentation-and-media-disposition).
+
+Two things landed that invalidate existing captures rather than merely adding
+new ones: **shift close-out is a different screen** for departments recording a
+call count, and **four QR pages gained an NFC control in their action row**.
+
+### REPLACE — existing images now show a screen that no longer matches
+
+Each of these is in a guide today and is wrong, incomplete, or newly ambiguous.
+Listed with the file so a re-capture run can target them.
+
+| Image                                                        | Guide  | Why                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `03-45-finalize-checklist.png`                               | 03     | Still correct for a **detailed**-mode department, and now ambiguous without saying so. The guide has been given a note above the image; the image itself needs a caption change, and the count-only wizard needs shooting alongside it rather than replacing it |
+| `03-32-settings-general-closeout.png`                        | 03     | The _Shift close-out rules_ block gained **Record a call count at close-out**. The current shot predates it, so a reader looking for the toggle will conclude their build does not have it                                                                      |
+| `03-14-scheduling-reports.png`                               | 03     | If the demo department is switched to count-only for the new captures, the Call Volume card relabels. Verify which mode this was shot in and caption it                                                                                                         |
+| `04-04-event-qr-code.png`                                    | 04     | The page gained **Write to an NFC tag** below the QR code. The current shot is missing a control the guide now describes                                                                                                                                        |
+| `03-08-calls-runs-section.png`                               | 03     | Correct, and now conditional — Calls / Runs does not exist for a count-only department. Needs a caption saying which mode it shows                                                                                                                              |
+| Check-In QR Codes directory (guide 06, `#check-in-qr-codes`) | 06     | Apparatus cards gained **Write NFC tag** in the action row. There is **no captured image of this page at all**; the new marker below covers it                                                                                                                  |
+| Shift detail QR block (guide 03)                             | 03     | The NFC writer now sits beneath the QR code. No dedicated capture exists; covered by the marker below                                                                                                                                                           |
+| `17-01-privacy-choices.png`                                  | 17     | `/privacy` and `/terms` were rewritten on 2026-08-17 with a new print stylesheet. Any capture of either page predates the rewrite                                                                                                                               |
+| `00-04-dashboard-overview.png`, `00-20-member-dashboard.png` | 00, 10 | Only if shot at a narrow viewport — the week strip and alert list now collapse on a phone. Desktop captures are unaffected                                                                                                                                      |
+| Login page (guides 00, 03 of the YouTube set)                | 00     | Only for departments with `CAPTCHA_ENABLED`. The challenge widget is new on the two internet-exposed forms and appears in no capture                                                                                                                            |
+
+### SCREENSHOT NEEDED (new captures)
+
+These are marked in the guides as `**[SCREENSHOT NEEDED — …]**` and counted by
+`status_report.py`. Repeated here with the demo-data state each one needs,
+because that is what a capture run has to set up and the marker cannot carry.
+
+**Guide 03 — scheduling (6 markers)**
+
+- **Settings → General → _Shift close-out rules_** with **Record a call count at
+  close-out** switched on and its explanatory paragraph legible.
+  _Demo data:_ none beyond the toggle.
+- **Close-out wizard step 1 — attendance.** _Demo data:_ a **four-person crew on
+  a 24-hour tour**, so the combined-hours figure reads ~96 and visibly is not
+  the shift length; at least one member with a missing check-out; at least one
+  assigned member who never checked in, showing empty times.
+- **Close-out wizard step 2 — calls.** _Demo data:_ two or three type rows
+  filled (e.g. EMS 3, Fire 1) with the derived total showing 4 and rendered
+  read-only. This is the screen that teaches "the rows are the only source" and
+  the read-only styling has to be visible.
+- **Close-out wizard step 3 — confirmation.** _Demo data:_ the same crew, credit
+  seeded from the apparatus count, **one member adjusted downward** for a late
+  arrival, plus the pass-down notes field.
+- **Close-out with outstanding end-of-shift checks.** _Demo data:_
+  `require_end_of_shift_checks` on, one check outstanding, showing the warning,
+  the override checkbox, and the reason field it requires.
+- **Reports → Call Volume in count-only mode**, showing **Unit Responses / Avg
+  Responses/Day / Peak Responses** and the footnote. **Caption it against the
+  detailed-mode version** — the whole point is that the labels differ, and a
+  lone capture teaches neither.
+
+**Guide 04 — events (3 markers)**
+
+- **`/events/:id/qr-code` mid-write**, showing the "hold a tag to your phone"
+  state rather than the idle button.
+- **Tap Tag on the Events page, scan armed**, waiting for a tag.
+- **Tap Tag after reading an unrecognized tag** — the explanatory message with
+  the scan still armed. This is the security behaviour, and a reader will not
+  believe "it just doesn't navigate" without seeing it.
+
+**Guide 06 — apparatus & facilities (1 marker)**
+
+- **`/locations/qr-codes` on a phone**, an apparatus card mid-write with its
+  action row showing Copy URL / Download PNG / Regenerate / **Write NFC tag**.
+  Shoot it on a phone, not desktop: that is where the button is usable, and the
+  card grid is the thing being described.
+
+**Guide 10 — mobile (1 marker)**
+
+- **A phone held against a mounted NFC tag on an apparatus**, and the resulting
+  shift check-in page naming the unit, date and hours. Two frames or one
+  composite. Note the camera-viewfinder caveat below does **not** apply — no
+  viewfinder is involved.
+
+**Guide 19 — release changes (3 markers)**
+
+- **Admin hours category QR page** with the NFC tag writer beside the QR code.
+- **`python -m app.preflight`**, two terminal captures side by side: exit 0 on a
+  good configuration, exit 1 on a broken one with the blocking items listed.
+- **The rewritten `/privacy` header**, showing the department-control statement
+  above the fold.
+
+### Capture constraints for this batch
+
+**Four of the six guide-03 captures are now automated** _(2026-08-19)_ —
+`03-74-settings-call-count-toggle`, `03-75-closeout-step1-attendance`,
+`03-76-closeout-step2-calls` and `03-77-closeout-step3-confirm`. They run
+against a dedicated fixture the seeder builds: a past **24-hour tour with four
+crew**, one member checked in but never out, and one assigned member with no
+attendance row at all. Both of those last two are states no other seeded shift
+carries, because `_seed_shift_attendance` checks every past crew fully in and
+out — right for every other shift, useless for this one.
+
+Three things about that group are worth knowing before editing it:
+
+- **Each shot forces the organization's call-tracking mode**, and
+  `03-45-finalize-checklist` forces it back. The mode decides which of two
+  entirely different close-out screens renders, either shot may run first, and a
+  shot that inherited the wrong mode would still **succeed** — it would just
+  write the wrong picture under the right filename. This is the same
+  self-healing rule `capture.mjs` applies to `navigationLayout`.
+- **Each shot walks the wizard from step 1.** The server remembers how far the
+  last run advanced (`shifts.closeout_step`) and reopens there, so without the
+  rewind a second capture run would open at step 3 and the "step 1" shot would
+  quietly contain step 3.
+- **Nothing clicks "Close out shift".** That finalizes, and a finalized shift
+  will not reopen the wizard — one capture run would spend the fixture for every
+  run after it. If the fixture is ever finalized by hand, the seeder says so and
+  refuses to reuse it rather than silently building a second one.
+
+**Two of the six are still manual, with the specific blocker for each:**
+
+- **Close-out with outstanding end-of-shift checks.** Needs
+  `require_end_of_shift_checks` on _and_ a shift with an outstanding check.
+  Equipment-check templates resolve by apparatus type and the demo department
+  writes its checklists for **engines**, while the close-out fixture is
+  deliberately a Medic — putting it on an engine would let it race
+  `03-45-finalize-checklist` for the same shift. Closing this needs either an
+  engine-typed second fixture or a medic checklist template in the seed.
+- **Reports → Call Volume in count-only mode.** Needs actual `org_calls` rows,
+  and the fixture has none: calls are written by the wizard, and the wizard
+  shots deliberately stop short of finalizing. Closing this needs the seeder to
+  POST `PATCH /scheduling/shifts/{id}/closeout/calls` against a _second_ past
+  shift — one the wizard captures do not use, so the two do not fight over
+  `closeout_step`.
+
+**The NFC captures cannot be automated at all.** Web NFC does not exist in the
+headless Chromium the harness drives, and it is not exposed over `http://`
+either. They are manual captures on a real Android phone, like the
+camera-viewfinder shots recorded under the 2026-08-12 entry below, and they must
+not be added to `manifest.mjs`.
+
 ## Tracker corrected 2026-08-17 — the count was never 421 of 423
 
 Two defects in the pipeline were found while capturing the nested-room shots,

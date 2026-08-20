@@ -309,7 +309,7 @@ class TestSelfCheckIn:
         event = _make_event(
             org_id=org_id,
             title="Future Event",
-            start_datetime=now + timedelta(hours=2),
+            start_datetime=now + timedelta(minutes=90),
             end_datetime=now + timedelta(hours=3),
             check_in_window_type=CheckInWindowType.FLEXIBLE,
         )
@@ -324,6 +324,33 @@ class TestSelfCheckIn:
         assert rsvp is not None
         assert notice is not None
         assert "official check-in window" in notice
+
+    @pytest.mark.asyncio
+    async def test_self_check_in_far_before_flexible_window_is_rejected(self):
+        """Knowing a future event ID must not permit claiming attendance."""
+        from app.models.event import CheckInWindowType
+
+        now = datetime.now(timezone.utc)
+        org_id = uuid4()
+        event = _make_event(
+            org_id=org_id,
+            title="Future Event",
+            start_datetime=now + timedelta(days=30),
+            end_datetime=now + timedelta(days=30, hours=1),
+            check_in_window_type=CheckInWindowType.FLEXIBLE,
+        )
+        user = _make_user(org_id=org_id)
+        org = _make_org(org_id=org_id)
+        mock_db = _mock_db_returning(event, user, org)
+
+        rsvp, error, notice = await _make_service(mock_db).self_check_in(
+            event.id, user.id, org_id
+        )
+
+        assert rsvp is None
+        assert "Check-in is not available yet" in error
+        assert notice is None
+        mock_db.commit.assert_not_awaited()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(

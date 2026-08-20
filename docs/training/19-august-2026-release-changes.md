@@ -1,9 +1,10 @@
-# August 12–16, 2026 workflow updates
+# August 12–19, 2026 workflow updates
 
 This lesson is the operator-facing companion to the
 [six-day change audit](../CHANGE_AUDIT_2026-08-10_TO_16.md), its
-[three-day detail](../CHANGE_AUDIT_2026-08-12_TO_14.md), and the
-[August 15–16 detail](../CHANGE_AUDIT_2026-08-15_TO_16.md). It explains what
+[three-day detail](../CHANGE_AUDIT_2026-08-12_TO_14.md), the
+[August 15–16 detail](../CHANGE_AUDIT_2026-08-15_TO_16.md), and the
+[August 17–19 audit](../CHANGE_AUDIT_2026-08-17_TO_19.md). It explains what
 members and administrators now do differently. Permission names are included
 because a control that is absent is usually a permission or module-state issue,
 not a rendering failure.
@@ -318,3 +319,175 @@ mounts; upgrade Compose rather than removing the tag). Unraid operators
 copying `unraid/.env.example` will find an HTTPS `ALLOWED_ORIGINS` example —
 substitute your reverse-proxy hostname. Details in the
 [technical audit](../CHANGE_AUDIT_2026-08-15_TO_16.md).
+
+---
+
+# August 17–19 changes
+
+Three things landed in this window that change what somebody does at a
+keyboard: a way to record call volume without an incident-reporting system, a
+rebuilt shift close-out, and NFC tags. A fourth — a pre-upgrade configuration
+check — changes what an administrator does at a terminal.
+
+## Counting calls without an incident-reporting system
+
+**Who this is for:** a department that does not run an RMS and still has to
+report call volume for grants, ISO, apparatus replacement, or a staffing case.
+
+**Switch it on:** Scheduling → Settings → General → _Shift close-out rules_ →
+**Record a call count at close-out**. It applies immediately.
+
+**Tell your officers first.** It changes what they see at 0700 the same
+morning: the familiar close-out checklist is replaced by a three-step wizard.
+
+Full lesson: [Counting Calls Without an
+RMS](./03-scheduling.md#counting-calls-without-an-rms-2026-08-18).
+
+### The one thing to get right before quoting a number
+
+The report labels the figure **Unit Responses**, not **Total Calls**, and the
+difference is real. Two units that closed out independently each reported their
+own call, and nothing yet links them to one incident — so an MVA that Engine 5
+and Medic 1 both ran counts twice.
+
+**Do not put that figure in a grant application as a department call count.**
+Reconcile mutual responses by hand until the cross-unit feature ships.
+
+### What is deliberately not collected
+
+No address, no patient or caller identity, no narrative, no response times, no
+readable CAD number. Those are the fields that make a call record protected
+health information, and there is nowhere in the feature to enter one. Departments
+that need incident-level records need an incident module, not a call counter.
+
+**Edge cases:** blank and `0` are different answers (a gap in the record versus
+a quiet tour); a type breakdown that adds up to less than the total is fine, and
+the remainder records as unclassified; 100 calls is the per-shift ceiling;
+renaming a call type does not disturb history, but deleting one leaves its past
+calls unclassified.
+
+## Shift close-out is now three screens, and it saves as you go
+
+For departments recording a call count. Same **Close out shift** button, same
+permissions.
+
+1. **When was everyone actually on** — times, combined crew hours, anyone
+   flagged for a missing check-out, and anyone assigned who never checked in
+2. **How many calls** — one row per call type; the total is calculated from the
+   rows and cannot be typed into
+3. **Confirm each member's credit** — seeded from the apparatus count, adjust
+   anyone who came on late
+
+**Each step saves when you press Next.** A phone that locks at 0700 reopens on
+the screen it left rather than at the beginning.
+
+**Edge cases:** reopening a finalized shift restarts the wizard; declined,
+pending and no-show crew are not listed; you cannot lower the count below the
+calls this shift shares with another unit; correcting a shift's date or
+apparatus afterwards moves its calls with it; a member credited with fewer calls
+than the apparatus ran gets a count but not call types, because which calls they
+were on is not knowable.
+
+Full lesson: [The three-step close-out
+wizard](./03-scheduling.md#the-three-step-close-out-wizard-2026-08-19).
+
+## NFC tags: events, admin hours, and shift check-in
+
+A reusable sticker replaces reprinting a QR sheet per event, and needs no
+camera — which is the part that fails in a dark bay or with gloves on.
+
+**Write a tag** from the page that already shows the QR code:
+
+| Page                                          | Tag opens                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------- |
+| Event → **QR Code**                           | that event's check-in                                                 |
+| Admin Hours → a category's QR code            | that category's clock-in                                              |
+| Shift detail → the apparatus QR block         | shift check-in for that truck                                         |
+| **Check-In QR Codes** (`/locations/qr-codes`) | shift check-in — this is where you write a whole fleet in one sitting |
+
+**Read a tag** by holding the phone to it — or, if the app is already open on
+screen, with **Tap Tag** on the Events page, My Admin Hours, or the scheduling
+calendar. Android only hands a tag to the browser when the app is _not_ in the
+foreground, which is the gap Tap Tag fills.
+
+> **[SCREENSHOT NEEDED — the admin hours category QR page with the NFC tag
+> writer beside the QR code]**
+
+**Requirements: Chrome on Android, over HTTPS.** Not iPhone, not desktop, not a
+plain-`http://` LAN deployment. Where it is unavailable the controls are absent
+or explain which of the two conditions is missing. QR still works everywhere.
+
+**Prefer the apparatus tag over a shift tag** for anything mounted: the
+apparatus code resolves to whichever shift is running when it is tapped, so one
+sticker serves the life of the truck. A shift-keyed tag dies when that shift
+ends.
+
+**Room kiosk display codes cannot be tagged, deliberately.** A kiosk code is a
+check-in credential for an unauthenticated screen; a sticker in a public hallway
+hands it to whoever walks past.
+
+**An unrecognized tag does nothing.** The app follows only links pointing back
+at your own Logbook and only to check-in pages it knows. Anything else leaves
+the scan waiting with a message.
+
+## Before you upgrade: check the configuration first
+
+A configuration problem is normally found when the container refuses to boot —
+which means finding it by losing the service. Ask first:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  run --rm --build backend python -m app.preflight
+```
+
+`0` means it starts, `1` means it does not and lists what is blocking, `2` means
+a value is malformed.
+
+**Two details matter.** Use `--build`, or you are checking the image you are
+replacing rather than the one you are deploying. And pass the same `-f` files
+your deployment uses, or Compose evaluates only the base development settings
+and answers about a configuration nobody runs.
+
+`--compose PATH` goes further and names settings your compose file **drops** —
+values sitting in `.env` that never reach the container. Those used to become
+defaults silently, which is how production ends up running a development
+setting with nothing on screen to say so.
+
+> **[SCREENSHOT NEEDED — two terminal captures side by side: `python -m
+app.preflight` exiting 0 on a good configuration, and exiting 1 on a broken
+> one with the blocking items listed]**
+
+## Sign-in hardening
+
+- **Breached-password rejection** (optional, off by default). Only the first
+  five characters of the password's hash ever leave the server. If the lookup
+  service is down the password change **still goes through** — the check is
+  supplementary, and complexity, history, MFA and lockout all still apply.
+- **A human challenge (CAPTCHA)** can be required on the two internet-facing
+  forms. If _its_ provider is down, the submission is **rejected** — there is no
+  other control behind it, so accepting unverified traffic during an outage is
+  exactly what an attacker wants.
+- **Lockout messages are generic by default.** Saying "this account is locked"
+  confirms the account exists and tells an attacker their spray is landing.
+- **A per-IP throttle** counts failed attempts across _all_ accounts. Account
+  lockout is per-user, so one password tried against a thousand accounts never
+  trips it; this is the control that does.
+
+## Privacy notice and terms rewritten
+
+Both pages were rewritten to state up front that **the department, not the
+platform, controls member data**. The print layouts were rebuilt and both pages
+went through an accessibility pass.
+
+> **[SCREENSHOT NEEDED — the rewritten `/privacy` page header showing the
+> department-control statement above the fold]**
+
+## Upgrade notes for administrators (August 17–19)
+
+- **Two migrations**: `82bdcb3b1e64` (the call tables) and `2827079fd66c` (the
+  close-out resume point). Both additive, neither backfilling. Back up, confirm
+  `alembic heads` returns exactly one, then `alembic upgrade head`.
+- **Nothing changes for a department that ignores the new setting.** Call
+  logging keeps working exactly as it does today; the absence of the setting
+  means current behaviour, not "off".
+- **Run the preflight check before the restart**, per the section above.

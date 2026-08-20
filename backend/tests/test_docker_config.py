@@ -372,6 +372,84 @@ class TestDockerCompose:
         assert not missing, f"Backend missing required environment vars: {missing}"
 
 
+class TestBaseComposeReachesProductionGates:
+    """ENVIRONMENT=production must not be a one-way door in the base file.
+
+    The base backend `environment:` block is a whitelist and there is no
+    env_file, so a variable missing from it cannot be set from .env at all.
+    ENVIRONMENT itself IS read from .env, so a base-only stack can be put into
+    production mode — where these gates block startup — while the knobs that
+    satisfy or waive them stay unreachable. Editing .env then changes nothing
+    and the container crash-loops with no way out.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.env = yaml.safe_load(_read(ROOT_DIR / "docker-compose.yml"))["services"][
+            "backend"
+        ]["environment"]
+
+    def test_environment_is_read_from_dot_env(self):
+        # The premise of every assertion below: base-only CAN enter production.
+        assert "${ENVIRONMENT:-development}" in str(self.env["ENVIRONMENT"])
+
+    @pytest.mark.parametrize(
+        "setting",
+        [
+            "SECURITY_ENFORCE_HTTPS",
+            "SECURITY_REQUIRE_TLS",
+            "SECURITY_ALLOW_UNVERIFIED_TLS",
+            "DB_SSL",
+            "DB_SSL_CA",
+            "REDIS_SSL",
+            "REDIS_SSL_CA",
+            "VOTE_SIGNING_KEY",
+            "DEBUG",
+            "ENABLE_DOCS",
+            "TRUSTED_PROXY_IPS",
+            "COOKIE_SECURE",
+        ],
+    )
+    def test_production_gate_is_settable_from_dot_env(self, setting: str):
+        assert setting in self.env, (
+            f"{setting} is absent from the base compose environment whitelist, "
+            "so setting it in .env silently does nothing"
+        )
+        assert f"${{{setting}" in str(self.env[setting]), (
+            f"{setting} is hardcoded in the base compose file rather than "
+            "interpolated from .env"
+        )
+
+
+class TestCaCertificateMount:
+    """DB_SSL_CA / REDIS_SSL_CA are read inside the container.
+
+    Passing those settings through without mounting the certificates means a
+    host path from .env resolves to nothing in the container and
+    ssl.create_default_context raises FileNotFoundError during startup — a TLS
+    misconfiguration that presents as a boot crash. Production is the case
+    that matters and also the one most easily lost, because the production
+    override tags `volumes:` with `!override`, which clears every mount
+    inherited from the base file.
+    """
+
+    MOUNT = "${SSL_CERTS_DIR:-./infrastructure/certs}:/etc/ssl/logbook:ro"
+
+    @pytest.mark.parametrize(
+        "compose_file", ["docker-compose.yml", "docker-compose.prod.yml"]
+    )
+    def test_ca_directory_is_mounted_read_only(self, compose_file: str):
+        assert self.MOUNT in _read(ROOT_DIR / compose_file), (
+            f"{compose_file} does not mount the CA directory; DB_SSL_CA / "
+            "REDIS_SSL_CA paths would not resolve inside the container"
+        )
+
+    def test_mount_target_dir_is_tracked(self):
+        # Docker creates a missing bind-mount source as a root-owned directory,
+        # so the repo carries the directory rather than leaving that to chance.
+        assert (ROOT_DIR / "infrastructure" / "certs" / "README.md").exists()
+
+
 class TestProductionComposeSecuritySwitches:
     """Production must fail closed unless plaintext transport is explicit."""
 
@@ -550,6 +628,13 @@ class TestSupportingFiles:
 
     def test_backend_requirements_exists(self):
         assert (BACKEND_DIR / "requirements.txt").exists()
+
+    def test_full_env_example_does_not_reveal_locked_accounts(self):
+        """Copied defaults must preserve uniform authentication failures."""
+        env_example = _read(ROOT_DIR / ".env.example.full")
+        assert re.search(
+            r"^ACCOUNT_LOCKOUT_REVEAL=false\s*$", env_example, re.MULTILINE
+        )
 
     def test_frontend_nginx_conf_exists(self):
         assert (FRONTEND_DIR / "nginx.conf").exists()

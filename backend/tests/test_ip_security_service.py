@@ -212,15 +212,19 @@ class TestQueryOrgScoping:
         with pytest.raises(TypeError):
             await svc.get_pending_requests(db=self._db_returning([]))
 
-    async def test_global_allowed_ips_returns_all_orgs(self, svc):
-        # The pre-auth middleware variant intentionally has no org filter.
+    async def test_allowed_ips_is_org_scoped(self, svc):
         db = self._db_returning(["203.0.113.7", "198.51.100.9"])
-        out = await svc.get_all_active_allowed_ips_global(db=db)
+        out = await svc.get_all_active_allowed_ips(db=db, organization_id="org-A")
         assert out == {"203.0.113.7", "198.51.100.9"}
         sql = _executed_sql(db)
-        assert "organization_id" not in sql
+        assert "organization_id" in sql
+        assert "org-A" in sql
         # Still scoped to active, approved allowlist exceptions.
         assert "allowlist" in sql.lower() or "exception_type" in sql.lower()
+
+    async def test_allowed_ips_requires_org(self, svc):
+        with pytest.raises(TypeError):
+            await svc.get_all_active_allowed_ips(db=self._db_returning([]))
 
 
 class TestGetExceptionById:

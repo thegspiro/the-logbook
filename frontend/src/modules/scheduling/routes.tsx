@@ -102,7 +102,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/qualifications"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredAnyPermission={['scheduling.view', 'scheduling.manage']}>
+            <ProtectedRoute requiredAnyPermission={['scheduling.manage', 'training.view_all', 'training.manage']}>
               <PositionRosterPage />
             </ProtectedRoute>
           </Suspense>

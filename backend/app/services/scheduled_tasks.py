@@ -99,13 +99,16 @@ from loguru import logger
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.call_tracking import CallTrackingMode
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
     default_reminder_target,
 )
 from app.models.inventory import MEDICAL_ITEM_TYPES
 from app.models.user import Organization, User
+from app.services.call_tracking_service import CallTrackingService
 from app.services.email_service import _redact_email
+from app.services.shift_eligibility_service import ShiftEligibilityService
 
 
 def _resolve_event_reminder_target(event: Any) -> str:
@@ -1395,6 +1398,11 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
             window_hours = psv_cfg.get("validation_window_hours", 2)
             lookback = now - timedelta(hours=window_hours)
 
+            count_only_calls = (
+                ShiftEligibilityService(db).get_call_tracking_settings(org).get("mode")
+                == CallTrackingMode.COUNT_ONLY
+            )
+
             shifts_result = await db.execute(
                 select(Shift)
                 .where(Shift.organization_id == str(org.id))
@@ -1554,6 +1562,16 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                     message += (
                         " A shift completion report is required "
                         "before this shift can be finalized."
+                    )
+                if count_only_calls:
+                    # For a department that records counts rather than
+                    # incidents, this number is the only call data that will
+                    # ever exist for the shift, and every member's call credit
+                    # is derived from it. A prompt that asks only about
+                    # attendance leaves the officer with no cue to enter it.
+                    message += (
+                        " Record the number of calls this shift ran — the "
+                        "crew's call credit is taken from that number."
                     )
 
                 # In-app notification
@@ -2464,16 +2482,39 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
 
                 # Map user_id -> { count, types }
                 per_member_calls: dict = {}
-                for members, incident_type in shift_calls:
-                    if not members:
-                        continue
-                    for mid in members:
-                        bucket = per_member_calls.setdefault(
-                            str(mid), {"count": 0, "types": []}
-                        )
-                        bucket["count"] += 1
-                        if incident_type:
-                            bucket["types"].append(incident_type)
+                if shift_calls:
+                    for members, incident_type in shift_calls:
+                        if not members:
+                            continue
+                        for mid in members:
+                            bucket = per_member_calls.setdefault(
+                                str(mid), {"count": 0, "types": []}
+                            )
+                            bucket["count"] += 1
+                            if incident_type:
+                                bucket["types"].append(incident_type)
+                else:
+                    # A department on count-only call tracking has no
+                    # per-incident rows to attribute from. Its member credit is
+                    # the figure the officer set at close-out, already stored on
+                    # the attendance record. Without this the summary tells a
+                    # member "Calls responded: 0" for a shift whose own record
+                    # says five, and the number they were actually credited
+                    # with never reaches the person it belongs to.
+                    shift_call_types = await CallTrackingService(db).shift_type_counts(
+                        str(shift.id)
+                    )
+                    flat_types: list[str] = []
+                    for slug in sorted(shift_call_types):
+                        flat_types.extend([slug] * shift_call_types[slug])
+                    for att in attendance_records:
+                        credited = int(att.call_count or 0)
+                        if credited <= 0:
+                            continue
+                        per_member_calls[str(att.user_id)] = {
+                            "count": credited,
+                            "types": flat_types[:credited],
+                        }
 
                 # Pre-load completion reports keyed by trainee
                 rep_result = await db.execute(

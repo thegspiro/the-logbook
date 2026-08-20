@@ -10,6 +10,7 @@ place and can be unit-tested without a database.
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List, Optional
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -100,7 +101,7 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
     org_name = meta.get("org_name") or ""
     story.append(
         Paragraph(
-            f"{org_name} &middot; Generated "
+            f"{escape(str(org_name))} &middot; Generated "
             f"{generated_at.strftime('%Y-%m-%d %H:%M UTC')}",
             sub_style,
         )
@@ -108,7 +109,12 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
     parameters: List[str] = meta.get("parameters") or []
     if parameters:
         story.append(Spacer(1, 4))
-        story.append(Paragraph(" &nbsp;|&nbsp; ".join(parameters), sub_style))
+        story.append(
+            Paragraph(
+                " &nbsp;|&nbsp; ".join(escape(str(value)) for value in parameters),
+                sub_style,
+            )
+        )
 
     # ---- Summary ----
     story.append(Paragraph("Summary", section_style))
@@ -168,7 +174,7 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
     rows = [header]
     for m in members:
         row = [
-            Paragraph(m.get("full_name") or "Unknown", cell_style),
+            Paragraph(escape(str(m.get("full_name") or "Unknown")), cell_style),
             m.get("membership_number") or "",
             m.get("rank") or "",
             m.get("station") or "",
@@ -179,7 +185,7 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
             row.append(_existing_status(m))
         if show_contact:
             contact = m.get("email") or m.get("phone") or ""
-            row.append(Paragraph(contact, cell_style))
+            row.append(Paragraph(escape(str(contact)), cell_style))
         rows.append(row)
 
     # Distribute width across the visible columns.

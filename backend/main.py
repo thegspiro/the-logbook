@@ -41,6 +41,7 @@ from app.core.database import database_manager
 from app.core.error_codes import ErrorCode, resolve_error_code
 from app.core.error_reporting import build_error_type, persist_error_log
 from app.core.logging import setup_logging, setup_sentry
+from app.core.startup_diagnostics import env_presence_report
 
 # Create rate limiter instance (uses Redis if available, falls back to in-memory)
 # SEC: Use settings.REDIS_URL which respects REDIS_SSL (rediss:// scheme).
@@ -1302,6 +1303,15 @@ def validate_security_configuration():
         # is explicitly True (it defaults to False, so a dev box with default
         # secrets is NOT self-protecting — set the flag to opt in).
         critical_warnings = [w for w in warnings if "CRITICAL" in w]
+
+        # A dropped variable and a deliberate default look identical once
+        # pydantic has applied defaults, so a blocked boot otherwise reports
+        # the effective value and never the reason. Name which of these
+        # settings actually reached the process before raising.
+        if critical_warnings:
+            for line in env_presence_report(critical_warnings, settings):
+                logger.error(line)
+
         if critical_warnings and settings.ENVIRONMENT in ("production", "staging"):
             raise RuntimeError(
                 "SECURITY FAILURE: Cannot start in "
@@ -2032,6 +2042,7 @@ app.add_middleware(
         "Authorization",
         "Content-Type",
         "X-Requested-With",
+        "X-Captcha-Token",
         "X-CSRF-Token",
         "X-Session-ID",
         "Accept",
