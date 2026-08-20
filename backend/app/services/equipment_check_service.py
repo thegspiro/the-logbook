@@ -1008,6 +1008,7 @@ class EquipmentCheckService:
 
         items_data = data.pop("items", [])
         template_id = data.get("template_id")
+        selected_template = None
 
         if not items_data:
             raise ValueError("At least one checklist item is required")
@@ -1021,8 +1022,18 @@ class EquipmentCheckService:
                 organization_id,
                 None if allow_manage or is_shift_officer else position,
             )
-            if str(template_id) not in {str(t.id) for t in applicable_templates}:
+            selected_template = next(
+                (t for t in applicable_templates if str(t.id) == str(template_id)),
+                None,
+            )
+            if selected_template is None:
                 raise ValueError("Template is not applicable to this shift")
+            requested_timing = data.get("check_timing")
+            if (
+                requested_timing is not None
+                and requested_timing != selected_template.check_timing
+            ):
+                raise ValueError("check_timing does not match the selected template")
 
         # Prevent duplicate submission for same shift+template
         if template_id:
@@ -1087,7 +1098,11 @@ class EquipmentCheckService:
             apparatus_id=apparatus_ref.full_id,
             checked_by=checked_by,
             checked_at=datetime.now(timezone.utc),
-            check_timing=data.get("check_timing", "start_of_shift"),
+            check_timing=(
+                selected_template.check_timing
+                if selected_template is not None
+                else "start_of_shift"
+            ),
             overall_status=overall_status,
             total_items=total,
             completed_items=completed,
@@ -1192,6 +1207,10 @@ class EquipmentCheckService:
         if not template or not template.is_active:
             raise ValueError("Template not found")
 
+        requested_timing = data.get("check_timing")
+        if requested_timing is not None and requested_timing != template.check_timing:
+            raise ValueError("check_timing does not match the selected template")
+
         apparatus_id = data.get("apparatus_id") or template.apparatus_id
         # A client-supplied apparatus_id must belong to the caller's org — the
         # template's own apparatus_id is already org-scoped.
@@ -1231,7 +1250,7 @@ class EquipmentCheckService:
             apparatus_id=apparatus_id,
             checked_by=checked_by,
             checked_at=datetime.now(timezone.utc),
-            check_timing=data.get("check_timing", "start_of_shift"),
+            check_timing=template.check_timing,
             check_context="standalone",
             overall_status=overall_status,
             total_items=total,
@@ -1288,6 +1307,20 @@ class EquipmentCheckService:
             raise ValueError("Check not found")
         if check.overall_status != "incomplete":
             raise ValueError("Only incomplete checks can be updated")
+
+        # Repair the timing from the template while completing legacy checks
+        # that may have trusted a client-provided value. This is particularly
+        # important for end-of-shift close-out, which filters on this column.
+        if check.template_id:
+            template_result = await self.db.execute(
+                select(EquipmentCheckTemplate).where(
+                    EquipmentCheckTemplate.id == check.template_id,
+                    EquipmentCheckTemplate.organization_id == organization_id,
+                )
+            )
+            template = template_result.scalars().first()
+            if template is not None:
+                check.check_timing = template.check_timing
 
         items_data = data.get("items", [])
         if not items_data:
