@@ -12,6 +12,7 @@ const ALL_EVENT_TYPES: EventType[] = [
   EventTypeEnum.SOCIAL,
   EventTypeEnum.FUNDRAISER,
   EventTypeEnum.CEREMONY,
+  EventTypeEnum.RECRUITMENT,
   EventTypeEnum.OTHER,
 ];
 

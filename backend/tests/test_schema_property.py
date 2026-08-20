@@ -40,6 +40,7 @@ valid_event_types = st.sampled_from(
         "fundraiser",
         "ceremony",
         "other",
+        "recruitment",
     ]
 )
 

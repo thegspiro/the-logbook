@@ -26,6 +26,7 @@ const EVENT_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: EventType.SOCIAL, label: getEventTypeLabel(EventType.SOCIAL) },
   { value: EventType.FUNDRAISER, label: getEventTypeLabel(EventType.FUNDRAISER) },
   { value: EventType.CEREMONY, label: getEventTypeLabel(EventType.CEREMONY) },
+  { value: EventType.RECRUITMENT, label: getEventTypeLabel(EventType.RECRUITMENT) },
   { value: EventType.OTHER, label: getEventTypeLabel(EventType.OTHER) },
 ];
 

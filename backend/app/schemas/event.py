@@ -157,7 +157,8 @@ class EventBase(BaseModel):
         ...,
         description=(
             "Event type: business_meeting, public_education,"
-            " training, social, fundraiser, ceremony, other"
+            " training, social, fundraiser, ceremony, other,"
+            " recruitment"
         ),
     )
     location_id: Optional[UUID] = Field(
