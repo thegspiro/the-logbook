@@ -268,14 +268,14 @@ const DocumentsPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowCreateFolder(true)}
-                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+                className="btn-secondary btn-auto inline-flex items-center space-x-2"
               >
                 <Folder className="h-4 w-4" aria-hidden="true" />
                 <span>New Folder</span>
               </button>
               <button
                 onClick={handleOpenUploadModal}
-                className="flex items-center space-x-2 rounded-lg bg-amber-600 px-4 py-2 text-white transition-colors hover:bg-amber-700"
+                className="mobile-touch-target space-x-2 rounded-lg bg-amber-600 px-4 py-2 text-white transition-colors hover:bg-amber-700"
               >
                 <Upload className="h-4 w-4" />
                 <span>Upload Document</span>

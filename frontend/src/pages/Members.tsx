@@ -262,7 +262,7 @@ const Members: React.FC = () => {
           {filteredMembers.length > 0 && (
             <button
               onClick={handleExportCSV}
-              className="btn-secondary inline-flex items-center gap-2"
+              className="btn-secondary btn-auto inline-flex items-center gap-2"
               title="Export to CSV"
             >
               <Download className="h-4 w-4" aria-hidden="true" />
