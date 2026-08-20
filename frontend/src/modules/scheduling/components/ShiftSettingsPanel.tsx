@@ -11,7 +11,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { ClipboardCheck, Truck, Users } from 'lucide-react';
-import type { ShiftTemplateRecord, SchedulingFeatureSettings } from '../services/api';
+import type { ShiftTemplateRecord, SchedulingFeatureSettings, PositionSlot } from '../services/api';
 import { schedulingService } from '../services/api';
 import { useSchedulingStore } from '../store/schedulingStore';
 import type { ShiftSettings } from '../types/shiftSettings';
@@ -39,7 +39,7 @@ interface ShiftSettingsPanelProps {
     name: string;
     unit_number: string;
     apparatus_type: string;
-    positions?: Array<string | { position: string; required?: boolean }> | undefined;
+    positions?: PositionSlot[] | undefined;
   }>;
   onNavigateToTemplates: () => void;
   /** Section to render. Owned by the page so it can mirror it into the URL. */
@@ -144,7 +144,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     () =>
       apparatusList.map((a) => ({
         ...a,
-        positions: a.positions?.map((p) => (typeof p === 'string' ? p : p.position)),
+        positions: a.positions?.map((p) => p.position),
       })),
     [apparatusList]
   );

@@ -100,7 +100,7 @@ export default function ApparatusBasicPage() {
       setApparatusList(
         data.map((a) => ({
           ...a,
-          positions: a.positions?.map((p) => (typeof p === 'string' ? p : p.position)) ?? [],
+          positions: a.positions?.map((p) => p.position) ?? [],
         }))
       );
     } catch {

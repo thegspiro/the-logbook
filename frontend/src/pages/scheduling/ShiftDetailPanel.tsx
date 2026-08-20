@@ -247,8 +247,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const positionOptions: [string, string][] = useMemo(
     () =>
       hasApparatusPositions
-        ? apparatusPositions.map((p) => {
-            const name = typeof p === 'string' ? p : p.position;
+        ? apparatusPositions.map(({ position: name }) => {
             return [name, POSITION_LABELS[name] || name.charAt(0).toUpperCase() + name.slice(1)] as [string, string];
           })
         : Object.entries(POSITION_LABELS),
