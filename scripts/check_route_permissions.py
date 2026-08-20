@@ -58,7 +58,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC = REPO_ROOT / "APPLICATION_PAGES.md"
 ROUTE_FILES = ["frontend/src/App.tsx", "frontend/src/modules/*/routes.tsx"]
 
-PATH_RE = re.compile(r'path="(/[^"]*)"')
+# Match every route declaration so relative and wildcard routes still delimit
+# the source window for the preceding absolute route. Only absolute paths are
+# added to the documentation comparison below.
+PATH_RE = re.compile(r'path="([^"]*)"')
 PROTECTED_RE = re.compile(r"<ProtectedRoute\b")
 # A route whose element is <Navigate> is a redirect, not a page. It has no
 # permission of its own — whatever it forwards to does the gating — so it has
@@ -184,8 +187,10 @@ def collect_routes() -> tuple[dict[str, tuple[set[str], str]], set[str]]:
             matches = list(PATH_RE.finditer(text))
             for i, m in enumerate(matches):
                 end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-                key = normalize(m.group(1))
                 window = text[m.start() : end]
+                if not m.group(1).startswith("/"):
+                    continue
+                key = normalize(m.group(1))
                 if REDIRECT_RE.search(window):
                     redirects.add(key)
                     continue
