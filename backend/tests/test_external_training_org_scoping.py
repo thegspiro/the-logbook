@@ -6,6 +6,7 @@ default_category_id or a category mapping's internal_category_id can't reference
 (or leak the name of) another org's training category. DB mocked; no MySQL.
 """
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -74,6 +75,42 @@ class TestExternalTrainingCategoryScoping:
         # The foreign id must not have been persisted.
         assert mapping.internal_category_id is None
         db.commit.assert_not_awaited()
+
+    async def test_update_mapping_clears_explicit_null_category(self):
+        now = datetime.now(timezone.utc)
+        mapping = SimpleNamespace(
+            id=uuid4(),
+            provider_id=uuid4(),
+            organization_id=uuid4(),
+            external_category_id="external-1",
+            external_category_name="Hazardous Materials Awareness",
+            external_category_code=None,
+            internal_category_id=uuid4(),
+            is_mapped=True,
+            auto_mapped=True,
+            created_at=now,
+            updated_at=now,
+            mapped_by=None,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(mapping)])
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        user = SimpleNamespace(id=uuid4(), organization_id="org-1", username="officer")
+
+        result = await update_category_mapping(
+            uuid4(),
+            uuid4(),
+            ExternalCategoryMappingUpdate(internal_category_id=None, is_mapped=False),
+            db,
+            user,
+        )
+
+        assert result.internal_category_id is None
+        assert result.is_mapped is False
+        assert mapping.auto_mapped is False
+        assert mapping.mapped_by == user.id
+        db.commit.assert_awaited_once()
 
 
 class TestTrainingRecordCategoryScoping:
