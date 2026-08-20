@@ -330,7 +330,7 @@ const EquipmentKitsPage: React.FC = () => {
                     <BoxSelect className="h-4 w-4 text-purple-500" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-theme-text-primary truncate font-semibold">{kit.name}</h3>
+                    <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{kit.name}</h3>
                     {!kit.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
                   </div>
                 </div>

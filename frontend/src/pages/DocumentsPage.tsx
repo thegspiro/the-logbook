@@ -400,7 +400,7 @@ const DocumentsPage: React.FC = () => {
                         className={`h-8 w-8 ${folder.color || 'text-amber-700 dark:text-amber-400'} transition-transform group-hover:scale-110`}
                       />
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-theme-text-primary truncate font-semibold">{folder.name}</h3>
+                        <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{folder.name}</h3>
                         <p className="text-theme-text-muted mt-1 text-sm">{folder.description || 'No description'}</p>
                         <p className="text-theme-text-muted mt-2 text-xs">
                           {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
@@ -435,7 +435,7 @@ const DocumentsPage: React.FC = () => {
                       <div className="flex items-start space-x-3">
                         <File className="h-8 w-8 shrink-0 text-amber-700 dark:text-amber-400" />
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-theme-text-primary truncate font-semibold">{doc.name}</h3>
+                          <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{doc.name}</h3>
                           {doc.description && (
                             <p className="text-theme-text-muted mt-1 line-clamp-2 text-sm">{doc.description}</p>
                           )}

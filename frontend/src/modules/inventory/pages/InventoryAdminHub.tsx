@@ -201,7 +201,7 @@ export const InventoryAdminHub: React.FC = () => {
               className="btn-secondary btn-md"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
+              <span className="sr-only sm:not-sr-only">Refresh</span>
             </button>
           </div>
         </div>

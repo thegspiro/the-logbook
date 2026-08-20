@@ -3393,7 +3393,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
           >
             <Eye className="h-4 w-4" />
-            <span className="hidden sm:inline">Preview</span>
+            <span className="sr-only sm:not-sr-only">Preview</span>
           </button>
           <button
             type="button"

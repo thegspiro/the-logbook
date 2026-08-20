@@ -286,6 +286,7 @@ const StorefrontPage: React.FC = () => {
           <Link to="/store/orders" className="btn-secondary btn-md btn-auto shrink-0">
             <ShoppingBag className="h-4 w-4" />
             <span className="hidden sm:inline">My orders</span>
+            <span className="sm:hidden">Orders</span>
           </Link>
         </div>
 

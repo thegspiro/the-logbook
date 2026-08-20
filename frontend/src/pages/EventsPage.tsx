@@ -745,7 +745,7 @@ export const EventsPage: React.FC = () => {
             a full-width row above the first event. */}
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
           <div className="flex items-center gap-2">
-            <div className="segmented-group">
+            <div className="segmented-group inline-flex shrink-0 items-center">
               <button
                 onClick={() => setShowPastEvents(false)}
                 className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
@@ -767,7 +767,7 @@ export const EventsPage: React.FC = () => {
                 Past
               </button>
             </div>
-            <div className="segmented-group">
+            <div className="segmented-group inline-flex shrink-0 items-center">
               <button
                 onClick={() => setViewMode('list')}
                 className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${

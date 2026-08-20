@@ -582,6 +582,7 @@ export const ReorderRequestsPage: React.FC = () => {
           <button onClick={() => setShowCreate(true)} className="btn-info btn-md flex items-center gap-2">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Request</span>
+            <span className="sm:hidden">New</span>
           </button>
         </div>
 

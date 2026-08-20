@@ -519,11 +519,21 @@
 }
 
 @utility segmented-group {
-  /* Segmented control shell — the container behind an Upcoming|Past or
-     list|calendar pair. Deliberately not `card`: the mobile block below
-     forces every `.card` to 12px padding, which inflates a 4px segment strip
-     into a chunky block on exactly the screens with the least room to spare. */
-  @apply bg-theme-surface border-theme-surface-border inline-flex shrink-0 items-center rounded-lg border p-1 shadow-sm;
+  /* Segmented control / tab strip shell — the container behind an
+     Upcoming|Past pair or a row of filter pills.
+     Deliberately not `card`: the mobile block below forces every `.card` to
+     12px padding, which inflates a 4px strip into a chunky block on exactly
+     the screens with the least room to spare.
+     Sets no display or flex behaviour either — call sites variously need
+     `flex`, `inline-flex`, `flex-wrap`, `hscroll` or `flex-1`, and a display
+     baked in here would fight them from the stylesheet, where the markup
+     cannot win. */
+  @apply bg-theme-surface border-theme-surface-border rounded-lg border p-1 shadow-sm;
+}
+
+@utility segmented-group-secondary {
+  /* The same strip nested inside another card, matching `card-secondary`. */
+  @apply bg-theme-surface-secondary border-theme-surface-border rounded-lg border p-1 shadow-sm;
 }
 
 @utility btn-icon-sm {

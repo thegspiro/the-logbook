@@ -240,7 +240,7 @@ const InventoryCategoriesPage: React.FC = () => {
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
                     <Tag className="h-4 w-4 text-blue-500" />
                   </div>
-                  <h3 className="text-theme-text-primary truncate font-semibold">{cat.name}</h3>
+                  <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{cat.name}</h3>
                 </div>
                 {canManage && (
                   <button

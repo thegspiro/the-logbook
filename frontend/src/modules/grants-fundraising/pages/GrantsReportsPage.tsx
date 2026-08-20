@@ -227,7 +227,7 @@ const GrantsReportsPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="card hscroll flex space-x-1 p-1">
+      <div className="segmented-group hscroll flex space-x-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}

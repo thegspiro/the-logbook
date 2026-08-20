@@ -395,7 +395,7 @@ const VariantGroupsPage: React.FC = () => {
                     <Ruler className="h-4 w-4 text-teal-500" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-theme-text-primary truncate font-semibold">{group.name}</h3>
+                    <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{group.name}</h3>
                     {!group.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
                   </div>
                 </div>
