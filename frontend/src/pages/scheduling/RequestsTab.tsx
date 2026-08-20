@@ -457,7 +457,11 @@ export const RequestsTab: React.FC = () => {
           aria-modal="true"
           aria-label="Review request"
         >
-          <DialogPanel onClose={() => setReviewing(null)} ref={reviewModalRef} className="w-full max-w-md">
+          <DialogPanel
+            onClose={() => setReviewing(null)}
+            ref={reviewModalRef}
+            className="modal-panel-scroll w-full max-w-md"
+          >
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Review Request</h2>
             </div>

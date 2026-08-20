@@ -973,6 +973,49 @@ implicitly. `20260819_2037_1eeb053d59b7` expands a legacy `count` into that many
 seats for exactly this reason — collapsing it would have cut a three-firefighter
 template to one, permanently, with no downgrade to undo it.
 
+### 21. A Fixed, Flex-Centred Dialog Needs the Height Cap on the PANEL _(2026-08-20)_
+
+A panel centred by `fixed inset-0 flex items-center` and given no height cap
+overflows that container in **both** directions once it is taller than the
+viewport. Neither end can be reached: the title sits above the top of the
+screen, the action row below the bottom, and no scrollbar appears anywhere
+because the fixed container itself never overflows. What the user reports is a
+box they cannot interact with — not a layout complaint, because nothing looks
+broken, it just refuses to take a tap.
+
+A sweep on 2026-08-20 found this at 38 sites. A phone in landscape is 390px
+tall, so it bites dialogs that are comfortable in portrait, and `items-end`
+sheets overflow upward the same way.
+
+```tsx
+// WRONG — the panel grows past the viewport and neither end is reachable
+<div className="modal-overlay z-50 flex items-center justify-center p-4">
+  <DialogPanel onClose={onClose} className="w-full max-w-md">
+
+// CORRECT
+<div className="modal-overlay z-50 flex items-center justify-center p-4">
+  <DialogPanel onClose={onClose} className="modal-panel-scroll w-full max-w-md">
+```
+
+**The cap has to be on the panel, not the container.** Adding `overflow-y-auto`
+to the container looks like the fix and is not: `align-items: center` still
+pushes the panel's top edge into the negative-scroll region, which no scrollbar
+reaches. (`components/Modal.tsx` and `Modal`'s own `modal-body` already do this
+correctly — the defect is confined to hand-rolled shells.)
+
+`src/dialogScrollIntegrity.test.ts` walks the source and fails on a new
+uncapped panel, in the manner of `routeIntegrity.test.ts`.
+
+**Related, same symptom, different cause:** a fixed element pinned near the
+bottom of the viewport must add `var(--bottom-nav-height, 0px)` to its offset.
+The mobile bottom bar is 56px tall at `z-50` and renders after the page, so it
+paints over anything at `bottom-0` or `bottom-6` and swallows its taps — that
+is what buried the FAB's lower half, the update banner's "Reload now" and the
+events bulk-action bar. `pb-safe` and `action-bar-safe` already fold the
+allowance in; a hand-written `bottom-*` does not. Dialogs get out of this by
+registering with `useOverlaySurface` (which `useDialog` does for you), which
+hides the bar outright.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

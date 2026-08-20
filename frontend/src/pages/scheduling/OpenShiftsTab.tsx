@@ -262,7 +262,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 if (e.key === 'Escape') setSignupShiftId(null);
               }}
             >
-              <DialogPanel onClose={() => setSignupShiftId(null)} className="w-full max-w-sm">
+              <DialogPanel onClose={() => setSignupShiftId(null)} className="modal-panel-scroll w-full max-w-sm">
                 <div className="border-theme-surface-border border-b p-5">
                   <h2 className="text-theme-text-primary text-lg font-bold">Sign Up for Shift</h2>
                   {targetShift && (

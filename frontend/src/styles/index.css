@@ -777,6 +777,27 @@
   @apply bg-theme-surface-modal border-theme-surface-border rounded-lg border shadow-xl;
 }
 
+@utility modal-panel-scroll {
+  /* Height cap and internal scrolling for a dialog panel that is centred by a
+     `fixed inset-0 flex items-center` container.
+
+     Without it a panel taller than the viewport overflows the centring
+     container in BOTH directions and neither end can be reached: the title
+     sits above the top of the screen, the action row below the bottom, and no
+     scrollbar appears anywhere because the fixed container itself never
+     overflows. Putting `overflow-y-auto` on the container does not fix it —
+     `align-items: center` still pushes the panel's top edge into the
+     unreachable negative-scroll region. The cap has to be on the panel.
+
+     A phone in landscape is 390px tall, so this bites dialogs that look fine
+     in portrait, and `items-end` sheets overflow upward the same way.
+
+     dvh rather than vh so the cap tracks the visible viewport as mobile browser
+     chrome retracts; the 2rem allows for the container's own p-4. */
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
 @utility modal-header {
   /* The standard dialog header block, as rendered by components/Modal.tsx. The
      same string was copied into nine sibling modals verbatim. */
@@ -961,6 +982,21 @@
 }
 @media (min-width: 768px) {
   .has-bottom-nav {
+    --bottom-nav-height: 0px;
+  }
+}
+
+/* Republished at the root for fixed elements that are NOT inside AppLayout and
+ * so cannot inherit the declaration above — the update banner is mounted beside
+ * the router, one level up. `:has` keeps it conditional on the layout, and
+ * therefore the bar, actually being mounted: public pages (login, onboarding)
+ * still resolve it to 0. Elements inside AppLayout keep taking the nearer
+ * declaration, including the dialog reset below. */
+:root:has(.has-bottom-nav) {
+  --bottom-nav-height: 3.5rem;
+}
+@media (min-width: 768px) {
+  :root:has(.has-bottom-nav) {
     --bottom-nav-height: 0px;
   }
 }

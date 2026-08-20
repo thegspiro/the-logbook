@@ -1351,7 +1351,7 @@ export default function ComplianceRequirementsConfigPage() {
       {/* Email Modal */}
       {emailModalReportId && (
         <div className="modal-overlay z-50 flex items-center justify-center">
-          <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
+          <div className="bg-theme-surface modal-panel-scroll mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-theme-text-primary text-lg font-semibold">Email Report</h3>
               <button
