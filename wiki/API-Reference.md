@@ -238,10 +238,50 @@ POST   /api/v1/training/shift-reports/{report_id}/review               # Officer
 POST   /api/v1/scheduling/shifts/{id}/finalize                         # Finalize shift (snapshot data, create draft reports)
 ```
 
+## Shift Close-Out _(2026-08-19)_
+
+The resumable close-out wizard for departments recording a call count rather
+than per-incident detail. All four endpoints require `scheduling.manage`
+**or** being the shift's own officer.
+
+```
+GET    /api/v1/scheduling/shifts/{id}/closeout              # State + resume point
+PATCH  /api/v1/scheduling/shifts/{id}/closeout/attendance   # Step 1 — who was on, and when
+PATCH  /api/v1/scheduling/shifts/{id}/closeout/calls        # Step 2 — how many calls
+POST   /api/v1/scheduling/shifts/{id}/finalize              # Step 3 — confirm and close
+```
+
+Each step writes real records as it advances, so an interrupted close-out
+resumes rather than restarting. `closeout_step` in the GET response is `0`
+(not started), `1` (attendance saved) or `2` (calls saved); a finalized shift
+reports `0`, and reopening restarts the wizard.
+
+**`PATCH …/closeout/calls`** accepts `reported_call_count`,
+`reported_call_types` and `attach_call_ids`. An explicit `null` count is
+meaningful — it clears a previously reported figure — and is distinguished from
+an omitted field, so a client that only attaches calls does not wipe a count it
+never mentioned. `reported_call_types` is keyed by the organization's own type
+slugs and must not exceed the total; the remainder is recorded as unclassified.
+
+**`POST …/finalize`** additionally accepts `manual_hours`,
+`member_call_counts`, `override_incomplete_checks` + `override_reason`
+(audited as `shift_finalized_check_override`), and `pass_down_notes`.
+
+`attach_call_ids` claims a call another unit already logged, which is what
+keeps a single incident counted once for the department when two units roll.
+`attachable_calls` in the GET response is **served empty** — the picker has no
+UI yet, and the field stays on the contract so it does not change when one
+lands.
+
 ## Shift Calls / Runs _(2026-06-09)_
 
 Log the calls/runs a crew responded to during a shift. Read: `scheduling.view`;
 write: `scheduling.manage`. Hidden once a shift is finalized.
+
+> **This is the `detailed` call-tracking path.** A department on `count_only`
+> tracking does not use these endpoints — its volume lives in `org_calls` /
+> `org_call_responses` and is written through close-out. See
+> [Module-Scheduling → Call Volume Without an RMS](Module-Scheduling#call-volume-without-an-rms-2026-08-18--08-19).
 
 ```
 GET    /api/v1/scheduling/shifts/{shift_id}/calls                       # List calls for a shift

@@ -13,6 +13,7 @@ import React, { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import { Printer, AlertTriangle } from 'lucide-react';
+import { buildShiftCheckInUrl } from '../../constants/nfc';
 
 const ShiftCheckInPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -20,7 +21,7 @@ const ShiftCheckInPrintPage: React.FC = () => {
   const apparatusName = searchParams.get('name') || 'Apparatus';
   const autoPrint = searchParams.get('autoprint') === '1';
 
-  const checkInUrl = `${window.location.origin}/scheduling/checkin?apparatus=${apparatusId}`;
+  const checkInUrl = buildShiftCheckInUrl({ apparatusId });
 
   // Only auto-open the print dialog when explicitly requested (the "Print QR
   // Card" action appends autoprint=1). Opening this page just to view the code

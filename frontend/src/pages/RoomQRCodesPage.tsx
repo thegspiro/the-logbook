@@ -48,6 +48,8 @@ import { copyToClipboard } from '../utils/clipboard';
 import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useEnabledModules } from '../hooks/useEnabledModules';
+import { buildShiftCheckInUrl } from '../constants/nfc';
+import { NfcTagWriteButton } from '../components/nfc/NfcTagWriteButton';
 
 /** Rasterize an inline QR SVG to a PNG download (white background for print/signage use). */
 function downloadSvgAsPng(svg: SVGSVGElement, filename: string): void {
@@ -194,6 +196,7 @@ function QRCard({
           <Download className="h-3 w-3" aria-hidden="true" />
           Download PNG
         </button>
+        <NfcTagWriteButton url={url} label={title} />
         {onRegenerate && (
           <button
             onClick={() => {
@@ -231,7 +234,7 @@ function apparatusCardProps(apparatus: ApparatusListItem): {
   return {
     title: `${apparatus.unitNumber}${apparatus.name ? ` — ${apparatus.name}` : ''}`,
     subtitle: 'Scan to check in or out of your shift',
-    url: `${window.location.origin}/scheduling/checkin?apparatus=${apparatus.id}`,
+    url: buildShiftCheckInUrl({ apparatusId: apparatus.id }),
     icon: 'apparatus',
   };
 }

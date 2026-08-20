@@ -7,6 +7,352 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### CI: an unbounded `apt-get` was silently skipping the backend suite (2026-08-19)
+
+**Fixed**
+
+- **A merge reached `main` on 2026-08-19 with no backend test having run, and
+  nothing red to react to.** `sudo apt-get update && sudo apt-get install -y
+libmagic1` — an unbounded network operation with no timeout and no retry, run
+  in six separate job instances — stalled for 19m26s on a single
+  `noble-security InRelease` fetch and consumed the entire 20-minute budget of
+  both **Backend Unit Tests** and **Backend Security Scan**. Because the
+  integration and contract matrices sit behind `needs: backend-test`, they were
+  then reported **skipped** rather than failed. The same stall took out
+  **Frontend E2E** via `playwright install --with-deps`, which shells out to the
+  same apt machinery.
+- **`.github/scripts/install-system-deps.sh` replaces the bare form**, with two
+  defences in order of preference: do nothing when the library is already
+  loadable (the `ubuntu-latest` image ships `libmagic.so.1`, so the apt call was
+  pure risk for no benefit), and when one genuinely is missing, retry under
+  **one overall deadline covering every attempt** — 240s total, not 180s per
+  command, because three attempts at a per-command timeout totals ~18.75 minutes
+  and would recreate the exhaustion the script exists to prevent.
+- **The presence check is on the SONAME, not the package name**, and that is
+  load-bearing. Ubuntu 24.04 renamed the package to `libmagic1t64` in the
+  64-bit-`time_t` transition, so `dpkg -s libmagic1` reports "not installed" on a
+  runner that has the library — a package-name check would take the apt path
+  every single time and defeat the first defence entirely. `python-magic`
+  resolves through `ctypes.util.find_library("magic")`, so the SONAME is also
+  the thing that actually has to be true.
+
+**Changed**
+
+- **`.github/actions/backend-db-setup` is now the single copy of the backend
+  database setup.** `backend-test-integration` and `backend-test-contract` ran
+  the same six steps duplicated verbatim, including a 15-line Python heredoc
+  encoding production's startup behaviour — two copies of that is how one of
+  them silently stops matching `main.py`. The heredoc itself moved to
+  `backend/scripts/repair_schema.py`. A job's `services:` and `env:` blocks are
+  job-level keys and Actions supports no YAML anchors, so the MySQL/Redis
+  service definitions remain duplicated by necessity.
+- Every CI job has a timeout, so a hung step fails instead of hanging.
+
+### Scheduling: a shift close-out that survives a locked phone (2026-08-19)
+
+**Added**
+
+- **A three-step close-out wizard** replaces the single finalize checklist for
+  departments recording a call count. **Close out shift** on the shift detail
+  panel opens it: step 1 is when each member was actually on, step 2 is how many
+  calls the apparatus ran, step 3 confirms the credit each member takes away.
+- **Each step saves as it advances** — `PATCH /scheduling/shifts/{id}/closeout/attendance`,
+  then `.../closeout/calls` — so a phone that locks at 0700 in an apparatus bay
+  resumes where it left off instead of starting over. `GET
+/scheduling/shifts/{id}/closeout` returns everything the wizard needs plus
+  `closeout_step`, and the server decides the entry screen; nothing is held only
+  in component state.
+- **`shifts.closeout_step`** (new column, `20260819_0900_2827079fd66c`) carries
+  **no entered data** — the wizard writes real records as it goes — only where
+  to resume. A finalized shift reports step 0, and reopening deliberately
+  restarts the wizard.
+
+**The call count has exactly one source: the per-type rows.** The total is
+derived from them and rendered read-only. An earlier design had a total input
+_and_ a breakdown, each claiming to own the number, which needed a
+reconciliation rule per direction — the downward one was missing, so revising a
+count down left the total stranded at its old value and that stale figure was
+what got saved. `closeoutMath.ts` holds the arithmetic on its own, because these
+are the calculations that were repeatedly got wrong while prototyping and each
+mistake produced a plausible number rather than an error.
+
+**Fixed while reviewing the branch, before any of it shipped**
+
+- **The feature was unreachable.** Nothing in the frontend ever wrote
+  `call_tracking.mode`, so no department could reach `count_only` and the wizard
+  never rendered for anyone. The toggle now lives in Scheduling → Settings →
+  General → _Shift close-out rules_, and sends the org's existing call types back untouched so
+  enabling it cannot wipe them.
+- **A count-only org enforcing end-of-shift checks could never close a shift.**
+  The wizard replaced the finalize checklist, which was the only UI that could
+  send `override_incomplete_checks`, and dropped pass-down notes with it.
+  Replacing a screen means carrying everything it could do; both are back, with
+  the override still gated on a logged reason.
+- **A fresh close-out credited the whole crew zero calls.** Credits seed from
+  the apparatus count, which is 0 before any count exists, and the
+  preserve-the-officer's-edit branch then treated that seed as an answer and
+  pinned it there. A seeded value and a typed one are indistinguishable by
+  value, so the draft now tracks whether the officer actually changed it. Every
+  existing test entered mid-flow with a count already stored, which is exactly
+  why none of them caught it.
+- **Members who never checked in were invisible** — no hours, no credit, and no
+  way for the officer to notice. Assigned members are now listed with empty
+  times to fill in, which is what the old checklist's manual-hours field was for.
+- **The roster listed people who never worked the shift.** It excluded only
+  `CANCELLED` assignments, so `DECLINED`, `PENDING` and `NO_SHOW` members were
+  shown — and every listed member gets an attendance row and the apparatus's
+  full call count by default. Narrowed to `ASSIGNED` and `CONFIRMED`.
+- **Re-hydrating after a save discarded a per-member credit the officer had
+  already adjusted** — silently, and only for the member they had singled out.
+- **Counts against a call type an admin later removed** stayed in the payload,
+  invisible but counted, and came back as an unknown-slug error with no field to
+  clear.
+- **Enabling count-only did not take effect until a reload.** `loadSettings` is a
+  once-per-session cache, so an admin who switched the toggle on kept seeing the
+  old checklist — which never asks for a count — while the backend had already
+  moved and would finalize with none recorded.
+
+### Scheduling: PII-free call volume for departments without an RMS (2026-08-18)
+
+**Added**
+
+- **A department that does not run incident reporting can now answer "how many
+  calls did we run, and what did each apparatus go on?"** — the question grant
+  applications, ISO ratings, apparatus replacement cases and staffing cases all
+  need. Two new tables, `org_calls` and `org_call_responses`
+  (`20260818_1200_82bdcb3b1e64`), and a new org setting
+  `scheduling.call_tracking.{mode, call_types}`.
+- **Three modes.** `detailed` keeps per-incident `ShiftCall` logging and is the
+  default for every existing organization; `count_only` asks the officer for a
+  number at close-out and nothing else; `off` does not ask. A missing setting
+  reads as `detailed`, never `off` — defaulting absence to disabled would
+  silently stop call logging for every installation on upgrade, and nobody
+  connects a missing year of call volume back to a deploy (pitfall #19).
+- **Nine seeded call types** (fire, EMS, MVA, rescue, hazmat, service, alarm /
+  good intent, mutual aid, other) for a department that has not defined its own.
+  The **slug** is stored and permanent; the label is display-only and may be
+  renamed freely — storing the label would orphan last year's history the first
+  time somebody fixed a typo in settings.
+
+**What is deliberately not collected.** No address, no cross streets, no patient
+or caller identity, no narrative, no dispatch/on-scene/clear times, and no CAD
+incident number for display. Those are the fields that make a call record
+PHI/PII, and collecting them is what the department declined to do. This is
+enforced **by absence** — there is no parameter to pass one to and no column to
+land it in — and `test_incident_detail_is_not_accepted` pins it. `call_date` is
+a **date, not a timestamp**, because a timestamp would let response times be
+reconstructed, which is the first step back toward an incident record.
+A department that wants incident-level records wants an incident module, behind
+its own consent and access-control story.
+
+**Why a call row exists at all, rather than an integer on the shift.** Two
+integers cannot be deduplicated. When Engine 5 reports 5 runs and Medic 1
+reports 3, nothing in those numbers says whether they were on the same MVA or on
+eight unrelated calls, so a department total summed from per-unit counts
+double-counts every mutual response. `OrgCall` is the shared thing both units
+point at. Three quantities, three code paths, and they are **not supposed to
+reconcile**:
+
+| Quantity               | Source                          | Note                                                              |
+| ---------------------- | ------------------------------- | ----------------------------------------------------------------- |
+| Department call volume | distinct `OrgCall` rows         | One call is one call however many units rolled                    |
+| Apparatus runs         | `OrgCallResponse` rows per unit | A 400-call department can hold 380 engine runs and 240 medic runs |
+| Member credit          | `ShiftAttendance.call_count`    | A member who came on at 0300 was not on the 2200 call             |
+
+**Changed**
+
+- **`GET /scheduling/reports/call-volume` names the figure honestly.** It reads
+  **one** source and never mixes them — count-only orgs from `org_calls`,
+  detailed orgs from the records feeding `ShiftCompletionReport`, because
+  reading both and adding them would count every call twice for an org that has
+  used each mode in turn. The count-only branch sets `counts_unit_responses`,
+  and the renderer relabels **Total Calls → Unit Responses**, **Avg Calls/Day →
+  Avg Responses/Day**, **Peak Calls → Peak Responses**, with a footnote. Where
+  two units on one incident are still counted twice, calling the number "calls"
+  overstates the department's volume; "unit responses" is true either way.
+- **`POST /scheduling/shifts/{id}/finalize`** accepts `reported_call_count`,
+  `reported_call_types`, `member_call_counts` and `attach_call_ids`.
+  `attach_call_ids` claims a call another unit already logged, and attachment
+  runs **before** this shift's own reconciliation so a shared call counts toward
+  the total instead of being duplicated alongside it.
+
+**Edge cases that are behaviour, not accidents**
+
+- **`null` and `0` are different facts and are stored differently.** `null` is
+  "we did not track it"; `0` is a department reporting a quiet tour. A report
+  that conflates them understates quiet nights as missing data.
+- **A tally short of the total pads with unclassified** rather than rejecting.
+  Requiring it to reconcile exactly would teach officers to invent a type at
+  0700 to get the close-out to submit. A tally longer than the total is
+  truncated, and zero-valued entries are ignored.
+- **Lowering the total below the shift's already-shared calls is refused**, with
+  a message naming the count and telling the officer to detach first — detaching
+  is an explicit act, not something a lowered number should do behind their back.
+- **Shared calls survive re-finalization.** Only calls this shift solely owns are
+  reconciled; rebuilding every call from scratch on each finalize would delete
+  the other unit's response along with it, dropping their run from the record the
+  first time this officer corrected a typo.
+- **A corrected shift drags its calls with it.** Editing the shift's date, or
+  reassigning it to another apparatus, after step 2 was saved re-dates and
+  re-attributes the surviving rows. Before this fix the totals stayed right while
+  the daily and per-apparatus reports pointed at the wrong day and the wrong truck.
+- **Per-member call _types_ are not invented.** Types are recorded only when the
+  member was on every call. A trainee credited with one call on a shift of one
+  EMS and one fire was previously always assigned "EMS" — an alphabetical prefix
+  — and `create_report` then spent that invented type against type-specific
+  requirements.
+- **100 calls per shift is a hard cap.** An officer closing out a shift is
+  reporting a tour, not a year; a department genuinely running more has an RMS
+  and is not using count-only mode.
+- **Malformed `call_types` JSON degrades to the built-in list** rather than
+  raising — an exception there would take out shift close-out for the whole
+  department over one hand-edited entry. The sanitiser mirrors `CallTypeOption`'s
+  pattern and length bounds exactly; admitting merely "non-blank" let an
+  uppercase or over-long slug through the filter and fail schema construction,
+  taking out the settings endpoint with it.
+- **An apparatus-less shift dedupes on `shift_id`.** `apparatus_id == None`
+  compiles to `= NULL`, which is never true, so every attach inserted another
+  row: the unit's tally climbed on each save and the third raised.
+
+**Known gap.** The cross-unit attach picker has no UI yet, so
+`attachable_calls` is served **empty** on the close-out GET — deliberately; it
+costs two queries per request and nothing consumes it. The field stays on the
+response so the contract does not change when the picker lands. Until then two
+units closing out independently each report their own call, which is exactly why
+the report says _unit responses_. Recorded as **SCHED-10** in
+[`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md#scheduling-module).
+
+### Fleet tags: write a vehicle's check-in tag from the QR directory (2026-08-18)
+
+**Added**
+
+- **`/locations/qr-codes` can now program the tag as well as print the code.**
+  That page is already the department's directory of every check-in code, one
+  card per apparatus, so it is where a box of tags gets written for a fleet in
+  one sitting. **Write NFC tag** joins Copy URL / Download PNG / Regenerate in
+  each card's existing action row — no second card, no reflow of the grid.
+- `NfcTagWriteButton` is the compact form of the writer for rows of small
+  actions. Feedback goes through toasts rather than inline alerts on purpose:
+  the directory is a print-oriented grid of fixed-size cards, and an inline
+  status block would reflow every card beside it mid-write.
+- **A write failure raises a toast rather than passing silently.** With no
+  inline slot to report into, the alternative is a member discovering it by
+  tapping a dead sticker — a silent failure looks exactly like a tag that was
+  written.
+
+**Notes on what already worked**
+
+- **The vehicle tag → shift → member chain needed no new code.** A tag holding
+  `/scheduling/checkin?apparatus=<id>` resolves through
+  `get_active_shift_for_apparatus` (today's non-finalized shift, else one that
+  ended within two hours, else the next upcoming) and `member_check_in` writes
+  the `ShiftAttendance` row for the authenticated member. `ShiftCheckInPage`
+  names the unit, date and hours on screen so the member can see which truck
+  they were matched to before they confirm.
+- **Whether a non-rostered member may check in is already an org setting** —
+  `restrict_checkin_to_assigned`, off by default, toggled under Scheduling →
+  Settings, read by `member_check_in`, and covered by
+  `test_restrict_checkin_to_assigned`. Nothing here changes that behaviour.
+- **The button gates itself on `parseNfcTagPath`**, so it appears on apparatus
+  cards and not on the room kiosk cards beside them — those encode
+  `/display/{code}`, which the parser refuses by design. Offering to write a
+  tag no reader would honour is worse than offering nothing, so one rule now
+  governs both ends.
+
+### NFC tags work across modules, not just events (2026-08-18)
+
+**Added**
+
+- **Shift check-in and admin hours clock-in are now taggable**, alongside event
+  check-in. `/admin-hours/categories/:id/qr-code` gains the tag writer beside
+  its QR code, and the apparatus check-in QR on the shift detail panel does
+  too. **Tap Tag** — which routes by what the tag says rather than by where the
+  button lives — is now on the Events page, My Admin Hours, and the scheduling
+  calendar.
+- **Prefer an apparatus-keyed shift tag for anything physically mounted.**
+  `/scheduling/checkin?apparatus=` resolves to whichever shift is running when
+  the tag is tapped, so one tag on the truck serves every shift; a shift-keyed
+  tag is dead the moment that shift ends. `buildShiftCheckInUrl` takes
+  `{ apparatusId }` or `{ shiftId }` so the choice is explicit at the call site.
+
+**Changed**
+
+- **`parseEventTagPath` is now `parseNfcTagPath`, driven by a target registry**
+  (`TAG_TARGETS` in `constants/nfc.ts`, keyed by `NfcTagTarget` in
+  `constants/enums.ts`). It returns `{ target, path }` rather than a bare
+  string. Adding a module means adding one spec, not another parser — and the
+  registry is the whole reachable surface, so what a tag may point at stays
+  reviewable in one place.
+- **The parser handles query-string routes, which it previously stripped.**
+  Shift check-in is `/scheduling/checkin?shift=` or `?apparatus=`, so refusing
+  every query parameter would have made it untaggable. Rather than passing the
+  query through, a spec now _names_ the parameters that may carry an id: each
+  value is validated against the same id pattern as a path segment, only the
+  first valid one survives, and **the route is rebuilt from those pieces**. A
+  parameter the spec does not name is dropped, so a tag cannot smuggle `?next=`
+  past the parser by hanging it off a route that is otherwise legitimate.
+  `shift` is checked before `apparatus` because `ShiftCheckInPage` reads it
+  first — a parsed route has to mean what the page will do with it.
+- **`/display/:code` is deliberately not taggable.** It is a public,
+  unauthenticated kiosk screen for a tablet left in a room, keyed by a
+  non-guessable code. Writing that code to a tag anyone can read hands it to
+  whoever walks past, and sending a member's phone to a wall display is not a
+  check-in. There is a test asserting it stays rejected.
+- **The four remaining hand-built check-in URLs now go through the shared
+  builders** — `RoomQRCodesPage`, `ShiftCheckInPrintPage`, `ShiftDetailPanel`
+  and `AdminHoursQRCodePage` each assembled their own copy of a route the
+  parser has to recognize, which is exactly the drift that makes a tag scan as
+  valid in one place and unknown in another.
+- `NfcTagWriter` takes an `actionNoun` ("clock-in", "shift check-in"), so its
+  copy reads correctly outside events instead of calling everything check-in.
+
+### Events: NFC tags as a second way in to check-in (2026-08-18)
+
+**Added**
+
+- **A station can mount a reusable NFC sticker instead of reprinting a QR sheet
+  per event.** `/events/:id/qr-code` now offers **Write to an NFC tag**, which
+  encodes that event's check-in URL onto a blank tag via Web NFC. Members tap
+  the tag with their phone and land on the same
+  `/events/:id/check-in` page the QR code opens — no camera, which is the part
+  that fails in a dark apparatus bay or with gloves on.
+- **Tap Tag on the Events page** reads a tag while the app is already open, for
+  the case Android does not cover on its own: with the app in the foreground,
+  the OS does not hand a URL tag off to the browser, so a member holding a phone
+  they are already using would otherwise have to close the app to use the tag.
+
+**A tag is untrusted input, and is treated as such.** Anyone with a phone can
+write an NFC tag, so the payload read off one is on par with a scanned QR code
+rather than with configuration. `parseEventTagPath` in `constants/nfc.ts`
+resolves the payload against the app's own origin, rejects anything that does
+not land back on that exact origin — which also disposes of `javascript:` and
+`data:`, whose origin parses as `"null"` — and accepts only the two known event
+paths. It returns the **normalized** route, never the raw string, so a tap hands
+react-router a fixed-shape path instead of assigning an attacker-supplied URL to
+`window.location`. An unrecognized tag leaves the scan armed and says so rather
+than navigating somewhere unintended.
+
+**Notes**
+
+- Web NFC is Chrome-on-Android and secure-context only. `NDEFReader` is declared
+  in `types/webnfc.d.ts` as an optional property of `Window` rather than as a
+  global class, so the feature test is the only route to the constructor and an
+  unguarded `new NDEFReader()` fails to compile instead of throwing on a
+  member's phone.
+- Where NFC is unavailable, the QR code is unchanged and remains the primary
+  path. The writer collapses to one explanatory line rather than disappearing —
+  a chief planning a tag rollout is usually at a desktop, where the writer can
+  never run, and that page is the only place the capability is documented. The
+  reader button hides entirely, being a pure action with nothing to explain.
+- `getNfcUnavailableReason()` separates an insecure origin from a browser that
+  never shipped the API. Both present identically as a missing `NDEFReader`, and
+  an admin on plain HTTP over a LAN IP needs to be told which one they hit.
+- Both hooks abort through an `AbortController` on cancel and on unmount.
+  `NDEFReader.write()` does not resolve when called — it arms the radio and
+  stays pending until a tag is physically present — so without the abort, a
+  member who changes their mind leaves the device armed and the next tag that
+  passes near the phone is silently overwritten.
+
 ### A dropped setting is now named instead of silently becoming a default (2026-08-18)
 
 **Added**
@@ -9398,16 +9744,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario                                      | Behavior                                                                         |
+| Scenario | Behavior |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
-| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
-| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
-| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
-| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
-| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 

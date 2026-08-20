@@ -37,6 +37,7 @@ import { trainingModuleConfigService } from '../services/api';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
 import SchedulingHeader from './scheduling/SchedulingHeader';
+import { NfcTapButton } from '../components/nfc/NfcTapButton';
 
 // Lazy-loaded tab components
 const MyShiftsTab = lazyWithRetry(() => import('./scheduling/MyShiftsTab'));
@@ -750,6 +751,7 @@ const SchedulingPage: React.FC = () => {
                   </button>
                 </div>
                 <div className="flex items-center space-x-2">
+                  <NfcTapButton />
                   <button
                     onClick={() => setCurrentDate(new Date())}
                     className="rounded-lg px-3 py-1.5 text-sm text-violet-700 transition-colors hover:bg-violet-500/10 max-md:min-h-[44px] dark:text-violet-400"
