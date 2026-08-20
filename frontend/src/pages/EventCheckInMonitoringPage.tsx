@@ -124,7 +124,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
           ← Back to Event
         </Link>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="overflow-x-auto">
+          <div>
             <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Check-In Monitoring</h1>
             <p className="text-theme-text-secondary mt-1 text-xl">{stats.event_name}</p>
           </div>
@@ -228,7 +228,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
             No check-ins yet. Waiting for members to arrive...
           </div>
         ) : (
-          <div>
+          <div className="overflow-x-auto">
             <table className="rwd-table divide-theme-surface-border min-w-full divide-y">
               <thead>
                 <tr>
