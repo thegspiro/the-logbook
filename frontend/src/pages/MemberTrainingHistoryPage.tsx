@@ -71,7 +71,7 @@ const RecordAttachmentsModal: React.FC<{
   };
 
   return (
-    <div className="modal-overlay flex items-center justify-center p-4" onClick={onClose}>
+    <div className="modal-overlay z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-theme-surface w-full max-w-lg rounded-lg p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">

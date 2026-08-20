@@ -6,6 +6,8 @@ import type { QRCheckInData } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
+import { NfcTagWriter } from '../components/nfc/NfcTagWriter';
+import { buildEventCheckInUrl } from '../constants/nfc';
 
 /**
  * Event QR Code Page
@@ -63,12 +65,6 @@ const EventQRCodePage: React.FC = () => {
     return () => clearInterval(interval);
   }, [eventId, fetchQRData]);
 
-  const getCheckInUrl = () => {
-    if (!eventId) return '';
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/events/${eventId}/check-in`;
-  };
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -109,7 +105,7 @@ const EventQRCodePage: React.FC = () => {
     );
   }
 
-  const checkInUrl = getCheckInUrl();
+  const checkInUrl = eventId ? buildEventCheckInUrl(eventId) : '';
 
   return (
     <div className="mx-auto min-h-screen max-w-4xl p-6">
@@ -195,6 +191,8 @@ const EventQRCodePage: React.FC = () => {
                 <li>After scanning, members will be checked in automatically</li>
               </ol>
             </div>
+
+            {checkInUrl && <NfcTagWriter url={checkInUrl} targetLabel={qrData.event_name} />}
           </div>
         ) : (
           <div className="text-center">

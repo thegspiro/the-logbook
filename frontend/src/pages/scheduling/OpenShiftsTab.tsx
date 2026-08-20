@@ -254,7 +254,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
           const targetShift = shifts.find((s) => s.id === signupShiftId);
           return (
             <div
-              className="modal-overlay flex items-center justify-center p-4"
+              className="modal-overlay z-50 flex items-center justify-center p-4"
               role="dialog"
               aria-modal="true"
               aria-label="Sign up for shift"

@@ -374,6 +374,69 @@ and events.view permissions]**
 > requirements, maximum age before forced rotation. The defaults are HIPAA-
 > compliant, but you can make them stricter."
 
+### BRUTE-FORCE PROTECTION, AND WHICH WAY EACH CONTROL FAILS (17:30 – 18:45) — ADDED 2026-08-19
+
+**[SCREEN: A table on screen — rate limit, account lockout, per-IP throttle,
+breached password, CAPTCHA — with the "on failure" column highlighted.]**
+
+> "There are four brute-force controls stacked on top of each other, and they
+> cover different gaps. It's worth knowing which is which, because if you tune
+> one down thinking it's redundant, it usually isn't."
+
+> "**Rate limiting** counts all attempts in a short window, per IP. **Account
+> lockout** counts consecutive failures against one user — five, then thirty
+> minutes. That pair sounds complete, and it isn't."
+
+**[CALLOUT: "Lockout is per-user. Spraying one password across a thousand
+accounts never reaches five failures on any of them."]**
+
+> "That's the gap. One password tried against your whole roster never trips
+> lockout on anybody. So there's a **per-IP throttle** that counts _failed_
+> attempts across **all** accounts over a long window. That's the control that
+> catches a spray, and it's the one people delete because it looks like a
+> duplicate of rate limiting."
+
+**[SCREEN: Highlight the "on failure" column.]**
+
+> "Now the part I actually want you to remember. Two of these fail in
+> **opposite** directions on purpose, and if you ever find yourself
+> 'fixing' one to match the other, don't."
+
+> "**Breached-password checking** — optional, off by default — looks a password
+> up against known breach corpora. If that lookup times out or the service is
+> down, **the password change goes through anyway**. It fails open. It's a
+> supplementary check: complexity, history, minimum age, MFA and lockout all
+> still applied. An outage must not lock your whole department out of changing
+> their passwords."
+
+**[CALLOUT: "Only the first five characters of the hash ever leave your server.
+Never the password. Never the full hash."]**
+
+> "**CAPTCHA** is the opposite. If the provider is unreachable, the submission
+> is **rejected**. It fails closed. And that's right, because there's nothing
+> behind it — accepting unverified traffic during an outage is precisely the
+> state an attacker would engineer if they could."
+
+> "One gotcha when you turn CAPTCHA on. It widens the content security policy
+> to allow your provider's widget. If you're adding a provider the app doesn't
+> know about, it needs an entry in two places in the code — the verification URL
+> and the widget origins. Miss the second one and the symptom is not an error;
+> it's that **the challenge simply never appears**, which looks like the feature
+> didn't turn on."
+
+**[CALLOUT: "Symptom of a missing widget origin: no challenge, no error. Check
+the browser console for CSP, not the server log."]**
+
+> "And a small one that bites cross-origin deployments: the challenge token
+> travels in an `X-Captcha-Token` header, so that header has to be allowed in
+> your CORS configuration or the preflight rejects it and the challenge can
+> never be submitted."
+
+> "Last thing — **lockout messages are generic by default**. The sign-in form
+> won't say 'this account is locked,' because that confirms the account exists
+> and tells an attacker their spray is landing. The specific reason is in your
+> audit log, where it belongs."
+
 ### AUDIT LOGS (17:30 – 18:00)
 
 > "Every security-relevant action is logged in the audit trail — logins,
@@ -741,6 +804,51 @@ row.]**
 > the change rather than locking the department out — but you don't want to
 > discover that on the day your only admin retires."
 
+### ASK BEFORE YOU RESTART (31:00 – 32:15) — ADDED 2026-08-19
+
+> "The next section is about the app refusing to boot. Before we get there —
+> there's a way to find out _first_, and it takes under a minute."
+
+**[SCREEN: Run the preflight check against the production compose set.]**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  run --rm --build backend python -m app.preflight
+```
+
+> "Zero means this configuration starts. One means it doesn't, and it lists what
+> is blocking. Two means a value is malformed. Run it before every upgrade —
+> otherwise the way you discover a configuration problem is by losing the
+> service, at whatever hour you chose to deploy."
+
+**[SCREEN: Show a run exiting 1, with the blocking items listed.]**
+
+**[CALLOUT: "--build, and the same -f files. Get either wrong and it's
+answering about a different configuration."]**
+
+> "Two details, and both of them will quietly lie to you if you skip them.
+> **`--build`** — without it, `run` uses the image that's already sitting there,
+> so you'd be checking the version you're replacing rather than the one you're
+> deploying. And **pass the same `-f` files your deployment actually uses** — a
+> bare `docker compose run` evaluates only the base development configuration,
+> which has different HTTPS enforcement and different docs settings, and it will
+> cheerfully tell you a stack nobody runs is fine."
+
+**[SCREEN: Run `python -m app.preflight --compose docker-compose.prod.yml`,
+showing a list of named dropped settings.]**
+
+> "There's a second mode that's specific to your job. `--compose`, with a path
+> to a compose file, tells you which settings that file **drops** — values
+> sitting in your `.env` that never reach the container because nothing passes
+> them through."
+
+**[CALLOUT: "A dropped setting used to become a default silently. That's how
+production ends up running a development value with nothing saying so."]**
+
+> "That's the failure mode this exists for. You set something in `.env`, you
+> believe it's in effect, and the container never received it — so it fell back
+> to a default and nothing anywhere told you. Now it's named."
+
 ### WHEN THE APP REFUSES TO START (31:00 – 31:30)
 
 **[SCREEN: Show a startup log with a CRITICAL security line]**
@@ -1064,3 +1172,24 @@ installs leave it at zero, and state that account reset cannot target an account
 holding permissions the operator lacks.
 
 **EDITOR:** Add 3:15 total and re-time Chapters 5 onward and the clip table.
+
+### Added 2026-08-19 — written in-script, not queued
+
+Two new sections are already in the script body above:
+
+- **Chapter 5, "Brute-force protection, and which way each control fails"**
+  (~1:15). The load-bearing beat is that breached-password checking fails
+  **open** and CAPTCHA fails **closed**, deliberately and in opposite
+  directions. Do not let a delivery pass compress that into "both are security
+  checks" — the whole point is that they are not interchangeable.
+- **Chapter 9, "Ask before you restart"** (~1:15). The preflight check, plus
+  `--compose` for dropped settings.
+
+**EDITOR:** a further **~2:30** on top of the 3:15 above. Chapter 5's addition
+re-times everything from 17:30 onward; Chapter 9's addition re-times only
+Chapter 9 and the clip table's last rows. Both land inside existing chapters, so
+no re-ordering. Final timecodes are a recording-production task.
+
+**Demo environment:** the `--compose` beat needs a compose file that genuinely
+drops a setting present in `.env`, or the output is an empty list and the
+section has nothing behind it. Prepare that fixture before the shoot.
