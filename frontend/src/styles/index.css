@@ -1511,11 +1511,6 @@ option {
     touch-action: manipulation;
   }
 
-  /* Prevent horizontal overflow from any uncontained elements */
-  main {
-    overflow-x: hidden;
-  }
-
   /* Hide scrollbars on mobile tab bars for cleaner look */
   .scrollbar-thin::-webkit-scrollbar {
     height: 0;

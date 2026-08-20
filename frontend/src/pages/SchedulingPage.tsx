@@ -616,8 +616,10 @@ const SchedulingPage: React.FC = () => {
         <div className="border-theme-surface-border relative -mx-4 mb-6 border-b px-4 sm:mx-0 sm:px-0">
           <div
             className="flex scrollbar-thin space-x-1 overflow-x-auto scroll-smooth"
+            data-mobile-scroll-region
             role="tablist"
             aria-label="Scheduling views"
+            tabIndex={0}
           >
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
