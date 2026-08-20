@@ -46,6 +46,7 @@ import EventEndConfirmModal from '../components/event-detail/EventEndConfirmModa
 import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfirmModal';
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
+import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 
 /**
  * `custom_fields` keys that are not custom fields.
@@ -1227,6 +1228,11 @@ export const EventDetailPage: React.FC = () => {
             {event.event_type === EventTypeEnum.TRAINING && (
               <TrainingSessionLinkageCard eventId={event.id} canManage={canManage} />
             )}
+
+            {/* Applicants this event produced. Not gated on event type: a
+                pipeline meeting stage links prospects to business meetings
+                too, so any event can have them. */}
+            <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
 
             {/* Attachments */}
             {event.attachments && event.attachments.length > 0 && (
