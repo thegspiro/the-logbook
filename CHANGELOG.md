@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The events page on a phone, and the rules that made it that way (2026-08-20)
+
+**Fixed**
+
+- **The events page now fits a phone.** Its header carried eight sibling
+  buttons, each hiding its label below 640px, which stacked into a column of
+  unlabelled full-width bars and pushed the first event most of a screen below
+  the fold. They move behind one overflow menu — which also absorbed the
+  separate Quick Create popover — and the filters nobody changes on every visit
+  (My Events, sort, presets) sit behind a disclosure carrying a count of what is
+  active. Mobile chrome above the first event drops from about eleven rows to
+  three.
+- **Every upcoming event read "just now".** `formatRelativeTime` collapsed all
+  future timestamps to that, on a list that is by definition mostly ahead of the
+  viewer. It reads forwards now: "in 3 days".
+- **Buttons in a row no longer stretch to full width on a phone.** A rule
+  forcing `width: 100%` on every `.btn-*` under 480px reached far past the form
+  buttons it was written for: scheduling's officer-tools strip became a carousel
+  showing one link at a time, dashboard row actions blew out their rows, and
+  buttons beside a heading squeezed it. The rule now matches stacking contexts
+  by parent — block, grid, or a flex column — and a row is not matched at all,
+  so a call site asking for `w-full` or `flex-1` inside one is honoured rather
+  than overridden. `flex-col-reverse` counts as a column, since it is the
+  standard modal footer.
+- **Event cards gave most of their title width to manager chrome.** A permanent
+  checkbox claimed a 40px gutter and the Edit/Duplicate chips 96px of clearance,
+  cutting titles on a ~343px card to "Monthly Traini…". Selection is now a mode
+  entered from the overflow menu, and the chips become a card footer on a phone
+  while keeping the corner from md up — 81% of the card width for the title, up
+  from 58%.
+- **Twelve controls had no accessible name on a phone.** Their only label was a
+  `hidden sm:inline` span, and `display: none` removes text from the
+  accessibility tree, so a screen-reader user reached a button called nothing.
+  Action buttons with room gained a shorter visible label; icon-only and
+  dynamic-label controls use `sr-only sm:not-sr-only`.
+- **CSV exports could execute on open.** The events, selected-events, attendance,
+  members, form-results, submissions and reports exports quoted their cells
+  without neutralizing them, so a member named `=cmd|…` ran a formula on
+  whichever officer opened the file. The attendance export also escaped only its
+  notes column, so a name containing a comma shifted every column after it. All
+  of them now route through `escapeCsvCell` in `utils/csv.ts`, which also gained
+  `buildCsv`/`downloadCsv` so the three separate copies of the escaping rule
+  became one.
+- **Three defects in that shared escaper**, each live today: `'=+@-'.includes('')`
+  is true, so every empty cell got a stray apostrophe; it skipped leading
+  whitespace before testing while the copy it replaced did not, so each caught a
+  formula the other missed; and it quoted every cell, which fights the
+  member-import error report a person is meant to correct and re-upload.
+- **Ten tab strips built on `card ... p-1`** collected the 12px mobile card
+  padding over the 4px they asked for, and thirteen list-card headings truncated
+  to one line where two would fit.
+
 ### Fleet tags: write a vehicle's check-in tag from the QR directory (2026-08-18)
 
 **Added**
