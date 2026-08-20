@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Mobile: the bottom navigation no longer sits on top of open dialogs (2026-08-20)
+
+**Fixed**
+
+- **A dialog's buttons could not be tapped on a phone.** The bottom navigation
+  is `fixed bottom-0 z-50` and `AppLayout` renders it after the page content, so
+  at equal z-index it painted _over_ any open dialog rather than under it — and
+  no dialog reserved room for it. Measured at 390x844 with each dialog scrolled
+  to its end: a taller-than-viewport dialog buried its action row 40px behind
+  the bar, and on a notched phone — where `pb-[env(safe-area-inset-bottom)]`
+  grows the bar by the home indicator, which no dialog knows about — even a
+  `max-h-[90dvh]` dialog lost 32px. `elementFromPoint` returned the nav in every
+  covered case, so the buttons were **untappable rather than merely clipped**,
+  and the tap navigated the page out from under the dialog. Creating a shift on
+  a phone was the worst case.
+- **The bar is now hidden for as long as any overlay is open**, rather than
+  padding ~93 dialogs around it. That also settles a second defect the padding
+  approach would have left standing: the bar sat above the scrim undimmed and
+  fully clickable while `aria-modal="true"` claimed everything outside the
+  dialog was inert.
+- **`useOverlaySurface` owns the registration stack**, and `useDialog` joins it,
+  so every dialog already routing through that hook is covered without opting
+  in. The two drawers that never adopted `useDialog` register directly; their
+  full-height panels ran behind the bar too. The stack is deliberately separate
+  from `useDialog`'s `openDialogs`, which owns Escape routing and the body
+  scroll lock — a drawer joining _that_ one would leave it non-empty when a
+  dialog above it closed, and the lock, released only by the last dialog out,
+  would never be released at all.
+- **`--bottom-nav-height` is zeroed inside overlay subtrees**, so an in-dialog
+  `action-bar-safe` / `pb-safe` stops reserving height for a bar that is no
+  longer rendered and floating the buttons above a band of dead space. Page-level
+  action bars sit outside those subtrees and keep the allowance, because the bar
+  is still on screen for them.
+
 ### CI: an unbounded `apt-get` was silently skipping the backend suite (2026-08-19)
 
 **Fixed**

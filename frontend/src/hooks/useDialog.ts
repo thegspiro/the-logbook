@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useFocusTrap } from './useFocusTrap';
+import { useOverlaySurface } from './useOverlaySurface';
 
 /**
  * Shared dialog behaviour: focus trapping, Escape-to-close and body scroll lock.
@@ -33,6 +34,10 @@ export function useDialog<T extends HTMLElement>({
   lockScroll = true,
 }: UseDialogOptions) {
   const containerRef = useFocusTrap<T>(isOpen);
+
+  // Lifts the mobile bottom navigation off the dialog while it is open; see
+  // useOverlaySurface for why this is tracked separately from `openDialogs`.
+  useOverlaySurface(isOpen);
 
   // Held in a ref so a caller passing an inline arrow does not tear down and
   // re-register the listener (and re-push onto the stack) on every render.
