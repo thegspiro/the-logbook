@@ -552,6 +552,138 @@ export function openStaffedShift(extraMatch) {
 }
 
 /**
+ * Force the organization's call-tracking mode.
+ *
+ * Close-out renders one of two entirely different screens depending on this
+ * setting: `count_only` gets the three-step wizard, anything else keeps the
+ * single finalize checklist. Both are photographed, so neither shot can assume
+ * what the last one left behind.
+ *
+ * Every mode-dependent shot therefore *sets* the mode it needs rather than
+ * inheriting it — the same self-healing rule capture.mjs applies to
+ * `navigationLayout`, and for the same reason: manifest order is not a
+ * contract, and a shot that silently photographs the other screen still
+ * succeeds. It just writes the wrong picture under the right filename.
+ *
+ * The seeder deliberately leaves the department on `detailed`, so a run that
+ * captures nothing from this group leaves the demo database as it found it.
+ */
+export function setCallTracking(mode) {
+  return async (page) => {
+    await page.evaluate(async (wanted) => {
+      const csrf =
+        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+      const current = await (
+        await fetch("/api/v1/scheduling/settings", { credentials: "include" })
+      ).json();
+      const tracking = current.call_tracking ?? {};
+      if ((tracking.mode ?? "detailed") === wanted) return;
+      // The payload replaces the whole call_tracking object, so the type list
+      // has to be sent back with it. Omitting it wipes the department's own
+      // call types — which is exactly what step 2 of the wizard renders.
+      await fetch("/api/v1/scheduling/settings", {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        },
+        body: JSON.stringify({
+          call_tracking: {
+            mode: wanted,
+            call_types: tracking.call_types ?? [],
+          },
+        }),
+      });
+    }, mode);
+  };
+}
+
+/**
+ * The seeder's dedicated close-out fixture: a past 24-hour shift, four crew.
+ *
+ * Kept in step with CLOSEOUT_SHIFT_NOTE in seed_demo_data.py, which matches on
+ * this string exactly to decide whether to reuse the fixture or build one.
+ */
+const CLOSEOUT_SHIFT_NOTE =
+  "Close-out wizard fixture — 24-hour tour, four crew, count-only captures.";
+
+/**
+ * Open the close-out wizard on the seeded fixture, at a chosen step.
+ *
+ * Two normalizations happen here, and both exist because these shots would
+ * otherwise photograph each other's leftovers:
+ *
+ * 1. **The mode is forced to `count_only`**, because `03-45` sets it back to
+ *    `detailed` and either may run first.
+ * 2. **The step is walked from 1**, because the server remembers how far the
+ *    last run got (`shifts.closeout_step`) and reopens there. Without this, a
+ *    second capture run would open at step 3 and the "step 1" shot would
+ *    quietly contain step 3. Back is pure client state and saves nothing, so
+ *    rewinding is free; Next saves, which is idempotent here — it rewrites the
+ *    same attendance times and reconciles to the same call rows.
+ *
+ * `Close out shift` is **never** clicked. That finalizes, and a finalized shift
+ * will not reopen the wizard — one capture run would spend the fixture for
+ * every run after it.
+ */
+export function openCloseoutWizard({ step = 1, calls = null, credit = null }) {
+  return async (page) => {
+    await setCallTracking("count_only")(page);
+    await openStaffedShift(
+      (shift) => (shift.notes || "").trim() === CLOSEOUT_SHIFT_NOTE,
+    )(page);
+    await clickByName(/^Close out shift$/i)(page);
+
+    const wizard = page.getByLabel("Close-out progress");
+    await wizard.waitFor({ state: "visible" });
+
+    const currentStep = async () => {
+      const marker = page.locator('[aria-current="step"]').first();
+      const label = (await marker.getAttribute("aria-label")) || "";
+      return Number(label.match(/Step (\d)/)?.[1] ?? 1);
+    };
+
+    // Bounded: three steps, so two Backs is the most that can be needed. A
+    // while(true) here would hang the whole run on an unexpected state.
+    for (let guard = 0; guard < 3 && (await currentStep()) > 1; guard += 1) {
+      await page.getByRole("button", { name: /^Back$/ }).click();
+    }
+
+    // Fill the call rows while step 1 is still on screen? No — they only exist
+    // on step 2. Advance first, fill on arrival, and only then move on: step
+    // 2's Next reads these rows, and the derived total is computed from them.
+    for (let target = 2; target <= step; target += 1) {
+      await page.getByRole("button", { name: /^Next$/ }).click();
+      await wizard.waitFor({ state: "visible" });
+      if ((await currentStep()) === 2 && calls) {
+        for (const [label, count] of Object.entries(calls)) {
+          // `${label} calls` is the input's own aria-label, one per configured
+          // call type. Matching the label text alone would also hit the row's
+          // name cell.
+          await page
+            .getByLabel(`${label} calls`, { exact: true })
+            .fill(String(count));
+        }
+      }
+    }
+
+    if (credit !== null) {
+      // Lower the first crew member, so the shot shows a deliberate correction
+      // rather than four identical seeded numbers. Targeted by pattern rather
+      // than by name: the roster is minted per seeder run, and the wizard sorts
+      // it server-side, so "the first row" is stable where any given name is
+      // not.
+      const field = page.getByLabel(/^Calls credited to /).first();
+      await field.fill(String(credit));
+      // The field clamps on blur, not per keystroke, so the displayed value is
+      // only settled once focus leaves.
+      await field.blur();
+    }
+  };
+}
+
+/**
  * Open an election's detail page and switch to one of its workflow tabs.
  *
  * The tabs are component state rather than a query parameter, so they can only
@@ -1025,7 +1157,8 @@ export const SHOTS = [
     // hanging off the bottom of the frame; an element screenshot brings it
     // into view by itself, and the form is the subject anyway. The heading
     // reads "Assign someone to this shift" since the crew-board redesign.
-    selector: "div.rounded-lg:has(> h4:text-is('Assign someone to this shift'))",
+    selector:
+      "div.rounded-lg:has(> h4:text-is('Assign someone to this shift'))",
   },
   {
     id: "03-59-open-shifts-signup",
@@ -1668,8 +1801,7 @@ export const SHOTS = [
         // steps lives; the member's first enrollment is a program without
         // one, and "first" quietly changed when a second enrollment was
         // seeded.
-        (enrollment) =>
-          /Probationary/i.test(enrollment.program?.name || ""),
+        (enrollment) => /Probationary/i.test(enrollment.program?.name || ""),
       )(page);
       await page.waitForTimeout(1500);
       // Scrolled to the "+N more steps your officer records" line rather than
@@ -2435,7 +2567,8 @@ export const SHOTS = [
     },
     // The phase the gate belongs to: the locked row means nothing without the
     // requirement it is waiting on in the same frame.
-    selector: "div.rounded-lg:has(> div > h2:text-is('Phase 3: Certification'))",
+    selector:
+      "div.rounded-lg:has(> div > h2:text-is('Phase 3: Certification'))",
   },
   {
     id: "02-97-manual-entry-apparatus",
@@ -2759,8 +2892,7 @@ export const SHOTS = [
     id: "08-60-dashboard-notification-cards",
     doc: "08-admin-reports.md",
     line: 1153,
-    anchor:
-      "the My Updates feed — unread rows dotted amber",
+    anchor: "the My Updates feed — unread rows dotted amber",
     alt: "The dashboard's My Updates feed — unread rows dotted amber, the unread count in the header, and Older Items linking to the full inbox",
     route: "/dashboard",
     // The station-board rebuild replaced the Notifications panel (per-card ✕,
@@ -7096,6 +7228,13 @@ export const SHOTS = [
     alt: "The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button",
     route: "/scheduling",
     prepare: async (page) => {
+      // This photographs the single finalize checklist, which only exists for
+      // a department NOT recording a call count — count-only replaces it
+      // wholesale with the three-step wizard. The 03-5x shots set count-only to
+      // photograph that wizard, so this one sets the mode back rather than
+      // trusting manifest order. Either shot may run first; both are correct.
+      await setCallTracking("detailed")(page);
+      await page.reload({ waitUntil: "domcontentloaded" });
       // An engine shift specifically. Equipment-check templates resolve by
       // apparatus type, and the demo department writes its checklists for
       // engines — on a ladder or brush shift the pre-finalization modal has no
@@ -7114,6 +7253,79 @@ export const SHOTS = [
       await clickByName(/^Close out shift$/i)(page);
     },
     fullPage: true,
+  },
+  // -- count-only call tracking and the close-out wizard (2026-08-19) -------
+  //
+  // These four share one dedicated fixture — the seeder's 24-hour, four-crew
+  // "Close-out wizard fixture" shift — and each one forces both the
+  // organization's call-tracking mode and its own wizard step rather than
+  // inheriting either. See openCloseoutWizard for why: the mode decides which
+  // of two entirely different screens renders, and the server remembers how far
+  // the last capture run advanced. A shot that inherited either would still
+  // succeed; it would just write the wrong picture under the right filename.
+  //
+  // None of them clicks "Close out shift". That finalizes, and a finalized
+  // shift will not reopen the wizard — one run would spend the fixture for
+  // every run after it.
+  {
+    id: "03-74-settings-call-count-toggle",
+    doc: "03-scheduling.md",
+    line: 272,
+    anchor: "Scheduling → Settings → General, scrolled to the",
+    alt: "Scheduling Settings, General section — the Shift close-out rules block with 'Record a call count at close-out' switched on",
+    route: "/scheduling/settings?tab=general",
+    prepare: async (page) => {
+      // Set through the API rather than by clicking the toggle: the shot is of
+      // the settled on-state, and a click leaves the control mid-transition and
+      // the section's save state ambiguous.
+      await setCallTracking("count_only")(page);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText(/Record a call count at close-out/i)
+        .first()
+        .scrollIntoViewIfNeeded();
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-75-closeout-step1-attendance",
+    doc: "03-scheduling.md",
+    line: 1376,
+    anchor: "close-out wizard step 1: the crew list with editable",
+    alt: "Close-out wizard step 1 — each member's on and off times, the combined-hours figure for the crew, one member flagged for a missing check-out and one assigned member with empty times",
+    route: "/scheduling",
+    prepare: openCloseoutWizard({ step: 1 }),
+    fullPage: false,
+  },
+  {
+    id: "03-76-closeout-step2-calls",
+    doc: "03-scheduling.md",
+    line: 1390,
+    anchor: "close-out wizard step 2: the per-type rows with a",
+    alt: "Close-out wizard step 2 — per-call-type rows with three EMS and one fire entered, and the total derived from them shown read-only above",
+    // Three EMS and one fire: the total has to be arithmetic a reader can do at
+    // a glance to see that the rows are its only source, and two distinct types
+    // show it is a sum rather than a single field echoed.
+    prepare: openCloseoutWizard({ step: 2, calls: { EMS: 3, Fire: 1 } }),
+    route: "/scheduling",
+    fullPage: false,
+  },
+  {
+    id: "03-77-closeout-step3-confirm",
+    doc: "03-scheduling.md",
+    line: 1417,
+    anchor: "close-out wizard step 3: per-member credit seeded from",
+    alt: "Close-out wizard step 3 — every member credited with the apparatus's four calls except the first, lowered to two for a late arrival, with the pass-down notes field below",
+    route: "/scheduling",
+    // credit: 2 against a total of 4 — below the total, so the "nobody is
+    // credited with all of them" advisory renders too, which is part of what
+    // the guide explains on this screen.
+    prepare: openCloseoutWizard({
+      step: 3,
+      calls: { EMS: 3, Fire: 1 },
+      credit: 2,
+    }),
+    fullPage: false,
   },
   {
     id: "03-46-finalized-badge",
@@ -7801,8 +8013,7 @@ export const SHOTS = [
     id: "01-37-elected-package-badge",
     doc: "01-membership.md",
     line: 1156,
-    anchor:
-      "its status badge reading Elected after the recorded vote closed",
+    anchor: "its status badge reading Elected after the recorded vote closed",
     alt: "The applicant drawer's Election Package section, its status badge reading Elected",
     route: "/prospective-members",
     // The badge reads `elected` only after `seed_membership_vote_outcome` has
