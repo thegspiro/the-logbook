@@ -2619,6 +2619,150 @@ class SchedulingService:
             )
         return outcome
 
+    async def _validate_assignment_candidate(
+        self,
+        organization_id: UUID,
+        shift: Shift,
+        user_id: Any,
+        position: Any,
+        *,
+        exclude_assignment_ids: Optional[set[str]] = None,
+        require_mutable: bool = False,
+        reject_past: bool = False,
+        context: str = "shift",
+    ) -> Optional[str]:
+        """Validate the live state needed to place a member in a shift seat.
+
+        ``exclude_assignment_ids`` describes rows that the same transaction is
+        moving away or exchanging.  This lets swaps reuse exactly the duplicate,
+        overlap, leave, eligibility, driver, and seat-capacity checks used by a
+        new assignment without temporarily mutating rows to make the checks pass.
+        """
+        excluded = {str(value) for value in (exclude_assignment_ids or set())}
+        label = context.capitalize()
+        if require_mutable:
+            if shift.status == ShiftStatus.CANCELLED:
+                return f"{label} was cancelled"
+            if shift.is_finalized:
+                return f"{label} was finalized"
+        if reject_past and shift.shift_date and shift.shift_date < date.today():
+            return "Cannot sign up for a past shift"
+        if not user_id or not await self._user_in_org(user_id, organization_id):
+            return "Participating member is no longer active in this organization"
+
+        active = ShiftAssignment.assignment_status.notin_(
+            self.INACTIVE_ASSIGNMENT_STATUSES
+        )
+        dup_query = select(ShiftAssignment.id).where(
+            ShiftAssignment.shift_id == str(shift.id),
+            ShiftAssignment.user_id == str(user_id),
+            ShiftAssignment.organization_id == str(organization_id),
+            active,
+        )
+        if excluded:
+            dup_query = dup_query.where(ShiftAssignment.id.notin_(excluded))
+        if (await self.db.execute(dup_query)).scalar_one_or_none():
+            return f"Member is already assigned to the {context}"
+
+        if shift.start_time:
+            overlap_query = (
+                select(Shift.shift_date)
+                .join(ShiftAssignment, ShiftAssignment.shift_id == Shift.id)
+                .where(
+                    ShiftAssignment.user_id == str(user_id),
+                    ShiftAssignment.organization_id == str(organization_id),
+                    active,
+                    Shift.id != str(shift.id),
+                    Shift.organization_id == str(organization_id),
+                    Shift.shift_date.between(
+                        shift.shift_date - timedelta(days=1),
+                        shift.shift_date + timedelta(days=1),
+                    ),
+                )
+            )
+            if excluded:
+                overlap_query = overlap_query.where(ShiftAssignment.id.notin_(excluded))
+            if shift.end_time:
+                overlap_query = overlap_query.where(
+                    Shift.start_time < shift.end_time,
+                    or_(
+                        and_(
+                            Shift.end_time.is_(None),
+                            Shift.shift_date == shift.shift_date,
+                        ),
+                        Shift.end_time > shift.start_time,
+                    ),
+                )
+            else:
+                overlap_query = overlap_query.where(
+                    Shift.shift_date == shift.shift_date
+                )
+            conflicts = (await self.db.execute(overlap_query)).scalars().all()
+            if conflicts:
+                dates = sorted({str(value) for value in conflicts})
+                return f"Member has a conflicting shift on {', '.join(dates)}"
+
+        if shift.shift_date:
+            leaves = await MemberLeaveService(self.db).get_active_leaves_for_user(
+                str(organization_id), str(user_id), shift.shift_date, shift.shift_date
+            )
+            if leaves:
+                return "Member is on leave of absence for this date"
+
+        position_value = getattr(position, "value", position)
+        slots = self.normalize_positions(shift.positions)
+        if slots and position_value:
+            matching_slots = [
+                slot
+                for slot in slots
+                if str(slot.get("position", "")).lower() == str(position_value).lower()
+            ]
+            if not matching_slots:
+                return f"Position is no longer available on the {context}"
+
+            occupied_query = (
+                select(func.count())
+                .select_from(ShiftAssignment)
+                .where(
+                    ShiftAssignment.shift_id == str(shift.id),
+                    ShiftAssignment.organization_id == str(organization_id),
+                    ShiftAssignment.position == position_value,
+                    active,
+                )
+            )
+            if excluded:
+                occupied_query = occupied_query.where(
+                    ShiftAssignment.id.notin_(excluded)
+                )
+            occupied = (await self.db.execute(occupied_query)).scalar() or 0
+            if occupied >= len(matching_slots):
+                return "Position was filled after this request was submitted"
+
+            from app.services.shift_eligibility_service import ShiftEligibilityService
+
+            user_result = await self.db.execute(
+                select(User).where(
+                    User.id == str(user_id),
+                    User.organization_id == str(organization_id),
+                )
+            )
+            user = user_result.scalar_one_or_none()
+            eligible = await ShiftEligibilityService(self.db).get_eligible_positions(
+                user, str(organization_id), str(shift.id)
+            )
+            if str(position_value).lower() not in {
+                str(value).lower() for value in eligible
+            }:
+                return f"Member is no longer eligible for the {position_value} position"
+
+        await self._check_driver_qualification(
+            user_id=str(user_id),
+            shift_id=str(shift.id),
+            organization_id=str(organization_id),
+            position=position,
+        )
+        return None
+
     async def create_assignment(
         self,
         organization_id: UUID,
@@ -2640,18 +2784,7 @@ class SchedulingService:
             if not shift:
                 return None, "Shift not found"
 
-            if self_signup:
-                if shift.status == ShiftStatus.CANCELLED:
-                    return None, "This shift has been cancelled"
-                if shift.is_finalized:
-                    return None, "This shift is already finalized"
-                if shift.shift_date and shift.shift_date < date.today():
-                    return None, "Cannot sign up for a past shift"
-
             user_id = assignment_data.get("user_id")
-
-            if user_id and not await self._user_in_org(user_id, organization_id):
-                return None, "User not found"
 
             training_error = await self._validate_training_slot_fields(
                 assignment_data, organization_id
@@ -2659,99 +2792,16 @@ class SchedulingService:
             if training_error:
                 return None, training_error
 
-            # Prevent duplicate assignment to the same shift
-            if user_id:
-                dup_result = await self.db.execute(
-                    select(ShiftAssignment.id)
-                    .where(ShiftAssignment.shift_id == str(shift_id))
-                    .where(ShiftAssignment.user_id == str(user_id))
-                    .where(
-                        ShiftAssignment.assignment_status.notin_(
-                            self.INACTIVE_ASSIGNMENT_STATUSES
-                        )
-                    )
-                )
-                if dup_result.scalar_one_or_none():
-                    return None, "Member is already assigned to this shift"
-
-            # Check for overlapping shift assignments
-            if user_id and shift.start_time:
-                # Scope to nearby dates (±1 day) to avoid scanning the whole table
-                # and to avoid false positives from ancient unclosed shifts
-                date_lo = shift.shift_date - timedelta(days=1)
-                date_hi = shift.shift_date + timedelta(days=1)
-                overlap_query = (
-                    select(Shift.shift_date, Shift.start_time)
-                    .join(ShiftAssignment, ShiftAssignment.shift_id == Shift.id)
-                    .where(ShiftAssignment.user_id == str(user_id))
-                    .where(
-                        ShiftAssignment.assignment_status.notin_(
-                            self.INACTIVE_ASSIGNMENT_STATUSES
-                        )
-                    )
-                    .where(Shift.id != str(shift_id))
-                    .where(Shift.organization_id == str(organization_id))
-                    .where(Shift.shift_date.between(date_lo, date_hi))
-                )
-                # Check time overlap: other shift starts before this one ends
-                # AND other shift ends after this one starts.
-                # When the other shift has no end_time, restrict the match to
-                # the same shift_date so open-ended shifts are not treated as
-                # infinitely long (which caused false positives across UTC
-                # date boundaries).
-                if shift.end_time:
-                    overlap_query = overlap_query.where(
-                        Shift.start_time < shift.end_time,
-                        or_(
-                            and_(
-                                Shift.end_time.is_(None),
-                                Shift.shift_date == shift.shift_date,
-                            ),
-                            Shift.end_time > shift.start_time,
-                        ),
-                    )
-                else:
-                    # No end time on this shift — check same-day overlap
-                    overlap_query = overlap_query.where(
-                        Shift.shift_date == shift.shift_date,
-                    )
-                overlap_result = await self.db.execute(overlap_query)
-                conflicting_rows = overlap_result.all()
-                if conflicting_rows:
-                    conflict_dates = sorted({str(row[0]) for row in conflicting_rows})
-                    if len(conflict_dates) == 1:
-                        return (
-                            None,
-                            f"Member has a conflicting shift on {conflict_dates[0]}",
-                        )
-                    return (
-                        None,
-                        f"Member has conflicting shifts on {', '.join(conflict_dates)}",
-                    )
-
-            # Check if the member is on leave of absence for the shift date
-            if user_id and shift.shift_date:
-                leave_svc = MemberLeaveService(self.db)
-                leaves = await leave_svc.get_active_leaves_for_user(
-                    str(organization_id),
-                    str(user_id),
-                    shift.shift_date,
-                    shift.shift_date,
-                )
-                if leaves:
-                    return None, "Member is on leave of absence for this date"
-
-            # Driver qualification. Enforced here rather than at the endpoints
-            # so member self-signup and officer assignment cannot diverge —
-            # both paths reach this one call, and a future third path inherits
-            # the check for free.
-            if user_id:
-                await self._check_driver_qualification(
-                    user_id=str(user_id),
-                    shift_id=str(shift_id),
-                    organization_id=str(organization_id),
-                    position=assignment_data.get("position"),
-                )
+            validation_error = await self._validate_assignment_candidate(
+                organization_id=organization_id,
+                shift=shift,
+                user_id=user_id,
+                position=assignment_data.get("position"),
+                require_mutable=self_signup,
+                reject_past=self_signup,
+            )
+            if validation_error:
+                return None, validation_error
 
             assignment = ShiftAssignment(
                 organization_id=organization_id,
@@ -3670,78 +3720,160 @@ class SchedulingService:
         status: SwapRequestStatus,
         reviewer_notes: Optional[str] = None,
     ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
-        """Review (approve/deny) a shift swap request"""
+        """Review a swap against current state under row-level locks.
+
+        In a two-person exchange, positions are seats belonging to their shifts,
+        so only the two ``user_id`` values change.  In a one-way move, the
+        assignment itself moves and its position stays with the member.
+        """
+
+        async def reject(message: str):
+            # SELECT ... FOR UPDATE locks live until transaction end.
+            await self.db.rollback()
+            return None, message
+
         try:
-            swap_request = await self.get_swap_request_by_id(
-                request_id, organization_id
+            request_result = await self.db.execute(
+                select(ShiftSwapRequest)
+                .where(
+                    ShiftSwapRequest.id == str(request_id),
+                    ShiftSwapRequest.organization_id == str(organization_id),
+                )
+                .with_for_update()
             )
+            swap_request = request_result.scalar_one_or_none()
             if not swap_request:
-                return None, "Swap request not found"
+                return await reject("Swap request not found")
 
             if swap_request.status != SwapRequestStatus.PENDING:
-                return None, "Swap request is no longer pending"
+                return await reject("Swap request is no longer pending")
 
+            if status == SwapRequestStatus.APPROVED:
+                shift_ids = {
+                    str(swap_request.offering_shift_id),
+                    *(
+                        [str(swap_request.requesting_shift_id)]
+                        if swap_request.requesting_shift_id
+                        else []
+                    ),
+                }
+                shifts_result = await self.db.execute(
+                    select(Shift)
+                    .where(
+                        Shift.id.in_(sorted(shift_ids)),
+                        Shift.organization_id == str(organization_id),
+                    )
+                    .order_by(Shift.id)
+                    .with_for_update()
+                )
+                shifts = {str(item.id): item for item in shifts_result.scalars().all()}
+                offering_shift = shifts.get(str(swap_request.offering_shift_id))
+                requested_shift = shifts.get(str(swap_request.requesting_shift_id))
+                if not offering_shift:
+                    return await reject("Offering shift no longer exists")
+                if not requested_shift:
+                    return await reject("Requested shift no longer exists")
+                if offering_shift.status == ShiftStatus.CANCELLED:
+                    return await reject("Offering shift was cancelled")
+                if offering_shift.is_finalized:
+                    return await reject("Offering shift was finalized")
+
+                assignments_result = await self.db.execute(
+                    select(ShiftAssignment)
+                    .where(
+                        ShiftAssignment.shift_id.in_(sorted(shift_ids)),
+                        ShiftAssignment.organization_id == str(organization_id),
+                    )
+                    .order_by(ShiftAssignment.id)
+                    .with_for_update()
+                )
+                assignments = assignments_result.scalars().all()
+                req_assignment = next(
+                    (
+                        item
+                        for item in assignments
+                        if str(item.shift_id) == str(swap_request.offering_shift_id)
+                        and str(item.user_id) == str(swap_request.requesting_user_id)
+                        and item.assignment_status
+                        not in self.INACTIVE_ASSIGNMENT_STATUSES
+                    ),
+                    None,
+                )
+                if not req_assignment:
+                    return await reject(
+                        "Offering assignment was removed after this request was submitted",
+                    )
+
+                target_assign = (
+                    next(
+                        (
+                            item
+                            for item in assignments
+                            if str(item.shift_id)
+                            == str(swap_request.requesting_shift_id)
+                            and str(item.user_id) == str(swap_request.target_user_id)
+                            and item.assignment_status
+                            not in self.INACTIVE_ASSIGNMENT_STATUSES
+                        ),
+                        None,
+                    )
+                    if swap_request.target_user_id
+                    else None
+                )
+                if swap_request.target_user_id and not target_assign:
+                    return await reject(
+                        "Requested assignment was removed after this request was submitted",
+                    )
+
+                moving_ids = {str(req_assignment.id)}
+                if target_assign:
+                    moving_ids.add(str(target_assign.id))
+                candidates = [
+                    (
+                        requested_shift,
+                        swap_request.requesting_user_id,
+                        (
+                            target_assign.position
+                            if target_assign
+                            else req_assignment.position
+                        ),
+                        "requested shift",
+                    )
+                ]
+                if target_assign:
+                    candidates.append(
+                        (
+                            offering_shift,
+                            swap_request.target_user_id,
+                            req_assignment.position,
+                            "offering shift",
+                        )
+                    )
+                for candidate_shift, user_id, position, context in candidates:
+                    error = await self._validate_assignment_candidate(
+                        organization_id=organization_id,
+                        shift=candidate_shift,
+                        user_id=user_id,
+                        position=position,
+                        exclude_assignment_ids=moving_ids,
+                        require_mutable=True,
+                        context=context,
+                    )
+                    if error:
+                        return await reject(error)
+
+                if target_assign:
+                    req_assignment.user_id = swap_request.target_user_id
+                    target_assign.user_id = swap_request.requesting_user_id
+                else:
+                    req_assignment.shift_id = swap_request.requesting_shift_id
+
+            # Deliberately last: no request becomes approved until all live-state
+            # validation and assignment mutations have succeeded.
             swap_request.status = status
             swap_request.reviewed_by = reviewer_id
             swap_request.reviewed_at = datetime.now(timezone.utc)
             swap_request.reviewer_notes = reviewer_notes
-
-            # If approved, perform the actual swap of assignments
-            if status == SwapRequestStatus.APPROVED:
-                # Find the requesting user's assignment on the offering shift
-                req_assign_result = await self.db.execute(
-                    select(ShiftAssignment)
-                    .where(ShiftAssignment.shift_id == swap_request.offering_shift_id)
-                    .where(ShiftAssignment.user_id == swap_request.requesting_user_id)
-                    .where(ShiftAssignment.organization_id == str(organization_id))
-                )
-                req_assignment = req_assign_result.scalar_one_or_none()
-
-                # Find the target user's assignment on the requesting shift
-                target_assign = None
-                if swap_request.requesting_shift_id and swap_request.target_user_id:
-                    target_assign_result = await self.db.execute(
-                        select(ShiftAssignment)
-                        .where(
-                            ShiftAssignment.shift_id == swap_request.requesting_shift_id
-                        )
-                        .where(ShiftAssignment.user_id == swap_request.target_user_id)
-                        .where(ShiftAssignment.organization_id == str(organization_id))
-                    )
-                    target_assign = target_assign_result.scalar_one_or_none()
-
-                # Swap user assignments between the two shifts
-                if req_assignment and target_assign:
-                    req_assignment.user_id = swap_request.target_user_id
-                    target_assign.user_id = swap_request.requesting_user_id
-                elif req_assignment and swap_request.requesting_shift_id:
-                    # Move requesting user to the new shift. Guard against an
-                    # existing active assignment on the target shift, which
-                    # would otherwise violate UniqueConstraint(shift_id,
-                    # user_id) and surface as a raw DB error.
-                    dup_result = await self.db.execute(
-                        select(ShiftAssignment.id)
-                        .where(
-                            ShiftAssignment.shift_id == swap_request.requesting_shift_id
-                        )
-                        .where(
-                            ShiftAssignment.user_id == swap_request.requesting_user_id
-                        )
-                        .where(ShiftAssignment.organization_id == str(organization_id))
-                        .where(
-                            ShiftAssignment.assignment_status.notin_(
-                                self.INACTIVE_ASSIGNMENT_STATUSES
-                            )
-                        )
-                    )
-                    if dup_result.scalar_one_or_none():
-                        await self.db.rollback()
-                        return (
-                            None,
-                            "Member is already assigned to the requested shift",
-                        )
-                    req_assignment.shift_id = swap_request.requesting_shift_id
-
             await self.db.commit()
             await self.db.refresh(swap_request)
 
