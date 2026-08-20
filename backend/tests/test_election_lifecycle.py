@@ -14,6 +14,8 @@ Covers:
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from email import policy
+from email.parser import Parser
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -391,7 +393,11 @@ class TestElectionLifecycleTask(TestLifecycleSetup):
         messages = send_batch.await_args.args[0]
         assert messages
         assert all(
-            "https://fd.example/ballot#token=" in message
+            any(
+                "https://fd.example/ballot#token=" in part.get_content()
+                for part in Parser(policy=policy.default).parsestr(message).walk()
+                if part.get_content_maintype() == "text"
+            )
             for _recipients, message in messages
         ), "automatic reminders must include a fresh ballot link"
         election = await self._get_election(db_session, election_id)
