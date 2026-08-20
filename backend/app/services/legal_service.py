@@ -24,6 +24,7 @@ from app.models.legal import (
     LegalRevisionStatus,
 )
 from app.models.user import Organization, User
+from app.utils.model_updates import apply_updates
 
 # settings["legal"] keys, per document type. The public endpoint reads these
 # exact keys; changing one here without changing app/api/public/legal.py
@@ -126,9 +127,17 @@ class LegalDocumentService:
             # Editing a published revision in place would rewrite what the
             # department is on record as having published on a date.
             raise ValueError("Only drafts can be edited")
-        for field in ("body", "change_note", "effective_date"):
-            if field in updates and updates[field] is not None:
-                setattr(revision, field, updates[field])
+        # apply_updates rather than a `if value is not None` loop: the payload
+        # is dumped with exclude_unset, so a None that reaches here is the
+        # drafter clearing the effective date, not an absent field. Skipping it
+        # would acknowledge the clear with a 200 and leave the old date on the
+        # revision (pitfall #1). A null against body/change_note — both NOT
+        # NULL — raises ValueError, which the endpoint turns into a 400.
+        apply_updates(
+            revision,
+            updates,
+            skip={"id", "organization_id", "document_type", "status"},
+        )
         await self.db.flush()
         return revision
 

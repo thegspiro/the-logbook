@@ -9,6 +9,7 @@ from app.models.legal import (
 )
 from app.models.user import Organization
 from app.services.legal_service import SETTINGS_KEY, LegalDocumentService
+from app.utils.model_updates import apply_updates
 
 
 class TestWriteSettings:
@@ -109,6 +110,43 @@ class TestWriteSettings:
         assert SETTINGS_KEY[LegalDocumentType.TERMS_OF_SERVICE] == "terms_of_service"
 
 
+class TestUpdateSemantics:
+    """The three states an update payload can express, without a database.
+
+    Kept DB-free because this is the pitfall that fails *quietly*: dropping an
+    explicit null acknowledges the clear with a 200 and leaves the old value
+    in place, so nothing surfaces until someone notices the public page still
+    shows last year's date.
+    """
+
+    pytestmark = pytest.mark.unit
+
+    def _revision(self) -> LegalDocumentRevision:
+        return LegalDocumentRevision(
+            organization_id="org-1",
+            document_type=LegalDocumentType.PRIVACY_POLICY,
+            body="Original.",
+            change_note="Original note.",
+            effective_date="March 3, 2026",
+        )
+
+    def test_absent_key_leaves_the_field_untouched(self):
+        revision = self._revision()
+        apply_updates(revision, {"body": "Revised."})
+        assert revision.body == "Revised."
+        assert revision.effective_date == "March 3, 2026"
+
+    def test_explicit_null_clears_a_nullable_field(self):
+        revision = self._revision()
+        apply_updates(revision, {"effective_date": None})
+        assert revision.effective_date is None
+
+    def test_null_against_a_required_column_raises(self):
+        revision = self._revision()
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            apply_updates(revision, {"body": None})
+
+
 @pytest.mark.integration
 class TestLegalDocumentWorkflow:
     """Draft -> publish -> archive, against the database."""
@@ -206,6 +244,35 @@ class TestLegalDocumentWorkflow:
             await service.get_revision(str(revision.id), str(other.id))
         with pytest.raises(ValueError, match="not found"):
             await service.publish(str(revision.id), str(other.id), published_by=None)
+
+    async def test_clearing_the_effective_date_persists(self, db_session):
+        # An explicit null is the drafter emptying the box. Dropping it would
+        # acknowledge the clear with a 200 and leave the old date in place —
+        # and the date is what members read as "Last updated" (pitfall #1).
+        org = await self._org(db_session)
+        revision = await self._draft(db_session, org, effective_date="March 3, 2026")
+        service = LegalDocumentService(db_session)
+        updated = await service.update_draft(
+            str(revision.id), str(org.id), {"effective_date": None}
+        )
+        assert updated.effective_date is None
+
+    async def test_omitting_a_field_leaves_it_alone(self, db_session):
+        org = await self._org(db_session)
+        revision = await self._draft(db_session, org, effective_date="March 3, 2026")
+        service = LegalDocumentService(db_session)
+        updated = await service.update_draft(
+            str(revision.id), str(org.id), {"body": "Revised."}
+        )
+        assert updated.body == "Revised."
+        assert updated.effective_date == "March 3, 2026"
+
+    async def test_nulling_a_required_field_is_rejected_not_dropped(self, db_session):
+        org = await self._org(db_session)
+        revision = await self._draft(db_session, org)
+        service = LegalDocumentService(db_session)
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await service.update_draft(str(revision.id), str(org.id), {"body": None})
 
     async def test_update_draft_changes_body_and_note(self, db_session):
         org = await self._org(db_session)

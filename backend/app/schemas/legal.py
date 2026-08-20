@@ -76,6 +76,13 @@ class LegalRevisionUpdate(BaseModel):
     def _note_not_blank(cls, v: Optional[str]) -> Optional[str]:
         return _require_text(v, "Change note") if v is not None else None
 
+    @field_validator("effective_date")
+    @classmethod
+    def _blank_date_clears(cls, v: Optional[str]) -> Optional[str]:
+        # Blank means "clear it", not "store an empty string": the key is
+        # present, so apply_updates writes the None through as a clear.
+        return (v.strip() or None) if v else None
+
 
 class LegalRevisionResponse(UTCResponseBase):
     """One revision, with the display name of who proposed and published it."""

@@ -9,6 +9,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { LEGAL_SECTIONS, toPlainText } from '../../../pages/legal/legalContent';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatDateTime } from '../../../utils/dateFormatting';
+import { blankToNull } from '../../../utils/formValues';
 import { RevisionEditorModal } from '../components/RevisionEditorModal';
 import { useLegalDocumentsStore } from '../store/legalDocumentsStore';
 import { LEGAL_DOCUMENT_LABEL, LegalDocumentType, type LegalDocumentState, type LegalRevision } from '../types/legal';
@@ -154,9 +155,10 @@ const LegalDocumentsPage: React.FC = () => {
         await updateRevision(editor.revisionId, {
           body: values.body,
           changeNote: values.changeNote,
-          // Send the field even when cleared so the update is not read as
-          // "leave it alone" — an omitted key means untouched on the backend.
-          effectiveDate: values.effectiveDate || undefined,
+          // blankToNull, not `|| undefined`: on an update an omitted key means
+          // "leave this alone", so clearing the date has to travel as an
+          // explicit null or the old one survives behind the success toast.
+          effectiveDate: blankToNull(values.effectiveDate),
         });
       } else {
         await createRevision({

@@ -63,7 +63,12 @@ export interface LegalRevisionCreate {
 export interface LegalRevisionUpdate {
   body?: string | undefined;
   changeNote?: string | undefined;
-  effectiveDate?: string | undefined;
+  /**
+   * `null` clears the date. Update payloads are read with `exclude_unset` on
+   * the backend, so omitting the key means "leave it alone" — a cleared field
+   * has to travel as an explicit null or the old value survives the save.
+   */
+  effectiveDate?: string | null | undefined;
 }
 
 export const LEGAL_DOCUMENT_LABEL: Record<LegalDocumentType, string> = {

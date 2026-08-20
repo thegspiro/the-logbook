@@ -2,13 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGetOverview = vi.fn();
 const mockCreateRevision = vi.fn();
+const mockUpdateRevision = vi.fn();
 const mockPublishRevision = vi.fn();
 
 vi.mock('../services/api', () => ({
   legalDocumentsService: {
     getOverview: () => mockGetOverview() as unknown,
     createRevision: (...args: unknown[]) => mockCreateRevision(...args) as unknown,
-    updateRevision: vi.fn(),
+    updateRevision: (...args: unknown[]) => mockUpdateRevision(...args) as unknown,
     deleteRevision: vi.fn(),
     publishRevision: (...args: unknown[]) => mockPublishRevision(...args) as unknown,
     revertToDefault: vi.fn(),
@@ -52,6 +53,22 @@ describe('useLegalDocumentsStore', () => {
       changeNote: 'Why.',
     });
     expect(mockGetOverview).toHaveBeenCalled();
+  });
+
+  it('sends an explicit null when a field is cleared on update', async () => {
+    // An omitted key means "leave this alone" on the backend, so a cleared
+    // effective date has to travel as null or the old one survives the save.
+    mockUpdateRevision.mockResolvedValue({ id: 'rev-1' });
+    await useLegalDocumentsStore.getState().updateRevision('rev-1', {
+      body: 'Revised.',
+      changeNote: 'Per counsel.',
+      effectiveDate: null,
+    });
+    expect(mockUpdateRevision).toHaveBeenCalledWith('rev-1', {
+      body: 'Revised.',
+      changeNote: 'Per counsel.',
+      effectiveDate: null,
+    });
   });
 
   it('rethrows a failed mutation so the caller can keep the editor open', async () => {

@@ -64,6 +64,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Fixed**
 
+- **Clearing a draft's effective date now persists.** The update path shipped
+  with both halves of pitfall #1: the frontend sent `|| undefined`, so the
+  emptied field never left the browser, and the service skipped nulls with a
+  `if value is not None` loop, so it would have dropped the clear even if it
+  had. The result was a success toast over an unchanged date — and that date is
+  what members read as "Last updated". Now `blankToNull` on the way out and
+  `apply_updates` on the way in, with a blank string treated as a clear rather
+  than stored. A null against `body` or `change_note` (both NOT NULL) raises
+  rather than silently no-opping.
+
 - Publishing writes the organization's settings through a `copy.deepcopy`, not
   a shallow copy. A nested mutation of a JSON column compares equal to
   SQLAlchemy's committed state and skips the UPDATE entirely, which here would

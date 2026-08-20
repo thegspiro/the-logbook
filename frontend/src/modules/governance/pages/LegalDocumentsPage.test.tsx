@@ -144,6 +144,30 @@ describe('LegalDocumentsPage', () => {
     expect(mockPublishRevision).not.toHaveBeenCalled();
   });
 
+  it('clears the effective date with an explicit null rather than omitting it', async () => {
+    const user = userEvent.setup();
+    mockUpdateRevision.mockResolvedValue(draft);
+    mockGetOverview.mockResolvedValue(
+      overview({
+        documents: overview().documents.map((d) =>
+          d.documentType === 'privacy_policy' ? { ...d, drafts: [draft] } : d
+        ),
+      })
+    );
+    renderWithRouter(<LegalDocumentsPage />);
+    await screen.findByText('Dana Reyes proposed this');
+    await user.click(screen.getByRole('button', { name: /Edit/ }));
+
+    await user.clear(await screen.findByLabelText(/Effective date/));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(mockUpdateRevision).toHaveBeenCalled());
+    const [, payload] = mockUpdateRevision.mock.calls[0] as [string, { effectiveDate: unknown }];
+    // Omitting the key would be read as "leave it alone" and the old date
+    // would survive behind the success toast.
+    expect(payload.effectiveDate).toBeNull();
+  });
+
   it('lists proposals with their author and reason', async () => {
     mockGetOverview.mockResolvedValue(
       overview({
