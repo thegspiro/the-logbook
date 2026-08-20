@@ -39,7 +39,9 @@ async function expectMobileDialogUsable(page: Page) {
 
     return {
       documentOverflows: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
-      contentScrollable: !!content && content.scrollHeight >= content.clientHeight,
+      // This is intentionally strict: equality only proves that the content
+      // fits, not that a long create/edit form can actually scroll.
+      contentScrollable: !!content && content.scrollHeight > content.clientHeight,
       footerInsideViewport: !!footerBox && footerBox.bottom <= window.innerHeight && footerBox.top >= 0,
       panelReceivesPointer: !!point?.closest('[data-testid="modal-panel"]'),
       undersized: controls
@@ -63,9 +65,11 @@ async function expectMobileDialogUsable(page: Page) {
   expect(measurements.panelReceivesPointer).toBe(true);
   expect(measurements.undersized).toEqual([]);
 
-  await content.evaluate((element) => {
+  const scrollPosition = await content.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
+    return element.scrollTop;
   });
+  expect(scrollPosition).toBeGreaterThan(0);
   await expect(footer).toBeInViewport();
 }
 
