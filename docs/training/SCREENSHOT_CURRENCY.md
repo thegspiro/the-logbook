@@ -55,7 +55,12 @@ because that is what a capture run has to set up and the marker cannot carry.
 - **Reports → Call Volume in count-only mode**, showing **Unit Responses / Avg
   Responses/Day / Peak Responses** and the footnote. **Caption it against the
   detailed-mode version** — the whole point is that the labels differ, and a
-  lone capture teaches neither.
+  lone capture teaches neither. Two things not to imply in that caption
+  _(added 2026-08-19)_: detailed mode's "Total Calls" is **also** not an
+  incident count (it sums per-trainee shift completion reports), and there is
+  **no per-apparatus breakdown on this screen** to frame — the API returns
+  `by_apparatus_runs` and the renderer ignores it, so do not treat its absence
+  as a mis-seeded capture. See `KNOWN_LIMITATIONS.md` SCHED-15 / SCHED-16.
 
 **Guide 04 — events (3 markers)**
 

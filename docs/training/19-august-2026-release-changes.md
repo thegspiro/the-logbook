@@ -360,11 +360,20 @@ readable CAD number. Those are the fields that make a call record protected
 health information, and there is nowhere in the feature to enter one. Departments
 that need incident-level records need an incident module, not a call counter.
 
-**Edge cases:** blank and `0` are different answers (a gap in the record versus
-a quiet tour); a type breakdown that adds up to less than the total is fine, and
-the remainder records as unclassified; 100 calls is the per-shift ceiling;
-renaming a call type does not disturb history, but deleting one leaves its past
-calls unclassified.
+**Edge cases:** calls the officer cannot classify go in the wizard's **Not
+categorised** row — the total is the sum of the rows, so leaving them out
+records a smaller shift rather than an unclassified remainder; 100 calls is the
+per-shift ceiling; renaming a call type does not disturb history, but deleting
+one leaves its past calls unclassified, and a rename is **not** reflected in the
+Call Volume report, which prints the internal slug. Blank and `0` read as
+different answers while the form is open, but they are not distinguishable once
+saved — both record no calls, so no report can tell a quiet tour from an
+unanswered question.
+
+**Officers already signed in must reload** before their next close-out: a
+session opened before the toggle was flipped still shows the old checklist,
+which never asks for a call count, so a shift closed from that tab finalizes
+with none recorded.
 
 ## Shift close-out is now three screens, and it saves as you go
 
@@ -418,9 +427,11 @@ plain-`http://` LAN deployment. Where it is unavailable the controls are absent
 or explain which of the two conditions is missing. QR still works everywhere.
 
 **Prefer the apparatus tag over a shift tag** for anything mounted: the
-apparatus code resolves to whichever shift is running when it is tapped, so one
+apparatus code resolves when it is tapped rather than naming a shift, so one
 sticker serves the life of the truck. A shift-keyed tag dies when that shift
-ends.
+ends. Tell members to check the shift named on the check-in page before
+confirming — the resolver takes the truck's earliest open shift dated today,
+which on a two-shift day is not the one currently running.
 
 **Room kiosk display codes cannot be tagged, deliberately.** A kiosk code is a
 check-in credential for an unauthenticated screen; a sticker in a public hallway

@@ -101,6 +101,70 @@ reader has to know to ask about.
 | **Call-volume report carries no preliminary marker**                    | Open (LOW)                                                  | Unfinalized shifts are labelled preliminary where they surface elsewhere; the call-volume report is not. A docstring claiming otherwise was corrected on 2026-08-19 rather than the marker being added, so the gap is recorded rather than hidden. A period read before the last shift of it is closed out under-reports, with nothing on screen saying so. (SCHED-11)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **`dispatch` / `derived` call sources have no writer**                  | Accepted (forward compatibility)                            | `CallSource.DISPATCH` / `.DERIVED` and the `uq_org_call_external_ref (organization_id, external_ref)` constraint exist so a CAD integration can be added without a migration — the constraint is what would make a re-sync idempotent. Nothing writes either value today; every row is `manual`. (SCHED-12)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
+
+## Call Volume Reporting — Five Gaps Between Payload and Screen (2026-08-19)
+
+Found by a Codex review of PR #1573, verified against the source, and confirmed
+as documentation defects rather than code regressions — the docs promised
+behaviour the read path does not implement. The guides now describe what is
+built; these track the code.
+
+Four of the five share one file and one cause: `_generate_call_volume_from_counts()`
+puts more in the payload than `CallVolumeRenderer` reads back out. SCHED-10
+through SCHED-12 above cover the *write* side of count-only tracking; these
+cover the *read* side.
+
+| Item | Status | Detail |
+| --- | --- | --- |
+| **CSV export mislabels unit responses as "Total Calls"** | Open (small fix, highest value) | `getCallVolumeExportData()` in `frontend/src/modules/reports/components/renderers/CallVolumeRenderer.tsx` never reads `counts_unit_responses`; the header is the literal `'Total Calls'` in both modes. The on-screen tiles relabel correctly twelve lines above, so **the export is the one presentation that still misleads** — and it is the artifact that reaches a grant officer or an auditor. The flag already travels with the data; the exporter has to branch on it exactly as the renderer does. (SCHED-13) |
+| **A date range spanning a mode change omits one period** | Open (needs product decision) | `ReportsService.get_call_volume_report()` picks its source from the organization's **current** `call_tracking.mode` and applies it to the whole range. Switching to `count_only` hides every earlier detailed-mode figure; switching back hides the `org_calls` era. Nothing warns — the number is just smaller. A correct fix reads each shift under the mode in force when it closed, which means recording that mode per shift; the cheap fix warns when the range predates the current mode's adoption. Not a silent-fix candidate: both change published figures. (SCHED-14) |
+| **"Total Calls" in detailed mode is not an incident count** | Open (needs product decision) | The detailed branch sums `calls_responded` over `ShiftCompletionReport` rows, which are **per trainee** — so a shift with two enrolled trainees contributes its calls twice, and manually filed reports are added alongside. The count-only branch was built carefully to count one incident once; the branch beside it was never held to that standard. Renaming the figure is the honest short-term move; sourcing it from `shift_calls` is the real one. (SCHED-15) |
+| **`by_apparatus_runs` is computed but never displayed** | Open (small fix) | `_generate_call_volume_from_counts()` returns per-apparatus run counts; `CallVolumeRenderer` renders summary cards, type totals and the daily table, and never this. Per-unit runs are therefore **API-only**, despite being the figure an apparatus-replacement case actually needs. (SCHED-16) |
+| **The report shows type slugs, not the department's labels** | Open (small fix) | `by_type` is keyed by slug and the renderer prints the key with underscores replaced, so `mva` displays as "mva" whatever the department named it. Storing the slug is deliberate and correct — it is what stops a rename orphaning history — but the read path never resolves it back through `call_types`. Renaming a type consequently has **no visible effect** on past calls in the report. (SCHED-17) |
+
+Two adjacent behaviours are **working as designed** and are documented in the
+guides rather than tracked here, because the code is right and the earlier
+wording was not:
+
+- **The close-out wizard has no separate total field.** `deriveCallTotal()` sums
+  the visible type rows including "Not categorised", so the API's short-tally
+  behaviour (a `reported_call_count` larger than the breakdown, remainder stored
+  as `unclassified`) is reachable only by a client that sends the two
+  separately. An officer who leaves the remainder out records a **smaller
+  shift** — the guides previously told them to do exactly that, and now tell
+  them to use the Not categorised row.
+- **A saved zero and a saved blank are indistinguishable.** Both write no
+  `OrgCall` rows, both return `reported_call_count: 0`, and hydration renders
+  both as empty. The request layer distinguishes an omitted field from an
+  explicit null (`count_provided`), which is what lets a correction clear a
+  previous count — but that distinction ends at persistence, so no report can
+  tell a quiet tour from an unanswered question. Preserving it needs a stored
+  marker.
+
+## Scheduling — the Apparatus Tag Resolver Is Not a "Currently Running" Lookup (2026-08-19)
+
+`get_active_shift_for_apparatus()` backs `/scheduling/checkin?apparatus=<id>`,
+the form the documentation recommends for a QR code or NFC tag physically
+mounted on a truck — it resolves when used, so one sticker outlives every shift.
+What it resolves to is looser than the phrase "whichever shift is running",
+which several guides used until this was caught:
+
+- The first query takes the **earliest-starting** non-finalized shift whose
+  `shift_date` is today, with **no start/end window check**. On an apparatus
+  running a day and a night shift, a tap at 2000 resolves to the 0600 shift.
+- **`status == cancelled` is excluded nowhere** in any of the three queries —
+  only `is_finalized` is. A cancelled shift dated today wins over the one that
+  actually ran.
+- A stale shift nobody closed out has the same effect, and keeps having it until
+  it is finalized.
+
+The consequence is bounded rather than silent: `ShiftCheckInPage` names the
+unit, date and hours before the member confirms, so a wrong resolution is
+visible to anyone reading the screen — which is why the guides now tell members
+to read it. The resolver is unchanged here because tightening it changes which
+shift existing QR **and** tag check-ins land on, which is a behaviour change
+wanting its own review. (SCHED-18)
+
 ## The Two Apparatus Tables (2026-08-08)
 
 Not a limitation — a piece of the data model that is easy to get wrong, recorded

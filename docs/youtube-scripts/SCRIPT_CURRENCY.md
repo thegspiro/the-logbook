@@ -39,6 +39,17 @@ application or an ISO submission. **A narrator who says "here's your call
 volume" over that screen is teaching a reporting error with a funding
 consequence.** The caveat is one sentence and it must be in the take:
 
+> **Three additions to this beat _(2026-08-19, from the Codex review of
+> PR #1573)_.** They change what can safely be shown, not just what is said.
+> **(a)** Switching the demo department to per-incident mode does **not** make
+> "total calls" safe — that figure sums `calls_responded` across *per-trainee*
+> shift completion reports, so a shift with two enrolled trainees counts twice.
+> Neither mode yields a quotable incident count. **(b) Do not show a CSV
+> export in this chapter.** The export still labels the column "Total Calls" in
+> both modes, so it visibly contradicts the tile beside it on camera. **(c) Do
+> not promise a per-apparatus breakdown** — the API returns one, the screen does
+> not render it. Tracked as SCHED-13/15/16 in `docs/KNOWN_LIMITATIONS.md`.
+
 > "If your department records call counts at close-out, read the label — this
 > is _unit responses_, not incidents. An MVA two units ran shows up twice.
 > Reconcile mutual responses before this goes in a grant application."

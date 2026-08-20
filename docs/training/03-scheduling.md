@@ -273,9 +273,18 @@ at close-out.**
 > _Shift close-out rules_ block, with the "Record a call count at close-out"
 > toggle switched on and its explanatory paragraph legible]**
 
-It takes effect immediately — no reload, no restart. **Tell your officers before
-you flip it**, because it changes what they see at 0700 the same morning: the
-familiar close-out checklist is replaced by a three-step wizard.
+It takes effect immediately **in your own browser** — no reload, no restart.
+**Tell your officers before you flip it**, because it changes what they see at
+0700 the same morning: the familiar close-out checklist is replaced by a
+three-step wizard.
+
+> **Anyone already signed in must reload before their next close-out.** A
+> session that was open when you flipped this keeps the settings it loaded at
+> sign-in, so that officer is still shown the old checklist — and the old
+> checklist never asks for a call count, while the backend has already switched
+> over. A shift closed out from a stale tab finalizes with **no calls recorded
+> at all**, silently. Flip this at a shift change, or tell anyone currently
+> working to refresh the page.
 
 Leaving it off keeps the per-incident **Calls / Runs** logging described above.
 A department that has never touched this setting keeps doing exactly what it
@@ -315,6 +324,13 @@ in a label does not orphan last year's calls. What you should _not_ do casually
 is delete a type: existing calls keep the deleted slug, and it will show as
 unclassified.
 
+> **A rename is invisible in the Call Volume report.** That report prints the
+> stored **slug**, not your label — so a type whose slug is `mva` reads as "mva"
+> there no matter what you call it on screen, and `mutual_aid` reads as "mutual
+> aid". Only the close-out wizard uses your labels. Bear it in mind when
+> choosing the slug for a new type: that string is what a reader sees in the
+> report.
+
 ### The three numbers, and why they will not add up
 
 This is the part that causes arguments in a budget meeting, so it is worth
@@ -323,7 +339,7 @@ getting straight before anyone quotes a figure.
 | Number                     | What it counts                                        | Where you see it                           |
 | -------------------------- | ----------------------------------------------------- | ------------------------------------------ |
 | **Department call volume** | One call is one call, however many units rolled on it | Reports → Call Volume                      |
-| **Apparatus runs**         | One per unit, per call                                | Per-apparatus reporting                    |
+| **Apparatus runs**         | One per unit, per call                                | **Not on any screen yet** — API only       |
 | **Member credit**          | Calls an individual was actually on                   | The member's own hours and training credit |
 
 A 400-call department can legitimately show **380 engine runs and 240 medic
@@ -349,6 +365,28 @@ reported their own call, and nothing has yet linked them to one incident — so
 the figure counts an incident once per responding unit. **Do not put it in a
 grant application as a department call count.** Reconcile mutual responses by
 hand, or wait for the cross-unit feature described below.
+
+Three further things about this report that are easy to be caught out by:
+
+> **The CSV export still says "Total Calls" — in both modes.** The wording on
+> screen changes with the mode; the export does not. So a CSV pulled for a grant
+> or an audit presents unit responses under the word "calls", which is the exact
+> confusion the on-screen label exists to prevent, in the file most likely to
+> leave the building. **Relabel the column by hand before sending one.**
+
+> **A date range spanning a mode change is incomplete.** The report picks its
+> source from your department's **current** setting and applies it to the whole
+> range — it does not switch part-way through. A department now on close-out
+> counts therefore sees **nothing** from its earlier per-incident months, and
+> one that switched back sees nothing from its count-only months. Nothing warns
+> you; the number is simply smaller. Run each period separately.
+
+> **"Total Calls" in per-incident mode is not an incident count either.** It
+> sums the call counts on **shift completion reports**, and those are filed per
+> trainee — so a shift with two enrolled trainees contributes its calls twice,
+> and manually filed reports are added alongside. Neither mode currently
+> produces a figure you can hand to a funder without explaining how it was
+> derived.
 
 ### What is not built yet
 
@@ -1395,15 +1433,22 @@ There is exactly one place the number comes from. An earlier design let you type
 a total _and_ a breakdown, and revising a count downward left the old total
 sitting on screen — which is the figure that then got saved.
 
-**Blank and zero are different answers.** Leaving every row blank records _"we
-did not track it"_. Entering `0` records _"we ran none"_ — a genuinely quiet
-tour. The report treats those differently, and it should: a quiet night is data,
-a blank is a gap.
+**Blank and zero read as different answers while you are filling the form in,
+but they are not distinguishable afterwards.** Leaving every row blank means
+_"we did not track it"_ and entering `0` means _"we ran none"_ — and the form and
+the request do keep those apart, which is what lets a correction clear a count
+somebody entered earlier. The distinction stops at saving: both record no calls,
+both read back as `0` when the shift is reopened, and no report can tell a quiet
+tour from a question nobody answered. **If a nil return matters for your
+records, say so in the pass-down notes on step 3.**
 
-**A breakdown that adds up to less than your total is fine.** Say you ran six
-and can only remember that four were EMS — the other two are recorded as
-unclassified. Requiring the breakdown to reconcile exactly would just teach
-officers to invent a type at 0700 to get the form to submit.
+**Calls you cannot classify go in the "Not categorised" row — not nowhere.**
+Say you ran six and can only remember that four were EMS: enter `4` against EMS
+**and `2` against Not categorised**. Nobody is asking you to invent a type at
+0700, which is exactly what that row is for — but the total on this screen is
+the sum of the rows, so if you enter only the four you are sure of, the shift is
+recorded as **four calls, not six**. Your department's volume is short by two,
+and nothing on screen shows it.
 
 **One hundred calls is the ceiling for a single shift.** You are reporting a
 tour, not a year, and the cap stops a fat-fingered "500" from skewing every

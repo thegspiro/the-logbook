@@ -182,14 +182,35 @@ cross-unit attach picker ships, two units closing out independently each report
 their own call, so calling the figure "calls" would overstate the department's
 volume. **Do not put that number in a grant application as a call count.**
 
+Three caveats on that report, all of them easy to be caught out by:
+
+- **The CSV export still says "Total Calls" in both modes.**
+  `getCallVolumeExportData()` does not read `counts_unit_responses`, so the
+  relabelling reaches the screen and not the file — which is the artifact most
+  likely to leave the building. Relabel it by hand.
+- **A date range spanning a mode change omits one period entirely.** The source
+  is chosen from the org's **current** mode and applied to the whole range, so
+  switching to count-only hides the detailed era and switching back hides the
+  count-only era. No warning; the number is just smaller.
+- **"Total Calls" in detailed mode is not an incident count either.** It sums
+  `calls_responded` across **per-trainee** `ShiftCompletionReport` rows, so a
+  shift with two enrolled trainees contributes twice.
+
+Per-apparatus run counts are returned by the API (`by_apparatus_runs`) but
+**not rendered on any screen**.
+
 ### Edge cases worth knowing
 
-- **Blank and zero are different answers.** Leaving the count blank records
-  "we did not track it"; entering `0` records a quiet tour. A report that
-  conflates them understates quiet nights as missing data.
-- **A breakdown that adds up to less than the total is fine** — the remainder
-  is recorded as unclassified. Requiring it to reconcile exactly would just
-  teach officers to invent a type at 0700 to get the close-out to submit.
+- **Blank and zero are different answers in the form and the request, but not
+  after saving.** The distinction is what lets a correction clear a previously
+  entered count; it does not survive persistence, since both store no call rows
+  and both read back as `0`. No report can tell a quiet tour from an unanswered
+  question.
+- **A breakdown shorter than the total is accepted at the API level** — the
+  remainder is stored as unclassified. **The wizard has no separate total
+  field**: `deriveCallTotal` sums the visible rows, including its own "Not
+  categorised" row, so an officer records a remainder by entering it there.
+  Omitting it records a smaller shift, not an unclassified remainder.
 - **You cannot lower the total below the calls this shift already shares with
   another unit.** The wizard says so and names the number; detaching a shared
   call is an explicit act, not something a lowered total should do behind your

@@ -504,10 +504,15 @@ Tab-based interface with the following views:
 
 > **`/scheduling/checkin` accepts `?shift=<id>` or `?apparatus=<id>`**
 > _(2026-08-18)_. Prefer the **apparatus** form for anything physically mounted:
-> it resolves to whichever shift is running when the code is scanned or the tag
-> is tapped (today's non-finalized shift, else one that ended within two hours,
-> else the next upcoming), so one sticker on the truck serves every shift. A
-> shift-keyed URL is dead the moment that shift ends. `buildShiftCheckInUrl`
+> it resolves at scan/tap time rather than naming a shift, so one sticker on the
+> truck serves every shift. A shift-keyed URL is dead the moment that shift
+> ends. **`get_active_shift_for_apparatus` is not a "currently running"
+> lookup**: it takes the *earliest-starting* non-finalized shift dated today,
+> else one whose `end_time` is within the last two hours, else the next
+> upcoming — with no start/end window check and no `status == cancelled`
+> exclusion. Two shifts on one apparatus in a day, or a stale un-finalized row,
+> therefore resolve to the wrong shift; `ShiftCheckInPage` names the unit, date
+> and hours before the member confirms. `buildShiftCheckInUrl`
 > takes `{ apparatusId }` or `{ shiftId }` so the choice is explicit at the call
 > site; `shift` is read first when both are present.
 
