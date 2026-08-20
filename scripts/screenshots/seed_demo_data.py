@@ -8496,7 +8496,10 @@ class Seeder:
         if not published or not candidate or not examiner:
             return None
 
-        existing = items(self.api.get("/training/skills-testing/tests"), "tests")
+        existing = items(
+            self.api.get("/training/skills-testing/tests?include_practice=true"),
+            "tests",
+        )
         candidate_id = pick(candidate, "id")
         mine = [t for t in existing if pick(t, "candidate_id") == candidate_id]
         # Idempotent on the two states, not on a count: a re-run must not keep
