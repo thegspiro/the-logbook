@@ -371,6 +371,49 @@ describe('EventForm', () => {
     });
   });
 
+  describe('Recruitment events', () => {
+    /** The type picker regroups once org settings load: recruitment is not a
+     *  visible type, so it moves into the "Other" optgroup. Selecting before
+     *  that re-render lands on the pre-fetch option list and is discarded. */
+    const selectRecruitment = async (user: ReturnType<typeof userEvent.setup>) => {
+      await screen.findByRole('group', { name: 'Other' });
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'recruitment');
+    };
+
+    it('prompts to wire guest sign-in into the pipeline when Recruitment is chosen', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await selectRecruitment(userEvent.setup());
+
+      expect(await screen.findByRole('button', { name: /enable guest sign-in/i })).toBeInTheDocument();
+      expect(screen.getByLabelText(/allow guest \(non-member\) sign-in/i)).not.toBeChecked();
+    });
+
+    it('turns on both guest sign-in switches from the prompt', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const user = userEvent.setup();
+      await selectRecruitment(user);
+      await user.click(await screen.findByRole('button', { name: /enable guest sign-in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/allow guest \(non-member\) sign-in/i)).toBeChecked();
+        expect(screen.getByLabelText(/add guests to the prospective members pipeline/i)).toBeChecked();
+      });
+      expect(screen.queryByRole('button', { name: /enable guest sign-in/i })).not.toBeInTheDocument();
+    });
+
+    it('does not prompt for other event types', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const user = userEvent.setup();
+      await screen.findByRole('group', { name: 'Other' });
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'social');
+
+      expect(screen.queryByRole('button', { name: /enable guest sign-in/i })).not.toBeInTheDocument();
+    });
+  });
+
   describe('Notifications Section', () => {
     it('defaults mandatory events to all-member reminders', async () => {
       const user = userEvent.setup();

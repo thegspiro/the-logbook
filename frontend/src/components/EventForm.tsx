@@ -663,6 +663,39 @@ export const EventForm: React.FC<EventFormProps> = ({
               </p>
             </div>
           )}
+          {/* A recruitment event only reaches the prospective-members pipeline
+              through guest sign-in, and those two switches live in Check-In,
+              several sections below the type picker. Without this prompt the
+              usual outcome is an outreach night whose attendees are recorded
+              as external attendees and never become leads. */}
+          {formData.event_type === EventTypeEnum.RECRUITMENT && (
+            <div className="mt-2 rounded-lg border border-teal-500/30 bg-teal-500/10 p-3">
+              {formData.allow_guest_check_in && formData.guest_check_in_creates_prospect ? (
+                <p className="text-sm text-teal-700 dark:text-teal-300">
+                  Guests who sign in at this event will be added to the prospective members pipeline.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-teal-700 dark:text-teal-300">
+                    Prospective members reach the pipeline by signing in as guests. Turn that on to have attendees of
+                    this event opened as applicants.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      update({
+                        allow_guest_check_in: true,
+                        guest_check_in_creates_prospect: true,
+                      })
+                    }
+                    className="mt-2 rounded-md border border-teal-500/40 px-3 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-500/10 dark:text-teal-300"
+                  >
+                    Enable guest sign-in and pipeline follow-up
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Custom Category (optional) */}
