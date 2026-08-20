@@ -12,7 +12,7 @@ describe('useDialog', () => {
     expect(document.body.style.overflow).toBe('hidden');
 
     unmount();
-    expect(document.body.style.overflow).toBe('unset');
+    expect(document.body.style.overflow).toBe('');
   });
 
   it('does nothing while closed', () => {
@@ -50,7 +50,29 @@ describe('useDialog', () => {
     expect(document.body.style.overflow).toBe('hidden');
 
     outer.unmount();
-    expect(document.body.style.overflow).toBe('unset');
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('restores the page when locking and non-locking dialogs close out of order', () => {
+    const locking = renderHook(() => useDialog({ onClose: vi.fn() }));
+    const nonLocking = renderHook(() => useDialog({ onClose: vi.fn(), lockScroll: false }));
+
+    locking.unmount();
+    expect(document.body.style.overflow).toBe('');
+
+    // Previously the non-locking entry kept the stack non-empty but would not
+    // release the lock itself, leaving the page permanently unscrollable.
+    nonLocking.unmount();
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('restores the body overflow value that existed before the dialog', () => {
+    document.body.style.overflow = 'clip';
+    const dialog = renderHook(() => useDialog({ onClose: vi.fn() }));
+
+    expect(document.body.style.overflow).toBe('hidden');
+    dialog.unmount();
+    expect(document.body.style.overflow).toBe('clip');
   });
 
   it('routes Escape to the innermost dialog only', () => {

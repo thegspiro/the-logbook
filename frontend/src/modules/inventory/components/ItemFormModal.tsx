@@ -477,8 +477,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Generate Sizes & Styles toggle (new uniform/PPE items only) */}
         {supportsVariants && (
           <fieldset>
-            <div className="mb-2 flex items-center gap-2">
-              <label className="relative inline-flex cursor-pointer items-center">
+            <div className="mb-2">
+              <label className="relative inline-flex min-h-[44px] cursor-pointer items-center gap-2">
                 <input
                   type="checkbox"
                   checked={generateVariants}
@@ -486,8 +486,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   className="peer sr-only"
                 />
                 <div className="bg-theme-surface-secondary peer border-theme-surface-border h-5 w-9 rounded-full border peer-checked:bg-blue-500 after:absolute after:top-0.5 after:left-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full dark:after:bg-gray-200" />
+                <span className="text-theme-text-primary text-sm font-semibold">Generate Sizes &amp; Styles</span>
               </label>
-              <span className="text-theme-text-primary text-sm font-semibold">Generate Sizes &amp; Styles</span>
             </div>
             {generateVariants && (
               <p className="text-theme-text-muted mb-3 text-xs">
@@ -618,7 +618,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         <fieldset>
           <button
             type="button"
-            className="text-theme-text-primary mb-2 flex items-center gap-1 text-sm font-semibold"
+            className="text-theme-text-primary mb-2 flex min-h-[44px] items-center gap-1 text-sm font-semibold"
             onClick={() => setShowFin(!showFin)}
           >
             Financial {showFin ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}

@@ -123,6 +123,8 @@ export interface MockOptions {
    * Serve empty collections everywhere so the dashboard's empty states render.
    */
   empty?: boolean;
+  /** Permissions granted to the signed-in fixture user. */
+  permissions?: string[];
 }
 
 /**
@@ -130,12 +132,12 @@ export interface MockOptions {
  * registers them in order and Playwright matches the last registration first,
  * so later entries win.
  */
-const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
+const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () => unknown][] => [
   // Catch-all. Anything not listed below answers with an empty object rather
   // than reaching the dev-server proxy, which has no backend behind it.
   ['**/api/v1/**', () => ({})],
 
-  ['**/api/v1/auth/me', () => TEST_USER],
+  ['**/api/v1/auth/me', () => ({ ...TEST_USER, permissions })],
   ['**/api/v1/auth/branding', () => ({ name: TEST_DEPARTMENT, logo: null })],
   ['**/api/v1/auth/oauth-config', () => ({ googleEnabled: false, microsoftEnabled: false })],
   ['**/api/v1/auth/session-settings', () => ({ session_timeout_minutes: 60 })],
@@ -175,6 +177,12 @@ const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
 
   ['**/api/v1/inventory/summary**', () => ({})],
   ['**/api/v1/inventory/low-stock**', () => []],
+  ['**/api/v1/inventory/items**', () => ({ items: [], total: 0 })],
+  ['**/api/v1/inventory/categories**', () => []],
+  ['**/api/v1/inventory/storage-areas**', () => []],
+  ['**/api/v1/inventory/vendors**', () => []],
+  ['**/api/v1/inventory/summary/by-location**', () => []],
+  ['**/api/v1/locations**', () => []],
 
   ['**/api/v1/events**', () => []],
 ];
