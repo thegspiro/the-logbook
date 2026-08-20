@@ -399,6 +399,83 @@ describe('EventsPage', () => {
     });
   });
 
+  describe('Selection Mode', () => {
+    it('should not put a checkbox on every card until selection mode is entered', async () => {
+      const user = userEvent.setup();
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByText('Monthly Business Meeting');
+      expect(screen.queryByRole('button', { name: /select monthly business meeting/i })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /more event actions/i }));
+      await user.click(screen.getByRole('button', { name: /select events/i }));
+
+      expect(screen.getByRole('button', { name: /select monthly business meeting/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /select cpr training/i })).toBeInTheDocument();
+    });
+
+    it('should show the bulk bar for the whole mode, so there is always a way out', async () => {
+      const user = userEvent.setup();
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByText('Monthly Business Meeting');
+      expect(screen.queryByRole('region', { name: /bulk event actions/i })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /more event actions/i }));
+      await user.click(screen.getByRole('button', { name: /select events/i }));
+
+      // Nothing ticked yet, but the bar is already there with Done on it.
+      const bar = screen.getByRole('region', { name: /bulk event actions/i });
+      expect(bar).toHaveTextContent('0 selected');
+      expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /cancel selected/i })).toBeDisabled();
+
+      await user.click(screen.getByRole('button', { name: /select monthly business meeting/i }));
+      expect(screen.getByRole('region', { name: /bulk event actions/i })).toHaveTextContent('1 selected');
+      expect(screen.getByRole('button', { name: /export csv/i })).toBeEnabled();
+    });
+
+    it('should drop the selection when Done leaves the mode', async () => {
+      const user = userEvent.setup();
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByText('Monthly Business Meeting');
+      await user.click(screen.getByRole('button', { name: /more event actions/i }));
+      await user.click(screen.getByRole('button', { name: /select events/i }));
+      await user.click(screen.getByRole('button', { name: /select monthly business meeting/i }));
+
+      await user.click(screen.getByRole('button', { name: /^done$/i }));
+
+      expect(screen.queryByRole('region', { name: /bulk event actions/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /select monthly business meeting/i })).not.toBeInTheDocument();
+
+      // Re-entering must start clean rather than restoring the old ticks.
+      await user.click(screen.getByRole('button', { name: /more event actions/i }));
+      await user.click(screen.getByRole('button', { name: /select events/i }));
+      expect(screen.getByRole('region', { name: /bulk event actions/i })).toHaveTextContent('0 selected');
+    });
+
+    it('should not offer selection mode to a member without event management', async () => {
+      const user = userEvent.setup();
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByText('Monthly Business Meeting');
+      await user.click(screen.getByRole('button', { name: /more event actions/i }));
+      expect(screen.queryByRole('button', { name: /select events/i })).not.toBeInTheDocument();
+    });
+  });
+
   describe('Filter Disclosure', () => {
     it('should hide the secondary filters behind the disclosure until it is opened', async () => {
       const user = userEvent.setup();
