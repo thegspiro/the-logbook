@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
 import { userService, roleService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
-import { buildCsv, downloadCsv } from '../utils/csvExport';
+import { buildCsv, downloadCsv } from '../utils/csv';
 
 /**
  * One rejected row: why it was rejected, and the cells it was rejected from.

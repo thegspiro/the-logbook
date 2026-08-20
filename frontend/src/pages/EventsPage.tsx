@@ -50,7 +50,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
-import { buildCsv, downloadCsv } from '../utils/csvExport';
+import { buildCsv, downloadCsv } from '../utils/csv';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
@@ -417,18 +417,26 @@ export const EventsPage: React.FC = () => {
   }, [typeFilter, searchQuery, showPastEvents, showMyEventsOnly, sortBy]);
 
   // #48: CSV export for events
+  /** One builder for both export paths, so a fix to either cannot miss the other. */
+  const exportEventsToCsv = useCallback(
+    (events: EventListItem[], filename: string) => {
+      const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
+      const rows = events.map((e) => [
+        e.title,
+        getEventTypeLabel(e.event_type),
+        formatShortDateTime(e.start_datetime, tz),
+        e.location || '',
+        e.is_mandatory ? 'Yes' : 'No',
+        e.is_cancelled ? 'Yes' : 'No',
+      ]);
+      downloadCsv(buildCsv([headers, ...rows]), filename);
+    },
+    [tz]
+  );
+
   const handleExportCSV = useCallback(() => {
-    const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
-    const rows = sortedEvents.map((e) => [
-      e.title,
-      getEventTypeLabel(e.event_type),
-      formatShortDateTime(e.start_datetime, tz),
-      e.location || '',
-      e.is_mandatory ? 'Yes' : 'No',
-      e.is_cancelled ? 'Yes' : 'No',
-    ]);
-    downloadCsv(buildCsv([headers, ...rows]), `events-${getTodayLocalDate(tz)}.csv`);
-  }, [sortedEvents, tz]);
+    exportEventsToCsv(sortedEvents, `events-${getTodayLocalDate(tz)}.csv`);
+  }, [exportEventsToCsv, sortedEvents, tz]);
 
   const handleExportFromMenu = useCallback(() => {
     setShowMoreMenu(false);
@@ -472,24 +480,8 @@ export const EventsPage: React.FC = () => {
   const handleExportSelectedCSV = useCallback(() => {
     const selected = sortedEvents.filter((e) => selectedEvents.has(e.id));
     if (selected.length === 0) return;
-    const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
-    const rows = selected.map((e) => [
-      e.title,
-      getEventTypeLabel(e.event_type),
-      formatShortDateTime(e.start_datetime, tz),
-      e.location || '',
-      e.is_mandatory ? 'Yes' : 'No',
-      e.is_cancelled ? 'Yes' : 'No',
-    ]);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `events-selected-${getTodayLocalDate(tz)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [sortedEvents, selectedEvents, tz]);
+    exportEventsToCsv(selected, `events-selected-${getTodayLocalDate(tz)}.csv`);
+  }, [exportEventsToCsv, sortedEvents, selectedEvents, tz]);
 
   const handleCancelSelected = useCallback(async () => {
     const selected = sortedEvents.filter((e) => selectedEvents.has(e.id) && !e.is_cancelled);

@@ -18,7 +18,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatShortDateTime } from '../../utils/dateFormatting';
 import { toDisplayString } from '../../utils/displayValue';
 import { FieldType } from '../../constants/enums';
-import { buildCsv, downloadCsv, type CsvValue } from '../../utils/csvExport';
+import { buildCsv, downloadCsv, type CsvValue } from '../../utils/csv';
 
 const CHOICE_TYPES = new Set(['select', 'multiselect', 'checkbox', 'radio']);
 const TEXT_TYPES = new Set(['text', 'textarea', 'email', 'phone']);

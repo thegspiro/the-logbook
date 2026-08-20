@@ -33,7 +33,7 @@ import { FieldType } from '../../constants/enums';
 import type { FormSubmission, FormField } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatShortDateTime } from '../../utils/dateFormatting';
-import { buildCsv, downloadCsv } from '../../utils/csvExport';
+import { buildCsv, downloadCsv } from '../../utils/csv';
 
 export interface SubmissionViewerProps {
   /** Fetch submissions for this form */

@@ -28,7 +28,7 @@ import { SortableHeader, sortItems } from '../components/ux/SortableHeader';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
 import { UserStatus } from '../constants/enums';
-import { buildCsv, downloadCsv } from '../utils/csvExport';
+import { buildCsv, downloadCsv } from '../utils/csv';
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
