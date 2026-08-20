@@ -2629,6 +2629,7 @@ class SchedulingService:
         exclude_assignment_ids: Optional[set[str]] = None,
         require_mutable: bool = False,
         reject_past: bool = False,
+        enforce_position_eligibility: bool = True,
         context: str = "shift",
     ) -> Optional[str]:
         """Validate the live state needed to place a member in a shift seat.
@@ -2647,7 +2648,14 @@ class SchedulingService:
                 return f"{label} was finalized"
         if reject_past and shift.shift_date and shift.shift_date < date.today():
             return "Cannot sign up for a past shift"
-        if not user_id or not await self._user_in_org(user_id, organization_id):
+        active_user_result = await self.db.execute(
+            select(User.id).where(
+                User.id == str(user_id),
+                User.organization_id == str(organization_id),
+                User.is_active,
+            )
+        )
+        if not user_id or active_user_result.scalar_one_or_none() is None:
             return "Participating member is no longer active in this organization"
 
         active = ShiftAssignment.assignment_status.notin_(
@@ -2738,22 +2746,25 @@ class SchedulingService:
             if occupied >= len(matching_slots):
                 return "Position was filled after this request was submitted"
 
-            from app.services.shift_eligibility_service import ShiftEligibilityService
-
-            user_result = await self.db.execute(
-                select(User).where(
-                    User.id == str(user_id),
-                    User.organization_id == str(organization_id),
+            if enforce_position_eligibility:
+                from app.services.shift_eligibility_service import (
+                    ShiftEligibilityService,
                 )
-            )
-            user = user_result.scalar_one_or_none()
-            eligible = await ShiftEligibilityService(self.db).get_eligible_positions(
-                user, str(organization_id), str(shift.id)
-            )
-            if str(position_value).lower() not in {
-                str(value).lower() for value in eligible
-            }:
-                return f"Member is no longer eligible for the {position_value} position"
+
+                user_result = await self.db.execute(
+                    select(User).where(
+                        User.id == str(user_id),
+                        User.organization_id == str(organization_id),
+                    )
+                )
+                user = user_result.scalar_one_or_none()
+                eligible = await ShiftEligibilityService(
+                    self.db
+                ).get_eligible_positions(user, str(organization_id), str(shift.id))
+                if str(position_value).lower() not in {
+                    str(value).lower() for value in eligible
+                }:
+                    return f"Member is no longer eligible for the {position_value} position"
 
         await self._check_driver_qualification(
             user_id=str(user_id),
@@ -2799,6 +2810,7 @@ class SchedulingService:
                 position=assignment_data.get("position"),
                 require_mutable=self_signup,
                 reject_past=self_signup,
+                enforce_position_eligibility=self_signup,
             )
             if validation_error:
                 return None, validation_error
@@ -3749,6 +3761,27 @@ class SchedulingService:
                 return await reject("Swap request is no longer pending")
 
             if status == SwapRequestStatus.APPROVED:
+                participant_ids = {
+                    str(swap_request.requesting_user_id),
+                    *(
+                        [str(swap_request.target_user_id)]
+                        if swap_request.target_user_id
+                        else []
+                    ),
+                }
+                participants_result = await self.db.execute(
+                    select(User.id)
+                    .where(
+                        User.id.in_(sorted(participant_ids)),
+                        User.organization_id == str(organization_id),
+                    )
+                    .order_by(User.id)
+                    .with_for_update()
+                )
+                # Materialize the result so all participant locks are acquired
+                # before any shift or assignment validation begins.
+                participants_result.scalars().all()
+
                 shift_ids = {
                     str(swap_request.offering_shift_id),
                     *(
@@ -3768,10 +3801,14 @@ class SchedulingService:
                 )
                 shifts = {str(item.id): item for item in shifts_result.scalars().all()}
                 offering_shift = shifts.get(str(swap_request.offering_shift_id))
-                requested_shift = shifts.get(str(swap_request.requesting_shift_id))
+                requested_shift = (
+                    shifts.get(str(swap_request.requesting_shift_id))
+                    if swap_request.requesting_shift_id
+                    else None
+                )
                 if not offering_shift:
                     return await reject("Offering shift no longer exists")
-                if not requested_shift:
+                if swap_request.requesting_shift_id and not requested_shift:
                     return await reject("Requested shift no longer exists")
                 if offering_shift.status == ShiftStatus.CANCELLED:
                     return await reject("Offering shift was cancelled")
@@ -3828,18 +3865,32 @@ class SchedulingService:
                 moving_ids = {str(req_assignment.id)}
                 if target_assign:
                     moving_ids.add(str(target_assign.id))
-                candidates = [
-                    (
-                        requested_shift,
-                        swap_request.requesting_user_id,
+                candidates = []
+                if requested_shift:
+                    candidates.append(
                         (
-                            target_assign.position
-                            if target_assign
-                            else req_assignment.position
-                        ),
-                        "requested shift",
+                            requested_shift,
+                            swap_request.requesting_user_id,
+                            (
+                                target_assign.position
+                                if target_assign
+                                else req_assignment.position
+                            ),
+                            "requested shift",
+                        )
                     )
-                ]
+                else:
+                    # An open request has no destination yet. Approval records
+                    # the review without moving the offering assignment, but
+                    # its member and shift must still be live and mutable.
+                    candidates.append(
+                        (
+                            offering_shift,
+                            swap_request.requesting_user_id,
+                            req_assignment.position,
+                            "offering shift",
+                        )
+                    )
                 if target_assign:
                     candidates.append(
                         (
@@ -3857,6 +3908,7 @@ class SchedulingService:
                         position=position,
                         exclude_assignment_ids=moving_ids,
                         require_mutable=True,
+                        reject_past=True,
                         context=context,
                     )
                     if error:
@@ -3865,7 +3917,7 @@ class SchedulingService:
                 if target_assign:
                     req_assignment.user_id = swap_request.target_user_id
                     target_assign.user_id = swap_request.requesting_user_id
-                else:
+                elif requested_shift:
                     req_assignment.shift_id = swap_request.requesting_shift_id
 
             # Deliberately last: no request becomes approved until all live-state
