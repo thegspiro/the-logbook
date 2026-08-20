@@ -751,9 +751,22 @@
   /* The scrim behind a dialog. This lived at the call site and had drifted into
      two different opacities for the same thing (bg-black/50 at 43 sites,
      bg-black/60 at 47); it settles here on the shared <Modal> component's /50.
-     Layout — flex centring, padding, a raised z-index for a dialog stacked over
-     another — stays at the call site. */
-  @apply fixed inset-0 z-50 bg-black/50;
+     Layout — flex centring, padding, z-index — stays at the call site.
+
+     The z-index in particular must NOT move in here. Two shapes use this class,
+     and they need opposite stacking:
+
+       a) the scrim IS the fixed container, with the panel as its child — it
+          needs a z-index to clear the page chrome, and the panel is a
+          descendant so it paints above the scrim whatever that z-index is;
+       b) the scrim is an empty sibling of the panel inside an already-raised
+          `fixed inset-0 z-50` wrapper — it needs NO z-index, because the panel
+          alongside it is only `relative z-10`.
+
+     Baking z-50 in here put the scrim on top of the panel in every (b) dialog:
+     the surface rendered dimmed under its own scrim, and every tap inside the
+     dialog hit the scrim's close handler instead of the control under it. */
+  @apply fixed inset-0 bg-black/50;
 }
 
 @utility modal-panel {

@@ -1113,7 +1113,7 @@ export const MemberProfilePage: React.FC = () => {
 
         {/* Status Change Modal */}
         {statusModalOpen && (
-          <div className="modal-overlay flex items-center justify-center">
+          <div className="modal-overlay z-50 flex items-center justify-center">
             <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
               <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Change Member Status</h3>
               <div className="space-y-4">

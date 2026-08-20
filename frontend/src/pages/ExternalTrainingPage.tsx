@@ -117,7 +117,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-provider-title"
@@ -656,7 +656,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-provider-title"
@@ -907,7 +907,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mappings-modal-title"

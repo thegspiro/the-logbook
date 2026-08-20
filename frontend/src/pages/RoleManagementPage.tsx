@@ -238,7 +238,7 @@ export const RoleManagementPage: React.FC = () => {
         {showCreateModal && (
           <div
             ref={roleModalRef}
-            className="modal-overlay flex items-center justify-center"
+            className="modal-overlay z-50 flex items-center justify-center"
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-modal-title"
