@@ -104,7 +104,7 @@ describe('ExternalTrainingPage — category mappings', () => {
 
     await waitFor(() =>
       expect(mockUpdateCategoryMapping).toHaveBeenCalledWith('prov-1', 'map-1', {
-        internal_category_id: '',
+        internal_category_id: null,
         is_mapped: false,
       })
     );

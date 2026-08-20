@@ -885,7 +885,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
     setSavingMappingId(mapping.id);
     try {
       const updated = await externalTrainingService.updateCategoryMapping(providerId, mapping.id, {
-        internal_category_id: internalCategoryId,
+        internal_category_id: internalCategoryId || null,
         is_mapped: Boolean(internalCategoryId),
       });
       setCategoryMappings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));

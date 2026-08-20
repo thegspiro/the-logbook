@@ -1394,7 +1394,7 @@ export interface ExternalCategoryMapping {
 }
 
 export interface ExternalCategoryMappingUpdate {
-  internal_category_id?: string;
+  internal_category_id?: string | null;
   is_mapped?: boolean;
 }
 
