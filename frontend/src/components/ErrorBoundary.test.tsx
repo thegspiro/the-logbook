@@ -213,8 +213,42 @@ describe('ErrorBoundary', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Copy error details/i }));
 
-    expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('/scheduling/templates?tab=templates'));
+    expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('/scheduling/templates'));
+    expect(writeTextMock).toHaveBeenCalledWith(expect.not.stringContaining('tab=templates'));
     expect(writeTextMock).toHaveBeenCalledWith(expect.not.stringContaining('view=week'));
+
+    await screen.findByText('Copied to clipboard!');
+  });
+
+  it('redacts credentials and URL parameters from copied crash details', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: writeTextMock },
+    });
+
+    const token = 'FINTOK_0123456789abcdefghijklmnopqrstuvwxyz';
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: {
+        ...window.location,
+        href: `https://logbook.example/finance/approvals/${token}?member=17#approval`,
+      },
+    });
+
+    render(
+      <ErrorBoundary>
+        <ThrowingChild shouldThrow={true} />
+      </ErrorBoundary>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Copy error details/i }));
+
+    expect(writeTextMock).toHaveBeenCalledWith(
+      expect.stringContaining('URL: https://logbook.example/finance/approvals/[REDACTED]')
+    );
+    expect(writeTextMock).toHaveBeenCalledWith(expect.not.stringContaining(token));
+    expect(writeTextMock).toHaveBeenCalledWith(expect.not.stringContaining('member=17'));
+    expect(writeTextMock).toHaveBeenCalledWith(expect.not.stringContaining('#approval'));
 
     await screen.findByText('Copied to clipboard!');
   });
