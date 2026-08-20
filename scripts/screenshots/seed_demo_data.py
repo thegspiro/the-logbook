@@ -6547,7 +6547,7 @@ class Seeder:
                         # being asked of them, and "2 items" pictures the
                         # feature without demonstrating it.
                         requirement["checklist_items"] = CHECKLIST_ITEMS.get(
-                            name,
+                            req_name,
                             [
                                 "Reviewed with company officer",
                                 "Signed off in station logbook",
