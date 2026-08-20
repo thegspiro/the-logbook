@@ -68,6 +68,21 @@ def _parse_migrations():
 MIGRATIONS = _parse_migrations()
 
 
+class TestRenumberedRevisionCompatibility:
+    """Previously released revision stamps must remain upgradeable."""
+
+    def test_legacy_revision_ids_remain_in_the_graph(self):
+        by_revision = {migration["revision"]: migration for migration in MIGRATIONS}
+
+        assert by_revision["20260812_0005"]["down_revisions"] == ["20260813_0002"]
+        assert by_revision["20260812_0006"]["down_revisions"] == ["20260812_0005"]
+        assert set(by_revision["20260813_0007_merge"]["down_revisions"]) == {
+            "20260812_0006",
+            "20260813_0007",
+        }
+        assert by_revision["20260813_0008"]["down_revisions"] == ["20260813_0007_merge"]
+
+
 class TestNoDuplicateRevisions:
     """Ensure no two migration files share the same revision ID."""
 
