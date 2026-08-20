@@ -127,6 +127,23 @@ describe('Modal', () => {
     expect(panel).toHaveClass('sm:max-w-lg');
   });
 
+  it('uses one internal scroller with pinned, safe actions', () => {
+    render(<Modal {...defaultProps} footer={<button>Save</button>} />);
+    expect(screen.getByTestId('modal-panel')).toHaveClass('modal-body', 'overflow-hidden');
+    expect(screen.getByTestId('modal-content')).toHaveClass('overflow-y-auto', 'min-h-0');
+    expect(screen.getByTestId('modal-footer')).toHaveClass('modal-footer-sticky');
+  });
+
+  it('can make its panel a form without disconnecting footer actions', () => {
+    const onSubmit = vi.fn((event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+    });
+    render(<Modal {...defaultProps} onSubmit={onSubmit} footer={<button type="submit">Save</button>} />);
+    fireEvent.submit(screen.getByTestId('modal-panel'));
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(screen.getByTestId('modal-panel')).toContainElement(screen.getByRole('button', { name: 'Save' }));
+  });
+
   // ---- Body scroll lock ----
 
   it('prevents body scroll when modal is open', () => {

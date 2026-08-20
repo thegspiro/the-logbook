@@ -738,11 +738,12 @@
 }
 
 @utility modal-body {
-  /* Mobile-safe modal body — accounts for on-screen keyboard. Uses dvh so the
-     cap tracks the visible viewport rather than the URL-bar-retracted height. */
-  @apply max-h-[85dvh] overflow-y-auto;
+  /* One bounded dialog surface and one internal scroller. dvh follows the
+     visual viewport when a software keyboard opens; safe action-bar padding
+     keeps the final action above the home indicator. */
+  max-height: calc(100dvh - 2rem);
   @media (min-width: 640px) {
-    max-height: 90dvh;
+    max-height: calc(100dvh - 4rem);
   }
 }
 
