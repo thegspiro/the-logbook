@@ -47,6 +47,7 @@ import type {
   ComplianceReportSummary,
   ComplianceReportGenerate,
 } from '../types/training';
+import { useOverlaySurface } from '../hooks/useOverlaySurface';
 
 // Shared form input classes
 const inputClass = 'form-input';
@@ -142,6 +143,9 @@ export default function ComplianceRequirementsConfigPage() {
 
   // Email modal state
   const [emailModalReportId, setEmailModalReportId] = useState<string | null>(null);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(emailModalReportId));
   const [emailRecipients, setEmailRecipients] = useState('');
 
   const loadConfig = useCallback(async () => {

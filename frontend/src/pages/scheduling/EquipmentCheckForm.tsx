@@ -73,6 +73,7 @@ import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel
 
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useAuthStore } from '../../stores/authStore';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 // ============================================================================
 // Types
 // ============================================================================
@@ -303,6 +304,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     {}
   );
   const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(swapTarget));
   // Lots corrected during this check, so the row reflects the box the crew is
   // holding without waiting for a template re-fetch.
   const [lotEdits, setLotEdits] = useState<Record<string, DeployedLot[]>>({});

@@ -28,6 +28,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 import { useConfirm } from '../../contexts/ConfirmContext';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 
 // ---------------------------------------------------------------------------
@@ -152,6 +153,9 @@ export const MyChecklistsPage: React.FC = () => {
 
   // Standalone check template picker
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(showTemplatePicker);
   const [availableTemplates, setAvailableTemplates] = useState<EquipmentCheckTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
 

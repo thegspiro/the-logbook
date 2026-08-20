@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { ConfirmDialog } from '@/components/ux/ConfirmDialog';
 import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
+import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 
 // =============================================================================
 // Status Badge
@@ -49,6 +50,9 @@ interface CreateFYModalProps {
 }
 
 const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
+  // Before the `if (!open) return null` below — hooks may not sit after it.
+  useOverlaySurface(open);
+
   const { createFiscalYear } = useFinanceStore();
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -139,6 +143,9 @@ interface CreateCategoryModalProps {
 }
 
 const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose, onCreated }) => {
+  // Before the `if (!open) return null` below — hooks may not sit after it.
+  useOverlaySurface(open);
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);

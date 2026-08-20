@@ -71,6 +71,7 @@ import {
   pendingReportCount,
 } from '../../utils/shiftReportOfflineQueue';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -144,6 +145,9 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Review modal
   const [reviewReportId, setReviewReportId] = useState<string | null>(null);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(ackReportId) || Boolean(reviewReportId));
   const [reviewNotes, setReviewNotes] = useState('');
   const [redactFields, setRedactFields] = useState<string[]>([]);
   const [reviewing, setReviewing] = useState(false);
