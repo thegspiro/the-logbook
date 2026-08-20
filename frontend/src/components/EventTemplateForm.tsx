@@ -373,7 +373,12 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 type="checkbox"
                 checked={sendReminders}
                 onChange={(e) => {
-                  reminderAudienceEdited.current = true;
+                  // Enabling reminders does not choose an audience. Keep the
+                  // mandatory-template default available until the user picks
+                  // an audience, while still respecting an explicit disable.
+                  if (!e.target.checked) {
+                    reminderAudienceEdited.current = true;
+                  }
                   setSendReminders(e.target.checked);
                   // Belt-and-braces with the state initializer above: turning
                   // reminders on must never leave 'none' as the audience.
