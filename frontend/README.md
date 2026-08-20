@@ -162,9 +162,9 @@ offline. The ordinary Playwright suite cannot provide this coverage because it
 runs against Vite's development server, where service-worker registration is
 disabled.
 
-The offline boundary is intentionally narrow: the login and dashboard shell is
-available immediately, and other frontend route chunks become available after
-they are visited online. Authenticated API responses are never cached. Features
+All generated frontend chunks are precached so a cold offline launch never
+fails on a transitive JavaScript import. Authenticated API responses are never
+cached, so screens that require server data still need connectivity. Features
 that queue offline mutations, such as supported field-report drafts, own their
 persistence and synchronization behavior separately from the service worker.
 
