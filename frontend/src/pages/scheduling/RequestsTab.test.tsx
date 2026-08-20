@@ -49,7 +49,10 @@ vi.mock('react-hot-toast', () => ({
 
 describe('RequestsTab', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Reset queued `mockResolvedValueOnce` pages as well as call history so a
+    // failed or interrupted pagination assertion cannot leak a page into the
+    // next test (CI runs this suite in randomized order).
+    vi.resetAllMocks();
     mockCheckPermission.mockReturnValue(false);
     mockGetSwapRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
     mockGetTimeOffRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
