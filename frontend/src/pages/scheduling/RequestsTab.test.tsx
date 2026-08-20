@@ -209,7 +209,7 @@ describe('RequestsTab', () => {
     renderWithRouter(<RequestsTab />);
     await waitFor(() => expect(mockGetTimeOffRequests).toHaveBeenCalledTimes(1));
 
-    await user.click(screen.getByRole('button', { name: /time off/i }));
+    await user.click(screen.getByRole('tab', { name: /time off/i }));
 
     await waitFor(() => {
       expect(mockGetTimeOffRequests).toHaveBeenCalledTimes(2);

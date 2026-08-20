@@ -17,8 +17,9 @@ import { formatDate, formatTime, formatDateCustom } from '../../utils/dateFormat
 import { getErrorMessage } from '../../utils/errorHandling';
 import { REQUEST_STATUS_COLORS, RequestStatus } from '../../constants/enums';
 
+const REQUESTS_PAGE_SIZE = 20;
+
 export const RequestsTab: React.FC = () => {
-  const pageSize = 20;
   const { checkPermission, user: currentUser } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
@@ -46,7 +47,11 @@ export const RequestsTab: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { ...(statusFilter ? { status: statusFilter as RequestStatus } : {}), skip: 0, limit: pageSize };
+      const params = {
+        ...(statusFilter ? { status: statusFilter as RequestStatus } : {}),
+        skip: 0,
+        limit: REQUESTS_PAGE_SIZE,
+      };
       const [swaps, timeOff] = await Promise.all([
         schedulingService.getSwapRequests(params),
         schedulingService.getTimeOffRequests(params),
@@ -69,14 +74,18 @@ export const RequestsTab: React.FC = () => {
     try {
       const common = statusFilter ? { status: statusFilter as RequestStatus } : {};
       if (activeView === 'swaps') {
-        const page = await schedulingService.getSwapRequests({ ...common, skip: swapRequests.length, limit: pageSize });
+        const page = await schedulingService.getSwapRequests({
+          ...common,
+          skip: swapRequests.length,
+          limit: REQUESTS_PAGE_SIZE,
+        });
         setSwapRequests((current) => [...current, ...page.items]);
         setSwapTotal(page.total);
       } else {
         const page = await schedulingService.getTimeOffRequests({
           ...common,
           skip: timeOffRequests.length,
-          limit: pageSize,
+          limit: REQUESTS_PAGE_SIZE,
         });
         setTimeOffRequests((current) => [...current, ...page.items]);
         setTimeOffTotal(page.total);
@@ -171,8 +180,11 @@ export const RequestsTab: React.FC = () => {
     <div className="space-y-6">
       {/* Tab + Filter Bar */}
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div className="bg-theme-input-bg flex rounded-lg p-1">
+        <div className="bg-theme-input-bg flex rounded-lg p-1" role="tablist" aria-label="Request type">
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeView === 'swaps'}
             onClick={() => {
               setActiveView('swaps');
               void loadData();
@@ -183,6 +195,9 @@ export const RequestsTab: React.FC = () => {
             <span className="sm:hidden">Swaps</span> ({swapTotal})
           </button>
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeView === 'timeoff'}
             onClick={() => {
               setActiveView('timeoff');
               void loadData();
