@@ -99,6 +99,7 @@ interface Measurement {
   crashed: boolean;
   scrollWidth: number;
   overflowExamples: string[];
+  invalidScrollRegions: string[];
   textLength: number;
   totalTargets: number;
   smallTargets: number;
@@ -115,6 +116,7 @@ test.describe('mobile presentation', () => {
 
     const crashed: string[] = [];
     const overflowed: string[] = [];
+    const invalidScrollRegions: string[] = [];
     const tapBudgetBusted: string[] = [];
     const textBudgetBusted: string[] = [];
     const blank: string[] = [];
@@ -130,14 +132,7 @@ test.describe('mobile presentation', () => {
           const doc = document.documentElement;
           const isVisible = (el: Element) => {
             const b = el.getBoundingClientRect();
-            return (
-              b.width > 0 &&
-              b.height > 0 &&
-              b.right > 0 &&
-              b.left < doc.clientWidth &&
-              b.bottom > 0 &&
-              b.top < doc.clientHeight
-            );
+            return b.width > 0 && b.height > 0 && b.right > 0 && b.left < doc.clientWidth;
           };
 
           const targets = [
@@ -195,10 +190,24 @@ test.describe('mobile presentation', () => {
             return `${identity} "${name}" [left=${Math.round(b.left)}, right=${Math.round(b.right)}, width=${Math.round(b.width)}]`;
           };
 
+          const invalidScrollRegions = [...document.querySelectorAll('[data-mobile-scroll-region]')]
+            .filter(isVisible)
+            .flatMap((el) => {
+              const failures: string[] = [];
+              const overflowX = getComputedStyle(el).overflowX;
+              if (overflowX !== 'auto' && overflowX !== 'scroll') failures.push(`overflow-x is ${overflowX}`);
+              if (!el.getAttribute('aria-label')?.trim() && !el.getAttribute('aria-labelledby')?.trim()) {
+                failures.push('has no accessible label');
+              }
+              if ((el as HTMLElement).tabIndex !== 0) failures.push('is not keyboard focusable');
+              return failures.length ? [`${describe(el)}: ${failures.join(', ')}`] : [];
+            });
+
           return {
             crashed: document.body.innerText.includes('Oops! Something went wrong'),
             scrollWidth: doc.scrollWidth,
             overflowExamples: overflowing.slice(0, 8).map(describe),
+            invalidScrollRegions,
             textLength: document.body.innerText.trim().length,
             totalTargets: targets.length,
             smallTargets: small.length,
@@ -220,6 +229,9 @@ test.describe('mobile presentation', () => {
         overflowed.push(
           `${route.path} (page scroll width ${m.scrollWidth}px):\n    ${m.overflowExamples.join('\n    ')}`
         );
+      }
+      if (m.invalidScrollRegions.length) {
+        invalidScrollRegions.push(`${route.path}:\n    ${m.invalidScrollRegions.join('\n    ')}`);
       }
       if (m.smallTargets > route.maxSmallTargets) {
         tapBudgetBusted.push(
@@ -253,6 +265,7 @@ test.describe('mobile presentation', () => {
 
     expect(crashed, 'routes that hit the ErrorBoundary').toEqual([]);
     expect(overflowed, 'routes with visible elements extending outside the viewport').toEqual([]);
+    expect(invalidScrollRegions, 'intentional scroll regions that break the accessibility contract').toEqual([]);
     expect(tapBudgetBusted, `routes that grew tap targets under ${MIN_TAP}px`).toEqual([]);
     expect(textBudgetBusted, `routes that grew text under ${MIN_FONT_PX}px`).toEqual([]);
   });
