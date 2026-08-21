@@ -32,6 +32,8 @@ from app.schemas.equipment_check import (
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
+    CheckTemplateItemBulkCreate,
+    CheckTemplateItemBulkResponse,
     CheckTemplateItemCreate,
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
@@ -552,6 +554,38 @@ async def add_item(
         )
         await db.commit()
     return item
+
+
+@router.post(
+    "/compartments/{compartment_id}/items/bulk",
+    response_model=CheckTemplateItemBulkResponse,
+    status_code=201,
+)
+async def add_items_bulk(
+    compartment_id: str,
+    data: CheckTemplateItemBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Create an ordered item batch atomically; safe to retry with the same key."""
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.add_items_bulk(
+            compartment_id,
+            str(current_user.organization_id),
+            [item.model_dump() for item in data.items],
+            data.idempotency_key,
+            str(current_user.id),
+            _user_display_name(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    items, replayed = result
+    return CheckTemplateItemBulkResponse(
+        items=items, created_count=0 if replayed else len(items), replayed=replayed
+    )
 
 
 @router.put(

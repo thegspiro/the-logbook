@@ -434,6 +434,11 @@ EVENT_SETTINGS_DEFAULTS = {
         "fundraiser",
         "ceremony",
         "other",
+        # Not in visible_event_types: recruitment is an occasional outreach
+        # type, so it lands under the "Other" tab rather than taking a primary
+        # filter slot. A department that runs them regularly can promote it in
+        # Events settings.
+        "recruitment",
     ],
     "visible_event_types": [
         "business_meeting",

@@ -23,8 +23,13 @@ export const UpdateNotification: React.FC = () => {
          flow it sits at the top of the document, where the fixed mobile header
          (z-50, and later in the DOM) paints straight over it — so on a phone
          the update prompt was never visible. Bottom-pinning also keeps it clear
-         of the hamburger menu, which a top overlay would block. */
-      className="relative z-50 flex items-center justify-center gap-3 bg-blue-600 px-4 py-2 text-sm text-white max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
+         of the hamburger menu, which a top overlay would block.
+
+         It stacks ABOVE the bottom navigation rather than at bottom-0, which
+         put it under the bar: both are z-50 and the bar renders later, so the
+         bar won and swallowed "Reload now". Include the safe-area inset as well
+         because the navigation extends into it on notched devices. */
+      className="relative z-50 flex items-center justify-center gap-3 bg-blue-600 px-4 py-2 text-sm text-white max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(var(--bottom-nav-height,0px)+env(safe-area-inset-bottom))]"
     >
       <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span>A new version of The Logbook is available.</span>

@@ -26,6 +26,10 @@ class EventType(str, Enum):
     FUNDRAISER = "fundraiser"
     CEREMONY = "ceremony"
     OTHER = "other"
+    # Appended after OTHER rather than grouped with the outward-facing types.
+    # MySQL stores an ENUM as the member's ordinal, so inserting mid-list would
+    # reassign the type of every event row already stored.
+    RECRUITMENT = "recruitment"
 
 
 class RSVPStatus(str, Enum):

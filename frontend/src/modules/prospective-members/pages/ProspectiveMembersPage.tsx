@@ -29,15 +29,15 @@ import {
   Info,
   Archive,
 } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { PipelineKanban } from '../components/PipelineKanban';
 import { PipelineTable } from '../components/PipelineTable';
 import { ApplicantDetailDrawer } from '../components/ApplicantDetailDrawer';
 import { ConversionModal } from '../components/ConversionModal';
-import { applicantService } from '../services/api';
-import type { ApplicantListItem, Applicant, ApplicantStatus, BulkActionResult } from '../types';
+import { applicantService, eventLinkService } from '../services/api';
+import type { ApplicantListItem, Applicant, ApplicantStatus, BulkActionResult, ProspectSourceEvent } from '../types';
 import { isValidEmail, getInitials } from '../utils';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -97,6 +97,12 @@ export const ProspectiveMembersPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ApplicantStatus | ''>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [sourceEvents, setSourceEvents] = useState<ProspectSourceEvent[]>([]);
+  // Seeded from ?event= so the event detail page can hand off straight into a
+  // filtered board, and mirrored back so the filtered view survives a reload
+  // and can be sent to somebody else.
+  const [eventFilter, setEventFilter] = useState<string>(() => searchParams.get('event') ?? '');
   const [showAddModal, setShowAddModal] = useState(false);
   const [conversionApplicant, setConversionApplicant] = useState<Applicant | null>(null);
   const [selectedInactive, setSelectedInactive] = useState<Set<string>>(new Set());
@@ -158,6 +164,38 @@ export const ProspectiveMembersPage: React.FC = () => {
   useEffect(() => {
     setFilters(statusFilter ? { status: statusFilter } : { status: undefined });
   }, [statusFilter, setFilters]);
+
+  // The dropdown lists only events something is linked to, so it is empty for
+  // a department that has never run one — the control hides itself rather than
+  // offering a filter that can only return nothing.
+  useEffect(() => {
+    let cancelled = false;
+    eventLinkService
+      .getSourceEvents()
+      .then((events) => {
+        if (!cancelled) setSourceEvents(events);
+      })
+      .catch(() => {
+        // Non-critical: the board stands on its own without this filter.
+        if (!cancelled) setSourceEvents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setFilters({ event_id: eventFilter || undefined });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (eventFilter) next.set('event', eventFilter);
+        else next.delete('event');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [eventFilter, setFilters, setSearchParams]);
 
   const handleApplicantClick = (applicantItem: ApplicantListItem) => {
     void fetchApplicant(applicantItem.id);
@@ -537,6 +575,24 @@ export const ProspectiveMembersPage: React.FC = () => {
               className="form-input placeholder-theme-text-muted pr-4 pl-10 text-sm"
             />
           </div>
+
+          {/* Came-from filter. Absent entirely until at least one applicant is
+              linked to an event, so it never offers an empty choice. */}
+          {sourceEvents.length > 0 && (
+            <select
+              value={eventFilter}
+              onChange={(e) => setEventFilter(e.target.value)}
+              aria-label="Filter by source event"
+              className={`form-input px-3 text-sm ${eventFilter ? 'border-red-500' : ''}`}
+            >
+              <option value="">All sources</option>
+              {sourceEvents.map((event) => (
+                <option key={event.event_id} value={event.event_id}>
+                  {event.title} ({event.prospect_count})
+                </option>
+              ))}
+            </select>
+          )}
 
           {/* Status Filter */}
           <div className="relative">
@@ -1144,7 +1200,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div ref={dialogRef2} className="modal-panel w-full max-w-md">
+          <div ref={dialogRef2} className="modal-panel modal-panel-scroll w-full max-w-md">
             <div className="p-6">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
@@ -1213,7 +1269,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Add Applicant Modal */}
       {showAddModal && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div ref={dialogRef3} className="modal-panel w-full max-w-md">
+          <div ref={dialogRef3} className="modal-panel modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Add Applicant</h2>
               <button

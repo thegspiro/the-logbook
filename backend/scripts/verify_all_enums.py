@@ -8,8 +8,11 @@ lowercase values matching what the application code sends.
 Usage:
     python scripts/verify_all_enums.py
 """
+
 import sys
-from sqlalchemy import create_engine, text, inspect
+
+from sqlalchemy import create_engine, inspect, text
+
 from app.core.config import settings
 
 
@@ -18,18 +21,91 @@ def verify_enum_values():
 
     # Expected enum definitions (table, column, expected_values)
     expected_enums = [
-        ("users", "status", ["active", "inactive", "suspended", "probationary", "retired"]),
-        ("organizations", "organization_type", ["fire_department", "ems_only", "fire_ems_combined"]),
+        (
+            "users",
+            "status",
+            ["active", "inactive", "suspended", "probationary", "retired"],
+        ),
+        (
+            "organizations",
+            "organization_type",
+            ["fire_department", "ems_only", "fire_ems_combined"],
+        ),
         ("organizations", "identifier_type", ["fdid", "state_id", "department_id"]),
         ("audit_logs", "severity", ["info", "warning", "critical"]),
-        ("training_courses", "training_type", ["certification", "continuing_education", "skills_practice", "orientation", "refresher", "specialty"]),
-        ("training_records", "status", ["scheduled", "in_progress", "completed", "cancelled", "failed"]),
+        (
+            "training_courses",
+            "training_type",
+            [
+                "certification",
+                "continuing_education",
+                "skills_practice",
+                "orientation",
+                "refresher",
+                "specialty",
+            ],
+        ),
+        (
+            "training_records",
+            "status",
+            ["scheduled", "in_progress", "completed", "cancelled", "failed"],
+        ),
         ("elections", "status", ["draft", "open", "closed", "cancelled"]),
-        ("events", "event_type", ["business_meeting", "public_education", "training", "social", "fundraiser", "ceremony", "other"]),
+        (
+            "events",
+            "event_type",
+            [
+                "business_meeting",
+                "public_education",
+                "training",
+                "social",
+                "fundraiser",
+                "ceremony",
+                "other",
+                "recruitment",
+            ],
+        ),
         ("event_rsvps", "status", ["going", "not_going", "maybe"]),
-        ("inventory_items", "item_type", ["uniform", "ppe", "tool", "equipment", "vehicle", "electronics", "consumable", "other"]),
-        ("inventory_items", "condition", ["excellent", "good", "fair", "poor", "damaged", "out_of_service", "retired"]),
-        ("inventory_items", "status", ["available", "assigned", "checked_out", "in_maintenance", "lost", "stolen", "retired"]),
+        (
+            "inventory_items",
+            "item_type",
+            [
+                "uniform",
+                "ppe",
+                "tool",
+                "equipment",
+                "vehicle",
+                "electronics",
+                "consumable",
+                "other",
+            ],
+        ),
+        (
+            "inventory_items",
+            "condition",
+            [
+                "excellent",
+                "good",
+                "fair",
+                "poor",
+                "damaged",
+                "out_of_service",
+                "retired",
+            ],
+        ),
+        (
+            "inventory_items",
+            "status",
+            [
+                "available",
+                "assigned",
+                "checked_out",
+                "in_maintenance",
+                "lost",
+                "stolen",
+                "retired",
+            ],
+        ),
     ]
 
     engine = create_engine(settings.SYNC_DATABASE_URL)
@@ -70,7 +146,9 @@ def verify_enum_values():
             # Parse ENUM values from column type
             # Format: enum('value1','value2','value3')
             if not column_type.startswith("enum("):
-                print(f"⚠️  Column '{table_name}.{column_name}' is not an ENUM type: {column_type}")
+                print(
+                    f"⚠️  Column '{table_name}.{column_name}' is not an ENUM type: {column_type}"
+                )
                 continue
 
             # Extract values
@@ -92,7 +170,9 @@ def verify_enum_values():
         print("✅ All ENUM values are correct!")
         return 0
     else:
-        print("❌ Some ENUM values are incorrect. Please rebuild the database with 'docker compose down -v && docker compose up --build'")
+        print(
+            "❌ Some ENUM values are incorrect. Please rebuild the database with 'docker compose down -v && docker compose up --build'"
+        )
         return 1
 
 

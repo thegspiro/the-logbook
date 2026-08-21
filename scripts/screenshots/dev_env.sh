@@ -13,11 +13,24 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LOG_DIR="${SCREENSHOT_LOG_DIR:-/tmp/logbook-screenshots}"
 BACKEND_URL="http://127.0.0.1:3001"
 FRONTEND_URL="http://localhost:3000"
 
-mkdir -p "$LOG_DIR"
+# Keep service logs private and out of predictable paths. An explicitly chosen
+# directory remains stable across runs, but must belong to the current user so
+# another local user cannot populate it with symlinks before redirection.
+umask 077
+if [[ -n "${SCREENSHOT_LOG_DIR:-}" ]]; then
+  LOG_DIR="$SCREENSHOT_LOG_DIR"
+  mkdir -p -- "$LOG_DIR"
+  if [[ -L "$LOG_DIR" || ! -d "$LOG_DIR" || "$(stat -c %u -- "$LOG_DIR")" != "$(id -u)" ]]; then
+    echo "refusing unsafe screenshot log directory: $LOG_DIR" >&2
+    exit 1
+  fi
+  chmod 700 -- "$LOG_DIR"
+else
+  LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/logbook-screenshots.XXXXXX")" || exit 1
+fi
 
 backend_up() { curl -sf -m 2 -o /dev/null "$BACKEND_URL/health"; }
 frontend_up() { curl -sf -m 2 -o /dev/null "$FRONTEND_URL/"; }

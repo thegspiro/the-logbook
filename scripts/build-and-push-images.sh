@@ -102,10 +102,10 @@ echo -e "${BLUE}Step 2/4: Building Frontend Image${NC}"
 echo -e "${BLUE}============================================${NC}"
 echo ""
 
-cd "${PROJECT_ROOT}/frontend"
+cd "${PROJECT_ROOT}"
 
 echo -e "${YELLOW}Building: ${FRONTEND_IMAGE}:${VERSION_TAG}${NC}"
-docker build --target production -t "${FRONTEND_IMAGE}:${VERSION_TAG}" .
+docker build -f frontend/Dockerfile --target production -t "${FRONTEND_IMAGE}:${VERSION_TAG}" .
 
 # Also tag as latest if building a version tag
 if [ "${VERSION_TAG}" != "latest" ]; then

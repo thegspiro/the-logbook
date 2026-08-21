@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**246 tables · 4239 columns · 801 foreign keys**
+**247 tables · 4246 columns · 803 foreign keys**
 
 ---
 
@@ -90,6 +90,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 11 | A named section/area within a checklist template. |
 | [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 27 | An individual item to check within a compartment. |
 | [`driver_exceptions`](#driver_exceptions) | `DriverException` | 17 | A chief-approved, time-boxed exception to the EVOC driving requirement. |
+| [`equipment_check_bulk_requests`](#equipment_check_bulk_requests) | `EquipmentCheckBulkRequest` | 7 | Durable idempotency ledger for atomic template-item batches. |
 | [`equipment_check_templates`](#equipment_check_templates) | `EquipmentCheckTemplate` | 14 | Master template for an equipment checklist. |
 | [`evoc_levels`](#evoc_levels) | `EvocLevel` | 13 | Organization-configurable EVOC (Emergency Vehicle Operator Course) levels. |
 | [`template_change_logs`](#template_change_logs) | `TemplateChangeLog` | 11 | Granular audit trail for equipment check template edits. |
@@ -1512,6 +1513,26 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - CHECK `ck_driver_exceptions_ck_driver_exception_date_order`: `valid_until >= valid_from`
 
+### `equipment_check_bulk_requests`
+
+**EquipmentCheckBulkRequest** · `app/models/apparatus.py`
+
+> Durable idempotency ledger for atomic template-item batches.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `compartment_id` | VARCHAR(36) | no | FK |  | → `check_template_compartments.id` ON DELETE CASCADE |
+| `idempotency_key` | VARCHAR(200) | no |  |  |  |
+| `payload_hash` | VARCHAR(64) | no |  |  |  |
+| `item_ids` | JSON | no |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- UNIQUE `uq_equipment_check_bulk_request` (`organization_id`, `compartment_id`, `idempotency_key`)
+
 ### `equipment_check_templates`
 
 **EquipmentCheckTemplate** · `app/models/apparatus.py`
@@ -2467,7 +2488,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no |  | `other` |  |
+| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment`) | no |  | `other` |  |
 | `default_title` | VARCHAR(200) | yes |  |  |  |
 | `default_description` | TEXT | yes |  |  |  |
 | `default_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` |
@@ -2508,7 +2529,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `title` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no | IDX | `other` |  |
+| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment`) | no | IDX | `other` |  |
 | `custom_category` | VARCHAR(100) | yes | IDX |  |  |
 | `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` |
 | `location` | VARCHAR(300) | yes |  |  |  |
@@ -7634,7 +7655,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `check_id` | VARCHAR(36) | no | FK, IDX |  | → `shift_equipment_checks.id` ON DELETE CASCADE |
 | `template_item_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_items.id` ON DELETE SET NULL |
-| `compartment_name` | VARCHAR(200) | no |  |  |  |
+| `compartment_name` | TEXT | no |  |  |  |
 | `item_name` | VARCHAR(200) | no |  |  |  |
 | `check_type` | VARCHAR(30) | yes |  |  |  |
 | `status` | VARCHAR(30) | no |  |  |  |
@@ -9006,7 +9027,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (195 references)
+### → `organizations` (196 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9056,6 +9077,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `dues_schedules` | `organization_id` | CASCADE | no |
 | `elections` | `organization_id` | CASCADE | no |
 | `email_templates` | `organization_id` | CASCADE | no |
+| `equipment_check_bulk_requests` | `organization_id` | CASCADE | no |
 | `equipment_check_templates` | `organization_id` | CASCADE | no |
 | `equipment_kits` | `organization_id` | CASCADE | no |
 | `equipment_requests` | `organization_id` | CASCADE | no |
@@ -9546,6 +9568,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
 
+### → `check_template_compartments` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
+| `check_template_items` | `compartment_id` | CASCADE | no |
+| `equipment_check_bulk_requests` | `compartment_id` | CASCADE | no |
+
 ### → `equipment_check_templates` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -9636,13 +9666,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `approval_chain_steps` | `chain_id` | CASCADE | no |
 | `approval_step_records` | `chain_id` | CASCADE | no |
-
-### → `check_template_compartments` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
-| `check_template_items` | `compartment_id` | CASCADE | no |
 
 ### → `check_template_items` (2 references)
 
