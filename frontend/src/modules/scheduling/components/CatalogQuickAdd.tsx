@@ -55,14 +55,14 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   disabled = false,
 }) => {
   const [results, setResults] = useState<CatalogResult[]>([]);
-  const resultsId = useId();
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchRequestRef = useRef(0);
+  const requestRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [activeResult, setActiveResult] = useState(-1);
+  const listboxId = useId();
   const [anchor, setAnchor] = useState<{
     top: number;
     left: number;
@@ -73,6 +73,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      requestRef.current += 1;
     };
   }, []);
 
@@ -87,47 +88,56 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const runSearch = useCallback((q: string) => {
-    if (!q.trim()) {
-      setResults([]);
-      return;
-    }
-    const request = ++searchRequestRef.current;
-    setSearching(true);
+  const runSearch = useCallback((query: string, request: number) => {
     void inventoryService
-      .getItems({ search: q.trim(), limit: 6, active_only: true })
+      .getItems({ search: query, limit: 6, active_only: true })
       .then((res) => {
-        if (request !== searchRequestRef.current) return;
+        if (request !== requestRef.current) return;
         setResults(
           res.items.map((i) => {
             const sub = [i.category_name, i.unit_of_measure].filter(Boolean).join(' · ');
             return { id: i.id, name: i.name, trackingType: i.tracking_type, ...(sub ? { sub } : {}) };
           })
         );
-        setActiveResult(res.items.length > 0 ? 0 : -1);
+        setHighlightedIndex(-1);
       })
       .catch(() => {
-        if (request === searchRequestRef.current) setResults([]);
+        if (request !== requestRef.current) return;
+        setResults([]);
+        setHighlightedIndex(-1);
       })
       .finally(() => {
-        if (request === searchRequestRef.current) setSearching(false);
+        if (request === requestRef.current) setSearching(false);
       });
   }, []);
 
   const handleChange = (q: string) => {
     onChange(q);
-    setResults([]);
-    setActiveResult(-1);
     setOpen(true);
+    setResults([]);
+    setHighlightedIndex(-1);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => runSearch(q), 300);
+    const request = ++requestRef.current;
+    const query = q.trim();
+    if (!query) {
+      setSearching(false);
+      return;
+    }
+    // Searching includes the debounce interval, while an empty settled result
+    // means "no matches". This prevents the previous query's empty state from
+    // flashing while the next query is in flight.
+    setSearching(true);
+    debounceRef.current = setTimeout(() => runSearch(query, request), 300);
   };
 
   const reset = () => {
-    searchRequestRef.current += 1;
     onChange('');
     setResults([]);
     setOpen(false);
+    setSearching(false);
+    setHighlightedIndex(-1);
+    requestRef.current += 1;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
   };
 
   /** Add exactly what was typed, with no catalog link. */
@@ -257,32 +267,39 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
             placeholder="Search inventory or type a new item name…"
             value={value}
             disabled={disabled}
-            onChange={(e) => handleChange(e.target.value)}
-            onFocus={() => setOpen(true)}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown' && results.length > 0) {
-                e.preventDefault();
-                setActiveResult((current) => (current + 1) % results.length);
-              } else if (e.key === 'ArrowUp' && results.length > 0) {
-                e.preventDefault();
-                setActiveResult((current) => (current <= 0 ? results.length - 1 : current - 1));
-              } else if (e.key === 'Enter' && activeResult >= 0 && results[activeResult]) {
-                e.preventDefault();
-                void addLinked(results[activeResult]);
-              } else if (e.key === 'Enter') {
-                e.preventDefault();
-                void addAsFreeText();
-              } else if (e.key === 'Escape') {
-                setOpen(false);
-              }
-            }}
             role="combobox"
             aria-autocomplete="list"
             aria-expanded={open && typed.length > 0}
-            aria-controls={resultsId}
-            aria-activedescendant={activeResult >= 0 ? `${resultsId}-option-${activeResult}` : undefined}
+            aria-controls={listboxId}
+            aria-activedescendant={highlightedIndex >= 0 ? `${listboxId}-option-${highlightedIndex}` : undefined}
+            onChange={(e) => handleChange(e.target.value)}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const highlighted = results[highlightedIndex];
+                if (open && highlighted) void addLinked(highlighted);
+                else void addAsFreeText();
+              } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setOpen(true);
+                if (results.length > 0) setHighlightedIndex((current) => (current + 1) % results.length);
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setOpen(true);
+                if (results.length > 0) {
+                  setHighlightedIndex((current) => (current <= 0 ? results.length - 1 : current - 1));
+                }
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setOpen(false);
+                setHighlightedIndex(-1);
+              }
+            }}
           />
-          {searching && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />}
+          {searching && (
+            <Loader2 aria-label="Searching catalog" className="text-theme-text-muted h-4 w-4 animate-spin" />
+          )}
         </div>
         <button
           type="button"
@@ -297,8 +314,9 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
 
       {open && typed.length > 0 && anchor && (
         <div
-          id={resultsId}
+          id={listboxId}
           role="listbox"
+          aria-label="Catalog results"
           style={{
             top: anchor.top,
             left: anchor.left,
@@ -307,16 +325,18 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
           }}
           className="card fixed z-50 overflow-auto shadow-lg"
         >
-          {results.map((r, resultIndex) => (
+          {results.map((r, index) => (
             <button
               key={r.id}
-              id={`${resultsId}-option-${resultIndex}`}
+              id={`${listboxId}-option-${index}`}
+              role="option"
+              aria-selected={highlightedIndex === index}
               type="button"
               onClick={() => void addLinked(r)}
-              onMouseEnter={() => setActiveResult(resultIndex)}
-              role="option"
-              aria-selected={activeResult === resultIndex}
-              className={`${activeResult === resultIndex ? 'bg-theme-surface-secondary' : ''} hover:bg-theme-surface-secondary flex w-full items-center gap-2 px-3 py-2 text-left`}
+              onMouseMove={() => setHighlightedIndex(index)}
+              className={`hover:bg-theme-surface-secondary flex w-full items-center gap-2 px-3 py-2 text-left ${
+                highlightedIndex === index ? 'bg-theme-surface-secondary' : ''
+              }`}
             >
               <Package className="text-theme-text-muted h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1">
@@ -328,6 +348,12 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
               </span>
             </button>
           ))}
+
+          {searching && (
+            <p role="status" className="text-theme-text-muted px-3 py-2 text-xs">
+              Searching catalog…
+            </p>
+          )}
 
           {showCreate && (
             <button

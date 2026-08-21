@@ -228,7 +228,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
             No check-ins yet. Waiting for members to arrive...
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div>
             <table className="rwd-table divide-theme-surface-border min-w-full divide-y">
               <thead>
                 <tr>

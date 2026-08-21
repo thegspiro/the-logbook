@@ -149,6 +149,7 @@ const COLORS: Record<string, string> = {
   social: 'bg-purple-500',
   fundraiser: 'bg-pink-500',
   ceremony: 'bg-orange-500',
+  recruitment: 'bg-teal-500',
   other: 'bg-gray-500',
 };
 

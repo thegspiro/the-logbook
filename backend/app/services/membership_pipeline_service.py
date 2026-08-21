@@ -633,11 +633,19 @@ class MembershipPipelineService:
         pipeline_id: Optional[str] = None,
         status: Optional[str] = None,
         search: Optional[str] = None,
+        event_id: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> tuple[List[ProspectiveMember], int]:
-        """List prospects with filters"""
+        """List prospects with filters.
+
+        ``event_id`` narrows to prospects whose creation metadata names that
+        event as their source. Callers must have already confirmed
+        the event belongs to *organization_id*; the prospect scope below stops
+        a foreign id leaking rows, but it would read as "no applicants" rather
+        than as the wrong-org id it is.
+        """
         query = (
             select(ProspectiveMember)
             .where(ProspectiveMember.organization_id == organization_id)
@@ -652,6 +660,11 @@ class MembershipPipelineService:
             query = query.where(ProspectiveMember.pipeline_id == pipeline_id)
         if status:
             query = query.where(ProspectiveMember.status == status)
+        if event_id:
+            query = query.where(
+                ProspectiveMember.metadata_["source_event_id"].as_string()
+                == str(event_id)
+            )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if search:
             query = query.where(self._prospect_search_filter(search))
@@ -5003,6 +5016,64 @@ class MembershipPipelineService:
     # =========================================================================
     # Event Links
     # =========================================================================
+
+    # Enough to fill a filter dropdown without turning it into a scroll.
+    MAX_SOURCE_EVENTS = 100
+
+    async def list_source_events(
+        self,
+        organization_id: str,
+        limit: int = MAX_SOURCE_EVENTS,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Events that produced applicants, newest first, with their counts.
+
+        This backs the "came from" filter, so it lists only events explicitly
+        recorded in prospect creation metadata. General event links represent
+        invitations or future meetings, not provenance. Offering every event
+        on the calendar would bury
+        the two open houses that matter among a year of business meetings, and
+        most of the choices would return nothing.
+
+        Both sides of the join are organization-scoped. Prospect exclusions
+        suppress confidential records from both counts and returned events.
+        """
+        query = (
+            select(
+                Event.id,
+                Event.title,
+                Event.event_type,
+                Event.start_datetime,
+                func.count(func.distinct(ProspectiveMember.id)).label("prospect_count"),
+            )
+            .join(
+                ProspectiveMember,
+                ProspectiveMember.metadata_["source_event_id"].as_string() == Event.id,
+            )
+            .where(
+                Event.organization_id == organization_id,
+                ProspectiveMember.organization_id == organization_id,
+            )
+            .group_by(Event.id, Event.title, Event.event_type, Event.start_datetime)
+            .order_by(Event.start_datetime.desc())
+            .limit(limit)
+        )
+        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
+        rows = (await self.db.execute(query)).all()
+        return [
+            {
+                "event_id": str(row.id),
+                "title": row.title,
+                "event_type": (
+                    row.event_type.value
+                    if hasattr(row.event_type, "value")
+                    else row.event_type
+                ),
+                "start_datetime": row.start_datetime,
+                "prospect_count": row.prospect_count or 0,
+            }
+            for row in rows
+        ]
 
     async def list_event_links(
         self,

@@ -40,6 +40,18 @@ const catalogItem = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const catalogResponse = (item: ReturnType<typeof catalogItem>) => ({ items: [item], total: 1, skip: 0, limit: 6 });
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
 describe('CatalogQuickAdd', () => {
   const onAdd = vi.fn();
 
@@ -82,19 +94,6 @@ describe('CatalogQuickAdd', () => {
     });
   });
 
-  it('uses Enter to select the highlighted inventory match', async () => {
-    const user = userEvent.setup();
-    renderWith();
-
-    await typeName(user, 'gauze');
-    await screen.findByText('Gauze Pads, 4x4 Sterile');
-    await user.keyboard('{Enter}');
-
-    await waitFor(() => {
-      expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ inventoryItemId: 'inv-1' }));
-    });
-  });
-
   it('links the catalog item when one is picked from the list', async () => {
     const user = userEvent.setup();
     renderWith();
@@ -112,6 +111,71 @@ describe('CatalogQuickAdd', () => {
         checkType: 'quantity',
       });
     });
+  });
+
+  it('uses the keyboard highlight when Enter is pressed', async () => {
+    const user = userEvent.setup();
+    renderWith();
+
+    await typeName(user, 'gauze');
+    await screen.findByRole('option', { name: /Gauze Pads/ });
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    await waitFor(() => {
+      expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ inventoryItemId: 'inv-1' }));
+    });
+  });
+
+  it('closes the list and clears its keyboard highlight on Escape', async () => {
+    const user = userEvent.setup();
+    renderWith();
+
+    await typeName(user, 'gauze');
+    await screen.findByRole('option', { name: /Gauze Pads/ });
+    await user.keyboard('{ArrowDown}{Escape}');
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'false');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ name: 'gauze' }));
+  });
+
+  it('shows searching feedback before reporting that there are no matches', async () => {
+    const pending = deferred<{ items: never[]; total: number; skip: number; limit: number }>();
+    mockGetItems.mockReturnValue(pending.promise);
+    const user = userEvent.setup();
+    renderWith(false);
+
+    await typeName(user, 'missing');
+    expect(screen.getByRole('status')).toHaveTextContent('Searching catalog');
+    expect(screen.queryByText(/No catalog match/)).not.toBeInTheDocument();
+
+    pending.resolve({ items: [], total: 0, skip: 0, limit: 6 });
+    expect(await screen.findByText(/No catalog match/)).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('ignores out-of-order results so a stale item cannot be linked', async () => {
+    const first = deferred<ReturnType<typeof catalogResponse>>();
+    const second = deferred<ReturnType<typeof catalogResponse>>();
+    mockGetItems.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const user = userEvent.setup();
+    renderWith();
+
+    await typeName(user, 'gauze');
+    await waitFor(() => expect(mockGetItems).toHaveBeenCalledTimes(1));
+    await user.clear(screen.getByRole('combobox'));
+    await typeName(user, 'mask');
+    await waitFor(() => expect(mockGetItems).toHaveBeenCalledTimes(2));
+
+    second.resolve(catalogResponse(catalogItem({ id: 'mask-1', name: 'N95 Mask' })));
+    expect(await screen.findByRole('option', { name: /N95 Mask/ })).toBeInTheDocument();
+    first.resolve(catalogResponse(catalogItem({ id: 'stale-1', name: 'Stale Gauze' })));
+    await waitFor(() => expect(screen.queryByText('Stale Gauze')).not.toBeInTheDocument());
+
+    await user.keyboard('{ArrowDown}{Enter}');
+    await waitFor(() => expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ inventoryItemId: 'mask-1' })));
+    expect(onAdd).not.toHaveBeenCalledWith(expect.objectContaining({ inventoryItemId: 'stale-1' }));
   });
 
   it('turns on expiration tracking when the catalog item has dated stock', async () => {
