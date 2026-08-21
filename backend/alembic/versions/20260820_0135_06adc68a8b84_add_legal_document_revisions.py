@@ -22,7 +22,7 @@ that can see settings can propose, a position that can manage settings can
 publish.
 
 Revision ID: 06adc68a8b84
-Revises: 8050e5a61f34
+Revises: 9f6d1c2a4b70
 Create Date: 2026-08-20 01:35:37.466085
 
 """
@@ -35,7 +35,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "06adc68a8b84"
-down_revision: Union[str, None] = "8050e5a61f34"
+down_revision: Union[str, None] = "9f6d1c2a4b70"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
