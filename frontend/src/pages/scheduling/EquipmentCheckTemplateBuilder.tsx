@@ -224,6 +224,8 @@ function itemFormFromResponse(created: CheckTemplateItem): ItemFormState {
 // ============================================================================
 
 interface CompartmentFormState {
+  /** Stable identity for unsaved rows; array indexes break focus/expansion after reorder. */
+  clientKey: string;
   id?: string;
   name: string;
   description: string;
@@ -234,8 +236,12 @@ interface CompartmentFormState {
   items: ItemFormState[];
 }
 
+let nextCompartmentKey = 0;
+const newCompartmentKey = () => `local-compartment-${Date.now()}-${nextCompartmentKey++}`;
+
 function emptyCompartment(): CompartmentFormState {
   return {
+    clientKey: newCompartmentKey(),
     name: '',
     description: '',
     imageUrl: '',
@@ -372,7 +378,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [cloning, setCloning] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(!isEditing);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (isEditing) return false;
+    if (typeof window === 'undefined') return true;
+    // On a phone the setup card otherwise consumes the entire first screen and
+    // hides the actual checklist-building choices below the fold.
+    return !window.matchMedia('(max-width: 1023px)').matches;
+  });
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   // Bulk selection: per-compartment set of selected item indices
@@ -432,6 +444,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const mapped: CompartmentFormState[] = (data.compartments ?? []).map((c) => {
         if (c.id) expanded.add(c.id);
         return {
+          clientKey: newCompartmentKey(),
           id: c.id,
           name: c.name,
           description: c.description ?? '',
@@ -522,14 +535,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     });
   };
 
-  const addCompartment = () =>
+  const addCompartment = (parentCompartmentId = '') =>
     runAddCompartment(async () => {
       if (!templateId) {
         // For new templates not yet saved, add locally
-        const key = `new-${Date.now()}`;
         const comp = emptyCompartment();
+        comp.parentCompartmentId = parentCompartmentId;
         setCompartments((prev) => [...prev, comp]);
-        setExpandedCompartments((prev) => new Set(prev).add(key));
+        setExpandedCompartments((prev) => new Set(prev).add(comp.clientKey));
         return;
       }
 
@@ -538,9 +551,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           name: 'New Compartment',
           sort_order: compartments.length,
           container_type: 'compartment',
+          ...(parentCompartmentId ? { parent_compartment_id: parentCompartmentId } : {}),
         };
         const created = await schedulingService.addCompartment(templateId, payload);
         const comp: CompartmentFormState = {
+          clientKey: newCompartmentKey(),
           id: created.id,
           name: created.name,
           description: created.description ?? '',
@@ -578,6 +593,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         };
         const created = await schedulingService.addCompartment(templateId, payload);
         const comp: CompartmentFormState = {
+          clientKey: newCompartmentKey(),
           id: created.id,
           name: created.name,
           description: created.description ?? '',
@@ -636,6 +652,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!comp) return;
 
     const copy: CompartmentFormState = {
+      clientKey: newCompartmentKey(),
       name: `${comp.name} (copy)`,
       description: comp.description,
       imageUrl: comp.imageUrl,
@@ -649,8 +666,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       next.splice(idx + 1, 0, copy);
       return next;
     });
-    const newKey = `comp-${Date.now()}`;
-    setExpandedCompartments((prev) => new Set(prev).add(newKey));
+    setExpandedCompartments((prev) => new Set(prev).add(copy.clientKey));
     toast.success('Compartment duplicated');
     markDirty();
   };
@@ -1519,6 +1535,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!preset) return;
 
     const newCompartments: CompartmentFormState[] = preset.compartments.map((comp) => ({
+      clientKey: newCompartmentKey(),
       name: comp.name,
       description: '',
       imageUrl: '',
@@ -1668,6 +1685,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           }));
 
         const imported: CompartmentFormState[] = data.compartments.map((c) => ({
+          clientKey: newCompartmentKey(),
           name: c.name || 'Untitled',
           description: c.description ?? '',
           imageUrl: '',
@@ -1824,6 +1842,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
 
     const imported: CompartmentFormState[] = Array.from(compMap.entries()).map(([name, items]) => ({
+      clientKey: newCompartmentKey(),
       name,
       description: '',
       imageUrl: '',
@@ -1981,7 +2000,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const compartmentKey = useCallback((comp: CompartmentFormState, flatIdx: number) => comp.id ?? `comp-${flatIdx}`, []);
+  const compartmentKey = useCallback((comp: CompartmentFormState, _flatIdx: number) => comp.id ?? comp.clientKey, []);
 
   // Canonical depth-first display order is shared with reorder persistence.
   const orderedCompartments = useMemo(
@@ -2772,7 +2791,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
            rest whatever z-index it carried. Every child sits on the same
            surface colour as the card, so the rounded corners stay clean
            without one — the header just rounds its own top corners. */
-        className="card"
+        className="card border-l-4 border-l-blue-500/50"
       >
         {/* Compartment header */}
         <div className="bg-theme-surface flex items-center gap-1.5 rounded-t-lg px-2 py-3 sm:gap-2 sm:px-4">
@@ -3055,8 +3074,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             {/* Items */}
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h4 className="text-theme-text-primary text-sm font-semibold">Check Items</h4>
+                <div>
+                  <h4 className="text-theme-text-primary text-sm font-semibold">Items to check</h4>
+                  <p className="text-theme-text-muted text-xs">Add equipment or a plain-language task for the crew.</p>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {comp.id && (
+                    <button
+                      type="button"
+                      onClick={() => void addCompartment(comp.id)}
+                      className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary flex min-h-9 items-center gap-1 rounded-md border px-2 text-xs font-medium"
+                    >
+                      <Package className="h-3.5 w-3.5" /> Add inside this location
+                    </button>
+                  )}
                   {/* Bulk selection controls */}
                   {comp.items.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1">
@@ -3324,19 +3355,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       </div>
 
       {/* Check Timing */}
-      <div>
+      <div className="border-theme-surface-border border-t pt-4">
         <label className={labelClass}>
           <Clock className="mr-1 inline h-3.5 w-3.5" />
-          Check Timing
+          When should crews complete it?
         </label>
-        <select
-          className={selectClass}
-          value={form.checkTiming}
-          onChange={(e) => updateForm({ checkTiming: e.target.value as TemplateFormState['checkTiming'] })}
-        >
-          <option value="start_of_shift">Start of Shift</option>
-          <option value="end_of_shift">End of Shift</option>
-        </select>
+        <div className="bg-theme-surface-secondary grid grid-cols-2 gap-1 rounded-lg p-1">
+          {(
+            [
+              ['start_of_shift', 'Start of shift'],
+              ['end_of_shift', 'End of shift'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => updateForm({ checkTiming: value })}
+              className={`min-h-9 rounded-md px-2 text-xs font-medium transition-colors ${form.checkTiming === value ? 'bg-theme-surface text-theme-text-primary shadow-sm ring-1 ring-blue-500/20' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              aria-pressed={form.checkTiming === value}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Template Type */}
@@ -3357,16 +3398,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       {/* Assigned Positions */}
       <div>
-        <label className={labelClass}>Assigned Positions</label>
-        <div className="mt-1 flex flex-wrap gap-2">
+        <label className={labelClass}>Who completes it?</label>
+        <p className="text-theme-text-muted -mt-1 mb-2 text-[11px]">
+          Leave blank to make it available to the whole crew.
+        </p>
+        <div className="flex flex-wrap gap-1.5">
           {POSITIONS.map((pos) => (
-            <label key={pos} className="text-theme-text-secondary flex items-center gap-1.5 text-xs capitalize">
+            <label
+              key={pos}
+              className={`flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-xs capitalize transition-colors ${form.assignedPositions.includes(pos) ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'}`}
+            >
               <input
                 type="checkbox"
-                className={checkboxClass}
+                className="sr-only"
                 checked={form.assignedPositions.includes(pos)}
                 onChange={() => togglePosition(pos)}
               />
+              {form.assignedPositions.includes(pos) && <CheckCircle2 className="h-3.5 w-3.5" />}
               {pos}
             </label>
           ))}
@@ -3374,8 +3422,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       </div>
 
       {/* Apparatus Type */}
-      <div>
-        <label className={labelClass}>Apparatus Type</label>
+      <div className="border-theme-surface-border border-t pt-4">
+        <label className={labelClass}>Where will it be used?</label>
         <select
           className={selectClass}
           value={form.apparatusType}
@@ -3430,6 +3478,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     </div>
   );
 
+  const setupReady = Boolean(form.name.trim() && form.checkTiming && form.templateType);
+  const structureReady = compartments.some((comp) => !comp.isHeader);
+  const itemsReady = stats.totalItems > 0;
+
   // ---------------------------------------------------------------------------
   // Main render
   // ---------------------------------------------------------------------------
@@ -3437,7 +3489,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   return (
     <div className="pb-16">
       {/* Header */}
-      <div className="mx-auto mb-4 flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mx-auto mb-3 flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
@@ -3452,61 +3504,68 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </h1>
         </div>
         <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
-          {isEditing && templateId && (
-            <button
-              type="button"
-              onClick={() => void handleClone()}
-              disabled={cloning}
-              className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
-              title="Clone this template"
-            >
-              {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-              <span className="hidden sm:inline">Clone</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={exportTemplateJson}
-            disabled={compartments.length === 0}
-            className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
-            title="Export template as JSON"
-          >
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => importFileRef.current?.click()}
-              className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
-              title="Import template from JSON"
-            >
-              <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Import JSON</span>
-            </button>
-            <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportTemplate} />
-          </div>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => csvImportRef.current?.click()}
-              className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
-              title="Import items from CSV spreadsheet"
-            >
-              <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Import CSV</span>
-            </button>
-            <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
-          </div>
-          <a
-            href={schedulingService.getCsvSampleUrl()}
-            download
-            className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
-            title="Download a sample CSV file for import"
-          >
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">CSV Sample</span>
-          </a>
+          <details className="relative">
+            <summary className="btn-secondary hover:bg-theme-surface-secondary flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium sm:min-h-10">
+              <MoreHorizontal className="h-4 w-4" />
+              Tools
+            </summary>
+            <div className="bg-theme-surface border-theme-surface-border absolute right-0 z-50 mt-1 w-56 rounded-lg border p-1.5 shadow-xl">
+              {isEditing && templateId && (
+                <button
+                  type="button"
+                  onClick={() => void handleClone()}
+                  disabled={cloning}
+                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-50"
+                >
+                  {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} Clone
+                  checklist
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={exportTemplateJson}
+                disabled={compartments.length === 0}
+                className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
+              >
+                <Download className="h-4 w-4" /> Export JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => importFileRef.current?.click()}
+                className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+              >
+                <Upload className="h-4 w-4" /> Import JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => csvImportRef.current?.click()}
+                className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+              >
+                <Upload className="h-4 w-4" /> Import spreadsheet
+              </button>
+              <a
+                href={schedulingService.getCsvSampleUrl()}
+                download
+                className="hover:bg-theme-surface-secondary flex min-h-10 items-center gap-2 rounded-md px-3 text-sm"
+              >
+                <Download className="h-4 w-4" /> Download CSV sample
+              </a>
+              {templateId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowChangelog(true);
+                    void loadChangelog();
+                  }}
+                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+                >
+                  <Clock className="h-4 w-4" /> Change history
+                </button>
+              )}
+            </div>
+          </details>
+          <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportTemplate} />
+          <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
           {templateId && coverage && coverage.linkable > 0 && (
             <button
               type="button"
@@ -3531,25 +3590,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </span>
             </button>
           )}
-          {templateId && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowChangelog(true);
-                void loadChangelog();
-              }}
-              className="btn-secondary flex items-center gap-2 px-3 text-sm font-medium"
-              title="View change history (admin only)"
-            >
-              <Clock className="h-4 w-4" />
-              <span className="hidden sm:inline">History</span>
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setShowPreview(true)}
             disabled={compartments.length === 0}
-            className="btn-secondary hover:bg-theme-surface-secondary flex items-center gap-2 px-3 text-sm font-medium"
+            className="btn-secondary hover:bg-theme-surface-secondary flex min-h-11 items-center gap-2 px-3 text-sm font-medium sm:min-h-10"
           >
             <Eye className="h-4 w-4" />
             <span className="sr-only sm:not-sr-only">Preview</span>
@@ -3558,7 +3603,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={() => void handleSave()}
             disabled={saving}
-            className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+            className="flex min-h-11 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:min-h-10"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? 'Saving...' : 'Save'}
@@ -3566,17 +3611,51 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
       </div>
 
+      <div className="mx-auto mb-5 grid max-w-7xl grid-cols-3 overflow-hidden rounded-xl border border-blue-500/15 bg-blue-500/5">
+        {[
+          { number: 1, label: 'Set up', detail: setupReady ? 'Basics ready' : 'Name and assign', ready: setupReady },
+          {
+            number: 2,
+            label: 'Build',
+            detail: structureReady ? `${stats.compartmentCount} locations` : 'Add locations',
+            ready: structureReady,
+          },
+          {
+            number: 3,
+            label: 'Review',
+            detail: itemsReady ? `${stats.totalItems} items` : 'Preview checklist',
+            ready: false,
+          },
+        ].map((step, index) => (
+          <div
+            key={step.label}
+            className={`flex items-center gap-2 px-3 py-2.5 sm:px-4 ${index > 0 ? 'border-l border-blue-500/15' : ''}`}
+          >
+            <span
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.ready ? 'bg-green-500 text-white' : index === 0 || (index === 1 && setupReady) || (index === 2 && structureReady) ? 'bg-blue-600 text-white' : 'bg-theme-surface text-theme-text-muted border-theme-surface-border border'}`}
+            >
+              {step.ready ? <CheckCircle2 className="h-4 w-4" /> : step.number}
+            </span>
+            <span className="min-w-0">
+              <span className="text-theme-text-primary block text-xs font-semibold sm:text-sm">{step.label}</span>
+              <span className="text-theme-text-muted hidden truncate text-xs sm:block">{step.detail}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+
       {/* Sidebar + Main content */}
       <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:gap-6">
         {/* Sidebar — Template details */}
         <div
-          className={`flex-shrink-0 transition-all duration-200 ${sidebarOpen ? 'w-full lg:w-72' : 'w-0'} overflow-hidden`}
+          className={`flex-shrink-0 overflow-hidden transition-all duration-200 ${sidebarOpen ? 'block w-full lg:w-72' : 'hidden lg:block lg:w-0'}`}
         >
           <div className="card w-full p-4 lg:sticky lg:top-4 lg:w-72">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase">
-                Template Details
-              </h2>
+              <div>
+                <h2 className="text-theme-text-primary text-sm font-semibold">Checklist setup</h2>
+                <p className="text-theme-text-muted text-[11px]">Name it, schedule it, and choose who sees it.</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
@@ -3599,13 +3678,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(true)}
-                  className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-md border p-1.5 transition-colors"
+                  className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface flex min-h-10 items-center gap-2 rounded-md border px-2.5 transition-colors"
                   title="Show template details"
                 >
                   <PanelLeftOpen className="h-4 w-4" />
+                  <span className="text-xs font-medium lg:hidden">Setup</span>
                 </button>
               )}
-              <h2 className="text-theme-text-primary text-lg font-semibold">Compartments</h2>
+              <div>
+                <h2 className="text-theme-text-primary text-lg font-semibold">Locations &amp; groups</h2>
+                <p className="text-theme-text-muted text-xs">
+                  Organize the checklist the way equipment is stored on the apparatus.
+                </p>
+              </div>
               {compartments.length > 1 && (
                 <button
                   type="button"
@@ -3647,7 +3732,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus className="h-4 w-4" />
-                Add Compartment
+                Add Location
               </button>
             </div>
           </div>
@@ -3678,13 +3763,58 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           )}
 
           {compartments.length === 0 && (
-            <div className="card border-dashed p-8 text-center">
-              <p className="text-theme-text-muted text-sm">
-                No compartments yet.
-                {form.templateType === 'vehicle' || form.templateType === 'combined'
-                  ? ' Use "Load Vehicle Preset" above or add compartments manually.'
-                  : ' Add compartments to organize equipment check items by location on the apparatus.'}
-              </p>
+            <div className="card overflow-hidden border-blue-500/20 bg-gradient-to-br from-blue-500/[0.06] via-transparent to-transparent p-5 shadow-sm sm:p-8">
+              <div className="mx-auto max-w-2xl text-center">
+                <h3 className="text-theme-text-primary text-lg font-semibold">How would you like to start?</h3>
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  You can change every detail later. Choose the quickest starting point for this checklist.
+                </p>
+              </div>
+              <div
+                className={`mx-auto mt-5 grid max-w-4xl gap-3 ${form.templateType === 'vehicle' || form.templateType === 'combined' ? 'sm:grid-cols-3' : 'sm:max-w-2xl sm:grid-cols-2'}`}
+              >
+                {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPresetPicker(true)}
+                    className="group border-theme-surface-border bg-theme-surface rounded-xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-orange-500/50 hover:shadow-md"
+                  >
+                    <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600">
+                      <Truck className="h-5 w-5" />
+                    </span>
+                    <span className="text-theme-text-primary block text-sm font-semibold">Use a vehicle layout</span>
+                    <span className="text-theme-text-muted mt-1 block text-xs">
+                      Start with common apparatus locations and inspection items.
+                    </span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => csvImportRef.current?.click()}
+                  className="group border-theme-surface-border bg-theme-surface rounded-xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-500/50 hover:shadow-md"
+                >
+                  <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
+                    <Upload className="h-5 w-5" />
+                  </span>
+                  <span className="text-theme-text-primary block text-sm font-semibold">Import a list</span>
+                  <span className="text-theme-text-muted mt-1 block text-xs">
+                    Bring in the spreadsheet or checklist you already use.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void addCompartment()}
+                  className="group border-theme-surface-border bg-theme-surface rounded-xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-500/50 hover:shadow-md"
+                >
+                  <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
+                    <Plus className="h-5 w-5" />
+                  </span>
+                  <span className="text-theme-text-primary block text-sm font-semibold">Build from scratch</span>
+                  <span className="text-theme-text-muted mt-1 block text-xs">
+                    Add the first location and begin typing items immediately.
+                  </span>
+                </button>
+              </div>
             </div>
           )}
 

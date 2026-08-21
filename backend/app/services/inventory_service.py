@@ -6461,9 +6461,10 @@ class InventoryService:
         """User IDs who are at/over their issuance allowance for a category.
 
         Issuing one more unit would exceed the member's per-category cap. The
-        applicable allowance is the role-specific one matching any of the
-        member's positions, else the org-wide one. Computed in batch (a query
-        per distinct allowance) to avoid per-member round-trips.
+        applicable allowance is the role-specific one matching the member's
+        highest-priority position, else the org-wide one. This mirrors actual
+        issuance enforcement. Computed in batch (a query per distinct
+        allowance) to avoid per-member round-trips.
         """
         if not (category_id and user_ids):
             return set()
@@ -6483,24 +6484,29 @@ class InventoryService:
         if not allowances:
             return set()
 
-        # Member -> set of position ids, for role-specific allowance matching.
-        pos_map: Dict[str, set] = {}
+        # Resolve the same single highest-priority position used by issuance
+        # enforcement. Ordering lets setdefault retain only that first role.
+        primary_positions: Dict[str, str] = {}
         for uid, pid in (
             await self.db.execute(
-                select(user_positions.c.user_id, user_positions.c.position_id).where(
-                    user_positions.c.user_id.in_(user_ids)
+                select(user_positions.c.user_id, user_positions.c.position_id)
+                .join(Position, Position.id == user_positions.c.position_id)
+                .where(
+                    user_positions.c.user_id.in_(user_ids),
+                    Position.organization_id == organization_id,
                 )
+                .order_by(user_positions.c.user_id, Position.priority.desc())
             )
         ).all():
-            pos_map.setdefault(uid, set()).add(pid)
+            primary_positions.setdefault(uid, pid)
 
         role_allowances = {a.role_id: a for a in allowances if a.role_id}
         org_wide = next((a for a in allowances if not a.role_id), None)
 
         def _pick(uid):
-            for pid in pos_map.get(uid, ()):  # role-specific wins
-                if pid in role_allowances:
-                    return role_allowances[pid]
+            role_allowance = role_allowances.get(primary_positions.get(uid))
+            if role_allowance is not None:
+                return role_allowance
             return org_wide
 
         chosen = {uid: _pick(uid) for uid in user_ids}

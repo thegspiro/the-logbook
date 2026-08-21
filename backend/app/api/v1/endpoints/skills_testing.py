@@ -856,6 +856,7 @@ async def duplicate_template(
         time_limit_seconds=source.time_limit_seconds,
         passing_percentage=source.passing_percentage,
         require_all_critical=source.require_all_critical,
+        requirement_id=source.requirement_id,
         score_pass_fail_criteria=source.score_pass_fail_criteria,
         tags=source.tags,
         visibility=source.visibility,
