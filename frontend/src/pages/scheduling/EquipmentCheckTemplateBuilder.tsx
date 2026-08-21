@@ -41,6 +41,7 @@ import {
   List,
   Package,
   Link2,
+  MoreHorizontal,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
@@ -105,6 +106,26 @@ const selectClass = 'form-input';
 const labelClass = 'form-label';
 
 const checkboxClass = 'form-checkbox';
+
+const mobileMenuItemClass =
+  'text-theme-text-primary hover:bg-theme-surface-secondary flex min-h-[44px] w-full items-center gap-3 px-3 py-2 text-left text-sm';
+const mobileDestructiveMenuItemClass = `${mobileMenuItemClass} text-red-600 dark:text-red-400`;
+
+/** Native details/summary preserves keyboard disclosure behavior without making
+ * the compact row permanently carry every secondary action. */
+const MobileActionMenu: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <details className="relative flex-shrink-0 sm:hidden" onClick={(event) => event.stopPropagation()}>
+    <summary
+      className="text-theme-text-muted hover:bg-theme-surface-secondary flex min-h-[44px] min-w-[44px] cursor-pointer list-none items-center justify-center rounded-md [&::-webkit-details-marker]:hidden"
+      aria-label={label}
+    >
+      <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+    </summary>
+    <div className="border-theme-surface-border bg-theme-surface absolute top-full right-0 z-30 mt-1 min-w-56 overflow-hidden rounded-lg border py-1 shadow-lg">
+      {children}
+    </div>
+  </details>
+);
 
 // ============================================================================
 // Item Form State
@@ -1991,6 +2012,45 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     [orderedCompartments, compartmentKey]
   );
 
+  const compartmentPath = useCallback(
+    (targetIdx: number) => {
+      const names: string[] = [];
+      const visited = new Set<number>();
+      let currentIdx: number | undefined = targetIdx;
+      while (currentIdx !== undefined && !visited.has(currentIdx)) {
+        visited.add(currentIdx);
+        const current: CompartmentFormState | undefined = compartments[currentIdx];
+        if (!current) break;
+        names.unshift(current.name.trim() || `Untitled ${containerTypeLabel(current.containerType)}`);
+        currentIdx = current.parentCompartmentId
+          ? compartments.findIndex((candidate) => candidate.id === current.parentCompartmentId)
+          : undefined;
+        if (currentIdx === -1) currentIdx = undefined;
+      }
+      return names.join(' / ');
+    },
+    [compartments]
+  );
+
+  const validParentDestinations = useCallback(
+    (sourceIdx: number) =>
+      compartments
+        .map((candidate, idx) => ({ candidate, idx }))
+        .filter(({ candidate, idx }) => {
+          if (idx === sourceIdx || candidate.isHeader || !candidate.id) return false;
+          const sourceId = compartments[sourceIdx]?.id;
+          let cursor: CompartmentFormState | undefined = candidate;
+          const seen = new Set<string>();
+          while (sourceId && cursor?.parentCompartmentId && !seen.has(cursor.parentCompartmentId)) {
+            if (cursor.parentCompartmentId === sourceId) return false;
+            seen.add(cursor.parentCompartmentId);
+            cursor = compartments.find((entry) => entry.id === cursor?.parentCompartmentId);
+          }
+          return true;
+        }),
+    [compartments]
+  );
+
   const handleCompartmentDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -2110,7 +2170,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           {/* Bulk selection checkbox */}
           <button
             type="button"
-            className="flex-shrink-0 p-0.5"
+            className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-0.5"
             onClick={(e) => {
               e.stopPropagation();
               toggleItemSelection(compIdx, itemIdx);
@@ -2126,7 +2186,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <button
             type="button"
-            className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
+            className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
             onClick={(e) => e.stopPropagation()}
             aria-label="Drag to reorder"
             {...(dragHandleProps ?? {})}
@@ -2136,7 +2196,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <button
             type="button"
-            className="text-theme-text-muted hover:text-theme-text-primary flex-shrink-0 p-0.5"
+            className="text-theme-text-muted hover:text-theme-text-primary flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-0.5"
             onClick={(e) => {
               e.stopPropagation();
               toggleItemExpanded(itemKey);
@@ -2178,7 +2238,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <button
             type="button"
-            className="text-theme-text-muted flex-shrink-0 p-0.5 transition-opacity hover:text-blue-600 sm:opacity-0 sm:group-hover/item:opacity-100"
+            className="text-theme-text-muted hidden flex-shrink-0 p-0.5 transition-opacity hover:text-blue-600 sm:block sm:opacity-0 sm:group-hover/item:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               startInlineEdit(itemKey, item.name, e);
@@ -2268,6 +2328,67 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </div>
+
+          <MobileActionMenu label={`Actions for ${item.name.trim() || 'item'}`}>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              onClick={(e) => startInlineEdit(itemKey, item.name, e)}
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
+            </button>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              disabled={itemIdx === 0}
+              onClick={() => moveItem(compIdx, itemIdx, 'up')}
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
+            </button>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              disabled={itemIdx === itemCount - 1}
+              onClick={() => moveItem(compIdx, itemIdx, 'down')}
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
+            </button>
+            <button type="button" className={mobileMenuItemClass} onClick={() => duplicateItem(compIdx, itemIdx)}>
+              <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
+            </button>
+            {compartments.filter((candidate, candidateIdx) => !candidate.isHeader && candidateIdx !== compIdx).length >
+              0 && (
+              <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+                <span className="flex items-center gap-3">
+                  <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Move to compartment
+                </span>
+                <select
+                  className="form-input min-h-[44px] text-sm"
+                  value={compIdx}
+                  aria-label={`Move ${item.name || 'item'} to compartment; current destination ${compartmentPath(compIdx)}`}
+                  onChange={(e) => void moveItemToCompartment(compIdx, itemIdx, Number(e.target.value))}
+                >
+                  <option value={compIdx} disabled>
+                    Current: {compartmentPath(compIdx)}
+                  </option>
+                  {compartments.map((candidate, candidateIdx) =>
+                    !candidate.isHeader && candidateIdx !== compIdx ? (
+                      <option key={candidate.id ?? candidateIdx} value={candidateIdx}>
+                        {compartmentPath(candidateIdx)}
+                      </option>
+                    ) : null
+                  )}
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              className={mobileDestructiveMenuItemClass}
+              onClick={() => void deleteItem(compIdx, itemIdx)}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
+            </button>
+          </MobileActionMenu>
         </div>
 
         {/* Expanded form — visible on click */}
@@ -2602,7 +2723,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <div className="flex items-center gap-1.5 px-2 py-3 sm:gap-2 sm:px-4">
             <button
               type="button"
-              className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
+              className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
               aria-label="Drag to reorder section"
               {...(dragHandleProps ?? {})}
             >
@@ -2651,6 +2772,31 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
+            <MobileActionMenu label={`Actions for ${comp.name || 'section'}`}>
+              <button
+                type="button"
+                className={mobileMenuItemClass}
+                disabled={idx === 0}
+                onClick={() => moveCompartment(idx, 'up')}
+              >
+                <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
+              </button>
+              <button
+                type="button"
+                className={mobileMenuItemClass}
+                disabled={idx === compartments.length - 1}
+                onClick={() => moveCompartment(idx, 'down')}
+              >
+                <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
+              </button>
+              <button
+                type="button"
+                className={mobileDestructiveMenuItemClass}
+                onClick={() => void deleteCompartment(idx)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
+              </button>
+            </MobileActionMenu>
           </div>
           {comp.description && (
             <div className="-mt-1 px-4 pb-2">
@@ -2679,7 +2825,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         <div className="bg-theme-surface flex items-center gap-1.5 rounded-t-lg px-2 py-3 sm:gap-2 sm:px-4">
           <button
             type="button"
-            className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
+            className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
             aria-label="Drag to reorder compartment"
             {...(dragHandleProps ?? {})}
           >
@@ -2689,7 +2835,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => toggleCompartmentExpanded(key)}
-            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 text-left sm:min-h-0"
             aria-expanded={isExpanded}
           >
             {isExpanded ? (
@@ -2776,6 +2922,64 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <Trash2 className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
+
+          <MobileActionMenu label={`Actions for ${comp.name || 'compartment'}`}>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              onClick={() => {
+                setExpandedCompartments((previous) => new Set(previous).add(key));
+                window.setTimeout(() => document.getElementById(`comp-name-${key}`)?.focus());
+              }}
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
+            </button>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              disabled={idx === 0}
+              onClick={() => moveCompartment(idx, 'up')}
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
+            </button>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              disabled={idx === compartments.length - 1}
+              onClick={() => moveCompartment(idx, 'down')}
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
+            </button>
+            <button type="button" className={mobileMenuItemClass} onClick={() => duplicateCompartment(idx)}>
+              <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
+            </button>
+            <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+              <span className="flex items-center gap-3">
+                <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Move to compartment
+              </span>
+              <select
+                className="form-input min-h-[44px] text-sm"
+                value={comp.parentCompartmentId}
+                aria-label={`Move ${comp.name || 'compartment'} to compartment; current destination ${comp.parentCompartmentId ? compartmentPath(compartments.findIndex((entry) => entry.id === comp.parentCompartmentId)) : 'Top level'}`}
+                onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
+              >
+                <option value="">Top level{!comp.parentCompartmentId ? ' (current)' : ''}</option>
+                {validParentDestinations(idx).map(({ candidate, idx: destinationIdx }) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {compartmentPath(destinationIdx)}
+                    {comp.parentCompartmentId === candidate.id ? ' (current)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className={mobileDestructiveMenuItemClass}
+              onClick={() => void deleteCompartment(idx)}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
+            </button>
+          </MobileActionMenu>
         </div>
 
         {/* Compartment body */}
@@ -2869,13 +3073,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
                 >
                   <option value="">Nothing (top-level)</option>
-                  {compartments
-                    .filter((other, cIdx) => cIdx !== idx && Boolean(other.id))
-                    .map((other) => (
-                      <option key={other.id} value={other.id ?? ''}>
-                        {containerTypeLabel(other.containerType)}: {other.name || 'Untitled'}
-                      </option>
-                    ))}
+                  {validParentDestinations(idx).map(({ candidate: other, idx: destinationIdx }) => (
+                    <option key={other.id} value={other.id ?? ''}>
+                      {compartmentPath(destinationIdx)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="sm:col-span-2">
