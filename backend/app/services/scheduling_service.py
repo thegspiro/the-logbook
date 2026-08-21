@@ -13,7 +13,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -3644,7 +3644,15 @@ class SchedulingService:
 
         # Paginated results
         query = (
-            query.order_by(ShiftSwapRequest.created_at.desc()).offset(skip).limit(limit)
+            query.order_by(
+                case(
+                    (ShiftSwapRequest.status == SwapRequestStatus.PENDING, 0), else_=1
+                ),
+                ShiftSwapRequest.created_at.desc(),
+                ShiftSwapRequest.id.desc(),
+            )
+            .offset(skip)
+            .limit(limit)
         )
         result = await self.db.execute(query)
         swap_requests = result.scalars().all()
@@ -3876,7 +3884,15 @@ class SchedulingService:
         total = total_result.scalar()
 
         # Paginated results
-        query = query.order_by(ShiftTimeOff.start_date.asc()).offset(skip).limit(limit)
+        query = (
+            query.order_by(
+                case((ShiftTimeOff.status == TimeOffStatus.PENDING, 0), else_=1),
+                ShiftTimeOff.created_at.desc(),
+                ShiftTimeOff.id.desc(),
+            )
+            .offset(skip)
+            .limit(limit)
+        )
         result = await self.db.execute(query)
         time_off_requests = result.scalars().all()
 

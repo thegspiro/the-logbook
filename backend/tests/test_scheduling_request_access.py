@@ -51,11 +51,21 @@ async def test_member_lists_are_forced_to_authenticated_identity():
             current_user=_user(member_id, org_id),
         )
 
-    assert swaps == ["member swap"]
+    assert swaps == {
+        "items": ["member swap"],
+        "total": 1,
+        "skip": 0,
+        "limit": 100,
+    }
     service.get_swap_requests_for_user.assert_awaited_once_with(
         org_id, member_id, status=None, skip=0, limit=100
     )
-    assert leave == ["member leave"]
+    assert leave == {
+        "items": ["member leave"],
+        "total": 1,
+        "skip": 0,
+        "limit": 100,
+    }
     service.get_time_off_requests_for_user.assert_awaited_once_with(
         org_id, member_id, status=None, skip=0, limit=100
     )
@@ -83,8 +93,18 @@ async def test_manager_lists_use_organization_review_queue():
             current_user=_user(manager_id, org_id),
         )
 
-    assert swaps == ["organization swap"]
-    assert leave == ["organization leave"]
+    assert swaps == {
+        "items": ["organization swap"],
+        "total": 1,
+        "skip": 0,
+        "limit": 100,
+    }
+    assert leave == {
+        "items": ["organization leave"],
+        "total": 1,
+        "skip": 0,
+        "limit": 100,
+    }
     service.get_swap_requests.assert_awaited_once()
     service.get_time_off_requests.assert_awaited_once()
 
