@@ -25,11 +25,11 @@ export function RouteTitleManager(): null {
     };
     const pushState: History['pushState'] = function (...args) {
       clearTitle();
-      return originalPushState.apply(this, args);
+      return originalPushState(...args);
     };
     const replaceState: History['replaceState'] = function (...args) {
       clearTitle();
-      return originalReplaceState.apply(this, args);
+      return originalReplaceState(...args);
     };
 
     // React may keep the previous route painted while a lazy destination
