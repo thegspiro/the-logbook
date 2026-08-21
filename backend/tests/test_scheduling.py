@@ -1729,9 +1729,10 @@ class TestSwapRequests:
         swap, _ = await svc.create_swap_request(
             uuid.UUID(org_id), uuid.UUID(user_id), {"offering_shift_id": shift.id}
         )
+        swap_id = uuid.UUID(swap.id)
 
         result, err = await svc.review_swap_request(
-            uuid.UUID(swap.id),
+            swap_id,
             uuid.UUID(org_id),
             uuid.UUID(user_id),
             SwapRequestStatus.APPROVED,
@@ -1739,8 +1740,9 @@ class TestSwapRequests:
 
         assert result is None
         assert err == "Requesters cannot review their own swap requests"
-        assert swap.status == SwapRequestStatus.PENDING
-        assert swap.reviewed_by is None
+        persisted = await svc.get_swap_request_by_id(swap_id, uuid.UUID(org_id))
+        assert persisted.status == SwapRequestStatus.PENDING
+        assert persisted.reviewed_by is None
 
     @pytest.mark.asyncio
     async def test_target_participant_cannot_manager_review_swap(
@@ -1768,9 +1770,10 @@ class TestSwapRequests:
             uuid.UUID(user_id),
             {"offering_shift_id": shift.id, "target_user_id": user2_id},
         )
+        swap_id = uuid.UUID(swap.id)
 
         result, err = await svc.review_swap_request(
-            uuid.UUID(swap.id),
+            swap_id,
             uuid.UUID(org_id),
             uuid.UUID(user2_id),
             SwapRequestStatus.APPROVED,
@@ -1778,8 +1781,9 @@ class TestSwapRequests:
 
         assert result is None
         assert err == "Target participants cannot manager-review swap requests"
-        assert swap.status == SwapRequestStatus.PENDING
-        assert swap.reviewed_by is None
+        persisted = await svc.get_swap_request_by_id(swap_id, uuid.UUID(org_id))
+        assert persisted.status == SwapRequestStatus.PENDING
+        assert persisted.reviewed_by is None
 
     @pytest.mark.asyncio
     async def test_cancel_swap_by_wrong_user_fails(

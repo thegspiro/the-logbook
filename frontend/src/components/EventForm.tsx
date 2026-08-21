@@ -86,6 +86,7 @@ const EVENT_TYPES: EventType[] = [
   EventTypeEnum.SOCIAL,
   EventTypeEnum.FUNDRAISER,
   EventTypeEnum.CEREMONY,
+  EventTypeEnum.RECRUITMENT,
   EventTypeEnum.OTHER,
 ];
 
@@ -218,6 +219,12 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>(initialData?.location ? 'other' : 'select');
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
+  // Whether the guest switches currently hold values this form chose for a
+  // recruitment event rather than values the coordinator set. Only auto-applied
+  // values may be withdrawn again when the type changes away — a coordinator
+  // who deliberately opened an open house to guests keeps it open.
+  const [guestDefaultsAuto, setGuestDefaultsAuto] = useState(false);
+  const [guestSwitchesTouched, setGuestSwitchesTouched] = useState(false);
   const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
   const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
   const [membershipTypes, setMembershipTypes] = useState(DEFAULT_MEMBERSHIP_TYPES);
@@ -372,6 +379,45 @@ export const EventForm: React.FC<EventFormProps> = ({
       prev.check_in_minutes_before === standardLeadTime ? prev : { ...prev, check_in_minutes_before: standardLeadTime }
     );
   }, [editingEventId, formData.start_datetime, tz, userEvents]);
+
+  /**
+   * Recruitment events exist to feed the prospective-members pipeline, and the
+   * only route there is guest sign-in, so a new one arrives with both switches
+   * on rather than making the coordinator find them in Check-In further down.
+   *
+   * Three limits keep that from becoming a setting nobody chose. It applies
+   * only when creating: flipping kiosk behaviour on an event that already
+   * exists would change what a printed QR code does, mid-season, invisibly. It
+   * stops as soon as the coordinator touches either switch. And it withdraws
+   * only what it applied — retyping a recruitment night as social clears the
+   * defaults this function set, never a choice somebody made by hand. The
+   * prompt beside the picker states the resulting behaviour either way, so
+   * nothing here happens silently.
+   */
+  const handleEventTypeChange = (nextType: EventType) => {
+    const changes: Partial<EventCreate> = { event_type: nextType };
+    const isCreating = !initialData;
+
+    if (isCreating && !guestSwitchesTouched) {
+      if (nextType === EventTypeEnum.RECRUITMENT) {
+        changes.allow_guest_check_in = true;
+        changes.guest_check_in_creates_prospect = true;
+        setGuestDefaultsAuto(true);
+      } else if (guestDefaultsAuto) {
+        changes.allow_guest_check_in = false;
+        changes.guest_check_in_creates_prospect = false;
+        setGuestDefaultsAuto(false);
+      }
+    }
+    update(changes);
+  };
+
+  /** Any hand-set guest value is the coordinator's, and outranks the default. */
+  const updateGuestSwitches = (partial: Partial<EventCreate>) => {
+    setGuestSwitchesTouched(true);
+    setGuestDefaultsAuto(false);
+    update(partial);
+  };
 
   const handleStartDateChange = (startDate: string) => {
     const changes: Partial<EventCreate> = { start_datetime: startDate };
@@ -637,7 +683,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             id="event-type"
             required
             value={formData.event_type}
-            onChange={(e) => update({ event_type: e.target.value as EventType })}
+            onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
             className={selectClass}
           >
             {EVENT_TYPES.filter((t) => visibleTypes.includes(t)).map((type) => (
@@ -660,6 +706,39 @@ export const EventForm: React.FC<EventFormProps> = ({
               <p className="text-sm text-purple-700 dark:text-purple-300">
                 For training events with course tracking, use "Create Training Session" instead.
               </p>
+            </div>
+          )}
+          {/* A recruitment event only reaches the prospective-members pipeline
+              through guest sign-in, and those two switches live in Check-In,
+              several sections below the type picker. Without this prompt the
+              usual outcome is an outreach night whose attendees are recorded
+              as external attendees and never become leads. */}
+          {formData.event_type === EventTypeEnum.RECRUITMENT && (
+            <div className="mt-2 rounded-lg border border-teal-500/30 bg-teal-500/10 p-3">
+              {formData.allow_guest_check_in && formData.guest_check_in_creates_prospect ? (
+                <p className="text-sm text-teal-700 dark:text-teal-300">
+                  Guests who sign in at this event will be added to the prospective members pipeline.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-teal-700 dark:text-teal-300">
+                    Prospective members reach the pipeline by signing in as guests. Turn that on to have attendees of
+                    this event opened as applicants.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateGuestSwitches({
+                        allow_guest_check_in: true,
+                        guest_check_in_creates_prospect: true,
+                      })
+                    }
+                    className="mt-2 rounded-md border border-teal-500/40 px-3 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-500/10 dark:text-teal-300"
+                  >
+                    Enable guest sign-in and pipeline follow-up
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1331,7 +1410,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               id="allow-guest-check-in"
               checked={formData.allow_guest_check_in ?? false}
               onChange={(e) =>
-                update({
+                updateGuestSwitches({
                   allow_guest_check_in: e.target.checked,
                   // Turning guest sign-in off must also clear the pipeline
                   // follow-up, or the event keeps a setting that can no longer
@@ -1357,7 +1436,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                   type="checkbox"
                   id="guest-creates-prospect"
                   checked={formData.guest_check_in_creates_prospect ?? false}
-                  onChange={(e) => update({ guest_check_in_creates_prospect: e.target.checked })}
+                  onChange={(e) => updateGuestSwitches({ guest_check_in_creates_prospect: e.target.checked })}
                   className={checkboxClass}
                 />
                 <label htmlFor="guest-creates-prospect" className="text-theme-text-secondary text-sm">
