@@ -74,11 +74,13 @@ from app.schemas.scheduling import (
     ShiftsListResponse,
     ShiftSwapRequestCreate,
     ShiftSwapRequestResponse,
+    ShiftSwapRequestsPage,
     ShiftSwapReview,
     ShiftTemplateCreate,
     ShiftTemplateResponse,
     ShiftTemplateUpdate,
     ShiftTimeOffCreate,
+    ShiftTimeOffRequestsPage,
     ShiftTimeOffResponse,
     ShiftTimeOffReview,
     ShiftUpdate,
@@ -1673,7 +1675,7 @@ async def confirm_assignment(
 # ============================================
 
 
-@router.get("/swap-requests", response_model=list[ShiftSwapRequestResponse])
+@router.get("/swap-requests", response_model=ShiftSwapRequestsPage)
 async def list_swap_requests(
     status_filter: str | None = Query(None, alias="status"),
     pagination: PaginationParams = Depends(),
@@ -1705,7 +1707,12 @@ async def list_swap_requests(
             skip=pagination.skip,
             limit=pagination.limit,
         )
-    return await service.enrich_swap_requests(requests)
+    return {
+        "items": await service.enrich_swap_requests(requests),
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 @router.post(
@@ -1808,7 +1815,7 @@ async def cancel_swap_request(
 # ============================================
 
 
-@router.get("/time-off", response_model=list[ShiftTimeOffResponse])
+@router.get("/time-off", response_model=ShiftTimeOffRequestsPage)
 async def list_time_off_requests(
     status_filter: str | None = Query(None, alias="status"),
     user_id: UUID | None = None,
@@ -1844,7 +1851,12 @@ async def list_time_off_requests(
             skip=pagination.skip,
             limit=pagination.limit,
         )
-    return await service.enrich_time_off_requests(requests)
+    return {
+        "items": await service.enrich_time_off_requests(requests),
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 @router.post(
