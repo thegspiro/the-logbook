@@ -202,6 +202,10 @@ class TestAuthoritativeCheckTiming:
             patch.object(
                 service, "_resolve_templates", AsyncMock(return_value=[template])
             ),
+            patch.object(service, "_validate_and_snapshot_submission"),
+            patch.object(
+                service, "_load_checkable_template_items", AsyncMock(return_value={})
+            ),
             patch.object(
                 service,
                 "complete_incomplete_check",
@@ -303,7 +307,7 @@ class TestAuthoritativeCheckTiming:
         with (
             patch.object(
                 service,
-                "_load_template_items_map",
+                "_load_checkable_template_items",
                 AsyncMock(return_value={"item-1": MagicMock()}),
             ),
             patch.object(service, "get_check", AsyncMock(return_value=check)),
@@ -379,8 +383,6 @@ class TestShiftCheckCompletionStatus:
 
         assert summaries[0]["is_completed"] is expected_completed
         assert summaries[0]["overall_status"] == overall_status
-
-
 
 
 class TestUpdateItemCompartmentValidation:
@@ -543,6 +545,10 @@ class TestSubmitCheckResumeOverride:
                 "_resolve_templates",
                 AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
             ),
+            patch.object(service, "_validate_and_snapshot_submission"),
+            patch.object(
+                service, "_load_checkable_template_items", AsyncMock(return_value={})
+            ),
             patch.object(
                 service,
                 "complete_incomplete_check",
@@ -577,6 +583,10 @@ class TestSubmitCheckResumeOverride:
                 service,
                 "_resolve_templates",
                 AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
+            ),
+            patch.object(service, "_validate_and_snapshot_submission"),
+            patch.object(
+                service, "_load_checkable_template_items", AsyncMock(return_value={})
             ),
             patch.object(
                 service,
@@ -614,8 +624,9 @@ class TestFailureAlertDetails:
                 "_resolve_templates",
                 AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
             ),
+            patch.object(service, "_validate_and_snapshot_submission"),
             patch.object(
-                service, "_load_template_items_map", AsyncMock(return_value={})
+                service, "_load_checkable_template_items", AsyncMock(return_value={})
             ),
             patch.object(service, "_create_check_items", AsyncMock(return_value=[])),
             patch.object(service, "_update_apparatus_deficiency", AsyncMock()),
