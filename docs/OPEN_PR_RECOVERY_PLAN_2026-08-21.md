@@ -118,6 +118,39 @@ were corrected on the affected heads:
 - Stacked PR #1651 was updated from its refreshed #1648 base so it includes the
   prospect-card render fix and regenerated schema reference.
 
+## Latest queue refresh
+
+After `main` advanced again to `fe7cdf9c`, the ten open PR heads (#1657, #1656,
+#1655, #1654, #1653, #1648, #1637, #1629, #1585, and #1577) were merged with
+that exact base and pushed. All ten integrations completed without file
+conflicts.
+
+This refresh is itself the shared fix for the stale failures visible before the
+update: it carries the current generated schema reference, modal scroll
+integrity fixes, warning-budget cleanup, migration chain, and test adjustments
+into every head before CI reruns. Branch-specific changes remain layered above
+`main`; no feature implementation was discarded to obtain a clean merge.
+
+The refreshed CI runs then isolated five branch-local failures, all repaired on
+their respective heads: #1657's parent-validation test was Black-formatted;
+#1655 scoped its intentional test-only DOM access so it stays within the lint
+warning budget; #1648 rebased the recruitment event-type migration onto the
+current Alembic head; #1585 removed a superseded PageTransition title assertion;
+and #1577 regenerated the schema reference for its legal revision model.
+
+#1637's database failures were traced to tests reading ORM objects expired by
+the intentional rejection rollback; the tests now reload the persisted swap
+before asserting its unchanged state. Newly opened #1659 was also merged with
+the same `fe7cdf9c` base and pushed without conflicts.
+
+#1655's next full frontend run found three hand-built builder dialogs outside
+the mobile height contract. Each panel now uses `modal-panel-scroll`, and the
+source-wide dialog integrity test passes with no offenders.
+
+#1629's remaining mobile E2E failure identified three 38px export controls on
+the member training route. The CSV, PDF, and Print Record actions now enforce
+the shared 44px minimum tap height.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:
