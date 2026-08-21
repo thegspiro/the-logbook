@@ -22,6 +22,27 @@ vi.mock('../../../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
+// Named rather than reached for by index: `noUncheckedIndexedAccess` types
+// `byCategory[0]` as possibly undefined, and the tests that re-spread a category
+// need the object itself, not an assertion that it is there.
+const adminCategory = {
+  categoryId: 'category-1',
+  categoryName: 'Administration',
+  categoryColor: '#2563eb',
+  totalMinutes: 360,
+  totalHours: 6,
+  entryCount: 2,
+};
+
+const outreachCategory = {
+  categoryId: 'category-2',
+  categoryName: 'Community outreach',
+  categoryColor: null,
+  totalMinutes: 240,
+  totalHours: 4,
+  entryCount: 2,
+};
+
 const populatedSummary: AdminHoursSummary = {
   totalHours: 10,
   totalEntries: 4,
@@ -31,24 +52,7 @@ const populatedSummary: AdminHoursSummary = {
   pendingEntries: 1,
   periodStart: null,
   periodEnd: null,
-  byCategory: [
-    {
-      categoryId: 'category-1',
-      categoryName: 'Administration',
-      categoryColor: '#2563eb',
-      totalMinutes: 360,
-      totalHours: 6,
-      entryCount: 2,
-    },
-    {
-      categoryId: 'category-2',
-      categoryName: 'Community outreach',
-      categoryColor: null,
-      totalMinutes: 240,
-      totalHours: 4,
-      entryCount: 2,
-    },
-  ],
+  byCategory: [adminCategory, outreachCategory],
 };
 
 describe('SummaryTab', () => {
@@ -152,8 +156,8 @@ describe('SummaryTab', () => {
       ...populatedSummary,
       totalHours: 2,
       byCategory: [
-        { ...populatedSummary.byCategory[0]!, totalMinutes: 50, totalHours: 1 },
-        { ...populatedSummary.byCategory[1]!, totalMinutes: 40, totalHours: 1 },
+        { ...adminCategory, totalMinutes: 50, totalHours: 1 },
+        { ...outreachCategory, totalMinutes: 40, totalHours: 1 },
       ],
     };
     render(<SummaryTab />);
