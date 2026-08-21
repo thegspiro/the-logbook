@@ -116,6 +116,7 @@ class TestBulkItemCreation:
     def empty_result():
         result = MagicMock()
         result.scalars.return_value.all.return_value = []
+        result.scalars.return_value.first.return_value = None
         return result
 
     async def test_orders_after_existing_items_and_commits_once(self, service, mock_db):
@@ -131,7 +132,12 @@ class TestBulkItemCreation:
             patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
         ):
             created, replayed = await service.add_items_bulk(
-                "comp-1", "org-1", [{"name": "A"}, {"name": "B"}], "request-123"
+                "comp-1",
+                "org-1",
+                [{"name": "A"}, {"name": "B"}],
+                "request-123",
+                "user-1",
+                "Tester",
             )
         assert [item.name for item in created] == ["A", "B"]
         assert [item.sort_order for item in created] == [8, 9]
@@ -155,6 +161,8 @@ class TestBulkItemCreation:
                     "org-1",
                     [{"name": "A"}, {"name": "B", "equipment_id": "bad"}],
                     "request-123",
+                    "user-1",
+                    "Tester",
                 )
         mock_db.add.assert_not_called()
         mock_db.commit.assert_not_awaited()
@@ -175,20 +183,41 @@ class TestBulkItemCreation:
         ):
             with pytest.raises(RuntimeError, match="database failure"):
                 await service.add_items_bulk(
-                    "comp-1", "org-1", [{"name": "A"}, {"name": "B"}], "request-123"
+                    "comp-1",
+                    "org-1",
+                    [{"name": "A"}, {"name": "B"}],
+                    "request-123",
+                    "user-1",
+                    "Tester",
                 )
-        assert mock_db.add.call_count == 2
+        # The ledger is staged first; neither it nor either item can commit.
+        assert mock_db.add.call_count == 1
         mock_db.commit.assert_not_awaited()
         mock_db.rollback.assert_awaited_once()
 
     async def test_retry_returns_original_rows_without_writing(self, service, mock_db):
+        payload = [{"name": "A"}, {"name": "B"}]
+        normalized_hash = (
+            __import__("hashlib")
+            .sha256(
+                __import__("json")
+                .dumps(payload, sort_keys=True, separators=(",", ":"))
+                .encode()
+            )
+            .hexdigest()
+        )
+        ledger = SimpleNamespace(
+            payload_hash=normalized_hash, item_ids=["first", "second"]
+        )
+        ledger_result = MagicMock()
+        ledger_result.scalars.return_value.first.return_value = ledger
         original = [
             SimpleNamespace(id="first", name="A"),
             SimpleNamespace(id="second", name="B"),
         ]
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = original
-        mock_db.execute.return_value = result
+        item_result = MagicMock()
+        item_result.scalars.return_value.all.return_value = original
+        mock_db.execute.side_effect = [ledger_result, item_result]
         with (
             patch.object(
                 service,
@@ -197,13 +226,9 @@ class TestBulkItemCreation:
                 return_value=MagicMock(),
             ),
             patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
-            patch(
-                "app.services.equipment_check_service.uuid5",
-                side_effect=["first", "second"],
-            ),
         ):
             items, replayed = await service.add_items_bulk(
-                "comp-1", "org-1", [{"name": "A"}, {"name": "B"}], "request-123"
+                "comp-1", "org-1", payload, "request-123", "user-1", "Tester"
             )
         assert items == original
         assert replayed is True

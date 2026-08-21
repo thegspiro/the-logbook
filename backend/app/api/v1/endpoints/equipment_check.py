@@ -573,8 +573,10 @@ async def add_items_bulk(
         result = await service.add_items_bulk(
             compartment_id,
             str(current_user.organization_id),
-            [item.model_dump(exclude_unset=True) for item in data.items],
+            [item.model_dump() for item in data.items],
             data.idempotency_key,
+            str(current_user.id),
+            _user_display_name(current_user),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))

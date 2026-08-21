@@ -5,11 +5,14 @@ Business logic for equipment check template management, shift equipment
 check submissions, checklist resolution by position, and item history.
 """
 
+import hashlib
+import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,6 +23,7 @@ from app.models.apparatus import (
     CheckItemDeployedLot,
     CheckTemplateCompartment,
     CheckTemplateItem,
+    EquipmentCheckBulkRequest,
     EquipmentCheckTemplate,
     TemplateChangeLog,
 )
@@ -542,6 +546,8 @@ class EquipmentCheckService:
         organization_id: str,
         items_data: List[Dict[str, Any]],
         idempotency_key: str,
+        user_id: str,
+        user_name: str,
     ) -> Optional[tuple[List[CheckTemplateItem], bool]]:
         """Validate and insert a batch atomically, returning it in input order.
 
@@ -554,12 +560,35 @@ class EquipmentCheckService:
             return None
 
         try:
-            # Validate the complete batch before adding even one pending row.
+            # Normalize and validate the complete batch before adding a pending row.
             for data in items_data:
-                if not str(data.get("name", "")).strip():
+                data["name"] = str(data.get("name", "")).strip()
+                if not data["name"]:
                     raise ValueError("Item name cannot be blank")
                 await self._validate_item_fks(data, organization_id)
 
+            payload_hash = hashlib.sha256(
+                json.dumps(
+                    items_data, sort_keys=True, separators=(",", ":"), default=str
+                ).encode()
+            ).hexdigest()
+            ledger_result = await self.db.execute(
+                select(EquipmentCheckBulkRequest).where(
+                    EquipmentCheckBulkRequest.organization_id == organization_id,
+                    EquipmentCheckBulkRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkRequest.idempotency_key == idempotency_key,
+                )
+            )
+            ledger = ledger_result.scalars().first()
+            if ledger:
+                return await self._replay_bulk_request(ledger, payload_hash)
+
+            # Serialize append-position allocation for distinct batches.
+            await self.db.execute(
+                select(CheckTemplateCompartment)
+                .where(CheckTemplateCompartment.id == compartment_id)
+                .with_for_update()
+            )
             ids = [
                 str(
                     uuid5(
@@ -569,26 +598,17 @@ class EquipmentCheckService:
                 )
                 for i in range(len(items_data))
             ]
-            existing_result = await self.db.execute(
-                select(CheckTemplateItem).where(CheckTemplateItem.id.in_(ids))
+            self.db.add(
+                EquipmentCheckBulkRequest(
+                    id=generate_uuid(),
+                    organization_id=organization_id,
+                    compartment_id=compartment_id,
+                    idempotency_key=idempotency_key,
+                    payload_hash=payload_hash,
+                    item_ids=ids,
+                )
             )
-            existing = {str(item.id): item for item in existing_result.scalars().all()}
-            if existing:
-                if len(existing) != len(ids):
-                    raise ValueError(
-                        "Idempotency key conflicts with an incomplete request"
-                    )
-                ordered = [existing[item_id] for item_id in ids]
-                for item, requested in zip(ordered, items_data):
-                    comparable = dict(requested)
-                    comparable.pop("sort_order", None)
-                    if any(
-                        getattr(item, key) != value for key, value in comparable.items()
-                    ):
-                        raise ValueError(
-                            "Idempotency key was already used with different items"
-                        )
-                return ordered, True
+            await self.db.flush()
 
             max_order = await self.db.scalar(
                 select(func.max(CheckTemplateItem.sort_order)).where(
@@ -599,7 +619,6 @@ class EquipmentCheckService:
             created = []
             for index, data in enumerate(items_data):
                 values = dict(data)
-                values["name"] = str(values["name"]).strip()
                 values["sort_order"] = first_order + index
                 item = CheckTemplateItem(
                     id=ids[index], compartment_id=compartment_id, **values
@@ -607,11 +626,51 @@ class EquipmentCheckService:
                 self.db.add(item)
                 created.append(item)
             await self.db.flush()
+            for item in created:
+                await self.log_template_change(
+                    organization_id=organization_id,
+                    template_id=str(compartment.template_id),
+                    user_id=user_id,
+                    user_name=user_name,
+                    action="add",
+                    entity_type="item",
+                    entity_id=str(item.id),
+                    entity_name=item.name,
+                    changes={"bulk_idempotency_key": idempotency_key},
+                )
             await self.db.commit()
             return created, False
+        except IntegrityError:
+            # A concurrent request with this key may have won the unique ledger
+            # insert. Reload it after rollback and return the winning batch.
+            await self.db.rollback()
+            result = await self.db.execute(
+                select(EquipmentCheckBulkRequest).where(
+                    EquipmentCheckBulkRequest.organization_id == organization_id,
+                    EquipmentCheckBulkRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkRequest.idempotency_key == idempotency_key,
+                )
+            )
+            ledger = result.scalars().first()
+            if ledger:
+                return await self._replay_bulk_request(ledger, payload_hash)
+            raise
         except Exception:
             await self.db.rollback()
             raise
+
+    async def _replay_bulk_request(
+        self, ledger: EquipmentCheckBulkRequest, payload_hash: str
+    ) -> tuple[List[CheckTemplateItem], bool]:
+        if ledger.payload_hash != payload_hash:
+            raise ValueError("Idempotency key was already used with different items")
+        result = await self.db.execute(
+            select(CheckTemplateItem).where(CheckTemplateItem.id.in_(ledger.item_ids))
+        )
+        by_id = {str(item.id): item for item in result.scalars().all()}
+        if len(by_id) != len(ledger.item_ids):
+            raise ValueError("Idempotency record refers to an incomplete batch")
+        return [by_id[item_id] for item_id in ledger.item_ids], True
 
     async def update_item(
         self,

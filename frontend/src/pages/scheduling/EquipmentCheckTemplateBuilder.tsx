@@ -909,6 +909,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [bulkPasteValues, setBulkPasteValues] = useState<Record<string, string>>({});
   const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
   const [bulkItemPending, setBulkItemPending] = useState<Record<string, boolean>>({});
+  const bulkIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
 
   const handleQuickAdd = async (compartmentIdx: number, payload: CatalogAddPayload) => {
     const comp = compartments[compartmentIdx];
@@ -970,7 +971,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       setBulkItemPending((prev) => ({ ...prev, [key]: true }));
       try {
         const payload = names.map((name) => ({ name }));
-        const result = await schedulingService.addCheckItemsBulk(comp.id, payload, crypto.randomUUID());
+        const requestKey = `paste:${key}`;
+        const payloadFingerprint = JSON.stringify(payload);
+        const previousRequest = bulkIdempotencyKeys.current[requestKey];
+        const idempotencyKey =
+          previousRequest?.payload === payloadFingerprint ? previousRequest.key : crypto.randomUUID();
+        bulkIdempotencyKeys.current[requestKey] = { key: idempotencyKey, payload: payloadFingerprint };
+        const result = await schedulingService.addCheckItemsBulk(comp.id, payload, idempotencyKey);
+        delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
         updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
         toast.success(`Added ${result.createdCount} item${result.createdCount !== 1 ? 's' : ''}`);
@@ -1012,7 +1020,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             check_type: presetItem.checkType,
           })),
         ];
-        const result = await schedulingService.addCheckItemsBulk(comp.id, items, crypto.randomUUID());
+        const requestKey = `preset:${key}:${presetKey}`;
+        const payloadFingerprint = JSON.stringify(items);
+        const previousRequest = bulkIdempotencyKeys.current[requestKey];
+        const idempotencyKey =
+          previousRequest?.payload === payloadFingerprint ? previousRequest.key : crypto.randomUUID();
+        bulkIdempotencyKeys.current[requestKey] = { key: idempotencyKey, payload: payloadFingerprint };
+        const result = await schedulingService.addCheckItemsBulk(comp.id, items, idempotencyKey);
+        delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
         updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
         toast.success(`Added ${preset.label} (${result.createdCount} items)`);
