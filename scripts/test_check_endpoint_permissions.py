@@ -41,13 +41,13 @@ class DocstringSpellings(unittest.TestCase):
 
     def test_requires_permission_spelling(self):
         perms, _ = documented_permissions("**Requires permission: training.view**")
-        self.assertEqual(perms, {"training.view"})
+        assert perms == {"training.view"}
 
     def test_permissions_required_spelling(self):
         perms, _ = documented_permissions(
             "**Permissions required:** facilities.view or facilities.manage"
         )
-        self.assertEqual(perms, {"facilities.view", "facilities.manage"})
+        assert perms == {"facilities.view", "facilities.manage"}
 
     def test_wrapped_list_keeps_every_permission(self):
         """A list too long for one line used to lose everything after the wrap.
@@ -59,15 +59,7 @@ class DocstringSpellings(unittest.TestCase):
             "    **Permissions required:** apparatus.view, apparatus.manage,\n"
             "    scheduling.view, or scheduling.manage\n"
         )
-        self.assertEqual(
-            perms,
-            {
-                "apparatus.view",
-                "apparatus.manage",
-                "scheduling.view",
-                "scheduling.manage",
-            },
-        )
+        assert perms == {"apparatus.view", "apparatus.manage", "scheduling.view", "scheduling.manage"}
 
     def test_prose_after_a_sentence_end_is_not_captured(self):
         """The wrap must not swallow the paragraph below it."""
@@ -75,7 +67,7 @@ class DocstringSpellings(unittest.TestCase):
             "    **Permissions required:** scheduling.manage, or the shift's officer.\n"
             "    Unrelated prose mentioning apparatus.view should not count.\n"
         )
-        self.assertEqual(perms, {"scheduling.manage"})
+        assert perms == {"scheduling.manage"}
 
     def test_blank_line_stops_the_wrap(self):
         perms, _ = documented_permissions(
@@ -83,7 +75,7 @@ class DocstringSpellings(unittest.TestCase):
             "\n"
             "    Later paragraph naming users.view.\n"
         )
-        self.assertEqual(perms, {"roles.view"})
+        assert perms == {"roles.view"}
 
 
 class SignatureEnforcement(unittest.TestCase):
@@ -91,7 +83,7 @@ class SignatureEnforcement(unittest.TestCase):
         fn, auth = route(
             "async def r(user=Depends(require_permission('a.view', 'a.manage'))): pass"
         )
-        self.assertEqual(enforced_permissions(fn, auth), {"a.view", "a.manage"})
+        assert enforced_permissions(fn, auth) == {"a.view", "a.manage"}
 
 
 class BodyAuthorizers(unittest.TestCase):
@@ -111,7 +103,7 @@ class BodyAuthorizers(unittest.TestCase):
             "async def r(user=Depends(get_current_user)):\n"
             "    await _authorize_shift_management(s, user, i, 'scheduling.manage')\n"
         )
-        self.assertEqual(enforced_permissions(fn, auth), {"scheduling.manage"})
+        assert enforced_permissions(fn, auth) == {"scheduling.manage"}
 
     def test_permission_hardcoded_inside_the_helper(self):
         """The call site names nothing; the helper's own body is the source."""
@@ -122,7 +114,7 @@ class BodyAuthorizers(unittest.TestCase):
             "async def r(user=Depends(get_current_user)):\n"
             "    await _authorize_assignment_management(s, user, i)\n"
         )
-        self.assertEqual(enforced_permissions(fn, auth), {"scheduling.assign"})
+        assert enforced_permissions(fn, auth) == {"scheduling.assign"}
 
     def test_helper_taking_a_parameter_contributes_nothing_itself(self):
         """Otherwise a parameterised helper would leak one call site's literal
@@ -132,7 +124,7 @@ class BodyAuthorizers(unittest.TestCase):
             "    user_has_permission(u, permission)\n"
             "async def r(): pass\n"
         )
-        self.assertEqual(auth["_authorize_shift_management"], set())
+        assert auth["_authorize_shift_management"] == set()
 
     def test_unrecognised_helper_is_not_treated_as_enforcement(self):
         """A guard the checker does not know about must NOT read as protection —
@@ -141,7 +133,7 @@ class BodyAuthorizers(unittest.TestCase):
             "async def r(user=Depends(get_current_user)):\n"
             "    await _some_other_helper(s, user, 'scheduling.manage')\n"
         )
-        self.assertEqual(enforced_permissions(fn, auth), set())
+        assert enforced_permissions(fn, auth) == set()
 
 
 if __name__ == "__main__":
