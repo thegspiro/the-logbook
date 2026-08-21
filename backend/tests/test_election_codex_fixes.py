@@ -46,6 +46,61 @@ from app.services.election_service import ElectionService
 # ---------------------------------------------------------------------------
 
 
+def _scalar_result(value):
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = value
+    return result
+
+
+class TestTokenSubmissionLocking:
+    async def test_rejects_token_used_after_initial_validation(self):
+        election = _make_election()
+        optimistic_token = SimpleNamespace(id=str(uuid4()), used=False)
+        locked_token = SimpleNamespace(
+            id=optimistic_token.id,
+            election_id=election.id,
+            used=True,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[_scalar_result(election), _scalar_result(locked_token)]
+            )
+        )
+
+        locked_election, token, error = await ElectionService(
+            db
+        )._lock_token_ballot_for_submission(election, optimistic_token)
+
+        assert locked_election is None
+        assert token is None
+        assert error == "This ballot has already been fully submitted"
+        assert db.execute.await_count == 2
+
+    async def test_rechecks_election_status_under_lock(self):
+        optimistic_election = _make_election()
+        locked_election = _make_election(
+            id=optimistic_election.id, status=ElectionStatus.CLOSED
+        )
+        token = SimpleNamespace(
+            id=str(uuid4()),
+            election_id=locked_election.id,
+            used=False,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[_scalar_result(locked_election), _scalar_result(token)]
+            )
+        )
+
+        _, _, error = await ElectionService(db)._lock_token_ballot_for_submission(
+            optimistic_election, token
+        )
+
+        assert error == "Election is not open for voting"
+
+
 def _make_election(**overrides) -> SimpleNamespace:
     """Create a stub Election-like namespace with sensible defaults."""
     defaults = dict(
