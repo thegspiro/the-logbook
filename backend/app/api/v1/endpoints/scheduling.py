@@ -80,8 +80,8 @@ from app.schemas.scheduling import (
     ShiftTemplateResponse,
     ShiftTemplateUpdate,
     ShiftTimeOffCreate,
-    ShiftTimeOffResponse,
     ShiftTimeOffRequestsPage,
+    ShiftTimeOffResponse,
     ShiftTimeOffReview,
     ShiftUpdate,
     SwapRequestStatus,
@@ -1692,12 +1692,21 @@ async def list_swap_requests(
             raise HTTPException(
                 status_code=400, detail=f"Invalid status: {status_filter}"
             )
-    requests, total = await service.get_swap_requests(
-        current_user.organization_id,
-        status=swap_status,
-        skip=pagination.skip,
-        limit=pagination.limit,
-    )
+    if user_has_permission(current_user, "scheduling.manage"):
+        requests, total = await service.get_swap_requests(
+            current_user.organization_id,
+            status=swap_status,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
+    else:
+        requests, total = await service.get_swap_requests_for_user(
+            current_user.organization_id,
+            current_user.id,
+            status=swap_status,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
     return {
         "items": await service.enrich_swap_requests(requests),
         "total": total,
@@ -1739,10 +1748,15 @@ async def get_swap_request(
 ):
     """Get a specific swap request"""
     service = SchedulingService(db)
-    swap_request = ensure_found(
-        await service.get_swap_request_by_id(request_id, current_user.organization_id),
-        "Swap request",
-    )
+    if user_has_permission(current_user, "scheduling.manage"):
+        result = await service.get_swap_request_by_id(
+            request_id, current_user.organization_id
+        )
+    else:
+        result = await service.get_swap_request_for_user_by_id(
+            request_id, current_user.organization_id, current_user.id
+        )
+    swap_request = ensure_found(result, "Swap request")
     enriched = await service.enrich_swap_requests([swap_request])
     return enriched[0]
 
@@ -1819,13 +1833,24 @@ async def list_time_off_requests(
             raise HTTPException(
                 status_code=400, detail=f"Invalid status: {status_filter}"
             )
-    requests, total = await service.get_time_off_requests(
-        current_user.organization_id,
-        status=time_off_status,
-        user_id=user_id,
-        skip=pagination.skip,
-        limit=pagination.limit,
-    )
+    if user_has_permission(current_user, "scheduling.manage"):
+        requests, total = await service.get_time_off_requests(
+            current_user.organization_id,
+            status=time_off_status,
+            user_id=user_id,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
+    else:
+        # The authenticated identity, never a client-provided user_id, defines
+        # the member scope.
+        requests, total = await service.get_time_off_requests_for_user(
+            current_user.organization_id,
+            current_user.id,
+            status=time_off_status,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
     return {
         "items": await service.enrich_time_off_requests(requests),
         "total": total,
@@ -1867,10 +1892,15 @@ async def get_time_off_request(
 ):
     """Get a specific time-off request"""
     service = SchedulingService(db)
-    time_off = ensure_found(
-        await service.get_time_off_by_id(time_off_id, current_user.organization_id),
-        "Time-off request",
-    )
+    if user_has_permission(current_user, "scheduling.manage"):
+        result = await service.get_time_off_by_id(
+            time_off_id, current_user.organization_id
+        )
+    else:
+        result = await service.get_time_off_for_user_by_id(
+            time_off_id, current_user.organization_id, current_user.id
+        )
+    time_off = ensure_found(result, "Time-off request")
     enriched = await service.enrich_time_off_requests([time_off])
     return enriched[0]
 

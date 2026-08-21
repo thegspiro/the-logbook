@@ -109,6 +109,64 @@ describe('RequestsTab', () => {
     });
   });
 
+  it("shows only the current member's requests in member view", async () => {
+    mockGetSwapRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'mine',
+          requesting_user_id: 'user-1',
+          user_name: 'Current Member',
+          offering_shift_id: 'shift-1',
+          status: 'pending',
+          reason: 'My swap',
+          created_at: '2026-02-25T00:00:00Z',
+        },
+        {
+          id: 'targeted-at-me',
+          requesting_user_id: 'user-2',
+          target_user_id: 'user-1',
+          user_name: 'Swap Partner',
+          offering_shift_id: 'shift-1',
+          status: 'pending',
+          reason: 'Swap involving me',
+          created_at: '2026-02-25T00:00:00Z',
+        },
+        {
+          id: 'unrelated',
+          requesting_user_id: 'user-2',
+          target_user_id: 'user-3',
+          user_name: 'Unrelated Member',
+          offering_shift_id: 'shift-1',
+          status: 'pending',
+          reason: 'Private unrelated swap',
+          created_at: '2026-02-25T00:00:00Z',
+        },
+      ],
+      total: 3,
+      skip: 0,
+      limit: 20,
+    });
+    mockGetTimeOffRequests.mockResolvedValue({
+      items: [
+        { id: 'my-leave', user_id: 'user-1', status: 'pending', reason: 'My leave' },
+        { id: 'other-leave', user_id: 'user-2', status: 'pending', reason: 'Private leave' },
+      ],
+      total: 2,
+      skip: 0,
+      limit: 20,
+    });
+
+    renderWithRouter(<RequestsTab />);
+
+    expect(await screen.findByText('My swap')).toBeInTheDocument();
+    expect(screen.getByText('Swap involving me')).toBeInTheDocument();
+    expect(screen.queryByText('Private unrelated swap')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText(/Time Off/));
+    expect(await screen.findByText('My leave')).toBeInTheDocument();
+    expect(screen.queryByText('Private leave')).not.toBeInTheDocument();
+  });
+
   it('should switch to time off view', async () => {
     renderWithRouter(<RequestsTab />);
     const user = userEvent.setup();
@@ -170,13 +228,29 @@ describe('RequestsTab', () => {
   it('displays server totals and loads a second page', async () => {
     mockGetSwapRequests
       .mockResolvedValueOnce({
-        items: [{ id: 'swap-1', offering_shift_id: 'shift-1', status: 'pending', created_at: '2026-02-25' }],
+        items: [
+          {
+            id: 'swap-1',
+            requesting_user_id: 'user-1',
+            offering_shift_id: 'shift-1',
+            status: 'pending',
+            created_at: '2026-02-25',
+          },
+        ],
         total: 2,
         skip: 0,
         limit: 20,
       })
       .mockResolvedValueOnce({
-        items: [{ id: 'swap-2', offering_shift_id: 'shift-2', status: 'pending', created_at: '2026-02-24' }],
+        items: [
+          {
+            id: 'swap-2',
+            requesting_user_id: 'user-1',
+            offering_shift_id: 'shift-2',
+            status: 'pending',
+            created_at: '2026-02-24',
+          },
+        ],
         total: 2,
         skip: 1,
         limit: 20,

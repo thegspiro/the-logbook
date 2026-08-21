@@ -3659,6 +3659,23 @@ class SchedulingService:
 
         return swap_requests, total
 
+    async def get_swap_requests_for_user(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        status: Optional[SwapRequestStatus] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[ShiftSwapRequest], int]:
+        """Get only swaps in which ``user_id`` is a participant.
+
+        Member-facing callers should use this method rather than accepting an
+        optional client filter on the organization-wide query.
+        """
+        return await self.get_swap_requests(
+            organization_id, status=status, user_id=user_id, skip=skip, limit=limit
+        )
+
     async def get_swap_request_by_id(
         self, request_id: UUID, organization_id: UUID
     ) -> Optional[ShiftSwapRequest]:
@@ -3670,6 +3687,23 @@ class SchedulingService:
         )
         return result.scalar_one_or_none()
 
+    async def get_swap_request_for_user_by_id(
+        self, request_id: UUID, organization_id: UUID, user_id: UUID
+    ) -> Optional[ShiftSwapRequest]:
+        """Get a swap only when ``user_id`` is its requester or target."""
+        result = await self.db.execute(
+            select(ShiftSwapRequest)
+            .where(ShiftSwapRequest.id == str(request_id))
+            .where(ShiftSwapRequest.organization_id == str(organization_id))
+            .where(
+                or_(
+                    ShiftSwapRequest.requesting_user_id == str(user_id),
+                    ShiftSwapRequest.target_user_id == str(user_id),
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def review_swap_request(
         self,
         request_id: UUID,
@@ -3678,7 +3712,11 @@ class SchedulingService:
         status: SwapRequestStatus,
         reviewer_notes: Optional[str] = None,
     ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
-        """Review (approve/deny) a shift swap request"""
+        """Review (approve/deny) a shift swap request.
+
+        This is a manager-review workflow, not participant acceptance: neither
+        the requester nor a targeted participant may review the request.
+        """
         try:
             swap_request = await self.get_swap_request_by_id(
                 request_id, organization_id
@@ -3688,6 +3726,17 @@ class SchedulingService:
 
             if swap_request.status != SwapRequestStatus.PENDING:
                 return None, "Swap request is no longer pending"
+
+            # Enforce separation of duties before mutating either the request
+            # or its assignments. A target participant's agreement, if a
+            # dedicated acceptance workflow is added, must remain distinct
+            # from the manager approval performed by this endpoint.
+            if str(reviewer_id) == str(swap_request.requesting_user_id):
+                return None, "Requesters cannot review their own swap requests"
+            if swap_request.target_user_id and str(reviewer_id) == str(
+                swap_request.target_user_id
+            ):
+                return None, "Target participants cannot manager-review swap requests"
 
             swap_request.status = status
             swap_request.reviewed_by = reviewer_id
@@ -3849,6 +3898,19 @@ class SchedulingService:
 
         return time_off_requests, total
 
+    async def get_time_off_requests_for_user(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        status: Optional[TimeOffStatus] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[ShiftTimeOff], int]:
+        """Get only ``user_id``'s time-off requests for member-facing reads."""
+        return await self.get_time_off_requests(
+            organization_id, status=status, user_id=user_id, skip=skip, limit=limit
+        )
+
     async def get_time_off_by_id(
         self, time_off_id: UUID, organization_id: UUID
     ) -> Optional[ShiftTimeOff]:
@@ -3857,6 +3919,18 @@ class SchedulingService:
             select(ShiftTimeOff)
             .where(ShiftTimeOff.id == str(time_off_id))
             .where(ShiftTimeOff.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_time_off_for_user_by_id(
+        self, time_off_id: UUID, organization_id: UUID, user_id: UUID
+    ) -> Optional[ShiftTimeOff]:
+        """Get a time-off request only when it belongs to ``user_id``."""
+        result = await self.db.execute(
+            select(ShiftTimeOff)
+            .where(ShiftTimeOff.id == str(time_off_id))
+            .where(ShiftTimeOff.organization_id == str(organization_id))
+            .where(ShiftTimeOff.user_id == str(user_id))
         )
         return result.scalar_one_or_none()
 
@@ -3880,6 +3954,11 @@ class SchedulingService:
 
             if time_off.status != TimeOffStatus.PENDING:
                 return None, "Time-off request is no longer pending"
+
+            # Check before changing fields or cancelling assignments so a
+            # rejected self-review leaves the request completely pending.
+            if str(reviewer_id) == str(time_off.user_id):
+                return None, "Requesters cannot review their own time-off requests"
 
             time_off.status = status
             time_off.approved_by = reviewer_id
@@ -5163,8 +5242,7 @@ class SchedulingService:
         return sum(
             1
             for s in summaries
-            if s.get("check_timing") == "end_of_shift"
-            and (not s.get("is_completed") or s.get("overall_status") == "incomplete")
+            if s.get("check_timing") == "end_of_shift" and not s.get("is_completed")
         )
 
     async def finalize_shift(

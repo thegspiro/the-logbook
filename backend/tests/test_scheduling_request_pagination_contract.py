@@ -71,6 +71,7 @@ async def test_list_endpoint_returns_service_total_and_requested_window(
     setattr(FakeService, service_method, list_requests)
     setattr(FakeService, enrichment_method, staticmethod(enrich))
     monkeypatch.setattr(scheduling, "SchedulingService", FakeService)
+    monkeypatch.setattr(scheduling, "user_has_permission", lambda *args: True)
 
     kwargs = {
         "status_filter": None,

@@ -32,6 +32,18 @@ export const RequestsTab: React.FC = () => {
   const [timeOffTotal, setTimeOffTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // The API enforces this scope; keep the member UI defensive as well so a
+  // stale cache or accidentally broadened response cannot expose another
+  // member's request details.
+  const visibleSwapRequests = canManage
+    ? swapRequests
+    : swapRequests.filter(
+        (request) => request.requesting_user_id === currentUser?.id || request.target_user_id === currentUser?.id
+      );
+  const visibleTimeOffRequests = canManage
+    ? timeOffRequests
+    : timeOffRequests.filter((request) => request.user_id === currentUser?.id);
+
   // Review modal
   const [reviewing, setReviewing] = useState<{ type: 'swap' | 'timeoff'; id: string } | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
@@ -234,7 +246,7 @@ export const RequestsTab: React.FC = () => {
         </div>
       ) : activeView === 'swaps' ? (
         /* Swap Requests */
-        swapRequests.length === 0 ? (
+        visibleSwapRequests.length === 0 ? (
           <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
             <ArrowLeftRight className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
             <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No swap requests</h3>
@@ -246,7 +258,7 @@ export const RequestsTab: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {swapRequests.map((req) => {
+            {visibleSwapRequests.map((req) => {
               const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
               return (
                 <div key={req.id} className="card p-4 sm:p-5">
@@ -381,7 +393,7 @@ export const RequestsTab: React.FC = () => {
           </div>
         )
       ) : /* Time Off Requests */
-      timeOffRequests.length === 0 ? (
+      visibleTimeOffRequests.length === 0 ? (
         <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
           <CalendarOff className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No time-off requests</h3>
@@ -393,7 +405,7 @@ export const RequestsTab: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {timeOffRequests.map((req) => {
+          {visibleTimeOffRequests.map((req) => {
             const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
             return (
               <div key={req.id} className="card p-4 sm:p-5">
