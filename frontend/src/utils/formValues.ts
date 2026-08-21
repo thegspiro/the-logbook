@@ -37,3 +37,33 @@ export function numberOrNull(value: string | number | null | undefined): number 
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
+
+/**
+ * The create/edit pair of coercions for a form that builds one payload for both.
+ *
+ * Most edit forms in this codebase reuse a single `…Create` payload shape, and
+ * the mode is the only thing that decides what a blank box means. Reaching for
+ * `blankToNull` per field means every field is a separate chance to forget —
+ * which is exactly how the inventory item form ended up with two fields fixed
+ * and sixteen still dropping the user's clear.
+ *
+ *   const { text, pick, num } = formCoercions(Boolean(editItem));
+ *   description: text(f.description),   // trimmed string
+ *   category_id: pick(f.category_id),   // select / date, already exact
+ *   reorder_point: num(f.reorder_point) // numeric text
+ *
+ * Fields the backend cannot take a null for — a NOT NULL enum column, or one a
+ * service guard dereferences — must stay `|| undefined` with a comment saying
+ * which, since nothing here can tell.
+ */
+export function formCoercions(isEdit: boolean): {
+  text: (value: string) => string | null | undefined;
+  pick: (value: string) => string | null | undefined;
+  num: (value: string) => number | null | undefined;
+} {
+  return {
+    text: (value) => (isEdit ? blankToNull(value) : value.trim() || undefined),
+    pick: (value) => (isEdit ? value || null : value || undefined),
+    num: (value) => (isEdit ? numberOrNull(value) : value ? Number(value) : undefined),
+  };
+}

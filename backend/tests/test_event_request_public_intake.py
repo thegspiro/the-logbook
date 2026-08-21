@@ -208,3 +208,56 @@ async def test_an_opted_in_department_still_accepts_a_real_request():
         )
 
     assert db.add.called, "an opted-in department should still record the request"
+
+
+class TestRequestPipelineSettingsAreSettable:
+    """The intake gate is only real if an administrator can reach the switch.
+
+    EV-5 added ``accept_public_requests`` and ``public_daily_limit`` to
+    ``EVENT_SETTINGS_DEFAULTS`` and gated the public endpoint on them, but never
+    declared them on ``RequestPipelineUpdate``. Pydantic drops undeclared fields
+    silently, so ``PATCH /events/settings`` deep-merged an empty dict: the write
+    never happened and the caller got a ``200``.
+
+    Public intake could therefore not be turned on at all. The settings screen's
+    toggle read the unchanged response back and announced the form was "now
+    closed" — the failure looked like a working control that the administrator
+    kept mis-clicking.
+    """
+
+    def test_every_default_key_is_settable(self):
+        """A structural check, because the field-by-field version only catches
+        the two keys we already know about. Anything added to the defaults from
+        now on has to be declared here too, or it is stored-but-unwritable."""
+        from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
+        from app.schemas.event import RequestPipelineUpdate
+
+        defaults = set(EVENT_SETTINGS_DEFAULTS["request_pipeline"])
+        settable = set(RequestPipelineUpdate.model_fields)
+
+        assert not defaults - settable, (
+            "request_pipeline keys with no field on RequestPipelineUpdate: "
+            f"{sorted(defaults - settable)}. Pydantic drops them silently, so "
+            "PATCH /events/settings returns 200 and writes nothing."
+        )
+
+    def test_the_two_ev5_keys_survive_validation(self):
+        from app.schemas.event import RequestPipelineUpdate
+
+        parsed = RequestPipelineUpdate.model_validate(
+            {"accept_public_requests": True, "public_daily_limit": 25}
+        ).model_dump(exclude_unset=True)
+
+        assert parsed == {"accept_public_requests": True, "public_daily_limit": 25}
+
+    def test_a_zero_daily_limit_is_refused(self):
+        """Zero would accept nothing while the intake toggle still read as open
+        — a confusing way to spell what ``accept_public_requests: false`` says
+        plainly."""
+        import pytest
+        from pydantic import ValidationError
+
+        from app.schemas.event import RequestPipelineUpdate
+
+        with pytest.raises(ValidationError):
+            RequestPipelineUpdate.model_validate({"public_daily_limit": 0})

@@ -59,6 +59,41 @@ does. It is not the source of truth for the current head.
 <details>
 <summary>Historical head notes (2026-05 through 2026-08)</summary>
 
+> **Update (2026-08-17) — the four-head fork, and why three merge revisions
+> look redundant.** `20260816_0006` (backfill legacy shift finalization) and
+> `20260816_0007` (unify email notification preference) both revise
+> `20260816_0005`. **Five pull requests independently noticed that fork and
+> each wrote a merge for it. All five merged within the hour**, so the repair
+> became the fork: `main` was left with four heads and two files claiming
+> revision id `20260816_0008`, which makes the versions directory unloadable —
+> `alembic upgrade head` fails outright, a fresh install cannot migrate, and
+> the head-count tests fail on every open pull request.
+>
+> The repair, and the constraints on it:
+>
+> - `20260816_0008_merge_finalization_and_email_prefs.py` was **deleted**. The
+>   duplicate id has to go for Alembic to load *either* revision, and this file
+>   was a no-op merge — the only member of the set whose removal has no schema
+>   consequence. `20260816_0008_add_driver_exceptions.py` keeps the id.
+> - The two redundant no-op merges (`71d86eba9a9e`, `bb34f8937c89`) were
+>   **kept**. A deployment may already have stamped them, and deleting a
+>   recorded revision strands that database at an id its chain no longer
+>   contains. They are harmless: Alembic runs each ancestor exactly once
+>   however many merge paths reach it.
+> - `20260817_1847_8050e5a61f34_rejoin_the_four_heads_left_by_.py` names all
+>   four surviving heads (`20260816_0008`, `20260816_0009`, `71d86eba9a9e`,
+>   `bb34f8937c89`) as its parents.
+>
+> **The lesson is the one this document already teaches, at a larger scale:**
+> run `alembic heads` *before* writing a migration, and — new here — before
+> writing a **merge**. Four of the five authors were each fixing a real
+> problem; the cost came from none of them knowing the others were.
+>
+> **`20260816_0009` was renumbered** from an earlier `20260816_0006`, and
+> `20260816_0006` (shift-finalization backfill) was itself renumbered off a
+> collided id. Anything already released keeps its id — renumbering stamped
+> history would break every database that has recorded it.
+
 > **Update (2026-08-16):** The head was **`20260816_0003`**
 > (`20260816_0003_add_inventory_vendors.py`). Past `20260814_0004` the chain runs
 > `20260816_0001` (`facility_rooms.parent_room_id`, nested rooms) →

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blankToNull, numberOrNull } from './formValues';
+import { blankToNull, numberOrNull, formCoercions } from './formValues';
 
 describe('blankToNull', () => {
   it('returns null for an emptied field so the backend clears it', () => {
@@ -48,5 +48,49 @@ describe('numberOrNull', () => {
 
   it('returns null for a non-numeric entry instead of NaN', () => {
     expect(numberOrNull('abc')).toBeNull();
+  });
+});
+
+describe('formCoercions', () => {
+  describe('on create', () => {
+    const { text, pick, num } = formCoercions(false);
+
+    // A blank must be omitted, never sent as "" — Pydantic's validators reject
+    // an empty string where they accept an absent key.
+    it('omits a blank so the key never reaches a validator', () => {
+      expect(text('')).toBeUndefined();
+      expect(text('   ')).toBeUndefined();
+      expect(pick('')).toBeUndefined();
+      expect(num('')).toBeUndefined();
+    });
+
+    it('passes a filled field through, trimmed', () => {
+      expect(text('  Helmet ')).toBe('Helmet');
+      expect(pick('cat-1')).toBe('cat-1');
+      expect(num('12')).toBe(12);
+    });
+  });
+
+  describe('on edit', () => {
+    const { text, pick, num } = formCoercions(true);
+
+    // Omitting is the bug here: the backend dumps with exclude_unset, so an
+    // absent key means "leave this alone" and the clear is lost.
+    it('sends an explicit null for a cleared field', () => {
+      expect(text('')).toBeNull();
+      expect(text('   ')).toBeNull();
+      expect(pick('')).toBeNull();
+      expect(num('')).toBeNull();
+    });
+
+    it('passes a filled field through, trimmed', () => {
+      expect(text('  Helmet ')).toBe('Helmet');
+      expect(pick('cat-1')).toBe('cat-1');
+      expect(num('12')).toBe(12);
+    });
+
+    it('treats an unparseable number as a clear rather than sending NaN', () => {
+      expect(num('abc')).toBeNull();
+    });
   });
 });

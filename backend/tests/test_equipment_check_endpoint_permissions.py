@@ -1,8 +1,12 @@
-"""Authorization regressions for equipment-check inventory mutations."""
+"""Equipment-check endpoint authorization and request regressions."""
 
 import pytest
 
 from app.api.v1.endpoints.equipment_check import router
+from app.schemas.equipment_check import (
+    ShiftEquipmentCheckCreate,
+    StandaloneEquipmentCheckCreate,
+)
 
 
 def _permission_set(path: str, method: str) -> set[str]:
@@ -36,3 +40,37 @@ def test_supply_overview_requires_officer_permission():
 
     assert permissions == {"equipment_check.view", "inventory.manage"}
     assert "inventory.view" not in permissions
+
+
+def _check_item():
+    return {
+        "template_item_id": "item-1",
+        "compartment_name": "Cab",
+        "item_name": "SCBA",
+        "status": "pass",
+    }
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [ShiftEquipmentCheckCreate, StandaloneEquipmentCheckCreate],
+)
+def test_submission_endpoints_discard_arbitrary_timing(schema):
+    """Submission payloads cannot forward timing into the service layer."""
+    request = schema(
+        template_id="tmpl-1",
+        check_timing="whenever_the_client_says",
+        items=[_check_item()],
+    )
+
+    assert "check_timing" not in request.model_dump()
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [ShiftEquipmentCheckCreate, StandaloneEquipmentCheckCreate],
+)
+def test_submission_endpoints_do_not_define_client_timing(schema):
+    request = schema(template_id="tmpl-1", items=[_check_item()])
+
+    assert "check_timing" not in type(request).model_fields

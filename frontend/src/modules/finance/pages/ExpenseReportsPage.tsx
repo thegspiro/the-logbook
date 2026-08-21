@@ -99,7 +99,7 @@ const ExpenseReportsPage: React.FC = () => {
       )}
 
       {/* Status Tabs */}
-      <div className="card flex flex-wrap gap-1 p-1">
+      <div className="segmented-group flex flex-wrap gap-1">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}

@@ -192,8 +192,9 @@ async def list_roles(
 
     Returns all roles including system roles and custom roles with user counts.
 
-    Requires `roles.view` permission.
     **Authentication required**
+
+    **Permissions required:** positions.view or roles.view
     """
     roles = await role_service.list_roles(
         db=db,
@@ -218,10 +219,12 @@ async def create_role(
     """
     Create a new custom role
 
-    Requires `roles.create` permission.
     System roles cannot be created through this endpoint.
 
     **Authentication required**
+
+    **Permissions required:** positions.create, positions.manage_permissions, or
+    roles.create
     """
     # Prevent privilege escalation: cannot mint a role that exceeds your own
     # permissions.
@@ -268,8 +271,9 @@ async def get_role(
     """
     Get a specific role by ID
 
-    Requires `roles.view` permission.
     **Authentication required**
+
+    **Permissions required:** positions.view or roles.view
     """
     role = ensure_found(
         await role_service.get_role(
@@ -302,10 +306,12 @@ async def update_role(
     """
     Update a role
 
-    Requires `roles.edit` or `roles.update` permission.
     System roles can have their permissions updated, but name/slug cannot be changed.
 
     **Authentication required**
+
+    **Permissions required:** positions.edit, positions.manage_permissions,
+    positions.update, roles.edit, or roles.update
     """
     # Prevent privilege escalation: cannot raise a role's permissions above your
     # own (guards the org-wide "member" system role in particular).
@@ -371,10 +377,12 @@ async def delete_role(
     """
     Delete a role
 
-    Requires `roles.delete` permission.
     System roles cannot be deleted.
 
     **Authentication required**
+
+    **Permissions required:** positions.delete, positions.manage_permissions, or
+    roles.delete
     """
     # Guard: prevent deletion of system positions at the API layer
     position = ensure_found(
@@ -438,8 +446,10 @@ async def clone_role(
     Creates a copy of the role with all its permissions.
     The cloned role is always a custom role (not a system role).
 
-    Requires `roles.create` permission.
     **Authentication required**
+
+    **Permissions required:** positions.create, positions.manage_permissions, or
+    roles.create
     """
     # Prevent privilege escalation: cloning copies all of the source role's
     # permissions, so the caller must already hold every one of them.
@@ -501,8 +511,9 @@ async def get_role_users(
     """
     Get all users assigned to a specific role
 
-    Requires `roles.view` or `users.view` permission.
     **Authentication required**
+
+    **Permissions required:** positions.view, roles.view, or users.view
     """
     role = ensure_found(
         await role_service.get_role(
@@ -558,8 +569,9 @@ async def get_user_permissions(
     """
     Get all permissions for a specific user based on their roles
 
-    Requires `users.view` or `roles.view` permission.
     **Authentication required**
+
+    **Permissions required:** positions.view, roles.view, or users.view
     """
     # Verify user exists in same organization
     result = await db.execute(
