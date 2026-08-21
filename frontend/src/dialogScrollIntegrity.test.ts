@@ -50,7 +50,7 @@ const collectSourceFiles = (dir: string): string[] => {
  * The scrim is frequently an empty sibling rendered before the panel, so the
  * first className after the container is not reliably the panel's.
  */
-const isScrim = (cls: string): boolean => cls.trim() === 'modal-overlay' || cls.includes('absolute inset-0');
+const isScrim = (cls: string): boolean => cls.includes('modal-overlay') || cls.includes('absolute inset-0');
 
 const findPanelClass = (source: string, from: number): string | null => {
   ANY_CLASS.lastIndex = from;
