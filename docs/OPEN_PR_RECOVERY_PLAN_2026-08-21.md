@@ -147,6 +147,10 @@ the same `fe7cdf9c` base and pushed without conflicts.
 the mobile height contract. Each panel now uses `modal-panel-scroll`, and the
 source-wide dialog integrity test passes with no offenders.
 
+#1629's remaining mobile E2E failure identified three 38px export controls on
+the member training route. The CSV, PDF, and Print Record actions now enforce
+the shared 44px minimum tap height.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:
