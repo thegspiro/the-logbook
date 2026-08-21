@@ -3572,6 +3572,7 @@ class TrainingProgramService:
         """
         result = await self.db.execute(
             select(RequirementProgress)
+            .options(selectinload(RequirementProgress.requirement))
             .join(ProgramEnrollment)
             .join(TrainingProgram)
             .where(

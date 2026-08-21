@@ -69,6 +69,7 @@ export const EventType = {
   SOCIAL: 'social',
   FUNDRAISER: 'fundraiser',
   CEREMONY: 'ceremony',
+  RECRUITMENT: 'recruitment',
   OTHER: 'other',
 } as const;
 export type EventType = (typeof EventType)[keyof typeof EventType];

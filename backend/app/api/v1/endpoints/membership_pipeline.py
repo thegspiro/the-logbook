@@ -36,6 +36,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
+from app.models.event import Event
 from app.models.user import User
 from app.schemas.membership_pipeline import (
     ActivityLogResponse,
@@ -69,6 +70,7 @@ from app.schemas.membership_pipeline import (
     ProspectEventLinkResponse,
     ProspectListResponse,
     ProspectResponse,
+    ProspectSourceEventResponse,
     ProspectUpdate,
     PurgeInactiveRequest,
     PurgeInactiveResponse,
@@ -744,6 +746,50 @@ def _prospect_list_item(prospect, now: datetime) -> ProspectListResponse:
     )
 
 
+async def _require_org_event(db: AsyncSession, event_id: str, organization_id: str):
+    """Resolve an event id inside the caller's organization, or 404.
+
+    Fails the same way for an event that does not exist and one that belongs to
+    another department, so the response cannot be used to probe which event ids
+    are real elsewhere.
+    """
+    result = await db.execute(
+        select(Event.id).where(
+            Event.id == event_id,
+            Event.organization_id == organization_id,
+        )
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+
+
+@router.get("/source-events", response_model=list[ProspectSourceEventResponse])
+async def list_prospect_source_events(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("prospective_members.view", "prospective_members.manage")
+    ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+):
+    """
+    List the events recorded as applicant sources, newest first, with counts.
+
+    Backs the "came from" filter on the pipeline board. Only events with at
+    least one sourced applicant appear — offering the whole calendar would bury
+    the two open houses that matter under a year of business meetings.
+
+    **Requires permission: prospective_members.view or prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    rows = await service.list_source_events(
+        current_user.organization_id,
+        exclude_prospect_ids=hidden_prospect_ids,
+    )
+    return [ProspectSourceEventResponse(**row) for row in rows]
+
+
 @router.get("/prospects", response_model=PaginatedProspectListResponse)
 async def list_prospects(
     pipeline_id: UUID | None = Query(None, description="Filter by pipeline"),
@@ -751,6 +797,9 @@ async def list_prospects(
         None, alias="status", description="Filter by status"
     ),
     search: str | None = Query(None, description="Search by name or email"),
+    event_id: UUID | None = Query(
+        None, description="Only prospects linked to this event"
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -765,17 +814,29 @@ async def list_prospects(
     Returns a paginated response with ``items``, ``total``, ``limit``,
     and ``offset`` so clients can implement proper pagination.
 
+    ``event_id`` narrows the list to the applicants a given event produced or
+    was linked to — what an open house actually brought in.
+
     The caller's own prospective-membership record, if they have one, is
     omitted from the results and from ``total``.
 
     **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
+
+    if event_id is not None:
+        # A client-supplied FK, so confirm it is this organization's event
+        # before filtering on it (CLAUDE.md #14c). The prospect query is
+        # org-scoped either way, but an unchecked foreign id would come back as
+        # an empty applicant list rather than as the wrong-org id it is.
+        await _require_org_event(db, str(event_id), current_user.organization_id)
+
     prospects, total = await service.list_prospects(
         organization_id=current_user.organization_id,
         pipeline_id=str(pipeline_id) if pipeline_id else None,
         status=status_filter,
         search=search,
+        event_id=str(event_id) if event_id else None,
         limit=limit,
         offset=offset,
         exclude_prospect_ids=hidden_prospect_ids,

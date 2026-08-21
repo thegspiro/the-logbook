@@ -21,6 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.integration import Integration
 from app.models.user import User
+from app.services.integration_services.salesforce_oauth_service import (
+    get_client_credentials,
+)
 from app.services.integration_services.salesforce_service import SalesforceService
 
 # Logbook User attributes an inbound Salesforce sync may overwrite. Deliberately
@@ -747,12 +750,17 @@ class SalesforceSyncService:
 def build_salesforce_credentials(integration: Integration) -> dict[str, Any]:
     """Extract Salesforce credentials from an Integration record."""
     config = integration.config or {}
+    client_id, client_secret = get_client_credentials(integration)
     creds: dict[str, Any] = {
         "instance_url": config.get("instance_url", ""),
         "api_version": config.get("api_version", "v62.0"),
         "environment": config.get("environment", "production"),
     }
-    for key in ("client_id", "client_secret", "refresh_token", "access_token"):
+    if client_id:
+        creds["client_id"] = client_id
+    if client_secret:
+        creds["client_secret"] = client_secret
+    for key in ("refresh_token", "access_token"):
         val = integration.get_secret(key)
         if val:
             creds[key] = val

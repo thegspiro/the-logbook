@@ -30,10 +30,12 @@ def _scalars(items):
 class RecordingSession:
     def __init__(self, results):
         self._results = list(results)
+        self.statements = []
         self.commit = AsyncMock()
         self.refresh = AsyncMock()
 
     async def execute(self, statement, *args, **kwargs):
+        self.statements.append(statement)
         return self._results.pop(0) if self._results else MagicMock()
 
 
@@ -78,6 +80,11 @@ class TestResetRequirement:
         assert row.progress_notes is None
         assert row.completed_at is None
         assert row.verified_by is None
+        assert any(
+            getattr(path_element, "key", None) == "requirement"
+            for option in db.statements[0]._with_options
+            for path_element in option.path.path
+        )
         db.commit.assert_awaited_once()
         svc._recalculate_enrollment_progress.assert_awaited_once()
 

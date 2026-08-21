@@ -395,12 +395,11 @@ class EquipmentCheckService:
         if not template:
             return None
 
-        # EC2-3: a client-supplied parent_compartment_id must be in-org
-        # (integrity-only — not projected — but validate on both paths).
-        if data.get("parent_compartment_id") and not await self._get_compartment(
-            data["parent_compartment_id"], organization_id
-        ):
-            raise ValueError("Invalid parent compartment")
+        parent_id = data.get("parent_compartment_id")
+        if parent_id:
+            parent = await self._get_compartment(parent_id, organization_id)
+            if not parent or parent.template_id != template_id:
+                raise ValueError("Parent compartment must belong to the same template")
 
         items_data = data.pop("items", None) or []
         # EC2-4: nested items carry the same client-supplied inventory_item_id /
@@ -440,12 +439,11 @@ class EquipmentCheckService:
         if not compartment:
             return None
 
-        # EC2-3: validate a reassigned parent_compartment_id in-org before the
-        # setattr loop applies it.
-        if data.get("parent_compartment_id") and not await self._get_compartment(
-            data["parent_compartment_id"], organization_id
-        ):
-            raise ValueError("Invalid parent compartment")
+        parent_id = data.get("parent_compartment_id")
+        if parent_id:
+            await self._validate_compartment_parent(
+                compartment, parent_id, organization_id
+            )
 
         for key, value in data.items():
             if key not in self.PROTECTED_FIELDS and hasattr(compartment, key):
@@ -3343,6 +3341,26 @@ class EquipmentCheckService:
             await self._clone_compartment(template_id, child, compartment.id)
 
         return compartment
+
+    async def _validate_compartment_parent(
+        self,
+        compartment: CheckTemplateCompartment,
+        parent_id: str,
+        organization_id: str,
+    ) -> None:
+        """Validate that a proposed parent is in-template and cannot form a cycle."""
+        current_id: Optional[str] = parent_id
+        visited: set[str] = set()
+        while current_id:
+            if current_id == compartment.id or current_id in visited:
+                raise ValueError(
+                    "A compartment cannot be stored inside itself or one of its children"
+                )
+            visited.add(current_id)
+            parent = await self._get_compartment(current_id, organization_id)
+            if not parent or parent.template_id != compartment.template_id:
+                raise ValueError("Parent compartment must belong to the same template")
+            current_id = parent.parent_compartment_id
 
     async def _get_compartment(
         self, compartment_id: str, organization_id: str
