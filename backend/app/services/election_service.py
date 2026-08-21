@@ -4186,7 +4186,11 @@ class ElectionService:
                 try:
                     reminded, _failed, _skipped, _details = (
                         await self.remind_non_voters(
-                            UUID(str(election.id)), organization_id
+                            UUID(str(election.id)),
+                            organization_id,
+                            base_ballot_url=(
+                                f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
+                            ),
                         )
                     )
                     actions += 1
