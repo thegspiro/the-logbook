@@ -41,6 +41,21 @@ def _uid() -> str:
     return str(uuid.uuid4())
 
 
+async def _add_user(db_session: AsyncSession, org_id: str, username: str) -> str:
+    """Add an extra in-organization reviewer for separation-of-duties tests."""
+    user_id = _uid()
+    await db_session.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name, last_name, "
+            "email, password_hash, status) VALUES "
+            "(:id, :org, :un, 'Review', 'Manager', :em, 'hashed', 'active')"
+        ),
+        {"id": user_id, "org": org_id, "un": username, "em": f"{username}@test.com"},
+    )
+    await db_session.flush()
+    return user_id
+
+
 @pytest.fixture
 async def setup_org_and_users(db_session: AsyncSession):
     """Create a minimal org with two users for scheduling tests."""
@@ -1047,7 +1062,7 @@ class TestPatternGeneration:
         await svc.review_time_off(
             uuid.UUID(time_off.id),
             uuid.UUID(org_id),
-            uuid.UUID(user_id),
+            uuid.UUID(user2_id),
             TimeOffStatus.APPROVED,
         )
 
@@ -1553,6 +1568,7 @@ class TestSwapRequests:
     ):
         org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
+        manager_id = await _add_user(db_session, org_id, "swap_manager")
 
         today = date.today()
         shift_a, _ = await svc.create_shift(
@@ -1603,7 +1619,7 @@ class TestSwapRequests:
         reviewed, err = await svc.review_swap_request(
             uuid.UUID(swap.id),
             uuid.UUID(org_id),
-            uuid.UUID(user_id),  # reviewer
+            uuid.UUID(manager_id),
             SwapRequestStatus.APPROVED,
         )
         assert err is None
@@ -1611,7 +1627,7 @@ class TestSwapRequests:
 
     @pytest.mark.asyncio
     async def test_deny_swap_request(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1621,7 +1637,7 @@ class TestSwapRequests:
                 "shift_date": today,
                 "start_time": datetime(today.year, today.month, today.day, 7, 0),
             },
-            uuid.UUID(user_id),
+            uuid.UUID(user2_id),
         )
         await svc.create_assignment(
             uuid.UUID(org_id),
@@ -1638,7 +1654,7 @@ class TestSwapRequests:
         reviewed, err = await svc.review_swap_request(
             uuid.UUID(swap.id),
             uuid.UUID(org_id),
-            uuid.UUID(user_id),
+            uuid.UUID(user2_id),
             SwapRequestStatus.DENIED,
             reviewer_notes="Staffing too low",
         )
@@ -1648,7 +1664,7 @@ class TestSwapRequests:
 
     @pytest.mark.asyncio
     async def test_review_already_reviewed_fails(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1675,7 +1691,7 @@ class TestSwapRequests:
         await svc.review_swap_request(
             uuid.UUID(swap.id),
             uuid.UUID(org_id),
-            uuid.UUID(user_id),
+            uuid.UUID(user2_id),
             SwapRequestStatus.DENIED,
         )
 
@@ -1688,6 +1704,82 @@ class TestSwapRequests:
         )
         assert result is None
         assert "no longer pending" in err.lower()
+
+    @pytest.mark.asyncio
+    async def test_requester_cannot_review_own_swap(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = setup_org_and_users
+        svc = SchedulingService(db_session)
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7),
+            },
+            uuid.UUID(user_id),
+        )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+        swap, _ = await svc.create_swap_request(
+            uuid.UUID(org_id), uuid.UUID(user_id), {"offering_shift_id": shift.id}
+        )
+
+        result, err = await svc.review_swap_request(
+            uuid.UUID(swap.id),
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            SwapRequestStatus.APPROVED,
+        )
+
+        assert result is None
+        assert err == "Requesters cannot review their own swap requests"
+        assert swap.status == SwapRequestStatus.PENDING
+        assert swap.reviewed_by is None
+
+    @pytest.mark.asyncio
+    async def test_target_participant_cannot_manager_review_swap(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7),
+            },
+            uuid.UUID(user_id),
+        )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+        swap, _ = await svc.create_swap_request(
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            {"offering_shift_id": shift.id, "target_user_id": user2_id},
+        )
+
+        result, err = await svc.review_swap_request(
+            uuid.UUID(swap.id),
+            uuid.UUID(org_id),
+            uuid.UUID(user2_id),
+            SwapRequestStatus.APPROVED,
+        )
+
+        assert result is None
+        assert err == "Target participants cannot manager-review swap requests"
+        assert swap.status == SwapRequestStatus.PENDING
+        assert swap.reviewed_by is None
 
     @pytest.mark.asyncio
     async def test_cancel_swap_by_wrong_user_fails(
@@ -1805,6 +1897,30 @@ class TestTimeOff:
         assert reviewed.status == TimeOffStatus.APPROVED
 
     @pytest.mark.asyncio
+    async def test_requester_cannot_review_own_time_off(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = setup_org_and_users
+        svc = SchedulingService(db_session)
+        time_off, _ = await svc.create_time_off(
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            {"start_date": date.today(), "end_date": date.today()},
+        )
+
+        result, err = await svc.review_time_off(
+            uuid.UUID(time_off.id),
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            TimeOffStatus.APPROVED,
+        )
+
+        assert result is None
+        assert err == "Requesters cannot review their own time-off requests"
+        assert time_off.status == TimeOffStatus.PENDING
+        assert time_off.approved_by is None
+
+    @pytest.mark.asyncio
     async def test_cancel_time_off_by_wrong_user(self, db_session, setup_org_and_users):
         org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
@@ -1863,7 +1979,7 @@ class TestTimeOff:
         await svc.review_time_off(
             uuid.UUID(to1.id),
             uuid.UUID(org_id),
-            uuid.UUID(user_id),
+            uuid.UUID(user2_id),
             TimeOffStatus.APPROVED,
         )
 

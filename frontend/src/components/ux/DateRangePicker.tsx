@@ -102,23 +102,23 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     <div className={`relative ${className}`}>
       {label && <label className="form-label">{label}</label>}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="card bg-theme-input-bg border-theme-input-border flex w-full min-w-0 items-center gap-1 sm:w-auto">
-          <div className="flex items-center pl-3">
+        <div className="card bg-theme-input-bg border-theme-input-border flex w-full min-w-0 items-center gap-1 max-sm:flex-col max-sm:items-stretch sm:w-auto">
+          <div className="flex items-center pl-3 max-sm:hidden">
             <Calendar className="text-theme-text-muted h-4 w-4" />
           </div>
           <input
             type="date"
             value={startDate}
             onChange={(e) => onChange(e.target.value, endDate)}
-            className="text-theme-text-primary focus:ring-theme-focus-ring min-w-0 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden sm:flex-none"
+            className="text-theme-text-primary focus:ring-theme-focus-ring min-h-11 min-w-0 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden max-sm:w-full sm:flex-none"
             aria-label="Start date"
           />
-          <span className="text-theme-text-muted text-sm">&ndash;</span>
+          <span className="text-theme-text-muted text-sm max-sm:hidden">&ndash;</span>
           <input
             type="date"
             value={endDate}
             onChange={(e) => onChange(startDate, e.target.value)}
-            className="text-theme-text-primary focus:ring-theme-focus-ring min-w-0 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden sm:flex-none"
+            className="text-theme-text-primary focus:ring-theme-focus-ring min-h-11 min-w-0 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden max-sm:w-full sm:flex-none"
             aria-label="End date"
           />
           {hasValue && (
@@ -137,7 +137,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           <button
             type="button"
             onClick={() => setShowPresets(!showPresets)}
-            className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover rounded-lg border px-2.5 py-1.5 text-sm transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-11 rounded-lg border px-2.5 py-1.5 text-sm transition-colors"
             aria-expanded={showPresets}
             aria-haspopup="true"
           >

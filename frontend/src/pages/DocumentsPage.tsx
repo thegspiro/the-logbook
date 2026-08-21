@@ -473,7 +473,7 @@ const DocumentsPage: React.FC = () => {
                   aria-label="Documents table"
                   tabIndex={0}
                 >
-                  <table className="w-full">
+                  <table className="rwd-table w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         <th
