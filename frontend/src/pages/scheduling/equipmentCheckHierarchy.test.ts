@@ -29,4 +29,14 @@ describe('EquipmentCheckTemplateBuilder Stored Inside options', () => {
       { id: 'sibling', label: 'Compartment: Cab › Cabinet' },
     ]);
   });
+
+  it('excludes section headers because they cannot contain equipment', () => {
+    const current = compartment('current', 'Cab');
+    const destination = compartment('destination', 'Medical bag');
+    const section = { ...compartment('section', 'Supplies'), isHeader: true };
+
+    expect(storedInsideOptions([current, destination, section], current)).toEqual([
+      { id: 'destination', label: 'Compartment: Medical bag' },
+    ]);
+  });
 });
